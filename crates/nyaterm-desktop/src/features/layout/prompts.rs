@@ -141,89 +141,127 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         let accept_id = prompt.id.clone();
         let reject_id = prompt.id.clone();
-        let tone = self.tr("settings.hostKeyVerifyTitle");
-        let action = match prompt.issue {
-            HostKeyPromptIssue::Unknown => self.tr("settings.hostKeyVerifyAcceptNew"),
-            HostKeyPromptIssue::Changed => self.tr("settings.hostKeyVerifyAcceptChanged"),
+        let changed = matches!(prompt.issue, HostKeyPromptIssue::Changed);
+        let description = match prompt.issue {
+            HostKeyPromptIssue::Unknown => self.tr("settings.hostKeyVerifyNew"),
+            HostKeyPromptIssue::Changed => self.tr("settings.hostKeyVerifyChanged"),
+        };
+        let detail_row = |label: &'static str, value: String| {
+            div()
+                .flex()
+                .items_start()
+                .gap_3()
+                .text_xs()
+                .child(
+                    div()
+                        .w(px(88.))
+                        .flex_none()
+                        .text_color(rgb(palette.text_muted))
+                        .child(label),
+                )
+                .child(
+                    div()
+                        .min_w_0()
+                        .flex_1()
+                        .font_family(crate::features::gpui_code_font_family())
+                        .text_color(rgb(palette.text))
+                        .child(value),
+                )
         };
 
         div()
-            .mx_3()
-            .mt_3()
+            .w_full()
+            .max_w(px(384.))
+            .mx_auto()
             .rounded_md()
             .border_1()
-            .border_color(match prompt.issue {
-                HostKeyPromptIssue::Unknown => rgb(palette.warning),
-                HostKeyPromptIssue::Changed => rgb(palette.danger),
-            })
-            .bg(match prompt.issue {
-                HostKeyPromptIssue::Unknown => rgb(palette.input),
-                HostKeyPromptIssue::Changed => rgb(palette.input),
-            })
-            .p_3()
+            .border_color(rgb(palette.border))
+            .bg(self.shell_surface_color(palette.bg))
+            .shadow_lg()
+            .p_6()
+            .flex()
+            .flex_col()
+            .gap_4()
             .child(
                 div()
                     .flex()
-                    .items_start()
-                    .justify_between()
-                    .gap_3()
+                    .flex_col()
+                    .gap_2()
                     .child(
                         div()
-                            .flex()
-                            .flex_col()
-                            .gap_1()
-                            .child(div().text_sm().font_weight(FontWeight(700.)).child(tone))
-                            .child(div().text_xs().text_color(rgb(palette.text)).child(format!(
-                                "{}: {}",
-                                self.tr("settings.hostKeyVerifyHost"),
-                                prompt.host_key.host_identifier
-                            )))
-                            .child(div().text_xs().text_color(rgb(palette.text_muted)).child(
-                                format!(
-                                    "{}: {} · {}: {}",
-                                    self.tr("settings.hostKeyVerifyKeyType"),
-                                    prompt.host_key.key_type,
-                                    self.tr("settings.hostKeyVerifyFingerprint"),
-                                    prompt.host_key.fingerprint
-                                ),
-                            ))
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(rgb(palette.text_muted))
-                                    .child(action),
-                            ),
+                            .text_sm()
+                            .font_weight(FontWeight(700.))
+                            .text_color(rgb(palette.text))
+                            .child(self.tr("settings.hostKeyVerifyTitle")),
                     )
                     .child(
                         div()
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .child(small_button(
-                                palette,
-                                format!("host-key-reject-{reject_id}"),
-                                self.tr("settings.hostKeyVerifyReject"),
-                                cx.listener(move |this, _, _, cx| {
-                                    this.resolve_host_key_prompt(
-                                        reject_id.clone(),
-                                        HostKeyPromptChoice::Reject,
-                                        cx,
-                                    );
-                                }),
-                            ))
-                            .child(small_button(
-                                palette,
-                                format!("host-key-accept-{accept_id}"),
-                                self.tr("settings.hostKeyVerifyAccept"),
-                                cx.listener(move |this, _, _, cx| {
-                                    this.resolve_host_key_prompt(
-                                        accept_id.clone(),
-                                        HostKeyPromptChoice::Accept,
-                                        cx,
-                                    );
-                                }),
-                            )),
+                            .text_xs()
+                            .text_color(rgb(palette.text_muted))
+                            .child(description),
                     ),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .child(detail_row(
+                        self.tr("settings.hostKeyVerifyHost"),
+                        prompt.host_key.host_identifier.clone(),
+                    ))
+                    .child(detail_row(
+                        self.tr("settings.hostKeyVerifyKeyType"),
+                        prompt.host_key.key_type.clone(),
+                    ))
+                    .child(detail_row(
+                        self.tr("settings.hostKeyVerifyFingerprint"),
+                        prompt.host_key.fingerprint.clone(),
+                    )),
+            )
+            .when(changed, |this| {
+                this.child(
+                    div()
+                        .rounded_sm()
+                        .border_1()
+                        .border_color(rgba((palette.danger << 8) | 0x80))
+                        .bg(rgba((palette.danger << 8) | 0x1a))
+                        .p_2()
+                        .text_size(px(11.))
+                        .text_color(rgb(palette.danger))
+                        .child(self.tr("settings.hostKeyVerifyWarning")),
+                )
+            })
+            .child(
+                div()
+                    .flex()
+                    .justify_end()
+                    .gap_2()
+                    .child(small_button(
+                        palette,
+                        format!("host-key-reject-{reject_id}"),
+                        self.tr("settings.hostKeyVerifyReject"),
+                        cx.listener(move |this, _, _, cx| {
+                            this.resolve_host_key_prompt(
+                                reject_id.clone(),
+                                HostKeyPromptChoice::Reject,
+                                cx,
+                            );
+                        }),
+                    ))
+                    .child(dialog_action_button(
+                        palette,
+                        format!("host-key-accept-{accept_id}"),
+                        self.tr("settings.hostKeyVerifyAccept"),
+                        changed,
+                        cx.listener(move |this, _, _, cx| {
+                            this.resolve_host_key_prompt(
+                                accept_id.clone(),
+                                HostKeyPromptChoice::Accept,
+                                cx,
+                            );
+                        }),
+                    )),
             )
     }
 
@@ -290,71 +328,65 @@ impl NyaTermApp {
         }
 
         div()
-            .mx_3()
-            .mt_3()
+            .w_full()
             .rounded_md()
             .border_1()
-            .border_color(rgb(palette.link))
-            .bg(rgb(palette.input))
-            .p_3()
+            .border_color(rgb(palette.border))
+            .bg(self.shell_surface_color(palette.bg))
+            .shadow_lg()
+            .p_6()
+            .flex()
+            .flex_col()
+            .gap_4()
+            .child(details)
+            .child(
+                div()
+                    .id(SharedString::from(format!("credential-input-{}", prompt.id)))
+                    .w_full()
+                    .h(px(36.))
+                    .px_3()
+                    .flex()
+                    .items_center()
+                    .rounded_sm()
+                    .border_1()
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.input))
+                    .font_family(crate::features::gpui_code_font_family())
+                    .text_sm()
+                    .track_focus(&self.credential_focus)
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        window.focus(&this.credential_focus);
+                        this.terminal_status = "credential prompt focused".to_string();
+                        cx.notify();
+                    }))
+                    .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+                        cx.stop_propagation();
+                        this.handle_credential_key_down(event, cx);
+                    }))
+                    .child(display_value),
+            )
             .child(
                 div()
                     .flex()
-                    .items_start()
-                    .justify_between()
-                    .gap_3()
-                    .child(details)
-                    .child(
-                        div()
-                            .id(SharedString::from(format!(
-                                "credential-input-{}",
-                                prompt.id
-                            )))
-                            .w(px(240.))
-                            .h(px(32.))
-                            .px_3()
-                            .flex()
-                            .items_center()
-                            .rounded_sm()
-                            .border_1()
-                            .border_color(rgb(palette.link))
-                            .bg(rgb(palette.bg))
-                            .font_family(crate::features::gpui_code_font_family())
-                            .text_sm()
-                            .track_focus(&self.credential_focus)
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                window.focus(&this.credential_focus);
-                                this.terminal_status = "credential prompt focused".to_string();
-                                cx.notify();
-                            }))
-                            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-                                cx.stop_propagation();
-                                this.handle_credential_key_down(event, cx);
-                            }))
-                            .child(display_value),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .child(small_button(
-                                palette,
-                                format!("credential-cancel-{}", prompt.id),
-                                self.tr("common.cancel"),
-                                cx.listener(|this, _, _, cx| {
-                                    this.cancel_credential_prompt(cx);
-                                }),
-                            ))
-                            .child(small_button(
-                                palette,
-                                format!("credential-submit-{}", prompt.id),
-                                self.tr("sshAuth.submit"),
-                                cx.listener(|this, _, _, cx| {
-                                    this.submit_credential_prompt(cx);
-                                }),
-                            )),
-                    ),
+                    .justify_end()
+                    .gap_2()
+                    .child(small_button(
+                        palette,
+                        format!("credential-cancel-{}", prompt.id),
+                        self.tr("common.cancel"),
+                        cx.listener(|this, _, _, cx| {
+                            this.cancel_credential_prompt(cx);
+                        }),
+                    ))
+                    .child(dialog_action_button(
+                        palette,
+                        format!("credential-submit-{}", prompt.id),
+                        self.tr("sshAuth.submit"),
+                        false,
+                        cx.listener(|this, _, _, cx| {
+                            this.submit_credential_prompt(cx);
+                        }),
+                    )),
             )
     }
 

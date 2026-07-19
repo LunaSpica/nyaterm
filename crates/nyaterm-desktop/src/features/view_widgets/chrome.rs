@@ -253,6 +253,39 @@ pub(in crate::features) fn modal_dialog_shell(
         )
 }
 
+pub(in crate::features) fn dialog_action_button(
+    palette: ThemePalette,
+    id: impl Into<String>,
+    label: &'static str,
+    danger: bool,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    let background = if danger {
+        palette.danger
+    } else {
+        palette.primary
+    };
+    let hover_background = if danger {
+        palette.danger
+    } else {
+        palette.primary_hover
+    };
+    div()
+        .id(SharedString::from(id.into()))
+        .h(px(28.))
+        .px_3()
+        .flex()
+        .items_center()
+        .rounded_sm()
+        .bg(rgb(background))
+        .text_color(rgb(palette.bg))
+        .text_xs()
+        .cursor_pointer()
+        .hover(move |this| this.bg(rgb(hover_background)))
+        .child(label)
+        .on_click(on_click)
+}
+
 /// Tauri ActionFooter-like Cancel/Save row.
 pub(in crate::features) fn modal_dialog_footer(
     palette: ThemePalette,

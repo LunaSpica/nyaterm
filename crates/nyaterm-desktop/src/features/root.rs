@@ -635,17 +635,25 @@ impl NyaTermApp {
         div()
             .id(SharedString::from("ssh-auth-prompt-overlay"))
             .absolute()
-            .top(px(34.))
+            .top_0()
+            .bottom_0()
             .left_0()
             .right_0()
+            .bg(rgba(0x00000080))
             .flex()
-            .flex_col()
-            .gap_2()
+            .items_center()
+            .justify_center()
+            .p_3()
+            .track_focus(&self.credential_focus)
+            .on_click(cx.listener(|this, _, window, cx| {
+                window.focus(&this.credential_focus);
+                cx.notify();
+            }))
             .child(
                 div()
                     .mx_auto()
                     .w_full()
-                    .max_w(px(920.))
+                    .max_w(px(416.))
                     .when_some(host_key_prompt, |this, prompt| {
                         this.child(self.host_key_prompt_banner(prompt, cx))
                     })

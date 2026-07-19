@@ -108,7 +108,7 @@ impl NyaTermApp {
                                     this.open_unknown_transfer_file_internal(window, cx);
                                 }),
                             ))
-                            .child(transfer_dialog_button(
+                            .child(dialog_action_button(
                                 palette,
                                 "transfer-unknown-external",
                                 self.tr("fileExplorer.unknownFileTypeOpenExternal"),

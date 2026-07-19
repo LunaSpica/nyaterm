@@ -207,7 +207,7 @@ impl NyaTermApp {
                                             .when(has_error || name.is_empty(), |this| {
                                                 this.opacity(0.45)
                                             })
-                                            .child(transfer_dialog_button(
+                                            .child(dialog_action_button(
                                                 palette,
                                                 "transfer-new-folder-create",
                                                 self.tr("common.confirm"),
@@ -428,7 +428,7 @@ impl NyaTermApp {
                                             .when(has_error || name.is_empty(), |this| {
                                                 this.opacity(0.45)
                                             })
-                                            .child(transfer_dialog_button(
+                                            .child(dialog_action_button(
                                                 palette,
                                                 "transfer-new-file-create",
                                                 self.tr("common.confirm"),
@@ -573,7 +573,7 @@ impl NyaTermApp {
                                 }),
                             ))
                             .child(div().when(has_error, |this| this.opacity(0.45)).child(
-                                transfer_dialog_button(
+                                dialog_action_button(
                                     palette,
                                     "transfer-new-symlink-create",
                                     self.tr("common.confirm"),

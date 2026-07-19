@@ -82,7 +82,7 @@ impl NyaTermApp {
                                     this.cancel_delete_transfer_job(cx);
                                 }),
                             ))
-                            .child(transfer_dialog_button(
+                            .child(dialog_action_button(
                                 palette,
                                 "transfer-job-delete-confirm",
                                 self.tr("fileTransfer.delete"),

@@ -118,7 +118,7 @@ impl NyaTermApp {
                                     this.close_transfer_delete_dialog(cx);
                                 }),
                             ))
-                            .child(transfer_dialog_button(
+                            .child(dialog_action_button(
                                 palette,
                                 "transfer-delete-confirm",
                                 self.tr("fileExplorer.delete"),
@@ -224,7 +224,7 @@ impl NyaTermApp {
                                     this.close_transfer_move_dialog(cx);
                                 }),
                             ))
-                            .child(transfer_dialog_button(
+                            .child(dialog_action_button(
                                 palette,
                                 "transfer-move-save",
                                 self.tr("common.save"),
