@@ -57,7 +57,7 @@ impl NyaTermApp {
                     .border_color(rgb(palette.border))
                     .bg(self.shell_surface_color(palette.bg))
                     .shadow_lg()
-                    .p_4()
+                    .p_6()
                     .child(
                         div()
                             .text_sm()
@@ -67,7 +67,7 @@ impl NyaTermApp {
                     )
                     .child(
                         div()
-                            .mt_3()
+                            .mt_2()
                             .text_xs()
                             .text_color(rgb(palette.text_muted))
                             .child(self.tr("fileExplorer.deleteConfirmHint")),
@@ -105,7 +105,7 @@ impl NyaTermApp {
                     })
                     .child(
                         div()
-                            .mt_4()
+                            .mt_2()
                             .flex()
                             .items_center()
                             .justify_end()
@@ -118,10 +118,11 @@ impl NyaTermApp {
                                     this.close_transfer_delete_dialog(cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(transfer_dialog_button(
                                 palette,
                                 "transfer-delete-confirm",
                                 self.tr("fileExplorer.delete"),
+                                true,
                                 cx.listener(|this, _, window, cx| {
                                     this.submit_transfer_delete(window, cx);
                                 }),
@@ -176,7 +177,7 @@ impl NyaTermApp {
                     .border_color(rgb(palette.border))
                     .bg(self.shell_surface_color(palette.bg))
                     .shadow_lg()
-                    .p_4()
+                    .p_6()
                     .child(
                         div()
                             .text_sm()
@@ -223,10 +224,11 @@ impl NyaTermApp {
                                     this.close_transfer_move_dialog(cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(transfer_dialog_button(
                                 palette,
                                 "transfer-move-save",
                                 self.tr("common.save"),
+                                false,
                                 cx.listener(|this, _, window, cx| {
                                     this.submit_transfer_move(window, cx);
                                 }),

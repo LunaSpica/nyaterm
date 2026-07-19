@@ -354,7 +354,7 @@ impl NyaTermApp {
                                     this.close_transfer_properties(cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(transfer_dialog_button(
                                 palette,
                                 "transfer-properties-save",
                                 if state.saving {
@@ -362,6 +362,7 @@ impl NyaTermApp {
                                 } else {
                                     self.tr("common.save")
                                 },
+                                false,
                                 cx.listener(move |this, _, window, cx| {
                                     if can_save {
                                         this.submit_transfer_properties(window, cx);

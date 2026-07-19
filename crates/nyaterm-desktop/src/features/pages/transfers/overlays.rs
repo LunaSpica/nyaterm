@@ -18,6 +18,7 @@ impl NyaTermApp {
         let description = self
             .tr("fileTransfer.deleteConfirmDesc")
             .replace("{{name}}", &state.title);
+        let dialog_width = transfer_dialog_width(self.last_viewport_size.0, 320.);
 
         div()
             .id(SharedString::from("transfer-job-delete-overlay"))
@@ -45,25 +46,25 @@ impl NyaTermApp {
             }))
             .child(
                 div()
-                    .w(px(380.))
+                    .w(px(dialog_width))
                     .rounded_md()
                     .border_1()
                     .border_color(rgb(palette.border))
                     .bg(self.shell_surface_color(palette.bg))
                     .shadow_lg()
-                    .p_4()
+                    .p_6()
                     .flex()
                     .flex_col()
                     .gap_2()
                     .child(
                         div()
-                            .text_sm()
+                            .text_size(px(18.))
                             .font_weight(FontWeight(700.))
                             .child(self.tr("fileTransfer.deleteConfirmTitle")),
                     )
                     .child(
                         div()
-                            .text_xs()
+                            .text_sm()
                             .text_color(rgb(palette.text_muted))
                             .child(description),
                     )
@@ -81,10 +82,11 @@ impl NyaTermApp {
                                     this.cancel_delete_transfer_job(cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(transfer_dialog_button(
                                 palette,
                                 "transfer-job-delete-confirm",
                                 self.tr("fileTransfer.delete"),
+                                true,
                                 cx.listener(|this, _, _, cx| {
                                     this.confirm_delete_transfer_job(cx);
                                 }),

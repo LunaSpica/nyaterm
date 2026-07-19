@@ -10,13 +10,13 @@ pub(in crate::features::pages::transfers) fn symlink_input_row(
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
     div()
-        .mt_3()
         .flex()
         .items_center()
         .gap_3()
         .child(
             div()
-                .w(px(72.))
+                .w(px(80.))
+                .flex_none()
                 .text_xs()
                 .text_color(rgb(palette.text_muted))
                 .child(label),
@@ -24,7 +24,7 @@ pub(in crate::features::pages::transfers) fn symlink_input_row(
         .child(
             div()
                 .id(SharedString::from(id))
-                .h(px(36.))
+                .h(px(32.))
                 .flex_1()
                 .min_w_0()
                 .rounded_sm()

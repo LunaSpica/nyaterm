@@ -9,6 +9,7 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         let overwrite_id = prompt.id.clone();
         let skip_id = prompt.id.clone();
+        let escape_id = prompt.id.clone();
         let rename_id = prompt.id.clone();
         let kind = if prompt.request.is_directory {
             self.tr("fileTransfer.duplicateKindFolder")
@@ -22,47 +23,75 @@ impl NyaTermApp {
             .replace("{{name}}", &target_name);
 
         div()
-            .mt_4()
-            .rounded_md()
-            .border_1()
-            .border_color(rgb(palette.warning))
-            .bg(rgb(palette.input))
+            .id("duplicate-prompt-overlay")
+            .absolute()
+            .top_0()
+            .bottom_0()
+            .left_0()
+            .right_0()
+            .bg(rgba(0x00000080))
+            .flex()
+            .items_center()
+            .justify_center()
             .p_3()
+            .track_focus(&self.transfer_focus)
+            .on_click(cx.listener(|this, _, window, cx| {
+                window.focus(&this.transfer_focus);
+                cx.notify();
+            }))
+            .on_key_down(cx.listener(move |this, event: &KeyDownEvent, _, cx| {
+                if event.keystroke.key.as_str() == "escape" {
+                    this.resolve_duplicate_prompt(
+                        escape_id.clone(),
+                        SftpDuplicateDecision::Skip,
+                        cx,
+                    );
+                }
+            }))
             .child(
                 div()
+                    .id("duplicate-prompt-dialog")
+                    .w(px((self.last_viewport_size.0 - 32.).min(448.).max(280.)))
+                    .rounded_md()
+                    .border_1()
+                    .border_color(rgb(palette.border))
+                    .bg(self.shell_surface_color(palette.bg))
+                    .shadow_lg()
+                    .p_6()
                     .flex()
-                    .items_start()
-                    .justify_between()
-                    .gap_3()
+                    .flex_col()
+                    .gap_4()
+                    .on_click(|_, _, cx| cx.stop_propagation())
                     .child(
                         div()
-                            .flex()
-                            .flex_col()
-                            .gap_1()
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .font_weight(FontWeight(700.))
-                                    .child(self.tr("fileTransfer.duplicateTitle")),
-                            )
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(rgb(palette.text))
-                                    .child(description),
-                            )
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(rgb(palette.text_muted))
-                                    .font_family(crate::features::gpui_code_font_family())
-                                    .child(prompt.request.target_path.clone()),
-                            ),
+                            .text_sm()
+                            .font_weight(FontWeight(700.))
+                            .child(self.tr("fileTransfer.duplicateTitle")),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .line_height(px(17.))
+                            .text_color(rgb(palette.text_muted))
+                            .child(description),
+                    )
+                    .child(
+                        div()
+                            .rounded_sm()
+                            .border_1()
+                            .border_color(rgb(palette.border))
+                            .px_2()
+                            .py_1()
+                            .font_family(crate::features::gpui_code_font_family())
+                            .text_size(px(11.))
+                            .text_color(rgb(palette.text_muted))
+                            .child(prompt.request.target_path.clone()),
                     )
                     .child(
                         div()
                             .flex()
-                            .items_center()
+                            .flex_wrap()
+                            .justify_end()
                             .gap_2()
                             .child(small_button(
                                 palette,

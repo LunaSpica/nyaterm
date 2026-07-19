@@ -26,7 +26,7 @@ impl NyaTermApp {
         } else {
             state.entry.name.clone()
         };
-        let dialog_width = transfer_dialog_width(self.last_viewport_size.0, 384.);
+        let dialog_width = transfer_dialog_width(self.last_viewport_size.0, 512.);
         let description = self
             .tr("fileExplorer.unknownFileTypeDesc")
             .replace("{{name}}", &name);
@@ -64,7 +64,7 @@ impl NyaTermApp {
                     .border_color(rgb(palette.border))
                     .bg(self.shell_surface_color(palette.bg))
                     .shadow_lg()
-                    .p_4()
+                    .p_6()
                     .flex()
                     .flex_col()
                     .gap_3()
@@ -74,7 +74,7 @@ impl NyaTermApp {
                     .child(
                         div().flex().items_center().justify_between().gap_3().child(
                             div()
-                                .text_sm()
+                                .text_size(px(18.))
                                 .font_weight(FontWeight(800.))
                                 .text_color(rgb(palette.text))
                                 .child(self.tr("fileExplorer.unknownFileTypeTitle")),
@@ -82,13 +82,14 @@ impl NyaTermApp {
                     )
                     .child(
                         div()
-                            .text_xs()
+                            .text_sm()
                             .text_color(rgb(palette.text_muted))
                             .child(description),
                     )
                     .child(
                         div()
                             .flex()
+                            .flex_wrap()
                             .justify_end()
                             .gap_2()
                             .child(small_button(
@@ -107,10 +108,11 @@ impl NyaTermApp {
                                     this.open_unknown_transfer_file_internal(window, cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(transfer_dialog_button(
                                 palette,
                                 "transfer-unknown-external",
                                 self.tr("fileExplorer.unknownFileTypeOpenExternal"),
+                                false,
                                 cx.listener(|this, _, window, cx| {
                                     this.open_unknown_transfer_file_external(window, cx);
                                 }),

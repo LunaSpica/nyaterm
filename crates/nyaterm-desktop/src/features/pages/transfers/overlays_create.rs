@@ -53,9 +53,15 @@ impl NyaTermApp {
                     .border_color(rgb(palette.border))
                     .bg(self.shell_surface_color(palette.bg))
                     .shadow_lg()
-                    .p_4()
+                    .flex()
+                    .flex_col()
                     .child(
                         div()
+                            .flex_none()
+                            .px_5()
+                            .py_3()
+                            .border_b_1()
+                            .border_color(rgb(palette.border))
                             .text_sm()
                             .font_weight(FontWeight(800.))
                             .text_color(rgb(palette.text))
@@ -63,113 +69,154 @@ impl NyaTermApp {
                     )
                     .child(
                         div()
-                            .mt_2()
-                            .font_family(crate::features::gpui_code_font_family())
-                            .text_xs()
-                            .text_color(rgb(palette.text_muted))
-                            .child(truncate_preview(&state.parent_path, 92)),
-                    )
-                    .child(
-                        div()
-                            .id(SharedString::from("transfer-new-folder-input"))
-                            .mt_3()
-                            .h(px(36.))
-                            .rounded_sm()
-                            .border_1()
-                            .border_color(if has_error {
-                                rgb(palette.danger)
-                            } else {
-                                rgb(0x256d3f)
-                            })
-                            .bg(rgb(palette.input))
-                            .px_3()
+                            .flex_1()
+                            .min_h_0()
+                            .p_5()
                             .flex()
-                            .items_center()
-                            .font_family(crate::features::gpui_code_font_family())
-                            .text_sm()
-                            .text_color(if state.value.is_empty() {
-                                rgb(palette.text_muted)
-                            } else {
-                                rgb(palette.text)
-                            })
-                            .child(truncate_preview(&input_display, 80)),
-                    )
-                    .child(self.transfer_permission_grid(
-                        palette,
-                        state.mode,
-                        TransferPermissionTarget::NewFolder,
-                        cx,
-                    ))
-                    .child(
-                        div()
-                            .mt_2()
-                            .flex()
-                            .items_center()
-                            .justify_end()
-                            .gap_2()
+                            .flex_col()
+                            .gap_4()
                             .child(
                                 div()
-                                    .text_xs()
-                                    .text_color(rgb(palette.text_muted))
-                                    .child(self.tr("fileExplorer.openAfterCreateFolder")),
+                                    .flex()
+                                    .items_center()
+                                    .gap_3()
+                                    .child(
+                                        div()
+                                            .w(px(64.))
+                                            .flex_none()
+                                            .text_xs()
+                                            .text_color(rgb(palette.text_muted))
+                                            .child(self.tr("fileExplorer.newFolderName")),
+                                    )
+                                    .child(
+                                        div()
+                                            .id(SharedString::from("transfer-new-folder-input"))
+                                            .h(px(32.))
+                                            .flex_1()
+                                            .min_w_0()
+                                            .rounded_sm()
+                                            .border_1()
+                                            .border_color(rgb(palette.border))
+                                            .bg(rgb(palette.input))
+                                            .px_3()
+                                            .flex()
+                                            .items_center()
+                                            .font_family(crate::features::gpui_code_font_family())
+                                            .text_sm()
+                                            .text_color(if state.value.is_empty() {
+                                                rgb(palette.text_muted)
+                                            } else {
+                                                rgb(palette.text)
+                                            })
+                                            .child(truncate_preview(&input_display, 80)),
+                                    ),
                             )
-                            .child(small_button(
-                                palette,
-                                "transfer-new-folder-open-after",
-                                if state.open_after_create {
-                                    self.tr("fileExplorer.on")
-                                } else {
-                                    self.tr("fileExplorer.off")
-                                },
-                                cx.listener(|this, _, _, cx| {
-                                    if let Some(state) = this.transfer_new_folder.as_mut() {
-                                        state.open_after_create = !state.open_after_create;
-                                    }
-                                    cx.notify();
-                                }),
-                            )),
-                    )
-                    .child(
-                        div()
-                            .mt_2()
-                            .text_xs()
-                            .text_color(if has_error {
-                                rgb(palette.danger)
-                            } else {
-                                rgb(palette.text_muted)
-                            })
-                            .child(if has_error {
-                                self.tr("fileExplorer.invalidFolderName")
-                            } else {
-                                ""
-                            }),
-                    )
-                    .child(
-                        div()
-                            .mt_4()
-                            .flex()
-                            .items_center()
-                            .justify_end()
-                            .gap_2()
-                            .child(small_button(
-                                palette,
-                                "transfer-new-folder-cancel",
-                                self.tr("common.cancel"),
-                                cx.listener(|this, _, _, cx| {
-                                    this.close_transfer_new_folder_dialog(cx);
-                                }),
-                            ))
                             .child(
                                 div()
-                                    .when(has_error || name.is_empty(), |this| this.opacity(0.45))
+                                    .flex()
+                                    .items_start()
+                                    .gap_3()
+                                    .child(
+                                        div()
+                                            .w(px(64.))
+                                            .flex_none()
+                                            .mt_1()
+                                            .text_xs()
+                                            .text_color(rgb(palette.text_muted))
+                                            .child(self.tr("fileExplorer.permissions")),
+                                    )
+                                    .child(div().flex_1().min_w_0().child(
+                                        self.transfer_permission_grid(
+                                            palette,
+                                            state.mode,
+                                            TransferPermissionTarget::NewFolder,
+                                            cx,
+                                        ),
+                                    )),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex_none()
+                            .border_t_1()
+                            .border_color(rgb(palette.border))
+                            .px_5()
+                            .py_3()
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .gap_2()
+                            .child(
+                                div()
+                                    .id("transfer-new-folder-open-after")
+                                    .flex()
+                                    .items_center()
+                                    .gap_2()
+                                    .cursor_pointer()
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        if let Some(state) = this.transfer_new_folder.as_mut() {
+                                            state.open_after_create = !state.open_after_create;
+                                        }
+                                        cx.notify();
+                                    }))
+                                    .child(
+                                        div()
+                                            .size(px(14.))
+                                            .rounded_sm()
+                                            .border_1()
+                                            .border_color(if state.open_after_create {
+                                                rgb(palette.link)
+                                            } else {
+                                                rgb(palette.border)
+                                            })
+                                            .bg(if state.open_after_create {
+                                                rgb(palette.link)
+                                            } else {
+                                                rgb(palette.input)
+                                            })
+                                            .when(state.open_after_create, |this| {
+                                                this.child(
+                                                    svg()
+                                                        .size(px(11.))
+                                                        .path("icons/check.svg")
+                                                        .text_color(rgb(palette.bg)),
+                                                )
+                                            }),
+                                    )
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .text_color(rgb(palette.text_muted))
+                                            .child(self.tr("fileExplorer.openAfterCreateFolder")),
+                                    ),
+                            )
+                            .child(
+                                div()
+                                    .flex()
+                                    .gap_2()
                                     .child(small_button(
                                         palette,
-                                        "transfer-new-folder-create",
-                                        self.tr("common.confirm"),
-                                        cx.listener(|this, _, window, cx| {
-                                            this.submit_transfer_new_folder(window, cx);
+                                        "transfer-new-folder-cancel",
+                                        self.tr("common.cancel"),
+                                        cx.listener(|this, _, _, cx| {
+                                            this.close_transfer_new_folder_dialog(cx);
                                         }),
-                                    )),
+                                    ))
+                                    .child(
+                                        div()
+                                            .when(has_error || name.is_empty(), |this| {
+                                                this.opacity(0.45)
+                                            })
+                                            .child(transfer_dialog_button(
+                                                palette,
+                                                "transfer-new-folder-create",
+                                                self.tr("common.confirm"),
+                                                false,
+                                                cx.listener(|this, _, window, cx| {
+                                                    this.submit_transfer_new_folder(window, cx);
+                                                }),
+                                            )),
+                                    ),
                             ),
                     ),
             )
@@ -227,9 +274,15 @@ impl NyaTermApp {
                     .border_color(rgb(palette.border))
                     .bg(self.shell_surface_color(palette.bg))
                     .shadow_lg()
-                    .p_4()
+                    .flex()
+                    .flex_col()
                     .child(
                         div()
+                            .flex_none()
+                            .px_5()
+                            .py_3()
+                            .border_b_1()
+                            .border_color(rgb(palette.border))
                             .text_sm()
                             .font_weight(FontWeight(800.))
                             .text_color(rgb(palette.text))
@@ -237,113 +290,154 @@ impl NyaTermApp {
                     )
                     .child(
                         div()
-                            .mt_2()
-                            .font_family(crate::features::gpui_code_font_family())
-                            .text_xs()
-                            .text_color(rgb(palette.text_muted))
-                            .child(truncate_preview(&state.parent_path, 92)),
-                    )
-                    .child(
-                        div()
-                            .id(SharedString::from("transfer-new-file-input"))
-                            .mt_3()
-                            .h(px(36.))
-                            .rounded_sm()
-                            .border_1()
-                            .border_color(if has_error {
-                                rgb(palette.danger)
-                            } else {
-                                rgb(0x256d3f)
-                            })
-                            .bg(rgb(palette.input))
-                            .px_3()
+                            .flex_1()
+                            .min_h_0()
+                            .p_5()
                             .flex()
-                            .items_center()
-                            .font_family(crate::features::gpui_code_font_family())
-                            .text_sm()
-                            .text_color(if state.value.is_empty() {
-                                rgb(palette.text_muted)
-                            } else {
-                                rgb(palette.text)
-                            })
-                            .child(truncate_preview(&input_display, 80)),
-                    )
-                    .child(self.transfer_permission_grid(
-                        palette,
-                        state.mode,
-                        TransferPermissionTarget::NewFile,
-                        cx,
-                    ))
-                    .child(
-                        div()
-                            .mt_2()
-                            .flex()
-                            .items_center()
-                            .justify_end()
-                            .gap_2()
+                            .flex_col()
+                            .gap_4()
                             .child(
                                 div()
-                                    .text_xs()
-                                    .text_color(rgb(palette.text_muted))
-                                    .child(self.tr("fileExplorer.openAfterCreateFile")),
+                                    .flex()
+                                    .items_center()
+                                    .gap_3()
+                                    .child(
+                                        div()
+                                            .w(px(64.))
+                                            .flex_none()
+                                            .text_xs()
+                                            .text_color(rgb(palette.text_muted))
+                                            .child(self.tr("fileExplorer.newFileName")),
+                                    )
+                                    .child(
+                                        div()
+                                            .id(SharedString::from("transfer-new-file-input"))
+                                            .h(px(32.))
+                                            .flex_1()
+                                            .min_w_0()
+                                            .rounded_sm()
+                                            .border_1()
+                                            .border_color(rgb(palette.border))
+                                            .bg(rgb(palette.input))
+                                            .px_3()
+                                            .flex()
+                                            .items_center()
+                                            .font_family(crate::features::gpui_code_font_family())
+                                            .text_sm()
+                                            .text_color(if state.value.is_empty() {
+                                                rgb(palette.text_muted)
+                                            } else {
+                                                rgb(palette.text)
+                                            })
+                                            .child(truncate_preview(&input_display, 80)),
+                                    ),
                             )
-                            .child(small_button(
-                                palette,
-                                "transfer-new-file-open-after",
-                                if state.open_after_create {
-                                    self.tr("fileExplorer.on")
-                                } else {
-                                    self.tr("fileExplorer.off")
-                                },
-                                cx.listener(|this, _, _, cx| {
-                                    if let Some(state) = this.transfer_new_file.as_mut() {
-                                        state.open_after_create = !state.open_after_create;
-                                    }
-                                    cx.notify();
-                                }),
-                            )),
-                    )
-                    .child(
-                        div()
-                            .mt_2()
-                            .text_xs()
-                            .text_color(if has_error {
-                                rgb(palette.danger)
-                            } else {
-                                rgb(palette.text_muted)
-                            })
-                            .child(if has_error {
-                                self.tr("fileExplorer.invalidFileName")
-                            } else {
-                                ""
-                            }),
-                    )
-                    .child(
-                        div()
-                            .mt_4()
-                            .flex()
-                            .items_center()
-                            .justify_end()
-                            .gap_2()
-                            .child(small_button(
-                                palette,
-                                "transfer-new-file-cancel",
-                                self.tr("common.cancel"),
-                                cx.listener(|this, _, _, cx| {
-                                    this.close_transfer_new_file_dialog(cx);
-                                }),
-                            ))
                             .child(
                                 div()
-                                    .when(has_error || name.is_empty(), |this| this.opacity(0.45))
+                                    .flex()
+                                    .items_start()
+                                    .gap_3()
+                                    .child(
+                                        div()
+                                            .w(px(64.))
+                                            .flex_none()
+                                            .mt_1()
+                                            .text_xs()
+                                            .text_color(rgb(palette.text_muted))
+                                            .child(self.tr("fileExplorer.permissions")),
+                                    )
+                                    .child(div().flex_1().min_w_0().child(
+                                        self.transfer_permission_grid(
+                                            palette,
+                                            state.mode,
+                                            TransferPermissionTarget::NewFile,
+                                            cx,
+                                        ),
+                                    )),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex_none()
+                            .border_t_1()
+                            .border_color(rgb(palette.border))
+                            .px_5()
+                            .py_3()
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .gap_2()
+                            .child(
+                                div()
+                                    .id("transfer-new-file-open-after")
+                                    .flex()
+                                    .items_center()
+                                    .gap_2()
+                                    .cursor_pointer()
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        if let Some(state) = this.transfer_new_file.as_mut() {
+                                            state.open_after_create = !state.open_after_create;
+                                        }
+                                        cx.notify();
+                                    }))
+                                    .child(
+                                        div()
+                                            .size(px(14.))
+                                            .rounded_sm()
+                                            .border_1()
+                                            .border_color(if state.open_after_create {
+                                                rgb(palette.link)
+                                            } else {
+                                                rgb(palette.border)
+                                            })
+                                            .bg(if state.open_after_create {
+                                                rgb(palette.link)
+                                            } else {
+                                                rgb(palette.input)
+                                            })
+                                            .when(state.open_after_create, |this| {
+                                                this.child(
+                                                    svg()
+                                                        .size(px(11.))
+                                                        .path("icons/check.svg")
+                                                        .text_color(rgb(palette.bg)),
+                                                )
+                                            }),
+                                    )
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .text_color(rgb(palette.text_muted))
+                                            .child(self.tr("fileExplorer.openAfterCreateFile")),
+                                    ),
+                            )
+                            .child(
+                                div()
+                                    .flex()
+                                    .gap_2()
                                     .child(small_button(
                                         palette,
-                                        "transfer-new-file-create",
-                                        self.tr("common.confirm"),
-                                        cx.listener(|this, _, window, cx| {
-                                            this.submit_transfer_new_file(window, cx);
+                                        "transfer-new-file-cancel",
+                                        self.tr("common.cancel"),
+                                        cx.listener(|this, _, _, cx| {
+                                            this.close_transfer_new_file_dialog(cx);
                                         }),
-                                    )),
+                                    ))
+                                    .child(
+                                        div()
+                                            .when(has_error || name.is_empty(), |this| {
+                                                this.opacity(0.45)
+                                            })
+                                            .child(transfer_dialog_button(
+                                                palette,
+                                                "transfer-new-file-create",
+                                                self.tr("common.confirm"),
+                                                false,
+                                                cx.listener(|this, _, window, cx| {
+                                                    this.submit_transfer_new_file(window, cx);
+                                                }),
+                                            )),
+                                    ),
                             ),
                     ),
             )
@@ -366,7 +460,8 @@ impl NyaTermApp {
             });
         let name = state.name.trim();
         let target = state.target.trim();
-        let has_error = !valid_remote_child_name(name) || target.is_empty();
+        let name_invalid = !name.is_empty() && !valid_remote_child_name(name);
+        let has_error = name.is_empty() || target.is_empty() || name_invalid;
 
         div()
             .id(SharedString::from("transfer-new-symlink-overlay"))
@@ -397,9 +492,15 @@ impl NyaTermApp {
                     .border_color(rgb(palette.border))
                     .bg(self.shell_surface_color(palette.bg))
                     .shadow_lg()
-                    .p_4()
+                    .flex()
+                    .flex_col()
                     .child(
                         div()
+                            .flex_none()
+                            .px_5()
+                            .py_3()
+                            .border_b_1()
+                            .border_color(rgb(palette.border))
                             .text_sm()
                             .font_weight(FontWeight(800.))
                             .text_color(rgb(palette.text))
@@ -407,68 +508,58 @@ impl NyaTermApp {
                     )
                     .child(
                         div()
-                            .mt_2()
-                            .font_family(crate::features::gpui_code_font_family())
-                            .text_xs()
-                            .text_color(rgb(palette.text_muted))
-                            .child(truncate_preview(&state.parent_path, 92)),
-                    )
-                    .child(symlink_input_row(
-                        palette,
-                        "transfer-new-symlink-name",
-                        self.tr("fileExplorer.symlinkName"),
-                        if state.name.is_empty() {
-                            self.tr("fileExplorer.symlinkName")
-                        } else {
-                            &state.name
-                        },
-                        state.focused_field == TransferSymlinkField::Name,
-                        has_error && !valid_remote_child_name(name),
-                        cx.listener(|this, _, window, cx| {
-                            if let Some(state) = this.transfer_new_symlink.as_mut() {
-                                state.focused_field = TransferSymlinkField::Name;
-                            }
-                            window.focus(&this.transfer_new_symlink_focus);
-                            cx.notify();
-                        }),
-                    ))
-                    .child(symlink_input_row(
-                        palette,
-                        "transfer-new-symlink-target",
-                        self.tr("fileExplorer.symlinkTarget"),
-                        if state.target.is_empty() {
-                            "/path/to/target"
-                        } else {
-                            &state.target
-                        },
-                        state.focused_field == TransferSymlinkField::Target,
-                        has_error && target.is_empty(),
-                        cx.listener(|this, _, window, cx| {
-                            if let Some(state) = this.transfer_new_symlink.as_mut() {
-                                state.focused_field = TransferSymlinkField::Target;
-                            }
-                            window.focus(&this.transfer_new_symlink_focus);
-                            cx.notify();
-                        }),
-                    ))
-                    .child(
-                        div()
-                            .mt_2()
-                            .text_xs()
-                            .text_color(if has_error {
-                                rgb(palette.danger)
-                            } else {
-                                rgb(palette.text_muted)
-                            })
-                            .child(if has_error {
-                                self.tr("fileExplorer.invalidSymlink")
-                            } else {
-                                ""
-                            }),
+                            .flex_1()
+                            .min_h_0()
+                            .p_5()
+                            .flex()
+                            .flex_col()
+                            .gap_4()
+                            .child(symlink_input_row(
+                                palette,
+                                "transfer-new-symlink-name",
+                                self.tr("fileExplorer.symlinkName"),
+                                if state.name.is_empty() {
+                                    self.tr("fileExplorer.symlinkName")
+                                } else {
+                                    &state.name
+                                },
+                                state.focused_field == TransferSymlinkField::Name,
+                                name_invalid,
+                                cx.listener(|this, _, window, cx| {
+                                    if let Some(state) = this.transfer_new_symlink.as_mut() {
+                                        state.focused_field = TransferSymlinkField::Name;
+                                    }
+                                    window.focus(&this.transfer_new_symlink_focus);
+                                    cx.notify();
+                                }),
+                            ))
+                            .child(symlink_input_row(
+                                palette,
+                                "transfer-new-symlink-target",
+                                self.tr("fileExplorer.symlinkTarget"),
+                                if state.target.is_empty() {
+                                    "/path/to/target"
+                                } else {
+                                    &state.target
+                                },
+                                state.focused_field == TransferSymlinkField::Target,
+                                false,
+                                cx.listener(|this, _, window, cx| {
+                                    if let Some(state) = this.transfer_new_symlink.as_mut() {
+                                        state.focused_field = TransferSymlinkField::Target;
+                                    }
+                                    window.focus(&this.transfer_new_symlink_focus);
+                                    cx.notify();
+                                }),
+                            )),
                     )
                     .child(
                         div()
-                            .mt_4()
+                            .flex_none()
+                            .border_t_1()
+                            .border_color(rgb(palette.border))
+                            .px_5()
+                            .py_3()
                             .flex()
                             .items_center()
                             .justify_end()
@@ -482,10 +573,11 @@ impl NyaTermApp {
                                 }),
                             ))
                             .child(div().when(has_error, |this| this.opacity(0.45)).child(
-                                small_button(
+                                transfer_dialog_button(
                                     palette,
                                     "transfer-new-symlink-create",
                                     self.tr("common.confirm"),
+                                    false,
                                     cx.listener(|this, _, window, cx| {
                                         this.submit_transfer_new_symlink(window, cx);
                                     }),
@@ -516,15 +608,9 @@ impl NyaTermApp {
         };
 
         div()
-            .mt_3()
-            .rounded_sm()
-            .border_1()
-            .border_color(rgb(palette.border))
-            .bg(rgb(palette.input))
-            .p_2()
             .flex()
             .flex_col()
-            .gap_1()
+            .gap_2()
             .child(
                 div()
                     .flex()

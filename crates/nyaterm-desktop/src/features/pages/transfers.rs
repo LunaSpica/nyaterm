@@ -123,16 +123,12 @@ impl NyaTermApp {
 
         // Tauri AppPanelContent: FileExplorer (flex-1) + vertical resize + FileTransfer fixed height.
         let palette = self.theme_palette();
-        let mut view = div()
+        let view = div()
             .size_full()
             .flex()
             .flex_col()
             .overflow_hidden()
             .bg(self.shell_transparent_color(palette.surface));
-
-        if let Some(prompt) = duplicate_prompt {
-            view = view.child(self.duplicate_prompt_banner(prompt, cx));
-        }
 
         view.child(
             div()
@@ -149,6 +145,9 @@ impl NyaTermApp {
                 .overflow_hidden()
                 .child(self.transfer_queue_view(cx)),
         )
+        .when_some(duplicate_prompt, |this, prompt| {
+            this.child(self.duplicate_prompt_banner(prompt, cx))
+        })
     }
 }
 
