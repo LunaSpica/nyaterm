@@ -97,7 +97,7 @@ impl NyaTermApp {
                     .bottom_0()
                     .left_0()
                     .right_0()
-                    .bg(rgba(0x020617dd))
+                    .bg(rgba(0x00000080))
                     .p_3()
             })
             .when(standalone, |this| this.size_full().bg(rgb(palette.bg)))
@@ -126,7 +126,11 @@ impl NyaTermApp {
                             .border_color(rgb(palette.border))
                             .shadow_lg()
                     })
-                    .bg(rgb(palette.bg))
+                    .bg(if standalone {
+                        rgb(palette.bg).into()
+                    } else {
+                        self.shell_surface_color(palette.bg)
+                    })
                     .p_4()
                     .flex()
                     .flex_col()
@@ -571,9 +575,9 @@ impl NyaTermApp {
             .left_0()
             .right_0()
             .bg(if standalone {
-                rgb(palette.bg)
+                rgb(palette.bg).into()
             } else {
-                rgb(0x030508)
+                rgba(0x00000080)
             })
             .flex()
             .items_center()
@@ -602,7 +606,11 @@ impl NyaTermApp {
                             .border_color(rgb(palette.border))
                             .shadow_lg()
                     })
-                    .bg(rgb(palette.bg))
+                    .bg(if standalone {
+                        rgb(palette.bg).into()
+                    } else {
+                        self.shell_surface_color(palette.bg)
+                    })
                     .overflow_hidden()
                     .relative()
                     .flex()

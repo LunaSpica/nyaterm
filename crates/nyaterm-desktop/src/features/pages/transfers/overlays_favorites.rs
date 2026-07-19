@@ -131,7 +131,7 @@ impl NyaTermApp {
                     .rounded_md()
                     .border_1()
                     .border_color(rgb(palette.border))
-                    .bg(rgb(palette.bg))
+                    .bg(self.shell_surface_color(palette.bg))
                     .shadow_lg()
                     .p_3()
                     .flex()
