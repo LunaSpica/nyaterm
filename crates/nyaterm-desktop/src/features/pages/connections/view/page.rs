@@ -164,11 +164,7 @@ impl NyaTermApp {
         } else {
             self.connection_search_draft.clone()
         };
-        let sort_label = match self.connection_sort_mode {
-            ConnectionSortMode::Default => "↕",
-            ConnectionSortMode::NameAsc => "A↑",
-            ConnectionSortMode::NameDesc => "A↓",
-        };
+        let sort_label = "icons/conn/sort.svg";
         let sort_tooltip = self.tr(match self.connection_sort_mode {
             ConnectionSortMode::Default => "savedConnections.sortDefault",
             ConnectionSortMode::NameAsc => "savedConnections.sortNameAsc",

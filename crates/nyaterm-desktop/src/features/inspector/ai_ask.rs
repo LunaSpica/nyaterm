@@ -379,7 +379,7 @@ impl NyaTermApp {
                             .rounded_md()
                             .border_1()
                             .border_color(rgb(palette.border))
-                            .bg(rgb(palette.surface_elevated))
+                            .bg(self.shell_surface_color(palette.surface))
                             .shadow_lg()
                             .flex()
                             .flex_col()
@@ -415,7 +415,7 @@ impl NyaTermApp {
                                         .bg(if focused || selected {
                                             rgb(palette.hover)
                                         } else {
-                                            rgb(palette.surface_elevated)
+                                            rgba(0x00000000)
                                         })
                                         .cursor_pointer()
                                         .hover(|this| this.bg(rgb(palette.hover)))
@@ -601,7 +601,7 @@ impl NyaTermApp {
                                                     .rounded_md()
                                                     .border_1()
                                                     .border_color(rgb(palette.border))
-                                                    .bg(rgb(palette.surface_elevated))
+                                                    .bg(self.shell_surface_color(palette.surface))
                                                     .shadow_lg()
                                                     .p_1()
                                                     .flex()
@@ -730,10 +730,7 @@ impl NyaTermApp {
                                                                     .bg(if focused || is_selected {
                                                                         rgb(palette.hover)
                                                                     } else {
-                                                                        rgb(
-                                                                            palette
-                                                                                .surface_elevated,
-                                                                        )
+                                                                        rgba(0x00000000)
                                                                     })
                                                                     .cursor_pointer()
                                                                     .hover(|this| {

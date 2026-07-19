@@ -366,6 +366,11 @@ impl NyaTermApp {
         let icon_key = editor.icon.as_deref();
         let icon_def = resolve_connection_icon(icon_key, editor.kind.label());
         let icon_picker_open = self.connection_icon_picker_open;
+        let icon_picker_bg = if native_window {
+            rgb(palette.surface)
+        } else {
+            self.shell_surface_color(palette.surface)
+        };
         let validation_error = self.connection_editor_validation_error(&editor);
         let save_enabled = validation_error.is_none();
         let mut icon_grid = div().grid().grid_cols(7).gap_1();
@@ -454,7 +459,7 @@ impl NyaTermApp {
                         .rounded_md()
                         .border_1()
                         .border_color(rgb(palette.border))
-                        .bg(rgb(palette.surface_elevated))
+                        .bg(icon_picker_bg)
                         .shadow_lg()
                         .child(icon_grid),
                 )

@@ -73,10 +73,6 @@ impl TransferPathPart {
     }
 }
 
-pub(in crate::features::pages::transfers) const TRANSFER_BROWSER_ACTIONS_WIDTH: gpui::Pixels =
-    px(44.);
-const TRANSFER_BROWSER_COLUMN_GAP_TOTAL: gpui::Pixels = px(48.);
-
 pub(in crate::features::pages::transfers) fn transfer_browser_table_width(
     widths: TransferBrowserColumnWidths,
 ) -> gpui::Pixels {
@@ -86,8 +82,6 @@ pub(in crate::features::pages::transfers) fn transfer_browser_table_width(
         + widths.permissions
         + widths.owner
         + widths.group
-        + TRANSFER_BROWSER_ACTIONS_WIDTH
-        + TRANSFER_BROWSER_COLUMN_GAP_TOTAL
 }
 
 pub(in crate::features::pages::transfers) fn transfer_path_part_value(
@@ -102,7 +96,16 @@ pub(in crate::features::pages::transfers) fn transfer_path_part_value(
 }
 
 pub(in crate::features::pages::transfers) fn format_sftp_modified(value: Option<u32>) -> String {
-    value
-        .map(|seconds| format!("{seconds}s"))
-        .unwrap_or_else(|| "-".to_string())
+    let Some(seconds) = value.filter(|seconds| *seconds > 0) else {
+        return "-".to_string();
+    };
+    let Ok(timestamp) = time::OffsetDateTime::from_unix_timestamp(i64::from(seconds)) else {
+        return "-".to_string();
+    };
+    let offset = time::UtcOffset::current_local_offset().unwrap_or(time::UtcOffset::UTC);
+    let format = time::macros::format_description!("[year]/[month]/[day] [hour]:[minute]");
+    timestamp
+        .to_offset(offset)
+        .format(&format)
+        .unwrap_or_else(|_| "-".to_string())
 }

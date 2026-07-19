@@ -386,6 +386,7 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         let session_id = session.id.clone();
+        let row_group = SharedString::from(format!("active-session-group-{}", session.id));
         let rename_session_id = session.id.clone();
         let menu_session_id = session.id.clone();
         let custom_color = self.session_tab_colors.get(&session.id).copied();
@@ -397,6 +398,10 @@ impl NyaTermApp {
             .is_some_and(|view| view.has_unread);
         let busy_action = self.active_session_busy_actions.get(&session.id).cloned();
         let is_busy = busy_action.is_some();
+        let menu_open = self
+            .active_session_menu
+            .as_ref()
+            .is_some_and(|menu| menu.session_id == session.id);
         let accent = if let Some(custom_color) = custom_color {
             rgb(custom_color)
         } else if is_disconnected {
@@ -411,9 +416,9 @@ impl NyaTermApp {
         let row_bg = if let Some(custom_color) = custom_color {
             rgba((custom_color << 8) | if is_active { 0x22 } else { 0x12 })
         } else if is_active {
-            rgb(palette.hover)
+            rgba(0x00000000)
         } else {
-            rgb(palette.surface)
+            rgba(0x00000000)
         };
         let hover_bg = if let Some(custom_color) = custom_color {
             rgba((custom_color << 8) | if is_active { 0x30 } else { 0x20 })
@@ -430,6 +435,7 @@ impl NyaTermApp {
             .id(SharedString::from(format!(
                 "active-session-row-{session_id}"
             )))
+            .group(row_group.clone())
             .relative()
             .h(px(48.))
             .rounded_md()
@@ -493,8 +499,10 @@ impl NyaTermApp {
                             .flex()
                             .items_center()
                             .gap_0()
-                            .flex_none()
-                            .child(session_action_svg_button(
+                    .flex_none()
+                    .opacity(if menu_open { 1. } else { 0. })
+                    .group_hover(row_group, |style| style.opacity(1.))
+                    .child(session_action_svg_button(
                                 palette,
                                 format!("active-session-rename-{rename_session_id}"),
                                 "icons/session/rename.svg",

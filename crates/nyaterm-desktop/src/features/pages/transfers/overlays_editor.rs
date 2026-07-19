@@ -351,18 +351,24 @@ impl NyaTermApp {
             .min_w_0()
             .flex()
             .overflow_x_scroll();
+        let tabs_menu_max_height = (self.last_viewport_size.1 - 48.).clamp(160., 360.);
+        let tabs_menu_bg = if standalone {
+            rgb(palette.surface)
+        } else {
+            self.shell_surface_color(palette.surface)
+        };
         let mut tabs_menu = div()
             .id("transfer-editor-tabs-menu")
             .absolute()
             .top(px(40.))
             .right_0()
             .w(px(320.))
-            .max_h(px(360.))
+            .max_h(px(tabs_menu_max_height))
             .overflow_y_scroll()
             .rounded_bl_md()
             .border_1()
             .border_color(rgb(palette.border))
-            .bg(rgb(palette.surface_elevated))
+            .bg(tabs_menu_bg)
             .shadow_lg()
             .py_1()
             .flex()

@@ -35,7 +35,7 @@ impl NyaTermApp {
             .min_h(px(26.))
             .border_b_1()
             .border_color(rgb(palette.border))
-            .bg(rgb(palette.surface))
+            .bg(self.shell_transparent_color(palette.surface))
             .px_2()
             .py(px(2.))
             .justify_center()
@@ -151,6 +151,7 @@ impl NyaTermApp {
                 |this| {
                     this.child(transfer_browser_path_history_list(
                         palette,
+                        self.shell_surface_color(palette.surface),
                         current_browser_path,
                         self.transfer_browser_home_dir.clone(),
                         history_paths,
@@ -275,6 +276,7 @@ impl NyaTermApp {
 
 fn transfer_browser_path_history_list(
     palette: crate::theme::ThemePalette,
+    popup_bg: gpui::Rgba,
     current_browser_path: String,
     home_dir: String,
     paths: Vec<String>,
@@ -289,7 +291,7 @@ fn transfer_browser_path_history_list(
         .rounded_b_md()
         .border_1()
         .border_color(rgb(palette.border))
-        .bg(rgb(palette.surface))
+        .bg(popup_bg)
         .shadow_lg()
         .flex()
         .flex_col();

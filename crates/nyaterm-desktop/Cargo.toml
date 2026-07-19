@@ -26,6 +26,7 @@ rqrr = "0.9"
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
+time.workspace = true
 tracing.workspace = true
 zed_reqwest.workspace = true
 zip.workspace = true

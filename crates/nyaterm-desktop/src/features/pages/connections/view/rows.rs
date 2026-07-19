@@ -130,7 +130,7 @@ impl NyaTermApp {
                         }) {
                             rgb(palette.hover)
                         } else {
-                            rgb(palette.surface)
+                            rgba(0x00000000)
                         }
                     })
                     .when(
@@ -391,13 +391,13 @@ impl NyaTermApp {
             .px_2()
             .pl(px(connection_tree_indent_px(depth)))
             .bg(if selected {
-                rgb(palette.hover)
+                rgba((palette.primary << 8) | 0x1a)
             } else if show_inside {
                 rgb(palette.hover)
             } else if hovered {
                 rgb(palette.hover)
             } else {
-                rgb(palette.surface)
+                rgba(0x00000000)
             })
             .hover(move |this| this.bg(rgb(palette.hover)))
             .when(show_inside, |this| {
@@ -541,7 +541,7 @@ impl NyaTermApp {
                     .bg(if show_actions {
                         rgb(palette.hover)
                     } else {
-                        rgb(palette.surface)
+                        rgba(0x00000000)
                     })
                     .opacity(if show_actions { 1. } else { 0. })
                     .child(icon_action_button(
@@ -612,7 +612,7 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         let rows = connection_detail_rows(&connection, &self.connections, &self.proxies);
         let mut grid = div().grid().gap_1();
-        for (label, value) in rows.into_iter().take(6) {
+        for (label, value) in rows {
             grid = grid.child(
                 div()
                     .flex()
@@ -641,11 +641,11 @@ impl NyaTermApp {
             .absolute()
             .top(px(30.))
             .left(px(28.))
-            .w(px(260.))
+            .w(px(200.))
             .rounded_md()
             .border_1()
             .border_color(rgb(palette.border))
-            .bg(rgb(palette.surface_elevated))
+            .bg(self.shell_surface_color(palette.surface))
             .px_3()
             .py_2()
             .child(

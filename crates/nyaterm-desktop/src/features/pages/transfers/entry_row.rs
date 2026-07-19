@@ -9,15 +9,11 @@ pub(super) fn transfer_browser_parent_entry_row(
     let context_path = current_path.clone();
     div()
         .id(SharedString::from("transfer-browser-entry-parent"))
+        .h(px(30.))
         .flex()
-        .gap_2()
         .items_center()
         .rounded_sm()
-        .border_1()
-        .border_color(rgb(palette.border))
-        .bg(rgb(0x0f1724))
-        .px_2()
-        .py_2()
+        .bg(gpui::rgba(0x00000000))
         .cursor_pointer()
         .hover(|this| this.bg(rgb(palette.hover)))
         .on_click(cx.listener(|this, _: &ClickEvent, window, cx| {
@@ -43,8 +39,8 @@ pub(super) fn transfer_browser_parent_entry_row(
                 .flex()
                 .items_center()
                 .gap_2()
-                .text_sm()
-                .font_weight(FontWeight(700.))
+                .px_2()
+                .text_size(px(12.))
                 .text_color(rgb(palette.text))
                 .child(transfer_entry_icon(true, false, false))
                 .child(".."),
@@ -62,14 +58,6 @@ pub(super) fn transfer_browser_parent_entry_row(
         ))
         .child(transfer_browser_text_cell(palette, column_widths.owner, ""))
         .child(transfer_browser_text_cell(palette, column_widths.group, ""))
-        .child(
-            div()
-                .w(TRANSFER_BROWSER_ACTIONS_WIDTH)
-                .flex_none()
-                .flex()
-                .items_center()
-                .justify_end(),
-        )
 }
 
 fn transfer_browser_text_cell(
@@ -80,6 +68,7 @@ fn transfer_browser_text_cell(
     div()
         .w(width)
         .flex_none()
+        .px_2()
         .truncate()
         .text_xs()
         .text_color(rgb(palette.text_muted))
@@ -100,7 +89,6 @@ pub(super) fn transfer_browser_entry_row(
     let mouse_down_path = entry.path.clone();
     let mouse_move_path = entry.path.clone();
     let context_path = entry.path.clone();
-    let actions_path = entry.path.clone();
     let is_selected = selected_remote_path.as_deref() == Some(entry.path.as_str());
     let is_marked = selected_remote_paths.contains(&entry.path);
     let inline_rename = rename_state.filter(|state| state.old_path == entry.path);
@@ -123,26 +111,28 @@ pub(super) fn transfer_browser_entry_row(
         trimmed.is_empty() || trimmed.contains('/') || trimmed == "." || trimmed == ".."
     });
     let is_directory = entry.file_type == SftpFileType::Directory;
+    let is_marked_or_selected = is_selected || is_marked;
+    let size_display = if is_directory {
+        "-".to_string()
+    } else {
+        format_file_size(entry.size)
+    };
     div()
         .id(SharedString::from(format!(
             "transfer-browser-entry-{entry_path}"
         )))
         .h(px(30.))
         .flex()
-        .gap_1()
         .items_center()
-        .border_b_1()
-        .border_color(rgb(palette.surface_elevated))
-        .bg(if is_selected {
-            rgb(0x10251d)
-        } else if is_marked {
-            rgb(0x0f1f18)
+        .bg(if is_marked_or_selected {
+            gpui::rgba((palette.primary << 8) | 0x1a)
         } else {
-            rgb(palette.surface)
+            gpui::rgba(0x00000000)
         })
-        .px_2()
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(palette.hover)))
+        .when(!is_marked_or_selected, |this| {
+            this.hover(|this| this.bg(rgb(palette.hover)))
+        })
         .on_mouse_down(
             MouseButton::Left,
             cx.listener(move |this, event: &MouseDownEvent, window, cx| {
@@ -192,27 +182,18 @@ pub(super) fn transfer_browser_entry_row(
                 .flex()
                 .items_center()
                 .gap_2()
+                .px_2()
                 .text_size(px(12.))
-                .font_weight(FontWeight(600.))
-                .text_color(if is_selected {
-                    rgb(0xdcfce7)
+                .text_color(if is_marked_or_selected {
+                    rgb(palette.primary)
                 } else {
                     rgb(palette.text)
                 })
                 .child(transfer_entry_icon(
                     is_directory,
                     entry.file_type == SftpFileType::Symlink,
-                    is_selected || is_marked,
+                    is_marked_or_selected,
                 ))
-                .when(is_marked, |this| {
-                    this.child(
-                        div()
-                            .text_size(px(9.))
-                            .font_weight(FontWeight(700.))
-                            .text_color(rgb(palette.success))
-                            .child("●"),
-                    )
-                })
                 .when(is_renaming, |this| {
                     this.child(
                         div()
@@ -279,8 +260,10 @@ pub(super) fn transfer_browser_entry_row(
             div()
                 .w(column_widths.modified)
                 .flex_none()
+                .px_2()
                 .truncate()
                 .text_xs()
+                .font_family(crate::features::gpui_code_font_family())
                 .text_color(rgb(palette.text_muted))
                 .child(format_sftp_modified(entry.modified_at)),
         )
@@ -288,16 +271,18 @@ pub(super) fn transfer_browser_entry_row(
             div()
                 .w(column_widths.size)
                 .flex_none()
+                .px_2()
                 .truncate()
                 .text_right()
                 .text_xs()
                 .text_color(rgb(palette.text_muted))
-                .child(format_file_size(entry.size)),
+                .child(size_display),
         )
         .child(
             div()
                 .w(column_widths.permissions)
                 .flex_none()
+                .px_2()
                 .truncate()
                 .text_xs()
                 .font_family(crate::features::gpui_code_font_family())
@@ -313,9 +298,9 @@ pub(super) fn transfer_browser_entry_row(
             div()
                 .w(column_widths.owner)
                 .flex_none()
+                .px_2()
                 .truncate()
                 .text_xs()
-                .font_family(crate::features::gpui_code_font_family())
                 .text_color(rgb(palette.text_muted))
                 .child(if entry.owner.is_empty() {
                     "-".to_string()
@@ -327,52 +312,14 @@ pub(super) fn transfer_browser_entry_row(
             div()
                 .w(column_widths.group)
                 .flex_none()
+                .px_2()
                 .truncate()
                 .text_xs()
-                .font_family(crate::features::gpui_code_font_family())
                 .text_color(rgb(palette.text_muted))
                 .child(if entry.group.is_empty() {
                     "-".to_string()
                 } else {
                     entry.group.clone()
                 }),
-        )
-        .child(
-            div()
-                .flex()
-                .items_center()
-                .justify_end()
-                .w(TRANSFER_BROWSER_ACTIONS_WIDTH)
-                .flex_none()
-                .child(
-                    div()
-                        .id(SharedString::from(format!(
-                            "transfer-entry-more-{actions_path}"
-                        )))
-                        .size(px(24.))
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .rounded_sm()
-                        .text_color(rgb(palette.text_muted))
-                        .cursor_pointer()
-                        .hover(|this| {
-                            this.bg(rgb(palette.surface_elevated))
-                                .text_color(rgb(palette.text))
-                        })
-                        .child(svg().size(px(14.)).path("icons/conn/more.svg"))
-                        .on_mouse_down(
-                            MouseButton::Left,
-                            cx.listener(move |this, event: &MouseDownEvent, window, cx| {
-                                cx.stop_propagation();
-                                this.open_transfer_browser_context_menu(
-                                    actions_path.clone(),
-                                    event,
-                                    window,
-                                    cx,
-                                );
-                            }),
-                        ),
-                ),
         )
 }

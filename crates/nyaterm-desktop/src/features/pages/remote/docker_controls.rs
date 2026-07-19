@@ -83,6 +83,7 @@ fn docker_overview_stat(
 
 pub(in crate::features::pages::remote) fn docker_tab_bar(
     palette: crate::theme::ThemePalette,
+    menu_bg: gpui::Rgba,
     active_tab: DockerTab,
     overview: &nyaterm_transport::RemoteDockerOverview,
     labels: [String; 5],
@@ -193,7 +194,7 @@ pub(in crate::features::pages::remote) fn docker_tab_bar(
                 .rounded_md()
                 .border_1()
                 .border_color(rgb(palette.border))
-                .bg(rgb(palette.surface_elevated))
+                .bg(menu_bg)
                 .shadow_lg()
                 .py_1()
                 .flex()

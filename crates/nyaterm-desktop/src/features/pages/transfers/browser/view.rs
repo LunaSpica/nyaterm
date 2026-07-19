@@ -1,7 +1,7 @@
 use super::*;
 
 const FILE_ROW_PX: f32 = 30.;
-const FILE_HEADER_PX: f32 = 24.;
+const FILE_HEADER_PX: f32 = 28.;
 const FILE_OVERSCAN: usize = 8;
 
 fn transfer_browser_viewport_rows(
@@ -95,6 +95,8 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
+        let transparent_surface = self.shell_transparent_color(palette.surface);
+        let section_header = self.shell_transparent_color(palette.section_header);
         let _selected = self
             .transfer_selected_remote_path
             .as_deref()
@@ -273,7 +275,7 @@ impl NyaTermApp {
             .flex()
             .flex_col()
             .overflow_hidden()
-            .bg(rgb(palette.surface))
+            .bg(transparent_surface)
             .track_focus(&self.transfer_browser_focus)
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 this.handle_transfer_browser_key_down(event, window, cx);
@@ -286,7 +288,7 @@ impl NyaTermApp {
                         .px_1()
                         .border_b_1()
                         .border_color(rgb(palette.border))
-                        .bg(rgb(palette.section_header))
+                        .bg(section_header)
                         .flex()
                         .items_center()
                         .gap(px(2.))
@@ -379,7 +381,7 @@ impl NyaTermApp {
                                     .rounded_md()
                                     .border_1()
                                     .border_color(rgb(0x388bfd))
-                                    .bg(rgb(palette.section_header))
+                                    .bg(transparent_surface)
                                     .px_1()
                                     .flex()
                                     .items_center()
@@ -520,10 +522,10 @@ impl NyaTermApp {
                                 div()
                                     .flex()
                                     .items_center()
-                                    .gap_2()
-                                    .px_2()
+                                    .gap_0()
                                     .child(sort_header_cell(
                                         palette,
+                                        section_header,
                                         TransferBrowserSortColumn::Name,
                                         column_widths.name,
                                         self.transfer_browser_sort_column,
@@ -533,6 +535,7 @@ impl NyaTermApp {
                                     ))
                                     .child(sort_header_cell(
                                         palette,
+                                        section_header,
                                         TransferBrowserSortColumn::Modified,
                                         column_widths.modified,
                                         self.transfer_browser_sort_column,
@@ -542,6 +545,7 @@ impl NyaTermApp {
                                     ))
                                     .child(sort_header_cell(
                                         palette,
+                                        section_header,
                                         TransferBrowserSortColumn::Size,
                                         column_widths.size,
                                         self.transfer_browser_sort_column,
@@ -551,6 +555,7 @@ impl NyaTermApp {
                                     ))
                                     .child(sort_header_cell(
                                         palette,
+                                        section_header,
                                         TransferBrowserSortColumn::Permissions,
                                         column_widths.permissions,
                                         self.transfer_browser_sort_column,
@@ -560,6 +565,7 @@ impl NyaTermApp {
                                     ))
                                     .child(sort_header_cell(
                                         palette,
+                                        section_header,
                                         TransferBrowserSortColumn::Owner,
                                         column_widths.owner,
                                         self.transfer_browser_sort_column,
@@ -569,28 +575,14 @@ impl NyaTermApp {
                                     ))
                                     .child(sort_header_cell(
                                         palette,
+                                        section_header,
                                         TransferBrowserSortColumn::Group,
                                         column_widths.group,
                                         self.transfer_browser_sort_column,
                                         self.transfer_browser_sort_direction,
                                         resizing_column,
                                         cx,
-                                    ))
-                                    .child(
-                                        div()
-                                            .h(px(24.))
-                                            .w(TRANSFER_BROWSER_ACTIONS_WIDTH)
-                                            .flex_none()
-                                            .flex()
-                                            .items_center()
-                                            .rounded_sm()
-                                            .bg(rgb(palette.input))
-                                            .px_2()
-                                            .text_size(px(10.))
-                                            .font_weight(FontWeight(800.))
-                                            .text_color(rgb(palette.text_muted))
-                                            .child(""),
-                                    ),
+                                    )),
                             )
                             .child(rows),
                     )
@@ -604,7 +596,7 @@ impl NyaTermApp {
                     .px_2()
                     .border_t_1()
                     .border_color(rgb(palette.border))
-                    .bg(rgb(palette.surface))
+                    .bg(transparent_surface)
                     .flex()
                     .items_center()
                     .justify_between()
@@ -699,7 +691,7 @@ mod tests {
 
     #[test]
     fn viewport_rows_prefer_measured_table_height() {
-        assert_eq!(transfer_browser_viewport_rows(800., 240., 444.), 14);
-        assert_eq!(transfer_browser_viewport_rows(800., 240., 84.), 2);
+        assert_eq!(transfer_browser_viewport_rows(800., 240., 444.), 13);
+        assert_eq!(transfer_browser_viewport_rows(800., 240., 84.), 1);
     }
 }

@@ -246,6 +246,7 @@ impl NyaTermApp {
             )
             .child(docker_tab_bar(
                 palette,
+                menu_bg,
                 active_tab,
                 &overview,
                 [

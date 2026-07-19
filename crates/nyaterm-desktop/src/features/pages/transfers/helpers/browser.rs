@@ -14,6 +14,7 @@ pub(in crate::features::pages::transfers) fn transfer_browser_search_status(
 
 pub(in crate::features::pages::transfers) fn sort_header_cell(
     palette: crate::theme::ThemePalette,
+    header_bg: gpui::Rgba,
     column: TransferBrowserSortColumn,
     width: gpui::Pixels,
     active_column: TransferBrowserSortColumn,
@@ -45,9 +46,9 @@ pub(in crate::features::pages::transfers) fn sort_header_cell(
         .border_color(rgb(palette.surface_elevated))
         .cursor_pointer()
         .bg(if is_active {
-            rgb(palette.hover)
+            gpui::rgba((palette.primary << 8) | 0x14)
         } else {
-            rgb(palette.section_header)
+            header_bg
         })
         .text_size(px(10.))
         .font_weight(FontWeight(800.))
