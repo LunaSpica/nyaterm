@@ -127,15 +127,33 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn toggle_left_sidebar(&mut self, cx: &mut Context<Self>) {
-        if self.left_sidebar_collapsed {
-            if self.active_left_panel.is_none() {
-                self.active_left_panel = self
-                    .activity_bar_layout
-                    .first_panel_on_side(PanelSide::Left);
+        if self.panel_multi_open {
+            if self.left_side_open() {
+                self.left_open_panels.clear();
+                self.active_left_panel = None;
+                self.left_sidebar_collapsed = true;
+                self.terminal_status = "left sidebar collapsed".to_string();
+            } else if let Some(panel) = self
+                .activity_bar_layout
+                .first_panel_on_side(PanelSide::Left)
+            {
+                self.active_left_panel = Some(panel);
+                self.left_open_panels.clear();
+                if Self::is_stackable_panel_id(panel.persistence_id()) {
+                    self.left_open_panels
+                        .push(panel.persistence_id().to_string());
+                }
+                self.left_sidebar_collapsed = false;
+                self.terminal_status = "left sidebar expanded".to_string();
             }
+        } else if self.left_sidebar_collapsed || self.active_left_panel.is_none() {
+            self.active_left_panel = self
+                .activity_bar_layout
+                .first_panel_on_side(PanelSide::Left);
             self.left_sidebar_collapsed = false;
             self.terminal_status = "left sidebar expanded".to_string();
         } else {
+            self.active_left_panel = None;
             self.left_sidebar_collapsed = true;
             self.terminal_status = "left sidebar collapsed".to_string();
         }
@@ -144,15 +162,33 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn toggle_right_inspector(&mut self, cx: &mut Context<Self>) {
-        if self.right_inspector_collapsed {
-            if self.active_right_panel.is_none() {
-                self.active_right_panel = self
-                    .activity_bar_layout
-                    .first_panel_on_side(PanelSide::Right);
+        if self.panel_multi_open {
+            if self.right_side_open() {
+                self.right_open_panels.clear();
+                self.active_right_panel = None;
+                self.right_inspector_collapsed = true;
+                self.terminal_status = "right sidebar collapsed".to_string();
+            } else if let Some(panel) = self
+                .activity_bar_layout
+                .first_panel_on_side(PanelSide::Right)
+            {
+                self.active_right_panel = Some(panel);
+                self.right_open_panels.clear();
+                if Self::is_stackable_panel_id(panel.persistence_id()) {
+                    self.right_open_panels
+                        .push(panel.persistence_id().to_string());
+                }
+                self.right_inspector_collapsed = false;
+                self.terminal_status = "right sidebar expanded".to_string();
             }
+        } else if self.right_inspector_collapsed || self.active_right_panel.is_none() {
+            self.active_right_panel = self
+                .activity_bar_layout
+                .first_panel_on_side(PanelSide::Right);
             self.right_inspector_collapsed = false;
             self.terminal_status = "right sidebar expanded".to_string();
         } else {
+            self.active_right_panel = None;
             self.right_inspector_collapsed = true;
             self.terminal_status = "right sidebar collapsed".to_string();
         }

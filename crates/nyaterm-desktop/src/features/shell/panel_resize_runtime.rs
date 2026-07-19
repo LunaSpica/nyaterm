@@ -104,8 +104,18 @@ impl NyaTermApp {
             .as_deref()
             .and_then(NavItem::from_persistence_id)
             .filter(|item| self.panel_side_for_item(*item) == Some(PanelSide::Right));
-        self.left_sidebar_collapsed = self.settings.ui_left_panel_collapsed;
-        self.right_inspector_collapsed = self.settings.ui_right_panel_collapsed;
+        self.left_sidebar_collapsed = panel_collapsed_from_persistence(
+            self.settings.ui_left_panel_collapsed,
+            self.settings.ui_panel_multi_open,
+            self.active_left_panel.is_some(),
+            !self.settings.ui_left_open_panels.is_empty(),
+        );
+        self.right_inspector_collapsed = panel_collapsed_from_persistence(
+            self.settings.ui_right_panel_collapsed,
+            self.settings.ui_panel_multi_open,
+            self.active_right_panel.is_some(),
+            !self.settings.ui_right_open_panels.is_empty(),
+        );
         self.apply_panel_stack_from_settings();
         if !self.settings.has_master_password {
             self.security_secrets_unlocked = true;

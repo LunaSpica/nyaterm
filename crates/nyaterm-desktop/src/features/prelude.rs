@@ -123,8 +123,8 @@ pub(super) use crate::models::{
     TransferPropertiesState, TransferRenameState, TransferUnknownFileState, TranslateInputField,
     TranslationDialogState, TranslationSecretDraft, WorkspacePaneNode, WorkspaceSplitDirection,
     WorkspaceSplitResizeState, WorkspaceSplitState, is_multi_line_paste, normalize_paste_newlines,
-    terminal_action_link_matcher_key, terminal_expensive_interactions_enabled,
-    terminal_frame_search_result_is_current,
+    panel_collapsed_from_persistence, terminal_action_link_matcher_key,
+    terminal_expensive_interactions_enabled, terminal_frame_search_result_is_current,
 };
 pub(super) use crate::send_command::{
     SendCommandControlFocus, SendCommandDataType, SendCommandLineEnding, SendCommandMode,

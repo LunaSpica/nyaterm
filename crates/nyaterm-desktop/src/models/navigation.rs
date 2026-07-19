@@ -455,6 +455,15 @@ pub(crate) enum PanelSide {
     Right,
 }
 
+pub(crate) fn panel_collapsed_from_persistence(
+    configured_collapsed: bool,
+    multi_open: bool,
+    has_active_panel: bool,
+    has_open_stack: bool,
+) -> bool {
+    configured_collapsed || (!has_active_panel && (!multi_open || !has_open_stack))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -476,5 +485,14 @@ mod tests {
             Some(NavItem::Connections)
         );
         assert_eq!(layout.side_for_entry("missing"), None);
+    }
+
+    #[test]
+    fn persisted_null_panel_closes_only_an_empty_side() {
+        assert!(panel_collapsed_from_persistence(false, false, false, false));
+        assert!(!panel_collapsed_from_persistence(false, false, true, false));
+        assert!(!panel_collapsed_from_persistence(false, true, false, true));
+        assert!(panel_collapsed_from_persistence(false, true, false, false));
+        assert!(panel_collapsed_from_persistence(true, true, true, true));
     }
 }

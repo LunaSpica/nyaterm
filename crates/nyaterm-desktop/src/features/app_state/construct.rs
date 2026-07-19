@@ -219,8 +219,18 @@ impl NyaTermApp {
             .filter(|item| {
                 activity_bar_layout.side_for_entry(item.persistence_id()) == Some(PanelSide::Right)
             });
-        let left_sidebar_collapsed = settings.ui_left_panel_collapsed;
-        let right_inspector_collapsed = settings.ui_right_panel_collapsed;
+        let left_sidebar_collapsed = panel_collapsed_from_persistence(
+            settings.ui_left_panel_collapsed,
+            settings.ui_panel_multi_open,
+            active_left_panel.is_some(),
+            !settings.ui_left_open_panels.is_empty(),
+        );
+        let right_inspector_collapsed = panel_collapsed_from_persistence(
+            settings.ui_right_panel_collapsed,
+            settings.ui_panel_multi_open,
+            active_right_panel.is_some(),
+            !settings.ui_right_open_panels.is_empty(),
+        );
         let security_secrets_unlocked = !settings.has_master_password;
         let left_open_panels = settings.ui_left_open_panels.clone();
         let right_open_panels = settings.ui_right_open_panels.clone();
