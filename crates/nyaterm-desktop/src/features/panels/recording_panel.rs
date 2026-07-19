@@ -162,6 +162,11 @@ impl NyaTermApp {
                                     } else {
                                         rgb(palette.text_muted)
                                     },
+                                    if session_is_recording {
+                                        self.tr("recording.stop").to_string()
+                                    } else {
+                                        self.tr("recording.start").to_string()
+                                    },
                                     !is_busy,
                                     cx.listener(move |this, _, _, cx| {
                                         cx.stop_propagation();
@@ -192,6 +197,7 @@ impl NyaTermApp {
                                     } else {
                                         rgb(palette.text_muted)
                                     },
+                                    self.tr("recording.saveTranscript").to_string(),
                                     !is_busy,
                                     cx.listener(move |this, _, _, cx| {
                                         cx.stop_propagation();
@@ -311,10 +317,12 @@ fn recording_action_svg_button(
     id: impl Into<String>,
     icon_path: &'static str,
     color: impl Into<gpui::Hsla>,
+    tooltip: impl Into<String>,
     enabled: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
     let color = color.into();
+    let tooltip = tooltip.into();
     div()
         .id(SharedString::from(id.into()))
         .size(px(28.))
@@ -331,6 +339,10 @@ fn recording_action_svg_button(
         })
         .when(!enabled, |this| this.opacity(0.4))
         .child(svg().size(px(16.)).flex_none().path(icon_path))
+        .tooltip(move |_, cx| {
+            cx.new(|_| crate::features::ChromeTooltip::new(tooltip.clone()))
+                .into()
+        })
         .on_click(move |event, window, cx| {
             if enabled {
                 on_click(event, window, cx);

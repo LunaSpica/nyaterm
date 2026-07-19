@@ -1988,6 +1988,7 @@
     "copyName": "Copy Tab Name",
     "copySshAddress": "Copy SSH Address",
     "disconnect": "Disconnect",
+    "disconnecting": "Disconnecting...",
     "disconnectFailed": "Disconnect failed",
     "disconnectSuccess": "Disconnected",
     "duplicate": "Duplicate",

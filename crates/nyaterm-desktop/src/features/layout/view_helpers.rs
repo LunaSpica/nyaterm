@@ -48,10 +48,12 @@ pub(super) fn session_action_svg_button(
     palette: crate::theme::ThemePalette,
     id: impl Into<String>,
     icon_path: &'static str,
+    tooltip: impl Into<String>,
     enabled: bool,
     on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
 ) -> impl IntoElement {
     // Tauri ActiveSessions action icons: h-7 ghost.
+    let tooltip = tooltip.into();
     div()
         .id(SharedString::from(id.into()))
         .size(px(28.))
@@ -72,6 +74,10 @@ pub(super) fn session_action_svg_button(
         })
         .when(!enabled, |this| this.opacity(0.4))
         .child(svg().size(px(16.)).flex_none().path(icon_path))
+        .tooltip(move |_, cx| {
+            cx.new(|_| crate::features::ChromeTooltip::new(tooltip.clone()))
+                .into()
+        })
         .on_click(move |event, window, cx| {
             if enabled {
                 on_click(event, window, cx);

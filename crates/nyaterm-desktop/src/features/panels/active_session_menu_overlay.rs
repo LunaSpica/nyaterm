@@ -18,14 +18,14 @@ impl NyaTermApp {
         let can_reconnect = !is_busy && !self.has_pending_session_start();
         let can_disconnect = !is_busy && !is_disconnected;
         let reconnect_label = if busy_action.as_deref() == Some("reconnect") {
-            "Reconnecting..."
+            self.tr("tabCtx.reconnecting").to_string()
         } else {
-            "Reconnect"
+            self.tr("tabCtx.reconnect").to_string()
         };
         let disconnect_label = if busy_action.as_deref() == Some("disconnect") {
-            "Disconnecting..."
+            self.tr("tabCtx.disconnecting").to_string()
         } else {
-            "Disconnect"
+            self.tr("tabCtx.disconnect").to_string()
         };
         let (viewport_w, viewport_h) = self.last_viewport_size;
         let (menu_x, menu_y) = active_session_clamped_menu_position(

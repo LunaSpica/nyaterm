@@ -1988,6 +1988,7 @@
     "copyName": "复制标签名称",
     "copySshAddress": "复制 SSH 地址",
     "disconnect": "断开连接",
+    "disconnecting": "正在断开连接...",
     "disconnectFailed": "断开连接失败",
     "disconnectSuccess": "连接已断开",
     "duplicate": "复制会话",

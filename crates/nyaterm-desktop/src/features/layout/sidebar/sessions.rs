@@ -498,6 +498,7 @@ impl NyaTermApp {
                                 palette,
                                 format!("active-session-rename-{rename_session_id}"),
                                 "icons/session/rename.svg",
+                                self.tr("tabCtx.rename").to_string(),
                                 !is_busy,
                                 cx.listener(move |this, _, window, cx| {
                                     cx.stop_propagation();
@@ -515,6 +516,7 @@ impl NyaTermApp {
                                 palette,
                                 format!("active-session-more-{menu_session_id}"),
                                 "icons/session/more.svg",
+                                self.tr("common.more").to_string(),
                                 !is_busy,
                                 cx.listener(move |this, event: &ClickEvent, _, cx| {
                                     cx.stop_propagation();
