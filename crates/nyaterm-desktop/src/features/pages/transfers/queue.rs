@@ -84,7 +84,7 @@ impl NyaTermApp {
             .flex()
             .flex_col()
             .overflow_hidden()
-            .bg(self.shell_surface_color(palette.surface))
+            .bg(self.shell_transparent_color(palette.surface))
             .track_focus(&self.transfer_queue_focus)
             .on_click(cx.listener(|this, _, window, cx| {
                 window.focus(&this.transfer_queue_focus);
@@ -171,7 +171,7 @@ impl NyaTermApp {
                     .px_2()
                     .border_t_1()
                     .border_color(rgb(palette.border))
-                    .bg(rgb(palette.surface))
+                    .bg(self.shell_transparent_color(palette.surface))
                     .flex()
                     .items_center()
                     .gap_1()
