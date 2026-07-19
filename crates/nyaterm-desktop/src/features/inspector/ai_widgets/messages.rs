@@ -279,14 +279,6 @@ impl NyaTermApp {
                 ));
             }
         }
-        if streaming && has_display {
-            bubble = bubble.child(
-                div()
-                    .text_size(px(10.))
-                    .text_color(rgb(palette.link))
-                    .child("streaming…"),
-            );
-        }
         bubble
     }
 

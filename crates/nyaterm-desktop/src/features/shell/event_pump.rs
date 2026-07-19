@@ -398,17 +398,6 @@ impl NyaTermApp {
         dirty
     }
 
-    pub(in crate::features) fn pending_session_tab_detail(&self) -> Option<&'static str> {
-        if !self.has_pending_session_start() {
-            return None;
-        }
-        Some(match self.pending_session_auth_wait() {
-            Some(PendingSessionAuthWait::Credential { .. }) => "Credential required",
-            Some(PendingSessionAuthWait::HostKey { .. }) => "Host key required",
-            None => "Connecting...",
-        })
-    }
-
     fn pending_session_auth_wait(&self) -> Option<PendingSessionAuthWait> {
         if let Some(prompt) = self.active_credential_prompt.as_ref() {
             return Some(PendingSessionAuthWait::Credential {

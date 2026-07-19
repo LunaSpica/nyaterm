@@ -449,9 +449,9 @@ impl NyaTermApp {
                 };
                 stack = stack.child(
                     div()
-                        .flex_none()
+                        .flex_shrink()
                         .flex_basis(relative(basis))
-                        .min_h(px(96.))
+                        .min_h(px(48.))
                         .flex()
                         .flex_col()
                         .overflow_hidden()
@@ -527,10 +527,8 @@ impl NyaTermApp {
                     .filter(|value| !value.is_empty())
                 {
                     truncate_preview(id, 28)
-                } else if !self.ai_settings.enabled {
-                    "disabled".to_string()
                 } else {
-                    "not configured".to_string()
+                    self.tr("ai.notConfigured").to_string()
                 };
                 SharedString::from(label)
             }

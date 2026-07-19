@@ -133,7 +133,7 @@ impl NyaTermApp {
                     .text_size(px(10.))
                     .font_weight(FontWeight(700.))
                     .text_color(rgb(palette.text_dimmed))
-                    .child("Open Tabs"),
+                    .child(self.tr("terminal.openTabs")),
             )
             .child(div().mx_2().my_1().h(px(1.)).bg(rgb(palette.border)));
 
@@ -144,7 +144,7 @@ impl NyaTermApp {
                     .py_2()
                     .text_size(px(12.))
                     .text_color(rgb(palette.text_muted))
-                    .child("No open sessions"),
+                    .child(self.tr("sessionQuickSwitcher.noSessions")),
             );
         } else {
             for (index, session) in sessions.into_iter().enumerate() {

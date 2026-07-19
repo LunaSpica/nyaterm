@@ -156,7 +156,7 @@ impl NyaTermApp {
         let model_label = selected_model
             .as_ref()
             .map(|model| model.name.clone())
-            .unwrap_or_else(|| "No enabled model".to_string());
+            .unwrap_or_else(|| self.tr("ai.notConfigured").to_string());
         let target_sessions = self
             .ai_target_session_ids
             .iter()
