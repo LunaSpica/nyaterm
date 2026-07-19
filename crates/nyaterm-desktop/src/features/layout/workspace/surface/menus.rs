@@ -225,17 +225,30 @@ impl NyaTermApp {
                                 .min_w_0()
                                 .flex_1()
                                 .text_size(px(12.))
-                                .text_color(if is_disconnected {
-                                    rgb(palette.text_dimmed)
-                                } else {
-                                    rgb(palette.text)
-                                })
-                                .overflow_hidden()
-                                .child(div().child(format!(
-                                    "{}  {}",
-                                    ordinals.get(&session.id).copied().unwrap_or(index + 1),
-                                    truncate_preview(&title, 28)
-                                ))),
+                                .flex()
+                                .items_center()
+                                .gap(px(6.))
+                                .child(
+                                    div()
+                                        .flex_none()
+                                        .text_color(rgb(palette.text_dimmed))
+                                        .child(format!(
+                                            "{}",
+                                            ordinals.get(&session.id).copied().unwrap_or(index + 1)
+                                        )),
+                                )
+                                .child(
+                                    div()
+                                        .min_w_0()
+                                        .flex_1()
+                                        .overflow_hidden()
+                                        .text_color(if is_disconnected {
+                                            rgb(palette.text_dimmed)
+                                        } else {
+                                            rgb(palette.text)
+                                        })
+                                        .child(truncate_preview(&title, 28)),
+                                ),
                         ),
                 );
             }
