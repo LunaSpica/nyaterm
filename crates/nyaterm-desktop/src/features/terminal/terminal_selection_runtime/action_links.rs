@@ -135,10 +135,10 @@ impl NyaTermApp {
         // Only hit-test when the pointer is over the painted terminal content area.
         let bounds = self.terminal_surface_bounds_for_session(session_id)?;
         let (cell_w, cell_h) = self.terminal_cell_size();
-        let pad = self.terminal_content_padding_px();
+        let insets = self.terminal_content_insets();
         let gutter = self.terminal_gutter_width_px();
-        let local_x = f32::from(position.x - bounds.origin.x) - pad - gutter;
-        let local_y = f32::from(position.y - bounds.origin.y) - pad;
+        let local_x = f32::from(position.x - bounds.origin.x) - insets.left - gutter;
+        let local_y = f32::from(position.y - bounds.origin.y) - insets.top;
         if local_x < 0. || local_y < 0. {
             return None;
         }

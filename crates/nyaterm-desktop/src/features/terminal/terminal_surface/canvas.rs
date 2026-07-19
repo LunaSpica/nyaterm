@@ -1,4 +1,5 @@
 use super::*;
+use crate::features::terminal_selection_runtime::terminal_gutter_metrics;
 use crate::models::TerminalPerformanceMode;
 
 impl NyaTermApp {
@@ -300,7 +301,7 @@ impl NyaTermApp {
             && !self.terminal_ime_marked_text.is_empty())
         .then(|| self.terminal_ime_marked_text.clone());
         let ime_preedit_position = ime_preedit_text.as_ref().map(|_| {
-            let pad = self.terminal_content_padding_px();
+            let insets = self.terminal_content_insets();
             let gutter = self.terminal_gutter_width_px();
             let row = if cursor_row == usize::MAX {
                 line_count.saturating_sub(1)
@@ -309,14 +310,27 @@ impl NyaTermApp {
             };
             let col = cursor_col.min(snapshot_cols.saturating_sub(1));
             (
-                pad + gutter + col as f32 * cell_w,
-                pad + row as f32 * cell_h,
+                insets.left + gutter + col as f32 * cell_w,
+                insets.top + row as f32 * cell_h,
             )
         });
         let gutter = if session_id.is_empty() && gutter_enabled {
+            let gutter_metrics = terminal_gutter_metrics(
+                cell_w,
+                show_timestamps,
+                show_timestamp_ms,
+                show_line_numbers,
+                5,
+            );
             let ts_w = self.terminal_timestamp_gutter_width_px();
             let ln_w = self.terminal_line_number_gutter_width_px();
-            let mut gutter = div().flex().flex_col().flex_none();
+            let mut gutter = div()
+                .flex()
+                .flex_col()
+                .flex_none()
+                .mr(px(10.))
+                .border_r_1()
+                .border_color(rgb(palette.border));
             for line_index in 0..line_count {
                 let ts_label = if show_timestamps {
                     snapshot
@@ -346,12 +360,12 @@ impl NyaTermApp {
                         .flex_row()
                         .items_center()
                         .min_h(px(cell_h))
-                        .gap_1()
+                        .gap(px(gutter_metrics.gap_width))
                         .flex_none()
-                        .pr_1()
+                        .pr(px(8.))
                         .text_color(rgb(palette.text_dimmed))
                         .font_family(terminal_font_family.clone())
-                        .text_size(px(self.settings.terminal_font_size as f32 * 0.85))
+                        .text_size(px(self.settings.terminal_font_size as f32))
                         .when(show_timestamps, |this| {
                             this.child(div().w(px(ts_w)).flex_none().child(ts_label))
                         })
@@ -688,11 +702,10 @@ impl NyaTermApp {
                             .when(is_active && self.action_link_tooltip.is_some(), |this| {
                                 this.cursor_pointer()
                             })
-                            .p(if self.settings.terminal_show_workspace_padding {
-                                px(16.)
-                            } else {
-                                px(8.)
-                            })
+                            .pl(px(self.terminal_content_insets().left))
+                            .pr(px(self.terminal_content_insets().right))
+                            .pt(px(self.terminal_content_insets().top))
+                            .pb(px(self.terminal_content_insets().bottom))
                             .overflow_hidden()
                             .can_drop(|drag, _, _| drag.is::<gpui::ExternalPaths>())
                             .on_drag_move({

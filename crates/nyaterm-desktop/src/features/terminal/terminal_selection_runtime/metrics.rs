@@ -51,11 +51,21 @@ impl NyaTermApp {
         }
     }
 
-    pub(in crate::features) fn terminal_content_padding_px(&self) -> f32 {
-        if self.settings.terminal_show_workspace_padding {
-            16.
+    pub(in crate::features) fn terminal_content_insets(&self) -> TerminalViewportInsets {
+        if self.settings.terminal_show_workspace_padding
+            && !self.settings.terminal_show_line_numbers
+            && !self.settings.terminal_show_timestamps
+        {
+            // Tauri applies workspace padding as `pl-2`; it does not add a
+            // default margin or vertical padding around the terminal grid.
+            TerminalViewportInsets {
+                left: 8.,
+                right: 0.,
+                top: 0.,
+                bottom: 0.,
+            }
         } else {
-            8.
+            TerminalViewportInsets::symmetric(0.)
         }
     }
 
@@ -63,10 +73,10 @@ impl NyaTermApp {
         let (cell_w, _) = self.terminal_cell_size();
         terminal_gutter_metrics(
             cell_w,
-            self.settings.terminal_font_size as f32,
             self.settings.terminal_show_timestamps,
             self.settings.terminal_show_timestamp_milliseconds,
             self.settings.terminal_show_line_numbers,
+            5,
         )
         .total_width()
     }
@@ -75,24 +85,17 @@ impl NyaTermApp {
         let (cell_w, _) = self.terminal_cell_size();
         terminal_gutter_metrics(
             cell_w,
-            self.settings.terminal_font_size as f32,
             true,
             self.settings.terminal_show_timestamp_milliseconds,
             false,
+            5,
         )
         .timestamp_width
     }
 
     pub(in crate::features) fn terminal_line_number_gutter_width_px(&self) -> f32 {
         let (cell_w, _) = self.terminal_cell_size();
-        terminal_gutter_metrics(
-            cell_w,
-            self.settings.terminal_font_size as f32,
-            false,
-            false,
-            true,
-        )
-        .line_number_width
+        terminal_gutter_metrics(cell_w, false, false, true, 5).line_number_width
     }
 
     pub(in crate::features) fn active_terminal_grid_size(&self) -> (usize, usize) {
@@ -177,7 +180,7 @@ impl NyaTermApp {
             .and_then(|id| self.terminal_session_surface_bounds.get(id).copied())
             .or(self.terminal_surface_bounds)?;
         let (cell_w, cell_h) = self.terminal_cell_size();
-        let pad = self.terminal_content_padding_px();
+        let insets = self.terminal_content_insets();
         let gutter = self.terminal_gutter_width_px();
         let (rows, cols) = self.terminal_grid_size_for_session(session_id);
         let display_offset = self.terminal_display_offset_for_session(session_id);
@@ -214,7 +217,8 @@ impl NyaTermApp {
             bounds,
             cell_w,
             cell_h,
-            padding: pad,
+            padding_left: insets.left,
+            padding_top: insets.top,
             gutter,
             rows,
             cols,
@@ -255,7 +259,8 @@ pub(in crate::features) struct TerminalHitTestGeometry {
     pub(in crate::features) bounds: Bounds<Pixels>,
     pub(in crate::features) cell_w: f32,
     pub(in crate::features) cell_h: f32,
-    pub(in crate::features) padding: f32,
+    pub(in crate::features) padding_left: f32,
+    pub(in crate::features) padding_top: f32,
     pub(in crate::features) gutter: f32,
     pub(in crate::features) rows: usize,
     pub(in crate::features) cols: usize,
@@ -271,8 +276,8 @@ pub(in crate::features) fn terminal_cell_for_visual_geometry(
     let cell_w = geometry.cell_w.max(1.0);
     let cell_h = geometry.cell_h.max(1.0);
     let local_x =
-        f32::from(position.x - geometry.bounds.origin.x) - geometry.padding - geometry.gutter;
-    let local_y = f32::from(position.y - geometry.bounds.origin.y) - geometry.padding;
+        f32::from(position.x - geometry.bounds.origin.x) - geometry.padding_left - geometry.gutter;
+    let local_y = f32::from(position.y - geometry.bounds.origin.y) - geometry.padding_top;
     let snapshot_row = ((local_y - geometry.visual_y_offset) / cell_h)
         .floor()
         .max(0.0) as usize;
@@ -300,34 +305,34 @@ impl TerminalGutterMetrics {
 
 pub(in crate::features) fn terminal_gutter_metrics(
     cell_width: f32,
-    font_size: f32,
     show_timestamps: bool,
     show_timestamp_ms: bool,
     show_line_numbers: bool,
+    line_number_digits: usize,
 ) -> TerminalGutterMetrics {
-    let font_size = font_size.max(8.0);
-    let gutter_font = (font_size * 0.85).max(8.0);
-    // Gutter text is painted at 0.85x terminal font; derive its column width
-    // from the measured terminal cell so hit-testing, resize, and paint agree.
-    let gutter_cell_w = (cell_width.max(1.0) * (gutter_font / font_size)).max(4.0);
+    let cell_width = cell_width.max(1.0);
     let timestamp_width = if show_timestamps {
-        let cols = if show_timestamp_ms { 12.0 } else { 8.0 };
-        (gutter_cell_w * cols + 2.0).max(if show_timestamp_ms { 96.0 } else { 72.0 })
+        let chars = if show_timestamp_ms { 14.0 } else { 10.0 };
+        (cell_width * chars).ceil() + 2.0
     } else {
         0.0
     };
     let line_number_width = if show_line_numbers {
-        (gutter_cell_w * 5.0 + 2.0).max(40.0)
+        (cell_width * line_number_digits.max(1) as f32)
+            .ceil()
+            .max(22.0)
+            + 2.0
     } else {
         0.0
     };
     let gap_width = if show_timestamps && show_line_numbers {
-        4.0
+        8.0
     } else {
         0.0
     };
     let trailing_padding_width = if timestamp_width > 0.0 || line_number_width > 0.0 {
-        4.0
+        // Tauri: 8px right padding, a 1px border, and a 10px separator gap.
+        19.0
     } else {
         0.0
     };
@@ -415,18 +420,18 @@ mod tests {
     }
     #[test]
     fn gutter_metrics_use_same_widths_for_ms_timestamps_and_total_hit_area() {
-        let metrics = terminal_gutter_metrics(8.0, 14.0, true, true, true);
+        let metrics = terminal_gutter_metrics(8.0, true, true, true, 5);
 
-        assert_eq!(metrics.timestamp_width, 96.0);
-        assert_eq!(metrics.line_number_width, 40.0);
-        assert_eq!(metrics.gap_width, 4.0);
-        assert_eq!(metrics.trailing_padding_width, 4.0);
-        assert_eq!(metrics.total_width(), 144.0);
+        assert_eq!(metrics.timestamp_width, 114.0);
+        assert_eq!(metrics.line_number_width, 42.0);
+        assert_eq!(metrics.gap_width, 8.0);
+        assert_eq!(metrics.trailing_padding_width, 19.0);
+        assert_eq!(metrics.total_width(), 183.0);
     }
 
     #[test]
     fn gutter_metrics_expand_with_large_terminal_font() {
-        let metrics = terminal_gutter_metrics(18.0, 28.0, true, false, true);
+        let metrics = terminal_gutter_metrics(18.0, true, false, true, 5);
 
         assert!(metrics.timestamp_width > 120.0);
         assert!(metrics.line_number_width > 70.0);
@@ -454,7 +459,8 @@ mod tests {
             ),
             cell_w: 8.0,
             cell_h: 16.0,
-            padding: 4.0,
+            padding_left: 4.0,
+            padding_top: 4.0,
             gutter: 12.0,
             rows: 24,
             cols: 80,
@@ -489,7 +495,8 @@ mod tests {
             ),
             cell_w: 8.0,
             cell_h: 16.0,
-            padding: 0.0,
+            padding_left: 0.0,
+            padding_top: 0.0,
             gutter: 0.0,
             rows: 24,
             cols: 80,

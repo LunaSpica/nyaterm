@@ -519,7 +519,7 @@ impl EntityInputHandler for NyaTermApp {
             return Some(element_bounds);
         }
         let (cell_w, cell_h) = self.terminal_cell_size();
-        let pad = self.terminal_content_padding_px();
+        let insets = self.terminal_content_insets();
         let gutter = self.terminal_gutter_width_px();
         let snapshot = self.terminal_snapshot_for_session(self.active_session_id.as_deref(), 0);
         let row = if snapshot.cursor_row == usize::MAX {
@@ -532,10 +532,10 @@ impl EntityInputHandler for NyaTermApp {
         let origin_y = f32::from(element_bounds.origin.y);
         let max_x = origin_x + f32::from(element_bounds.size.width) - cell_w.max(1.);
         let max_y = origin_y + f32::from(element_bounds.size.height) - cell_h.max(1.);
-        let x = (origin_x + pad + gutter + col as f32 * cell_w)
+        let x = (origin_x + insets.left + gutter + col as f32 * cell_w)
             .min(max_x)
             .max(origin_x);
-        let y = (origin_y + pad + row as f32 * cell_h)
+        let y = (origin_y + insets.top + row as f32 * cell_h)
             .min(max_y)
             .max(origin_y);
         Some(gpui::bounds(

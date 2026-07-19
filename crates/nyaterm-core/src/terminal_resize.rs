@@ -6,6 +6,25 @@ pub struct TerminalResizeGeometry {
     pub pixel_height: u16,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TerminalViewportInsets {
+    pub left: f32,
+    pub right: f32,
+    pub top: f32,
+    pub bottom: f32,
+}
+
+impl TerminalViewportInsets {
+    pub const fn symmetric(padding: f32) -> Self {
+        Self {
+            left: padding,
+            right: padding,
+            top: padding,
+            bottom: padding,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TerminalBackendResize {
     pub cols: u16,
@@ -33,10 +52,29 @@ pub fn terminal_resize_geometry_for_size(
     padding: f32,
     gutter_width: f32,
 ) -> TerminalResizeGeometry {
+    terminal_resize_geometry_for_size_with_insets(
+        width,
+        height,
+        cell_width,
+        cell_height,
+        TerminalViewportInsets::symmetric(padding),
+        gutter_width,
+    )
+}
+
+pub fn terminal_resize_geometry_for_size_with_insets(
+    width: f32,
+    height: f32,
+    cell_width: f32,
+    cell_height: f32,
+    insets: TerminalViewportInsets,
+    gutter_width: f32,
+) -> TerminalResizeGeometry {
     let cell_width = cell_width.max(1.);
     let cell_height = cell_height.max(1.);
-    let usable_width = (width - padding * 2. - gutter_width).max(cell_width);
-    let usable_height = (height - padding * 2.).max(cell_height);
+    let usable_width =
+        (width - insets.left.max(0.) - insets.right.max(0.) - gutter_width).max(cell_width);
+    let usable_height = (height - insets.top.max(0.) - insets.bottom.max(0.)).max(cell_height);
     let raw_cols = (usable_width / cell_width).floor();
     let raw_rows = (usable_height / cell_height).floor();
     let clamped_cols = raw_cols.clamp(20., 500.);
@@ -97,6 +135,28 @@ mod tests {
         assert_eq!(geometry.rows, 4);
         assert_eq!(geometry.pixel_width, 200);
         assert_eq!(geometry.pixel_height, 80);
+    }
+
+    #[test]
+    fn resize_geometry_supports_tauri_left_only_workspace_padding() {
+        let geometry = terminal_resize_geometry_for_size_with_insets(
+            812.,
+            612.,
+            10.,
+            20.,
+            TerminalViewportInsets {
+                left: 8.,
+                right: 0.,
+                top: 0.,
+                bottom: 0.,
+            },
+            72.,
+        );
+
+        assert_eq!(geometry.cols, 73);
+        assert_eq!(geometry.rows, 30);
+        assert_eq!(geometry.pixel_width, 732);
+        assert_eq!(geometry.pixel_height, 612);
     }
 
     #[test]

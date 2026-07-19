@@ -1618,10 +1618,10 @@ impl Render for TerminalSurface {
         let gutter = if gutter_enabled {
             let gutter_metrics = terminal_gutter_metrics(
                 cell_w,
-                self.font_size,
                 self.show_timestamps,
                 self.show_timestamp_ms,
                 self.show_line_numbers,
+                5,
             );
             let ts_w = gutter_metrics.timestamp_width;
             let ln_w = gutter_metrics.line_number_width;
@@ -1635,7 +1635,10 @@ impl Render for TerminalSurface {
                 .top(px(gutter_y_offset))
                 .flex()
                 .flex_col()
-                .flex_none();
+                .flex_none()
+                .mr(px(10.))
+                .border_r_1()
+                .border_color(rgb(palette.border));
             for line_index in visible_gutter_rows {
                 let ts_label = if self.show_timestamps {
                     snapshot
@@ -1665,12 +1668,12 @@ impl Render for TerminalSurface {
                         .flex_row()
                         .items_center()
                         .min_h(px(cell_h))
-                        .gap_1()
+                        .gap(px(gutter_metrics.gap_width))
                         .flex_none()
-                        .pr_1()
+                        .pr(px(8.))
                         .text_color(rgb(palette.text_dimmed))
                         .font_family(self.font_family.clone())
-                        .text_size(px(self.font_size * 0.85))
+                        .text_size(px(self.font_size))
                         .when(self.show_timestamps, |this| {
                             this.child(div().w(px(ts_w)).flex_none().child(ts_label))
                         })

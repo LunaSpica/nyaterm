@@ -115,8 +115,9 @@ pub use terminal_input_tracker::{
 };
 pub use terminal_mouse::{TerminalMouseReportEligibility, terminal_mouse_report_should_send};
 pub use terminal_resize::{
-    TerminalBackendResize, TerminalResizeGeometry, terminal_backend_resize_changed,
-    terminal_resize_geometry_for_size,
+    TerminalBackendResize, TerminalResizeGeometry, TerminalViewportInsets,
+    terminal_backend_resize_changed, terminal_resize_geometry_for_size,
+    terminal_resize_geometry_for_size_with_insets,
 };
 pub use terminal_wire_write::{
     TerminalWireWriteDisposition, TerminalWireWriteKind, terminal_wire_write_disposition,

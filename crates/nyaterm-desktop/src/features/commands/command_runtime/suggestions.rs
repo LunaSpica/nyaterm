@@ -601,10 +601,12 @@ impl NyaTermApp {
         menu_h: f32,
     ) -> Option<(f32, f32)> {
         let bounds = self.terminal_surface_bounds_for_session(session_id)?;
+        let insets = self.terminal_content_insets();
         Some(suggestion_overlay_position(
             bounds,
             self.terminal_cell_size(),
-            self.terminal_content_padding_px(),
+            insets.left,
+            insets.top,
             self.terminal_gutter_width_px(),
             self.last_viewport_size,
             cursor_row,
@@ -618,7 +620,8 @@ impl NyaTermApp {
 pub(in crate::features) fn suggestion_overlay_position(
     bounds: Bounds<Pixels>,
     cell_size: (f32, f32),
-    pad: f32,
+    pad_left: f32,
+    pad_top: f32,
     gutter: f32,
     viewport_size: (f32, f32),
     cursor_row: usize,
@@ -627,8 +630,8 @@ pub(in crate::features) fn suggestion_overlay_position(
     menu_h: f32,
 ) -> (f32, f32) {
     let (cell_w, cell_h) = cell_size;
-    let base_x = f32::from(bounds.origin.x) + pad + gutter + cursor_col as f32 * cell_w;
-    let base_y = f32::from(bounds.origin.y) + pad + (cursor_row as f32 + 1.0) * cell_h;
+    let base_x = f32::from(bounds.origin.x) + pad_left + gutter + cursor_col as f32 * cell_w;
+    let base_y = f32::from(bounds.origin.y) + pad_top + (cursor_row as f32 + 1.0) * cell_h;
     let (viewport_w, viewport_h) = viewport_size;
     let mut x = base_x;
     let mut y = base_y + 4.0;
@@ -653,6 +656,7 @@ mod overlay_position_tests {
             (8.0, 16.0),
             8.0,
             0.0,
+            0.0,
             (1024.0, 768.0),
             2,
             4,
@@ -661,7 +665,7 @@ mod overlay_position_tests {
         );
 
         assert_eq!(x, 50.0);
-        assert_eq!(y, 80.0);
+        assert_eq!(y, 72.0);
     }
 
     #[test]
@@ -671,6 +675,7 @@ mod overlay_position_tests {
             (8.0, 16.0),
             8.0,
             0.0,
+            0.0,
             (900.0, 620.0),
             4,
             30,
@@ -679,7 +684,7 @@ mod overlay_position_tests {
         );
 
         assert_eq!(x, 592.0);
-        assert_eq!(y, 444.0);
+        assert_eq!(y, 436.0);
     }
 }
 

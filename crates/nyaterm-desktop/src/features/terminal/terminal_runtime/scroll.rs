@@ -239,12 +239,12 @@ pub(in crate::features) fn terminal_resize_geometry_for_bounds(
     padding: f32,
     gutter_width: f32,
 ) -> TerminalResizeGeometry {
-    terminal_resize_geometry_for_size(
+    terminal_resize_geometry_for_size_with_insets(
         f32::from(bounds.size.width),
         f32::from(bounds.size.height),
         cell_width,
         cell_height,
-        padding,
+        TerminalViewportInsets::symmetric(padding),
         gutter_width,
     )
 }
@@ -1398,9 +1398,16 @@ impl NyaTermApp {
         bounds: gpui::Bounds<gpui::Pixels>,
     ) -> TerminalResizeGeometry {
         let (cell_w, cell_h) = self.terminal_cell_size();
-        let pad = self.terminal_content_padding_px();
+        let insets = self.terminal_content_insets();
         let gutter = self.terminal_gutter_width_px();
-        terminal_resize_geometry_for_bounds(bounds, cell_w, cell_h, pad, gutter)
+        terminal_resize_geometry_for_size_with_insets(
+            f32::from(bounds.size.width),
+            f32::from(bounds.size.height),
+            cell_w,
+            cell_h,
+            insets,
+            gutter,
+        )
     }
 
     pub(in crate::features) fn drive_terminal_resize(&mut self) -> bool {
