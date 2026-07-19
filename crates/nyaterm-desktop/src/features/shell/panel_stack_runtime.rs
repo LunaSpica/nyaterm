@@ -732,6 +732,8 @@ impl NyaTermApp {
                         .docker_overview
                         .as_ref()
                         .is_some_and(|overview| overview.available);
+                let more_label = self.tr("dockerManager.moreActions").to_string();
+                let prune_label = self.tr("dockerManager.prune");
                 Some(
                     div()
                         .flex()
@@ -747,16 +749,63 @@ impl NyaTermApp {
                                 this.refresh_docker(window, cx);
                             }),
                         ))
-                        .child(header_svg_icon_button(
-                            palette,
-                            "docker-header-prune",
-                            "icons/fe/delete.svg",
-                            self.tr("dockerManager.prune"),
-                            can_prune,
-                            cx.listener(|this, _, _, cx| {
-                                this.prune_docker_system(cx);
-                            }),
-                        ))
+                        .child(
+                            div()
+                                .relative()
+                                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                                .child(header_svg_icon_button(
+                                    palette,
+                                    "docker-header-more",
+                                    "icons/session/more.svg",
+                                    more_label,
+                                    can_prune,
+                                    cx.listener(|this, _, _, cx| {
+                                        this.docker_header_menu_open =
+                                            !this.docker_header_menu_open;
+                                        cx.notify();
+                                    }),
+                                ))
+                                .when(self.docker_header_menu_open, |this| {
+                                    this.child(
+                                        div()
+                                            .id("docker-header-more-menu")
+                                            .absolute()
+                                            .top(px(30.))
+                                            .right_0()
+                                            .w(px(160.))
+                                            .rounded_md()
+                                            .border_1()
+                                            .border_color(rgb(palette.border))
+                                            .bg(rgb(palette.surface_elevated))
+                                            .shadow_lg()
+                                            .py_1()
+                                            .child(
+                                                div()
+                                                    .id("docker-header-prune")
+                                                    .h(px(30.))
+                                                    .px_3()
+                                                    .flex()
+                                                    .items_center()
+                                                    .gap_2()
+                                                    .text_size(px(11.))
+                                                    .text_color(rgb(palette.danger))
+                                                    .cursor_pointer()
+                                                    .hover(|this| this.bg(rgb(palette.hover)))
+                                                    .child(
+                                                        svg()
+                                                            .size(px(14.))
+                                                            .flex_none()
+                                                            .path("icons/fe/delete.svg"),
+                                                    )
+                                                    .child(prune_label)
+                                                    .on_click(cx.listener(|this, _, _, cx| {
+                                                        this.docker_header_menu_open = false;
+                                                        this.prune_docker_system(cx);
+                                                    })),
+                                            ),
+                                    )
+                                }),
+                        )
                         .into_any_element(),
                 )
             }

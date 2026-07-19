@@ -7,6 +7,7 @@ impl NyaTermApp {
         self.docker_container_menu_id = None;
         self.docker_compose_menu_id = None;
         self.docker_tab_menu_open = false;
+        self.docker_header_menu_open = false;
         if tab == DockerTab::Compose
             && self
                 .docker_overview

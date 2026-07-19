@@ -530,6 +530,7 @@ impl NyaTermApp {
             docker_compose_menu_id: None,
             docker_tab: DockerTab::Containers,
             docker_tab_menu_open: false,
+            docker_header_menu_open: false,
             docker_search_draft: String::new(),
             docker_search_focus: cx.focus_handle(),
             docker_compose_expanded: HashSet::new(),
