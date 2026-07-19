@@ -2,6 +2,7 @@ use super::*;
 
 pub(in crate::features::pages::remote) fn docker_details_panel(
     palette: crate::theme::ThemePalette,
+    dialog_bg: gpui::Rgba,
     container_id: Option<String>,
     details: Option<DockerContainerDetails>,
     container: Option<DockerContainer>,
@@ -72,7 +73,8 @@ pub(in crate::features::pages::remote) fn docker_details_panel(
                     ),
             );
 
-        return modal_dialog_shell(palette, "docker-details-modal", 680., card).into_any_element();
+        return modal_dialog_shell(palette, dialog_bg, "docker-details-modal", 680., card)
+            .into_any_element();
     };
 
     let mut mounts = div().flex().flex_col().gap_1();
@@ -540,7 +542,7 @@ pub(in crate::features::pages::remote) fn docker_details_panel(
                 .child(mounts),
         );
 
-    modal_dialog_shell(palette, "docker-details-modal", 620., card).into_any_element()
+    modal_dialog_shell(palette, dialog_bg, "docker-details-modal", 620., card).into_any_element()
 }
 
 fn docker_detail_line(

@@ -216,7 +216,13 @@ pub(in crate::features::pages::tunnels) fn network_proxy_editor_panel(
             }),
         ));
 
-    network_modal_shell(palette, "network-proxy-editor-modal", 520., card)
+    network_modal_shell(
+        palette,
+        app.shell_surface_color(palette.bg),
+        "network-proxy-editor-modal",
+        520.,
+        card,
+    )
 }
 
 pub(in crate::features::pages::tunnels) fn proxy_editor_input(

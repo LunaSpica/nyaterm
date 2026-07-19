@@ -8,6 +8,7 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         let menu_bg = self.shell_surface_color(palette.surface);
+        let dialog_bg = self.shell_surface_color(palette.bg);
         let table_labels = ProcessTableLabels {
             process: self.tr("processManager.process"),
             pid: self.tr("processManager.sortPid"),
@@ -457,6 +458,7 @@ impl NyaTermApp {
             .when_some(self.process_signal_confirm.clone(), |this, confirm| {
                 this.child(process_signal_confirm_panel(
                     palette,
+                    dialog_bg,
                     confirm,
                     signal_labels,
                     cx,

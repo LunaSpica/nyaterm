@@ -290,6 +290,7 @@ fn docker_tab_menu_item(
 
 pub(in crate::features::pages::remote) fn docker_confirm_panel(
     palette: crate::theme::ThemePalette,
+    dialog_bg: gpui::Rgba,
     confirm: DockerConfirmState,
     labels: DockerLabels,
     cx: &mut Context<NyaTermApp>,
@@ -337,7 +338,7 @@ pub(in crate::features::pages::remote) fn docker_confirm_panel(
                     }),
                 )),
         );
-    modal_dialog_shell(palette, "docker-confirm-modal", 420., card)
+    modal_dialog_shell(palette, dialog_bg, "docker-confirm-modal", 420., card)
 }
 
 pub(in crate::features::pages::remote) fn docker_container_confirm_button(

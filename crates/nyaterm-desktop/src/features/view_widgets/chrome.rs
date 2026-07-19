@@ -222,6 +222,7 @@ pub(in crate::features) fn panel_header_with_actions(
 /// Dimmed full-area modal shell (Tauri Dialog backdrop + centered card).
 pub(in crate::features) fn modal_dialog_shell(
     palette: ThemePalette,
+    background: gpui::Rgba,
     id: impl Into<String>,
     width: f32,
     content: impl IntoElement,
@@ -246,7 +247,7 @@ pub(in crate::features) fn modal_dialog_shell(
                 .rounded_md()
                 .border_1()
                 .border_color(rgb(palette.border))
-                .bg(rgb(palette.bg))
+                .bg(background)
                 .shadow_lg()
                 .child(content),
         )

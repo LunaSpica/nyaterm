@@ -249,7 +249,13 @@ pub(in crate::features::pages::tunnels) fn network_tunnel_editor_panel(
             }),
         ));
 
-    network_modal_shell(palette, "network-tunnel-editor-modal", 640., card)
+    network_modal_shell(
+        palette,
+        app.shell_surface_color(palette.bg),
+        "network-tunnel-editor-modal",
+        640.,
+        card,
+    )
 }
 
 pub(in crate::features::pages::tunnels) fn tunnel_editor_input(

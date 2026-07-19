@@ -130,6 +130,7 @@ impl NyaTermApp {
 
         let palette = self.theme_palette();
         let menu_bg = self.shell_surface_color(palette.surface);
+        let dialog_bg = self.shell_surface_color(palette.bg);
         let docker_content = match active_tab {
             DockerTab::Containers => docker_containers_panel(
                 palette,
@@ -271,6 +272,7 @@ impl NyaTermApp {
                 |this, container_id| {
                     this.child(docker_details_panel(
                         palette,
+                        dialog_bg,
                         Some(container_id.clone()),
                         self.docker_details.clone(),
                         overview
@@ -284,7 +286,9 @@ impl NyaTermApp {
                 },
             )
             .when_some(self.docker_confirm.clone(), |this, confirm| {
-                this.child(docker_confirm_panel(palette, confirm, labels, cx))
+                this.child(docker_confirm_panel(
+                    palette, dialog_bg, confirm, labels, cx,
+                ))
             })
     }
 }

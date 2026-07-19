@@ -66,7 +66,13 @@ impl NyaTermApp {
                     this.save_connection_group_editor(cx);
                 }),
             ));
-        modal_dialog_shell(palette, "connection-group-editor-modal", 420., card)
+        modal_dialog_shell(
+            palette,
+            self.shell_surface_color(palette.bg),
+            "connection-group-editor-modal",
+            420.,
+            card,
+        )
     }
 
     pub(in crate::features) fn connection_delete_confirm_panel(
@@ -109,7 +115,13 @@ impl NyaTermApp {
                     this.confirm_connection_delete(cx);
                 }),
             ));
-        modal_dialog_shell(palette, "connection-delete-confirm-modal", 420., card)
+        modal_dialog_shell(
+            palette,
+            self.shell_surface_color(palette.bg),
+            "connection-delete-confirm-modal",
+            420.,
+            card,
+        )
     }
 
     pub(in crate::features) fn connection_group_delete_confirm_panel(
@@ -152,7 +164,13 @@ impl NyaTermApp {
                     this.confirm_connection_group_delete(cx);
                 }),
             ));
-        modal_dialog_shell(palette, "connection-group-delete-modal", 440., card)
+        modal_dialog_shell(
+            palette,
+            self.shell_surface_color(palette.bg),
+            "connection-group-delete-modal",
+            440.,
+            card,
+        )
     }
 
     pub(in crate::features) fn connection_group_open_confirm_panel(
@@ -211,6 +229,12 @@ impl NyaTermApp {
                     this.confirm_connection_group_open(window, cx);
                 }),
             ));
-        modal_dialog_shell(palette, "connection-group-open-confirm-modal", 400., card)
+        modal_dialog_shell(
+            palette,
+            self.shell_surface_color(palette.bg),
+            "connection-group-open-confirm-modal",
+            400.,
+            card,
+        )
     }
 }

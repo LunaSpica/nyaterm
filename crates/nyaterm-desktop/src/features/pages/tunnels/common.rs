@@ -198,7 +198,13 @@ pub(super) fn network_delete_confirm_panel(
                 this.confirm_network_delete(cx);
             }),
         ));
-    network_modal_shell(palette, "network-delete-confirm-modal", 420., card)
+    network_modal_shell(
+        palette,
+        app.shell_surface_color(palette.bg),
+        "network-delete-confirm-modal",
+        420.,
+        card,
+    )
 }
 
 pub(super) fn network_group_editor_panel(
@@ -284,7 +290,13 @@ pub(super) fn network_group_editor_panel(
                 this.save_network_group_editor(cx);
             }),
         ));
-    network_modal_shell(palette, "network-group-editor-modal", 420., card)
+    network_modal_shell(
+        palette,
+        app.shell_surface_color(palette.bg),
+        "network-group-editor-modal",
+        420.,
+        card,
+    )
 }
 
 pub(super) fn network_group_delete_confirm_panel(
@@ -328,16 +340,23 @@ pub(super) fn network_group_delete_confirm_panel(
                 this.confirm_network_group_delete(cx);
             }),
         ));
-    network_modal_shell(palette, "network-group-delete-modal", 420., card)
+    network_modal_shell(
+        palette,
+        app.shell_surface_color(palette.bg),
+        "network-group-delete-modal",
+        420.,
+        card,
+    )
 }
 
 pub(super) fn network_modal_shell(
     palette: crate::theme::ThemePalette,
+    background: gpui::Rgba,
     id: impl Into<String>,
     width: f32,
     content: impl IntoElement,
 ) -> impl IntoElement {
-    modal_dialog_shell(palette, id, width, content)
+    modal_dialog_shell(palette, background, id, width, content)
 }
 
 pub(super) fn network_dialog_footer(

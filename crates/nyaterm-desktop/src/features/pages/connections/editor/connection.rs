@@ -712,7 +712,14 @@ impl NyaTermApp {
                 .child(card)
                 .into_any_element()
         } else {
-            modal_dialog_shell(palette, "connection-editor-modal", 560., card).into_any_element()
+            modal_dialog_shell(
+                palette,
+                self.shell_surface_color(palette.bg),
+                "connection-editor-modal",
+                560.,
+                card,
+            )
+            .into_any_element()
         }
     }
 }

@@ -261,6 +261,7 @@ fn process_metric(
 
 pub(in crate::features::pages::remote) fn process_signal_confirm_panel(
     palette: ThemePalette,
+    dialog_bg: gpui::Rgba,
     confirm: RemoteProcessSignalConfirmState,
     labels: ProcessSignalLabels,
     cx: &mut Context<NyaTermApp>,
@@ -316,5 +317,11 @@ pub(in crate::features::pages::remote) fn process_signal_confirm_panel(
                     }),
                 )),
         );
-    modal_dialog_shell(palette, "process-signal-confirm-modal", 420., card)
+    modal_dialog_shell(
+        palette,
+        dialog_bg,
+        "process-signal-confirm-modal",
+        420.,
+        card,
+    )
 }
