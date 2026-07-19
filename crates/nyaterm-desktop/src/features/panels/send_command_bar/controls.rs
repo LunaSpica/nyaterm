@@ -59,7 +59,11 @@ impl NyaTermApp {
                 )
                 .when(self.send_command_data_menu_open, |this| {
                     this.child(
-                        send_command_select_menu(palette, "bottom-command-data-menu")
+                        send_command_select_menu(
+                            palette,
+                            self.shell_surface_color(palette.surface),
+                            "bottom-command-data-menu",
+                        )
                             .child(send_command_select_menu_item(
                                 palette,
                                 "bottom-command-data-text",
@@ -96,7 +100,11 @@ impl NyaTermApp {
                 )
                 .when(self.send_command_mode_menu_open, |this| {
                     let menu = if self.send_command_data_type == SendCommandDataType::Hex {
-                        send_command_select_menu(palette, "bottom-command-mode-menu")
+                        send_command_select_menu(
+                            palette,
+                            self.shell_surface_color(palette.surface),
+                            "bottom-command-mode-menu",
+                        )
                             .child(send_command_select_menu_item(
                                 palette,
                                 "bottom-command-mode-byte",
@@ -116,7 +124,11 @@ impl NyaTermApp {
                                 }),
                             ))
                     } else {
-                        send_command_select_menu(palette, "bottom-command-mode-menu")
+                        send_command_select_menu(
+                            palette,
+                            self.shell_surface_color(palette.surface),
+                            "bottom-command-mode-menu",
+                        )
                             .child(send_command_select_menu_item(
                                 palette,
                                 "bottom-command-mode-line",
@@ -153,7 +165,11 @@ impl NyaTermApp {
                     }),
                 )
                 .when(self.send_command_target_menu_open, |this| {
-                    let mut menu = send_command_select_menu(palette, "bottom-command-target-menu")
+                    let mut menu = send_command_select_menu(
+                        palette,
+                        self.shell_surface_color(palette.surface),
+                        "bottom-command-target-menu",
+                    )
                         .child(send_command_select_menu_item(
                             palette,
                             "bottom-command-target-current",
@@ -335,7 +351,11 @@ impl NyaTermApp {
                     )
                     .when(self.send_command_line_ending_menu_open, |this| {
                         this.child(
-                            send_command_select_menu(palette, "bottom-command-eol-menu")
+                            send_command_select_menu(
+                                palette,
+                                self.shell_surface_color(palette.surface),
+                                "bottom-command-eol-menu",
+                            )
                                 .child(send_command_line_ending_item(
                                     palette,
                                     "none",

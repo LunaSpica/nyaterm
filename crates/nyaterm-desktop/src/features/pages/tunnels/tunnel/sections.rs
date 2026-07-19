@@ -123,6 +123,7 @@ pub(in crate::features::pages::tunnels) fn tunnel_section(
                     .flex_col()
                     .child(tunnel_network_row(
                         palette,
+                        app.shell_surface_color(palette.surface),
                         &tunnel,
                         connection_label,
                         open_info,
@@ -273,6 +274,7 @@ pub(in crate::features::pages::tunnels) fn tunnel_section(
                         .is_some_and(|menu| menu.tab == NetworkTab::Tunnels && menu.id == menu_id);
                     this.child(network_item_overflow_menu(
                         palette,
+                        app.shell_surface_color(palette.surface),
                         format!("tunnel-group-actions-{}", group.id),
                         menu_open,
                         app.tr("common.more"),

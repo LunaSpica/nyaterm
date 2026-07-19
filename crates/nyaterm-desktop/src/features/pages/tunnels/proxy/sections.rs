@@ -195,6 +195,7 @@ pub(in crate::features::pages::tunnels) fn proxy_section(
                         .is_some_and(|menu| menu.tab == NetworkTab::Proxies && menu.id == menu_id);
                     this.child(network_item_overflow_menu(
                         palette,
+                        app.shell_surface_color(palette.surface),
                         format!("proxy-group-actions-{}", group.id),
                         menu_open,
                         app.tr("common.more"),

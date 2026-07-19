@@ -312,35 +312,41 @@ impl NyaTermApp {
                                 .absolute()
                                 .top(px(30.))
                                 .right(px(0.))
-                                .w(px(148.))
+                                .w(px(160.))
                                 .rounded_md()
                                 .border_1()
                                 .border_color(rgb(palette.border))
-                                .bg(rgb(palette.surface))
+                                .bg(self.shell_surface_color(palette.surface))
                                 .shadow_sm()
                                 .py_1()
-                                .child(menu_item(
+                                .child(menu_item_with_icon(
                                     palette,
                                     "connections-export",
+                                    "icons/menu/export.svg",
                                     self.tr("settings.exportConfig"),
+                                    false,
                                     cx.listener(|this, _, _, cx| {
                                         this.connections_more_menu_open = false;
                                         this.prompt_config_export(cx);
                                     }),
                                 ))
-                                .child(menu_item(
+                                .child(menu_item_with_icon(
                                     palette,
                                     "connections-import",
+                                    "icons/import.svg",
                                     self.tr("settings.importConfig"),
+                                    false,
                                     cx.listener(|this, _, _, cx| {
                                         this.connections_more_menu_open = false;
                                         this.prompt_config_import(cx);
                                     }),
                                 ))
-                                .child(menu_item(
+                                .child(menu_item_with_icon(
                                     palette,
                                     "connections-refresh",
+                                    "icons/fe/refresh.svg",
                                     self.tr("common.refresh"),
+                                    false,
                                     cx.listener(|this, _, _, cx| {
                                         this.connections_more_menu_open = false;
                                         this.refresh_store_from_runtime();
@@ -348,10 +354,12 @@ impl NyaTermApp {
                                         cx.notify();
                                     }),
                                 ))
-                                .child(menu_item(
+                                .child(menu_item_with_icon(
                                     palette,
                                     "connections-local",
+                                    "icons/conn/terminal.svg",
                                     self.tr("dialog.openLocalShell"),
+                                    false,
                                     cx.listener(|this, _, window, cx| {
                                         this.connections_more_menu_open = false;
                                         this.start_local_session(window, cx);

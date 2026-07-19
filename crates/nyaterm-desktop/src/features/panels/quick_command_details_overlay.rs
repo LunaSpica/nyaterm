@@ -59,7 +59,7 @@ impl NyaTermApp {
                     .rounded_lg()
                     .border_1()
                     .border_color(rgb(palette.border))
-                    .bg(rgb(palette.surface))
+                    .bg(self.shell_surface_color(palette.surface))
                     .shadow_lg()
                     .track_focus(&self.quick_command_details_focus)
                     .on_click(cx.listener(|this, _, window, cx| {

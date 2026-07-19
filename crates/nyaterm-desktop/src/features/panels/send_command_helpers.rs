@@ -93,6 +93,7 @@ pub(super) fn send_command_select_trigger(
 
 pub(super) fn send_command_select_menu(
     palette: crate::theme::ThemePalette,
+    menu_background: gpui::Rgba,
     id: impl Into<String>,
 ) -> gpui::Stateful<gpui::Div> {
     div()
@@ -107,7 +108,7 @@ pub(super) fn send_command_select_menu(
         .rounded_md()
         .border_1()
         .border_color(rgb(palette.border))
-        .bg(rgb(palette.surface))
+        .bg(menu_background)
         .shadow_lg()
         .py_1()
         .flex()

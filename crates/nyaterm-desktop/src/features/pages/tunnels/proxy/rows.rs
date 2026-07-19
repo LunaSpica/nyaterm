@@ -71,6 +71,7 @@ pub(in crate::features::pages::tunnels) fn proxy_network_row(
         )
         .child(network_item_overflow_menu(
             palette,
+            app.shell_surface_color(palette.surface),
             format!("proxy-actions-{}", proxy.id),
             menu_open,
             app.tr("common.more"),

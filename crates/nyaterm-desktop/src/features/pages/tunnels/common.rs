@@ -43,6 +43,7 @@ pub(super) fn network_tab_button(
 
 pub(super) fn network_item_overflow_menu(
     palette: crate::theme::ThemePalette,
+    menu_background: gpui::Rgba,
     id: impl Into<String>,
     open: bool,
     more_label: &'static str,
@@ -93,7 +94,7 @@ pub(super) fn network_item_overflow_menu(
                     .rounded_md()
                     .border_1()
                     .border_color(rgb(palette.border))
-                    .bg(rgb(palette.surface))
+                    .bg(menu_background)
                     .shadow_lg()
                     .py_1()
                     .flex()

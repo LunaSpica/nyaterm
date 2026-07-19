@@ -29,7 +29,7 @@ impl NyaTermApp {
             .rounded_md()
             .border_1()
             .border_color(rgb(palette.border))
-            .bg(rgb(palette.surface))
+            .bg(self.shell_surface_color(palette.surface))
             .shadow_lg()
             .py_1()
             .flex()
@@ -142,7 +142,7 @@ impl NyaTermApp {
             .rounded_lg()
             .border_1()
             .border_color(rgb(palette.border))
-            .bg(rgb(palette.surface_elevated))
+            .bg(self.shell_surface_color(palette.surface_elevated))
             .shadow_lg()
             .overflow_hidden()
             .child(
@@ -154,7 +154,7 @@ impl NyaTermApp {
                     .py_2()
                     .border_b_1()
                     .border_color(rgb(palette.border))
-                    .bg(rgb(palette.surface))
+                    .bg(self.shell_surface_color(palette.surface))
                     .child(
                         div()
                             .flex()

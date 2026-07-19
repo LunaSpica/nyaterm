@@ -2,6 +2,7 @@ use super::*;
 
 pub(in crate::features::pages::tunnels) fn tunnel_network_row(
     palette: crate::theme::ThemePalette,
+    menu_background: gpui::Rgba,
     tunnel: &TunnelConfig,
     connection_label: String,
     open_info: Option<SshTunnelInfo>,
@@ -137,6 +138,7 @@ pub(in crate::features::pages::tunnels) fn tunnel_network_row(
                 .child(toggle)
                 .child(network_item_overflow_menu(
                     palette,
+                    menu_background,
                     format!("network-tunnel-actions-{}", tunnel.id),
                     menu_open,
                     more_label,

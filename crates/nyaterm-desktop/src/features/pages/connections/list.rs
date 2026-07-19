@@ -841,11 +841,13 @@ pub(super) fn menu_separator(palette: crate::theme::ThemePalette) -> impl IntoEl
     div().h(px(1.)).mx_2().my_1().bg(rgb(palette.border))
 }
 
-pub(super) fn menu_item(
+pub(super) fn menu_item_with_icon(
     palette: crate::theme::ThemePalette,
     id: impl Into<String>,
-    label: &'static str,
-    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+    icon: &'static str,
+    label: impl Into<SharedString>,
+    destructive: bool,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
     div()
         .id(SharedString::from(id.into()))
@@ -853,12 +855,24 @@ pub(super) fn menu_item(
         .px_3()
         .flex()
         .items_center()
+        .gap_2()
         .text_size(px(12.))
-        .text_color(rgb(palette.text))
+        .text_color(rgb(if destructive {
+            palette.danger
+        } else {
+            palette.text
+        }))
         .cursor_pointer()
         .hover(|this| this.bg(rgb(palette.surface_elevated)))
         .on_click(on_click)
-        .child(label)
+        .child(svg().size(px(14.)).flex_none().path(icon).text_color(rgb(
+            if destructive {
+                palette.danger
+            } else {
+                palette.text_muted
+            },
+        )))
+        .child(div().min_w_0().flex_1().child(label.into()))
 }
 
 pub(super) fn connection_detail_rows(

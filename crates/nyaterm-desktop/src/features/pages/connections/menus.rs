@@ -20,40 +20,6 @@ fn connection_menu_position(
     )
 }
 
-fn connection_menu_item(
-    palette: crate::theme::ThemePalette,
-    id: impl Into<String>,
-    icon: &'static str,
-    label: impl Into<SharedString>,
-    destructive: bool,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    div()
-        .id(SharedString::from(id.into()))
-        .h(px(28.))
-        .px_3()
-        .flex()
-        .items_center()
-        .gap_2()
-        .text_size(px(12.))
-        .text_color(rgb(if destructive {
-            palette.danger
-        } else {
-            palette.text
-        }))
-        .cursor_pointer()
-        .hover(|this| this.bg(rgb(palette.surface_elevated)))
-        .on_click(on_click)
-        .child(svg().size(px(14.)).flex_none().path(icon).text_color(rgb(
-            if destructive {
-                palette.danger
-            } else {
-                palette.text_muted
-            },
-        )))
-        .child(div().min_w_0().flex_1().child(label.into()))
-}
-
 impl NyaTermApp {
     pub(in crate::features) fn connection_context_menu_overlay(
         &mut self,
@@ -128,7 +94,7 @@ impl NyaTermApp {
                     .shadow_lg()
                     .py_1()
                     .on_click(|_, _, cx| cx.stop_propagation())
-                    .child(connection_menu_item(
+                    .child(menu_item_with_icon(
                         palette,
                         "connection-context-connect",
                         "icons/conn/connect.svg",
@@ -146,7 +112,7 @@ impl NyaTermApp {
                             }
                         }),
                     ))
-                    .child(connection_menu_item(
+                    .child(menu_item_with_icon(
                         palette,
                         "connection-context-edit",
                         "icons/net/edit.svg",
@@ -164,7 +130,7 @@ impl NyaTermApp {
                         }),
                     ))
                     .child(menu_separator(palette))
-                    .child(connection_menu_item(
+                    .child(menu_item_with_icon(
                         palette,
                         "connection-context-rename",
                         "icons/session/rename.svg",
@@ -175,7 +141,7 @@ impl NyaTermApp {
                             this.rename_connection(connection_for_rename.clone(), window, cx);
                         }),
                     ))
-                    .child(connection_menu_item(
+                    .child(menu_item_with_icon(
                         palette,
                         "connection-context-copy",
                         "icons/copy.svg",
@@ -195,7 +161,7 @@ impl NyaTermApp {
                         }),
                     ))
                     .child(menu_separator(palette))
-                    .child(connection_menu_item(
+                    .child(menu_item_with_icon(
                         palette,
                         "connection-context-delete",
                         "icons/net/delete.svg",
@@ -299,7 +265,7 @@ impl NyaTermApp {
                     .shadow_lg()
                     .py_1()
                     .on_click(|_, _, cx| cx.stop_propagation())
-                    .child(connection_menu_item(
+                    .child(menu_item_with_icon(
                         palette,
                         "connection-group-context-new",
                         "icons/conn/add.svg",
@@ -316,7 +282,7 @@ impl NyaTermApp {
                             );
                         }),
                     ))
-                    .child(connection_menu_item(
+                    .child(menu_item_with_icon(
                         palette,
                         "connection-group-context-folder",
                         "icons/fe/new-folder.svg",
@@ -333,7 +299,7 @@ impl NyaTermApp {
                         }),
                     ))
                     .when(total_in_group > 0, |this| {
-                        this.child(menu_separator(palette)).child(connection_menu_item(
+                        this.child(menu_separator(palette)).child(menu_item_with_icon(
                             palette,
                             "connection-group-context-open-all",
                             "icons/fe/forward.svg",
@@ -350,7 +316,7 @@ impl NyaTermApp {
                         ))
                     })
                     .child(menu_separator(palette))
-                    .child(connection_menu_item(
+                    .child(menu_item_with_icon(
                         palette,
                         "connection-group-context-rename",
                         "icons/session/rename.svg",
@@ -366,7 +332,7 @@ impl NyaTermApp {
                             );
                         }),
                     ))
-                    .child(connection_menu_item(
+                    .child(menu_item_with_icon(
                         palette,
                         "connection-group-context-delete",
                         "icons/net/delete.svg",
