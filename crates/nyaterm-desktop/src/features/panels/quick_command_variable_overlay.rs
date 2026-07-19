@@ -25,32 +25,82 @@ impl NyaTermApp {
 
         let mut rows = div()
             .id("quick-command-variable-fields")
-            .mt_3()
-            .max_h(px((self.last_viewport_size.1 * 0.6).clamp(180., 420.)))
-            .overflow_y_scroll()
             .flex()
             .flex_col()
-            .gap_2();
+            .gap_4();
         for (index, variable) in prompt.variables.iter().cloned().enumerate() {
             let focused = prompt.focused_index == index;
             let variable_name = variable.name.clone();
             let field_id = format!("quick-command-variable-{index}");
-            rows = rows.child(
+            let field = if variable.options.is_empty() {
+                transfer_input(
+                    field_id.clone(),
+                    self.tr("quickCommands.command"),
+                    variable.value.clone(),
+                    focused,
+                    self.theme_palette(),
+                )
+                .track_focus(&self.quick_command_variable_focus)
+                .into_any_element()
+            } else {
                 div()
-                    .id(SharedString::from(field_id.clone()))
+                    .h(px(32.))
+                    .px_2()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap_2()
                     .rounded_sm()
                     .border_1()
                     .border_color(if focused {
-                        rgb(0x4ade80)
+                        rgb(palette.primary)
                     } else {
                         rgb(palette.border)
                     })
-                    .bg(if focused {
-                        rgb(0x0f1f18)
-                    } else {
-                        rgb(palette.input)
-                    })
-                    .p_2()
+                    .bg(rgb(palette.input))
+                    .child(
+                        div()
+                            .min_w_0()
+                            .flex_1()
+                            .font_family(crate::features::gpui_code_font_family())
+                            .text_xs()
+                            .text_color(rgb(palette.text))
+                            .child(if variable.value.is_empty() {
+                                "-".to_string()
+                            } else {
+                                variable.value.clone()
+                            }),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_1()
+                            .child(small_button(
+                                palette,
+                                format!("quick-command-variable-prev-{index}"),
+                                "<",
+                                cx.listener(move |this, _, _, cx| {
+                                    this.cycle_quick_command_variable_option(index, -1, cx);
+                                }),
+                            ))
+                            .child(small_button(
+                                palette,
+                                format!("quick-command-variable-next-{index}"),
+                                ">",
+                                cx.listener(move |this, _, _, cx| {
+                                    this.cycle_quick_command_variable_option(index, 1, cx);
+                                }),
+                            )),
+                    )
+                    .into_any_element()
+            };
+            rows = rows.child(
+                div()
+                    .id(SharedString::from(field_id.clone()))
+                    .flex()
+                    .flex_col()
+                    .gap_1()
                     .cursor_pointer()
                     .on_click(cx.listener(move |this, _, window, cx| {
                         this.focus_quick_command_variable(index, cx);
@@ -58,74 +108,11 @@ impl NyaTermApp {
                     }))
                     .child(
                         div()
-                            .flex()
-                            .items_center()
-                            .justify_between()
-                            .gap_2()
-                            .child(
-                                div()
-                                    .min_w_0()
-                                    .flex()
-                                    .flex_col()
-                                    .gap_1()
-                                    .child(
-                                        div()
-                                            .text_size(px(10.))
-                                            .text_color(rgb(palette.text_muted))
-                                            .child(truncate_preview(&variable_name, 48)),
-                                    )
-                                    .child(if variable.options.is_empty() {
-                                        transfer_input(
-                                            field_id,
-                                            self.tr("quickCommands.command"),
-                                            variable.value.clone(),
-                                            focused,
-                                            self.theme_palette(),
-                                        )
-                                        .track_focus(&self.quick_command_variable_focus)
-                                        .into_any_element()
-                                    } else {
-                                        div()
-                                            .font_family(crate::features::gpui_code_font_family())
-                                            .text_xs()
-                                            .text_color(rgb(palette.text))
-                                            .child(if variable.value.is_empty() {
-                                                "-".to_string()
-                                            } else {
-                                                variable.value.clone()
-                                            })
-                                            .into_any_element()
-                                    }),
-                            )
-                            .when(!variable.options.is_empty(), |this| {
-                                this.child(
-                                    div()
-                                        .flex()
-                                        .items_center()
-                                        .gap_1()
-                                        .child(small_button(
-                                            palette,
-                                            format!("quick-command-variable-prev-{index}"),
-                                            "<",
-                                            cx.listener(move |this, _, _, cx| {
-                                                this.cycle_quick_command_variable_option(
-                                                    index, -1, cx,
-                                                );
-                                            }),
-                                        ))
-                                        .child(small_button(
-                                            palette,
-                                            format!("quick-command-variable-next-{index}"),
-                                            ">",
-                                            cx.listener(move |this, _, _, cx| {
-                                                this.cycle_quick_command_variable_option(
-                                                    index, 1, cx,
-                                                );
-                                            }),
-                                        )),
-                                )
-                            }),
-                    ),
+                            .text_size(px(11.))
+                            .text_color(rgb(palette.text_muted))
+                            .child(truncate_preview(&variable_name, 48)),
+                    )
+                    .child(field),
             );
         }
 
@@ -159,115 +146,86 @@ impl NyaTermApp {
                     .border_color(rgb(palette.border))
                     .bg(self.shell_surface_color(palette.bg))
                     .shadow_lg()
-                    .p_4()
+                    .overflow_hidden()
                     .child(
                         div()
-                            .flex()
-                            .items_center()
-                            .justify_between()
-                            .gap_3()
-                            .child(
-                                div()
-                                    .min_w_0()
-                                    .flex()
-                                    .flex_col()
-                                    .gap_1()
-                                    .child(
-                                        div()
-                                            .text_sm()
-                                            .font_weight(FontWeight(800.))
-                                            .text_color(rgb(palette.text))
-                                            .child(self.tr("quickCommands.fillVariables")),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_xs()
-                                            .text_color(rgb(palette.text_muted))
-                                            .child(truncate_preview(&prompt.label, 64)),
-                                    ),
-                            )
-                            .child(status_pill(
-                                if prompt.send_to_all {
-                                    self.tr("quickCommands.sendToAll")
-                                } else if prompt.execute {
-                                    self.tr("quickCommands.run")
-                                } else {
-                                    self.tr("quickCommands.appendOnly")
-                                },
-                                if prompt.send_to_all || prompt.execute {
-                                    rgb(palette.success)
-                                } else {
-                                    rgb(0xfacc15)
-                                },
-                                if prompt.send_to_all || prompt.execute {
-                                    rgb(palette.hover)
-                                } else {
-                                    rgb(0x32280f)
-                                },
-                            )),
-                    )
-                    .child(rows)
-                    .child(
-                        div()
-                            .mt_3()
-                            .rounded_sm()
-                            .border_1()
+                            .px_5()
+                            .py_3()
+                            .border_b_1()
                             .border_color(rgb(palette.border))
-                            .bg(rgb(palette.input))
-                            .p_2()
                             .child(
                                 div()
-                                    .text_size(px(10.))
-                                    .text_color(rgb(palette.text_muted))
-                                    .child(self.tr("quickCommands.view")),
-                            )
-                            .child(
-                                div()
-                                    .mt_1()
-                                    .font_family(crate::features::gpui_code_font_family())
-                                    .text_xs()
-                                    .line_height(px(18.))
-                                    .text_color(rgb(palette.text_muted))
-                                    .child(if preview.trim().is_empty() {
-                                        self.tr("quickCommands.noCommandsFound").to_string()
-                                    } else {
-                                        truncate_preview(&preview, 280)
-                                    }),
+                                    .text_sm()
+                                    .font_weight(FontWeight(800.))
+                                    .text_color(rgb(palette.text))
+                                    .child(self.tr("quickCommands.fillVariables")),
                             ),
                     )
                     .child(
                         div()
-                            .mt_4()
+                            .id("quick-command-variable-body")
+                            .p_5()
+                            .max_h(px((self.last_viewport_size.1 * 0.6).clamp(180., 420.)))
+                            .overflow_y_scroll()
+                            .child(rows)
+                            .child(
+                                div()
+                                    .mt_4()
+                                    .rounded_sm()
+                                    .bg(rgb(palette.input))
+                                    .p_2()
+                                    .child(
+                                        div()
+                                            .text_size(px(10.))
+                                            .text_color(rgb(palette.text_muted))
+                                            .child(self.tr("quickCommands.view")),
+                                    )
+                                    .child(
+                                        div()
+                                            .mt_1()
+                                            .font_family(crate::features::gpui_code_font_family())
+                                            .text_xs()
+                                            .line_height(px(18.))
+                                            .text_color(rgb(palette.text_muted))
+                                            .child(if preview.trim().is_empty() {
+                                                self.tr("quickCommands.noCommandsFound").to_string()
+                                            } else {
+                                                truncate_preview(&preview, 280)
+                                            }),
+                                    ),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .px_5()
+                            .py_3()
+                            .border_t_1()
+                            .border_color(rgb(palette.border))
                             .flex()
                             .items_center()
                             .justify_end()
                             .gap_2()
-                            .child(
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .gap_2()
-                                    .child(small_button(
-                                        palette,
-                                        "quick-command-variable-cancel",
-                                        self.tr("common.cancel"),
-                                        cx.listener(|this, _, _, cx| {
-                                            this.cancel_quick_command_variable_prompt(cx);
-                                        }),
-                                    ))
-                                    .child(small_button(
-                                        palette,
-                                        "quick-command-variable-submit",
-                                        if prompt.execute {
-                                            self.tr("quickCommands.run")
-                                        } else {
-                                            self.tr("quickCommands.appendOnly")
-                                        },
-                                        cx.listener(|this, _, _, cx| {
-                                            this.submit_quick_command_variable_prompt(cx);
-                                        }),
-                                    )),
-                            ),
+                            .child(small_button(
+                                palette,
+                                "quick-command-variable-cancel",
+                                self.tr("common.cancel"),
+                                cx.listener(|this, _, _, cx| {
+                                    this.cancel_quick_command_variable_prompt(cx);
+                                }),
+                            ))
+                            .child(dialog_action_button(
+                                palette,
+                                "quick-command-variable-submit",
+                                if prompt.execute {
+                                    self.tr("quickCommands.run")
+                                } else {
+                                    self.tr("quickCommands.appendOnly")
+                                },
+                                false,
+                                cx.listener(|this, _, _, cx| {
+                                    this.submit_quick_command_variable_prompt(cx);
+                                }),
+                            )),
                     ),
             )
     }

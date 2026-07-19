@@ -696,10 +696,11 @@ impl NyaTermApp {
                                                 this.cancel_delete_sync_group(cx);
                                             }),
                                         ))
-                                        .child(small_button(
+                                        .child(dialog_action_button(
                                             palette,
                                             "sync-group-delete-confirm",
                                             self.tr("syncGroup.deleteGroup"),
+                                            true,
                                             cx.listener(|this, _, _, cx| {
                                                 this.confirm_delete_sync_group(cx);
                                             }),

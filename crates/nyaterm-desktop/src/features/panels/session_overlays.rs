@@ -13,6 +13,7 @@ impl NyaTermApp {
             format!("{}{}", self.rename_draft, self.rename_marked_text)
         };
         let can_save = !self.rename_draft.trim().is_empty();
+        let dialog_width = (self.last_viewport_size.0 - 32.).clamp(280., 320.);
 
         div()
             .id(SharedString::from("rename-tab-overlay"))
@@ -37,13 +38,13 @@ impl NyaTermApp {
             .child(
                 div()
                     .id(SharedString::from("rename-tab-dialog"))
-                    .w(px(320.))
+                    .w(px(dialog_width))
                     .rounded_md()
                     .border_1()
                     .border_color(rgb(palette.border))
                     .bg(self.shell_surface_color(palette.bg))
                     .shadow_lg()
-                    .p_4()
+                    .p_6()
                     .child(
                         div()
                             .text_sm()
@@ -59,11 +60,7 @@ impl NyaTermApp {
                             .h(px(36.))
                             .rounded_sm()
                             .border_1()
-                            .border_color(if can_save {
-                                rgb(palette.border)
-                            } else {
-                                rgb(palette.danger)
-                            })
+                            .border_color(rgb(palette.border))
                             .bg(rgb(palette.input))
                             .px_3()
                             .flex()
@@ -97,13 +94,6 @@ impl NyaTermApp {
                     )
                     .child(
                         div()
-                            .mt_2()
-                            .text_xs()
-                            .text_color(rgb(palette.text_muted))
-                            .child(self.tr("tabCtx.renameHint")),
-                    )
-                    .child(
-                        div()
                             .mt_4()
                             .flex()
                             .items_center()
@@ -118,10 +108,11 @@ impl NyaTermApp {
                                 }),
                             ))
                             .child(div().when(!can_save, |this| this.opacity(0.45)).child(
-                                small_button(
+                                dialog_action_button(
                                     palette,
                                     "rename-tab-save",
                                     self.tr("common.save"),
+                                    false,
                                     cx.listener(|this, _, _, cx| {
                                         this.submit_rename_session(cx);
                                     }),
@@ -381,6 +372,7 @@ impl NyaTermApp {
         };
         let can_submit = !self.startup_command_draft.trim().is_empty();
         let delay_label = format!("{} ms", self.startup_command_delay_ms);
+        let dialog_width = (self.last_viewport_size.0 - 32.).clamp(280., 448.);
 
         div()
             .id(SharedString::from("startup-command-overlay"))
@@ -405,13 +397,13 @@ impl NyaTermApp {
             .child(
                 div()
                     .id(SharedString::from("startup-command-dialog"))
-                    .w(px(420.))
+                    .w(px(dialog_width))
                     .rounded_md()
                     .border_1()
                     .border_color(rgb(palette.border))
                     .bg(self.shell_surface_color(palette.bg))
                     .shadow_lg()
-                    .p_4()
+                    .p_6()
                     .child(
                         div()
                             .text_sm()
@@ -421,17 +413,21 @@ impl NyaTermApp {
                     )
                     .child(
                         div()
+                            .mt_3()
+                            .text_xs()
+                            .font_weight(FontWeight(600.))
+                            .text_color(rgb(palette.text_muted))
+                            .child(self.tr("tabCtx.commandInput")),
+                    )
+                    .child(
+                        div()
                             .id(SharedString::from("startup-command-input"))
                             .relative()
-                            .mt_3()
+                            .mt_1()
                             .h(px(38.))
                             .rounded_sm()
                             .border_1()
-                            .border_color(if can_submit {
-                                rgb(palette.border)
-                            } else {
-                                rgb(palette.danger)
-                            })
+                            .border_color(rgb(palette.border))
                             .bg(rgb(palette.input))
                             .px_3()
                             .flex()
@@ -467,28 +463,30 @@ impl NyaTermApp {
                     .child(
                         div()
                             .mt_3()
+                            .text_xs()
+                            .font_weight(FontWeight(600.))
+                            .text_color(rgb(palette.text_muted))
+                            .child(self.tr("tabCtx.commandDelay")),
+                    )
+                    .child(
+                        div()
+                            .mt_1()
+                            .h(px(36.))
+                            .px_3()
+                            .rounded_sm()
+                            .border_1()
+                            .border_color(rgb(palette.border))
+                            .bg(rgb(palette.input))
                             .flex()
                             .items_center()
                             .justify_between()
                             .gap_3()
                             .child(
                                 div()
-                                    .flex()
-                                    .flex_col()
-                                    .gap_1()
-                                    .child(
-                                        div()
-                                            .text_xs()
-                                            .text_color(rgb(palette.text_muted))
-                                            .child(self.tr("tabCtx.commandDelay")),
-                                    )
-                                    .child(
-                                        div()
-                                            .font_family(crate::features::gpui_code_font_family())
-                                            .text_sm()
-                                            .text_color(rgb(palette.text))
-                                            .child(delay_label),
-                                    ),
+                                    .font_family(crate::features::gpui_code_font_family())
+                                    .text_sm()
+                                    .text_color(rgb(palette.text))
+                                    .child(delay_label),
                             )
                             .child(
                                 div()
@@ -524,13 +522,6 @@ impl NyaTermApp {
                     )
                     .child(
                         div()
-                            .mt_2()
-                            .text_xs()
-                            .text_color(rgb(palette.text_muted))
-                            .child(self.tr("tabCtx.commandDelayHint")),
-                    )
-                    .child(
-                        div()
                             .mt_4()
                             .flex()
                             .items_center()
@@ -545,10 +536,11 @@ impl NyaTermApp {
                                 }),
                             ))
                             .child(div().when(!can_submit, |this| this.opacity(0.45)).child(
-                                small_button(
+                                dialog_action_button(
                                     palette,
                                     "startup-command-submit",
                                     self.tr("common.confirm"),
+                                    false,
                                     cx.listener(|this, _, window, cx| {
                                         this.submit_startup_command_dialog(window, cx);
                                     }),

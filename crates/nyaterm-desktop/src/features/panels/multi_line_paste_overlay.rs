@@ -19,7 +19,7 @@ impl NyaTermApp {
             .replace("{{lines}}", &normalized.split('\n').count().to_string())
             .replace("{{chars}}", &draft_text.chars().count().to_string());
         let can_send = !draft_text.is_empty();
-        let preview_height = (viewport_h * 0.32).clamp(100., 190.);
+        let preview_height = (viewport_h - 160.).clamp(128., 288.);
         let mut preview = div()
             .id(SharedString::from("multi-line-paste-text"))
             .mt_3()
@@ -115,7 +115,7 @@ impl NyaTermApp {
                     .border_color(rgb(palette.border))
                     .bg(self.shell_surface_color(palette.bg))
                     .shadow_lg()
-                    .p_4()
+                    .p_6()
                     .on_click(|_, _, cx| cx.stop_propagation())
                     .child(
                         div()
@@ -161,13 +161,6 @@ impl NyaTermApp {
                     )
                     .child(
                         div()
-                            .mt_2()
-                            .text_xs()
-                            .text_color(rgb(palette.text_muted))
-                            .child(self.tr("terminal.multiLinePasteDescription")),
-                    )
-                    .child(
-                        div()
                             .mt_4()
                             .flex()
                             .items_center()
@@ -182,10 +175,11 @@ impl NyaTermApp {
                                 }),
                             ))
                             .child(div().when(!can_send, |this| this.opacity(0.45)).child(
-                                small_button(
+                                dialog_action_button(
                                     palette,
                                     "multi-line-paste-direct",
                                     self.tr("terminal.multiLinePasteDirect"),
+                                    false,
                                     cx.listener(|this, _, _, cx| {
                                         this.direct_multi_line_paste(cx);
                                     }),

@@ -31,9 +31,9 @@ impl NyaTermApp {
             .right_0()
             .bg(rgba(0x00000080))
             .flex()
-            .items_start()
+            .items_center()
             .justify_center()
-            .pt(px(116.))
+            .p_3()
             .track_focus(&self.close_all_sessions_confirm_focus)
             .on_click(cx.listener(|this, _, window, cx| {
                 window.focus(&this.close_all_sessions_confirm_focus);
@@ -58,7 +58,7 @@ impl NyaTermApp {
                     .border_color(rgb(palette.border))
                     .bg(self.shell_surface_color(palette.bg))
                     .shadow_lg()
-                    .p_4()
+                    .p_6()
                     .on_click(|_, _, cx| cx.stop_propagation())
                     .child(
                         div()
@@ -96,24 +96,15 @@ impl NyaTermApp {
                                 }),
                             ))
                             .child(
-                                div()
-                                    .id("close-all-sessions-confirm")
-                                    .h(px(28.))
-                                    .px_3()
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .rounded_sm()
-                                    .bg(rgb(0x7f1d1d))
-                                    .text_xs()
-                                    .font_weight(FontWeight(800.))
-                                    .text_color(rgb(palette.text))
-                                    .cursor_pointer()
-                                    .hover(|this| this.bg(rgb(0x991b1b)))
-                                    .child(self.tr(action_key))
-                                    .on_click(cx.listener(|this, _, window, cx| {
+                                dialog_action_button(
+                                    palette,
+                                    "close-all-sessions-confirm",
+                                    self.tr(action_key),
+                                    true,
+                                    cx.listener(|this, _, window, cx| {
                                         this.confirm_close_all_sessions(window, cx);
-                                    })),
+                                    }),
+                                ),
                             ),
                     ),
             )
