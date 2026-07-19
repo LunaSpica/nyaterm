@@ -323,8 +323,8 @@ impl NyaTermApp {
             .id(SharedString::from("settings-sidebar-scroll"))
             .flex_1()
             .min_h_0()
-            .px_2()
-            .py_2()
+            .when(compact, |this| this.px_2().py_3())
+            .when(!compact, |this| this.px_3().py_3())
             .overflow_scroll();
 
         sidebar_nav = sidebar_nav
@@ -342,24 +342,28 @@ impl NyaTermApp {
                     SettingsTab::General,
                     "settings-tab-general",
                     compact,
+                    true,
                     cx,
                 ))
                 .child(self.settings_tab_button(
                     SettingsTab::Appearance,
                     "settings-tab-appearance",
                     compact,
+                    true,
                     cx,
                 ))
                 .child(self.settings_tab_button(
                     SettingsTab::Interaction,
                     "settings-tab-interaction",
                     compact,
+                    true,
                     cx,
                 ))
                 .child(self.settings_tab_button(
                     SettingsTab::Keybindings,
                     "settings-tab-keybindings",
                     compact,
+                    true,
                     cx,
                 ))
             })
@@ -377,18 +381,21 @@ impl NyaTermApp {
                     SettingsTab::TerminalGeneral,
                     "settings-tab-terminal-general",
                     compact,
+                    true,
                     cx,
                 ))
                 .child(self.settings_tab_button(
                     SettingsTab::Search,
                     "settings-tab-search",
                     compact,
+                    true,
                     cx,
                 ))
                 .child(self.settings_tab_button(
                     SettingsTab::Translation,
                     "settings-tab-translation",
                     compact,
+                    true,
                     cx,
                 ))
             })
@@ -406,18 +413,21 @@ impl NyaTermApp {
                     SettingsTab::AiGeneral,
                     "settings-tab-ai-general",
                     compact,
+                    true,
                     cx,
                 ))
                 .child(self.settings_tab_button(
                     SettingsTab::AiModels,
                     "settings-tab-ai-models",
                     compact,
+                    true,
                     cx,
                 ))
                 .child(self.settings_tab_button(
                     SettingsTab::AiRules,
                     "settings-tab-ai-rules",
                     compact,
+                    true,
                     cx,
                 ))
             })
@@ -425,18 +435,21 @@ impl NyaTermApp {
                 SettingsTab::Transfer,
                 "settings-tab-transfer",
                 compact,
+                false,
                 cx,
             ))
             .child(self.settings_tab_button(
                 SettingsTab::Security,
                 "settings-tab-security",
                 compact,
+                false,
                 cx,
             ))
             .child(self.settings_tab_button(
                 SettingsTab::SyncBackup,
                 "settings-tab-sync-backup",
                 compact,
+                false,
                 cx,
             ));
 
@@ -447,8 +460,8 @@ impl NyaTermApp {
             .flex()
             .flex_col()
             .border_r_1()
-            .border_color(rgb(palette.border))
-            .bg(rgb(palette.surface))
+            .border_color(rgba((palette.border << 8) | 0xb3))
+            .bg(rgba((palette.surface_elevated << 8) | 0x33))
             .child(
                 div()
                     .h(px(64.))
@@ -459,7 +472,7 @@ impl NyaTermApp {
                     .when(compact, |this| this.justify_center())
                     .when(!compact, |this| this.px_3())
                     .border_b_1()
-                    .border_color(rgb(palette.border))
+                    .border_color(rgba((palette.border << 8) | 0xb3))
                     .child(
                         svg()
                             .size(px(if compact { 22. } else { 24. }))
@@ -495,15 +508,15 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         div()
             .id(SharedString::from(format!("settings-group-{group}")))
-            .mt_2()
+            .mt_1()
             .mb_1()
-            .h(px(26.))
-            .when(!compact, |this| this.px_2())
+            .h(px(40.))
+            .when(!compact, |this| this.px_3())
             .flex()
             .items_center()
             .when(compact, |this| this.justify_center())
             .when(!compact, |this| this.justify_between())
-            .rounded_sm()
+            .rounded_lg()
             .cursor_pointer()
             .hover(|this| this.bg(rgb(palette.hover)))
             .child(
@@ -511,10 +524,10 @@ impl NyaTermApp {
                     .flex()
                     .items_center()
                     .gap_2()
-                    .text_size(px(10.))
-                    .font_weight(FontWeight(700.))
-                    .text_color(rgb(palette.text_dimmed))
-                    .child(svg().size(px(15.)).path(icon_path).text_color(rgb(accent)))
+                    .text_size(px(14.))
+                    .font_weight(FontWeight(600.))
+                    .text_color(rgb(palette.text_muted))
+                    .child(svg().size(px(18.)).path(icon_path).text_color(rgb(accent)))
                     .when(!compact, |this| this.child(title)),
             )
             .when(!compact, |this| {
@@ -524,7 +537,7 @@ impl NyaTermApp {
                         .text_color(rgb(palette.text_dimmed))
                         .child(
                             svg()
-                                .size(px(14.))
+                                .size(px(18.))
                                 .flex_none()
                                 .path(if expanded {
                                     "icons/chevron-down.svg"
@@ -551,6 +564,7 @@ impl NyaTermApp {
         tab: SettingsTab,
         id: &'static str,
         compact: bool,
+        nested: bool,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
@@ -560,14 +574,14 @@ impl NyaTermApp {
         // Tauri settings nav item: soft primary fill, no permanent green border.
         div()
             .id(id)
-            .mt_0()
-            .h(px(30.))
-            .when(!compact, |this| this.px_2())
+            .mt(if nested { px(4.) } else { px(8.) })
+            .h(px(if nested { 34. } else { 40. }))
+            .when(!compact, |this| this.px_3())
             .flex()
             .items_center()
             .when(compact, |this| this.justify_center())
             .gap_2()
-            .rounded_md()
+            .rounded_lg()
             .border_1()
             .border_color(if selected {
                 rgba((palette.primary << 8) | 0x33)
@@ -575,7 +589,7 @@ impl NyaTermApp {
                 rgb(0x00000000)
             })
             .bg(if selected {
-                rgb(palette.hover)
+                rgba((palette.primary << 8) | 0x1f)
             } else {
                 rgb(0x00000000)
             })
@@ -584,17 +598,24 @@ impl NyaTermApp {
             } else {
                 rgb(palette.text_muted)
             })
-            .text_size(px(12.))
+            .text_size(px(if nested { 13. } else { 14. }))
             .font_weight(if selected {
                 FontWeight(600.)
             } else {
                 FontWeight(500.)
             })
             .cursor_pointer()
-            .hover(move |this| this.bg(rgb(palette.hover)).text_color(rgb(palette.text)))
+            .hover(move |this| {
+                this.bg(if selected {
+                    rgba((palette.primary << 8) | 0x29)
+                } else {
+                    rgb(palette.hover)
+                })
+                .text_color(rgb(palette.text))
+            })
             .child(
                 svg()
-                    .size(px(15.))
+                    .size(px(if nested { 16. } else { 18. }))
                     .flex_none()
                     .path(tab.icon_path())
                     .text_color(if selected {
