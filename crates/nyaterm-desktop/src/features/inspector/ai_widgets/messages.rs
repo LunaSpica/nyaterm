@@ -1,5 +1,25 @@
 use super::*;
 
+fn ai_message_menu_position(
+    x: f32,
+    y: f32,
+    menu_width: f32,
+    menu_height: f32,
+    viewport_width: f32,
+    viewport_height: f32,
+) -> (f32, f32, f32) {
+    let margin = 8.;
+    let max_height = (viewport_height - margin * 2.).max(64.);
+    let height = menu_height.min(max_height);
+    let max_x = (viewport_width - menu_width - margin).max(margin);
+    let max_y = (viewport_height - height - margin).max(margin);
+    (
+        x.clamp(margin, max_x),
+        y.clamp(margin, max_y),
+        max_height,
+    )
+}
+
 impl NyaTermApp {
     pub(in crate::features) fn close_ai_message_menu(&mut self, cx: &mut Context<Self>) {
         self.ai_message_menu = None;
@@ -51,13 +71,21 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         let state = self.ai_message_menu.clone().unwrap_or(AiMessageMenuState {
             message_id: String::new(),
-            role_label: "Message".to_string(),
             text: String::new(),
             x: px(24.),
             y: px(24.),
         });
         let quote_text = state.text.clone();
         let copy_text = state.text.clone();
+        let (viewport_w, viewport_h) = self.last_viewport_size;
+        let (menu_x, menu_y, menu_max_h) = ai_message_menu_position(
+            f32::from(state.x),
+            f32::from(state.y),
+            128.,
+            64.,
+            viewport_w,
+            viewport_h,
+        );
         div()
             .id(SharedString::from("ai-message-context-menu-overlay"))
             .absolute()
@@ -72,28 +100,20 @@ impl NyaTermApp {
                 div()
                     .id(SharedString::from("ai-message-context-menu"))
                     .absolute()
-                    .top(state.y)
-                    .left(state.x)
-                    .w(px(180.))
+                    .top(px(menu_y))
+                    .left(px(menu_x))
+                    .w(px(128.))
+                    .max_h(px(menu_max_h))
+                    .overflow_y_scroll()
                     .rounded_md()
                     .border_1()
                     .border_color(rgb(palette.border))
-                    .bg(rgb(palette.bg))
+                    .bg(self.shell_surface_color(palette.bg))
                     .shadow_lg()
-                    .p_2()
+                    .py_1()
                     .flex()
                     .flex_col()
-                    .gap_1()
                     .on_click(|_, _, cx| cx.stop_propagation())
-                    .child(
-                        div()
-                            .px_2()
-                            .pb_1()
-                            .text_size(px(10.))
-                            .font_weight(FontWeight(700.))
-                            .text_color(rgb(palette.text_muted))
-                            .child(state.role_label),
-                    )
                     .child(ai_message_menu_button(
                         palette,
                         "ai-message-menu-quote",
@@ -149,7 +169,6 @@ impl NyaTermApp {
         } else {
             display.clone()
         };
-        let menu_role = role_label.to_string();
         let menu_message_id = message.id.clone();
 
         // Tauri AssistantResponse/User: compact bubbles, softer borders.
@@ -178,7 +197,6 @@ impl NyaTermApp {
                     cx.stop_propagation();
                     this.ai_message_menu = Some(AiMessageMenuState {
                         message_id: menu_message_id.clone(),
-                        role_label: menu_role.clone(),
                         text: menu_text.clone(),
                         x: event.position.x,
                         y: event.position.y,
@@ -194,7 +212,7 @@ impl NyaTermApp {
                     .text_size(px(10.))
                     .font_weight(FontWeight(700.))
                     .text_color(rgb(palette.text_muted))
-                    .child(role_label),
+            .child(role_label),
             );
 
         if let Some(reasoning) = reasoning {
@@ -343,4 +361,21 @@ fn ai_message_menu_button(
         .hover(|this| this.bg(rgb(palette.hover)))
         .on_click(on_click)
         .child(label)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ai_message_menu_position;
+
+    #[test]
+    fn menu_position_stays_inside_viewport() {
+        assert_eq!(
+            ai_message_menu_position(1240., 780., 128., 64., 1280., 800.),
+            (1144., 728., 784.)
+        );
+        assert_eq!(
+            ai_message_menu_position(240., 180., 128., 64., 200., 120.),
+            (64., 48., 104.)
+        );
+    }
 }

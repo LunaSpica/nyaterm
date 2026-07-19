@@ -1,5 +1,25 @@
 use super::*;
 
+fn connection_menu_position(
+    x: f32,
+    y: f32,
+    menu_width: f32,
+    preferred_height: f32,
+    viewport_width: f32,
+    viewport_height: f32,
+) -> (f32, f32, f32) {
+    let margin = 8.;
+    let max_height = (viewport_height - margin * 2.).max(80.);
+    let height = preferred_height.min(max_height);
+    let max_x = (viewport_width - menu_width - margin).max(margin);
+    let max_y = (viewport_height - height - margin).max(margin);
+    (
+        x.clamp(margin, max_x),
+        y.clamp(margin, max_y),
+        max_height,
+    )
+}
+
 impl NyaTermApp {
     pub(in crate::features) fn connection_context_menu_overlay(
         &mut self,
@@ -38,6 +58,15 @@ impl NyaTermApp {
         let connection_for_rename = connection_id.clone();
         let connection_for_copy = connection_id.clone();
         let connection_for_delete = connection_id.clone();
+        let (viewport_w, viewport_h) = self.last_viewport_size;
+        let (menu_x, menu_y, menu_max_h) = connection_menu_position(
+            f32::from(state.x),
+            f32::from(state.y),
+            180.,
+            166.,
+            viewport_w,
+            viewport_h,
+        );
 
         div()
             .id(SharedString::from("connection-context-menu-overlay"))
@@ -53,9 +82,11 @@ impl NyaTermApp {
                 div()
                     .id(SharedString::from("connection-context-menu"))
                     .absolute()
-                    .top(state.y)
-                    .left(state.x)
+                    .top(px(menu_y))
+                    .left(px(menu_x))
                     .w(px(180.))
+                    .max_h(px(menu_max_h))
+                    .overflow_y_scroll()
                     .rounded_md()
                     .border_1()
                     .border_color(rgb(palette.border))
@@ -187,6 +218,16 @@ impl NyaTermApp {
                 })
                 .count()
         };
+        let (viewport_w, viewport_h) = self.last_viewport_size;
+        let group_menu_height = if total_in_group > 0 { 166. } else { 129. };
+        let (menu_x, menu_y, menu_max_h) = connection_menu_position(
+            f32::from(state.x),
+            f32::from(state.y),
+            180.,
+            group_menu_height,
+            viewport_w,
+            viewport_h,
+        );
 
         div()
             .id(SharedString::from("connection-group-context-menu-overlay"))
@@ -202,9 +243,11 @@ impl NyaTermApp {
                 div()
                     .id(SharedString::from("connection-group-context-menu"))
                     .absolute()
-                    .top(state.y)
-                    .left(state.x)
+                    .top(px(menu_y))
+                    .left(px(menu_x))
                     .w(px(180.))
+                    .max_h(px(menu_max_h))
+                    .overflow_y_scroll()
                     .rounded_md()
                     .border_1()
                     .border_color(rgb(palette.border))
@@ -281,5 +324,22 @@ impl NyaTermApp {
                         }),
                     )),
             )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::connection_menu_position;
+
+    #[test]
+    fn menu_position_stays_inside_viewport() {
+        assert_eq!(
+            connection_menu_position(1240., 780., 180., 166., 1280., 800.),
+            (1092., 626., 784.)
+        );
+        assert_eq!(
+            connection_menu_position(240., 180., 180., 166., 200., 120.),
+            (12., 8., 104.)
+        );
     }
 }

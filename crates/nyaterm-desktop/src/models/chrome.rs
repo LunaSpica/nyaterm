@@ -90,7 +90,6 @@ pub(crate) struct ActiveSessionMenuState {
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct AiMessageMenuState {
     pub(crate) message_id: String,
-    pub(crate) role_label: String,
     pub(crate) text: String,
     pub(crate) x: Pixels,
     pub(crate) y: Pixels,
