@@ -233,7 +233,7 @@ pub(in crate::features) fn modal_dialog_shell(
         .bottom_0()
         .left_0()
         .right_0()
-        .bg(rgba(0x030508d8))
+        .bg(rgba(0x00000080))
         .flex()
         .items_center()
         .justify_center()

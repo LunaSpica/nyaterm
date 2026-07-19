@@ -23,7 +23,7 @@ impl NyaTermApp {
             .bottom_0()
             .left_0()
             .right_0()
-            .bg(rgb(0x030508))
+            .bg(rgba(0x00000080))
             .flex()
             .items_center()
             .justify_center()
@@ -46,7 +46,7 @@ impl NyaTermApp {
                     .rounded_md()
                     .border_1()
                     .border_color(rgb(palette.border))
-                    .bg(rgb(palette.bg))
+                    .bg(self.shell_surface_color(palette.bg))
                     .shadow_lg()
                     .p_4()
                     .child(

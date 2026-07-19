@@ -151,6 +151,11 @@ impl NyaTermApp {
             ));
         }
         let can_save = !editor.label.trim().is_empty() && !editor.command.trim().is_empty();
+        let dialog_bg = if native_window {
+            rgb(palette.bg)
+        } else {
+            self.shell_surface_color(palette.bg)
+        };
 
         div()
             .id(SharedString::from("quick-command-editor-overlay"))
@@ -160,7 +165,7 @@ impl NyaTermApp {
                     .bottom_0()
                     .left_0()
                     .right_0()
-                    .bg(rgb(0x030508))
+                    .bg(rgba(0x00000080))
                     .p_4()
             })
             .when(native_window, |this| this.size_full().bg(rgb(palette.bg)))
@@ -190,7 +195,7 @@ impl NyaTermApp {
                             .border_color(rgb(palette.border))
                             .shadow_lg()
                     })
-                    .bg(rgb(palette.bg))
+                    .bg(dialog_bg)
                     .p_4()
                     .when(!native_window, |this| {
                         this.child(
