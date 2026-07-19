@@ -14,7 +14,7 @@ impl NyaTermApp {
             .flex_col()
             .border_l_1()
             .border_color(rgb(palette.border))
-            .bg(rgb(palette.surface))
+            .bg(self.shell_surface_color(palette.surface))
             .child(self.side_panel_stack(PanelSide::Right, cx))
     }
 

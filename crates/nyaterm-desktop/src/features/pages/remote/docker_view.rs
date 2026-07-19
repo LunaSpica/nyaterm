@@ -188,7 +188,7 @@ impl NyaTermApp {
             .size_full()
             .relative()
             .overflow_hidden()
-            .bg(rgb(palette.surface))
+            .bg(self.shell_surface_color(palette.surface))
             .when(
                 self.docker_overview
                     .as_ref()

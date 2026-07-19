@@ -46,7 +46,7 @@ impl NyaTermApp {
             .flex()
             .flex_col()
             .overflow_hidden()
-            .bg(rgb(palette.surface))
+            .bg(self.shell_surface_color(palette.surface))
             .child(
                 div()
                     .h(px(36.))

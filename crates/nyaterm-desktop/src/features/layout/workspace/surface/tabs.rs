@@ -23,6 +23,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
+        let hover_bg = self.shell_surface_color(palette.hover);
         let close_request_id = request_id.clone();
         let spinner_id = SharedString::from(format!("pending-session-spinner-{request_id}"));
         div()
@@ -40,12 +41,12 @@ impl NyaTermApp {
             .border_r_1()
             .border_color(rgb(palette.border))
             .bg(if active {
-                rgb(palette.hover)
+                self.shell_surface_color(palette.hover)
             } else {
-                rgb(palette.bg)
+                self.shell_surface_color(palette.bg)
             })
             .cursor_pointer()
-            .hover(|this| this.bg(rgb(palette.hover)))
+            .hover(move |this| this.bg(hover_bg))
             .when(active, |this| {
                 this.child(
                     div()
@@ -245,7 +246,7 @@ impl NyaTermApp {
             .min_w_0()
             .flex()
             .flex_col()
-            .bg(rgb(palette.bg))
+            .bg(self.shell_transparent_color(palette.bg))
             .child(self.workspace_view(cx))
     }
 
@@ -254,6 +255,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
+        let shell_hover_bg = self.shell_surface_color(palette.hover);
         let sessions = self.ordered_tab_sessions();
         let session_count = sessions.len();
         let mut transient_tabs: Vec<TransientSessionTab> = self
@@ -424,14 +426,14 @@ impl NyaTermApp {
             let bg = if let Some(custom_color) = custom_color {
                 rgba((custom_color << 8) | if is_active { 0x24 } else { 0x14 })
             } else if is_active {
-                rgb(palette.hover)
+                self.shell_surface_color(palette.hover)
             } else {
-                rgb(palette.bg)
+                self.shell_surface_color(palette.bg)
             };
             let hover_bg = if let Some(custom_color) = custom_color {
                 rgba((custom_color << 8) | if is_active { 0x32 } else { 0x22 })
             } else {
-                rgb(palette.hover)
+                self.shell_surface_color(palette.hover)
             };
             tabs = tabs.child(
                 div()
@@ -509,7 +511,7 @@ impl NyaTermApp {
                                 .left_0()
                                 .right_0()
                                 .h(px(1.))
-                                .bg(rgb(palette.bg)),
+                                .bg(self.shell_surface_color(palette.bg)),
                         )
                     })
                     .child(
@@ -628,7 +630,7 @@ impl NyaTermApp {
                     .flex_none()
                     .border_l_1()
                     .border_color(rgb(palette.border))
-                    .hover(|this| this.bg(rgb(palette.hover)))
+                    .hover(move |this| this.bg(shell_hover_bg))
                     .on_drop(cx.listener(|this, payload: &SessionTabDragPayload, _, cx| {
                         this.reorder_session_to_end(payload.session_id.clone(), cx);
                     })),
@@ -672,13 +674,15 @@ impl NyaTermApp {
                             .border_r_1()
                             .border_color(rgb(palette.border))
                             .bg(if open_tabs_menu {
-                                rgb(palette.hover)
+                                self.shell_surface_color(palette.hover)
                             } else {
-                                rgb(palette.surface)
+                                self.shell_surface_color(palette.surface)
                             })
                             .text_color(rgb(palette.text_muted))
                             .cursor_pointer()
-                            .hover(|this| this.bg(rgb(palette.hover)).text_color(rgb(palette.text)))
+                            .hover(move |this| {
+                                this.bg(shell_hover_bg).text_color(rgb(palette.text))
+                            })
                             .child(
                                 svg()
                                     .size(px(16.))
@@ -720,13 +724,13 @@ impl NyaTermApp {
                         .border_r_1()
                         .border_color(rgb(palette.border))
                         .bg(if new_session_menu {
-                            rgb(palette.hover)
+                            self.shell_surface_color(palette.hover)
                         } else {
-                            rgb(palette.surface)
+                            self.shell_surface_color(palette.surface)
                         })
                         .text_color(rgb(palette.text_muted))
                         .cursor_pointer()
-                        .hover(|this| this.bg(rgb(palette.hover)).text_color(rgb(palette.text)))
+                        .hover(move |this| this.bg(shell_hover_bg).text_color(rgb(palette.text)))
                         .child(svg().size(px(16.)).flex_none().path("icons/conn/add.svg"))
                         .tooltip(move |_, cx| {
                             cx.new(|_| {
@@ -749,7 +753,7 @@ impl NyaTermApp {
             .items_center()
             .border_b_1()
             .border_color(rgb(palette.border))
-            .bg(rgb(palette.surface))
+            .bg(self.shell_surface_color(palette.surface))
             .child(tabs)
             .child(session_actions)
     }

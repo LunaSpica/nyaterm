@@ -125,7 +125,7 @@ impl NyaTermApp {
             .flex_col()
             .size_full()
             .overflow_hidden()
-            .bg(rgb(palette.surface))
+            .bg(self.shell_surface_color(palette.surface))
             .child(self.connections_search_bar(visible_count, cx))
             .when(selected_count > 0, |this| {
                 this.child(self.connections_selection_strip(selected_count, cx))

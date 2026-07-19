@@ -290,7 +290,7 @@ impl NyaTermApp {
             .rounded_sm()
             .border_1()
             .border_color(rgb(palette.border))
-            .bg(rgb(palette.surface))
+            .bg(self.shell_surface_color(palette.surface))
             .shadow_lg()
             .px_2()
             .py_1()

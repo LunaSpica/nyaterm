@@ -32,6 +32,33 @@ impl NyaTermApp {
         theme_palette(&self.settings.theme)
     }
 
+    pub(in crate::features) fn wallpaper_enabled(&self) -> bool {
+        self.settings
+            .background_image_path
+            .as_deref()
+            .map(str::trim)
+            .is_some_and(|path| !path.is_empty() && std::path::Path::new(path).is_file())
+    }
+
+    /// Wallpaper opacity applies to surface backgrounds, not their contents.
+    pub(in crate::features) fn shell_surface_color(&self, color: u32) -> gpui::Rgba {
+        if !self.wallpaper_enabled() {
+            return gpui::rgb(color);
+        }
+        let alpha = ((self.settings.background_content_opacity.min(100) as f32 / 100.0) * 255.0)
+            .round() as u32;
+        gpui::rgba((color << 8) | alpha.min(0xff))
+    }
+
+    /// Tauri's terminal and explicitly transparent surfaces reveal wallpaper.
+    pub(in crate::features) fn shell_transparent_color(&self, color: u32) -> gpui::Rgba {
+        if self.wallpaper_enabled() {
+            gpui::rgba(color << 8)
+        } else {
+            gpui::rgb(color)
+        }
+    }
+
     pub(in crate::features) fn terminal_theme_is_dark(&self) -> bool {
         let palette = self.terminal_theme_palette();
         let r = ((palette.terminal_bg >> 16) & 0xff) as f32;

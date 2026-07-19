@@ -1676,6 +1676,7 @@ impl NyaTermApp {
             return false;
         };
         let palette = self.terminal_theme_palette();
+        let transparent_background = self.wallpaper_enabled();
         let font_family = self.gpui_terminal_font_family();
         let font_size = self.settings.terminal_font_size as f32;
         let normal_weight = self.settings.terminal_font_weight as f32;
@@ -1724,6 +1725,7 @@ impl NyaTermApp {
         self.remember_terminal_scroll_window_snapshot(session_id, display_offset, &snapshot);
         surface.update(cx, |surface, cx| {
             surface.set_layout_cache(layout_cache);
+            surface.set_background_transparent(transparent_background);
             surface.set_paint_chrome(
                 palette,
                 font_family,
@@ -1857,6 +1859,7 @@ impl NyaTermApp {
             }
         });
         let palette = self.terminal_theme_palette();
+        let transparent_background = self.wallpaper_enabled();
         let font_family = self.gpui_terminal_font_family();
         let font_size = self.settings.terminal_font_size as f32;
         let normal_weight = self.settings.terminal_font_weight as f32;
@@ -1900,6 +1903,7 @@ impl NyaTermApp {
             }
             surface.update(cx, |surface, cx| {
                 surface.set_layout_cache(layout_cache);
+                surface.set_background_transparent(transparent_background);
                 surface.set_paint_chrome(
                     palette,
                     font_family,
@@ -2113,6 +2117,7 @@ impl NyaTermApp {
         self.remember_terminal_scroll_window_snapshot(session_id, display_offset, &snapshot);
         surface.update(cx, |surface, cx| {
             surface.set_layout_cache(layout_cache);
+            surface.set_background_transparent(transparent_background);
             surface.set_paint_chrome(
                 palette,
                 font_family,

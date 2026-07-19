@@ -532,7 +532,7 @@ impl NyaTermApp {
                     .flex()
                     .flex_col()
                     .relative()
-                    .bg(rgb(palette.terminal_bg))
+                    .bg(self.shell_transparent_color(palette.terminal_bg))
                     .track_focus(&self.terminal_focus)
                     .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                         this.mark_user_activity();
@@ -626,7 +626,7 @@ impl NyaTermApp {
                                 .px_3()
                                 .border_b_1()
                                 .border_color(rgb(palette.border))
-                                .bg(rgb(palette.input))
+                                .bg(self.shell_surface_color(palette.input))
                                 .child(
                                     div()
                                         .text_xs()
@@ -651,7 +651,7 @@ impl NyaTermApp {
                                 .px_3()
                                 .border_b_1()
                                 .border_color(rgb(palette.border))
-                                .bg(rgb(palette.input))
+                                .bg(self.shell_surface_color(palette.input))
                                 .child(
                                     div()
                                         .text_xs()
@@ -671,7 +671,7 @@ impl NyaTermApp {
                                 .px_3()
                                 .border_b_1()
                                 .border_color(rgb(palette.border))
-                                .bg(rgb(palette.input))
+                                .bg(self.shell_surface_color(palette.input))
                                 .child(small_button(
                                     palette,
                                     "terminal-start-local",

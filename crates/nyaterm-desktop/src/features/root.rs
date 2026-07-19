@@ -32,14 +32,9 @@ impl NyaTermApp {
             .as_ref()
             .map(|p| p.trim())
             .filter(|p| !p.is_empty())
+            .filter(|p| std::path::Path::new(p).is_file())
             .map(|p| p.to_string());
-        let wallpaper_enabled = wallpaper_path.is_some();
         let wallpaper_opacity = (self.settings.background_image_opacity.min(100) as f32) / 100.0;
-        let content_opacity = if wallpaper_enabled {
-            (self.settings.background_content_opacity.min(100) as f32) / 100.0
-        } else {
-            1.0
-        };
         let wallpaper_fit = self.settings.background_image_fit.clone();
         let wallpaper_tile_size = wallpaper_path
             .as_deref()
@@ -49,7 +44,7 @@ impl NyaTermApp {
             .id(SharedString::from("nyaterm-root"))
             .size_full()
             .relative()
-            .bg(rgb(palette.bg))
+            .bg(self.shell_transparent_color(palette.bg))
             .text_color(rgb(palette.text))
             .font_family(self.gpui_ui_font_family())
             .text_size(px(self.settings.ui_font_size.clamp(12, 24) as f32))
@@ -218,7 +213,6 @@ impl NyaTermApp {
                     .flex()
                     .flex_col()
                     .size_full()
-                    .opacity(content_opacity)
                     .child(self.title_bar(window, cx))
                     .child(self.workspace_surface(palette, cx)),
             )
@@ -247,7 +241,7 @@ impl NyaTermApp {
                 .flex()
                 .flex_1()
                 .min_h_0()
-                .bg(rgb(palette.bg))
+                .bg(self.shell_surface_color(palette.bg))
                 .child(self.settings_view(cx))
                 .into_any_element()
         } else {
@@ -270,7 +264,7 @@ impl NyaTermApp {
                 .min_h_0()
                 .relative()
                 .overflow_hidden()
-                .bg(rgb(palette.bg))
+                .bg(self.shell_transparent_color(palette.bg))
                 .when(has_left_activity_items, |this| {
                     this.child(self.activity_bar(ActivitySide::Left, cx))
                 })

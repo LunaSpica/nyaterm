@@ -108,7 +108,7 @@ impl NyaTermApp {
             .flex()
             .flex_col()
             .overflow_hidden()
-            .bg(rgb(palette.surface));
+            .bg(self.shell_surface_color(palette.surface));
 
         if let Some(prompt) = duplicate_prompt {
             view = view.child(self.duplicate_prompt_banner(prompt, cx));

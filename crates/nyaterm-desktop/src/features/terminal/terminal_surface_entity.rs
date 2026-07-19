@@ -90,6 +90,7 @@ pub(in crate::features) struct TerminalSurface {
     performance_overlay: Option<TerminalPerformanceOverlay>,
     skipped_output_chars: u64,
     visual_bell: bool,
+    transparent_background: bool,
     is_active: bool,
     protocol_state: TerminalProtocolState,
     scroll_interaction_generation: u64,
@@ -135,6 +136,7 @@ impl TerminalSurface {
             performance_overlay: None,
             skipped_output_chars: 0,
             visual_bell: false,
+            transparent_background: false,
             is_active: false,
             protocol_state: TerminalProtocolState::default(),
             scroll_interaction_generation: 0,
@@ -869,6 +871,10 @@ impl TerminalSurface {
         self.show_timestamp_ms = show_timestamp_ms;
         self.is_active = is_active;
         self.visual_bell = visual_bell;
+    }
+
+    pub(in crate::features) fn set_background_transparent(&mut self, transparent: bool) {
+        self.transparent_background = transparent;
     }
 
     pub(in crate::features) fn set_cursor_blink_visible(&mut self, show_cursor: bool) {
@@ -1732,7 +1738,11 @@ impl Render for TerminalSurface {
             .flex()
             .flex_row()
             .relative()
-            .bg(rgb(palette.terminal_bg))
+            .bg(if self.transparent_background {
+                rgba(palette.terminal_bg << 8)
+            } else {
+                rgb(palette.terminal_bg)
+            })
             .text_color(rgb(palette.terminal_fg))
             .font_family(self.font_family.clone())
             .text_size(px(self.font_size))

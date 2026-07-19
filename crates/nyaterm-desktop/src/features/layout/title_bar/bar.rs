@@ -21,7 +21,7 @@ impl NyaTermApp {
             .justify_between()
             .border_b_1()
             .border_color(rgb(palette.border))
-            .bg(rgb(palette.surface))
+            .bg(self.shell_surface_color(palette.surface))
             .child(
                 div()
                     .h_full()
