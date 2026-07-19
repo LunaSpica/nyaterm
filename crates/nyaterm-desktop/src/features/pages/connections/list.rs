@@ -432,7 +432,7 @@ pub(super) fn connection_editor_group_select(
                         .flex_none()
                         .text_size(px(10.))
                         .text_color(rgb(palette.text_dimmed))
-                        .child(if open { "▴" } else { "▾" }),
+                        .child(svg().size(px(14.)).flex_none().path("icons/chevron-down.svg")),
                 )
                 .on_click(cx.listener(|this, _, _, cx| {
                     this.toggle_connection_editor_menu(ConnectionEditorMenu::Group, cx);
@@ -626,7 +626,7 @@ pub(super) fn connection_editor_select(
                         .flex_none()
                         .text_size(px(10.))
                         .text_color(rgb(palette.text_dimmed))
-                        .child(if open { "▴" } else { "▾" }),
+                        .child(svg().size(px(14.)).flex_none().path("icons/chevron-down.svg")),
                 )
                 .on_click(cx.listener(move |this, _, _, cx| {
                     this.toggle_connection_editor_menu(menu, cx);

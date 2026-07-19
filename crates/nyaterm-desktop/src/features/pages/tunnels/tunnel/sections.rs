@@ -227,10 +227,15 @@ pub(in crate::features::pages::tunnels) fn tunnel_section(
                         .items_center()
                         .gap_2()
                         .child(
-                            div()
-                                .text_size(px(12.))
-                                .text_color(rgb(palette.text_muted))
-                                .child(if collapsed { "▸" } else { "▾" }),
+                            svg()
+                                .size(px(16.))
+                                .flex_none()
+                                .path(if collapsed {
+                                    "icons/fe/forward.svg"
+                                } else {
+                                    "icons/chevron-down.svg"
+                                })
+                                .text_color(rgb(palette.text_muted)),
                         )
                         .child(
                             div()

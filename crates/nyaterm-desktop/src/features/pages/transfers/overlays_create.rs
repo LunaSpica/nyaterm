@@ -556,9 +556,9 @@ impl NyaTermApp {
                             .text_color(rgb(palette.text_muted))
                             .child(self.tr("fileExplorer.permUser")),
                     )
-                    .child(toggle("transfer-perm-user-r", "R", 0o400))
-                    .child(toggle("transfer-perm-user-w", "W", 0o200))
-                    .child(toggle("transfer-perm-user-x", "X", 0o100))
+                    .child(toggle("transfer-perm-user-r", "", 0o400))
+                    .child(toggle("transfer-perm-user-w", "", 0o200))
+                    .child(toggle("transfer-perm-user-x", "", 0o100))
                     .child(toggle("transfer-perm-user-special", "UID", 0o4000)),
             )
             .child(
@@ -574,9 +574,9 @@ impl NyaTermApp {
                             .text_color(rgb(palette.text_muted))
                             .child(self.tr("fileExplorer.permGroup")),
                     )
-                    .child(toggle("transfer-perm-group-r", "R", 0o040))
-                    .child(toggle("transfer-perm-group-w", "W", 0o020))
-                    .child(toggle("transfer-perm-group-x", "X", 0o010))
+                    .child(toggle("transfer-perm-group-r", "", 0o040))
+                    .child(toggle("transfer-perm-group-w", "", 0o020))
+                    .child(toggle("transfer-perm-group-x", "", 0o010))
                     .child(toggle("transfer-perm-group-special", "GID", 0o2000)),
             )
             .child(
@@ -592,9 +592,9 @@ impl NyaTermApp {
                             .text_color(rgb(palette.text_muted))
                             .child(self.tr("fileExplorer.permOther")),
                     )
-                    .child(toggle("transfer-perm-other-r", "R", 0o004))
-                    .child(toggle("transfer-perm-other-w", "W", 0o002))
-                    .child(toggle("transfer-perm-other-x", "X", 0o001))
+                    .child(toggle("transfer-perm-other-r", "", 0o004))
+                    .child(toggle("transfer-perm-other-w", "", 0o002))
+                    .child(toggle("transfer-perm-other-x", "", 0o001))
                     .child(toggle(
                         "transfer-perm-other-special",
                         self.tr("fileExplorer.permSticky"),
@@ -656,6 +656,7 @@ fn permission_toggle(
     active: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let show_label = !label.is_empty();
     div()
         .id(SharedString::from(id))
         .w(px(42.))
@@ -663,29 +664,41 @@ fn permission_toggle(
         .flex_none()
         .flex()
         .items_center()
-        .justify_center()
+        .justify_start()
+        .when(!show_label, |this| this.justify_center())
         .gap_1()
-        .rounded_sm()
-        .border_1()
-        .border_color(if active {
-            rgb(palette.link)
-        } else {
-            rgb(palette.border)
-        })
-        .bg(if active {
-            rgb(palette.hover)
-        } else {
-            rgb(palette.surface_elevated)
-        })
-        .text_size(px(10.))
-        .text_color(if active {
-            rgb(palette.link)
-        } else {
-            rgb(palette.text_muted)
-        })
+        .text_size(px(11.))
+        .text_color(rgb(palette.text_muted))
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(palette.hover)))
-        .child(if active { "✓" } else { "·" })
-        .child(label)
+        .hover(|this| this.text_color(rgb(palette.text)))
+        .child(
+            div()
+                .size(px(14.))
+                .flex_none()
+                .rounded_sm()
+                .border_1()
+                .border_color(if active {
+                    rgb(palette.link)
+                } else {
+                    rgb(palette.border)
+                })
+                .bg(if active {
+                    rgb(palette.link)
+                } else {
+                    rgb(palette.input)
+                })
+                .flex()
+                .items_center()
+                .justify_center()
+                .when(active, |this| {
+                    this.child(
+                        svg()
+                            .size(px(11.))
+                            .path("icons/check.svg")
+                            .text_color(rgb(palette.bg)),
+                    )
+                }),
+        )
+        .when(show_label, |this| this.child(label))
         .on_click(on_click)
 }

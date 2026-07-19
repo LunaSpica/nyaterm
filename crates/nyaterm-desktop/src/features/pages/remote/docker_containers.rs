@@ -248,9 +248,10 @@ fn docker_container_row(
             div().absolute().top(px(8.)).right(px(6.)).child(
                 div()
                     .relative()
-                    .child(icon_button(
+                    .child(svg_icon_button(
                         format!("docker-menu-toggle-{short}"),
-                        "⋮",
+                        "icons/session/more.svg",
+                        14.,
                         palette,
                         cx.listener(move |this, _, _, cx| {
                             cx.stop_propagation();

@@ -70,7 +70,6 @@ pub(in crate::features::pages::remote) fn docker_compose_project_row(
     } else {
         labels.state_label(status_label)
     };
-    let chevron = if expanded { "▾" } else { "▸" };
     let key_for_toggle = project_key.to_string();
 
     div()
@@ -106,14 +105,21 @@ pub(in crate::features::pages::remote) fn docker_compose_project_row(
                         .items_center()
                         .justify_center()
                         .rounded_md()
-                        .text_size(px(12.))
                         .text_color(rgb(palette.text_muted))
                         .cursor_pointer()
                         .hover(|this| {
                             this.bg(rgb(palette.surface_elevated))
                                 .text_color(rgb(palette.text))
                         })
-                        .child(chevron)
+                        .child(
+                            svg()
+                                .size(px(14.))
+                                .path(if expanded {
+                                    "icons/chevron-down.svg"
+                                } else {
+                                    "icons/fe/forward.svg"
+                                }),
+                        )
                         .on_click(cx.listener({
                             let project_name = project_name.clone();
                             let config_files = config_files.clone();
@@ -184,9 +190,10 @@ pub(in crate::features::pages::remote) fn docker_compose_project_row(
                     div().absolute().top(px(8.)).right(px(6.)).child(
                         div()
                             .relative()
-                            .child(icon_button(
+                            .child(svg_icon_button(
                                 format!("docker-compose-menu-{project_key}"),
-                                "⋮",
+                                "icons/session/more.svg",
+                                14.,
                                 palette,
                                 cx.listener({
                                     let menu_id = menu_id.clone();

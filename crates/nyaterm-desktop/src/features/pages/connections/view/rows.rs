@@ -267,11 +267,15 @@ impl NyaTermApp {
                             .gap_2()
                             .min_w_0()
                             .child(
-                                div()
-                                    .text_xs()
-                                    .font_weight(FontWeight(800.))
-                                    .text_color(rgb(palette.text_muted))
-                                    .child(if expanded { "▾" } else { "▸" }),
+                                svg()
+                                    .size(px(14.))
+                                    .flex_none()
+                                    .path(if expanded {
+                                        "icons/chevron-down.svg"
+                                    } else {
+                                        "icons/fe/forward.svg"
+                                    })
+                                    .text_color(rgb(palette.text_muted)),
                             )
                             .child(connection_type_icon(
                                 palette,

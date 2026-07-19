@@ -75,10 +75,15 @@ impl NyaTermApp {
                         this.toggle_ai_agent_thought_expanded(step_index, cx);
                     }))
                     .child(
-                        div()
-                            .text_size(px(11.))
-                            .text_color(rgb(palette.text_muted))
-                            .child(if thought_open { "▾" } else { "▸" }),
+                        svg()
+                            .size(px(13.))
+                            .flex_none()
+                            .path(if thought_open {
+                                "icons/chevron-down.svg"
+                            } else {
+                                "icons/fe/forward.svg"
+                            })
+                            .text_color(rgb(palette.text_muted)),
                     )
                     .child(
                         div()
@@ -183,10 +188,15 @@ impl NyaTermApp {
                             this.toggle_ai_agent_output_expanded(step_index, cx);
                         }))
                         .child(
-                            div()
-                                .text_size(px(10.))
-                                .text_color(rgb(palette.text_muted))
-                                .child(if output_open { "▾" } else { "▸" }),
+                            svg()
+                                .size(px(13.))
+                                .flex_none()
+                                .path(if output_open {
+                                    "icons/chevron-down.svg"
+                                } else {
+                                    "icons/fe/forward.svg"
+                                })
+                                .text_color(rgb(palette.text_muted)),
                         )
                         .child(
                             div()

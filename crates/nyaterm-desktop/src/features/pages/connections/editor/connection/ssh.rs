@@ -421,7 +421,17 @@ pub(super) fn connection_editor_ssh_section(
                 .text_color(rgb(palette.text_muted))
                 .cursor_pointer()
                 .hover(|this| this.text_color(rgb(palette.text)))
-                .child(if editor.advanced_open { "▾" } else { "▸" })
+                .child(
+                    svg()
+                        .size(px(14.))
+                        .flex_none()
+                        .path(if editor.advanced_open {
+                            "icons/chevron-down.svg"
+                        } else {
+                            "icons/fe/forward.svg"
+                        })
+                        .text_color(rgb(palette.text_muted)),
+                )
                 .child(tr("dialog.advancedConfig"))
                 .on_click(cx.listener(|this, _, _, cx| {
                     this.toggle_connection_editor_flag(ConnectionEditorToggle::Advanced, cx);

@@ -522,7 +522,17 @@ impl NyaTermApp {
                     div()
                         .text_size(px(12.))
                         .text_color(rgb(palette.text_dimmed))
-                        .child(if expanded { "▾" } else { "▸" }),
+                        .child(
+                            svg()
+                                .size(px(14.))
+                                .flex_none()
+                                .path(if expanded {
+                                    "icons/chevron-down.svg"
+                                } else {
+                                    "icons/fe/forward.svg"
+                                })
+                                .text_color(rgb(palette.text_dimmed)),
+                        ),
                 )
             })
             .when(compact, |this| {

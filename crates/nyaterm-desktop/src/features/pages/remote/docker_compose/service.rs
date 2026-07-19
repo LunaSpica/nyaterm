@@ -200,9 +200,10 @@ pub(in crate::features::pages::remote) fn docker_compose_service_row(
             div().absolute().top(px(14.)).right(px(4.)).child(
                 div()
                     .relative()
-                    .child(icon_button(
+                    .child(svg_icon_button(
                         format!("{row_id}-menu"),
-                        "⋮",
+                        "icons/session/more.svg",
+                        14.,
                         palette,
                         cx.listener({
                             let menu_id = menu_id.clone();

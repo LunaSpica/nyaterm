@@ -371,10 +371,10 @@ impl NyaTermApp {
                     .flex()
                     .items_center()
                     .justify_center()
-                    .text_size(px(10.))
-                    .font_weight(FontWeight(800.))
                     .text_color(rgb(palette.bg))
-                    .child(if enabled { "✓" } else { "" }),
+                    .when(enabled, |this| {
+                        this.child(svg().size(px(11.)).path("icons/check.svg"))
+                    }),
             )
             .child(
                 div()
@@ -465,9 +465,12 @@ impl NyaTermApp {
             )
             .child(
                 div()
-                    .text_size(px(12.))
+                    .size(px(14.))
+                    .flex_none()
                     .text_color(rgb(palette.link))
-                    .child(if selected { "✓" } else { "" }),
+                    .when(selected, |this| {
+                        this.child(svg().size(px(13.)).path("icons/check.svg"))
+                    }),
             )
     }
 

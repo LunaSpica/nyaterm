@@ -823,11 +823,11 @@ fn appearance_select_control(
                         .child(truncate_preview(&value, 44)),
                 )
                 .child(
-                    div()
+                    svg()
+                        .size(px(14.))
                         .flex_none()
-                        .text_size(px(11.))
-                        .text_color(rgb(palette.text_dimmed))
-                        .child(if open { "▴" } else { "▾" }),
+                        .path("icons/chevron-down.svg")
+                        .text_color(rgb(palette.text_dimmed)),
                 )
                 .on_click(on_toggle),
         )
@@ -872,10 +872,11 @@ fn appearance_select_control(
                             )
                             .when(option.selected, |this| {
                                 this.child(
-                                    div()
+                                    svg()
+                                        .size(px(13.))
                                         .flex_none()
-                                        .text_color(rgb(palette.primary))
-                                        .child("✓"),
+                                        .path("icons/check.svg")
+                                        .text_color(rgb(palette.primary)),
                                 )
                             })
                             .on_click(option.on_click)
@@ -928,11 +929,11 @@ fn appearance_plain_select_control(
                         .child(value),
                 )
                 .child(
-                    div()
+                    svg()
+                        .size(px(14.))
                         .flex_none()
-                        .text_size(px(11.))
-                        .text_color(rgb(palette.text_dimmed))
-                        .child(if open { "▴" } else { "▾" }),
+                        .path("icons/chevron-down.svg")
+                        .text_color(rgb(palette.text_dimmed)),
                 )
                 .when(enabled, |this| {
                     this.cursor_pointer()
@@ -975,10 +976,11 @@ fn appearance_plain_select_control(
                             .child(div().min_w_0().flex_1().child(option.label))
                             .when(option.selected, |this| {
                                 this.child(
-                                    div()
+                                    svg()
+                                        .size(px(13.))
                                         .flex_none()
-                                        .text_color(rgb(palette.primary))
-                                        .child("✓"),
+                                        .path("icons/check.svg")
+                                        .text_color(rgb(palette.primary)),
                                 )
                             })
                             .on_click(option.on_click)

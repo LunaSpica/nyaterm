@@ -581,15 +581,11 @@ impl NyaTermApp {
                                                             )),
                                                     )
                                                     .child(
-                                                        div()
+                                                        svg()
+                                                            .size(px(14.))
                                                             .flex_none()
-                                                            .text_size(px(10.))
-                                                            .text_color(rgb(palette.text_dimmed))
-                                                            .child(if self.ai_model_menu_open {
-                                                                "▴"
-                                                            } else {
-                                                                "▾"
-                                                            }),
+                                                            .path("icons/chevron-down.svg")
+                                                            .text_color(rgb(palette.text_dimmed)),
                                                     ),
                                             )
                                             .when(self.ai_model_menu_open, |this| {
@@ -761,21 +757,19 @@ impl NyaTermApp {
                                                                     .child(
                                                                         div()
                                                                             .size(px(14.))
-                                                                            .rounded_full()
                                                                             .flex_none()
                                                                             .flex()
                                                                             .items_center()
                                                                             .justify_center()
-                                                                            .text_size(px(10.))
                                                                             .text_color(rgb(
                                                                                 palette.link,
                                                                             ))
-                                                                            .child(if is_selected {
-                                                                                "✓"
-                                                                            } else if focused {
-                                                                                "•"
-                                                                            } else {
-                                                                                ""
+                                                                            .when(is_selected, |this| {
+                                                                                this.child(
+                                                                                    svg()
+                                                                                        .size(px(13.))
+                                                                                        .path("icons/check.svg"),
+                                                                                )
                                                                             }),
                                                                     )
                                                                     .child(
