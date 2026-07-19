@@ -115,7 +115,7 @@ impl NyaTermApp {
             .absolute()
             .top(px(36.))
             .right_0()
-            .w(px(280.))
+            .w(px(256.))
             .max_h(px(360.))
             .overflow_y_scroll()
             .rounded_md()
@@ -149,20 +149,22 @@ impl NyaTermApp {
         } else {
             for (index, session) in sessions.into_iter().enumerate() {
                 let session_id = session.id.clone();
-                let is_active = active_id.as_deref() == Some(session_id.as_str());
-                let is_disconnected = self.is_session_disconnected(&session_id);
+                let is_active = active_id
+                    .as_deref()
+                    .is_some_and(|id| self.tab_root_for_session(id) == session_id);
+                let leaf_ids = self
+                    .session_pane_roots
+                    .get(&session_id)
+                    .map(|root| root.session_ids())
+                    .unwrap_or_else(|| vec![session_id.clone()]);
+                let has_unread = leaf_ids.iter().any(|id| {
+                    self.terminal_views
+                        .get(id)
+                        .is_some_and(|view| view.has_unread)
+                });
+                let is_disconnected = leaf_ids.iter().any(|id| self.is_session_disconnected(id));
                 let title = self.session_display_name_by_info(&session);
-                let kind = session_kind_label(session.kind);
-                let accent = if let Some(color) = self.session_tab_colors.get(&session_id).copied()
-                {
-                    rgb(color)
-                } else if is_disconnected {
-                    rgb(palette.danger)
-                } else if is_active {
-                    rgb(palette.success)
-                } else {
-                    rgb(palette.text_dimmed)
-                };
+                let kind_icon = session_kind_icon_path(session.kind);
                 menu = menu.child(
                     div()
                         .id(SharedString::from(format!("open-tabs-menu-{session_id}")))
@@ -183,41 +185,57 @@ impl NyaTermApp {
                             this.select_session(session_id.clone(), cx);
                             window.focus(&this.terminal_focus);
                         }))
-                        .child(div().size(px(8.)).rounded_full().bg(accent))
                         .child(
                             div()
-                                .min_w(px(14.))
-                                .text_size(px(11.))
-                                .font_weight(FontWeight(700.))
-                                .text_color(rgb(palette.text_dimmed))
-                                .child(format!(
-                                    "{}",
-                                    ordinals.get(&session.id).copied().unwrap_or(index + 1)
-                                )),
+                                .size(px(16.))
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .child(if is_active {
+                                    svg()
+                                        .size(px(14.))
+                                        .path("icons/check.svg")
+                                        .text_color(rgb(palette.primary))
+                                        .into_any_element()
+                                } else if has_unread {
+                                    div()
+                                        .size(px(8.))
+                                        .rounded_full()
+                                        .bg(rgb(palette.success))
+                                        .into_any_element()
+                                } else {
+                                    div().size(px(8.)).into_any_element()
+                                }),
+                        )
+                        .child(
+                            div()
+                                .size(px(16.))
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .child(
+                                    svg()
+                                        .size(px(14.))
+                                        .path(kind_icon)
+                                        .text_color(rgb(palette.text_dimmed)),
+                                ),
                         )
                         .child(
                             div()
                                 .min_w_0()
                                 .flex_1()
                                 .text_size(px(12.))
-                                .font_weight(if is_active {
-                                    FontWeight(700.)
-                                } else {
-                                    FontWeight(500.)
-                                })
                                 .text_color(if is_disconnected {
                                     rgb(palette.text_dimmed)
                                 } else {
                                     rgb(palette.text)
                                 })
                                 .overflow_hidden()
-                                .child(truncate_preview(&title, 28)),
-                        )
-                        .child(
-                            div()
-                                .text_size(px(10.))
-                                .text_color(rgb(palette.text_dimmed))
-                                .child(kind),
+                                .child(div().child(format!(
+                                    "{}  {}",
+                                    ordinals.get(&session.id).copied().unwrap_or(index + 1),
+                                    truncate_preview(&title, 28)
+                                ))),
                         ),
                 );
             }
