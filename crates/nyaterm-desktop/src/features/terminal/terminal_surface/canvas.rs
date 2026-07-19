@@ -453,6 +453,22 @@ impl NyaTermApp {
             .get(&session_id)
             .map(|view| view.skipped_output_chars)
             .unwrap_or(0);
+        let performance_overlay_copy = performance_overlay.map(|overlay| {
+            let skipped = format_skipped_count(skipped_output_chars);
+            match overlay {
+                TerminalPerformanceOverlay::Overloaded => (
+                    self.tr("terminal.largeOutputProtectionActive").to_string(),
+                    self.tr("terminal.largeOutputProtectionActiveDetail")
+                        .replace("{{skipped}}", &skipped),
+                ),
+                TerminalPerformanceOverlay::Recovered => (
+                    self.tr("terminal.largeOutputProtectionRecovered")
+                        .to_string(),
+                    self.tr("terminal.largeOutputProtectionRecoveredDetail")
+                        .replace("{{skipped}}", &skipped),
+                ),
+            }
+        });
         let (render_cache_hits, render_cache_misses) = self
             .terminal_views
             .get(&session_id)
@@ -1101,38 +1117,7 @@ impl NyaTermApp {
                                         ),
                                 )
                             })
-                            .when_some(performance_overlay, |this, overlay| {
-                                let stats_detail = format!(
-                                    "Queued {} in {} event(s). Dropped {} total. Last drain {}. Link cache {}/{} hit/miss. Layout cache {}/{} hit/miss. Shape {} calls/{}ms.",
-                                    format_bytes(self.terminal_runtime.session_event_queued_output_bytes as u64),
-                                    format_skipped_count(self.terminal_runtime.session_event_queued_events as u64),
-                                    format_bytes(self.terminal_runtime.session_event_dropped_output_bytes),
-                                    format_bytes(self.terminal_runtime.session_event_last_drained_output_bytes as u64),
-                                    format_skipped_count(render_cache_hits),
-                                    format_skipped_count(render_cache_misses),
-                                    format_skipped_count(layout_cache_hits),
-                                    format_skipped_count(layout_cache_misses),
-                                    format_skipped_count(layout_shape_calls),
-                                    format_skipped_count(layout_shape_duration_ms),
-                                );
-                                let (title, detail) = match overlay {
-                                    TerminalPerformanceOverlay::Overloaded => (
-                                        "Large-output protection active",
-                                        format!(
-                                            "Rendering is prioritizing responsiveness. Skipped {} queued characters. {}",
-                                            format_skipped_count(skipped_output_chars),
-                                            stats_detail,
-                                        ),
-                                    ),
-                                    TerminalPerformanceOverlay::Recovered => (
-                                        "Large-output protection recovered",
-                                        format!(
-                                            "The terminal is responsive again. Skipped {} queued characters during overload. {}",
-                                            format_skipped_count(skipped_output_chars),
-                                            stats_detail,
-                                        ),
-                                    ),
-                                };
+                            .when_some(performance_overlay_copy, |this, (title, detail)| {
                                 this.child(
                                     div()
                                         .id(SharedString::from(format!(
@@ -1279,7 +1264,6 @@ impl NyaTermApp {
         canvas
     }
 }
-
 fn terminal_render_pressure_active(
     runtime_output_pressure: bool,
     output_burst_bytes: usize,
