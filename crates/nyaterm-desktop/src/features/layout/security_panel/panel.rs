@@ -93,7 +93,7 @@ impl NyaTermApp {
         };
         let description = self.tr(description_key).replace("{{name}}", &confirm.label);
         let card = div()
-            .p_4()
+            .p_6()
             .flex()
             .flex_col()
             .gap_3()
@@ -111,7 +111,7 @@ impl NyaTermApp {
                     .text_color(rgb(palette.text_muted))
                     .child(description),
             )
-            .child(modal_dialog_footer_localized(
+            .child(modal_dialog_footer_localized_danger(
                 palette,
                 "security-delete-cancel",
                 "security-delete-confirm",

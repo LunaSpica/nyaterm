@@ -166,7 +166,7 @@ pub(super) fn network_delete_confirm_panel(
         NetworkTab::Proxies => app.tr("network.proxyConfig"),
     };
     let card = div()
-        .p_4()
+        .p_6()
         .flex()
         .flex_col()
         .gap_3()
@@ -186,11 +186,11 @@ pub(super) fn network_delete_confirm_panel(
                         .replace("{{name}}", &confirm.label),
                 ),
         )
-        .child(network_dialog_footer(
-            app,
+        .child(modal_dialog_footer_localized_danger(
             palette,
             "network-delete-cancel",
             "network-delete-confirm",
+            app.tr("common.cancel"),
             app.tr("common.delete"),
             cx.listener(|this, _, _, cx| {
                 this.cancel_network_delete(cx);
@@ -203,7 +203,7 @@ pub(super) fn network_delete_confirm_panel(
         palette,
         app.shell_surface_color(palette.bg),
         "network-delete-confirm-modal",
-        420.,
+        384.,
         card,
     )
 }
@@ -216,7 +216,7 @@ pub(super) fn network_group_editor_panel(
 ) -> impl IntoElement {
     let palette = app.theme_palette();
     let card = div()
-        .p_4()
+        .p_6()
         .flex()
         .flex_col()
         .gap_4()
@@ -236,15 +236,7 @@ pub(super) fn network_group_editor_panel(
                         } else {
                             app.tr("network.newGroup")
                         }),
-                )
-                .child(status_pill(
-                    match editor.tab {
-                        NetworkTab::Tunnels => app.tr("network.tunnels"),
-                        NetworkTab::Proxies => app.tr("network.proxyConfig"),
-                    },
-                    rgb(0x93c5fd),
-                    rgb(0x17233a),
-                )),
+                ),
         )
         .child(
             div()
@@ -311,7 +303,7 @@ pub(super) fn network_group_delete_confirm_panel(
         .replace("{{name}}", &confirm.label)
         .replace("{{count}}", &confirm.item_count.to_string());
     let card = div()
-        .p_4()
+        .p_6()
         .flex()
         .flex_col()
         .gap_3()
@@ -328,11 +320,11 @@ pub(super) fn network_group_delete_confirm_panel(
                 .text_color(rgb(palette.text))
                 .child(description),
         )
-        .child(network_dialog_footer(
-            app,
+        .child(modal_dialog_footer_localized_danger(
             palette,
             "network-group-delete-cancel",
             "network-group-delete-confirm",
+            app.tr("common.cancel"),
             app.tr("common.delete"),
             cx.listener(|this, _, _, cx| {
                 this.cancel_network_group_delete(cx);
@@ -345,7 +337,7 @@ pub(super) fn network_group_delete_confirm_panel(
         palette,
         app.shell_surface_color(palette.bg),
         "network-group-delete-modal",
-        420.,
+        384.,
         card,
     )
 }

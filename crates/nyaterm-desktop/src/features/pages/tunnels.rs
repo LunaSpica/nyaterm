@@ -10,8 +10,9 @@ use crate::widgets::{small_button, status_pill};
 use super::super::{
     NetworkDeleteConfirmState, NetworkGroupDeleteConfirmState, NetworkGroupEditorState,
     NetworkProxyEditorField, NetworkProxyEditorState, NetworkTab, NetworkTunnelEditorField,
-    NetworkTunnelEditorState, NyaTermApp, modal_dialog_footer_localized, modal_dialog_shell,
-    transfer_input, tunnel_endpoint, tunnel_mode, tunnel_name,
+    NetworkTunnelEditorState, NyaTermApp, modal_dialog_footer_localized,
+    modal_dialog_footer_localized_danger, modal_dialog_shell, transfer_input, tunnel_endpoint,
+    tunnel_mode, tunnel_name,
 };
 use nyaterm_core::{ProxyConfig, ProxyGroup, TunnelConfig, TunnelGroup, truncate_preview};
 use nyaterm_transport::SshTunnelInfo;

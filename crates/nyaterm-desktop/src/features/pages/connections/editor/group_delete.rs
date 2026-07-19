@@ -14,7 +14,7 @@ impl NyaTermApp {
         };
         let card = div()
             .id(SharedString::from("connection-group-editor-panel"))
-            .p_4()
+            .p_6()
             .flex()
             .flex_col()
             .gap_3()
@@ -70,7 +70,7 @@ impl NyaTermApp {
             palette,
             self.shell_surface_color(palette.bg),
             "connection-group-editor-modal",
-            420.,
+            384.,
             card,
         )
     }
@@ -82,7 +82,7 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         let card = div()
-            .p_4()
+            .p_6()
             .flex()
             .flex_col()
             .gap_3()
@@ -102,7 +102,7 @@ impl NyaTermApp {
                             .replace("{{name}}", &confirm.label),
                     ),
             )
-            .child(modal_dialog_footer_localized(
+            .child(modal_dialog_footer_localized_danger(
                 palette,
                 "connection-delete-cancel",
                 "connection-delete-confirm",
@@ -119,7 +119,7 @@ impl NyaTermApp {
             palette,
             self.shell_surface_color(palette.bg),
             "connection-delete-confirm-modal",
-            420.,
+            384.,
             card,
         )
     }
@@ -131,7 +131,7 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         let card = div()
-            .p_4()
+            .p_6()
             .flex()
             .flex_col()
             .gap_3()
@@ -151,7 +151,7 @@ impl NyaTermApp {
                             .replace("{{name}}", &confirm.label),
                     ),
             )
-            .child(modal_dialog_footer_localized(
+            .child(modal_dialog_footer_localized_danger(
                 palette,
                 "connection-group-delete-cancel",
                 "connection-group-delete-confirm",
@@ -168,7 +168,7 @@ impl NyaTermApp {
             palette,
             self.shell_surface_color(palette.bg),
             "connection-group-delete-modal",
-            440.,
+            384.,
             card,
         )
     }
@@ -179,7 +179,7 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         let card = div()
-            .p_4()
+            .p_6()
             .flex()
             .flex_col()
             .gap_3()
@@ -196,7 +196,7 @@ impl NyaTermApp {
                     .text_color(rgb(palette.text))
                     .child(self.tr("savedConnections.clearAllConfirm")),
             )
-            .child(modal_dialog_footer_localized(
+            .child(modal_dialog_footer_localized_danger(
                 palette,
                 "connection-clear-all-cancel",
                 "connection-clear-all-confirm",
@@ -213,7 +213,7 @@ impl NyaTermApp {
             palette,
             self.shell_surface_color(palette.bg),
             "connection-clear-all-confirm-modal",
-            440.,
+            384.,
             card,
         )
     }
@@ -230,7 +230,7 @@ impl NyaTermApp {
             .replace("{{count}}", &confirm.connection_count.to_string());
         let card = div()
             .id("connection-group-open-confirm-panel")
-            .p_4()
+            .p_6()
             .flex()
             .flex_col()
             .gap_3()
@@ -278,7 +278,7 @@ impl NyaTermApp {
             palette,
             self.shell_surface_color(palette.bg),
             "connection-group-open-confirm-modal",
-            400.,
+            384.,
             card,
         )
     }
