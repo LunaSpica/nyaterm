@@ -20,6 +20,7 @@ pub struct NyaTermApp {
     pub(in crate::features) connection_search_focus: FocusHandle,
     pub(in crate::features) connection_sort_mode: ConnectionSortMode,
     pub(in crate::features) connections_more_menu_open: bool,
+    pub(in crate::features) connections_clear_all_confirm_open: bool,
     pub(in crate::features) connection_context_menu: Option<ConnectionContextMenuState>,
     pub(in crate::features) connection_group_context_menu: Option<ConnectionGroupContextMenuState>,
     pub(in crate::features) hovered_connection_id: Option<String>,

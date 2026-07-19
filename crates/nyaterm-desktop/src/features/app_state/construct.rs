@@ -268,6 +268,7 @@ impl NyaTermApp {
                 &settings.ui_saved_connections_sort_mode,
             ),
             connections_more_menu_open: false,
+            connections_clear_all_confirm_open: false,
             connection_context_menu: None,
             connection_group_context_menu: None,
             hovered_connection_id: None,

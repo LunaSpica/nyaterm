@@ -173,6 +173,51 @@ impl NyaTermApp {
         )
     }
 
+    pub(in crate::features) fn connections_clear_all_confirm_panel(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let palette = self.theme_palette();
+        let card = div()
+            .p_4()
+            .flex()
+            .flex_col()
+            .gap_3()
+            .child(
+                div()
+                    .text_size(px(15.))
+                    .font_weight(FontWeight(700.))
+                    .text_color(rgb(palette.text))
+                    .child(self.tr("savedConnections.clearAll")),
+            )
+            .child(
+                div()
+                    .text_size(px(12.))
+                    .text_color(rgb(palette.text))
+                    .child(self.tr("savedConnections.clearAllConfirm")),
+            )
+            .child(modal_dialog_footer_localized(
+                palette,
+                "connection-clear-all-cancel",
+                "connection-clear-all-confirm",
+                self.tr("common.cancel"),
+                self.tr("savedConnections.clearAll"),
+                cx.listener(|this, _, _, cx| {
+                    this.close_connections_clear_all_confirm(cx);
+                }),
+                cx.listener(|this, _, _, cx| {
+                    this.confirm_connections_clear_all(cx);
+                }),
+            ));
+        modal_dialog_shell(
+            palette,
+            self.shell_surface_color(palette.bg),
+            "connection-clear-all-confirm-modal",
+            440.,
+            card,
+        )
+    }
+
     pub(in crate::features) fn connection_group_open_confirm_panel(
         &mut self,
         confirm: ConnectionGroupOpenConfirmState,

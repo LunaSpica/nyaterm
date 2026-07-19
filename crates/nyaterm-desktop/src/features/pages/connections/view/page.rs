@@ -145,6 +145,9 @@ impl NyaTermApp {
                 self.connection_group_open_confirm.clone(),
                 |this, confirm| this.child(self.connection_group_open_confirm_panel(confirm, cx)),
             )
+            .when(self.connections_clear_all_confirm_open, |this| {
+                this.child(self.connections_clear_all_confirm_panel(cx))
+            })
             .when(self.connection_context_menu.is_some(), |this| {
                 this.child(self.connection_context_menu_overlay(cx))
             })
@@ -171,6 +174,7 @@ impl NyaTermApp {
             ConnectionSortMode::NameDesc => "savedConnections.sortNameDesc",
         });
         let more_open = self.connections_more_menu_open;
+        let can_clear_all = !self.connections.is_empty();
 
         // Tauri search strip: px-2 py-1.5, input h-7.
         let palette = self.theme_palette();
@@ -337,30 +341,18 @@ impl NyaTermApp {
                                         this.prompt_config_import(cx);
                                     }),
                                 ))
-                                .child(menu_item_with_icon(
-                                    palette,
-                                    "connections-refresh",
-                                    "icons/fe/refresh.svg",
-                                    self.tr("common.refresh"),
-                                    false,
-                                    cx.listener(|this, _, _, cx| {
-                                        this.connections_more_menu_open = false;
-                                        this.refresh_store_from_runtime();
-                                        this.terminal_status = "connections refreshed".to_string();
-                                        cx.notify();
-                                    }),
-                                ))
-                                .child(menu_item_with_icon(
-                                    palette,
-                                    "connections-local",
-                                    "icons/conn/terminal.svg",
-                                    self.tr("dialog.openLocalShell"),
-                                    false,
-                                    cx.listener(|this, _, window, cx| {
-                                        this.connections_more_menu_open = false;
-                                        this.start_local_session(window, cx);
-                                    }),
-                                )),
+                                .when(can_clear_all, |this| {
+                                    this.child(menu_separator(palette)).child(menu_item_with_icon(
+                                        palette,
+                                        "connections-clear-all",
+                                        "icons/transfer/clear-all.svg",
+                                        self.tr("savedConnections.clearAll"),
+                                        true,
+                                        cx.listener(|this, _, _, cx| {
+                                            this.open_connections_clear_all_confirm(cx);
+                                        }),
+                                    ))
+                                }),
                         )
                     }),
             )

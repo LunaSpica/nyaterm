@@ -1,6 +1,49 @@
 use super::*;
 
 impl NyaTermApp {
+    pub(in crate::features) fn open_connections_clear_all_confirm(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        self.connections_more_menu_open = false;
+        self.connections_clear_all_confirm_open = true;
+        self.terminal_status = "confirm clearing all saved connections".to_string();
+        cx.notify();
+    }
+
+    pub(in crate::features) fn close_connections_clear_all_confirm(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        self.connections_clear_all_confirm_open = false;
+        cx.notify();
+    }
+
+    pub(in crate::features) fn confirm_connections_clear_all(&mut self, cx: &mut Context<Self>) {
+        if !self.connections_clear_all_confirm_open {
+            return;
+        }
+        match self
+            .with_connection_store(|store| store.replace_sessions(&SessionsConfig::default()))
+        {
+            Ok(()) => {
+                self.connections_clear_all_confirm_open = false;
+                self.selected_connection_ids.clear();
+                self.last_selected_connection_id = None;
+                self.expanded_connection_groups.clear();
+                self.refresh_store_from_runtime();
+                self.terminal_status = self.tr("savedConnections.clearAllSuccess").to_string();
+            }
+            Err(error) => {
+                self.connections_clear_all_confirm_open = false;
+                self.terminal_status = format!("clear saved connections failed: {error}");
+                self.store_status.message = self.terminal_status.clone();
+                self.store_status.ready = false;
+            }
+        }
+        cx.notify();
+    }
+
     pub(in crate::features) fn open_connection_delete_confirm(
         &mut self,
         connection_id: String,

@@ -19,7 +19,7 @@ pub(super) use nyaterm_core::{
     NativeServices, NativeUpdateInfo, OtpEntry, ProxyConfig, ProxyGroup, QuickCommand,
     QuickCommandCategory, QuickCommandsConfig, RiskLevel, RuntimeMode, SavedConnection,
     SavedCredential, SavedPassword, SearchEngineConfig, SnippetRemote, SshKey, StorageError,
-    TerminalInputState, TerminalMouseReportEligibility, TerminalResizeGeometry,
+    SessionsConfig, TerminalInputState, TerminalMouseReportEligibility, TerminalResizeGeometry,
     TerminalViewportInsets, TerminalWireWriteKind, TranslateResult, TranslationSettings,
     TunnelConfig, TunnelGroup, agent_response_action, ai_model_id_for_credential,
     ai_model_id_for_provider, append_cloud_sync_history, apply_terminal_input_data,
