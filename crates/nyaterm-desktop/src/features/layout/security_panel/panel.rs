@@ -17,57 +17,12 @@ impl NyaTermApp {
         let active_tab = self.security_auth_tab;
         let palette = self.theme_palette();
 
-        let mut body = match active_tab {
+        let body = match active_tab {
             SecurityAuthTab::Keys => self.security_keys_body(palette, cx),
             SecurityAuthTab::Passwords => self.security_passwords_body(palette, cx),
             SecurityAuthTab::Credentials => self.security_credentials_body(palette, cx),
             SecurityAuthTab::Otp => self.security_otp_body(palette, cx),
         };
-
-        if let Some(confirm) = self.security_delete_confirm.clone() {
-            let delete_title = self
-                .tr("securityAuth.deleteConfirm")
-                .replace("{{name}}", &confirm.label);
-            body = body.child(
-                div()
-                    .rounded_md()
-                    .border_1()
-                    .border_color(rgb(palette.danger))
-                    .bg(rgb(palette.hover))
-                    .p_3()
-                    .flex()
-                    .flex_col()
-                    .gap_2()
-                    .child(
-                        div()
-                            .text_xs()
-                            .font_weight(FontWeight(700.))
-                            .text_color(rgb(palette.danger))
-                            .child(delete_title),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .gap_2()
-                            .child(small_button(
-                                palette,
-                                "security-delete-confirm",
-                                self.tr("common.delete"),
-                                cx.listener(|this, _, _, cx| {
-                                    this.confirm_security_delete(cx);
-                                }),
-                            ))
-                            .child(small_button(
-                                palette,
-                                "security-delete-cancel",
-                                self.tr("common.cancel"),
-                                cx.listener(|this, _, _, cx| {
-                                    this.cancel_security_delete(cx);
-                                }),
-                            )),
-                    ),
-            );
-        }
 
         div()
             .size_full()
@@ -107,12 +62,75 @@ impl NyaTermApp {
                 ),
                 |this| this.child(self.security_secret_footer(cx)),
             )
+            .when_some(self.security_delete_confirm.clone(), |this, confirm| {
+                this.child(self.security_delete_confirm_panel(confirm, cx))
+            })
             .when(self.security_unlock_prompt_open, |this| {
                 this.child(self.security_unlock_prompt(cx))
             })
             .when(self.security_master_required_prompt_open, |this| {
                 this.child(self.security_master_required_prompt(cx))
             })
+    }
+
+    fn security_delete_confirm_panel(
+        &mut self,
+        confirm: SecurityDeleteConfirmState,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let palette = self.theme_palette();
+        let (title_key, description_key) = match confirm.kind {
+            SecurityAuthTab::Keys => ("settings.deleteKey", "settings.deleteKeyConfirm"),
+            SecurityAuthTab::Passwords => (
+                "passwordManager.deleteTitle",
+                "passwordManager.deleteConfirm",
+            ),
+            SecurityAuthTab::Credentials => (
+                "credentialManager.deleteTitle",
+                "credentialManager.deleteConfirm",
+            ),
+            SecurityAuthTab::Otp => ("otpManager.deleteTitle", "otpManager.deleteConfirm"),
+        };
+        let description = self.tr(description_key).replace("{{name}}", &confirm.label);
+        let card = div()
+            .p_4()
+            .flex()
+            .flex_col()
+            .gap_3()
+            .child(
+                div()
+                    .text_size(px(15.))
+                    .font_weight(FontWeight(700.))
+                    .text_color(rgb(palette.text))
+                    .child(self.tr(title_key)),
+            )
+            .child(
+                div()
+                    .text_size(px(12.))
+                    .line_height(px(18.))
+                    .text_color(rgb(palette.text_muted))
+                    .child(description),
+            )
+            .child(modal_dialog_footer_localized(
+                palette,
+                "security-delete-cancel",
+                "security-delete-confirm",
+                self.tr("common.cancel"),
+                self.tr("common.delete"),
+                cx.listener(|this, _, _, cx| {
+                    this.cancel_security_delete(cx);
+                }),
+                cx.listener(|this, _, _, cx| {
+                    this.confirm_security_delete(cx);
+                }),
+            ));
+        modal_dialog_shell(
+            palette,
+            self.shell_surface_color(palette.bg),
+            "security-delete-confirm-modal",
+            384.,
+            card,
+        )
     }
 }
 

@@ -10,7 +10,7 @@ impl NyaTermApp {
     ) -> gpui::Div {
         let mut rows = div()
             .flex()
-            .gap_1()
+            .gap(px(6.))
             .when(
                 self.quick_command_view_mode == QuickCommandViewMode::Tile,
                 |this| this.items_start().flex_wrap(),
@@ -84,14 +84,16 @@ impl NyaTermApp {
                         .h(px(26.))
                         .rounded_md()
                         .border_1()
-                        .border_color(rgb(palette.border))
-                        .bg(rgb(palette.input))
+                        .border_color(rgba((palette.border << 8) | 0x59))
+                        .bg(rgba((palette.surface_elevated << 8) | 0x33))
                         .px_2()
                         .flex()
                         .items_center()
                         .gap_1()
                         .cursor_pointer()
-                        .hover(|this| this.bg(rgb(0x151d2a)))
+                        .hover(move |this| {
+                            this.bg(rgba((palette.surface_elevated << 8) | 0x80))
+                        })
                         .on_mouse_down(
                             MouseButton::Right,
                             cx.listener({
@@ -123,7 +125,7 @@ impl NyaTermApp {
                             div()
                                 .min_w_0()
                                 .text_size(px(11.))
-                                .font_weight(FontWeight(600.))
+                                .font_weight(FontWeight(500.))
                                 .text_color(rgb(palette.text))
                                 .overflow_hidden()
                                 .child(truncate_preview(&command.label, 28)),
@@ -201,7 +203,9 @@ impl NyaTermApp {
                             .flex()
                             .items_center()
                             .gap_1()
-                            .hover(|this| this.bg(rgb(0x151d2a)))
+                            .hover(move |this| {
+                                this.bg(rgba((palette.surface_elevated << 8) | 0x73))
+                            })
                             .on_mouse_down(
                                 MouseButton::Right,
                                 cx.listener({
@@ -249,7 +253,7 @@ impl NyaTermApp {
                                             .min_w(px(64.))
                                             .max_w(px(140.))
                                             .text_size(px(11.))
-                                            .font_weight(FontWeight(600.))
+                                            .font_weight(FontWeight(500.))
                                             .text_color(rgb(palette.text))
                                             .overflow_hidden()
                                             .child(truncate_preview(&command.label, 28)),
@@ -323,14 +327,16 @@ impl NyaTermApp {
                             .w_full()
                             .rounded_md()
                             .border_1()
-                            .border_color(rgb(palette.border))
-                            .bg(rgb(0x121820))
+                            .border_color(rgba((palette.border << 8) | 0x59))
+                            .bg(rgba((palette.surface_elevated << 8) | 0x26))
                             .px_2()
                             .py_1()
                             .flex()
                             .items_center()
                             .gap_2()
-                            .hover(|this| this.bg(rgb(0x151d2a)))
+                            .hover(move |this| {
+                                this.bg(rgba((palette.surface_elevated << 8) | 0x73))
+                            })
                             .on_mouse_down(
                                 MouseButton::Right,
                                 cx.listener({
@@ -386,7 +392,7 @@ impl NyaTermApp {
                                                             .min_w_0()
                                                             .flex_1()
                                                             .text_xs()
-                                                            .font_weight(FontWeight(700.))
+                                                            .font_weight(FontWeight(500.))
                                                             .text_color(rgb(palette.text))
                                                             .overflow_hidden()
                                                             .child(truncate_preview(

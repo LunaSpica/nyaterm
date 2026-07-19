@@ -48,7 +48,7 @@ impl NyaTermApp {
             .flex()
             .flex_col()
             .overflow_hidden()
-            .bg(self.shell_surface_color(palette.surface))
+            .bg(self.shell_transparent_color(palette.surface))
             .child(
                 div()
                     .h(px(36.))
@@ -56,7 +56,7 @@ impl NyaTermApp {
                     .px_2()
                     .border_b_1()
                     .border_color(rgb(palette.border))
-                    .bg(rgb(palette.section_header))
+                    .bg(self.shell_transparent_color(palette.section_header))
                     .flex()
                     .items_center()
                     .gap_2()
@@ -191,10 +191,7 @@ impl NyaTermApp {
                 div()
                     .flex_1()
                     .min_h_0()
-                    .p_2()
                     .flex()
-                    .items_start()
-                    .gap_2()
                     .on_mouse_down(
                         MouseButton::Left,
                         cx.listener(|this, _, _, cx| {
@@ -209,15 +206,23 @@ impl NyaTermApp {
                     )
                     .child(category_sidebar)
                     .child(
-                        div().min_w_0().flex_1().flex().flex_col().gap_2().child(
-                            div()
-                                .id(SharedString::from("quick-command-rows-scroll"))
-                                .flex_1()
-                                .min_h_0()
-                                .overflow_scroll()
-                                .scrollbar_width(px(6.))
-                                .child(rows),
-                        ),
+                        div()
+                            .min_w_0()
+                            .flex_1()
+                            .min_h_0()
+                            .h_full()
+                            .p(px(6.))
+                            .flex()
+                            .flex_col()
+                            .child(
+                                div()
+                                    .id(SharedString::from("quick-command-rows-scroll"))
+                                    .flex_1()
+                                    .min_h_0()
+                                    .overflow_scroll()
+                                    .scrollbar_width(px(6.))
+                                    .child(rows),
+                            ),
                     ),
             )
     }

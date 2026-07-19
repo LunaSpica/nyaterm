@@ -295,6 +295,9 @@ impl NyaTermApp {
             .child(
                 div()
                     .relative()
+                    .on_mouse_down(MouseButton::Left, |_, _, cx| {
+                        cx.stop_propagation();
+                    })
                     .child(icon_action_button(
                         palette,
                         "connections-more",

@@ -8,48 +8,77 @@ impl NyaTermApp {
         let unlocked = self.settings.has_master_password && self.security_secrets_unlocked;
         let palette = self.theme_palette();
         div()
+            .id(SharedString::from("security-secrets-toggle"))
+            .h(px(40.))
             .flex_none()
             .border_t_1()
             .border_color(rgb(palette.border))
-            .bg(rgb(palette.section_header))
-            .px_2()
-            .py_2()
+            .bg(rgba((palette.primary << 8) | 0x1a))
+            .px_3()
             .flex()
             .items_center()
             .justify_between()
-            .gap_2()
+            .gap_3()
+            .cursor_pointer()
+            .hover(move |this| this.bg(rgba((palette.primary << 8) | 0x26)))
             .child(
                 div()
-                    .text_size(px(10.))
-                    .text_color(if unlocked {
-                        rgb(palette.success)
-                    } else {
-                        rgb(palette.warning)
-                    })
+                    .min_w_0()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(
+                        div()
+                            .size(px(24.))
+                            .flex_none()
+                            .rounded_md()
+                            .border_1()
+                            .border_color(rgba((palette.primary << 8) | 0x40))
+                            .bg(self.shell_surface_color(palette.bg))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .child(
+                                svg()
+                                    .size(px(14.))
+                                    .path("icons/lock.svg")
+                                    .text_color(rgb(palette.primary)),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .min_w_0()
+                            .overflow_hidden()
+                            .text_xs()
+                            .text_color(rgb(palette.text))
+                            .child(self.tr(if unlocked {
+                                "secretUnlock.unlockedTitle"
+                            } else {
+                                "secretUnlock.lockedTitle"
+                            })),
+                    ),
+            )
+            .child(
+                div()
+                    .flex_none()
+                    .text_xs()
+                    .font_weight(FontWeight(600.))
+                    .text_color(rgb(palette.primary))
                     .child(self.tr(if unlocked {
-                        "secretUnlock.unlockedTitle"
+                        "secretUnlock.lockAction"
                     } else {
-                        "secretUnlock.lockedTitle"
+                        "secretUnlock.unlockAction"
                     })),
             )
-            .child(div().flex().items_center().gap_1().child(small_button(
-                palette,
-                "security-secrets-toggle",
-                self.tr(if unlocked {
-                    "secretUnlock.lockAction"
+            .on_click(cx.listener(|this, _, window, cx| {
+                if this.security_secrets_locked() {
+                    this.open_security_unlock_prompt(window, cx);
+                } else if this.settings.has_master_password {
+                    this.lock_security_secrets(cx);
                 } else {
-                    "secretUnlock.unlockAction"
-                }),
-                cx.listener(|this, _, window, cx| {
-                    if this.security_secrets_locked() {
-                        this.open_security_unlock_prompt(window, cx);
-                    } else if this.settings.has_master_password {
-                        this.lock_security_secrets(cx);
-                    } else {
-                        this.open_security_unlock_prompt(window, cx);
-                    }
-                }),
-            )))
+                    this.open_security_unlock_prompt(window, cx);
+                }
+            }))
     }
 
     pub(in crate::features) fn security_unlock_prompt(

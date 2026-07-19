@@ -6,11 +6,15 @@ impl NyaTermApp {
         categories: Vec<QuickCommandCategoryOption>,
         palette: crate::theme::ThemePalette,
         cx: &mut Context<Self>,
-    ) -> gpui::Div {
+    ) -> gpui::Stateful<gpui::Div> {
         let mut category_sidebar = div()
+            .id(SharedString::from("quick-command-category-scroll"))
             .w(px(176.))
+            .h_full()
             .flex_shrink_0()
-            .p_1()
+            .overflow_scroll()
+            .scrollbar_width(px(6.))
+            .p(px(6.))
             .border_r_1()
             .border_color(rgb(palette.border))
             .flex()
@@ -37,9 +41,9 @@ impl NyaTermApp {
                     .flex()
                     .items_center()
                     .gap_2()
-                    .rounded_sm()
+                    .rounded_md()
                     .bg(if selected {
-                        rgb(palette.section_header)
+                        rgb(palette.hover)
                     } else {
                         rgba(0x00000000)
                     })
@@ -61,7 +65,7 @@ impl NyaTermApp {
                             .min_w_0()
                             .flex_1()
                             .overflow_hidden()
-                            .font_weight(FontWeight(700.))
+                            .font_weight(FontWeight(500.))
                             .child(option.label),
                     )
                     .child(
@@ -70,13 +74,13 @@ impl NyaTermApp {
                             .px_2()
                             .py(px(1.))
                             .bg(if selected {
-                                rgb(0x203456)
+                                rgba((palette.primary << 8) | 0x24)
                             } else {
-                                rgb(palette.border)
+                                rgb(palette.hover)
                             })
                             .text_size(px(10.))
                             .text_color(if selected {
-                                rgb(0xbfdbfe)
+                                rgb(palette.primary)
                             } else {
                                 rgb(palette.text_muted)
                             })
