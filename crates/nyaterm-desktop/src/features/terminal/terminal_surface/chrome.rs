@@ -125,7 +125,7 @@ impl NyaTermApp {
         let (status, is_error) = match self.terminal_search_mode {
             TerminalSearchMode::Buffer => match &buffer_matches {
                 Ok(matches) if self.terminal_search_query.trim().is_empty() => {
-                    ("idle".to_string(), false)
+                    (String::new(), false)
                 }
                 Ok(matches) if matches.is_empty() => ("not found".to_string(), false),
                 Ok(matches) => {
@@ -151,7 +151,7 @@ impl NyaTermApp {
             TerminalSearchMode::History if history_pending => ("searching".to_string(), false),
             TerminalSearchMode::History => match &history_results {
                 Ok(response) if self.terminal_search_query.trim().is_empty() => {
-                    ("idle".to_string(), false)
+                    (String::new(), false)
                 }
                 Ok(response) if response.results.is_empty() => ("not found".to_string(), false),
                 Ok(response) => (
@@ -170,17 +170,20 @@ impl NyaTermApp {
         } else {
             self.terminal_search_query.clone()
         };
-        let mut history_rows = div()
-            .id(SharedString::from("terminal-search-history-results"))
-            .mt_1()
-            .max_h(px(260.))
-            .overflow_y_scroll()
-            .flex()
-            .flex_col()
-            .gap_1();
-        if self.terminal_search_mode == TerminalSearchMode::History
-            && !self.terminal_search_query.trim().is_empty()
-        {
+        let show_history_results = self.terminal_search_mode == TerminalSearchMode::History
+            && !self.terminal_search_query.trim().is_empty();
+        let mut history_rows = div().id(SharedString::from("terminal-search-history-results"));
+        if show_history_results {
+            history_rows = history_rows
+                .mt_1()
+                .max_h(px(256.))
+                .overflow_y_scroll()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .border_t_1()
+                .border_color(rgb(palette.border))
+                .pt_1();
             match history_results {
                 Ok(response) if response.results.is_empty() => {
                     history_rows = history_rows.child(
@@ -280,16 +283,17 @@ impl NyaTermApp {
         div()
             .id(SharedString::from("terminal-search-bar"))
             .absolute()
-            .top(px(8.))
-            .right(px(8.))
+            .top(px(4.))
+            .right(px(4.))
             .w(px(420.))
             .max_w_full()
-            .rounded_md()
+            .rounded_sm()
             .border_1()
             .border_color(rgb(palette.border))
-            .bg(rgb(palette.terminal_bg))
+            .bg(rgb(palette.surface))
             .shadow_lg()
-            .p_2()
+            .px_2()
+            .py_1()
             .track_focus(&self.terminal_search_focus)
             .on_click(cx.listener(|this, _, window, cx| {
                 window.focus(&this.terminal_search_focus);
@@ -304,7 +308,7 @@ impl NyaTermApp {
                     .flex()
                     .items_center()
                     .gap_1()
-                    .child(mode_button(
+                    .child(terminal_search_mode_button(
                         "terminal-search-mode-buffer",
                         TerminalSearchMode::Buffer.label(),
                         self.terminal_search_mode == TerminalSearchMode::Buffer,
@@ -315,7 +319,7 @@ impl NyaTermApp {
                             this.refresh_terminal_search_state(cx);
                         }),
                     ))
-                    .child(mode_button(
+                    .child(terminal_search_mode_button(
                         "terminal-search-mode-history",
                         TerminalSearchMode::History.label(),
                         self.terminal_search_mode == TerminalSearchMode::History,
@@ -337,7 +341,7 @@ impl NyaTermApp {
                             })
                             .child(status),
                     )
-                    .child(icon_button(
+                    .child(terminal_search_icon_button(
                         "terminal-search-close",
                         "x",
                         self.theme_palette(),
@@ -348,14 +352,14 @@ impl NyaTermApp {
             )
             .child(
                 div()
-                    .mt_2()
+                    .mt_1()
                     .flex()
                     .items_center()
                     .gap_1()
                     .child(
                         div()
                             .id(SharedString::from("terminal-search-input"))
-                            .h(px(28.))
+                            .h(px(24.))
                             .min_w_0()
                             .flex_1()
                             .rounded_sm()
@@ -373,7 +377,7 @@ impl NyaTermApp {
                             })
                             .child(input_display),
                     )
-                    .child(mode_button(
+                    .child(terminal_search_flag_button(
                         "terminal-search-case",
                         "Aa",
                         self.terminal_search_case_sensitive,
@@ -385,7 +389,7 @@ impl NyaTermApp {
                             this.refresh_terminal_search_state(cx);
                         }),
                     ))
-                    .child(mode_button(
+                    .child(terminal_search_flag_button(
                         "terminal-search-regex",
                         ".*",
                         self.terminal_search_regex,
@@ -396,7 +400,7 @@ impl NyaTermApp {
                             this.refresh_terminal_search_state(cx);
                         }),
                     ))
-                    .child(mode_button(
+                    .child(terminal_search_flag_button(
                         "terminal-search-word",
                         "Word",
                         self.terminal_search_whole_word,
@@ -410,7 +414,7 @@ impl NyaTermApp {
                     .when(
                         self.terminal_search_mode == TerminalSearchMode::Buffer,
                         |this| {
-                            this.child(icon_button(
+                            this.child(terminal_search_icon_button(
                                 "terminal-search-prev",
                                 "^",
                                 self.theme_palette(),
@@ -418,7 +422,7 @@ impl NyaTermApp {
                                     this.navigate_terminal_search(-1, cx);
                                 }),
                             ))
-                            .child(icon_button(
+                            .child(terminal_search_icon_button(
                                 "terminal-search-next",
                                 "v",
                                 self.theme_palette(),
@@ -431,4 +435,89 @@ impl NyaTermApp {
             )
             .child(history_rows)
     }
+}
+
+fn terminal_search_mode_button(
+    id: impl Into<String>,
+    label: &'static str,
+    active: bool,
+    palette: ThemePalette,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    div()
+        .id(SharedString::from(id.into()))
+        .h(px(20.))
+        .px_2()
+        .flex()
+        .items_center()
+        .rounded_sm()
+        .bg(if active {
+            rgb(palette.accent)
+        } else {
+            rgba(0x00000000)
+        })
+        .text_color(if active {
+            rgb(palette.bg)
+        } else {
+            rgb(palette.text_muted)
+        })
+        .text_size(px(11.))
+        .cursor_pointer()
+        .hover(|this| this.opacity(0.9))
+        .child(label)
+        .on_click(on_click)
+}
+
+fn terminal_search_icon_button(
+    id: impl Into<String>,
+    label: &'static str,
+    palette: ThemePalette,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    div()
+        .id(SharedString::from(id.into()))
+        .size(px(20.))
+        .flex()
+        .items_center()
+        .justify_center()
+        .rounded_sm()
+        .text_color(rgb(palette.text_muted))
+        .text_size(px(14.))
+        .cursor_pointer()
+        .hover(|this| this.opacity(0.8))
+        .child(label)
+        .on_click(on_click)
+}
+
+fn terminal_search_flag_button(
+    id: impl Into<String>,
+    label: &'static str,
+    active: bool,
+    palette: ThemePalette,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    div()
+        .id(SharedString::from(id.into()))
+        .h(px(24.))
+        .px_1()
+        .flex()
+        .items_center()
+        .rounded_sm()
+        .border_1()
+        .border_color(rgb(palette.border))
+        .bg(if active {
+            rgb(palette.accent)
+        } else {
+            rgba(0x00000000)
+        })
+        .text_color(if active {
+            rgb(palette.bg)
+        } else {
+            rgb(palette.text_muted)
+        })
+        .text_size(px(11.))
+        .cursor_pointer()
+        .hover(|this| this.opacity(0.9))
+        .child(label)
+        .on_click(on_click)
 }
