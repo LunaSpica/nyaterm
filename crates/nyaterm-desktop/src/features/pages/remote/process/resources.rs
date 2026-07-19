@@ -17,8 +17,10 @@ pub(in crate::features::pages::remote) fn compact_remote_svg_button(
     palette: ThemePalette,
     id: impl Into<String>,
     icon_path: &'static str,
+    tooltip: impl Into<String>,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let tooltip = tooltip.into();
     div()
         .id(gpui::SharedString::from(id.into()))
         .size(px(28.))
@@ -31,6 +33,10 @@ pub(in crate::features::pages::remote) fn compact_remote_svg_button(
         .hover(|this| {
             this.bg(rgb(palette.surface_elevated))
                 .text_color(rgb(palette.text))
+        })
+        .tooltip(move |_, cx| {
+            cx.new(|_| crate::features::ChromeTooltip::new(tooltip.clone()))
+                .into()
         })
         .child(svg().size(px(16.)).flex_none().path(icon_path))
         .on_click(on_click)

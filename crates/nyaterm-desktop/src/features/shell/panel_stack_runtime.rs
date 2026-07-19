@@ -637,6 +637,7 @@ impl NyaTermApp {
                                     "icons/ai/exec-confirm.svg"
                                 }
                             },
+                            self.tr("ai.agentCommandExecutionMode"),
                             !ai_running,
                             cx.listener(|this, _, _, cx| {
                                 this.ai_history_open = false;
@@ -649,6 +650,7 @@ impl NyaTermApp {
                             palette,
                             "ai-header-history-toggle",
                             "icons/ai/history.svg",
+                            self.tr("ai.history"),
                             true,
                             cx.listener(|this, _, window, cx| {
                                 this.ai_execution_menu_open = false;
@@ -666,6 +668,7 @@ impl NyaTermApp {
                             palette,
                             "ai-header-open-settings",
                             "icons/ai/settings.svg",
+                            self.tr("ai.settings"),
                             true,
                             cx.listener(|this, _, _, cx| {
                                 this.ai_history_open = false;
@@ -678,6 +681,7 @@ impl NyaTermApp {
                             palette,
                             "ai-header-new-chat",
                             "icons/ai/new.svg",
+                            self.tr("ai.newChat"),
                             !ai_running,
                             cx.listener(|this, _, _, cx| {
                                 this.start_new_ai_chat(cx);
@@ -694,6 +698,7 @@ impl NyaTermApp {
                         palette,
                         "stats-header-refresh",
                         "icons/fe/refresh.svg",
+                        self.tr("resourceMonitor.refresh"),
                         can_refresh,
                         cx.listener(|this, _, window, cx| {
                             this.refresh_stats(window, cx);
@@ -710,6 +715,7 @@ impl NyaTermApp {
                         palette,
                         "process-header-refresh",
                         "icons/fe/refresh.svg",
+                        self.tr("common.refresh"),
                         can_refresh,
                         cx.listener(|this, _, window, cx| {
                             this.refresh_processes(window, cx);
@@ -735,6 +741,7 @@ impl NyaTermApp {
                             palette,
                             "docker-header-refresh",
                             "icons/fe/refresh.svg",
+                            self.tr("common.refresh"),
                             can_refresh,
                             cx.listener(|this, _, window, cx| {
                                 this.refresh_docker(window, cx);
@@ -744,6 +751,7 @@ impl NyaTermApp {
                             palette,
                             "docker-header-prune",
                             "icons/fe/delete.svg",
+                            self.tr("dockerManager.prune"),
                             can_prune,
                             cx.listener(|this, _, _, cx| {
                                 this.prune_docker_system(cx);
@@ -805,9 +813,11 @@ fn header_svg_icon_button(
     palette: ThemePalette,
     id: impl Into<String>,
     icon_path: &'static str,
+    tooltip: impl Into<String>,
     enabled: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let tooltip = tooltip.into();
     div()
         .id(SharedString::from(id.into()))
         .size(px(28.))
@@ -827,6 +837,7 @@ fn header_svg_icon_button(
             })
         })
         .when(!enabled, |this| this.opacity(0.45))
+        .tooltip(move |_, cx| cx.new(|_| ChromeTooltip::new(tooltip.clone())).into())
         .child(svg().size(px(16.)).flex_none().path(icon_path))
         .on_click(move |event, window, cx| {
             if enabled {

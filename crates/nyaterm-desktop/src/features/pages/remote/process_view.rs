@@ -13,6 +13,7 @@ impl NyaTermApp {
             cpu: self.tr("processManager.sortCpu"),
             memory: self.tr("processManager.sortMemory"),
             user: self.tr("processManager.user"),
+            more: self.tr("common.more"),
             copy_pid: self.tr("processManager.copyPid"),
             copy_command: self.tr("processManager.copyCommand"),
             signal_term: self.tr("processManager.signalTerm"),

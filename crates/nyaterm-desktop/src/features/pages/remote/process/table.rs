@@ -119,6 +119,7 @@ pub(in crate::features::pages::remote) fn process_table_row(
             palette,
             format!("process-menu-{}", process.pid),
             "icons/conn/more.svg",
+            labels.more,
             on_menu,
         ))
         .when(menu_open, |this| {
@@ -325,6 +326,7 @@ pub(in crate::features::pages::remote) struct ProcessTableLabels {
     pub cpu: &'static str,
     pub memory: &'static str,
     pub user: &'static str,
+    pub more: &'static str,
     pub copy_pid: &'static str,
     pub copy_command: &'static str,
     pub signal_term: &'static str,
