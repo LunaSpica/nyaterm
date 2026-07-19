@@ -39,7 +39,9 @@ impl NyaTermApp {
         });
         let mut group_list = div()
             .id(SharedString::from("sync-groups-list"))
-            .max_h(px(350.))
+            .flex_1()
+            .min_h_0()
+            .max_h_full()
             .overflow_y_scroll()
             .flex()
             .flex_col()
@@ -144,7 +146,9 @@ impl NyaTermApp {
             .unwrap_or_default();
         let mut session_rows = div()
             .id(SharedString::from("sync-sessions-list"))
-            .max_h(px(290.))
+            .flex_1()
+            .min_h_0()
+            .max_h_full()
             .overflow_y_scroll()
             .flex()
             .flex_col()
@@ -348,10 +352,16 @@ impl NyaTermApp {
                     .shadow_lg()
                     .h(px(dialog_height))
                     .max_h_full()
-                    .p_4()
+                    .overflow_hidden()
+                    .flex()
+                    .flex_col()
                     .on_click(|_, _, cx| cx.stop_propagation())
                     .child(
                         div()
+                            .px_5()
+                            .py_4()
+                            .border_b_1()
+                            .border_color(rgb(palette.border))
                             .flex()
                             .items_start()
                             .justify_between()
@@ -368,12 +378,6 @@ impl NyaTermApp {
                                             .text_color(rgb(palette.text))
                                             .child(self.tr("syncGroup.title")),
                                     )
-                                    .child(
-                                        div()
-                                            .text_xs()
-                                            .text_color(rgb(palette.text_muted))
-                                            .child(self.tr("syncGroup.description")),
-                                    ),
                             )
                             .child(
                                 div()
@@ -398,14 +402,21 @@ impl NyaTermApp {
                     )
                     .child(
                         div()
-                            .mt_4()
+                            .px_5()
+                            .pt_4()
+                            .pb_5()
                             .flex()
+                            .flex_1()
                             .min_h_0()
-                            .gap_3()
+                            .gap_0()
                             .child(
                                 div()
                                     .w(px(groups_width))
                                     .flex_none()
+                                    .min_h_0()
+                                    .pr_3()
+                                    .border_r_1()
+                                    .border_color(rgb(palette.border))
                                     .flex()
                                     .flex_col()
                                     .gap_2()
@@ -422,6 +433,7 @@ impl NyaTermApp {
                                 div()
                                     .flex_1()
                                     .min_w_0()
+                                    .pl_4()
                                     .flex()
                                     .flex_col()
                                     .gap_2()
@@ -658,7 +670,7 @@ impl NyaTermApp {
                         .child(
                             div()
                                 .id(SharedString::from("sync-group-delete-dialog"))
-                                .w(px(360.))
+                                .w(px(384.))
                                 .max_w_full()
                                 .mx_4()
                                 .rounded_md()
@@ -666,7 +678,7 @@ impl NyaTermApp {
                                 .border_color(rgb(palette.border))
                                 .bg(rgb(palette.surface_elevated))
                                 .shadow_lg()
-                                .p_4()
+                                .p_6()
                                 .on_click(|_, _, cx| cx.stop_propagation())
                                 .child(
                                     div()
