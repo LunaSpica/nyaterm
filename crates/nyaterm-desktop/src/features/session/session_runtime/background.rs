@@ -30,11 +30,14 @@ impl NyaTermApp {
             .as_deref()
             .and_then(|request_id| self.pending_session_starts.get(request_id))
             .or_else(|| {
-                self.pending_session_starts.values().min_by(|left, right| {
-                    left.requested_at
-                        .cmp(&right.requested_at)
-                        .then_with(|| left.connection_name.cmp(&right.connection_name))
-                })
+                self.pending_session_starts
+                    .values()
+                    .filter(|pending| pending.reconnect_session_id.is_none())
+                    .min_by(|left, right| {
+                        left.requested_at
+                            .cmp(&right.requested_at)
+                            .then_with(|| left.connection_name.cmp(&right.connection_name))
+                    })
             })
             .map(pending_session_start_display_name)
     }
@@ -94,6 +97,7 @@ impl NyaTermApp {
             self.active_pending_session_start = self
                 .pending_session_starts
                 .iter()
+                .filter(|(_, pending)| pending.reconnect_session_id.is_none())
                 .max_by(|(left_id, left), (right_id, right)| {
                     left.requested_at
                         .cmp(&right.requested_at)
@@ -151,6 +155,7 @@ impl NyaTermApp {
             self.active_pending_session_start = self
                 .pending_session_starts
                 .iter()
+                .filter(|(_, pending)| pending.reconnect_session_id.is_none())
                 .max_by(|(left_id, left), (right_id, right)| {
                     left.requested_at
                         .cmp(&right.requested_at)
@@ -199,6 +204,7 @@ impl NyaTermApp {
     ) -> String {
         let request_id = uuid();
         let requested_at = Instant::now();
+        let reconnect_session_id = self.pending_reconnect_replace_id.clone();
         let PendingSessionStartRegistration {
             connection_name,
             launch_config,
@@ -216,8 +222,10 @@ impl NyaTermApp {
             append_start_log,
         } = registration;
 
-        self.last_connect_failure_name = None;
-        self.last_connect_failure_error = None;
+        if reconnect_session_id.is_none() {
+            self.last_connect_failure_name = None;
+            self.last_connect_failure_error = None;
+        }
         self.session_pane_states.insert(
             request_id.clone(),
             SessionPaneState::Connecting {
@@ -242,10 +250,13 @@ impl NyaTermApp {
                 startup_command,
                 multiplex_key,
                 source_connection_id,
+                reconnect_session_id: reconnect_session_id.clone(),
             },
         );
-        self.active_pending_session_start = Some(request_id.clone());
-        self.active_failed_session_start = None;
+        if reconnect_session_id.is_none() {
+            self.active_pending_session_start = Some(request_id.clone());
+            self.active_failed_session_start = None;
+        }
         self.terminal_status = status_message;
         // Status + connecting tab already show progress; avoid full terminal decode
         // work on the click path before the worker even starts.
@@ -549,6 +560,25 @@ impl NyaTermApp {
                     self.last_connect_failure_error = None;
                     let session_info = success.session_info;
                     let session_id = session_info.id.clone();
+                    let reconnect_session_id = pending
+                        .as_ref()
+                        .and_then(|pending| pending.reconnect_session_id.clone());
+                    if reconnect_session_id
+                        .as_deref()
+                        .is_some_and(|stale_id| !self.session_metadata.contains_key(stale_id))
+                    {
+                        let _ = self.pending_reconnect_replace_id.take();
+                        self.session_pane_states.remove(&request_id);
+                        if let Err(error) = self.session_manager.close(&session_id) {
+                            tracing::warn!(
+                                request_id = %request_id,
+                                session_id = %session_id,
+                                error = %error,
+                                "failed to close stale reconnect result"
+                            );
+                        }
+                        continue;
+                    }
                     let launch_config = success
                         .launch_config
                         .or_else(|| {
@@ -649,10 +679,13 @@ impl NyaTermApp {
                     {
                         self.move_session_to_index(&session_id, insert_index);
                     }
-                    if let Some(stale_id) = self.pending_reconnect_replace_id.take() {
+                    if let Some(stale_id) = reconnect_session_id {
+                        let _ = self.pending_reconnect_replace_id.take();
                         if stale_id != session_id {
                             self.migrate_reconnected_session_state(&stale_id, &session_id);
                             self.remove_session_state(&stale_id);
+                            self.persist_workspace_pane_layout();
+                            self.persist_terminal_window_layout();
                         }
                     }
                     self.session_pane_states.insert(
@@ -729,10 +762,24 @@ impl NyaTermApp {
                     }
                 }
                 Err(error) => {
-                    let _ = self.pending_reconnect_replace_id.take();
-                    self.last_connect_failure_name = Some(connection_name.clone());
-                    self.last_connect_failure_error = Some(error.clone());
-                    if let Some(pending) = pending {
+                    let reconnect_session_id = pending
+                        .as_ref()
+                        .and_then(|pending| pending.reconnect_session_id.clone());
+                    let reconnect_failure = reconnect_session_id.is_some();
+                    if reconnect_failure {
+                        let _ = self.pending_reconnect_replace_id.take();
+                    }
+                    if !reconnect_failure {
+                        self.last_connect_failure_name = Some(connection_name.clone());
+                        self.last_connect_failure_error = Some(error.clone());
+                    }
+                    if let Some(session_id) = reconnect_session_id {
+                        if self.session_metadata.contains_key(&session_id) {
+                            self.reconnect_session_failures
+                                .insert(session_id, error.clone());
+                        }
+                        self.session_pane_states.remove(&request_id);
+                    } else if let Some(pending) = pending {
                         self.failed_session_starts.insert(
                             request_id.clone(),
                             FailedSessionStart {
@@ -744,13 +791,15 @@ impl NyaTermApp {
                             self.active_failed_session_start = Some(request_id.clone());
                         }
                     }
-                    self.session_pane_states.insert(
-                        request_id.clone(),
-                        SessionPaneState::Failed {
-                            name: connection_name.clone(),
-                            error: error.clone(),
-                        },
-                    );
+                    if !reconnect_failure {
+                        self.session_pane_states.insert(
+                            request_id.clone(),
+                            SessionPaneState::Failed {
+                                name: connection_name.clone(),
+                                error: error.clone(),
+                            },
+                        );
+                    }
                     self.terminal_status = format!("failed to start {connection_name}: {error}");
                     if self.active_session_id.is_none() {
                         self.append_terminal_log(format!(

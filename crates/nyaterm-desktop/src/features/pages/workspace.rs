@@ -4,7 +4,7 @@ use gpui::{
 
 use super::super::{
     NyaTermApp, SessionTabDragPayload, SessionTabDragPreview, SessionTabTooltip, ThemePalette,
-    session_kind_label, short_id, truncate_preview,
+    session_kind_label, short_id, small_button, truncate_preview,
 };
 use crate::models::{
     TabDockEdge, TabDockZone, TerminalWindowNode, WorkspacePaneNode, WorkspaceSplitDirection,
@@ -81,9 +81,10 @@ impl NyaTermApp {
                     .into_any_element();
             }
         }
-        let Some(root) = self.workspace_split.clone() else {
-            return self.terminal_canvas(cx).into_any_element();
-        };
+        let root = self
+            .workspace_split
+            .clone()
+            .unwrap_or_else(|| WorkspacePaneNode::leaf(self.active_session_id.clone().unwrap()));
 
         let show_chrome = root.is_split();
         div()

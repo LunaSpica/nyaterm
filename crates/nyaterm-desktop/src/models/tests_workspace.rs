@@ -34,6 +34,20 @@ mod workspace_pane_tests {
         expected.sort();
         assert_eq!(ids, expected);
     }
+
+    #[test]
+    fn replacing_session_preserves_workspace_pane_tree() {
+        let mut root = WorkspacePaneNode::leaf("a");
+        assert!(root.split_leaf(
+            "a",
+            "b".into(),
+            WorkspaceSplitDirection::Vertical,
+            "s1".into(),
+        ));
+        assert!(root.replace_session_id("a", "reconnected-a"));
+        assert_eq!(root.session_ids(), vec!["reconnected-a", "b"]);
+        assert!(root.is_split());
+    }
 }
 
 #[cfg(test)]
@@ -63,6 +77,17 @@ mod terminal_window_tests {
         let next = root.remove_tab("b").expect("remaining leaf");
         assert!(matches!(next, TerminalWindowNode::Leaf { .. }));
         assert_eq!(next.collect_tab_ids(), vec!["a".to_string()]);
+    }
+
+    #[test]
+    fn replacing_tab_preserves_terminal_window_leaf() {
+        let mut root = TerminalWindowNode::leaf(vec!["a".into(), "b".into()], Some("a".into()));
+        assert!(root.replace_tab_id("a", "reconnected-a"));
+        assert_eq!(
+            root.collect_tab_ids(),
+            vec!["reconnected-a".to_string(), "b".to_string()]
+        );
+        assert_eq!(root.active_tabs(), vec!["reconnected-a".to_string()]);
     }
 
     #[test]

@@ -116,6 +116,8 @@ pub(in crate::features) struct PendingSessionStart {
     pub startup_command: Option<StartupCommandRequest>,
     pub multiplex_key: Option<String>,
     pub source_connection_id: Option<String>,
+    /// Existing pane being replaced by this request, when this is a reconnect.
+    pub reconnect_session_id: Option<String>,
 }
 
 /// A session start that remains visible after its worker failed.

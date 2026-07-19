@@ -292,7 +292,10 @@ impl NyaTermApp {
         self.active_session_busy_actions
             .insert(session_id.clone(), "reconnect".to_string());
         self.active_session_menu = None;
+        self.active_pending_session_start = None;
+        self.active_failed_session_start = None;
         let old_id = session_id;
+        self.reconnect_session_failures.remove(&old_id);
         let source_index = self
             .session_order
             .iter()
@@ -415,6 +418,7 @@ impl NyaTermApp {
         old_id: &str,
         new_id: &str,
     ) {
+        self.reconnect_session_failures.remove(old_id);
         if let Some(bounds) = self.terminal_session_surface_bounds.remove(old_id) {
             self.terminal_session_surface_bounds
                 .insert(new_id.to_string(), bounds);
@@ -441,5 +445,38 @@ impl NyaTermApp {
             self.session_command_history
                 .insert(new_id.to_string(), history);
         }
+
+        let mut pane_roots = std::mem::take(&mut self.session_pane_roots);
+        for root in pane_roots.values_mut() {
+            root.replace_session_id(old_id, new_id);
+        }
+        if let Some(root) = pane_roots.remove(old_id) {
+            pane_roots.insert(new_id.to_string(), root);
+        }
+        self.session_pane_roots = pane_roots;
+        if let Some(root) = self.workspace_split.as_mut() {
+            root.replace_session_id(old_id, new_id);
+        }
+        if let Some(root) = self.terminal_windows.as_mut() {
+            root.replace_tab_id(old_id, new_id);
+        }
+        for group in &mut self.sync_groups {
+            for session_id in &mut group.session_ids {
+                if session_id == old_id {
+                    *session_id = new_id.to_string();
+                }
+            }
+            if group.paused_session_ids.iter().any(|id| id == old_id) {
+                group.paused_session_ids.retain(|id| id != old_id);
+                if !group.paused_session_ids.iter().any(|id| id == new_id) {
+                    group.paused_session_ids.push(new_id.to_string());
+                }
+            }
+        }
+        if self.active_session_id.as_deref() == Some(old_id) {
+            self.activate_session_id(new_id);
+        }
+        self.rebuild_session_tab_owners();
+        self.sync_workspace_split_from_active_tab();
     }
 }

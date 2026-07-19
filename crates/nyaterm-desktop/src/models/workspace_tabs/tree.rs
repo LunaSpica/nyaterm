@@ -98,6 +98,32 @@ impl TerminalWindowNode {
         }
     }
 
+    pub(crate) fn replace_tab_id(&mut self, old_id: &str, new_id: &str) -> bool {
+        match self {
+            Self::Leaf {
+                tab_ids,
+                active_tab_id,
+                ..
+            } => {
+                let Some(index) = tab_ids.iter().position(|id| id == old_id) else {
+                    return false;
+                };
+                if tab_ids.iter().all(|id| id != new_id) {
+                    tab_ids[index] = new_id.to_string();
+                } else {
+                    tab_ids.remove(index);
+                }
+                if active_tab_id.as_deref() == Some(old_id) {
+                    *active_tab_id = Some(new_id.to_string());
+                }
+                true
+            }
+            Self::Split { first, second, .. } => {
+                first.replace_tab_id(old_id, new_id) || second.replace_tab_id(old_id, new_id)
+            }
+        }
+    }
+
     pub(crate) fn active_tabs(&self) -> Vec<String> {
         let mut out = Vec::new();
         self.collect_active_tabs(&mut out);

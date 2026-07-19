@@ -485,6 +485,8 @@ pub struct NyaTermApp {
     pub(in crate::features) session_pane_states: HashMap<String, SessionPaneState>,
     /// Disconnected session id being replaced by an in-flight reconnect.
     pub(in crate::features) pending_reconnect_replace_id: Option<String>,
+    /// Reconnect failures rendered in their original workspace panes.
+    pub(in crate::features) reconnect_session_failures: HashMap<String, String>,
     pub(in crate::features) pending_workspace_split: Option<(WorkspaceSplitDirection, String)>,
     pub(in crate::features) host_key_prompts: Arc<HostKeyPromptBroker>,
     pub(in crate::features) active_host_key_prompt: Option<HostKeyPromptRequest>,

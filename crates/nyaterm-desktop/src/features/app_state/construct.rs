@@ -706,6 +706,7 @@ impl NyaTermApp {
             cancelled_session_start_requests: HashSet::new(),
             session_pane_states: HashMap::new(),
             pending_reconnect_replace_id: None,
+            reconnect_session_failures: HashMap::new(),
             pending_workspace_split: None,
             host_key_prompts: Arc::new(HostKeyPromptBroker::default()),
             active_host_key_prompt: None,

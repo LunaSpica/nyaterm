@@ -82,6 +82,22 @@ impl WorkspacePaneNode {
         }
     }
 
+    pub(crate) fn replace_session_id(&mut self, old_id: &str, new_id: &str) -> bool {
+        match self {
+            Self::Leaf { session_id } => {
+                if session_id != old_id {
+                    return false;
+                }
+                *session_id = new_id.to_string();
+                true
+            }
+            Self::Split { first, second, .. } => {
+                first.replace_session_id(old_id, new_id)
+                    || second.replace_session_id(old_id, new_id)
+            }
+        }
+    }
+
     pub(crate) fn session_ids(&self) -> Vec<String> {
         let mut ids = Vec::new();
         self.collect_session_ids(&mut ids);

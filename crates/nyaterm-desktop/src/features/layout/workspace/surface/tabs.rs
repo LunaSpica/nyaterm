@@ -259,7 +259,10 @@ impl NyaTermApp {
         let mut transient_tabs: Vec<TransientSessionTab> = self
             .pending_session_starts
             .iter()
-            .map(|(request_id, pending)| {
+            .filter_map(|(request_id, pending)| {
+                if pending.reconnect_session_id.is_some() {
+                    return None;
+                }
                 let name = pending
                     .custom_name
                     .as_deref()
@@ -272,14 +275,14 @@ impl NyaTermApp {
                 });
                 let index =
                     pending_tab_insert_index(session_count, after_position, pending.insert_index);
-                (
+                Some((
                     index,
                     pending.requested_at,
                     pending.connection_name.clone(),
                     request_id.clone(),
                     name,
                     None,
-                )
+                ))
             })
             .collect::<Vec<_>>();
         transient_tabs.extend(

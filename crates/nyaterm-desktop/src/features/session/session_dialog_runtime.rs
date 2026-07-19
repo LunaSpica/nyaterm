@@ -234,6 +234,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn remove_session_state(&mut self, session_id: &str) {
         self.clear_terminal_mouse_report_for_session(session_id);
+        self.reconnect_session_failures.remove(session_id);
         self.session_order.retain(|id| id != session_id);
         self.session_tab_owner.remove(session_id);
         // If this leaf was a tab root, drop its pane tree (prune will rekey survivors).
