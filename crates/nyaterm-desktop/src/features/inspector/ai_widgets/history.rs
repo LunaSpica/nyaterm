@@ -545,7 +545,7 @@ impl NyaTermApp {
                             .bg(if active {
                                 rgb(palette.hover)
                             } else {
-                                rgb(palette.surface)
+                                rgba(0x00000000)
                             })
                             .hover(|this| this.bg(rgb(palette.surface_elevated)))
                             .child(

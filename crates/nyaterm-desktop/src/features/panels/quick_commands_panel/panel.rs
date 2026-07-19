@@ -563,7 +563,7 @@ fn quick_command_toolbar_menu_item(
         .bg(if active {
             rgb(palette.hover)
         } else {
-            rgb(palette.surface)
+            rgba(0x00000000)
         })
         .cursor_pointer()
         .hover(|this| this.bg(rgb(palette.surface_elevated)))

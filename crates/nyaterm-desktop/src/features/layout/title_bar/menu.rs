@@ -12,7 +12,7 @@ impl NyaTermApp {
         let mut items = div()
             .id(SharedString::from(format!("title-menu-{}", menu.label())))
             .absolute()
-            .top(px(30.))
+            .top(px(36.))
             .left_0()
             .w(px(220.))
             .rounded_md()

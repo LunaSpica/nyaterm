@@ -287,7 +287,7 @@ impl NyaTermApp {
                     .bg(if open {
                         rgb(palette.hover)
                     } else {
-                        rgb(palette.surface)
+                        rgba(0x00000000)
                     })
                     .cursor_pointer()
                     .hover(move |this| this.bg(rgb(palette.hover)).text_color(rgb(palette.primary)))

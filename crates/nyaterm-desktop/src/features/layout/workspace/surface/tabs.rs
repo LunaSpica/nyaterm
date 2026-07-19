@@ -673,10 +673,10 @@ impl NyaTermApp {
                             .justify_center()
                             .border_r_1()
                             .border_color(rgb(palette.border))
-                            .bg(if open_tabs_menu {
-                                self.shell_surface_color(palette.hover)
-                            } else {
-                                self.shell_surface_color(palette.surface)
+                        .bg(if open_tabs_menu {
+                            self.shell_surface_color(palette.hover)
+                        } else {
+                            rgba(0x00000000)
                             })
                             .text_color(rgb(palette.text_muted))
                             .cursor_pointer()
@@ -726,7 +726,7 @@ impl NyaTermApp {
                         .bg(if new_session_menu {
                             self.shell_surface_color(palette.hover)
                         } else {
-                            self.shell_surface_color(palette.surface)
+                            rgba(0x00000000)
                         })
                         .text_color(rgb(palette.text_muted))
                         .cursor_pointer()
