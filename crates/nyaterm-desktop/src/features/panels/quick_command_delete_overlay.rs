@@ -28,13 +28,13 @@ impl NyaTermApp {
             .child(
                 div()
                     .id(SharedString::from("quick-command-delete-dialog"))
-                    .w(px(380.))
+                    .w(px((self.last_viewport_size.0 - 32.).clamp(280., 384.)))
                     .rounded_md()
                     .border_1()
                     .border_color(rgb(0x7f1d1d))
                     .bg(self.shell_surface_color(palette.bg))
                     .shadow_lg()
-                    .p_4()
+                    .p_6()
                     .child(
                         div()
                             .text_sm()
@@ -68,10 +68,11 @@ impl NyaTermApp {
                                     this.cancel_delete_quick_command(cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(dialog_action_button(
                                 palette,
                                 "quick-command-delete-confirm",
                                 self.tr("common.delete"),
+                                true,
                                 cx.listener(|this, _, _, cx| {
                                     this.confirm_delete_quick_command(cx);
                                 }),

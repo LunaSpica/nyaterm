@@ -59,7 +59,7 @@ impl NyaTermApp {
                     .overflow_hidden()
                     .on_click(|_, _, cx| cx.stop_propagation())
                     .child(
-                        div().px_4().pt_4().flex().items_start().gap_3().child(
+                        div().px_6().pt_6().flex().items_start().gap_3().child(
                             div()
                                 .flex()
                                 .flex_col()
@@ -94,7 +94,7 @@ impl NyaTermApp {
                     )
                     .child(
                         div()
-                            .px_4()
+                            .px_6()
                             .pt_4()
                             .flex()
                             .flex_col()
@@ -156,8 +156,8 @@ impl NyaTermApp {
                     )
                     .child(
                         div()
-                            .px_4()
-                            .py_4()
+                            .px_6()
+                            .py_6()
                             .flex()
                             .items_center()
                             .justify_end()
@@ -171,10 +171,11 @@ impl NyaTermApp {
                                 }),
                             ))
                             .child(if can_submit {
-                                small_button(
+                                dialog_action_button(
                                     palette,
                                     "temporary-ssh-link-connect",
                                     self.tr("temporarySsh.connect"),
+                                    false,
                                     cx.listener(|this, _, window, cx| {
                                         this.submit_temporary_ssh_link_dialog(window, cx);
                                     }),
