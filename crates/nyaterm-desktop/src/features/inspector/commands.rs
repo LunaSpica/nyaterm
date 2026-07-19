@@ -302,7 +302,7 @@ impl NyaTermApp {
             .rounded_md()
             .border_1()
             .border_color(rgb(palette.border))
-            .bg(rgb(palette.surface))
+            .bg(self.shell_transparent_color(palette.surface))
             .p_4()
             .child(
                 div()

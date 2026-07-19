@@ -67,7 +67,7 @@ impl NyaTermApp {
             .rounded_md()
             .border_1()
             .border_color(rgb(palette.border))
-            .bg(rgb(palette.surface))
+            .bg(self.shell_surface_color(palette.surface))
             .shadow_lg()
             .py_1()
             .flex()
@@ -149,7 +149,7 @@ impl NyaTermApp {
                         .rounded_md()
                         .border_1()
                         .border_color(rgb(palette.border))
-                        .bg(rgb(palette.surface))
+                        .bg(self.shell_surface_color(palette.surface))
                         .shadow_lg()
                         .py_1()
                         .flex()
@@ -273,22 +273,10 @@ impl NyaTermApp {
         };
         let entry_id = entry.persistence_id().to_string();
         let context_entry_id = entry_id.clone();
-        let recording_active =
-            matches!(entry, ActivityBarEntry::Recording) && self.recording_active_count > 0;
-        let indicator = if recording_active {
-            rgb(palette.danger)
-        } else if selected {
+        let indicator = if selected {
             active_color
         } else {
-            rgb(palette.bg)
-        };
-        let bg = if recording_active {
-            // Keep a subdued danger wash while recording.
-            rgb(0x3d1418)
-        } else if selected {
-            rgb(palette.hover)
-        } else {
-            rgb(palette.bg)
+            rgba(0x00000000)
         };
 
         div()
@@ -321,8 +309,7 @@ impl NyaTermApp {
             } else {
                 rgb(palette.text_muted)
             })
-            .bg(bg)
-            .hover(move |hover| hover.bg(rgb(palette.hover)).text_color(active_color))
+            .bg(rgba(0x00000000))
             .child(
                 div()
                     .absolute()

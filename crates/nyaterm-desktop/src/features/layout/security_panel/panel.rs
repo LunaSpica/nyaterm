@@ -74,7 +74,7 @@ impl NyaTermApp {
             .relative()
             .flex()
             .flex_col()
-            .bg(rgb(palette.surface))
+            .bg(self.shell_transparent_color(palette.surface))
             .child(
                 div()
                     .px_3()

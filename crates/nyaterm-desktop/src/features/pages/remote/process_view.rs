@@ -277,7 +277,7 @@ impl NyaTermApp {
             .size_full()
             .relative()
             .overflow_hidden()
-            .bg(self.shell_surface_color(palette.surface))
+            .bg(self.shell_transparent_color(palette.surface))
             .child(
                 div()
                     .h(px(36.))
@@ -285,7 +285,7 @@ impl NyaTermApp {
                     .px_2()
                     .border_b_1()
                     .border_color(rgb(palette.border))
-                    .bg(rgb(palette.section_header))
+                    .bg(self.shell_transparent_color(palette.section_header))
                     .flex()
                     .items_center()
                     .gap_1()

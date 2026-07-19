@@ -199,7 +199,7 @@ impl NyaTermApp {
             .flex()
             .flex_col()
             .overflow_hidden()
-            .bg(rgb(palette.surface))
+            .bg(self.shell_transparent_color(palette.surface))
             .relative()
             .when(self.ai_history_open, |this| {
                 this.child(self.ai_history_popover(cx))
@@ -238,7 +238,7 @@ impl NyaTermApp {
                     .flex_none()
                     .border_t_1()
                     .border_color(rgb(palette.border))
-                    .bg(rgb(palette.section_header))
+                    .bg(self.shell_transparent_color(palette.section_header))
                     .p_2()
                     .flex()
                     .flex_col()

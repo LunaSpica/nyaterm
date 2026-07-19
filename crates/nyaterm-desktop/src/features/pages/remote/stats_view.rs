@@ -16,7 +16,7 @@ impl NyaTermApp {
             };
             return div()
                 .size_full()
-                .bg(rgb(palette.surface))
+                .bg(self.shell_transparent_color(palette.surface))
                 .child(empty_panel(message, palette));
         };
 
@@ -81,7 +81,7 @@ impl NyaTermApp {
         div()
             .size_full()
             .overflow_hidden()
-            .bg(rgb(palette.surface))
+            .bg(self.shell_transparent_color(palette.surface))
             .child(
                 div()
                     .id(SharedString::from("stats-scroll"))

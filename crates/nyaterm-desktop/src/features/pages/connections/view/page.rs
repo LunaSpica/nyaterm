@@ -186,7 +186,7 @@ impl NyaTermApp {
             .gap_1()
             .border_b_1()
             .border_color(rgb(palette.border))
-            .bg(rgb(palette.section_header))
+            .bg(self.shell_transparent_color(palette.section_header))
             .child(
                 div()
                     .id(SharedString::from("connection-search-input"))
