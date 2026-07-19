@@ -117,6 +117,7 @@ impl NyaTermApp {
                     .child(ai_message_menu_button(
                         palette,
                         "ai-message-menu-quote",
+                        "icons/quote.svg",
                         self.tr("ai.quote"),
                         cx.listener(move |this, _, _, cx| {
                             this.quote_ai_message_text(quote_text.clone(), cx);
@@ -125,6 +126,7 @@ impl NyaTermApp {
                     .child(ai_message_menu_button(
                         palette,
                         "ai-message-menu-copy",
+                        "icons/copy.svg",
                         self.tr("ai.copy"),
                         cx.listener(move |this, _, _, cx| {
                             this.copy_ai_message_text(copy_text.clone(), cx);
@@ -345,6 +347,7 @@ fn ai_user_pre_wrap_text(palette: crate::theme::ThemePalette, text: &str) -> gpu
 fn ai_message_menu_button(
     palette: crate::theme::ThemePalette,
     id: &'static str,
+    icon: &'static str,
     label: &'static str,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
@@ -354,12 +357,20 @@ fn ai_message_menu_button(
         .px_2()
         .flex()
         .items_center()
+        .gap_2()
         .rounded_sm()
         .text_size(px(12.))
         .text_color(rgb(palette.text))
         .cursor_pointer()
         .hover(|this| this.bg(rgb(palette.hover)))
         .on_click(on_click)
+        .child(
+            svg()
+                .size(px(14.))
+                .flex_none()
+                .path(icon)
+                .text_color(rgb(palette.text_muted)),
+        )
         .child(label)
 }
 

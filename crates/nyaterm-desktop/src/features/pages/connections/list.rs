@@ -861,26 +861,6 @@ pub(super) fn menu_item(
         .child(label)
 }
 
-pub(super) fn menu_item_owned(
-    palette: crate::theme::ThemePalette,
-    id: impl Into<String>,
-    label: String,
-    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
-) -> impl IntoElement {
-    div()
-        .id(SharedString::from(id.into()))
-        .h(px(28.))
-        .px_3()
-        .flex()
-        .items_center()
-        .text_size(px(12.))
-        .text_color(rgb(palette.text))
-        .cursor_pointer()
-        .hover(|this| this.bg(rgb(palette.surface_elevated)))
-        .on_click(on_click)
-        .child(label)
-}
-
 pub(super) fn connection_detail_rows(
     connection: &SavedConnection,
     all_connections: &[SavedConnection],

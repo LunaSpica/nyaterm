@@ -20,6 +20,40 @@ fn connection_menu_position(
     )
 }
 
+fn connection_menu_item(
+    palette: crate::theme::ThemePalette,
+    id: impl Into<String>,
+    icon: &'static str,
+    label: impl Into<SharedString>,
+    destructive: bool,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    div()
+        .id(SharedString::from(id.into()))
+        .h(px(28.))
+        .px_3()
+        .flex()
+        .items_center()
+        .gap_2()
+        .text_size(px(12.))
+        .text_color(rgb(if destructive {
+            palette.danger
+        } else {
+            palette.text
+        }))
+        .cursor_pointer()
+        .hover(|this| this.bg(rgb(palette.surface_elevated)))
+        .on_click(on_click)
+        .child(svg().size(px(14.)).flex_none().path(icon).text_color(rgb(
+            if destructive {
+                palette.danger
+            } else {
+                palette.text_muted
+            },
+        )))
+        .child(div().min_w_0().flex_1().child(label.into()))
+}
+
 impl NyaTermApp {
     pub(in crate::features) fn connection_context_menu_overlay(
         &mut self,
@@ -94,10 +128,12 @@ impl NyaTermApp {
                     .shadow_lg()
                     .py_1()
                     .on_click(|_, _, cx| cx.stop_propagation())
-                    .child(menu_item_owned(
+                    .child(connection_menu_item(
                         palette,
                         "connection-context-connect",
+                        "icons/conn/connect.svg",
                         connect_label,
+                        false,
                         cx.listener(move |this, _, window, cx| {
                             this.close_connection_context_menus(cx);
                             let selected = this.selected_connections();
@@ -110,10 +146,12 @@ impl NyaTermApp {
                             }
                         }),
                     ))
-                    .child(menu_item(
+                    .child(connection_menu_item(
                         palette,
                         "connection-context-edit",
+                        "icons/net/edit.svg",
                         self.tr("savedConnections.edit"),
+                        false,
                         cx.listener(move |this, _, window, cx| {
                             this.close_connection_context_menus(cx);
                             this.open_connection_editor(
@@ -126,23 +164,27 @@ impl NyaTermApp {
                         }),
                     ))
                     .child(menu_separator(palette))
-                    .child(menu_item(
+                    .child(connection_menu_item(
                         palette,
                         "connection-context-rename",
+                        "icons/session/rename.svg",
                         self.tr("savedConnections.rename"),
+                        false,
                         cx.listener(move |this, _, window, cx| {
                             this.close_connection_context_menus(cx);
                             this.rename_connection(connection_for_rename.clone(), window, cx);
                         }),
                     ))
-                    .child(menu_item(
+                    .child(connection_menu_item(
                         palette,
                         "connection-context-copy",
+                        "icons/copy.svg",
                         if selected_count > 1 {
                             self.tr("savedConnections.copySelected")
                         } else {
                             self.tr("savedConnections.copy")
                         },
+                        false,
                         cx.listener(move |this, _, _, cx| {
                             this.close_connection_context_menus(cx);
                             if this.selected_connections().len() > 1 {
@@ -153,14 +195,16 @@ impl NyaTermApp {
                         }),
                     ))
                     .child(menu_separator(palette))
-                    .child(menu_item(
+                    .child(connection_menu_item(
                         palette,
                         "connection-context-delete",
+                        "icons/net/delete.svg",
                         if selected_count > 1 {
                             self.tr("savedConnections.delete")
                         } else {
                             self.tr("savedConnections.delete")
                         },
+                        true,
                         cx.listener(move |this, _, _, cx| {
                             this.close_connection_context_menus(cx);
                             if this.selected_connections().len() > 1 {
@@ -255,10 +299,12 @@ impl NyaTermApp {
                     .shadow_lg()
                     .py_1()
                     .on_click(|_, _, cx| cx.stop_propagation())
-                    .child(menu_item(
+                    .child(connection_menu_item(
                         palette,
                         "connection-group-context-new",
+                        "icons/conn/add.svg",
                         self.tr("savedConnections.newConnection"),
+                        false,
                         cx.listener(move |this, _, window, cx| {
                             this.close_connection_context_menus(cx);
                             this.open_connection_editor(
@@ -270,10 +316,12 @@ impl NyaTermApp {
                             );
                         }),
                     ))
-                    .child(menu_item(
+                    .child(connection_menu_item(
                         palette,
                         "connection-group-context-folder",
+                        "icons/fe/new-folder.svg",
                         self.tr("savedConnections.newFolder"),
+                        false,
                         cx.listener(move |this, _, window, cx| {
                             this.close_connection_context_menus(cx);
                             this.open_connection_group_editor(
@@ -285,10 +333,12 @@ impl NyaTermApp {
                         }),
                     ))
                     .when(total_in_group > 0, |this| {
-                        this.child(menu_separator(palette)).child(menu_item(
+                        this.child(menu_separator(palette)).child(connection_menu_item(
                             palette,
                             "connection-group-context-open-all",
+                            "icons/fe/forward.svg",
                             self.tr("savedConnections.openAllConnections"),
+                            false,
                             cx.listener(move |this, _, window, cx| {
                                 this.close_connection_context_menus(cx);
                                 this.open_connection_group_open_confirm(
@@ -300,10 +350,12 @@ impl NyaTermApp {
                         ))
                     })
                     .child(menu_separator(palette))
-                    .child(menu_item(
+                    .child(connection_menu_item(
                         palette,
                         "connection-group-context-rename",
+                        "icons/session/rename.svg",
                         self.tr("savedConnections.renameFolder"),
+                        false,
                         cx.listener(move |this, _, window, cx| {
                             this.close_connection_context_menus(cx);
                             this.open_connection_group_editor(
@@ -314,10 +366,12 @@ impl NyaTermApp {
                             );
                         }),
                     ))
-                    .child(menu_item(
+                    .child(connection_menu_item(
                         palette,
                         "connection-group-context-delete",
+                        "icons/net/delete.svg",
                         self.tr("savedConnections.deleteFolder"),
+                        true,
                         cx.listener(move |this, _, _, cx| {
                             this.close_connection_context_menus(cx);
                             this.open_connection_group_delete_confirm(group_id_delete.clone(), cx);
