@@ -19,6 +19,7 @@ const TERMINAL_SURFACE_RETAINED_SNAPSHOT_LIMIT: usize = 12;
 const TERMINAL_SURFACE_RETAINED_ROW_LIMIT: usize = 4096;
 const TERMINAL_SURFACE_SCROLL_PENDING_WARN_AFTER: Duration = Duration::from_millis(48);
 const TERMINAL_SURFACE_SCROLL_PENDING_WARN_INTERVAL: Duration = Duration::from_millis(500);
+const TERMINAL_SURFACE_LOCAL_SCROLL_SYNC_DELAY: Duration = Duration::from_millis(16);
 
 #[derive(Clone)]
 struct TerminalSurfaceRetainedRow {
@@ -1201,11 +1202,13 @@ impl TerminalSurface {
             return;
         }
         let surface = cx.entity();
-        cx.defer(move |cx| {
+        cx.spawn(async move |_, cx| {
+            Timer::after(TERMINAL_SURFACE_LOCAL_SCROLL_SYNC_DELAY).await;
             let _ = surface.update(cx, |surface, cx| {
                 surface.flush_local_scroll_app_sync(app, cx);
             });
-        });
+        })
+        .detach();
     }
 
     fn remember_pending_local_scroll_sync(
