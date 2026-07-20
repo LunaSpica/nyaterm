@@ -302,7 +302,7 @@ impl NyaTermApp {
                 .pending_terminal_selection_drag_sessions,
         );
         for session_id in session_ids {
-            self.notify_terminal_surface_only(Some(session_id.as_str()), cx);
+            self.notify_terminal_selection_visual_only(session_id.as_str(), cx);
         }
     }
 

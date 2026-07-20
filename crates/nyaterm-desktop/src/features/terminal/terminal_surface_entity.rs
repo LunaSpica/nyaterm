@@ -919,6 +919,56 @@ impl TerminalSurface {
         self.cursor_style = cursor_style.into();
     }
 
+    pub(in crate::features) fn set_selection_visual(
+        &mut self,
+        selection: Option<TerminalSelection>,
+    ) -> bool {
+        let Some(snapshot) = self.snapshot.as_ref() else {
+            return false;
+        };
+        let line_count = snapshot.lines.len();
+        if line_count == 0 {
+            return false;
+        }
+
+        let mut next = if self.decorations.is_empty() {
+            vec![TerminalLineDecorations::default(); line_count]
+        } else {
+            let mut decorations = self.decorations.as_ref().to_vec();
+            decorations.resize(line_count, TerminalLineDecorations::default());
+            decorations
+        };
+
+        let mut changed = false;
+        for (line_index, decoration) in next.iter_mut().enumerate() {
+            let selection_cols = selection.and_then(|selection| {
+                let viewport_row = line_index.checked_sub(selection.viewport_anchor_row)?;
+                let (start, end) = selection.cols_for_row(viewport_row)?;
+                let start = start.min(snapshot.cols);
+                let end = end.min(snapshot.cols);
+                (end > start).then_some((start, end))
+            });
+            if decoration.selection_cols != selection_cols {
+                decoration.selection_cols = selection_cols;
+                changed = true;
+            }
+        }
+        if !changed {
+            return false;
+        }
+
+        if next
+            .iter()
+            .all(|decoration| *decoration == TerminalLineDecorations::default())
+        {
+            self.decorations = Arc::from(Vec::<TerminalLineDecorations>::new());
+        } else {
+            self.decorations = Arc::from(next);
+        }
+        self.revision = self.revision.saturating_add(1);
+        true
+    }
+
     fn visual_scroll_active(&self) -> bool {
         terminal_visual_scroll_active_for_state(self.scroll_offset, self.scroll_residual_lines)
     }
@@ -2212,6 +2262,60 @@ mod tests {
             snapshot, 0, 0.60, 0, 10, rows, false, None, 0, false, true, "block",
         );
         assert!(!surface.show_cursor);
+    }
+
+    #[test]
+    fn selection_visual_update_preserves_existing_decorations() {
+        let snapshot = Arc::new(TerminalScreen::default().viewport_snapshot(0));
+        let rows = snapshot.rows;
+        let mut surface = TerminalSurface::new("session");
+
+        surface.apply_frame_snapshot(
+            snapshot.clone(),
+            0,
+            0.0,
+            0,
+            10,
+            rows,
+            false,
+            None,
+            0,
+            false,
+            true,
+            "block",
+        );
+        surface.set_decorations_and_keywords(
+            vec![TerminalLineDecorations {
+                link_ranges: vec![(1, 3)],
+                ..TerminalLineDecorations::default()
+            }],
+            Arc::new(Vec::new()),
+            true,
+            "block",
+        );
+
+        assert!(
+            surface.set_selection_visual(Some(TerminalSelection::from_range(
+                TerminalCellPos::new(0, 2),
+                TerminalCellPos::new(1, usize::MAX),
+                0,
+                0,
+            )))
+        );
+        assert_eq!(surface.decorations[0].link_ranges, vec![(1, 3)]);
+        assert_eq!(
+            surface.decorations[0].selection_cols,
+            Some((2, snapshot.cols))
+        );
+        assert_eq!(
+            surface.decorations[1].selection_cols,
+            Some((0, snapshot.cols))
+        );
+
+        assert!(surface.set_selection_visual(None));
+        assert_eq!(surface.decorations[0].link_ranges, vec![(1, 3)]);
+        assert_eq!(surface.decorations[0].selection_cols, None);
+        assert_eq!(surface.decorations[1].selection_cols, None);
     }
 
     #[test]

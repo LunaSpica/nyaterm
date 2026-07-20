@@ -2432,6 +2432,32 @@ impl NyaTermApp {
         }
         self.sync_terminal_surface_paint(&session_id, cx);
     }
+
+    pub(in crate::features) fn notify_terminal_selection_visual_only(
+        &mut self,
+        session_id: &str,
+        cx: &mut Context<Self>,
+    ) {
+        if session_id.is_empty() {
+            return;
+        }
+        let Some(surface) = self.terminal_surfaces.get(session_id).cloned() else {
+            self.sync_terminal_surface_paint(session_id, cx);
+            return;
+        };
+        let selection = self.terminal_selection;
+        let visual_state_ready = surface.update(cx, |surface, cx| {
+            if surface.set_selection_visual(selection) {
+                cx.notify();
+                true
+            } else {
+                surface.has_snapshot()
+            }
+        });
+        if !visual_state_ready {
+            self.sync_terminal_surface_paint(session_id, cx);
+        }
+    }
 }
 
 fn terminal_key_bytes_for_mode_and_settings(
