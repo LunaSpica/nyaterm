@@ -427,6 +427,9 @@ impl TerminalSurface {
         self.has_new_while_scrolled = has_new_while_scrolled;
         self.performance_overlay = performance_overlay;
         self.skipped_output_chars = skipped_output_chars;
+        self.keyword_rules = Arc::new(Vec::new());
+        self.decorations = Arc::from(Vec::<TerminalLineDecorations>::new());
+        self.has_action_link_decorations = false;
         self.show_cursor = false;
         self.revision = self.revision.saturating_add(1);
     }
@@ -449,6 +452,7 @@ impl TerminalSurface {
             scrollback_len,
         );
         if self.snapshot.as_ref().map(terminal_snapshot_identity) != previous_snapshot_key {
+            self.keyword_rules = Arc::new(Vec::new());
             self.decorations = Arc::from(Vec::<TerminalLineDecorations>::new());
             self.has_action_link_decorations = false;
             self.show_cursor = false;
@@ -1970,10 +1974,17 @@ mod tests {
     }
 
     #[test]
-    fn scroll_without_target_snapshot_preserves_retained_display_offset() {
+    fn scroll_without_target_snapshot_preserves_offset_and_drops_expensive_paint() {
         let snapshot = Arc::new(TerminalScreen::default().viewport_snapshot(0));
         let rows = snapshot.rows;
         let mut surface = TerminalSurface::new("session");
+        surface.keyword_rules = Arc::new(vec![nyaterm_core::ResolvedKeywordHighlightRule {
+            id: "test".to_string(),
+            name: "test".to_string(),
+            patterns: vec!["test".to_string()],
+            color: "#ff0000".to_string(),
+            enabled: true,
+        }]);
 
         surface.apply_frame_snapshot(
             snapshot, 0, 0.0, 0, 10, rows, false, None, 0, true, true, "block",
@@ -1982,7 +1993,8 @@ mod tests {
 
         assert_eq!(surface.display_offset, 0);
         assert!(surface.scroll_snapshot_pending);
-        assert!(surface.has_action_link_decorations);
+        assert!(surface.keyword_rules.is_empty());
+        assert!(!surface.has_action_link_decorations);
         assert_eq!(
             terminal_effective_visual_scroll_offset_px(
                 surface.scroll_snapshot_pending,
