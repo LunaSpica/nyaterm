@@ -1,13 +1,40 @@
 use super::*;
 
 impl NyaTermApp {
+    fn recording_session_matches_query(session: &SessionInfo, query: &str) -> bool {
+        query.is_empty()
+            || format!(
+                "{} {} {}",
+                session.name,
+                session_kind_label(session.kind),
+                session.id
+            )
+            .to_lowercase()
+            .contains(query)
+    }
+
+    pub(in crate::features) fn recording_sessions_header_count(&self) -> String {
+        let sessions = self.sorted_active_sessions();
+        let total = sessions.len();
+        let query = self.recording_session_filter_query();
+        if query.is_empty() {
+            return total.to_string();
+        }
+
+        let visible = sessions
+            .iter()
+            .filter(|session| Self::recording_session_matches_query(session, &query))
+            .count();
+        format!("{visible}/{total}")
+    }
+
     pub(in crate::features) fn recording_panel(
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         let active_session_id = self.active_session_id.clone();
-        let sessions = self.ordered_sessions();
+        let sessions = self.sorted_active_sessions();
         let query = self.recording_session_filter_query();
         let no_sessions_label = self.tr("panel.noActiveSessions").to_string();
         let no_matches_label = self.tr("activeSessions.noMatches").to_string();
@@ -27,20 +54,12 @@ impl NyaTermApp {
             );
         } else {
             for session in sessions {
-                let session_name = self.session_display_name_by_info(&session);
-                let haystack = format!(
-                    "{} {} {} {}",
-                    session_name,
-                    session.name,
-                    session_kind_label(session.kind),
-                    session.id
-                )
-                .to_ascii_lowercase();
-                if !query.is_empty() && !haystack.contains(&query) {
+                if !Self::recording_session_matches_query(&session, &query) {
                     continue;
                 }
                 visible_count += 1;
 
+                let session_name = session.name.clone();
                 let session_id = session.id.clone();
                 let start_session_id = session.id.clone();
                 let save_session_id = session.id.clone();
@@ -59,14 +78,16 @@ impl NyaTermApp {
                         .id(SharedString::from(format!(
                             "recording-session-row-{session_id}"
                         )))
-                        .h(px(44.))
+                        .h(px(48.))
                         .rounded_md()
                         .px_2()
-                        .bg(if is_current {
-                            rgb(palette.hover)
+                        .border_1()
+                        .border_color(if is_current {
+                            rgba((palette.primary << 8) | 0x73)
                         } else {
-                            rgb(palette.surface)
+                            rgba(0x00000000)
                         })
+                        .bg(rgba(0x00000000))
                         .when(is_busy, |this| this.opacity(0.72))
                         .flex()
                         .items_center()
@@ -108,7 +129,7 @@ impl NyaTermApp {
                                             div()
                                                 .px_1()
                                                 .rounded_sm()
-                                                .bg(rgb(palette.surface_elevated))
+                                                .bg(rgb(palette.hover))
                                                 .text_size(px(10.))
                                                 .font_weight(FontWeight(700.))
                                                 .text_color(rgb(palette.text_muted))
@@ -134,7 +155,7 @@ impl NyaTermApp {
                                                 div()
                                                     .px_1()
                                                     .rounded_sm()
-                                                    .bg(rgb(0x3d1418))
+                                                    .bg(rgba((palette.danger << 8) | 0x24))
                                                     .text_size(px(10.))
                                                     .text_color(rgb(palette.danger))
                                                     .child(format!("● {recording_label}")),
@@ -245,7 +266,7 @@ impl NyaTermApp {
                     .px_2()
                     .border_b_1()
                     .border_color(rgb(palette.border))
-                    .bg(self.shell_transparent_color(palette.surface))
+                    .bg(self.shell_transparent_color(palette.section_header))
                     .flex()
                     .items_center()
                     .gap_2()
@@ -255,7 +276,7 @@ impl NyaTermApp {
                                 .id(SharedString::from("recording-session-search"))
                                 .h(px(28.))
                                 .rounded_md()
-                                .bg(self.shell_surface_color(palette.surface_elevated))
+                                .bg(self.shell_surface_color(palette.hover))
                                 .px_2()
                                 .flex()
                                 .items_center()
@@ -308,7 +329,7 @@ impl NyaTermApp {
     }
 
     fn recording_session_filter_query(&self) -> String {
-        self.recording_search_draft.trim().to_ascii_lowercase()
+        self.recording_search_draft.trim().to_lowercase()
     }
 }
 

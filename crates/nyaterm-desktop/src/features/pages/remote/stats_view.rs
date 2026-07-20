@@ -4,10 +4,17 @@ use gpui::SharedString;
 impl NyaTermApp {
     pub(in crate::features) fn stats_view(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = self.theme_palette();
+        if self.active_ssh_config.is_none() {
+            return div()
+                .size_full()
+                .bg(self.shell_transparent_color(palette.surface))
+                .child(empty_panel(
+                    self.tr("panel.resourceMonitorNoSession"),
+                    palette,
+                ));
+        }
         let Some(stats) = self.remote_stats.clone() else {
-            let message = if self.active_ssh_config.is_none() {
-                self.tr("panel.resourceMonitorNoSession")
-            } else if self.stats_pending {
+            let message = if self.stats_pending {
                 self.tr("common.loading")
             } else if self.stats_status.contains("failed") {
                 self.tr("panel.resourceMonitorError")

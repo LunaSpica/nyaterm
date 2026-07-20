@@ -2,6 +2,7 @@ use super::*;
 
 impl NyaTermApp {
     pub(in crate::features) fn docker_view(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        let palette = self.theme_palette();
         let labels = DockerLabels {
             search: self.tr("dockerManager.search"),
             no_session: self.tr("dockerManager.noSession"),
@@ -67,7 +68,29 @@ impl NyaTermApp {
             state_running: self.tr("dockerManager.stateLabels.running"),
             state_unknown: self.tr("dockerManager.stateLabels.unknown"),
         };
-        let overview = self.docker_overview.clone().unwrap_or_default();
+        if self.active_ssh_config.is_none() {
+            return div()
+                .size_full()
+                .bg(self.shell_transparent_color(palette.surface))
+                .child(empty_panel(labels.no_session, palette));
+        }
+        let Some(overview) = self.docker_overview.clone() else {
+            let message = if self.docker_pending || !self.docker_status.contains("failed") {
+                labels.loading
+            } else {
+                labels.error
+            };
+            return div()
+                .size_full()
+                .bg(self.shell_transparent_color(palette.surface))
+                .child(empty_panel(message, palette));
+        };
+        if !overview.available {
+            return div()
+                .size_full()
+                .bg(self.shell_transparent_color(palette.surface))
+                .child(empty_panel(labels.unavailable, palette));
+        }
         let active_tab = if self.docker_tab == DockerTab::Compose && !overview.compose_available {
             DockerTab::Containers
         } else {
@@ -128,7 +151,6 @@ impl NyaTermApp {
             }
         }
 
-        let palette = self.theme_palette();
         let menu_bg = self.shell_surface_color(palette.surface);
         let dialog_bg = self.shell_surface_color(palette.bg);
         let docker_content = match active_tab {

@@ -56,6 +56,7 @@ impl NyaTermApp {
             self.stats_pending = false;
             match event.result {
                 Ok(stats) => {
+                    self.stats_consecutive_refresh_failures = 0;
                     self.stats_status = format!(
                         "loaded stats for {} · load {:.2}/{:.2}/{:.2}",
                         if stats.system.hostname.trim().is_empty() {
@@ -71,6 +72,11 @@ impl NyaTermApp {
                     self.remote_stats = Some(stats);
                 }
                 Err(error) => {
+                    self.stats_consecutive_refresh_failures =
+                        self.stats_consecutive_refresh_failures.saturating_add(1);
+                    if self.stats_consecutive_refresh_failures >= 3 {
+                        self.remote_stats = None;
+                    }
                     self.stats_status = format!("stats refresh failed: {error}");
                     self.terminal_status = self.stats_status.clone();
                 }

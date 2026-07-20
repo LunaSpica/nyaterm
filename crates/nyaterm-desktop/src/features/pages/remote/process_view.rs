@@ -7,6 +7,28 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
+        if self.active_ssh_config.is_none() {
+            return div()
+                .size_full()
+                .bg(self.shell_transparent_color(palette.surface))
+                .child(empty_panel(self.tr("processManager.noSession"), palette));
+        }
+        if !self.process_snapshot_loaded {
+            let message = if self.process_pending || !self.process_status.contains("failed") {
+                self.tr("common.loading")
+            } else if self
+                .process_status
+                .contains(nyaterm_transport::PROCESS_LIST_UNSUPPORTED_ERROR)
+            {
+                self.tr("processManager.unsupported")
+            } else {
+                self.tr("processManager.error")
+            };
+            return div()
+                .size_full()
+                .bg(self.shell_transparent_color(palette.surface))
+                .child(empty_panel(message, palette));
+        }
         let menu_bg = self.shell_surface_color(palette.surface);
         let dialog_bg = self.shell_surface_color(palette.bg);
         let table_labels = ProcessTableLabels {
@@ -107,16 +129,7 @@ impl NyaTermApp {
             .cloned();
 
         let mut rows = div().flex().flex_col();
-        if self.processes.is_empty() {
-            rows = rows.child(empty_panel(
-                if self.active_ssh_config.is_some() {
-                    self.tr("processManager.error")
-                } else {
-                    self.tr("processManager.noSession")
-                },
-                self.theme_palette(),
-            ));
-        } else if filtered_processes.is_empty() {
+        if filtered_processes.is_empty() {
             rows = rows.child(empty_panel(
                 self.tr("processManager.noMatches"),
                 self.theme_palette(),
@@ -225,7 +238,6 @@ impl NyaTermApp {
         }
 
         // Tauri ProcessManager shell: dense search toolbar + sort strip + scrollable table.
-        let palette = self.theme_palette();
         let count_label = self.processes.len().to_string();
         div()
             .flex()

@@ -476,8 +476,10 @@ impl NyaTermApp {
             };
             dirty = true;
             self.docker_pending = false;
+            let was_overview_refresh = self.docker_status == "loading Docker overview";
             match event.result {
                 Ok(DockerJobOutput::Overview(overview)) => {
+                    self.docker_consecutive_refresh_failures = 0;
                     self.docker_status = docker_overview_status(&overview);
                     self.terminal_status = self.docker_status.clone();
                     self.apply_docker_overview(overview);
@@ -546,6 +548,13 @@ impl NyaTermApp {
                     self.docker_confirm = None;
                 }
                 Err(error) => {
+                    if was_overview_refresh {
+                        self.docker_consecutive_refresh_failures =
+                            self.docker_consecutive_refresh_failures.saturating_add(1);
+                        if self.docker_consecutive_refresh_failures >= 3 {
+                            self.docker_overview = None;
+                        }
+                    }
                     self.docker_status = format!("Docker operation failed: {error}");
                     self.terminal_status = self.docker_status.clone();
                 }

@@ -563,13 +563,19 @@ impl NyaTermApp {
                 }
             }
             NavItem::Processes => {
-                if self.processes.is_empty() {
+                if self.active_ssh_config.is_none()
+                    || !self.process_snapshot_loaded
+                    || self.processes.is_empty()
+                {
                     SharedString::from("")
                 } else {
                     SharedString::from(self.processes.len().to_string())
                 }
             }
             NavItem::Docker => {
+                if self.active_ssh_config.is_none() {
+                    return SharedString::from("");
+                }
                 let Some(overview) = self
                     .docker_overview
                     .as_ref()
@@ -598,11 +604,7 @@ impl NyaTermApp {
                     SharedString::from(count.to_string())
                 }
             }
-            NavItem::Recording => {
-                // Badge reflects open session panes (local metadata), not transport lock.
-                let count = self.ordered_session_count();
-                SharedString::from(count.to_string())
-            }
+            NavItem::Recording => SharedString::from(self.recording_sessions_header_count()),
             NavItem::SyncBackupHistory => SharedString::from(""),
             _ => SharedString::from(""),
         }

@@ -432,8 +432,10 @@ impl NyaTermApp {
             };
             dirty = true;
             self.process_pending = false;
+            let was_list_refresh = self.process_status == "listing remote processes";
             match event.result {
                 Ok(ProcessJobOutput::Listed(processes)) => {
+                    self.process_consecutive_refresh_failures = 0;
                     self.process_status = format!("loaded {} remote process(es)", processes.len());
                     self.terminal_status = self.process_status.clone();
                     self.apply_processes(processes);
@@ -458,6 +460,18 @@ impl NyaTermApp {
                     self.apply_processes(processes);
                 }
                 Err(error) => {
+                    if was_list_refresh {
+                        self.process_consecutive_refresh_failures =
+                            if error.contains(nyaterm_transport::PROCESS_LIST_UNSUPPORTED_ERROR) {
+                                3
+                            } else {
+                                self.process_consecutive_refresh_failures.saturating_add(1)
+                            };
+                        if self.process_consecutive_refresh_failures >= 3 {
+                            self.processes.clear();
+                            self.process_snapshot_loaded = false;
+                        }
+                    }
                     self.process_status = format!("process operation failed: {error}");
                     self.terminal_status = self.process_status.clone();
                 }
@@ -475,5 +489,6 @@ impl NyaTermApp {
             self.process_nice_draft = "0".to_string();
         }
         self.processes = processes;
+        self.process_snapshot_loaded = true;
     }
 }
