@@ -69,9 +69,20 @@ impl NyaTermApp {
         } else {
             list = list.gap(px(2.)).p_1();
             for job in ordered_transfer_jobs(&visible_jobs) {
+                let directory_progress = job.progress.as_ref().and_then(|progress| {
+                    progress
+                        .item_count_completed
+                        .zip(progress.item_count_total)
+                        .map(|(completed, total)| {
+                            self.tr("fileTransfer.directoryProgress")
+                                .replace("{{completed}}", &completed.to_string())
+                                .replace("{{total}}", &total.to_string())
+                        })
+                });
                 list = list.child(transfer_job_row(
                     palette,
                     job,
+                    directory_progress,
                     self.transfer_selected_remote_path.clone(),
                     self.transfer_selected_job_id.clone(),
                     cx,

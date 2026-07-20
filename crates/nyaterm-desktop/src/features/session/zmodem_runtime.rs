@@ -611,6 +611,8 @@ impl NyaTermApp {
             local_path: PathBuf::from(file_name),
             bytes_transferred,
             total_bytes: (total_size > 0).then_some(total_size),
+            item_count_completed: None,
+            item_count_total: None,
         };
         if let Some(job) = self.transfer_jobs.iter_mut().find(|job| {
             matches!(

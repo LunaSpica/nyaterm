@@ -662,6 +662,8 @@ pub struct SftpTransferProgress {
     pub local_path: PathBuf,
     pub bytes_transferred: u64,
     pub total_bytes: Option<u64>,
+    pub item_count_completed: Option<u64>,
+    pub item_count_total: Option<u64>,
 }
 
 pub const SFTP_TRANSFER_DEFAULT_BUFFER_SIZE: usize = 64 * 1024;
@@ -2579,6 +2581,8 @@ where
         local_path: local_path.to_path_buf(),
         bytes_transferred: bytes,
         total_bytes,
+        item_count_completed: None,
+        item_count_total: None,
     });
     loop {
         control.wait_if_paused().await?;
@@ -2601,6 +2605,8 @@ where
             local_path: local_path.to_path_buf(),
             bytes_transferred: bytes,
             total_bytes,
+            item_count_completed: None,
+            item_count_total: None,
         });
     }
     local.flush().await?;
@@ -2626,7 +2632,10 @@ where
 {
     control.wait_if_paused().await?;
     tokio::fs::create_dir_all(local_path).await?;
+    let (expected_bytes, item_count_total) =
+        remote_directory_transfer_totals(sftp, remote_path, control).await?;
     let mut total_bytes = 0_u64;
+    let mut item_count_completed = 0_u64;
     let mut pending = vec![(remote_path.to_string(), local_path.to_path_buf())];
     while let Some((remote_dir, local_dir)) = pending.pop() {
         control.wait_if_paused().await?;
@@ -2659,16 +2668,35 @@ where
                         duplicate_policy,
                         duplicate_resolver,
                     )? {
+                        let completed_bytes = total_bytes;
+                        let mut aggregate_progress = |current| {
+                            progress(directory_transfer_progress(
+                                current,
+                                completed_bytes,
+                                expected_bytes,
+                                item_count_completed,
+                                item_count_total,
+                            ));
+                        };
                         total_bytes += download_remote_file(
                             sftp,
                             &remote_child,
                             &local_child,
                             control,
                             options,
-                            progress,
+                            &mut aggregate_progress,
                         )
                         .await?;
                     }
+                    item_count_completed = item_count_completed.saturating_add(1);
+                    progress(SftpTransferProgress {
+                        remote_path: remote_child,
+                        local_path: local_child,
+                        bytes_transferred: total_bytes,
+                        total_bytes: (expected_bytes > 0).then_some(expected_bytes),
+                        item_count_completed: Some(item_count_completed.min(item_count_total)),
+                        item_count_total: Some(item_count_total),
+                    });
                 }
                 russh_sftp::protocol::FileType::Other => {}
             }
@@ -2700,6 +2728,8 @@ where
         local_path: local_path.to_path_buf(),
         bytes_transferred: bytes,
         total_bytes,
+        item_count_completed: None,
+        item_count_total: None,
     });
     loop {
         control.wait_if_paused().await?;
@@ -2715,6 +2745,8 @@ where
             local_path: local_path.to_path_buf(),
             bytes_transferred: bytes,
             total_bytes,
+            item_count_completed: None,
+            item_count_total: None,
         });
     }
     remote.flush().await?;
@@ -2741,7 +2773,10 @@ where
 {
     control.wait_if_paused().await?;
     ensure_remote_dir(sftp, remote_path, control).await?;
+    let (expected_bytes, item_count_total) =
+        local_directory_transfer_totals(local_path, control).await?;
     let mut total_bytes = 0_u64;
+    let mut item_count_completed = 0_u64;
     let mut pending = vec![(local_path.to_path_buf(), remote_path.to_string())];
     while let Some((local_dir, remote_dir)) = pending.pop() {
         control.wait_if_paused().await?;
@@ -2777,20 +2812,109 @@ where
                 )
                 .await?
                 {
+                    let completed_bytes = total_bytes;
+                    let mut aggregate_progress = |current| {
+                        progress(directory_transfer_progress(
+                            current,
+                            completed_bytes,
+                            expected_bytes,
+                            item_count_completed,
+                            item_count_total,
+                        ));
+                    };
                     total_bytes += upload_local_file(
                         sftp,
                         &local_child,
                         &remote_child,
                         control,
                         options,
-                        progress,
+                        &mut aggregate_progress,
                     )
                     .await?;
                 }
+                item_count_completed = item_count_completed.saturating_add(1);
+                progress(SftpTransferProgress {
+                    remote_path: remote_child,
+                    local_path: local_child,
+                    bytes_transferred: total_bytes,
+                    total_bytes: (expected_bytes > 0).then_some(expected_bytes),
+                    item_count_completed: Some(item_count_completed.min(item_count_total)),
+                    item_count_total: Some(item_count_total),
+                });
             }
         }
     }
     Ok(total_bytes)
+}
+
+fn directory_transfer_progress(
+    current: SftpTransferProgress,
+    completed_bytes: u64,
+    expected_bytes: u64,
+    item_count_completed: u64,
+    item_count_total: u64,
+) -> SftpTransferProgress {
+    SftpTransferProgress {
+        remote_path: current.remote_path,
+        local_path: current.local_path,
+        bytes_transferred: completed_bytes.saturating_add(current.bytes_transferred),
+        total_bytes: (expected_bytes > 0).then_some(expected_bytes),
+        item_count_completed: Some(item_count_completed.min(item_count_total)),
+        item_count_total: Some(item_count_total),
+    }
+}
+
+async fn remote_directory_transfer_totals(
+    sftp: &SftpSession,
+    remote_path: &str,
+    control: &SftpTransferControl,
+) -> anyhow::Result<(u64, u64)> {
+    let mut total_bytes = 0_u64;
+    let mut total_items = 0_u64;
+    let mut pending = vec![remote_path.to_string()];
+    while let Some(remote_dir) = pending.pop() {
+        control.wait_if_paused().await?;
+        for entry in sftp.read_dir(remote_dir.clone()).await? {
+            let name = entry.file_name();
+            if name == "." || name == ".." {
+                continue;
+            }
+            match entry.file_type() {
+                russh_sftp::protocol::FileType::Dir => {
+                    pending.push(remote_join(&remote_dir, &name));
+                }
+                russh_sftp::protocol::FileType::File | russh_sftp::protocol::FileType::Symlink => {
+                    total_items = total_items.saturating_add(1);
+                    total_bytes = total_bytes.saturating_add(entry.metadata().size.unwrap_or(0));
+                }
+                russh_sftp::protocol::FileType::Other => {}
+            }
+        }
+    }
+    Ok((total_bytes, total_items))
+}
+
+async fn local_directory_transfer_totals(
+    local_path: &Path,
+    control: &SftpTransferControl,
+) -> anyhow::Result<(u64, u64)> {
+    let mut total_bytes = 0_u64;
+    let mut total_items = 0_u64;
+    let mut pending = vec![local_path.to_path_buf()];
+    while let Some(local_dir) = pending.pop() {
+        control.wait_if_paused().await?;
+        let mut entries = tokio::fs::read_dir(local_dir).await?;
+        while let Some(entry) = entries.next_entry().await? {
+            let file_type = entry.file_type().await?;
+            if file_type.is_dir() {
+                pending.push(entry.path());
+            } else if file_type.is_file() {
+                total_items = total_items.saturating_add(1);
+                total_bytes = total_bytes.saturating_add(entry.metadata().await?.len());
+            }
+        }
+    }
+    Ok((total_bytes, total_items))
 }
 
 async fn ensure_remote_dir(
@@ -6968,6 +7092,26 @@ mod tests {
     use super::*;
     use std::net::TcpListener;
     use std::time::{Duration, Instant};
+
+    #[test]
+    fn directory_progress_accumulates_file_bytes_and_preserves_item_counts() {
+        let current = SftpTransferProgress {
+            remote_path: "/remote/two.txt".to_string(),
+            local_path: PathBuf::from("/local/two.txt"),
+            bytes_transferred: 25,
+            total_bytes: Some(100),
+            item_count_completed: None,
+            item_count_total: None,
+        };
+
+        let aggregate = directory_transfer_progress(current, 100, 400, 1, 4);
+
+        assert_eq!(aggregate.bytes_transferred, 125);
+        assert_eq!(aggregate.total_bytes, Some(400));
+        assert_eq!(aggregate.item_count_completed, Some(1));
+        assert_eq!(aggregate.item_count_total, Some(4));
+        assert_eq!(aggregate.remote_path, "/remote/two.txt");
+    }
 
     #[test]
     fn sftp_transfer_options_clamp_execution_settings() {

@@ -666,6 +666,14 @@ impl NyaTermApp {
                         local_path: summary.local_path.clone(),
                         bytes_transferred: summary.bytes,
                         total_bytes: Some(summary.bytes),
+                        item_count_completed: job
+                            .progress
+                            .as_ref()
+                            .and_then(|progress| progress.item_count_total),
+                        item_count_total: job
+                            .progress
+                            .as_ref()
+                            .and_then(|progress| progress.item_count_total),
                     });
                     job.summary = Some(summary);
                     self.terminal_status = format!("SFTP transfer completed: {}", job.detail);
@@ -683,6 +691,14 @@ impl NyaTermApp {
                         local_path: summary.local_path.clone(),
                         bytes_transferred: summary.bytes,
                         total_bytes: Some(summary.bytes),
+                        item_count_completed: job
+                            .progress
+                            .as_ref()
+                            .and_then(|progress| progress.item_count_total),
+                        item_count_total: job
+                            .progress
+                            .as_ref()
+                            .and_then(|progress| progress.item_count_total),
                     });
                     job.summary = Some(summary.clone());
                     job.control = None;

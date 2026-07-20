@@ -169,11 +169,61 @@ pub(in crate::features::pages::transfers) fn transfer_job_can_retry(
 pub(in crate::features::pages::transfers) fn transfer_progress_percent_label(
     progress: &SftpTransferProgress,
 ) -> String {
-    match progress.total_bytes.filter(|total| *total > 0) {
-        Some(total) => {
-            let percent = (progress.bytes_transferred as f64 / total as f64 * 100.).clamp(0., 100.);
-            format!("{percent:.0}%")
+    transfer_progress_ratio(progress)
+        .map(|ratio| format!("{:.0}%", ratio * 100.))
+        .unwrap_or_else(|| "streaming".to_string())
+}
+
+pub(in crate::features::pages::transfers) fn transfer_progress_ratio(
+    progress: &SftpTransferProgress,
+) -> Option<f32> {
+    if let Some(total) = progress.total_bytes.filter(|total| *total > 0) {
+        return Some((progress.bytes_transferred as f32 / total as f32).clamp(0., 1.));
+    }
+    progress
+        .item_count_total
+        .filter(|total| *total > 0)
+        .zip(progress.item_count_completed)
+        .map(|(total, completed)| (completed as f32 / total as f32).clamp(0., 1.))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn progress(
+        bytes_transferred: u64,
+        total_bytes: Option<u64>,
+        item_count_completed: Option<u64>,
+        item_count_total: Option<u64>,
+    ) -> SftpTransferProgress {
+        SftpTransferProgress {
+            remote_path: "/remote".to_string(),
+            local_path: std::path::PathBuf::from("/local"),
+            bytes_transferred,
+            total_bytes,
+            item_count_completed,
+            item_count_total,
         }
-        None => "streaming".to_string(),
+    }
+
+    #[test]
+    fn progress_ratio_prefers_bytes_and_falls_back_to_items() {
+        assert_eq!(
+            transfer_progress_ratio(&progress(50, Some(200), Some(3), Some(4))),
+            Some(0.25)
+        );
+        assert_eq!(
+            transfer_progress_ratio(&progress(0, None, Some(3), Some(4))),
+            Some(0.75)
+        );
+        assert_eq!(
+            transfer_progress_ratio(&progress(0, None, Some(5), Some(4))),
+            Some(1.0)
+        );
+        assert_eq!(
+            transfer_progress_ratio(&progress(0, None, None, None)),
+            None
+        );
     }
 }

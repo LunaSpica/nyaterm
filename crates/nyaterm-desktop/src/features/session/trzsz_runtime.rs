@@ -1210,6 +1210,8 @@ impl NyaTermApp {
             local_path: update.local_path.clone(),
             bytes_transferred: update.bytes_transferred,
             total_bytes: update.total_bytes,
+            item_count_completed: None,
+            item_count_total: None,
         };
         if let Some(job) = self.transfer_jobs.iter_mut().find(|job| {
             matches!(
@@ -1293,6 +1295,8 @@ impl NyaTermApp {
             local_path: update.local_path.clone(),
             bytes_transferred: update.bytes_transferred,
             total_bytes: update.total_bytes,
+            item_count_completed: None,
+            item_count_total: None,
         };
         if let Some(job) = self.transfer_jobs.iter_mut().find(|job| {
             matches!(

@@ -3,6 +3,7 @@ use super::*;
 pub(in crate::features::pages::transfers) fn transfer_job_row(
     palette: crate::theme::ThemePalette,
     job: TransferJobState,
+    directory_progress: Option<String>,
     _selected_remote_path: Option<String>,
     selected_job_id: Option<String>,
     cx: &mut Context<NyaTermApp>,
@@ -37,22 +38,16 @@ pub(in crate::features::pages::transfers) fn transfer_job_row(
         .or(summary_detail)
         .filter(|value| !value.trim().is_empty())
         .unwrap_or_else(|| job.detail.clone());
+    let detail = directory_progress
+        .map(|progress| format!("{detail} · {progress}"))
+        .unwrap_or(detail);
 
     let progress_label = job
         .progress
         .as_ref()
         .map(transfer_progress_percent_label)
         .unwrap_or_else(|| transfer_status_label(job.status).to_string());
-    let progress_percent = job
-        .progress
-        .as_ref()
-        .and_then(|progress| {
-            progress
-                .total_bytes
-                .filter(|total| *total > 0)
-                .map(|total| progress.bytes_transferred as f32 / total as f32)
-        })
-        .map(|percent| percent.clamp(0., 1.));
+    let progress_percent = job.progress.as_ref().and_then(transfer_progress_ratio);
     let context_job_id = job.id.clone();
 
     div()
