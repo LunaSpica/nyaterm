@@ -29,11 +29,15 @@ pub(in crate::features) enum TunnelJobOutput {
 
 #[derive(Debug)]
 pub(in crate::features) struct ProcessJobResult {
+    pub(in crate::features) job_id: u64,
+    pub(in crate::features) session_id: String,
     pub(in crate::features) result: Result<ProcessJobOutput, String>,
 }
 
 #[derive(Debug)]
 pub(in crate::features) struct StatsJobResult {
+    pub(in crate::features) job_id: u64,
+    pub(in crate::features) session_id: String,
     pub(in crate::features) result: Result<RemoteStats, String>,
 }
 
@@ -49,6 +53,8 @@ pub(in crate::features) struct UpdateJobResult {
 
 #[derive(Debug)]
 pub(in crate::features) struct DockerJobResult {
+    pub(in crate::features) job_id: u64,
+    pub(in crate::features) session_id: String,
     pub(in crate::features) result: Result<DockerJobOutput, String>,
 }
 
@@ -199,4 +205,41 @@ pub(in crate::features) enum DockerJobOutput {
 pub(in crate::features) enum ActivitySide {
     Left,
     Right,
+}
+
+pub(in crate::features) fn remote_job_event_matches(
+    current_job_id: u64,
+    current_session_id: Option<&str>,
+    event_job_id: u64,
+    event_session_id: &str,
+) -> bool {
+    current_job_id == event_job_id && current_session_id == Some(event_session_id)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::remote_job_event_matches;
+
+    #[test]
+    fn remote_job_event_must_match_job_and_session() {
+        assert!(remote_job_event_matches(
+            3,
+            Some("session-a"),
+            3,
+            "session-a"
+        ));
+        assert!(!remote_job_event_matches(
+            3,
+            Some("session-a"),
+            2,
+            "session-a"
+        ));
+        assert!(!remote_job_event_matches(
+            3,
+            Some("session-a"),
+            3,
+            "session-b"
+        ));
+        assert!(!remote_job_event_matches(3, None, 3, "session-a"));
+    }
 }

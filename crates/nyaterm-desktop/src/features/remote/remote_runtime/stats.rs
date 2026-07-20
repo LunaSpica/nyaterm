@@ -14,13 +14,20 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        if self.stats_pending {
+        let Some(job_session_id) = self.active_session_id.clone() else {
+            self.stats_status = "start an SSH session before inspecting stats".to_string();
+            cx.notify();
+            return;
+        };
+        if self.stats_pending
+            && self.stats_job_session_id.as_deref() == Some(job_session_id.as_str())
+        {
             self.stats_status = "stats refresh already running".to_string();
             cx.notify();
             return;
         }
 
-        self.stats_pending = true;
+        let job_id = self.begin_stats_job(job_session_id.clone());
         self.stats_last_refresh_at = Some(Instant::now());
         self.stats_status = "loading remote system stats".to_string();
         let tx = self.stats_tx.clone();
@@ -28,7 +35,11 @@ impl NyaTermApp {
             let result = RemoteStatsService::new(config)
                 .snapshot()
                 .map_err(|error| error.to_string());
-            let _ = tx.send(StatsJobResult { result });
+            let _ = tx.send(StatsJobResult {
+                job_id,
+                session_id: job_session_id,
+                result,
+            });
         });
         cx.notify();
     }
@@ -44,16 +55,25 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn drain_stats_events(&mut self) -> bool {
-        if !self.stats_pending {
-            return false;
-        }
         let mut dirty = false;
         for _ in 0..STATS_EVENT_DRAIN_LIMIT {
             let Ok(event) = self.stats_rx.try_recv() else {
                 break;
             };
+            if !remote_job_event_matches(
+                self.stats_job_id,
+                self.stats_job_session_id.as_deref(),
+                event.job_id,
+                &event.session_id,
+            ) {
+                continue;
+            }
             dirty = true;
             self.stats_pending = false;
+            self.stats_job_session_id = None;
+            if self.active_session_id.as_deref() != Some(event.session_id.as_str()) {
+                continue;
+            }
             match event.result {
                 Ok(stats) => {
                     self.stats_consecutive_refresh_failures = 0;
@@ -83,5 +103,12 @@ impl NyaTermApp {
             }
         }
         dirty
+    }
+
+    fn begin_stats_job(&mut self, session_id: String) -> u64 {
+        self.stats_job_id = self.stats_job_id.wrapping_add(1).max(1);
+        self.stats_job_session_id = Some(session_id);
+        self.stats_pending = true;
+        self.stats_job_id
     }
 }

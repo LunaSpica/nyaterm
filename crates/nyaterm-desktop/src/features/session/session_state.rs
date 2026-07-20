@@ -263,6 +263,7 @@ impl NyaTermApp {
             self.transfer_selected_job_id = None;
             self.transfer_job_menu = None;
             self.transfer_job_delete = None;
+            self.reset_remote_runtime_for_session_switch();
         }
         self.session_tab_scroll_into_view_pending = true;
         // Keep workspace_split mirrored to the active tab's per-tab pane root.
@@ -317,6 +318,41 @@ impl NyaTermApp {
             self.request_terminal_live_snapshot(session_id);
         }
         previous_session_id
+    }
+
+    fn reset_remote_runtime_for_session_switch(&mut self) {
+        self.processes.clear();
+        self.process_snapshot_loaded = false;
+        self.process_pending = false;
+        self.process_job_session_id = None;
+        self.process_consecutive_refresh_failures = 0;
+        self.process_last_refresh_at = None;
+        self.process_selected_pid = None;
+        self.process_menu_pid = None;
+        self.process_signal_confirm = None;
+        self.process_status = "ready".to_string();
+
+        self.remote_stats = None;
+        self.stats_pending = false;
+        self.stats_job_session_id = None;
+        self.stats_consecutive_refresh_failures = 0;
+        self.stats_last_refresh_at = None;
+        self.stats_status = "start an SSH session to inspect remote stats".to_string();
+
+        self.docker_overview = None;
+        self.docker_pending = false;
+        self.docker_job_session_id = None;
+        self.docker_consecutive_refresh_failures = 0;
+        self.docker_last_refresh_at = None;
+        self.docker_details = None;
+        self.docker_details_container_id = None;
+        self.docker_details_last_refresh_at = None;
+        self.docker_confirm = None;
+        self.docker_container_menu_id = None;
+        self.docker_compose_menu_id = None;
+        self.docker_compose_services.clear();
+        self.docker_compose_service_errors.clear();
+        self.docker_status = "start an SSH session to inspect Docker".to_string();
     }
 
     pub(in crate::features) fn activate_session_id_with_surface_sync(

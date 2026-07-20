@@ -194,6 +194,7 @@ pub(in crate::features) use runtime_jobs::{
     AiChatJobOutput, AiChatJobResult, AiChatWorkerEvent, AiDiscoveryJobResult, DockerJobOutput,
     DockerJobResult, ProcessJobOutput, ProcessJobResult, SessionStartResult, SessionStartSuccess,
     StatsJobResult, TranslateJobResult, TunnelJobOutput, TunnelJobResult, UpdateJobResult,
+    remote_job_event_matches,
 };
 pub(in crate::features) use settings_window::SettingsWindow;
 pub(in crate::features) use tab_mouse::{

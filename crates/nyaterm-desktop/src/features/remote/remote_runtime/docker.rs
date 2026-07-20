@@ -14,13 +14,20 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        if self.docker_pending {
+        let Some(job_session_id) = self.active_session_id.clone() else {
+            self.docker_status = "start an SSH session before inspecting Docker".to_string();
+            cx.notify();
+            return;
+        };
+        if self.docker_pending
+            && self.docker_job_session_id.as_deref() == Some(job_session_id.as_str())
+        {
             self.docker_status = "Docker operation already running".to_string();
             cx.notify();
             return;
         }
 
-        self.docker_pending = true;
+        let job_id = self.begin_docker_job(job_session_id.clone());
         self.docker_last_refresh_at = Some(Instant::now());
         self.docker_status = "loading Docker overview".to_string();
         let tx = self.docker_tx.clone();
@@ -29,7 +36,11 @@ impl NyaTermApp {
                 .overview()
                 .map(DockerJobOutput::Overview)
                 .map_err(|error| error.to_string());
-            let _ = tx.send(DockerJobResult { result });
+            let _ = tx.send(DockerJobResult {
+                job_id,
+                session_id: job_session_id,
+                result,
+            });
         });
         cx.notify();
     }
@@ -47,13 +58,20 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        if self.docker_pending {
+        let Some(job_session_id) = self.active_session_id.clone() else {
+            self.docker_status = "start an SSH session before changing containers".to_string();
+            cx.notify();
+            return;
+        };
+        if self.docker_pending
+            && self.docker_job_session_id.as_deref() == Some(job_session_id.as_str())
+        {
             self.docker_status = "Docker operation already running".to_string();
             cx.notify();
             return;
         }
 
-        self.docker_pending = true;
+        let job_id = self.begin_docker_job(job_session_id.clone());
         self.docker_status = format!("Docker {action} {}", compact_id(&container_id));
         self.docker_details = None;
         self.docker_details_container_id = None;
@@ -69,7 +87,11 @@ impl NyaTermApp {
                 })
             })()
             .map_err(|error: anyhow::Error| error.to_string());
-            let _ = tx.send(DockerJobResult { result });
+            let _ = tx.send(DockerJobResult {
+                job_id,
+                session_id: job_session_id,
+                result,
+            });
         });
         cx.notify();
     }
@@ -86,13 +108,20 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        if self.docker_pending {
+        let Some(job_session_id) = self.active_session_id.clone() else {
+            self.docker_status = "start an SSH session before reading Docker details".to_string();
+            cx.notify();
+            return;
+        };
+        if self.docker_pending
+            && self.docker_job_session_id.as_deref() == Some(job_session_id.as_str())
+        {
             self.docker_status = "Docker operation already running".to_string();
             cx.notify();
             return;
         }
 
-        self.docker_pending = true;
+        let job_id = self.begin_docker_job(job_session_id.clone());
         self.docker_details_container_id = Some(container_id.clone());
         self.docker_details_last_refresh_at = Some(Instant::now());
         self.docker_status = format!("loading details for {}", compact_id(&container_id));
@@ -105,7 +134,11 @@ impl NyaTermApp {
                     details,
                 })
                 .map_err(|error| error.to_string());
-            let _ = tx.send(DockerJobResult { result });
+            let _ = tx.send(DockerJobResult {
+                job_id,
+                session_id: job_session_id,
+                result,
+            });
         });
         cx.notify();
     }
@@ -229,14 +262,21 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        if self.docker_pending {
+        let Some(job_session_id) = self.active_session_id.clone() else {
+            self.docker_status = "start an SSH session before reading compose services".to_string();
+            cx.notify();
+            return;
+        };
+        if self.docker_pending
+            && self.docker_job_session_id.as_deref() == Some(job_session_id.as_str())
+        {
             self.docker_status = "Docker operation already running".to_string();
             cx.notify();
             return;
         }
 
         let key = docker_compose_project_key(&project_name, config_files.as_deref());
-        self.docker_pending = true;
+        let job_id = self.begin_docker_job(job_session_id.clone());
         self.docker_status = format!("loading compose services for {project_name}");
         self.docker_compose_service_errors.remove(&key);
         let tx = self.docker_tx.clone();
@@ -249,7 +289,11 @@ impl NyaTermApp {
                     services,
                 })
                 .map_err(|error| error.to_string());
-            let _ = tx.send(DockerJobResult { result });
+            let _ = tx.send(DockerJobResult {
+                job_id,
+                session_id: job_session_id,
+                result,
+            });
         });
         cx.notify();
     }
@@ -270,14 +314,22 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        if self.docker_pending {
+        let Some(job_session_id) = self.active_session_id.clone() else {
+            self.docker_status =
+                "start an SSH session before changing compose services".to_string();
+            cx.notify();
+            return;
+        };
+        if self.docker_pending
+            && self.docker_job_session_id.as_deref() == Some(job_session_id.as_str())
+        {
             self.docker_status = "Docker operation already running".to_string();
             cx.notify();
             return;
         }
 
         let key = docker_compose_project_key(&project_name, config_files.as_deref());
-        self.docker_pending = true;
+        let job_id = self.begin_docker_job(job_session_id.clone());
         self.docker_status = format!("compose {action} {service_name}");
         let tx = self.docker_tx.clone();
         std::thread::spawn(move || {
@@ -300,7 +352,11 @@ impl NyaTermApp {
                 })
             })()
             .map_err(|error: anyhow::Error| error.to_string());
-            let _ = tx.send(DockerJobResult { result });
+            let _ = tx.send(DockerJobResult {
+                job_id,
+                session_id: job_session_id,
+                result,
+            });
         });
         cx.notify();
     }
@@ -320,14 +376,22 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        if self.docker_pending {
+        let Some(job_session_id) = self.active_session_id.clone() else {
+            self.docker_status =
+                "start an SSH session before changing compose projects".to_string();
+            cx.notify();
+            return;
+        };
+        if self.docker_pending
+            && self.docker_job_session_id.as_deref() == Some(job_session_id.as_str())
+        {
             self.docker_status = "Docker operation already running".to_string();
             cx.notify();
             return;
         }
 
         let key = docker_compose_project_key(&project_name, config_files.as_deref());
-        self.docker_pending = true;
+        let job_id = self.begin_docker_job(job_session_id.clone());
         self.docker_status = format!("compose {action} {project_name}");
         self.docker_compose_service_errors.remove(&key);
         let tx = self.docker_tx.clone();
@@ -352,7 +416,11 @@ impl NyaTermApp {
                 })
             })()
             .map_err(|error: anyhow::Error| error.to_string());
-            let _ = tx.send(DockerJobResult { result });
+            let _ = tx.send(DockerJobResult {
+                job_id,
+                session_id: job_session_id,
+                result,
+            });
         });
         cx.notify();
     }
@@ -388,13 +456,21 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        if self.docker_pending {
+        let Some(job_session_id) = self.active_session_id.clone() else {
+            self.docker_status =
+                "start an SSH session before changing Docker resources".to_string();
+            cx.notify();
+            return;
+        };
+        if self.docker_pending
+            && self.docker_job_session_id.as_deref() == Some(job_session_id.as_str())
+        {
             self.docker_status = "Docker operation already running".to_string();
             cx.notify();
             return;
         }
 
-        self.docker_pending = true;
+        let job_id = self.begin_docker_job(job_session_id.clone());
         self.docker_status = format!("running {}", confirm.title);
         let tx = self.docker_tx.clone();
         std::thread::spawn(move || {
@@ -449,7 +525,11 @@ impl NyaTermApp {
                 Ok(DockerJobOutput::RefreshedAfterAction { label, overview })
             })()
             .map_err(|error: anyhow::Error| error.to_string());
-            let _ = tx.send(DockerJobResult { result });
+            let _ = tx.send(DockerJobResult {
+                job_id,
+                session_id: job_session_id,
+                result,
+            });
         });
         cx.notify();
     }
@@ -466,16 +546,25 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn drain_docker_events(&mut self) -> bool {
-        if !self.docker_pending {
-            return false;
-        }
         let mut dirty = false;
         for _ in 0..DOCKER_EVENT_DRAIN_LIMIT {
             let Ok(event) = self.docker_rx.try_recv() else {
                 break;
             };
+            if !remote_job_event_matches(
+                self.docker_job_id,
+                self.docker_job_session_id.as_deref(),
+                event.job_id,
+                &event.session_id,
+            ) {
+                continue;
+            }
             dirty = true;
             self.docker_pending = false;
+            self.docker_job_session_id = None;
+            if self.active_session_id.as_deref() != Some(event.session_id.as_str()) {
+                continue;
+            }
             let was_overview_refresh = self.docker_status == "loading Docker overview";
             match event.result {
                 Ok(DockerJobOutput::Overview(overview)) => {
@@ -561,6 +650,13 @@ impl NyaTermApp {
             }
         }
         dirty
+    }
+
+    fn begin_docker_job(&mut self, session_id: String) -> u64 {
+        self.docker_job_id = self.docker_job_id.wrapping_add(1).max(1);
+        self.docker_job_session_id = Some(session_id);
+        self.docker_pending = true;
+        self.docker_job_id
     }
 
     pub(in crate::features) fn apply_docker_overview(&mut self, overview: RemoteDockerOverview) {

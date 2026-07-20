@@ -322,13 +322,20 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        if self.process_pending {
+        let Some(job_session_id) = self.active_session_id.clone() else {
+            self.process_status = "start an SSH session before listing processes".to_string();
+            cx.notify();
+            return;
+        };
+        if self.process_pending
+            && self.process_job_session_id.as_deref() == Some(job_session_id.as_str())
+        {
             self.process_status = "process operation already running".to_string();
             cx.notify();
             return;
         }
 
-        self.process_pending = true;
+        let job_id = self.begin_process_job(job_session_id.clone());
         self.process_menu_pid = None;
         self.process_last_refresh_at = Some(Instant::now());
         self.process_status = "listing remote processes".to_string();
@@ -338,7 +345,11 @@ impl NyaTermApp {
                 .list_processes()
                 .map(ProcessJobOutput::Listed)
                 .map_err(|error| error.to_string());
-            let _ = tx.send(ProcessJobResult { result });
+            let _ = tx.send(ProcessJobResult {
+                job_id,
+                session_id: job_session_id,
+                result,
+            });
         });
         cx.notify();
     }
@@ -356,13 +367,20 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        if self.process_pending {
+        let Some(job_session_id) = self.active_session_id.clone() else {
+            self.process_status = "start an SSH session before signalling processes".to_string();
+            cx.notify();
+            return;
+        };
+        if self.process_pending
+            && self.process_job_session_id.as_deref() == Some(job_session_id.as_str())
+        {
             self.process_status = "process operation already running".to_string();
             cx.notify();
             return;
         }
 
-        self.process_pending = true;
+        let job_id = self.begin_process_job(job_session_id.clone());
         self.process_status = format!("sending {signal} to pid {pid}");
         let tx = self.process_tx.clone();
         std::thread::spawn(move || {
@@ -377,7 +395,11 @@ impl NyaTermApp {
                 })
             })()
             .map_err(|error: anyhow::Error| error.to_string());
-            let _ = tx.send(ProcessJobResult { result });
+            let _ = tx.send(ProcessJobResult {
+                job_id,
+                session_id: job_session_id,
+                result,
+            });
         });
         cx.notify();
     }
@@ -395,13 +417,20 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        if self.process_pending {
+        let Some(job_session_id) = self.active_session_id.clone() else {
+            self.process_status = "start an SSH session before renicing processes".to_string();
+            cx.notify();
+            return;
+        };
+        if self.process_pending
+            && self.process_job_session_id.as_deref() == Some(job_session_id.as_str())
+        {
             self.process_status = "process operation already running".to_string();
             cx.notify();
             return;
         }
 
-        self.process_pending = true;
+        let job_id = self.begin_process_job(job_session_id.clone());
         self.process_status = format!("renicing pid {pid} to {nice}");
         let tx = self.process_tx.clone();
         std::thread::spawn(move || {
@@ -416,22 +445,35 @@ impl NyaTermApp {
                 })
             })()
             .map_err(|error: anyhow::Error| error.to_string());
-            let _ = tx.send(ProcessJobResult { result });
+            let _ = tx.send(ProcessJobResult {
+                job_id,
+                session_id: job_session_id,
+                result,
+            });
         });
         cx.notify();
     }
 
     pub(in crate::features) fn drain_process_events(&mut self) -> bool {
-        if !self.process_pending {
-            return false;
-        }
         let mut dirty = false;
         for _ in 0..PROCESS_EVENT_DRAIN_LIMIT {
             let Ok(event) = self.process_rx.try_recv() else {
                 break;
             };
+            if !remote_job_event_matches(
+                self.process_job_id,
+                self.process_job_session_id.as_deref(),
+                event.job_id,
+                &event.session_id,
+            ) {
+                continue;
+            }
             dirty = true;
             self.process_pending = false;
+            self.process_job_session_id = None;
+            if self.active_session_id.as_deref() != Some(event.session_id.as_str()) {
+                continue;
+            }
             let was_list_refresh = self.process_status == "listing remote processes";
             match event.result {
                 Ok(ProcessJobOutput::Listed(processes)) => {
@@ -478,6 +520,13 @@ impl NyaTermApp {
             }
         }
         dirty
+    }
+
+    fn begin_process_job(&mut self, session_id: String) -> u64 {
+        self.process_job_id = self.process_job_id.wrapping_add(1).max(1);
+        self.process_job_session_id = Some(session_id);
+        self.process_pending = true;
+        self.process_job_id
     }
 
     pub(in crate::features) fn apply_processes(&mut self, processes: Vec<RemoteProcess>) {
