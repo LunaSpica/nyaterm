@@ -48,24 +48,49 @@ pub(super) fn ansi_to_highlight_spans_compiled(
         let end = cursor + s.text.len();
         cursor = end;
         let bg = palette.resolve_cell_bg(s.style);
-        let mut color = palette.resolve_cell_fg(s.style);
-        let mut keyword_hit = false;
-        if s.style.fg.is_none() {
-            if let Some(kc) = keyword_color_at.get(start).copied().flatten() {
-                color = kc;
-                keyword_hit = true;
-            }
+        let color = palette.resolve_cell_fg(s.style);
+        if s.style.hidden {
+            push_ansi_segment(
+                &mut out,
+                &s.text,
+                bg.unwrap_or(palette.terminal_bg),
+                None,
+                bg,
+                s.style,
+            );
+            continue;
         }
-        out.push(TerminalHighlightSpan {
-            text: s.text.clone(),
-            color: Some(color),
+        if s.style.fg.is_some() || s.style.fg_rgb.is_some() {
+            push_ansi_segment(&mut out, &s.text, color, None, bg, s.style);
+            continue;
+        }
+
+        let mut segment_start = 0usize;
+        let mut segment_keyword_color = keyword_color_at.get(start).copied().flatten();
+        for (offset, _) in s.text.char_indices().skip(1) {
+            let keyword_color = keyword_color_at.get(start + offset).copied().flatten();
+            if keyword_color == segment_keyword_color {
+                continue;
+            }
+            push_ansi_segment(
+                &mut out,
+                &s.text[segment_start..offset],
+                color,
+                segment_keyword_color,
+                bg,
+                s.style,
+            );
+            segment_start = offset;
+            segment_keyword_color = keyword_color;
+        }
+        push_ansi_segment(
+            &mut out,
+            &s.text[segment_start..],
+            color,
+            segment_keyword_color,
             bg,
-            keyword: keyword_hit,
-            underline: s.style.underline,
-            strikeout: s.style.strikeout,
-            bold: s.style.bold,
-            italic: s.style.italic,
-        });
+            s.style,
+        );
     }
     if out.is_empty() {
         out.push(TerminalHighlightSpan {
@@ -80,4 +105,118 @@ pub(super) fn ansi_to_highlight_spans_compiled(
         });
     }
     out
+}
+
+fn push_ansi_segment(
+    out: &mut Vec<TerminalHighlightSpan>,
+    text: &str,
+    default_color: u32,
+    keyword_color: Option<u32>,
+    bg: Option<u32>,
+    style: nyaterm_terminal::CellStyle,
+) {
+    if text.is_empty() {
+        return;
+    }
+    out.push(TerminalHighlightSpan {
+        text: text.to_string(),
+        color: Some(keyword_color.unwrap_or(default_color)),
+        bg,
+        keyword: keyword_color.is_some(),
+        underline: style.underline,
+        strikeout: style.strikeout,
+        bold: style.bold,
+        italic: style.italic,
+    });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn spans(text: &str, style: nyaterm_terminal::CellStyle) -> Vec<nyaterm_terminal::StyledSpan> {
+        vec![nyaterm_terminal::StyledSpan {
+            text: text.to_string(),
+            style,
+        }]
+    }
+
+    #[test]
+    fn keyword_overlay_splits_default_ansi_span_at_match_boundaries() {
+        let palette = nyaterm_ui::theme_palette("github-dark");
+        let keyword_color = 0xff2244;
+        let compiled = vec![(regex::Regex::new("ERROR").unwrap(), keyword_color)];
+
+        let highlighted = ansi_to_highlight_spans_compiled(
+            &spans(
+                "prefix ERROR suffix",
+                nyaterm_terminal::CellStyle::default(),
+            ),
+            palette,
+            &compiled,
+        );
+
+        assert_eq!(highlighted.len(), 3);
+        assert_eq!(highlighted[0].text, "prefix ");
+        assert!(!highlighted[0].keyword);
+        assert_eq!(highlighted[1].text, "ERROR");
+        assert_eq!(highlighted[1].color, Some(keyword_color));
+        assert!(highlighted[1].keyword);
+        assert_eq!(highlighted[2].text, " suffix");
+        assert!(!highlighted[2].keyword);
+    }
+
+    #[test]
+    fn keyword_overlay_respects_explicit_truecolor_foreground() {
+        let palette = nyaterm_ui::theme_palette("github-dark");
+        let style = nyaterm_terminal::CellStyle {
+            fg_rgb: Some(0x112233),
+            ..nyaterm_terminal::CellStyle::default()
+        };
+        let compiled = vec![(regex::Regex::new("ERROR").unwrap(), 0xff2244)];
+
+        let highlighted =
+            ansi_to_highlight_spans_compiled(&spans("ERROR", style), palette, &compiled);
+
+        assert_eq!(highlighted.len(), 1);
+        assert_eq!(highlighted[0].color, Some(0x112233));
+        assert!(!highlighted[0].keyword);
+    }
+
+    #[test]
+    fn hidden_ansi_text_stays_concealed_from_keyword_overlay() {
+        let palette = nyaterm_ui::theme_palette("github-dark");
+        let style = nyaterm_terminal::CellStyle {
+            bg_rgb: Some(0x112233),
+            hidden: true,
+            ..nyaterm_terminal::CellStyle::default()
+        };
+        let compiled = vec![(regex::Regex::new("secret").unwrap(), 0xff2244)];
+
+        let highlighted =
+            ansi_to_highlight_spans_compiled(&spans("secret", style), palette, &compiled);
+
+        assert_eq!(highlighted.len(), 1);
+        assert_eq!(highlighted[0].color, Some(0x112233));
+        assert_eq!(highlighted[0].bg, Some(0x112233));
+        assert!(!highlighted[0].keyword);
+    }
+
+    #[test]
+    fn keyword_overlay_handles_multibyte_prefixes() {
+        let palette = nyaterm_ui::theme_palette("github-dark");
+        let keyword_color = 0xff2244;
+        let compiled = vec![(regex::Regex::new("ERROR").unwrap(), keyword_color)];
+
+        let highlighted = ansi_to_highlight_spans_compiled(
+            &spans("界 ERROR", nyaterm_terminal::CellStyle::default()),
+            palette,
+            &compiled,
+        );
+
+        assert_eq!(highlighted.len(), 2);
+        assert_eq!(highlighted[0].text, "界 ");
+        assert_eq!(highlighted[1].text, "ERROR");
+        assert_eq!(highlighted[1].color, Some(keyword_color));
+    }
 }

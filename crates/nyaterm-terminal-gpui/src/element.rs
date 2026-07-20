@@ -439,6 +439,19 @@ mod layout_cache_tests {
         assert_eq!(terminal_layout_height_px(16.0, 80, Some(24)), 384.0);
         assert_eq!(terminal_layout_height_px(0.0, 0, Some(0)), 1.0);
     }
+
+    #[test]
+    fn concealed_cursor_cell_suppresses_cursor_glyph() {
+        let mut snapshot = TerminalScreen::default().snapshot();
+        snapshot.cursor_row = 0;
+        snapshot.cursor_col = 0;
+        snapshot.cells[0].style.hidden = true;
+
+        assert!(terminal_cursor_cell_hidden(&snapshot));
+
+        snapshot.cells[0].style.hidden = false;
+        assert!(!terminal_cursor_cell_hidden(&snapshot));
+    }
 }
 
 pub struct NyaTerminalElement {
@@ -670,6 +683,15 @@ fn hash_styled_spans<H: Hasher>(
     } else {
         0usize.hash(hasher);
     }
+}
+
+fn terminal_cursor_cell_hidden(snapshot: &TerminalSnapshot) -> bool {
+    snapshot
+        .cursor_row
+        .checked_mul(snapshot.cols)
+        .and_then(|row_start| row_start.checked_add(snapshot.cursor_col))
+        .and_then(|index| snapshot.cells.get(index))
+        .is_some_and(|cell| cell.style.hidden)
 }
 
 fn terminal_glyph_decorations_needed(decorations: &TerminalLineDecorations) -> bool {
@@ -914,16 +936,18 @@ impl Element for NyaTerminalElement {
             );
             // Glyph spans intentionally exclude search/selection/cursor state so
             // dynamic overlays do not invalidate shaped base rows.
-            let spans = terminal_highlight_spans_compiled(
-                display_line,
-                ansi,
-                &compiled_keyword_rules,
-                &[],
-                &decorations.active_search_ranges,
-                None,
-                &decorations.link_ranges,
-                self.palette,
-            );
+            let mut spans = background_spans.clone();
+            if !decorations.link_ranges.is_empty() {
+                spans = apply_action_link_ranges(spans, &decorations.link_ranges, self.palette);
+            }
+            if !decorations.active_search_ranges.is_empty() {
+                spans = apply_search_ranges(
+                    spans,
+                    &decorations.active_search_ranges,
+                    true,
+                    self.palette,
+                );
+            }
 
             // Cell / keyword backgrounds.
             let mut col = 0usize;
@@ -1119,7 +1143,10 @@ impl Element for NyaTerminalElement {
                 _ => Bounds::new(point(x, y), size(px(width), px(height))),
             };
             plan.cursor_background = Some(fill(cursor_bounds, rgb(self.palette.terminal_cursor)));
-            if self.cursor_style.as_str() != "bar" && self.cursor_style.as_str() != "underline" {
+            if self.cursor_style.as_str() != "bar"
+                && self.cursor_style.as_str() != "underline"
+                && !terminal_cursor_cell_hidden(&self.snapshot)
+            {
                 let cursor_line = self
                     .snapshot
                     .lines

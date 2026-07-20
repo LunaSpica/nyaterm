@@ -10,31 +10,62 @@ use smallvec::SmallVec;
 /// Process-wide decode cache keyed by placement id + payload fingerprint.
 static DECODE_CACHE: Mutex<Option<DecodeCache>> = Mutex::new(None);
 
-const MAX_DECODE_CACHE_IMAGES: usize = 128;
+const MAX_DECODE_CACHE_ENTRIES: usize = 128;
+const MAX_DECODE_CACHE_BYTES: u64 = 64 * 1024 * 1024;
 const MAX_DECODED_IMAGE_DIMENSION: u32 = 4096;
 const MAX_DECODED_IMAGE_BYTES: u64 = 4 * 1024 * 1024;
 
 #[derive(Default)]
 struct DecodeCache {
-    entries: HashMap<u64, Arc<RenderImage>>,
+    entries: HashMap<u64, CachedDecode>,
     lru: VecDeque<u64>,
+    decoded_bytes: u64,
+}
+
+struct CachedDecode {
+    image: Option<Arc<RenderImage>>,
+    decoded_bytes: u64,
 }
 
 impl DecodeCache {
-    fn get(&mut self, key: u64) -> Option<Arc<RenderImage>> {
-        let image = self.entries.get(&key)?.clone();
+    fn get(&mut self, key: u64) -> Option<Option<Arc<RenderImage>>> {
+        let image = self.entries.get(&key)?.image.clone();
         self.touch(key);
         Some(image)
     }
 
-    fn insert(&mut self, key: u64, image: Arc<RenderImage>) {
-        self.entries.insert(key, image);
+    fn insert(&mut self, key: u64, image: Option<Arc<RenderImage>>) {
+        self.insert_with_limits(key, image, MAX_DECODE_CACHE_ENTRIES, MAX_DECODE_CACHE_BYTES);
+    }
+
+    fn insert_with_limits(
+        &mut self,
+        key: u64,
+        image: Option<Arc<RenderImage>>,
+        max_entries: usize,
+        max_bytes: u64,
+    ) {
+        let decoded_bytes = image
+            .as_deref()
+            .map(render_image_decoded_bytes)
+            .unwrap_or(0);
+        if let Some(replaced) = self.entries.insert(
+            key,
+            CachedDecode {
+                image,
+                decoded_bytes,
+            },
+        ) {
+            self.decoded_bytes = self.decoded_bytes.saturating_sub(replaced.decoded_bytes);
+        }
+        self.decoded_bytes = self.decoded_bytes.saturating_add(decoded_bytes);
         self.touch(key);
-        while self.entries.len() > MAX_DECODE_CACHE_IMAGES {
+        while self.entries.len() > max_entries || self.decoded_bytes > max_bytes {
             let Some(oldest) = self.lru.pop_front() else {
                 break;
             };
-            if self.entries.remove(&oldest).is_some() {
+            if let Some(removed) = self.entries.remove(&oldest) {
+                self.decoded_bytes = self.decoded_bytes.saturating_sub(removed.decoded_bytes);
                 self.lru.retain(|candidate| *candidate != oldest);
             }
         }
@@ -44,6 +75,15 @@ impl DecodeCache {
         self.lru.retain(|candidate| *candidate != key);
         self.lru.push_back(key);
     }
+}
+
+fn render_image_decoded_bytes(image: &RenderImage) -> u64 {
+    (0..image.frame_count())
+        .filter_map(|frame| {
+            let size = image.size(frame);
+            decoded_rgba_bytes(u32::from(size.width), u32::from(size.height))
+        })
+        .fold(0u64, u64::saturating_add)
 }
 
 fn cache() -> std::sync::MutexGuard<'static, Option<DecodeCache>> {
@@ -138,14 +178,14 @@ pub fn cached_render_image(placement_id: u64, data: &[u8]) -> Option<Arc<RenderI
         let mut guard = cache();
         let cache = guard.get_or_insert_with(DecodeCache::default);
         if let Some(hit) = cache.get(key) {
-            return Some(hit);
+            return hit;
         }
     }
-    let decoded = decode_render_image(data)?;
+    let decoded = decode_render_image(data);
     let mut guard = cache();
     let cache = guard.get_or_insert_with(DecodeCache::default);
     cache.insert(key, decoded.clone());
-    Some(decoded)
+    decoded
 }
 
 #[cfg(test)]
@@ -229,7 +269,7 @@ mod tests {
         let first = tiny_nyar([0, 0, 0, 255]);
         let first_image = cached_render_image(1, &first).expect("first");
         let mut second_image = None;
-        for placement_id in 2..=MAX_DECODE_CACHE_IMAGES as u64 {
+        for placement_id in 2..=MAX_DECODE_CACHE_ENTRIES as u64 {
             let value = placement_id as u8;
             let payload = tiny_nyar([value, 0, 0, 255]);
             let image = cached_render_image(placement_id, &payload).expect("fill");
@@ -265,6 +305,36 @@ mod tests {
         b[96] = 2;
 
         assert_ne!(cache_key(42, &a), cache_key(42, &b));
+    }
+
+    #[test]
+    fn cache_remembers_decode_failures() {
+        let _guard = TEST_CACHE_LOCK.lock().unwrap();
+        clear_cache();
+        let invalid = b"not an image";
+        let key = cache_key(42, invalid);
+
+        assert!(cached_render_image(42, invalid).is_none());
+        let mut guard = cache();
+        let cached = guard
+            .as_mut()
+            .and_then(|cache| cache.get(key))
+            .expect("cached failure entry");
+        assert!(cached.is_none());
+    }
+
+    #[test]
+    fn cache_prunes_images_to_decoded_byte_budget() {
+        let first = decode_render_image(&tiny_nyar([1, 0, 0, 255])).expect("first");
+        let second = decode_render_image(&tiny_nyar([2, 0, 0, 255])).expect("second");
+        let mut cache = DecodeCache::default();
+
+        cache.insert_with_limits(1, Some(first), 10, 4);
+        cache.insert_with_limits(2, Some(second), 10, 4);
+
+        assert!(!cache.entries.contains_key(&1));
+        assert!(cache.entries.contains_key(&2));
+        assert_eq!(cache.decoded_bytes, 4);
     }
 
     #[test]
