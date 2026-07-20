@@ -598,11 +598,7 @@ impl NyaTermApp {
                     SecurityAuthTab::Credentials => self.connection_saved_credentials.len(),
                     SecurityAuthTab::Otp => self.connection_otp_entries.len(),
                 };
-                if count == 0 {
-                    SharedString::from("")
-                } else {
-                    SharedString::from(count.to_string())
-                }
+                SharedString::from(count.to_string())
             }
             NavItem::Recording => SharedString::from(self.recording_sessions_header_count()),
             NavItem::SyncBackupHistory => SharedString::from(""),
