@@ -1,6 +1,67 @@
 use super::*;
 use gpui::{Bounds, Pixels};
 
+const COMMAND_SUGGESTION_INPUT_SLOW_THRESHOLD: Duration = Duration::from_millis(4);
+const COMMAND_SUGGESTION_REFRESH_SLOW_THRESHOLD: Duration = Duration::from_millis(8);
+
+#[derive(Clone, Copy, Default)]
+struct CommandSuggestionInputTiming {
+    utf8: Duration,
+    submission: Duration,
+    resync: Duration,
+    apply_tracker: Duration,
+    min_chars: Duration,
+    pattern: Duration,
+    pager: Duration,
+    eligibility: Duration,
+    hide_popup: Duration,
+    schedule: Duration,
+}
+
+impl CommandSuggestionInputTiming {
+    fn max_stage(self) -> Duration {
+        [
+            self.utf8,
+            self.submission,
+            self.resync,
+            self.apply_tracker,
+            self.min_chars,
+            self.pattern,
+            self.pager,
+            self.eligibility,
+            self.hide_popup,
+            self.schedule,
+        ]
+        .into_iter()
+        .max()
+        .unwrap_or(Duration::ZERO)
+    }
+}
+
+#[derive(Clone, Copy, Default)]
+struct CommandSuggestionRefreshTiming {
+    pattern: Duration,
+    search: Duration,
+    cursor: Duration,
+    update_state: Duration,
+    hide_popup: Duration,
+}
+
+impl CommandSuggestionRefreshTiming {
+    fn max_stage(self) -> Duration {
+        [
+            self.pattern,
+            self.search,
+            self.cursor,
+            self.update_state,
+            self.hide_popup,
+        ]
+        .into_iter()
+        .max()
+        .unwrap_or(Duration::ZERO)
+    }
+}
+
 impl NyaTermApp {
     pub(in crate::features) fn dismiss_command_suggestions(&mut self, cx: &mut Context<Self>) {
         self.command_suggestion_search_gen = self.command_suggestion_search_gen.saturating_add(1);
@@ -34,6 +95,24 @@ impl NyaTermApp {
         bytes: &[u8],
         cx: &mut Context<Self>,
     ) {
+        let started_at = Instant::now();
+        let byte_count = bytes.len();
+        let popup_visible_at_start = self.command_suggestions.is_some();
+        let mut timing = CommandSuggestionInputTiming::default();
+        macro_rules! finish {
+            ($outcome:expr, $pattern_chars:expr) => {{
+                self.log_command_suggestion_input_diagnostic(
+                    started_at,
+                    byte_count,
+                    popup_visible_at_start,
+                    $outcome,
+                    $pattern_chars,
+                    timing,
+                );
+                return;
+            }};
+        }
+
         if self.credential_suggestions.is_some() || self.is_credential_prompt_input_mode() {
             return;
         }
@@ -45,12 +124,20 @@ impl NyaTermApp {
             self.clear_command_suggestion_draft(cx);
             return;
         }
-        let Ok(text) = std::str::from_utf8(bytes) else {
-            self.clear_command_suggestion_draft(cx);
-            return;
+        let utf8_started_at = Instant::now();
+        let text = match std::str::from_utf8(bytes) {
+            Ok(text) => {
+                timing.utf8 = utf8_started_at.elapsed();
+                text
+            }
+            Err(_) => {
+                timing.utf8 = utf8_started_at.elapsed();
+                self.clear_command_suggestion_draft(cx);
+                finish!("non_utf8", 0);
+            }
         };
         if text.is_empty() {
-            return;
+            finish!("empty_text", 0);
         }
 
         // Exit interactive suppression on Ctrl+C or q (Tauri resetCommandSuggestionSuppression).
@@ -59,10 +146,11 @@ impl NyaTermApp {
             self.command_input_tracker = TerminalInputState::new();
             self.command_suggestions = None;
             cx.notify();
-            return;
+            finish!("suppression_reset", 0);
         }
 
         // Capture submission command before tracker reset on Enter.
+        let submission_started_at = Instant::now();
         if text.contains('\r') || text.contains('\n') {
             let submitted = get_tracked_submission_command(&self.command_input_tracker);
             if !submitted.is_empty() {
@@ -72,8 +160,10 @@ impl NyaTermApp {
                 }
             }
         }
+        timing.submission = submission_started_at.elapsed();
 
         // Tab-desync recovery: before applying non-tab input, resync from terminal line.
+        let resync_started_at = Instant::now();
         if text != "\t"
             && self.command_input_tracker.desynced
             && self.command_input_tracker.desync_reason == Some("tab")
@@ -86,50 +176,78 @@ impl NyaTermApp {
                 }
             }
         }
+        timing.resync = resync_started_at.elapsed();
 
+        let apply_started_at = Instant::now();
         self.command_input_tracker = apply_terminal_input_data(&self.command_input_tracker, text);
+        timing.apply_tracker = apply_started_at.elapsed();
 
         if self.command_suggestions_suppressed {
+            let hide_started_at = Instant::now();
             self.command_suggestion_search_gen =
                 self.command_suggestion_search_gen.saturating_add(1);
             if self.command_suggestions.take().is_some() {
                 cx.notify();
             }
-            return;
+            timing.hide_popup = hide_started_at.elapsed();
+            finish!("suppressed", 0);
         }
 
         let min_chars = self
             .settings
             .interaction_command_suggestion_min_chars
             .max(1) as usize;
-        if terminal_input_tracker_below_min_chars(&self.command_input_tracker, min_chars) {
+        let min_chars_started_at = Instant::now();
+        let below_min_chars =
+            terminal_input_tracker_below_min_chars(&self.command_input_tracker, min_chars);
+        timing.min_chars = min_chars_started_at.elapsed();
+        if below_min_chars {
+            let hide_started_at = Instant::now();
             self.command_suggestion_search_gen =
                 self.command_suggestion_search_gen.saturating_add(1);
             if self.command_suggestions.take().is_some() {
                 cx.notify();
             }
-            return;
+            timing.hide_popup = hide_started_at.elapsed();
+            finish!("below_min_chars", 0);
         }
 
+        let pattern_started_at = Instant::now();
         let pattern = get_tracked_command(&self.command_input_tracker);
-        if is_pager_search_or_command_input(&pattern) {
+        let pattern_chars = pattern.chars().count();
+        timing.pattern = pattern_started_at.elapsed();
+
+        let pager_started_at = Instant::now();
+        let pager_input = is_pager_search_or_command_input(&pattern);
+        timing.pager = pager_started_at.elapsed();
+        if pager_input {
+            let hide_started_at = Instant::now();
             self.command_suggestion_search_gen =
                 self.command_suggestion_search_gen.saturating_add(1);
             if self.command_suggestions.take().is_some() {
                 cx.notify();
             }
-            return;
+            timing.hide_popup = hide_started_at.elapsed();
+            finish!("pager_input", pattern_chars);
         }
 
-        if !can_suggest_from_tracked_command(&self.command_input_tracker, &pattern) {
+        let eligibility_started_at = Instant::now();
+        let can_suggest = can_suggest_from_tracked_command(&self.command_input_tracker, &pattern);
+        timing.eligibility = eligibility_started_at.elapsed();
+        if !can_suggest {
+            let hide_started_at = Instant::now();
             self.command_suggestion_search_gen =
                 self.command_suggestion_search_gen.saturating_add(1);
             if self.command_suggestions.take().is_some() {
                 cx.notify();
             }
-            return;
+            timing.hide_popup = hide_started_at.elapsed();
+            finish!("not_eligible", pattern_chars);
         }
+        let schedule_started_at = Instant::now();
         self.schedule_command_suggestion_refresh(cx);
+        timing.schedule = schedule_started_at.elapsed();
+        finish!("scheduled", pattern_chars);
     }
 
     pub(in crate::features) fn schedule_command_suggestion_refresh(
@@ -163,25 +281,48 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn refresh_command_suggestions(&mut self, cx: &mut Context<Self>) {
+        let started_at = Instant::now();
+        let popup_visible_at_start = self.command_suggestions.is_some();
+        let mut timing = CommandSuggestionRefreshTiming::default();
+        macro_rules! finish_refresh {
+            ($outcome:expr, $pattern_chars:expr, $result_count:expr) => {{
+                self.log_command_suggestion_refresh_diagnostic(
+                    started_at,
+                    popup_visible_at_start,
+                    $outcome,
+                    $pattern_chars,
+                    $result_count,
+                    timing,
+                );
+                return;
+            }};
+        }
+
         let Some(session_id) = self
             .active_session_id
             .as_deref()
             .filter(|session_id| !session_id.is_empty())
             .map(ToOwned::to_owned)
         else {
+            let hide_started_at = Instant::now();
             self.hide_command_suggestions_if_present(cx);
-            return;
+            timing.hide_popup = hide_started_at.elapsed();
+            finish_refresh!("no_active_session", 0, 0);
         };
         if self.credential_suggestions.is_some()
             || self.is_credential_prompt_input_mode()
             || self.command_suggestions_suppressed
         {
+            let hide_started_at = Instant::now();
             self.hide_command_suggestions_if_present(cx);
-            return;
+            timing.hide_popup = hide_started_at.elapsed();
+            finish_refresh!("suppressed_or_credential", 0, 0);
         }
         if !self.settings.interaction_command_suggestions_enabled {
+            let hide_started_at = Instant::now();
             self.hide_command_suggestions_if_present(cx);
-            return;
+            timing.hide_popup = hide_started_at.elapsed();
+            finish_refresh!("disabled", 0, 0);
         }
         let min_chars = self
             .settings
@@ -191,16 +332,24 @@ impl NyaTermApp {
             .settings
             .interaction_command_suggestion_max_chars
             .max(min_chars as u32) as usize;
+        let pattern_started_at = Instant::now();
         let pattern = get_tracked_command(&self.command_input_tracker);
-        if pattern.chars().count() < min_chars {
+        let pattern_chars = pattern.chars().count();
+        timing.pattern = pattern_started_at.elapsed();
+        if pattern_chars < min_chars {
+            let hide_started_at = Instant::now();
             self.hide_command_suggestions_if_present(cx);
-            return;
+            timing.hide_popup = hide_started_at.elapsed();
+            finish_refresh!("below_min_chars", pattern_chars, 0);
         }
         // Pager/search-like prefixes: hide suggestions.
         if pattern.starts_with('/') || pattern.starts_with('?') || pattern.starts_with(':') {
+            let hide_started_at = Instant::now();
             self.hide_command_suggestions_if_present(cx);
-            return;
+            timing.hide_popup = hide_started_at.elapsed();
+            finish_refresh!("pager_prefix", pattern_chars, 0);
         }
+        let search_started_at = Instant::now();
         let results = search_command_sources(
             &self.command_history,
             &self.quick_commands,
@@ -209,17 +358,24 @@ impl NyaTermApp {
             Some(min_chars),
             Some(max_chars),
         );
+        timing.search = search_started_at.elapsed();
+        let result_count = results.len();
         if results.is_empty() {
+            let hide_started_at = Instant::now();
             self.hide_command_suggestions_if_present(cx);
-            return;
+            timing.hide_popup = hide_started_at.elapsed();
+            finish_refresh!("search_empty", pattern_chars, result_count);
         }
+        let cursor_started_at = Instant::now();
         let (cursor_row, cursor_col) = self.active_terminal_cursor_cell();
+        timing.cursor = cursor_started_at.elapsed();
         let selected_index = self
             .command_suggestions
             .as_ref()
             .filter(|state| state.session_id == session_id)
             .map(|state| state.selected_index.min(results.len().saturating_sub(1)))
             .unwrap_or(0);
+        let update_started_at = Instant::now();
         self.command_suggestions = Some(CommandSuggestionState {
             session_id,
             draft: pattern,
@@ -237,7 +393,95 @@ impl NyaTermApp {
             cursor_row,
             cursor_col,
         });
+        timing.update_state = update_started_at.elapsed();
         cx.notify();
+        finish_refresh!("shown", pattern_chars, result_count);
+    }
+
+    fn log_command_suggestion_input_diagnostic(
+        &mut self,
+        started_at: Instant,
+        byte_count: usize,
+        popup_visible_at_start: bool,
+        outcome: &'static str,
+        pattern_chars: usize,
+        timing: CommandSuggestionInputTiming,
+    ) {
+        let total_duration = started_at.elapsed();
+        if total_duration < COMMAND_SUGGESTION_INPUT_SLOW_THRESHOLD
+            && timing.max_stage() < COMMAND_SUGGESTION_INPUT_SLOW_THRESHOLD
+        {
+            return;
+        }
+        if !self.should_log_slow_diagnostic("terminal_suggestion_input", Instant::now()) {
+            return;
+        }
+        tracing::warn!(
+            diagnostic = "terminal_suggestion_input",
+            outcome,
+            byte_count,
+            pattern_chars,
+            tracker_value_bytes = self.command_input_tracker.value.len(),
+            tracker_cursor = self.command_input_tracker.cursor,
+            tracker_desynced = self.command_input_tracker.desynced,
+            tracker_desync_reason = self.command_input_tracker.desync_reason.unwrap_or(""),
+            tracker_multiline = self.command_input_tracker.multiline,
+            tracker_paste_mode = self.command_input_tracker.paste_mode,
+            popup_visible_at_start,
+            popup_visible = self.command_suggestions.is_some(),
+            total_us = total_duration.as_micros(),
+            utf8_us = timing.utf8.as_micros(),
+            submission_us = timing.submission.as_micros(),
+            resync_us = timing.resync.as_micros(),
+            apply_tracker_us = timing.apply_tracker.as_micros(),
+            min_chars_us = timing.min_chars.as_micros(),
+            pattern_us = timing.pattern.as_micros(),
+            pager_us = timing.pager.as_micros(),
+            eligibility_us = timing.eligibility.as_micros(),
+            hide_popup_us = timing.hide_popup.as_micros(),
+            schedule_us = timing.schedule.as_micros(),
+            "slow terminal suggestion input"
+        );
+    }
+
+    fn log_command_suggestion_refresh_diagnostic(
+        &mut self,
+        started_at: Instant,
+        popup_visible_at_start: bool,
+        outcome: &'static str,
+        pattern_chars: usize,
+        result_count: usize,
+        timing: CommandSuggestionRefreshTiming,
+    ) {
+        let total_duration = started_at.elapsed();
+        if total_duration < COMMAND_SUGGESTION_REFRESH_SLOW_THRESHOLD
+            && timing.max_stage() < COMMAND_SUGGESTION_REFRESH_SLOW_THRESHOLD
+        {
+            return;
+        }
+        if !self.should_log_slow_diagnostic("terminal_suggestion_refresh", Instant::now()) {
+            return;
+        }
+        tracing::warn!(
+            diagnostic = "terminal_suggestion_refresh",
+            outcome,
+            pattern_chars,
+            result_count,
+            command_history_count = self.command_history.len(),
+            quick_command_count = self.quick_commands.len(),
+            tracker_value_bytes = self.command_input_tracker.value.len(),
+            tracker_desynced = self.command_input_tracker.desynced,
+            tracker_multiline = self.command_input_tracker.multiline,
+            popup_visible_at_start,
+            popup_visible = self.command_suggestions.is_some(),
+            total_us = total_duration.as_micros(),
+            pattern_us = timing.pattern.as_micros(),
+            search_us = timing.search.as_micros(),
+            cursor_us = timing.cursor.as_micros(),
+            update_state_us = timing.update_state.as_micros(),
+            hide_popup_us = timing.hide_popup.as_micros(),
+            "slow terminal suggestion refresh"
+        );
     }
 
     fn hide_command_suggestions_if_present(&mut self, cx: &mut Context<Self>) {
