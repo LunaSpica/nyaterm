@@ -73,7 +73,7 @@ impl NyaTermApp {
             .bottom_0()
             .left_0()
             .right_0()
-            .bg(rgba(0x030508d8))
+            .bg(rgba(0x00000080))
             .flex()
             .items_center()
             .justify_center()
@@ -94,17 +94,17 @@ impl NyaTermApp {
             .child(
                 div()
                     .id(SharedString::from("ai-auto-execution-confirm-dialog"))
-                    .w(px(400.))
+                    .w(px(384.))
                     .max_w_full()
                     .rounded_md()
                     .border_1()
-                    .border_color(rgb(0x3f1f27))
+                    .border_color(rgb(palette.border))
                     .bg(rgb(palette.bg))
                     .shadow_lg()
-                    .p_4()
+                    .p_6()
                     .flex()
                     .flex_col()
-                    .gap_3()
+                    .gap_4()
                     .on_click(|_, _, cx| cx.stop_propagation())
                     .child(
                         div()
@@ -115,7 +115,7 @@ impl NyaTermApp {
                                 div()
                                     .text_size(px(15.))
                                     .font_weight(FontWeight(800.))
-                                    .text_color(rgb(0xfca5a5))
+                                    .text_color(rgb(palette.text))
                                     .child(self.tr("ai.autoExecutionConfirmTitle")),
                             )
                             .child(
@@ -140,26 +140,15 @@ impl NyaTermApp {
                                     this.cancel_ai_auto_execution_confirm(cx);
                                 }),
                             ))
-                            .child(
-                                div()
-                                    .id(SharedString::from("ai-auto-execution-confirm"))
-                                    .h(px(28.))
-                                    .px_3()
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .rounded_sm()
-                                    .bg(rgb(0x7f1d1d))
-                                    .text_xs()
-                                    .font_weight(FontWeight(800.))
-                                    .text_color(rgb(0xfee2e2))
-                                    .cursor_pointer()
-                                    .hover(|this| this.bg(rgb(0x991b1b)))
-                                    .child(self.tr("ai.enableAutoExecution"))
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.confirm_ai_auto_execution(cx);
-                                    })),
-                            ),
+                            .child(dialog_action_button(
+                                palette,
+                                "ai-auto-execution-confirm",
+                                self.tr("ai.enableAutoExecution"),
+                                true,
+                                cx.listener(|this, _, _, cx| {
+                                    this.confirm_ai_auto_execution(cx);
+                                }),
+                            )),
                     ),
             )
     }
@@ -176,7 +165,7 @@ impl NyaTermApp {
             .bottom_0()
             .left_0()
             .right_0()
-            .bg(rgba(0x030508d8))
+            .bg(rgba(0x00000080))
             .flex()
             .items_center()
             .justify_center()
@@ -197,17 +186,17 @@ impl NyaTermApp {
             .child(
                 div()
                     .id(SharedString::from("ai-clear-history-confirm-dialog"))
-                    .w(px(380.))
+                    .w(px(384.))
                     .max_w_full()
                     .rounded_md()
                     .border_1()
-                    .border_color(rgb(0x3f1f27))
+                    .border_color(rgb(palette.border))
                     .bg(rgb(palette.bg))
                     .shadow_lg()
-                    .p_4()
+                    .p_6()
                     .flex()
                     .flex_col()
-                    .gap_3()
+                    .gap_4()
                     .on_click(|_, _, cx| cx.stop_propagation())
                     .child(
                         div()
@@ -218,7 +207,7 @@ impl NyaTermApp {
                                 div()
                                     .text_size(px(15.))
                                     .font_weight(FontWeight(800.))
-                                    .text_color(rgb(0xfca5a5))
+                                    .text_color(rgb(palette.text))
                                     .child(self.tr("ai.clearHistoryTitle")),
                             )
                             .child(
@@ -242,26 +231,15 @@ impl NyaTermApp {
                                     this.cancel_ai_clear_history_confirm(cx);
                                 }),
                             ))
-                            .child(
-                                div()
-                                    .id(SharedString::from("ai-clear-history-confirm"))
-                                    .h(px(28.))
-                                    .px_3()
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .rounded_sm()
-                                    .bg(rgb(0x7f1d1d))
-                                    .text_xs()
-                                    .font_weight(FontWeight(800.))
-                                    .text_color(rgb(0xfee2e2))
-                                    .cursor_pointer()
-                                    .hover(|this| this.bg(rgb(0x991b1b)))
-                                    .child(self.tr("ai.clearHistory"))
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.confirm_ai_clear_history(cx);
-                                    })),
-                            ),
+                            .child(dialog_action_button(
+                                palette,
+                                "ai-clear-history-confirm",
+                                self.tr("ai.clearHistory"),
+                                true,
+                                cx.listener(|this, _, _, cx| {
+                                    this.confirm_ai_clear_history(cx);
+                                }),
+                            )),
                     ),
             )
     }

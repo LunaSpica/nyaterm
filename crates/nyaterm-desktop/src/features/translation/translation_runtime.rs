@@ -294,9 +294,6 @@ impl NyaTermApp {
             );
         } else if !translated.is_empty() {
             result_box = result_box.child(translated.clone());
-        } else {
-            result_box =
-                result_box.child(div().text_color(rgb(palette.text_muted)).child(error_label));
         }
 
         div()
@@ -306,7 +303,7 @@ impl NyaTermApp {
             .bottom_0()
             .left_0()
             .right_0()
-            .bg(rgb(0x030508))
+            .bg(rgba(0x00000080))
             .flex()
             .items_center()
             .justify_center()
@@ -327,7 +324,7 @@ impl NyaTermApp {
                     .border_color(rgb(palette.border))
                     .bg(rgb(palette.bg))
                     .shadow_lg()
-                    .p_4()
+                    .p_6()
                     .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                     .on_click(|_, _, cx| cx.stop_propagation())
                     .child(

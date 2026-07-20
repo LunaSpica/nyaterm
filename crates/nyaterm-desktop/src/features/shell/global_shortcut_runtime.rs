@@ -11,6 +11,11 @@ impl NyaTermApp {
             return false;
         }
 
+        if event.keystroke.key.as_str() == "escape" && self.translation_dialog.is_some() {
+            self.close_translation_dialog(cx);
+            return true;
+        }
+
         // Dismiss strip menus with Escape (Tauri dropdown dismiss).
         if event.keystroke.key.as_str() == "escape"
             && (self.open_tabs_menu_open || self.new_session_menu_open)
