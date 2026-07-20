@@ -246,7 +246,9 @@ impl NyaTermApp {
         let unsaved_label = self.tr("fileEditor.unsaved");
         let conflict_label = self.tr("fileEditor.conflictTitle");
         let conflict_desc = self.tr("fileEditor.conflictDesc");
+        let unsaved_title = self.tr("fileEditor.unsavedTitle");
         let unsaved_desc = self.tr("fileEditor.unsavedDesc");
+        let reload_dirty_title = self.tr("fileEditor.reloadDirtyTitle");
         let reload_dirty_desc = self.tr("fileEditor.reloadDirtyDesc");
         let reload_label = self.tr("fileEditor.reload");
         let confirm_reload_label = self.tr("fileEditor.discardAndReload");
@@ -653,19 +655,13 @@ impl NyaTermApp {
                                     .when(!close_confirm, |this| this.child(small_button(
                                         palette,
                                         "transfer-editor-reload",
-                                        if state.reload_confirm {
-                                            confirm_reload_label
-                                        } else {
-                                            reload_label
-                                        },
+                                        reload_label,
                                         cx.listener(|this, _, window, cx| {
                                             if let Some(state) =
                                                 this.active_transfer_editor_tab_mut()
                                             {
                                                 if state.dirty && !state.reload_confirm {
                                                     state.reload_confirm = true;
-                                                    state.error =
-                                                        Some(reload_dirty_desc.to_string());
                                                     this.terminal_status =
                                                         "confirm remote editor reload".to_string();
                                                     cx.notify();
@@ -686,16 +682,6 @@ impl NyaTermApp {
                                             }
                                         }),
                                     )))
-                                    .when(!close_confirm && state.reload_confirm, |this| {
-                                        this.child(small_button(
-                                            palette,
-                                            "transfer-editor-cancel-reload",
-                                            cancel_label,
-                                            cx.listener(|this, _, _, cx| {
-                                                this.cancel_transfer_editor_reload_confirm(cx);
-                                            }),
-                                        ))
-                                    })
                                     .when(!close_confirm, |this| this.child(small_button(
                                         palette,
                                         "transfer-editor-open-external",
@@ -725,46 +711,6 @@ impl NyaTermApp {
                                                 this.save_all_transfer_editor_tabs(window, cx);
                                             }),
                                         ))
-                                    })
-                                    .when(!close_confirm && state.conflict, |this| {
-                                        this.child(small_button(
-                                            palette,
-                                            "transfer-editor-force-save",
-                                            force_save_label,
-                                            cx.listener(|this, _, window, cx| {
-                                                this.save_transfer_editor(true, window, cx);
-                                            }),
-                                        ))
-                                    })
-                                    .when(close_confirm, |this| {
-                                        this.child(small_button(
-                                            palette,
-                                            "transfer-editor-save-close",
-                                            if state.saving {
-                                                saving_label
-                                            } else {
-                                                save_close_label
-                                            },
-                                            cx.listener(|this, _, window, cx| {
-                                                this.save_transfer_editor_and_close(window, cx);
-                                            }),
-                                        ))
-                                        .child(small_button(
-                                            palette,
-                                            "transfer-editor-cancel-close",
-                                            cancel_label,
-                                            cx.listener(|this, _, _, cx| {
-                                                this.cancel_transfer_editor_close_confirm(cx);
-                                            }),
-                                        ))
-                                        .child(small_button(
-                                            palette,
-                                            "transfer-editor-discard",
-                                            discard_label,
-                                            cx.listener(|this, _, _, cx| {
-                                                this.discard_transfer_editor(cx);
-                                            }),
-                                        ))
                                     }),
                             ),
                     )
@@ -780,48 +726,6 @@ impl NyaTermApp {
                                 .text_xs()
                                 .text_color(rgb(palette.danger))
                                 .child(error),
-                        )
-                    })
-                    .when(state.conflict, |this| {
-                        this.child(
-                            div()
-                                .flex_none()
-                                .border_b_1()
-                                .border_color(rgb(palette.border))
-                                .bg(rgb(0x352912))
-                                .px_3()
-                                .py_2()
-                                .text_xs()
-                                .text_color(rgb(palette.warning))
-                                .child(conflict_desc),
-                        )
-                    })
-                    .when(close_confirm, |this| {
-                        this.child(
-                            div()
-                                .flex_none()
-                                .border_b_1()
-                                .border_color(rgb(palette.border))
-                                .bg(rgb(0x352912))
-                                .px_3()
-                                .py_2()
-                                .text_xs()
-                                .text_color(rgb(palette.warning))
-                                .child(unsaved_desc),
-                        )
-                    })
-                    .when(state.reload_confirm, |this| {
-                        this.child(
-                            div()
-                                .flex_none()
-                                .border_b_1()
-                                .border_color(rgb(palette.border))
-                                .bg(rgb(0x352912))
-                                .px_3()
-                                .py_2()
-                                .text_xs()
-                                .text_color(rgb(palette.warning))
-                                .child(reload_dirty_desc),
                         )
                     })
                     .when(
@@ -1002,7 +906,211 @@ impl NyaTermApp {
                                     )),
                             ),
                     )
+                    .when(state.conflict, |this| {
+                        this.child(transfer_editor_alert_dialog(
+                            palette,
+                            "transfer-editor-conflict-dialog",
+                            480.,
+                            conflict_label,
+                            conflict_desc,
+                            div()
+                                .flex()
+                                .items_center()
+                                .justify_end()
+                                .gap_2()
+                                .child(small_button(
+                                    palette,
+                                    "transfer-editor-conflict-cancel",
+                                    cancel_label,
+                                    cx.listener(|this, _, _, cx| {
+                                        this.cancel_transfer_editor_conflict(cx);
+                                    }),
+                                ))
+                                .child(small_button(
+                                    palette,
+                                    "transfer-editor-conflict-reload",
+                                    reload_label,
+                                    cx.listener(|this, _, window, cx| {
+                                        let Some(state) = this.active_transfer_editor_tab_mut()
+                                        else {
+                                            return;
+                                        };
+                                        state.loading = true;
+                                        state.error = None;
+                                        state.conflict = false;
+                                        state.reload_confirm = false;
+                                        let session_id = state.session_id.clone();
+                                        let remote_path = state.remote_path.clone();
+                                        this.start_sftp_editor_load_job(
+                                            session_id,
+                                            remote_path,
+                                            window,
+                                            cx,
+                                        );
+                                    }),
+                                ))
+                                .child(dialog_action_button(
+                                    palette,
+                                    "transfer-editor-conflict-force-save",
+                                    force_save_label,
+                                    false,
+                                    cx.listener(|this, _, window, cx| {
+                                        this.save_transfer_editor(true, window, cx);
+                                    }),
+                                )),
+                        ))
+                    })
+                    .when(close_confirm && !state.conflict, |this| {
+                        this.child(transfer_editor_alert_dialog(
+                            palette,
+                            "transfer-editor-unsaved-dialog",
+                            384.,
+                            unsaved_title,
+                            unsaved_desc,
+                            div()
+                                .flex()
+                                .items_center()
+                                .justify_end()
+                                .gap_2()
+                                .child(small_button(
+                                    palette,
+                                    "transfer-editor-unsaved-cancel",
+                                    cancel_label,
+                                    cx.listener(|this, _, _, cx| {
+                                        this.cancel_transfer_editor_close_confirm(cx);
+                                    }),
+                                ))
+                                .child(small_button(
+                                    palette,
+                                    "transfer-editor-unsaved-save",
+                                    if state.saving {
+                                        saving_label
+                                    } else {
+                                        save_close_label
+                                    },
+                                    cx.listener(|this, _, window, cx| {
+                                        this.save_transfer_editor_and_close(window, cx);
+                                    }),
+                                ))
+                                .child(dialog_action_button(
+                                    palette,
+                                    "transfer-editor-unsaved-discard",
+                                    discard_label,
+                                    true,
+                                    cx.listener(|this, _, _, cx| {
+                                        this.discard_transfer_editor(cx);
+                                    }),
+                                )),
+                        ))
+                    })
+                    .when(
+                        state.reload_confirm && !state.conflict && !close_confirm,
+                        |this| {
+                            this.child(transfer_editor_alert_dialog(
+                                palette,
+                                "transfer-editor-reload-dirty-dialog",
+                                384.,
+                                reload_dirty_title,
+                                reload_dirty_desc,
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .justify_end()
+                                    .gap_2()
+                                    .child(small_button(
+                                        palette,
+                                        "transfer-editor-reload-dirty-cancel",
+                                        cancel_label,
+                                        cx.listener(|this, _, _, cx| {
+                                            this.cancel_transfer_editor_reload_confirm(cx);
+                                        }),
+                                    ))
+                                    .child(dialog_action_button(
+                                        palette,
+                                        "transfer-editor-reload-dirty-confirm",
+                                        confirm_reload_label,
+                                        true,
+                                        cx.listener(|this, _, window, cx| {
+                                            let Some(state) =
+                                                this.active_transfer_editor_tab_mut()
+                                            else {
+                                                return;
+                                            };
+                                            state.loading = true;
+                                            state.error = None;
+                                            state.conflict = false;
+                                            state.reload_confirm = false;
+                                            let session_id = state.session_id.clone();
+                                            let remote_path = state.remote_path.clone();
+                                            this.start_sftp_editor_load_job(
+                                                session_id,
+                                                remote_path,
+                                                window,
+                                                cx,
+                                            );
+                                        }),
+                                    )),
+                            ))
+                        },
+                    )
                     .when(tabs_menu_open, |this| this.child(tabs_menu)),
             )
     }
+}
+
+fn transfer_editor_alert_dialog(
+    palette: crate::theme::ThemePalette,
+    id: &'static str,
+    width: f32,
+    title: &'static str,
+    description: &'static str,
+    actions: impl IntoElement,
+) -> impl IntoElement {
+    div()
+        .id(SharedString::from(format!("{id}-backdrop")))
+        .absolute()
+        .inset_0()
+        .bg(rgba(0x00000099))
+        .flex()
+        .items_center()
+        .justify_center()
+        .p_3()
+        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+        .on_click(|_, _, cx| cx.stop_propagation())
+        .child(
+            div()
+                .id(SharedString::from(id))
+                .w(px(width))
+                .max_w_full()
+                .rounded_md()
+                .border_1()
+                .border_color(rgb(palette.border))
+                .bg(rgb(palette.surface_elevated))
+                .shadow_lg()
+                .p_6()
+                .flex()
+                .flex_col()
+                .gap_4()
+                .child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap_1()
+                        .child(
+                            div()
+                                .text_sm()
+                                .font_weight(FontWeight(700.))
+                                .text_color(rgb(palette.text))
+                                .child(title),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .line_height(px(18.))
+                                .text_color(rgb(palette.text_muted))
+                                .child(description),
+                        ),
+                )
+                .child(actions),
+        )
 }

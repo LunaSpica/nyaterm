@@ -165,6 +165,20 @@ impl NyaTermApp {
         cx.notify();
     }
 
+    pub(in crate::features) fn cancel_transfer_editor_conflict(&mut self, cx: &mut Context<Self>) {
+        let Some(state) = self
+            .transfer_editor
+            .as_mut()
+            .and_then(TransferEditorWorkspaceState::active_tab_mut)
+        else {
+            cx.notify();
+            return;
+        };
+        state.conflict = false;
+        self.terminal_status = "remote editor conflict dismissed".to_string();
+        cx.notify();
+    }
+
     pub(in crate::features) fn start_sftp_editor_load_job(
         &mut self,
         session_id: Option<String>,
