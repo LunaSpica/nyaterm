@@ -55,6 +55,10 @@ pub(in crate::features) struct TerminalRuntimeUiState {
     pub terminal_user_scroll_idle_notify_armed: bool,
     /// After connect success, demote idle/visual work until this time (no faster tick).
     pub connect_settle_until: Option<Instant>,
+    /// A short post-input pump task is armed to drain echo output/frame events.
+    pub terminal_input_wake_armed: bool,
+    /// Incremented on every user input write so an armed wake can extend itself.
+    pub terminal_input_wake_generation: u64,
     /// Last full-shell cx.notify from the runtime tick (paint throttle).
     pub last_ui_notify_at: Option<Instant>,
     /// A visual update was deferred by paint throttle and still needs a notify.
@@ -173,6 +177,8 @@ impl Default for TerminalRuntimeUiState {
             pending_terminal_user_scroll_idle_sessions: HashSet::new(),
             terminal_user_scroll_idle_notify_armed: false,
             connect_settle_until: None,
+            terminal_input_wake_armed: false,
+            terminal_input_wake_generation: 0,
             last_ui_notify_at: None,
             pending_ui_notify: false,
             full_shell_paint_count: 0,

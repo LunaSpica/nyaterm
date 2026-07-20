@@ -13,6 +13,12 @@ mod session_events;
 
 use helpers::*;
 
+const TERMINAL_INPUT_WAKE_DELAYS: [Duration; 3] = [
+    Duration::from_millis(4),
+    Duration::from_millis(12),
+    Duration::from_millis(24),
+];
+
 impl NyaTermApp {
     pub(in crate::features) fn refresh_window_render_inputs(
         &mut self,
@@ -40,6 +46,53 @@ impl NyaTermApp {
     pub(in crate::features) fn mark_user_activity(&mut self) {
         if !self.is_locked {
             self.last_user_activity_at = Instant::now();
+        }
+    }
+
+    pub(in crate::features) fn arm_terminal_input_wake(&mut self, cx: &mut Context<Self>) {
+        self.terminal_runtime.terminal_input_wake_generation = self
+            .terminal_runtime
+            .terminal_input_wake_generation
+            .saturating_add(1);
+        if self.terminal_runtime.terminal_input_wake_armed {
+            return;
+        }
+        self.terminal_runtime.terminal_input_wake_armed = true;
+        let mut observed_generation = self.terminal_runtime.terminal_input_wake_generation;
+        cx.spawn(async move |this, cx| {
+            loop {
+                for delay in TERMINAL_INPUT_WAKE_DELAYS {
+                    Timer::after(delay).await;
+                    let _ = this.update(cx, |this, cx| {
+                        this.drain_terminal_input_wake(cx);
+                    });
+                }
+                let (next_generation, finished) = this
+                    .update(cx, |this, _| {
+                        let next_generation = this.terminal_runtime.terminal_input_wake_generation;
+                        if next_generation == observed_generation {
+                            this.terminal_runtime.terminal_input_wake_armed = false;
+                            (next_generation, true)
+                        } else {
+                            (next_generation, false)
+                        }
+                    })
+                    .unwrap_or((observed_generation, true));
+                if finished {
+                    break;
+                }
+                observed_generation = next_generation;
+            }
+        })
+        .detach();
+    }
+
+    fn drain_terminal_input_wake(&mut self, cx: &mut Context<Self>) {
+        let chrome_dirty = self.drain_session_events(cx) | self.drain_terminal_frame_events(cx);
+        if chrome_dirty {
+            cx.notify();
+            self.terminal_runtime.last_ui_notify_at = Some(Instant::now());
+            self.terminal_runtime.pending_ui_notify = false;
         }
     }
 

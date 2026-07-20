@@ -731,11 +731,14 @@ impl NyaTermApp {
         self.record_command_history_for_sessions(&session_refs, &bytes);
         let history_duration = history_started_at.elapsed();
 
-        let should_notify = synced > 0 || failed > 0 || byte_count != 1;
+        let should_notify = synced > 0 || failed > 0;
         let notify_started_at = Instant::now();
         if should_notify {
             self.terminal_status = terminal_input_fanout_status("sent", byte_count, synced, failed);
             cx.notify();
+        }
+        if failed == 0 {
+            self.arm_terminal_input_wake(cx);
         }
         let notify_duration = notify_started_at.elapsed();
         log_slow_terminal_input_diagnostic(
@@ -844,11 +847,14 @@ impl NyaTermApp {
         self.record_command_history_for_sessions(&session_refs, &primary_bytes);
         let history_duration = history_started_at.elapsed();
 
-        let should_notify = synced > 0 || failed > 0 || byte_count != 1;
+        let should_notify = synced > 0 || failed > 0;
         let notify_started_at = Instant::now();
         if should_notify {
             self.terminal_status = terminal_input_fanout_status("sent", byte_count, synced, failed);
             cx.notify();
+        }
+        if failed == 0 {
+            self.arm_terminal_input_wake(cx);
         }
         let notify_duration = notify_started_at.elapsed();
         log_slow_terminal_input_diagnostic(
@@ -912,8 +918,10 @@ impl NyaTermApp {
                 Err(_) => failed += 1,
             }
         }
-        self.terminal_status = terminal_input_fanout_status("sent", byte_count, synced, failed);
-        cx.notify();
+        if synced > 0 || failed > 0 {
+            self.terminal_status = terminal_input_fanout_status("sent", byte_count, synced, failed);
+            cx.notify();
+        }
         failed == 0
     }
 
@@ -1465,6 +1473,7 @@ impl NyaTermApp {
             Ok(()) => {
                 self.record_command_history_from_bytes(Some(&session_id), &bytes);
                 self.terminal_status = format!("sent {} byte(s)", bytes.len());
+                self.arm_terminal_input_wake(cx);
                 true
             }
             Err(error) => {
@@ -1493,6 +1502,7 @@ impl NyaTermApp {
         let sent = match self.write_session_raw_input_recorded(&session_id, &bytes) {
             Ok(()) => {
                 self.terminal_status = format!("sent {} byte(s)", bytes.len());
+                self.arm_terminal_input_wake(cx);
                 true
             }
             Err(error) => {
