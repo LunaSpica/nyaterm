@@ -19,6 +19,10 @@ impl NyaTermApp {
         let (ai_discovery_tx, ai_discovery_rx) = mpsc::channel();
         let (ai_chat_tx, ai_chat_rx) = mpsc::channel();
         let (github_gist_auth_tx, github_gist_auth_rx) = mpsc::channel();
+        let (command_persistence_tx, command_persistence_rx) = spawn_command_persistence_worker(
+            runtime.config_dir().to_path_buf(),
+            runtime.portable_key_path().map(ToOwned::to_owned),
+        );
         let (
             connections,
             connection_groups,
@@ -367,6 +371,9 @@ impl NyaTermApp {
             quick_command_import_focus: cx.focus_handle(),
             quick_command_ai_focus: cx.focus_handle(),
             command_history,
+            command_persistence_tx,
+            command_persistence_rx,
+            command_persistence_pending: 0,
             session_command_history: HashMap::new(),
             command_search_draft: String::new(),
             command_search_focus: cx.focus_handle(),

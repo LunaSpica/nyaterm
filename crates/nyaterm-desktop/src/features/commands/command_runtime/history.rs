@@ -1,5 +1,7 @@
 use super::*;
 
+const COMMAND_PERSISTENCE_EVENT_DRAIN_LIMIT: usize = 32;
+
 impl NyaTermApp {
     pub(in crate::features) fn insert_ai_command_card(
         &mut self,
@@ -332,25 +334,85 @@ impl NyaTermApp {
                 self.record_session_command_history(session_id, command);
             }
         }
-        match ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        ) {
-            Ok(store) => {
-                for command in &submitted {
-                    if let Err(error) = store.append_command_history(command) {
-                        self.store_status.message = format!("command history save failed: {error}");
+        if self
+            .command_persistence_tx
+            .send(CommandPersistenceRequest::AppendHistory(submitted))
+            .is_ok()
+        {
+            self.command_persistence_pending = self.command_persistence_pending.saturating_add(1);
+        } else {
+            self.store_status.message = "command history worker is unavailable".to_string();
+            self.store_status.ready = false;
+        }
+    }
+
+    pub(in crate::features) fn queue_quick_command_use_count(&mut self, command_id: String) {
+        if self
+            .command_persistence_tx
+            .send(CommandPersistenceRequest::IncrementQuickCommand(
+                command_id.clone(),
+            ))
+            .is_ok()
+        {
+            if let Some(command) = self
+                .quick_commands
+                .iter_mut()
+                .find(|command| command.id == command_id)
+            {
+                command.use_count = Some(command.use_count.unwrap_or_default().saturating_add(1));
+            }
+            self.command_persistence_pending = self.command_persistence_pending.saturating_add(1);
+        } else {
+            self.store_status.message = "command persistence worker is unavailable".to_string();
+            self.store_status.ready = false;
+        }
+    }
+
+    pub(in crate::features) fn drain_command_persistence_events(&mut self) -> bool {
+        let mut dirty = false;
+        for _ in 0..COMMAND_PERSISTENCE_EVENT_DRAIN_LIMIT {
+            let event = match self.command_persistence_rx.try_recv() {
+                Ok(event) => event,
+                Err(mpsc::TryRecvError::Empty) => break,
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    if self.command_persistence_pending > 0 {
+                        self.command_persistence_pending = 0;
+                        self.store_status.message =
+                            "command persistence worker disconnected".to_string();
                         self.store_status.ready = false;
-                        return;
+                        dirty = true;
+                    }
+                    break;
+                }
+            };
+            self.command_persistence_pending = self.command_persistence_pending.saturating_sub(1);
+            dirty = true;
+            match event {
+                CommandPersistenceResult::History(Ok(history)) => {
+                    self.command_history = history;
+                }
+                CommandPersistenceResult::History(Err(error)) => {
+                    self.store_status.message = format!("command history save failed: {error}");
+                    self.store_status.ready = false;
+                }
+                CommandPersistenceResult::QuickCommandUseCount { command_id, result } => {
+                    if let Err(error) = result {
+                        if let Some(command) = self
+                            .quick_commands
+                            .iter_mut()
+                            .find(|command| command.id == command_id)
+                        {
+                            command.use_count =
+                                Some(command.use_count.unwrap_or_default().saturating_sub(1));
+                        }
+                        self.store_status.message =
+                            format!("quick command use count update failed: {error}");
+                        self.store_status.ready = false;
                     }
                 }
-                self.command_history = store.list_command_history(64).unwrap_or_default();
-            }
-            Err(error) => {
-                self.store_status.message = format!("command history store failed: {error}");
-                self.store_status.ready = false;
             }
         }
+        dirty
     }
 
     pub(in crate::features) fn record_session_command_history(

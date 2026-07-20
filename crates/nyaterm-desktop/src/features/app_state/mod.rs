@@ -99,6 +99,9 @@ pub struct NyaTermApp {
     pub(in crate::features) quick_command_import_focus: FocusHandle,
     pub(in crate::features) quick_command_ai_focus: FocusHandle,
     pub(in crate::features) command_history: Vec<CommandHistoryEntry>,
+    pub(in crate::features) command_persistence_tx: mpsc::Sender<CommandPersistenceRequest>,
+    pub(in crate::features) command_persistence_rx: mpsc::Receiver<CommandPersistenceResult>,
+    pub(in crate::features) command_persistence_pending: usize,
     pub(in crate::features) session_command_history: HashMap<String, Vec<String>>,
     pub(in crate::features) command_search_draft: String,
     /// Inline terminal command suggestions (Tauri CommandSuggestions).

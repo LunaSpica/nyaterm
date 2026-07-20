@@ -102,6 +102,7 @@ impl NyaTermApp {
             maintenance,
             self.drain_translate_events()
                 | self.drain_update_events()
+                | self.drain_command_persistence_events()
                 | self.drain_github_gist_auth_events(cx)
         );
 
@@ -164,6 +165,7 @@ impl NyaTermApp {
             && !self.ai_chat_pending
             && self.ai_agent_loop.is_none()
             && !self.ai_discovery_pending
+            && self.command_persistence_pending == 0
         {
             dirty |= self.drive_pending_focus(window);
             // During connect settle, skip blink notifies so first frames stay free.

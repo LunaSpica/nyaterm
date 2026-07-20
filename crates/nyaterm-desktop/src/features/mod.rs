@@ -192,9 +192,10 @@ pub(in crate::features) use remote_text_editor::RemoteTextEditor;
 pub(in crate::features) use runtime_jobs::{
     ActivitySide, AiAgentBackgroundTarget, AiAgentLoopState, AiAgentStepStatus, AiAgentStepView,
     AiChatJobOutput, AiChatJobResult, AiChatWorkerEvent, AiDiscoveryJobResult, DockerJobOutput,
-    DockerJobResult, ProcessJobOutput, ProcessJobResult, SessionStartResult, SessionStartSuccess,
-    StatsJobResult, TranslateJobResult, TunnelJobOutput, TunnelJobResult, UpdateJobResult,
-    remote_job_event_matches,
+    DockerJobResult, CommandPersistenceRequest, CommandPersistenceResult, ProcessJobOutput,
+    ProcessJobResult, SessionStartResult, SessionStartSuccess, StatsJobResult, TranslateJobResult,
+    TunnelJobOutput, TunnelJobResult, UpdateJobResult, remote_job_event_matches,
+    spawn_command_persistence_worker,
 };
 pub(in crate::features) use settings_window::SettingsWindow;
 pub(in crate::features) use tab_mouse::{

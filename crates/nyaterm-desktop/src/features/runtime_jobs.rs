@@ -52,6 +52,21 @@ pub(in crate::features) struct UpdateJobResult {
 }
 
 #[derive(Debug)]
+pub(in crate::features) enum CommandPersistenceRequest {
+    AppendHistory(Vec<String>),
+    IncrementQuickCommand(String),
+}
+
+#[derive(Debug)]
+pub(in crate::features) enum CommandPersistenceResult {
+    History(Result<Vec<CommandHistoryEntry>, String>),
+    QuickCommandUseCount {
+        command_id: String,
+        result: Result<(), String>,
+    },
+}
+
+#[derive(Debug)]
 pub(in crate::features) struct DockerJobResult {
     pub(in crate::features) job_id: u64,
     pub(in crate::features) session_id: String,
@@ -214,6 +229,53 @@ pub(in crate::features) fn remote_job_event_matches(
     event_session_id: &str,
 ) -> bool {
     current_job_id == event_job_id && current_session_id == Some(event_session_id)
+}
+
+pub(in crate::features) fn spawn_command_persistence_worker(
+    config_dir: PathBuf,
+    portable_key_path: Option<PathBuf>,
+) -> (
+    mpsc::Sender<CommandPersistenceRequest>,
+    mpsc::Receiver<CommandPersistenceResult>,
+) {
+    let (request_tx, request_rx) = mpsc::channel();
+    let (result_tx, result_rx) = mpsc::channel();
+    let _ = std::thread::Builder::new()
+        .name("nyaterm-command-persistence".to_string())
+        .spawn(move || {
+            while let Ok(request) = request_rx.recv() {
+                let result = match request {
+                    CommandPersistenceRequest::AppendHistory(commands) => {
+                        CommandPersistenceResult::History(
+                            ConnectionStore::open_with_portable_key_path(
+                                &config_dir,
+                                portable_key_path.clone(),
+                            )
+                            .and_then(|store| {
+                                for command in commands {
+                                    store.append_command_history(&command)?;
+                                }
+                                store.list_command_history(64)
+                            })
+                            .map_err(|error| error.to_string()),
+                        )
+                    }
+                    CommandPersistenceRequest::IncrementQuickCommand(command_id) => {
+                        let result = ConnectionStore::open_with_portable_key_path(
+                            &config_dir,
+                            portable_key_path.clone(),
+                        )
+                        .and_then(|store| store.increment_quick_command_use_count(&command_id))
+                        .map_err(|error| error.to_string());
+                        CommandPersistenceResult::QuickCommandUseCount { command_id, result }
+                    }
+                };
+                if result_tx.send(result).is_err() {
+                    break;
+                }
+            }
+        });
+    (request_tx, result_rx)
 }
 
 #[cfg(test)]

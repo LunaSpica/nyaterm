@@ -264,18 +264,7 @@ impl NyaTermApp {
             command_text.push('\r');
         }
         let command_bytes = command_text.into_bytes();
-        if let Ok(store) = ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        ) {
-            if let Err(error) = store.increment_quick_command_use_count(&command_id) {
-                self.store_status.message =
-                    format!("quick command use count update failed: {error}");
-                self.store_status.ready = false;
-            } else {
-                self.refresh_quick_commands();
-            }
-        }
+        self.queue_quick_command_use_count(command_id);
 
         if send_to_all {
             let sessions = self
