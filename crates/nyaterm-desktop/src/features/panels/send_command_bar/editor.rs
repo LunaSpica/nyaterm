@@ -341,7 +341,7 @@ fn send_command_progress_popover(
                 .child(
                     div()
                         .h_full()
-                        .w(px((280.0 * progress_ratio).max(2.0)))
+                        .w(gpui::relative(progress_ratio.clamp(0.0, 1.0)))
                         .rounded_full()
                         .bg(rgb(0x1f6feb)),
                 ),

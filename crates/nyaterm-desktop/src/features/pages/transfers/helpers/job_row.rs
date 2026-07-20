@@ -142,7 +142,7 @@ pub(in crate::features::pages::transfers) fn transfer_job_row(
                     .child(
                         div()
                             .h_full()
-                            .w(px(220. * percent))
+                            .w(gpui::relative(percent))
                             .rounded_full()
                             .bg(rgb(palette.link)),
                     ),
