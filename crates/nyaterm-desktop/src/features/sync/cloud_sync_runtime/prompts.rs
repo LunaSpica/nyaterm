@@ -82,12 +82,6 @@ impl NyaTermApp {
         self.start_snapshot_password_prompt(kind, cx);
     }
 
-    pub(in crate::features) fn dismiss_cloud_sync_conflict(&mut self, cx: &mut Context<Self>) {
-        self.cloud_sync_conflict = None;
-        self.cloud_sync_status = "cloud sync conflict dismissed".to_string();
-        cx.notify();
-    }
-
     pub(in crate::features) fn capture_cloud_sync_conflict(
         &mut self,
         error: &CloudSyncError,

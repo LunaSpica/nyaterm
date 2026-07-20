@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::features::{dialog_action_button, format_cloud_provider};
+
 #[path = "cloud_sync/providers.rs"]
 mod providers;
 impl NyaTermApp {
@@ -160,63 +162,76 @@ impl NyaTermApp {
         div()
             .rounded_md()
             .border_1()
-            .border_color(rgb(0x8a5f1c))
-            .bg(rgb(0x1f1a10))
-            .p_3()
+            .border_color(rgba((palette.warning << 8) | 0x4d))
+            .bg(rgba((palette.warning << 8) | 0x1a))
+            .p_4()
+            .flex()
+            .flex_col()
+            .gap_3()
             .child(
                 div()
                     .flex()
-                    .items_start()
-                    .justify_between()
-                    .gap_3()
+                    .flex_col()
+                    .gap_1()
                     .child(
                         div()
-                            .min_w_0()
-                            .flex()
-                            .flex_col()
-                            .gap_1()
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .font_weight(FontWeight(700.))
-                                    .text_color(rgb(0xfacc15))
-                                    .child(self.tr("settings.syncConflictTitle")),
-                            )
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(rgb(0xe2e8f0))
-                                    .child(conflict.message),
-                            )
-                            .child(div().text_xs().text_color(rgb(palette.text_muted)).child(
-                                format!(
-                                    "{} · local {} · remote {}",
-                                    conflict.provider, local_hash, remote_revision
-                                ),
-                            )),
+                            .text_sm()
+                            .font_weight(FontWeight(700.))
+                            .text_color(rgb(palette.text))
+                            .child(self.tr("settings.syncConflictTitle")),
                     )
                     .child(
                         div()
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .child(small_button(
-                                palette,
-                                "cloud-conflict-force-pull",
-                                self.tr("settings.downloadRemoteVersion"),
-                                cx.listener(move |this, _, _, cx| {
-                                    this.prompt_cloud_sync_force_pull(provider_action, cx);
-                                }),
-                            ))
-                            .child(small_button(
-                                palette,
-                                "cloud-conflict-force-push",
-                                self.tr("settings.uploadLocalVersion"),
-                                cx.listener(move |this, _, _, cx| {
-                                    this.prompt_cloud_sync_force_push(provider_action, cx);
-                                }),
-                            )),
+                            .text_xs()
+                            .line_height(px(18.))
+                            .text_color(rgb(palette.text_muted))
+                            .child(conflict.message),
                     ),
+            )
+            .child(
+                div()
+                    .grid()
+                    .grid_cols(2)
+                    .gap_2()
+                    .child(cloud_sync_conflict_stat(
+                        palette,
+                        self.tr("settings.localSnapshot"),
+                        local_hash,
+                    ))
+                    .child(cloud_sync_conflict_stat(
+                        palette,
+                        self.tr("settings.remoteSnapshot"),
+                        remote_revision,
+                    )),
+            )
+            .child(
+                div()
+                    .text_size(px(11.))
+                    .text_color(rgb(palette.text_muted))
+                    .child(format_cloud_provider(&conflict.provider)),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .gap_2()
+                    .child(small_button(
+                        palette,
+                        "cloud-conflict-force-pull",
+                        self.tr("settings.downloadRemoteVersion"),
+                        cx.listener(move |this, _, _, cx| {
+                            this.prompt_cloud_sync_force_pull(provider_action, cx);
+                        }),
+                    ))
+                    .child(dialog_action_button(
+                        palette,
+                        "cloud-conflict-force-push",
+                        self.tr("settings.uploadLocalVersion"),
+                        false,
+                        cx.listener(move |this, _, _, cx| {
+                            this.prompt_cloud_sync_force_push(provider_action, cx);
+                        }),
+                    )),
             )
     }
 
@@ -658,6 +673,34 @@ impl NyaTermApp {
                 },
             ))
     }
+}
+
+fn cloud_sync_conflict_stat(
+    palette: crate::theme::ThemePalette,
+    label: &'static str,
+    value: String,
+) -> impl IntoElement {
+    div()
+        .min_w_0()
+        .rounded_md()
+        .border_1()
+        .border_color(rgb(palette.border))
+        .bg(rgb(palette.input))
+        .p_3()
+        .child(
+            div()
+                .text_size(px(11.))
+                .text_color(rgb(palette.text_muted))
+                .child(label),
+        )
+        .child(
+            div()
+                .mt_2()
+                .font_family(crate::features::gpui_code_font_family())
+                .text_xs()
+                .text_color(rgb(palette.text))
+                .child(value),
+        )
 }
 
 fn cloud_sync_provider_label(provider: &str) -> &'static str {

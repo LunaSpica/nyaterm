@@ -280,23 +280,16 @@ impl NyaTermApp {
                                         }
                                     }),
                                 ))
-                                .child(small_button(
+                                .child(dialog_action_button(
                                     palette,
                                     "sync-panel-force-push",
                                     self.tr("settings.uploadLocalVersion"),
+                                    false,
                                     cx.listener({
                                         let provider_action = conflict.provider_action;
                                         move |this, _, _, cx| {
                                             this.prompt_cloud_sync_force_push(provider_action, cx);
                                         }
-                                    }),
-                                ))
-                                .child(small_button(
-                                    palette,
-                                    "sync-panel-conflict-dismiss",
-                                    self.tr("common.dismiss"),
-                                    cx.listener(|this, _, _, cx| {
-                                        this.dismiss_cloud_sync_conflict(cx);
                                     }),
                                 )),
                         ),
