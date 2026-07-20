@@ -129,6 +129,7 @@ impl NyaTermApp {
             let inactive_browser_snapshot = job_session_id
                 .as_deref()
                 .filter(|session_id| self.active_session_id.as_deref() != Some(*session_id))
+                .filter(|_| transfer_event_needs_browser_context(&event.event))
                 .map(|session_id| {
                     let snapshot = self.transfer_browser_event_snapshot();
                     self.load_transfer_browser_event_session(session_id);
@@ -857,6 +858,10 @@ fn transfer_event_paths_match(left: &str, right: &str) -> bool {
     transfer_event_normalized_path(left) == transfer_event_normalized_path(right)
 }
 
+fn transfer_event_needs_browser_context(event: &TransferJobEvent) -> bool {
+    matches!(event, TransferJobEvent::Finished(_))
+}
+
 fn transfer_event_remote_parent_path(path: &str) -> String {
     let trimmed = path.trim_end_matches('/');
     if trimmed.is_empty() || trimmed == "/" {
@@ -923,6 +928,32 @@ mod tests {
             &latest_jobs,
             None,
             "unrelated-job"
+        ));
+    }
+
+    #[test]
+    fn transfer_progress_does_not_swap_inactive_browser_context() {
+        assert!(!transfer_event_needs_browser_context(
+            &TransferJobEvent::Progress(SftpTransferProgress {
+                remote_path: "/tmp/file".to_string(),
+                local_path: PathBuf::from("/tmp/file"),
+                bytes_transferred: 1,
+                total_bytes: Some(2),
+                item_count_completed: None,
+                item_count_total: None,
+            },)
+        ));
+        assert!(transfer_event_needs_browser_context(
+            &TransferJobEvent::Finished(Ok(TransferJobOutput::Uploaded {
+                summary: nyaterm_transport::SftpTransferSummary {
+                    remote_path: "/tmp/file".to_string(),
+                    local_path: PathBuf::from("/tmp/file"),
+                    bytes: 2,
+                    skipped: false,
+                },
+                parent_path: "/tmp".to_string(),
+                entries: Vec::new(),
+            }))
         ));
     }
 }
