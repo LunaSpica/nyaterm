@@ -103,7 +103,6 @@ impl NyaTermApp {
             let Ok(event) = self.transfer_rx.try_recv() else {
                 break;
             };
-            dirty = true;
             let Some(job_index) = self
                 .transfer_jobs
                 .iter()
@@ -126,6 +125,11 @@ impl NyaTermApp {
                 self.transfer_jobs.remove(job_index);
                 continue;
             }
+            dirty |= transfer_event_needs_ui_refresh(
+                self.active_session_id.as_deref(),
+                job_session_id.as_deref(),
+                &event.event,
+            );
             let inactive_browser_snapshot = job_session_id
                 .as_deref()
                 .filter(|session_id| self.active_session_id.as_deref() != Some(*session_id))
@@ -862,6 +866,14 @@ fn transfer_event_needs_browser_context(event: &TransferJobEvent) -> bool {
     matches!(event, TransferJobEvent::Finished(_))
 }
 
+fn transfer_event_needs_ui_refresh(
+    active_session_id: Option<&str>,
+    job_session_id: Option<&str>,
+    event: &TransferJobEvent,
+) -> bool {
+    !matches!(event, TransferJobEvent::Progress(_)) || job_session_id == active_session_id
+}
+
 fn transfer_event_remote_parent_path(path: &str) -> String {
     let trimmed = path.trim_end_matches('/');
     if trimmed.is_empty() || trimmed == "/" {
@@ -954,6 +966,34 @@ mod tests {
                 parent_path: "/tmp".to_string(),
                 entries: Vec::new(),
             }))
+        ));
+    }
+
+    #[test]
+    fn inactive_transfer_progress_does_not_request_ui_refresh() {
+        let progress = TransferJobEvent::Progress(SftpTransferProgress {
+            remote_path: "/tmp/file".to_string(),
+            local_path: PathBuf::from("/tmp/file"),
+            bytes_transferred: 1,
+            total_bytes: Some(2),
+            item_count_completed: None,
+            item_count_total: None,
+        });
+
+        assert!(transfer_event_needs_ui_refresh(
+            Some("session-a"),
+            Some("session-a"),
+            &progress,
+        ));
+        assert!(!transfer_event_needs_ui_refresh(
+            Some("session-a"),
+            Some("session-b"),
+            &progress,
+        ));
+        assert!(transfer_event_needs_ui_refresh(
+            Some("session-a"),
+            Some("session-b"),
+            &TransferJobEvent::Finished(Err("failed".to_string())),
         ));
     }
 }
