@@ -109,7 +109,7 @@ impl NyaTermApp {
 
         match result {
             Ok(label) => {
-                self.refresh_ai_usage_counts();
+                self.refresh_ai_usage_counts(cx);
                 self.refresh_quick_commands();
                 self.ai_status = format!("Saved AI command card '{}' to Quick Commands", label);
                 self.store_status.message = self.ai_status.clone();

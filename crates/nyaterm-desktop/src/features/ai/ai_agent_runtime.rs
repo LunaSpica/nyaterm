@@ -125,37 +125,48 @@ impl NyaTermApp {
         card: &AiCommandCard,
         execute: bool,
         inserted_to_terminal: bool,
+        cx: &mut Context<Self>,
     ) {
-        match ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        )
-        .and_then(|store| {
-            store
-                .append_ai_audit(AppendAiAuditRequest {
-                    connection_id: self.ai_effective_target_session_id(),
-                    action: if execute {
-                        "ai.command_card_run".to_string()
-                    } else {
-                        "ai.command_card_insert".to_string()
-                    },
-                    user_input: Some(self.ai_response_preview.clone()),
-                    generated_command: Some(card.command.clone()),
-                    risk_level: card.risk_level.clone(),
-                    inserted_to_terminal,
-                    executed: execute,
-                    blocked: false,
-                })
+        let config_dir = self.runtime.config_dir().to_path_buf();
+        let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
+        let write_lock = Arc::clone(&self.ai_audit_write_lock);
+        let request = AppendAiAuditRequest {
+            connection_id: self.ai_effective_target_session_id(),
+            action: if execute {
+                "ai.command_card_run".to_string()
+            } else {
+                "ai.command_card_insert".to_string()
+            },
+            user_input: Some(self.ai_response_preview.clone()),
+            generated_command: Some(card.command.clone()),
+            risk_level: card.risk_level.clone(),
+            inserted_to_terminal,
+            executed: execute,
+            blocked: false,
+        };
+        let task = cx.background_spawn(async move {
+            let _guard = write_lock
+                .lock()
+                .map_err(|_| "AI audit write lock poisoned".to_string())?;
+            ConnectionStore::open_with_portable_key_path(config_dir, portable_key_path)
+                .and_then(|store| store.append_ai_audit(request))
                 .map(|_| ())
-        }) {
-            Ok(()) => {
-                self.refresh_ai_usage_counts();
+                .map_err(|error| error.to_string())
+        });
+        cx.spawn(async move |this, cx| {
+            if let Err(error) = task.await {
+                let _ = this.update(cx, |this, cx| {
+                    this.store_status.message = format!("AI audit save failed: {error}");
+                    this.store_status.ready = false;
+                    cx.notify();
+                });
+            } else {
+                let _ = this.update(cx, |this, cx| {
+                    this.refresh_ai_usage_counts(cx);
+                });
             }
-            Err(error) => {
-                self.store_status.message = format!("AI audit save failed: {error}");
-                self.store_status.ready = false;
-            }
-        }
+        })
+        .detach();
     }
 
     pub(in crate::features) fn begin_ai_agent_observation(

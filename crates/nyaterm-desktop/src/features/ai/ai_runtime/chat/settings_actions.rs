@@ -114,7 +114,7 @@ impl NyaTermApp {
         {
             Ok(saved) => {
                 self.ai_settings = saved;
-                self.refresh_ai_usage_counts();
+                self.refresh_ai_usage_counts(cx);
                 if self.ai_status.trim().is_empty() {
                     self.ai_status = "AI settings saved".to_string();
                 }

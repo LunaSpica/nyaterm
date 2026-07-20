@@ -473,8 +473,10 @@ impl NyaTermApp {
             .collect();
         let total_count = self.ai_sessions.len();
         let filtered_count = filtered.len();
-        let history_actions_disabled =
-            total_count == 0 || self.ai_chat_pending || self.ai_agent_loop.is_some();
+        let history_actions_disabled = total_count == 0
+            || self.ai_history_pending
+            || self.ai_chat_pending
+            || self.ai_agent_loop.is_some();
         let grouped = group_ai_sessions_by_date(&filtered);
         let search_display = if self.ai_history_query.is_empty() {
             "Search history...".to_string()
@@ -490,7 +492,9 @@ impl NyaTermApp {
                     .text_center()
                     .text_size(px(11.))
                     .text_color(rgb(palette.text_dimmed))
-                    .child(if total_count == 0 {
+                    .child(if self.ai_history_pending {
+                        "Loading history..."
+                    } else if total_count == 0 {
                         "No chat history yet"
                     } else {
                         "No matching history"

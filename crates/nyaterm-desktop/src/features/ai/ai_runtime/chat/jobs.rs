@@ -907,7 +907,7 @@ impl NyaTermApp {
                                 format!("AI session {} updated", event.session_id);
                             self.store_status.ready = true;
                             self.ai_prompt_draft.clear();
-                            self.refresh_ai_usage_counts();
+                            self.refresh_ai_usage_counts(cx);
                             if output.mode == AiMode::Agent {
                                 if command_count == 0 {
                                     self.ai_agent_loop = None;

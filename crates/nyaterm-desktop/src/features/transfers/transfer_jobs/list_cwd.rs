@@ -29,9 +29,12 @@ impl NyaTermApp {
         self.transfer_selected_remote_path = None;
         self.transfer_selected_remote_paths.clear();
         let id = self.next_transfer_id("sftp-list");
+        let job_session_id = self.active_session_id.clone();
+        self.transfer_browser_navigation_jobs
+            .insert(job_session_id.clone().unwrap_or_default(), id.clone());
         self.transfer_jobs.push(TransferJobState {
             id: id.clone(),
-            session_id: self.active_session_id.clone(),
+            session_id: job_session_id,
             kind: TransferJobKind::ListDir {
                 remote_path: remote_path.clone(),
                 select_after,
@@ -76,9 +79,12 @@ impl NyaTermApp {
         };
         self.transfer_auto_sync_cwd_last_at = Some(Instant::now());
         let id = self.next_transfer_id("sftp-sync-cwd");
+        let job_session_id = self.active_session_id.clone();
+        self.transfer_browser_navigation_jobs
+            .insert(job_session_id.clone().unwrap_or_default(), id.clone());
         self.transfer_jobs.push(TransferJobState {
             id: id.clone(),
-            session_id: self.active_session_id.clone(),
+            session_id: job_session_id,
             kind: TransferJobKind::SyncCwd,
             status: TransferJobStatus::Running,
             detail: "Resolving remote cwd".to_string(),

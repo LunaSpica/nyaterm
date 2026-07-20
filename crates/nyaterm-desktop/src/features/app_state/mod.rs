@@ -341,6 +341,8 @@ pub struct NyaTermApp {
     pub(in crate::features) transfer_browser_visited_history: VecDeque<String>,
     pub(in crate::features) transfer_browser_session_cache:
         HashMap<String, TransferBrowserSessionCacheState>,
+    /// Latest SFTP navigation job per session; older results must not rewind the browser.
+    pub(in crate::features) transfer_browser_navigation_jobs: HashMap<String, String>,
     pub(in crate::features) transfer_auto_sync_cwd_last_at: Option<Instant>,
     pub(in crate::features) transfer_browser_favorites: VecDeque<String>,
     pub(in crate::features) transfer_browser_sort_column: TransferBrowserSortColumn,
@@ -427,6 +429,13 @@ pub struct NyaTermApp {
     pub(in crate::features) ai_history_open: bool,
     pub(in crate::features) ai_history_query: String,
     pub(in crate::features) ai_history_search_focus: FocusHandle,
+    /// Serializes AI history storage operations and rejects stale UI results.
+    pub(in crate::features) ai_history_job_id: u64,
+    pub(in crate::features) ai_history_pending: bool,
+    /// Prevents an older full-history count scan from overwriting newer counts.
+    pub(in crate::features) ai_usage_count_job_id: u64,
+    /// Serializes background AI audit read-modify-write operations.
+    pub(in crate::features) ai_audit_write_lock: Arc<Mutex<()>>,
     pub(in crate::features) ai_clear_history_confirm_open: bool,
     pub(in crate::features) ai_clear_history_confirm_focus: FocusHandle,
     pub(in crate::features) ai_auto_execution_confirm_open: bool,

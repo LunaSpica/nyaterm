@@ -111,7 +111,21 @@ impl NyaTermApp {
             else {
                 continue;
             };
+            let event_id = event.id.clone();
             let job_session_id = self.transfer_jobs[job_index].session_id.clone();
+            let navigation_job_key = matches!(
+                &self.transfer_jobs[job_index].kind,
+                TransferJobKind::ListDir { .. } | TransferJobKind::SyncCwd
+            )
+            .then(|| job_session_id.clone().unwrap_or_default());
+            if transfer_navigation_job_is_stale(
+                &self.transfer_browser_navigation_jobs,
+                navigation_job_key.as_deref(),
+                &event_id,
+            ) {
+                self.transfer_jobs.remove(job_index);
+                continue;
+            }
             let inactive_browser_snapshot = job_session_id
                 .as_deref()
                 .filter(|session_id| self.active_session_id.as_deref() != Some(*session_id))
@@ -819,6 +833,15 @@ impl NyaTermApp {
                 }
                 self.restore_transfer_browser_event_snapshot(snapshot);
             }
+            if event_finished
+                && let Some(key) = navigation_job_key
+                && self
+                    .transfer_browser_navigation_jobs
+                    .get(&key)
+                    .is_some_and(|latest_id| latest_id == &event_id)
+            {
+                self.transfer_browser_navigation_jobs.remove(&key);
+            }
             if let Some(job_id) = cleanup_internal_job_id {
                 self.transfer_jobs.retain(|job| job.id != job_id);
             }
@@ -854,5 +877,52 @@ fn transfer_event_normalized_path(path: &str) -> String {
         "/".to_string()
     } else {
         trimmed.trim_end_matches('/').to_string()
+    }
+}
+
+fn transfer_navigation_job_is_stale(
+    latest_jobs: &HashMap<String, String>,
+    session_key: Option<&str>,
+    event_id: &str,
+) -> bool {
+    session_key.is_some_and(|key| {
+        latest_jobs
+            .get(key)
+            .is_none_or(|latest_id| latest_id != event_id)
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    #[test]
+    fn superseded_transfer_navigation_result_is_stale_per_session() {
+        let latest_jobs = HashMap::from([
+            ("session-a".to_string(), "job-a2".to_string()),
+            ("session-b".to_string(), "job-b1".to_string()),
+        ]);
+
+        assert!(transfer_navigation_job_is_stale(
+            &latest_jobs,
+            Some("session-a"),
+            "job-a1"
+        ));
+        assert!(!transfer_navigation_job_is_stale(
+            &latest_jobs,
+            Some("session-a"),
+            "job-a2"
+        ));
+        assert!(!transfer_navigation_job_is_stale(
+            &latest_jobs,
+            Some("session-b"),
+            "job-b1"
+        ));
+        assert!(!transfer_navigation_job_is_stale(
+            &latest_jobs,
+            None,
+            "unrelated-job"
+        ));
     }
 }

@@ -216,7 +216,7 @@ impl NyaTermApp {
         if should_continue_agent && self.ai_settings.agent_background_execution_enabled {
             match self.begin_ai_agent_background_execution(&card.command, cx) {
                 Ok(()) => {
-                    self.record_ai_command_card_audit(&card, true, false);
+                    self.record_ai_command_card_audit(&card, true, false, cx);
                     cx.notify();
                 }
                 Err(error) => {
@@ -265,7 +265,7 @@ impl NyaTermApp {
             command.clone().into_bytes()
         };
 
-        self.record_ai_command_card_audit(&card, execute, true);
+        self.record_ai_command_card_audit(&card, execute, true, cx);
 
         self.send_terminal_input_to_session(target_session_id, input_bytes, cx);
         self.ai_status = if should_continue_agent {
