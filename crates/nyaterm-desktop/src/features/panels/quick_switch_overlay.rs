@@ -71,12 +71,18 @@ impl NyaTermApp {
                         self.shell_surface_color(palette.hover),
                     )
                     .into_any_element(),
-                    QuickSwitchItem::Pending { .. } => status_pill(
-                        self.tr("sessionQuickSwitcher.connecting"),
-                        rgb(palette.warning),
-                        rgb(palette.hover),
-                    )
-                    .into_any_element(),
+                    QuickSwitchItem::Pending { active, .. } => {
+                        if *active {
+                            status_pill(
+                                self.tr("sessionQuickSwitcher.active"),
+                                rgb(palette.primary),
+                                rgba((palette.primary << 8) | 0x1a),
+                            )
+                            .into_any_element()
+                        } else {
+                            div().into_any_element()
+                        }
+                    }
                 };
 
                 rows = rows.child(

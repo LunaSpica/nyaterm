@@ -95,8 +95,12 @@ pub(crate) enum QuickSwitchItem {
         subtitle: String,
     },
     Pending {
+        request_id: String,
         title: String,
         subtitle: String,
+        active: bool,
+        failed: bool,
+        search_detail: Option<String>,
     },
 }
 
@@ -105,7 +109,7 @@ impl QuickSwitchItem {
         match self {
             Self::Session { id, .. } => format!("session:{id}"),
             Self::Connection { connection, .. } => format!("connection:{}", connection.id),
-            Self::Pending { title, .. } => format!("pending:{title}"),
+            Self::Pending { request_id, .. } => format!("session:{request_id}"),
         }
     }
 
@@ -144,7 +148,16 @@ impl QuickSwitchItem {
                 connection.description.clone().unwrap_or_default(),
                 connection.endpoint()
             ),
-            Self::Pending { title, subtitle } => format!("{title} {subtitle}"),
+            Self::Pending {
+                request_id,
+                title,
+                subtitle,
+                search_detail,
+                ..
+            } => format!(
+                "{title} {subtitle} {request_id} {}",
+                search_detail.as_deref().unwrap_or_default()
+            ),
         }
     }
 }

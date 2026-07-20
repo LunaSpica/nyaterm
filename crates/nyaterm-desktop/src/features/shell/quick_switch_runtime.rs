@@ -25,15 +25,9 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn quick_switch_items(&self) -> Vec<QuickSwitchItem> {
-        let mut items = Vec::new();
-        if let Some(pending_name) = self.pending_session_display_name() {
-            items.push(QuickSwitchItem::Pending {
-                title: format!("Connecting {pending_name}"),
-                subtitle: "pending SSH session".to_string(),
-            });
-        }
-
-        for session in self.ordered_sessions() {
+        let sessions = self.ordered_sessions();
+        let mut session_items = Vec::new();
+        for session in &sessions {
             let title = self.session_display_name_by_info(&session);
             let active = self.active_session_id.as_deref() == Some(session.id.as_str());
             let mut subtitle = format!(
@@ -45,13 +39,103 @@ impl NyaTermApp {
                 subtitle.push_str(" - ");
                 subtitle.push_str(&path.display().to_string());
             }
-            items.push(QuickSwitchItem::Session {
-                id: session.id,
+            session_items.push(QuickSwitchItem::Session {
+                id: session.id.clone(),
                 title,
                 subtitle,
                 active,
             });
         }
+
+        let mut transient_items = self
+            .pending_session_starts
+            .iter()
+            .filter(|(_, pending)| pending.reconnect_session_id.is_none())
+            .map(|(request_id, pending)| {
+                let insert_index = quick_switch_transient_insert_index(
+                    sessions.len(),
+                    pending.insert_index,
+                    pending.after_session_id.as_deref().and_then(|after_id| {
+                        sessions.iter().position(|session| session.id == after_id)
+                    }),
+                );
+                let title = pending
+                    .custom_name
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|name| !name.is_empty())
+                    .unwrap_or(&pending.connection_name)
+                    .to_string();
+                (
+                    insert_index,
+                    pending.requested_at,
+                    pending.connection_name.clone(),
+                    QuickSwitchItem::Pending {
+                        request_id: request_id.clone(),
+                        title,
+                        subtitle: format!(
+                            "{} - {}",
+                            self.tr("sessionQuickSwitcher.connecting"),
+                            session_kind_label(pending.kind)
+                        ),
+                        active: self.active_pending_session_start.as_deref()
+                            == Some(request_id.as_str()),
+                        failed: false,
+                        search_detail: None,
+                    },
+                )
+            })
+            .chain(
+                self.failed_session_starts
+                    .iter()
+                    .map(|(request_id, failed)| {
+                        let pending = &failed.pending;
+                        let insert_index = quick_switch_transient_insert_index(
+                            sessions.len(),
+                            pending.insert_index,
+                            pending.after_session_id.as_deref().and_then(|after_id| {
+                                sessions.iter().position(|session| session.id == after_id)
+                            }),
+                        );
+                        let title = pending
+                            .custom_name
+                            .as_deref()
+                            .map(str::trim)
+                            .filter(|name| !name.is_empty())
+                            .unwrap_or(&pending.connection_name)
+                            .to_string();
+                        (
+                            insert_index,
+                            pending.requested_at,
+                            pending.connection_name.clone(),
+                            QuickSwitchItem::Pending {
+                                request_id: request_id.clone(),
+                                title,
+                                subtitle: format!(
+                                    "{} - {}",
+                                    self.tr("terminal.connectionFailed"),
+                                    session_kind_label(pending.kind)
+                                ),
+                                active: self.active_failed_session_start.as_deref()
+                                    == Some(request_id.as_str()),
+                                failed: true,
+                                search_detail: Some(failed.error.clone()),
+                            },
+                        )
+                    }),
+            )
+            .collect::<Vec<_>>();
+        transient_items.sort_by(|left, right| {
+            left.0
+                .cmp(&right.0)
+                .then(left.1.cmp(&right.1))
+                .then(left.2.cmp(&right.2))
+        });
+        for (offset, (insert_index, _, _, item)) in transient_items.into_iter().enumerate() {
+            session_items.insert((insert_index + offset).min(session_items.len()), item);
+        }
+
+        let mut items = session_items;
 
         let mut connections = self.connections.clone();
         connections.sort_by(|left, right| {
@@ -118,8 +202,14 @@ impl NyaTermApp {
             QuickSwitchItem::Connection { connection, .. } => {
                 self.start_saved_connection(connection, window, cx);
             }
-            QuickSwitchItem::Pending { .. } => {
-                self.terminal_status = self.tr("sessionQuickSwitcher.connecting").to_string();
+            QuickSwitchItem::Pending {
+                request_id, failed, ..
+            } => {
+                if failed {
+                    self.select_failed_session_start(request_id, cx);
+                } else {
+                    self.select_pending_session_start(request_id, cx);
+                }
                 cx.notify();
             }
         }
@@ -182,5 +272,29 @@ impl NyaTermApp {
                 }
             }
         }
+    }
+}
+
+fn quick_switch_transient_insert_index(
+    session_count: usize,
+    insert_index: Option<usize>,
+    after_position: Option<usize>,
+) -> usize {
+    insert_index
+        .or_else(|| after_position.map(|position| position + 1))
+        .unwrap_or(session_count)
+        .min(session_count)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::quick_switch_transient_insert_index;
+
+    #[test]
+    fn transient_items_follow_workspace_tab_insertion_rules() {
+        assert_eq!(quick_switch_transient_insert_index(3, None, None), 3);
+        assert_eq!(quick_switch_transient_insert_index(3, None, Some(0)), 1);
+        assert_eq!(quick_switch_transient_insert_index(3, Some(2), Some(0)), 2);
+        assert_eq!(quick_switch_transient_insert_index(3, Some(99), None), 3);
     }
 }
