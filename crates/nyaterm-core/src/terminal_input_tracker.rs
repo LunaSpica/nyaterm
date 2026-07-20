@@ -372,10 +372,15 @@ pub fn get_tracked_command(state: &TerminalInputState) -> String {
 }
 
 pub fn can_suggest_from_tracker(state: &TerminalInputState) -> bool {
-    !state.desynced
-        && !state.multiline
-        && state.cursor == state.value.len()
-        && !get_tracked_command(state).is_empty()
+    can_suggest_from_tracked_command(state, &get_tracked_command(state))
+}
+
+pub fn can_suggest_from_tracked_command(state: &TerminalInputState, command: &str) -> bool {
+    !state.desynced && !state.multiline && state.cursor == state.value.len() && !command.is_empty()
+}
+
+pub fn terminal_input_tracker_below_min_chars(state: &TerminalInputState, min_chars: usize) -> bool {
+    state.value.chars().count() < min_chars.max(1)
 }
 
 pub fn can_register_command_from_tracker(state: &TerminalInputState) -> bool {
@@ -594,6 +599,22 @@ mod tests {
         assert_eq!(get_tracked_submission_command(&state), "ls");
         state = apply_terminal_input_data(&state, "\t");
         assert!(get_tracked_submission_command(&state).is_empty());
+    }
+
+    #[test]
+    fn tracker_short_input_stays_below_suggestion_threshold() {
+        let mut state = TerminalInputState::new();
+        state = apply_terminal_input_data(&state, "g");
+        assert!(terminal_input_tracker_below_min_chars(&state, 2));
+        assert!(!terminal_input_tracker_below_min_chars(&state, 1));
+    }
+
+    #[test]
+    fn suggestible_command_can_reuse_precomputed_text() {
+        let mut state = TerminalInputState::new();
+        state = apply_terminal_input_data(&state, "git");
+        let command = get_tracked_command(&state);
+        assert!(can_suggest_from_tracked_command(&state, &command));
     }
 
     #[test]

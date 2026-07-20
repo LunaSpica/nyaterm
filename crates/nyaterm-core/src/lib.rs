@@ -111,9 +111,10 @@ pub use terminal_input_fanout::terminal_input_fanout_status;
 pub use terminal_input_tracker::{
     InputSelectionRange, TerminalInputState, apply_terminal_input_data,
     build_move_input_cursor_data, byte_index_to_char, can_register_command_from_tracker,
-    can_suggest_from_tracker, char_index_to_byte, delete_terminal_input_range, get_tracked_command,
-    get_tracked_submission_command, resync_from_terminal_line, sanitize_terminal_command,
-    strip_terminal_command_prompt,
+    can_suggest_from_tracked_command, can_suggest_from_tracker, char_index_to_byte,
+    delete_terminal_input_range, get_tracked_command, get_tracked_submission_command,
+    resync_from_terminal_line, sanitize_terminal_command, strip_terminal_command_prompt,
+    terminal_input_tracker_below_min_chars,
 };
 pub use terminal_mouse::{TerminalMouseReportEligibility, terminal_mouse_report_should_send};
 pub use terminal_resize::{

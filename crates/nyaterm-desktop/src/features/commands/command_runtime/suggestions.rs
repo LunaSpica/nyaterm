@@ -98,7 +98,11 @@ impl NyaTermApp {
             return;
         }
 
-        if is_pager_search_or_command_input(&get_tracked_command(&self.command_input_tracker)) {
+        let min_chars = self
+            .settings
+            .interaction_command_suggestion_min_chars
+            .max(1) as usize;
+        if terminal_input_tracker_below_min_chars(&self.command_input_tracker, min_chars) {
             self.command_suggestion_search_gen =
                 self.command_suggestion_search_gen.saturating_add(1);
             if self.command_suggestions.take().is_some() {
@@ -107,7 +111,17 @@ impl NyaTermApp {
             return;
         }
 
-        if !can_suggest_from_tracker(&self.command_input_tracker) {
+        let pattern = get_tracked_command(&self.command_input_tracker);
+        if is_pager_search_or_command_input(&pattern) {
+            self.command_suggestion_search_gen =
+                self.command_suggestion_search_gen.saturating_add(1);
+            if self.command_suggestions.take().is_some() {
+                cx.notify();
+            }
+            return;
+        }
+
+        if !can_suggest_from_tracked_command(&self.command_input_tracker, &pattern) {
             self.command_suggestion_search_gen =
                 self.command_suggestion_search_gen.saturating_add(1);
             if self.command_suggestions.take().is_some() {
@@ -169,7 +183,6 @@ impl NyaTermApp {
             self.hide_command_suggestions_if_present(cx);
             return;
         }
-        let pattern = get_tracked_command(&self.command_input_tracker);
         let min_chars = self
             .settings
             .interaction_command_suggestion_min_chars
@@ -178,6 +191,7 @@ impl NyaTermApp {
             .settings
             .interaction_command_suggestion_max_chars
             .max(min_chars as u32) as usize;
+        let pattern = get_tracked_command(&self.command_input_tracker);
         if pattern.chars().count() < min_chars {
             self.hide_command_suggestions_if_present(cx);
             return;
