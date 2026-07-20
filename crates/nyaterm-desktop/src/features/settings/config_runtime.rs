@@ -17,14 +17,19 @@ impl NyaTermApp {
         self.store_status.message = "selecting backup destination".to_string();
         cx.spawn(async move |this, cx| {
             let result = match receiver.await {
-                Ok(Ok(Some(path))) => match ConnectionStore::export_config_database(
-                    &config_dir,
-                    portable_key_path,
-                    &path,
-                ) {
-                    Ok(info) => ConfigPathPromptResult::Exported(info),
-                    Err(error) => ConfigPathPromptResult::Failed(error.to_string()),
-                },
+                Ok(Ok(Some(path))) => {
+                    cx.background_spawn(async move {
+                        match ConnectionStore::export_config_database(
+                            &config_dir,
+                            portable_key_path,
+                            &path,
+                        ) {
+                            Ok(info) => ConfigPathPromptResult::Exported(info),
+                            Err(error) => ConfigPathPromptResult::Failed(error.to_string()),
+                        }
+                    })
+                    .await
+                }
                 Ok(Ok(None)) => ConfigPathPromptResult::Cancelled,
                 Ok(Err(error)) => ConfigPathPromptResult::Failed(error.to_string()),
                 Err(_) => ConfigPathPromptResult::Closed,
@@ -54,16 +59,21 @@ impl NyaTermApp {
         self.store_status.message = "selecting .nya export destination".to_string();
         cx.spawn(async move |this, cx| {
             let result = match receiver.await {
-                Ok(Ok(Some(path))) => match ConnectionStore::export_portable_snapshot(
-                    &config_dir,
-                    portable_key_path,
-                    &path,
-                    "native-local",
-                    env!("CARGO_PKG_VERSION"),
-                ) {
-                    Ok(info) => ConfigPathPromptResult::Exported(info),
-                    Err(error) => ConfigPathPromptResult::Failed(error.to_string()),
-                },
+                Ok(Ok(Some(path))) => {
+                    cx.background_spawn(async move {
+                        match ConnectionStore::export_portable_snapshot(
+                            &config_dir,
+                            portable_key_path,
+                            &path,
+                            "native-local",
+                            env!("CARGO_PKG_VERSION"),
+                        ) {
+                            Ok(info) => ConfigPathPromptResult::Exported(info),
+                            Err(error) => ConfigPathPromptResult::Failed(error.to_string()),
+                        }
+                    })
+                    .await
+                }
                 Ok(Ok(None)) => ConfigPathPromptResult::Cancelled,
                 Ok(Err(error)) => ConfigPathPromptResult::Failed(error.to_string()),
                 Err(_) => ConfigPathPromptResult::Closed,
@@ -114,14 +124,19 @@ impl NyaTermApp {
         cx.spawn(async move |this, cx| {
             let result = match receiver.await {
                 Ok(Ok(Some(paths))) => match paths.into_iter().next() {
-                    Some(path) => match ConnectionStore::import_config_database(
-                        &config_dir,
-                        portable_key_path,
-                        &path,
-                    ) {
-                        Ok(info) => ConfigPathPromptResult::Imported(info),
-                        Err(error) => ConfigPathPromptResult::Failed(error.to_string()),
-                    },
+                    Some(path) => {
+                        cx.background_spawn(async move {
+                            match ConnectionStore::import_config_database(
+                                &config_dir,
+                                portable_key_path,
+                                &path,
+                            ) {
+                                Ok(info) => ConfigPathPromptResult::Imported(info),
+                                Err(error) => ConfigPathPromptResult::Failed(error.to_string()),
+                            }
+                        })
+                        .await
+                    }
                     None => ConfigPathPromptResult::Cancelled,
                 },
                 Ok(Ok(None)) => ConfigPathPromptResult::Cancelled,
@@ -167,14 +182,19 @@ impl NyaTermApp {
         cx.spawn(async move |this, cx| {
             let result = match receiver.await {
                 Ok(Ok(Some(paths))) => match paths.into_iter().next() {
-                    Some(path) => match ConnectionStore::import_portable_snapshot(
-                        &config_dir,
-                        portable_key_path,
-                        &path,
-                    ) {
-                        Ok(info) => ConfigPathPromptResult::Imported(info),
-                        Err(error) => ConfigPathPromptResult::Failed(error.to_string()),
-                    },
+                    Some(path) => {
+                        cx.background_spawn(async move {
+                            match ConnectionStore::import_portable_snapshot(
+                                &config_dir,
+                                portable_key_path,
+                                &path,
+                            ) {
+                                Ok(info) => ConfigPathPromptResult::Imported(info),
+                                Err(error) => ConfigPathPromptResult::Failed(error.to_string()),
+                            }
+                        })
+                        .await
+                    }
                     None => ConfigPathPromptResult::Cancelled,
                 },
                 Ok(Ok(None)) => ConfigPathPromptResult::Cancelled,
@@ -389,17 +409,22 @@ impl NyaTermApp {
         self.store_status.message = "selecting encrypted .nya export destination".to_string();
         cx.spawn(async move |this, cx| {
             let result = match receiver.await {
-                Ok(Ok(Some(path))) => match ConnectionStore::export_encrypted_portable_snapshot(
-                    &config_dir,
-                    portable_key_path,
-                    &path,
-                    "native-local",
-                    env!("CARGO_PKG_VERSION"),
-                    &master_password,
-                ) {
-                    Ok(info) => ConfigPathPromptResult::Exported(info),
-                    Err(error) => ConfigPathPromptResult::Failed(error.to_string()),
-                },
+                Ok(Ok(Some(path))) => {
+                    cx.background_spawn(async move {
+                        match ConnectionStore::export_encrypted_portable_snapshot(
+                            &config_dir,
+                            portable_key_path,
+                            &path,
+                            "native-local",
+                            env!("CARGO_PKG_VERSION"),
+                            &master_password,
+                        ) {
+                            Ok(info) => ConfigPathPromptResult::Exported(info),
+                            Err(error) => ConfigPathPromptResult::Failed(error.to_string()),
+                        }
+                    })
+                    .await
+                }
                 Ok(Ok(None)) => ConfigPathPromptResult::Cancelled,
                 Ok(Err(error)) => ConfigPathPromptResult::Failed(error.to_string()),
                 Err(_) => ConfigPathPromptResult::Closed,
@@ -436,15 +461,20 @@ impl NyaTermApp {
         cx.spawn(async move |this, cx| {
             let result = match receiver.await {
                 Ok(Ok(Some(paths))) => match paths.into_iter().next() {
-                    Some(path) => match ConnectionStore::import_encrypted_portable_snapshot(
-                        &config_dir,
-                        portable_key_path,
-                        &path,
-                        &master_password,
-                    ) {
-                        Ok(info) => ConfigPathPromptResult::Imported(info),
-                        Err(error) => ConfigPathPromptResult::Failed(error.to_string()),
-                    },
+                    Some(path) => {
+                        cx.background_spawn(async move {
+                            match ConnectionStore::import_encrypted_portable_snapshot(
+                                &config_dir,
+                                portable_key_path,
+                                &path,
+                                &master_password,
+                            ) {
+                                Ok(info) => ConfigPathPromptResult::Imported(info),
+                                Err(error) => ConfigPathPromptResult::Failed(error.to_string()),
+                            }
+                        })
+                        .await
+                    }
                     None => ConfigPathPromptResult::Cancelled,
                 },
                 Ok(Ok(None)) => ConfigPathPromptResult::Cancelled,

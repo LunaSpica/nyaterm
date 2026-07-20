@@ -273,7 +273,7 @@ impl NyaTermApp {
         } else {
             validation_key.map(|key| self.tr(key))
         };
-        let actions_busy = cloud_snapshot_prompt.is_some();
+        let actions_busy = cloud_snapshot_prompt.is_some() || self.cloud_sync_job_running;
         let can_run_actions = action_block_message.is_none() && !actions_busy;
         let can_run_enabled_actions = can_run_actions && self.cloud_sync_settings.enabled;
         let sync_state_key = cloud_sync_state_i18n_key(

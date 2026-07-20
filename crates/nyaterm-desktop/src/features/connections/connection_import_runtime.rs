@@ -93,16 +93,21 @@ impl NyaTermApp {
         cx.spawn(async move |this, cx| {
             let result = match receiver.await {
                 Ok(Ok(Some(paths))) => match paths.into_iter().next() {
-                    Some(path) => match ConnectionStore::open_with_portable_key_path(
-                        &config_dir,
-                        portable_key_path,
-                    ) {
-                        Ok(store) => match nyaterm_core::import_sessions(&store, &path) {
-                            Ok(count) => ConnectionImportResult::Imported(count),
-                            Err(error) => ConnectionImportResult::Failed(error.to_string()),
-                        },
-                        Err(error) => ConnectionImportResult::Failed(error.to_string()),
-                    },
+                    Some(path) => {
+                        cx.background_spawn(async move {
+                            match ConnectionStore::open_with_portable_key_path(
+                                &config_dir,
+                                portable_key_path,
+                            ) {
+                                Ok(store) => match nyaterm_core::import_sessions(&store, &path) {
+                                    Ok(count) => ConnectionImportResult::Imported(count),
+                                    Err(error) => ConnectionImportResult::Failed(error.to_string()),
+                                },
+                                Err(error) => ConnectionImportResult::Failed(error.to_string()),
+                            }
+                        })
+                        .await
+                    }
                     None => ConnectionImportResult::Cancelled,
                 },
                 Ok(Ok(None)) => ConnectionImportResult::Cancelled,

@@ -61,21 +61,26 @@ impl NyaTermApp {
         cx.spawn(async move |this, cx| {
             let result = match receiver.await {
                 Ok(Ok(Some(paths))) => match paths.into_iter().next() {
-                    Some(path) => match import_quick_commands_from_path(
-                        &config_dir,
-                        portable_key_path.clone(),
-                        kind,
-                        &path,
-                    ) {
-                        Ok(summary) => QuickCommandImportPathPromptResult::Imported {
-                            imported_commands: summary.imported_commands,
-                            imported_categories: summary.imported_categories,
-                            updated_commands: summary.updated_commands,
-                            total_commands: summary.total_commands,
-                            total_categories: summary.total_categories,
-                        },
-                        Err(error) => QuickCommandImportPathPromptResult::Failed(error),
-                    },
+                    Some(path) => {
+                        cx.background_spawn(async move {
+                            match import_quick_commands_from_path(
+                                &config_dir,
+                                portable_key_path,
+                                kind,
+                                &path,
+                            ) {
+                                Ok(summary) => QuickCommandImportPathPromptResult::Imported {
+                                    imported_commands: summary.imported_commands,
+                                    imported_categories: summary.imported_categories,
+                                    updated_commands: summary.updated_commands,
+                                    total_commands: summary.total_commands,
+                                    total_categories: summary.total_categories,
+                                },
+                                Err(error) => QuickCommandImportPathPromptResult::Failed(error),
+                            }
+                        })
+                        .await
+                    }
                     None => QuickCommandImportPathPromptResult::Cancelled,
                 },
                 Ok(Ok(None)) => QuickCommandImportPathPromptResult::Cancelled,

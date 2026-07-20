@@ -584,7 +584,7 @@ impl NyaTermApp {
             && !connect_settle
             && let Some((session_id, session_name)) = self.pending_auto_recording_session.take()
         {
-            self.maybe_auto_start_recording(&session_id, &session_name);
+            self.maybe_auto_start_recording(&session_id, &session_name, cx);
         }
 
         let stage_started_at = Instant::now();

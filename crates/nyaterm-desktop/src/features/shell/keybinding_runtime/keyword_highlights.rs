@@ -67,24 +67,31 @@ impl NyaTermApp {
         cx.spawn(async move |this, cx| {
             let result = match receiver.await {
                 Ok(Ok(Some(paths))) => match paths.into_iter().next() {
-                    Some(path) => match read_keyword_highlight_import_text(&path) {
-                        Ok(raw) => match ConnectionStore::open_with_portable_key_path(
-                            &config_dir,
-                            portable_key_path.clone(),
-                        )
-                        .and_then(|store| store.import_keyword_highlights_json(&raw))
-                        {
-                            Ok((_, result)) => KeywordHighlightPathPromptResult::Imported {
-                                imported_rules: result.imported_rules,
-                                updated_rules: result.updated_rules,
-                                total_rules: result.total_rules,
-                            },
-                            Err(error) => {
-                                KeywordHighlightPathPromptResult::Failed(error.to_string())
+                    Some(path) => {
+                        cx.background_spawn(async move {
+                            match read_keyword_highlight_import_text(&path) {
+                                Ok(raw) => match ConnectionStore::open_with_portable_key_path(
+                                    &config_dir,
+                                    portable_key_path,
+                                )
+                                .and_then(|store| store.import_keyword_highlights_json(&raw))
+                                {
+                                    Ok((_, result)) => KeywordHighlightPathPromptResult::Imported {
+                                        imported_rules: result.imported_rules,
+                                        updated_rules: result.updated_rules,
+                                        total_rules: result.total_rules,
+                                    },
+                                    Err(error) => {
+                                        KeywordHighlightPathPromptResult::Failed(error.to_string())
+                                    }
+                                },
+                                Err(error) => {
+                                    KeywordHighlightPathPromptResult::Failed(error.to_string())
+                                }
                             }
-                        },
-                        Err(error) => KeywordHighlightPathPromptResult::Failed(error.to_string()),
-                    },
+                        })
+                        .await
+                    }
                     None => KeywordHighlightPathPromptResult::Cancelled,
                 },
                 Ok(Ok(None)) => KeywordHighlightPathPromptResult::Cancelled,

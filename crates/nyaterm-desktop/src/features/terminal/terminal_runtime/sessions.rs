@@ -65,8 +65,7 @@ impl NyaTermApp {
                 }
                 Err(_) => {}
             }
-            self.recording_write_pipeline
-                .cleanup_session(close_id.clone());
+            self.cleanup_recording_for_session(close_id);
             self.remove_session_state(close_id);
         }
         self.prune_workspace_split();
@@ -111,8 +110,7 @@ impl NyaTermApp {
         for session_id in session_ids {
             match self.session_manager.close(&session_id) {
                 Ok(()) => {
-                    self.recording_write_pipeline
-                        .cleanup_session(session_id.clone());
+                    self.cleanup_recording_for_session(&session_id);
                     self.remove_session_state(&session_id);
                     closed += 1;
                 }

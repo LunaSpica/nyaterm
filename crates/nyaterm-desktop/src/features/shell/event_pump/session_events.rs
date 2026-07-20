@@ -337,8 +337,7 @@ impl NyaTermApp {
         self.clear_trzsz_session(&session_id);
         self.clear_zmodem_session(&session_id);
         self.session_event_bridge.clear_session(&session_id);
-        self.recording_write_pipeline
-            .cleanup_session(session_id.clone());
+        self.cleanup_recording_for_session(&session_id);
         let _ = self.session_manager.close(&session_id);
         if known_session {
             // Keep the tab so the user can reconnect (Tauri disconnected pane).

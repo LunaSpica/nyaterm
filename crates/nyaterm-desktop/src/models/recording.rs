@@ -78,17 +78,6 @@ impl RecordingWritePipeline {
         }
     }
 
-    pub(crate) fn flush(&self) {
-        let (ack_tx, ack_rx) = mpsc::sync_channel(0);
-        if self
-            .command_tx
-            .send(RecordingWriteCommand::Flush { ack_tx })
-            .is_ok()
-        {
-            let _ = ack_rx.recv();
-        }
-    }
-
     pub(crate) fn writer(&self) -> RecordingWriteHandle {
         RecordingWriteHandle {
             command_tx: self.command_tx.clone(),
@@ -106,6 +95,17 @@ impl RecordingWriteHandle {
             session_id: session_id.into(),
             text,
         });
+    }
+
+    pub(crate) fn flush(&self) {
+        let (ack_tx, ack_rx) = mpsc::sync_channel(0);
+        if self
+            .command_tx
+            .send(RecordingWriteCommand::Flush { ack_tx })
+            .is_ok()
+        {
+            let _ = ack_rx.recv();
+        }
     }
 }
 
@@ -208,7 +208,7 @@ mod tests {
         let session_id = "session-a";
         pipeline.write_input(session_id, b"echo hello\r".to_vec());
         pipeline.write_output(session_id, "hello\n");
-        pipeline.flush();
+        pipeline.writer().flush();
 
         let results = manager
             .search_history(nyaterm_transport::TerminalHistorySearchRequest {
@@ -240,7 +240,7 @@ mod tests {
 
         pipeline.write_output(session_id, "before cleanup\n");
         pipeline.cleanup_session(session_id);
-        pipeline.flush();
+        pipeline.writer().flush();
 
         let text = fs::read_to_string(&path).expect("recording file should exist");
         assert!(text.contains("before cleanup"));
@@ -266,7 +266,7 @@ mod tests {
 
         pipeline.write_output(session_id, "queued history line\n");
         pipeline.request_history_search(key.clone());
-        pipeline.flush();
+        pipeline.writer().flush();
 
         let event = pipeline
             .try_recv_event()

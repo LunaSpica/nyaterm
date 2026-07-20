@@ -19,9 +19,13 @@ impl NyaTermApp {
                 Ok(Ok(Some(paths))) => paths.into_iter().next(),
                 _ => None,
             };
-            let result = selected
-                .map(|path| decode_security_otp_qr(&path))
-                .transpose();
+            let result = match selected {
+                Some(path) => {
+                    cx.background_spawn(async move { decode_security_otp_qr(&path).map(Some) })
+                        .await
+                }
+                None => Ok(None),
+            };
             let _ = this.update(cx, |this, cx| {
                 this.security_otp_qr_importing = false;
                 match result {

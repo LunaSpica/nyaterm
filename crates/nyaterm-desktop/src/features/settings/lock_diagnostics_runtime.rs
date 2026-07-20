@@ -123,10 +123,15 @@ impl NyaTermApp {
         self.terminal_status = "selecting diagnostics export destination".to_string();
         cx.spawn(async move |this, cx| {
             let result = match receiver.await {
-                Ok(Ok(Some(path))) => match export_diagnostics_archive(&runtime, &options, &path) {
-                    Ok(info) => DiagnosticsPathPromptResult::Exported(info),
-                    Err(error) => DiagnosticsPathPromptResult::Failed(error.to_string()),
-                },
+                Ok(Ok(Some(path))) => {
+                    cx.background_spawn(async move {
+                        match export_diagnostics_archive(&runtime, &options, &path) {
+                            Ok(info) => DiagnosticsPathPromptResult::Exported(info),
+                            Err(error) => DiagnosticsPathPromptResult::Failed(error.to_string()),
+                        }
+                    })
+                    .await
+                }
                 Ok(Ok(None)) => DiagnosticsPathPromptResult::Cancelled,
                 Ok(Err(error)) => DiagnosticsPathPromptResult::Failed(error.to_string()),
                 Err(_) => DiagnosticsPathPromptResult::Closed,

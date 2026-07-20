@@ -203,8 +203,7 @@ impl NyaTermApp {
         self.active_session_menu = None;
         // Backend may already be gone (race with Exited); still mark disconnected.
         let _ = self.session_manager.close(&session_id);
-        self.recording_write_pipeline
-            .cleanup_session(session_id.clone());
+        self.cleanup_recording_for_session(&session_id);
         self.mark_session_disconnected(&session_id, cx);
         self.active_session_busy_actions.remove(&session_id);
         self.terminal_status = format!("disconnected {}", short_id(&session_id));
@@ -325,8 +324,7 @@ impl NyaTermApp {
 
         // Close live backend if still present.
         let _ = self.session_manager.close(&old_id);
-        self.recording_write_pipeline
-            .cleanup_session(old_id.clone());
+        self.cleanup_recording_for_session(&old_id);
         self.clear_terminal_mouse_report_for_session(&old_id);
         let Some(metadata) = self.session_metadata.get_mut(&old_id) else {
             self.active_session_busy_actions.remove(&old_id);

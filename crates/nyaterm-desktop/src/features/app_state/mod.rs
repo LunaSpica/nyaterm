@@ -388,6 +388,8 @@ pub struct NyaTermApp {
     pub(in crate::features) cloud_sync_conflict: Option<CloudSyncConflictState>,
     pub(in crate::features) cloud_sync_secret_draft: CloudSyncSecretDraft,
     pub(in crate::features) cloud_sync_status: String,
+    /// Prevent overlapping network jobs from applying cloud state out of order.
+    pub(in crate::features) cloud_sync_job_running: bool,
     pub(in crate::features) cloud_sync_focus: FocusHandle,
     pub(in crate::features) cloud_sync_focused_field: CloudSyncInputField,
     pub(in crate::features) cloud_sync_provider_menu_open: bool,

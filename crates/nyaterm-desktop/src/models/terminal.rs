@@ -3299,7 +3299,7 @@ mod tests {
             event.recording_text_bytes,
             TERMINAL_FRAME_VISIBLE_TEXT_TAIL_CAP + 1028
         );
-        recording_pipeline.flush();
+        recording_pipeline.writer().flush();
         let recorded = recording_manager
             .search_history(nyaterm_transport::TerminalHistorySearchRequest {
                 session_id: "s1".to_string(),
