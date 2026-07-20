@@ -44,12 +44,23 @@ impl NyaTermApp {
                     .border_color(rgb(palette.border))
                     .bg(self.shell_surface_color(palette.bg))
                     .shadow_lg()
+                    .relative()
                     .p_6()
                     .flex()
                     .flex_col()
                     .items_center()
                     .gap_4()
                     .on_click(|_, _, cx| cx.stop_propagation())
+                    .child(div().absolute().top(px(8.)).right(px(8.)).child(
+                        modal_close_icon_button(
+                            palette,
+                            "about-close",
+                            self.tr("common.close"),
+                            cx.listener(|this, _, _, cx| {
+                                this.close_about(cx);
+                            }),
+                        ),
+                    ))
                     .child(
                         svg()
                             .size(px(96.))
@@ -127,15 +138,7 @@ impl NyaTermApp {
                                         );
                                     })),
                             ),
-                    )
-                    .child(small_button(
-                        palette,
-                        "about-close",
-                        self.tr("about.close"),
-                        cx.listener(|this, _, _, cx| {
-                            this.close_about(cx);
-                        }),
-                    )),
+                    ),
             )
     }
 }

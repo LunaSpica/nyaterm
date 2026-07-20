@@ -286,6 +286,35 @@ pub(in crate::features) fn dialog_action_button(
         .on_click(on_click)
 }
 
+pub(in crate::features) fn modal_close_icon_button(
+    palette: ThemePalette,
+    id: impl Into<String>,
+    tooltip: &'static str,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    div()
+        .id(SharedString::from(id.into()))
+        .size(px(28.))
+        .flex_none()
+        .rounded_sm()
+        .flex()
+        .items_center()
+        .justify_center()
+        .cursor_pointer()
+        .hover(|this| this.bg(rgb(palette.hover)))
+        .tooltip(move |_, cx| {
+            cx.new(|_| crate::features::ChromeTooltip::new(tooltip))
+                .into()
+        })
+        .on_click(on_click)
+        .child(
+            svg()
+                .size(px(14.))
+                .path("icons/window/close.svg")
+                .text_color(rgb(palette.text_muted)),
+        )
+}
+
 /// Tauri ActionFooter-like Cancel/Save row.
 pub(in crate::features) fn modal_dialog_footer(
     palette: ThemePalette,

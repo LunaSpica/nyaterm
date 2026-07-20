@@ -79,8 +79,9 @@ impl NyaTermApp {
                                             .child(self.tr("savedConnections.importSelectSource")),
                                     ),
                             )
-                            .child(connection_import_close_button(
+                            .child(modal_close_icon_button(
                                 palette,
+                                "connection-import-close",
                                 self.tr("common.close"),
                                 cx.listener(|this, _, _, cx| {
                                     this.close_connection_import_dialog(cx);
@@ -257,30 +258,5 @@ fn connection_import_source_card(
                 .text_size(px(10.))
                 .text_color(rgb(palette.text_dimmed))
                 .child(hint),
-        )
-}
-
-fn connection_import_close_button(
-    palette: crate::theme::ThemePalette,
-    tooltip: &'static str,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    div()
-        .id("connection-import-close")
-        .size(px(28.))
-        .flex_none()
-        .rounded_sm()
-        .flex()
-        .items_center()
-        .justify_center()
-        .cursor_pointer()
-        .hover(|this| this.bg(rgb(palette.hover)))
-        .tooltip(move |_, cx| cx.new(|_| ChromeTooltip::new(tooltip)).into())
-        .on_click(on_click)
-        .child(
-            svg()
-                .size(px(14.))
-                .path("icons/window/close.svg")
-                .text_color(rgb(palette.text_muted)),
         )
 }
