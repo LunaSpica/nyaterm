@@ -32,6 +32,9 @@ pub(in crate::features) struct TerminalRuntimeUiState {
     /// Last user-driven terminal scroll input. During this short window the
     /// terminal paint path favors text/position over enhanced decorations.
     pub last_terminal_user_scroll_at: Option<Instant>,
+    /// Last successful user terminal input write. During this short window the
+    /// terminal paint path favors low-latency echo over enhanced decorations.
+    pub last_terminal_input_at: Option<Instant>,
     /// Sessions whose scroll position changed and should repaint on the next frame tick.
     pub pending_terminal_scroll_position_sessions: HashSet<String>,
     /// Sessions already scrolled locally by TerminalSurface; only snapshot requests
@@ -53,6 +56,10 @@ pub(in crate::features) struct TerminalRuntimeUiState {
     pub pending_terminal_user_scroll_idle_sessions: HashSet<String>,
     /// True while a delayed scroll-idle repaint task is armed.
     pub terminal_user_scroll_idle_notify_armed: bool,
+    /// Sessions that need a full decoration repaint once typing idles.
+    pub pending_terminal_input_idle_sessions: HashSet<String>,
+    /// True while a delayed input-idle repaint task is armed.
+    pub terminal_input_idle_notify_armed: bool,
     /// After connect success, demote idle/visual work until this time (no faster tick).
     pub connect_settle_until: Option<Instant>,
     /// A short post-input pump task is armed to drain echo output/frame events.
@@ -166,6 +173,7 @@ impl Default for TerminalRuntimeUiState {
             last_terminal_resize_at: None,
             last_terminal_frame_apply_at: None,
             last_terminal_user_scroll_at: None,
+            last_terminal_input_at: None,
             pending_terminal_scroll_position_sessions: HashSet::new(),
             pending_terminal_scroll_snapshot_only_sessions: HashSet::new(),
             pending_terminal_scroll_position_repaint_sessions: HashSet::new(),
@@ -176,6 +184,8 @@ impl Default for TerminalRuntimeUiState {
             terminal_selection_drag_notify_armed: false,
             pending_terminal_user_scroll_idle_sessions: HashSet::new(),
             terminal_user_scroll_idle_notify_armed: false,
+            pending_terminal_input_idle_sessions: HashSet::new(),
+            terminal_input_idle_notify_armed: false,
             connect_settle_until: None,
             terminal_input_wake_armed: false,
             terminal_input_wake_generation: 0,

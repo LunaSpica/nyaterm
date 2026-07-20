@@ -11,6 +11,7 @@ mod publish;
 #[path = "event_pump/session_events.rs"]
 mod session_events;
 
+use crate::features::terminal_runtime::TERMINAL_INPUT_LATENCY_WINDOW;
 use helpers::*;
 
 const TERMINAL_INPUT_WAKE_DELAYS: [Duration; 3] = [
@@ -50,6 +51,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn arm_terminal_input_wake(&mut self, cx: &mut Context<Self>) {
+        self.mark_terminal_input_latency_activity(cx);
         self.terminal_runtime.terminal_input_wake_generation = self
             .terminal_runtime
             .terminal_input_wake_generation
@@ -93,6 +95,57 @@ impl NyaTermApp {
             cx.notify();
             self.terminal_runtime.last_ui_notify_at = Some(Instant::now());
             self.terminal_runtime.pending_ui_notify = false;
+        }
+    }
+
+    fn mark_terminal_input_latency_activity(&mut self, cx: &mut Context<Self>) {
+        self.terminal_runtime.last_terminal_input_at = Some(Instant::now());
+        if let Some(session_id) = self
+            .active_session_id
+            .as_deref()
+            .filter(|session_id| !session_id.is_empty())
+        {
+            self.terminal_runtime
+                .pending_terminal_input_idle_sessions
+                .insert(session_id.to_string());
+        }
+        if self.terminal_runtime.terminal_input_idle_notify_armed {
+            return;
+        }
+        self.terminal_runtime.terminal_input_idle_notify_armed = true;
+        cx.spawn(async move |this, cx| {
+            Timer::after(TERMINAL_INPUT_LATENCY_WINDOW).await;
+            let _ = this.update(cx, |this, cx| {
+                this.flush_terminal_input_idle_notify(cx);
+            });
+        })
+        .detach();
+    }
+
+    fn flush_terminal_input_idle_notify(&mut self, cx: &mut Context<Self>) {
+        let now = Instant::now();
+        if self
+            .terminal_runtime
+            .last_terminal_input_at
+            .is_some_and(|last| now.saturating_duration_since(last) < TERMINAL_INPUT_LATENCY_WINDOW)
+        {
+            cx.spawn(async move |this, cx| {
+                Timer::after(TERMINAL_INPUT_LATENCY_WINDOW).await;
+                let _ = this.update(cx, |this, cx| {
+                    this.flush_terminal_input_idle_notify(cx);
+                });
+            })
+            .detach();
+            return;
+        }
+        self.terminal_runtime.terminal_input_idle_notify_armed = false;
+        let session_ids = self
+            .terminal_runtime
+            .pending_terminal_input_idle_sessions
+            .drain()
+            .collect::<Vec<_>>();
+        for session_id in session_ids {
+            self.notify_terminal_surface_only(Some(session_id.as_str()), cx);
         }
     }
 

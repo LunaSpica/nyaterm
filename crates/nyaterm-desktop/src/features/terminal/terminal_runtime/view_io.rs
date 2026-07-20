@@ -455,6 +455,7 @@ fn terminal_scroll_text_first_keywords_allowed(
     output_burst_bytes: usize,
     performance_mode: TerminalPerformanceMode,
     user_scroll_active: bool,
+    input_latency_active: bool,
 ) -> bool {
     is_active
         && !render_degraded
@@ -462,6 +463,7 @@ fn terminal_scroll_text_first_keywords_allowed(
         && output_burst_bytes == 0
         && performance_mode != TerminalPerformanceMode::Overloaded
         && !user_scroll_active
+        && !input_latency_active
 }
 
 fn terminal_user_scroll_active(
@@ -475,6 +477,11 @@ fn terminal_user_scroll_active(
         && last_user_scroll_at.is_some_and(|last| {
             now.saturating_duration_since(last) < TERMINAL_USER_SCROLL_ACTIVE_WINDOW
         })
+}
+
+fn terminal_input_latency_active(last_input_at: Option<Instant>, now: Instant) -> bool {
+    last_input_at
+        .is_some_and(|last| now.saturating_duration_since(last) < TERMINAL_INPUT_LATENCY_WINDOW)
 }
 
 impl NyaTermApp {
@@ -1680,14 +1687,17 @@ impl NyaTermApp {
         let viewport_rows = view.viewport_rows_for_ui();
         let display_offset =
             terminal_visual_display_offset(scroll_offset, scroll_residual_lines, scrollback_len);
+        let now = Instant::now();
         let user_scroll_active = terminal_user_scroll_active(
             display_offset,
             self.terminal_runtime
                 .pending_terminal_user_scroll_idle_sessions
                 .contains(session_id),
             self.terminal_runtime.last_terminal_user_scroll_at,
-            Instant::now(),
+            now,
         );
+        let input_latency_active =
+            terminal_input_latency_active(self.terminal_runtime.last_terminal_input_at, now);
         let Some(snapshot) = terminal_paint_window_snapshot_for_view(
             Some(view),
             display_offset,
@@ -1719,6 +1729,7 @@ impl NyaTermApp {
         let skipped = view.skipped_output_chars;
         let protocol_state = view.protocol_state;
         let search_matches = if is_active
+            && !input_latency_active
             && self.terminal_search_open
             && self.terminal_search_mode == TerminalSearchMode::Buffer
         {
@@ -1729,7 +1740,7 @@ impl NyaTermApp {
         let decorations = terminal_scroll_text_first_decorations(
             snapshot.as_ref(),
             (!search_matches.is_empty()).then_some(search_matches.as_slice()),
-            is_active,
+            is_active && !input_latency_active,
         );
         let keyword_rules = if terminal_scroll_text_first_keywords_allowed(
             is_active,
@@ -1738,6 +1749,7 @@ impl NyaTermApp {
             output_burst_bytes,
             performance_mode,
             user_scroll_active,
+            input_latency_active,
         ) {
             self.resolved_keyword_highlight_rules()
         } else {
@@ -1836,10 +1848,15 @@ impl NyaTermApp {
             self.terminal_runtime.last_terminal_user_scroll_at,
             paint_started_at,
         );
+        let input_latency_active = terminal_input_latency_active(
+            self.terminal_runtime.last_terminal_input_at,
+            paint_started_at,
+        );
         let render_pressure = render_output_pressure
             || burst > 0
             || mode == TerminalPerformanceMode::Overloaded
-            || user_scroll_active;
+            || user_scroll_active
+            || input_latency_active;
         let render_degraded = render_degraded_view || render_pressure;
         let keyword_rules = if render_degraded || !is_active {
             std::sync::Arc::new(Vec::new())
@@ -3041,6 +3058,7 @@ mod tests {
             0,
             TerminalPerformanceMode::Normal,
             false,
+            false,
         ));
     }
 
@@ -3053,6 +3071,7 @@ mod tests {
             0,
             TerminalPerformanceMode::Normal,
             false,
+            false,
         ));
         assert!(!terminal_scroll_text_first_keywords_allowed(
             true,
@@ -3060,6 +3079,7 @@ mod tests {
             false,
             0,
             TerminalPerformanceMode::Normal,
+            false,
             false,
         ));
         assert!(!terminal_scroll_text_first_keywords_allowed(
@@ -3069,6 +3089,7 @@ mod tests {
             1,
             TerminalPerformanceMode::Normal,
             false,
+            false,
         ));
         assert!(!terminal_scroll_text_first_keywords_allowed(
             true,
@@ -3076,6 +3097,7 @@ mod tests {
             false,
             0,
             TerminalPerformanceMode::Overloaded,
+            false,
             false,
         ));
     }
@@ -3088,6 +3110,20 @@ mod tests {
             false,
             0,
             TerminalPerformanceMode::Normal,
+            true,
+            false,
+        ));
+    }
+
+    #[test]
+    fn terminal_scroll_text_first_keywords_disable_during_input_latency() {
+        assert!(!terminal_scroll_text_first_keywords_allowed(
+            true,
+            false,
+            false,
+            0,
+            TerminalPerformanceMode::Normal,
+            false,
             true,
         ));
     }
@@ -3106,6 +3142,18 @@ mod tests {
             now,
         ));
         assert!(!terminal_user_scroll_active(4, true, None, now));
+    }
+
+    #[test]
+    fn terminal_input_latency_active_uses_short_idle_window() {
+        let now = Instant::now();
+
+        assert!(terminal_input_latency_active(Some(now), now));
+        assert!(!terminal_input_latency_active(
+            Some(now - TERMINAL_INPUT_LATENCY_WINDOW - Duration::from_millis(1)),
+            now,
+        ));
+        assert!(!terminal_input_latency_active(None, now));
     }
 
     #[test]
