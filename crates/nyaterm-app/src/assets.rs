@@ -30,6 +30,9 @@ const ICON_FILES: &[&str] = &[
     "icons/quote.svg",
     "icons/eye.svg",
     "icons/import.svg",
+    "icons/import/xshell.svg",
+    "icons/import/mobaxterm.svg",
+    "icons/import/windterm.svg",
     "icons/pin.svg",
     "icons/view-compact.svg",
     "icons/view-grid.svg",
@@ -144,6 +147,11 @@ fn icon_bytes(path: &str) -> Option<&'static [u8]> {
         "icons/quote.svg" => Some(include_bytes!("../assets/icons/quote.svg")),
         "icons/eye.svg" => Some(include_bytes!("../assets/icons/eye.svg")),
         "icons/import.svg" => Some(include_bytes!("../assets/icons/import.svg")),
+        "icons/import/xshell.svg" => Some(include_bytes!("../assets/icons/import/xshell.svg")),
+        "icons/import/mobaxterm.svg" => {
+            Some(include_bytes!("../assets/icons/import/mobaxterm.svg"))
+        }
+        "icons/import/windterm.svg" => Some(include_bytes!("../assets/icons/import/windterm.svg")),
         "icons/pin.svg" => Some(include_bytes!("../assets/icons/pin.svg")),
         "icons/view-compact.svg" => Some(include_bytes!("../assets/icons/view-compact.svg")),
         "icons/view-grid.svg" => Some(include_bytes!("../assets/icons/view-grid.svg")),

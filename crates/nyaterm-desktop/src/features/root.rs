@@ -572,6 +572,9 @@ impl NyaTermApp {
             .when(self.quick_command_import_dialog_open, |this| {
                 this.child(self.quick_command_import_overlay(cx))
             })
+            .when(self.connection_import_dialog_open, |this| {
+                this.child(self.connection_import_overlay(cx))
+            })
             .when(overlay.close_all_sessions_confirm_open, |this| {
                 this.child(self.close_all_sessions_confirm_overlay(cx))
             })

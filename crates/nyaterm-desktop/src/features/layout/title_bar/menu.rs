@@ -51,9 +51,9 @@ impl NyaTermApp {
                         false,
                         tr("settings.importConfig"),
                         None,
-                        cx.listener(|this, _, _, cx| {
+                        cx.listener(|this, _, window, cx| {
                             this.close_title_menu(cx);
-                            this.prompt_config_import(cx);
+                            this.open_connection_import_dialog(window, cx);
                         }),
                     ))
                     .child(title_menu_item(

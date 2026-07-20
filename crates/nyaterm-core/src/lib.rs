@@ -11,6 +11,7 @@ pub mod models;
 pub mod portable_snapshot;
 pub mod runtime;
 pub mod services;
+pub mod session_import;
 pub mod storage;
 pub mod terminal_file_drop;
 pub mod terminal_input_fanout;
@@ -101,6 +102,7 @@ pub use portable_snapshot::{
 };
 pub use runtime::{AppRuntime, RuntimeMode};
 pub use services::{MigrationCapability, NativeServiceStatus, NativeServices};
+pub use session_import::{SessionImportError, import_sessions};
 pub use storage::{ConfigBackupInfo, ConnectionStore, KnownHostCheck, StorageError};
 pub use terminal_file_drop::{
     format_local_terminal_drop_input, quote_local_path, terminal_drop_overlay_copy,

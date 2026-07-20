@@ -23,6 +23,8 @@ mod command_runtime;
 #[path = "settings/config_runtime.rs"]
 mod config_runtime;
 mod connection_editor_window;
+#[path = "connections/connection_import_runtime.rs"]
+mod connection_import_runtime;
 #[path = "connections/connection_runtime.rs"]
 mod connection_runtime;
 #[path = "connections/connections.rs"]

@@ -282,6 +282,15 @@ pub(crate) enum KeywordHighlightPathPromptResult {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ConnectionImportSource {
+    NyatermBackup,
+    Xshell,
+    MobaXterm,
+    WindTerm,
+    NyatermJson,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum QuickCommandImportPathPromptKind {
     NyatermJson,
     WindTermQuickbar,

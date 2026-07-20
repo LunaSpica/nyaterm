@@ -339,9 +339,9 @@ impl NyaTermApp {
                                     "icons/import.svg",
                                     self.tr("settings.importConfig"),
                                     false,
-                                    cx.listener(|this, _, _, cx| {
+                                    cx.listener(|this, _, window, cx| {
                                         this.connections_more_menu_open = false;
-                                        this.prompt_config_import(cx);
+                                        this.open_connection_import_dialog(window, cx);
                                     }),
                                 ))
                                 .when(can_clear_all, |this| {

@@ -80,7 +80,7 @@ pub(super) use crate::models::{
     ConnectionEditorField, ConnectionEditorMenu, ConnectionEditorPasswordSource,
     ConnectionEditorState, ConnectionEditorTelnetTab, ConnectionGroupContextMenuState,
     ConnectionGroupDeleteConfirmState, ConnectionGroupEditorState, ConnectionGroupOpenConfirmState,
-    ConnectionKindTab, ConnectionSortMode, CredentialAutofillMatchEvent,
+    ConnectionImportSource, ConnectionKindTab, ConnectionSortMode, CredentialAutofillMatchEvent,
     CredentialAutofillMatchOutcome, CredentialAutofillMatchPipeline,
     CredentialAutofillMatchRequest, CredentialAutofillMatchRequestKey, CredentialSuggestionState,
     DiagnosticsPathPromptKind, DiagnosticsPathPromptResult, DockerConfirmAction,
