@@ -202,12 +202,50 @@ struct TotpCode {
     period: u64,
 }
 
+#[derive(Debug, Clone)]
+pub(in crate::features) struct NativeOtpCodePreview {
+    pub(in crate::features) code: String,
+    pub(in crate::features) otp_type: String,
+    pub(in crate::features) period: u64,
+    pub(in crate::features) time_step: Option<u64>,
+}
+
+impl NativeOtpProvider {
+    pub(in crate::features) fn preview_otp_code(
+        &self,
+        otp_id: &str,
+    ) -> Result<Option<NativeOtpCodePreview>, String> {
+        let Some(entry) = self.load_entry(otp_id)? else {
+            return Ok(None);
+        };
+        if entry.otp_type.eq_ignore_ascii_case("hotp") {
+            let code = self.generate_hotp_code(&entry)?;
+            self.increment_counter(otp_id)?;
+            return Ok(Some(NativeOtpCodePreview {
+                code,
+                otp_type: "hotp".to_string(),
+                period: 0,
+                time_step: None,
+            }));
+        }
+
+        let now = unix_seconds_now();
+        let code = self.generate_totp_code(&entry, now)?;
+        Ok(Some(NativeOtpCodePreview {
+            code: code.code,
+            otp_type: "totp".to_string(),
+            period: code.period,
+            time_step: Some(code.time_step),
+        }))
+    }
+}
+
 impl SshOtpProvider for NativeOtpProvider {
     fn request_otp_code(&self, otp_id: &str) -> Result<Option<String>, String> {
         let Some(entry) = self.load_entry(otp_id)? else {
             return Ok(None);
         };
-        if entry.otp_type == "hotp" {
+        if entry.otp_type.eq_ignore_ascii_case("hotp") {
             let code = self.generate_hotp_code(&entry)?;
             self.increment_counter(otp_id)?;
             return Ok(Some(code));
@@ -245,7 +283,7 @@ fn otp_material(
     Ok((algorithm, secret, digits))
 }
 
-fn unix_seconds_now() -> u64 {
+pub(in crate::features) fn unix_seconds_now() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
@@ -415,6 +453,9 @@ pub(in crate::features) struct KeyboardInteractivePromptState {
     pub(in crate::features) responses: Vec<String>,
     pub(in crate::features) focused_index: usize,
     pub(in crate::features) otp_code: Option<String>,
+    pub(in crate::features) otp_type: Option<String>,
+    pub(in crate::features) otp_period: u64,
+    pub(in crate::features) otp_time_step: Option<u64>,
     pub(in crate::features) otp_error: Option<String>,
 }
 

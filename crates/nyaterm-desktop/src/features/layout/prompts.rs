@@ -502,6 +502,20 @@ impl NyaTermApp {
         }
 
         if prompt.request.otp_id.is_some() {
+            let has_code = prompt.otp_code.is_some();
+            let is_hotp = prompt.otp_type.as_deref() == Some("hotp");
+            let is_totp = prompt.otp_type.as_deref() == Some("totp");
+            let otp_type_label = prompt
+                .otp_type
+                .as_deref()
+                .map(str::to_ascii_uppercase)
+                .unwrap_or_else(|| "OTP".to_string());
+            let remaining = if is_totp && prompt.otp_period > 0 {
+                let period = prompt.otp_period.max(1);
+                period - (unix_seconds_now() % period)
+            } else {
+                0
+            };
             let display_code = prompt
                 .otp_code
                 .as_deref()
@@ -519,9 +533,28 @@ impl NyaTermApp {
                 .gap_2()
                 .child(
                     div()
-                        .text_size(px(11.))
-                        .text_color(rgb(palette.text_muted))
-                        .child(self.tr("otp.currentCode")),
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .gap_2()
+                        .child(
+                            div()
+                                .text_size(px(11.))
+                                .text_color(rgb(palette.text_muted))
+                                .child(self.tr("otp.currentCode")),
+                        )
+                        .child(
+                            div()
+                                .rounded_full()
+                                .border_1()
+                                .border_color(rgb(palette.border))
+                                .px_2()
+                                .py(px(2.))
+                                .text_size(px(9.))
+                                .font_weight(FontWeight(600.))
+                                .text_color(rgb(palette.text_muted))
+                                .child(otp_type_label),
+                        ),
                 )
                 .child(
                     div()
@@ -531,6 +564,28 @@ impl NyaTermApp {
                         .text_color(rgb(palette.text))
                         .child(display_code),
                 );
+            if is_totp && has_code {
+                otp_panel = otp_panel.child(
+                    div()
+                        .text_size(px(11.))
+                        .text_color(rgb(if remaining <= 5 {
+                            palette.warning
+                        } else {
+                            palette.text_muted
+                        }))
+                        .child(
+                            self.tr("otp.expiresIn")
+                                .replace("{{seconds}}", &remaining.to_string()),
+                        ),
+                );
+            } else if is_hotp && !has_code {
+                otp_panel = otp_panel.child(
+                    div()
+                        .text_xs()
+                        .text_color(rgb(palette.text_muted))
+                        .child(self.tr("otp.hotpHint")),
+                );
+            }
             if let Some(error) = prompt.otp_error.as_ref() {
                 otp_panel = otp_panel.child(
                     div()
@@ -539,28 +594,28 @@ impl NyaTermApp {
                         .child(error.clone()),
                 );
             }
-            otp_panel = otp_panel.child(
-                div()
-                    .flex()
-                    .flex_wrap()
-                    .gap_2()
-                    .child(small_button(
+            otp_panel = otp_panel.child({
+                let mut actions = div().flex().flex_wrap().gap_2();
+                if is_hotp || !has_code {
+                    actions = actions.child(small_button(
                         palette,
                         format!("keyboard-interactive-otp-generate-{}", prompt.id),
                         self.tr("otp.generateCode"),
                         cx.listener(|this, _, _, cx| {
                             this.generate_keyboard_interactive_otp_code(cx);
                         }),
-                    ))
-                    .child(small_button(
+                    ));
+                }
+                if has_code {
+                    actions = actions.child(small_button(
                         palette,
                         format!("keyboard-interactive-otp-copy-{}", prompt.id),
                         self.tr("otp.copyCode"),
                         cx.listener(|this, _, _, cx| {
                             this.copy_keyboard_interactive_otp_code(cx);
                         }),
-                    ))
-                    .child(dialog_action_button(
+                    ));
+                    actions = actions.child(dialog_action_button(
                         palette,
                         format!("keyboard-interactive-otp-send-{}", prompt.id),
                         self.tr("otp.sendToInput"),
@@ -568,8 +623,10 @@ impl NyaTermApp {
                         cx.listener(|this, _, _, cx| {
                             this.send_keyboard_interactive_otp_to_input(cx);
                         }),
-                    )),
-            );
+                    ));
+                }
+                actions
+            });
             fields = fields.child(otp_panel);
         }
 

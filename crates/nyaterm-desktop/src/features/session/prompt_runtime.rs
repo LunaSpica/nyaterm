@@ -120,14 +120,13 @@ impl NyaTermApp {
         else {
             return;
         };
-        let result = self.otp_provider.request_otp_code(&otp_id);
+        let result = self.otp_provider.preview_otp_code(&otp_id);
         let Some(state) = self.active_keyboard_interactive_prompt.as_mut() else {
             return;
         };
         match result {
-            Ok(Some(code)) => {
-                state.otp_code = Some(code);
-                state.otp_error = None;
+            Ok(Some(preview)) => {
+                apply_keyboard_interactive_otp_preview(state, preview);
                 self.terminal_status = "OTP code ready".to_string();
             }
             Ok(None) => {
@@ -136,6 +135,7 @@ impl NyaTermApp {
             }
             Err(error) => {
                 state.otp_code = None;
+                state.otp_time_step = None;
                 state.otp_error = Some(error);
             }
         }
@@ -317,6 +317,27 @@ impl NyaTermApp {
                         keyboard_interactive_prompt_target(&request)
                     );
                     let responses = vec![String::new(); request.prompts.len()];
+                    let otp_type = request.otp_id.as_deref().and_then(|otp_id| {
+                        self.connection_otp_entries
+                            .iter()
+                            .find(|entry| entry.id == otp_id)
+                            .map(|entry| entry.otp_type.to_ascii_lowercase())
+                    });
+                    let otp_preview = if otp_type.as_deref() == Some("totp") {
+                        request
+                            .otp_id
+                            .as_deref()
+                            .and_then(|otp_id| self.otp_provider.preview_otp_code(otp_id).ok())
+                            .flatten()
+                    } else {
+                        None
+                    };
+                    let otp_code = otp_preview.as_ref().map(|preview| preview.code.clone());
+                    let otp_period = otp_preview
+                        .as_ref()
+                        .map(|preview| preview.period)
+                        .unwrap_or(0);
+                    let otp_time_step = otp_preview.as_ref().and_then(|preview| preview.time_step);
                     self.active_keyboard_interactive_prompt =
                         Some(KeyboardInteractivePromptState {
                             id,
@@ -324,7 +345,10 @@ impl NyaTermApp {
                             response_tx,
                             responses,
                             focused_index: 0,
-                            otp_code: None,
+                            otp_code,
+                            otp_type,
+                            otp_period,
+                            otp_time_step,
                             otp_error: None,
                         });
                 }
@@ -333,6 +357,41 @@ impl NyaTermApp {
             return true;
         }
         false
+    }
+
+    pub(super) fn refresh_keyboard_interactive_totp(&mut self) -> bool {
+        let Some(state) = self.active_keyboard_interactive_prompt.as_ref() else {
+            return false;
+        };
+        if state.otp_type.as_deref() != Some("totp") || state.otp_code.is_none() {
+            return false;
+        }
+        let period = state.otp_period.max(1);
+        let current_step = unix_seconds_now() / period;
+        if state.otp_time_step == Some(current_step) {
+            return false;
+        }
+        let Some(otp_id) = state.request.otp_id.clone() else {
+            return false;
+        };
+        let result = self.otp_provider.preview_otp_code(&otp_id);
+        let Some(state) = self.active_keyboard_interactive_prompt.as_mut() else {
+            return false;
+        };
+        match result {
+            Ok(Some(preview)) => apply_keyboard_interactive_otp_preview(state, preview),
+            Ok(None) => {
+                state.otp_code = None;
+                state.otp_time_step = None;
+                state.otp_error = Some("OTP entry not found".to_string());
+            }
+            Err(error) => {
+                state.otp_code = None;
+                state.otp_time_step = None;
+                state.otp_error = Some(error);
+            }
+        }
+        true
     }
 
     pub(super) fn drain_duplicate_prompts(&mut self) -> bool {
@@ -354,6 +413,17 @@ impl NyaTermApp {
         }
         false
     }
+}
+
+fn apply_keyboard_interactive_otp_preview(
+    state: &mut KeyboardInteractivePromptState,
+    preview: NativeOtpCodePreview,
+) {
+    state.otp_code = Some(preview.code);
+    state.otp_type = Some(preview.otp_type);
+    state.otp_period = preview.period;
+    state.otp_time_step = preview.time_step;
+    state.otp_error = None;
 }
 
 pub(in crate::features) fn uuid_like_prompt_id(host_key: &SshHostKey) -> String {

@@ -364,12 +364,13 @@ impl NyaTermApp {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        match self.otp_provider.request_otp_code(&otp_id) {
-            Ok(Some(code)) => {
-                self.security_otp_codes.insert(otp_id.clone(), code.clone());
+        self.security_otp_codes.remove(&otp_id);
+        match self.otp_provider.preview_otp_code(&otp_id) {
+            Ok(Some(preview)) => {
+                let code = preview.code;
+                self.security_otp_codes.insert(otp_id.clone(), code);
                 self.security_status = format!("OTP code ready for {}", compact_id(&otp_id));
-                cx.write_to_clipboard(ClipboardItem::new_string(code));
-                self.terminal_status = "OTP code copied".to_string();
+                self.terminal_status = "OTP code ready".to_string();
             }
             Ok(None) => {
                 self.security_status = "OTP entry not found".to_string();
@@ -389,14 +390,14 @@ impl NyaTermApp {
         let ids = self
             .connection_otp_entries
             .iter()
-            .filter(|entry| entry.has_secret || entry.otp_type.eq_ignore_ascii_case("totp"))
+            .filter(|entry| entry.otp_type.eq_ignore_ascii_case("totp"))
             .map(|entry| entry.id.clone())
             .collect::<Vec<_>>();
         let mut refreshed = 0usize;
         for otp_id in ids {
-            match self.otp_provider.request_otp_code(&otp_id) {
-                Ok(Some(code)) => {
-                    self.security_otp_codes.insert(otp_id, code);
+            match self.otp_provider.preview_otp_code(&otp_id) {
+                Ok(Some(preview)) => {
+                    self.security_otp_codes.insert(otp_id, preview.code);
                     refreshed += 1;
                 }
                 Ok(None) | Err(_) => {}
@@ -424,6 +425,15 @@ impl NyaTermApp {
                 return;
             }
         }
-        self.generate_security_otp_code(otp_id, window, cx);
+        self.generate_security_otp_code(otp_id.clone(), window, cx);
+        if let Some(code) = self.security_otp_codes.get(&otp_id).cloned()
+            && code != "------"
+            && !code.trim().is_empty()
+        {
+            cx.write_to_clipboard(ClipboardItem::new_string(code));
+            self.security_status = format!("OTP code copied ({})", compact_id(&otp_id));
+            self.terminal_status = "OTP code copied".to_string();
+            cx.notify();
+        }
     }
 }
