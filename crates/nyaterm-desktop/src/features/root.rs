@@ -577,9 +577,6 @@ impl NyaTermApp {
             .when(self.connection_import_dialog_open, |this| {
                 this.child(self.connection_import_overlay(cx))
             })
-            .when(overlay.close_all_sessions_confirm_open, |this| {
-                this.child(self.close_all_sessions_confirm_overlay(cx))
-            })
             .when(overlay.quick_switch_open, |this| {
                 this.child(self.quick_switch_overlay(cx))
             })
@@ -588,6 +585,9 @@ impl NyaTermApp {
             })
             .when(overlay.locked, |this| {
                 this.child(self.lock_screen_overlay(window, cx))
+            })
+            .when(overlay.close_all_sessions_confirm_open, |this| {
+                this.child(self.close_all_sessions_confirm_overlay(cx))
             })
             .when(self.about_open, |this| this.child(self.about_overlay(cx)))
             .when(self.update_dialog_open, |this| {

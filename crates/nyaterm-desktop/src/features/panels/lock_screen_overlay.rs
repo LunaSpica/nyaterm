@@ -47,44 +47,48 @@ impl NyaTermApp {
                 cx.stop_propagation();
                 this.handle_lock_key_down(event, cx);
             }))
-            .child(
-                div()
-                    .h(px(40.))
-                    .flex()
-                    .items_center()
-                    .text_color(rgb(0xb6bfcc))
-                    .child(
-                        div()
-                            .h_full()
-                            .flex_1()
-                            .window_control_area(WindowControlArea::Drag),
-                    )
-                    .child(window_control_button(
-                        palette,
-                        "lock-window-min",
-                        "icons/window/minimize.svg",
-                        WindowControlArea::Min,
-                        |_, window, _| window.minimize_window(),
-                    ))
-                    .child(window_control_button(
-                        palette,
-                        "lock-window-max",
-                        if window.is_maximized() {
-                            "icons/window/restore.svg"
-                        } else {
-                            "icons/window/maximize.svg"
-                        },
-                        WindowControlArea::Max,
-                        |_, window, _| window.zoom_window(),
-                    ))
-                    .child(window_control_button(
-                        palette,
-                        "lock-window-close",
-                        "icons/window/close.svg",
-                        WindowControlArea::Close,
-                        |_, window, _| window.remove_window(),
-                    )),
-            )
+            .when(!cfg!(target_os = "macos"), |this| {
+                this.child(
+                    div()
+                        .h(px(40.))
+                        .flex()
+                        .items_center()
+                        .text_color(rgb(0xb6bfcc))
+                        .child(
+                            div()
+                                .h_full()
+                                .flex_1()
+                                .window_control_area(WindowControlArea::Drag),
+                        )
+                        .child(window_control_button(
+                            palette,
+                            "lock-window-min",
+                            "icons/window/minimize.svg",
+                            WindowControlArea::Min,
+                            |_, window, _| window.minimize_window(),
+                        ))
+                        .child(window_control_button(
+                            palette,
+                            "lock-window-max",
+                            if window.is_maximized() {
+                                "icons/window/restore.svg"
+                            } else {
+                                "icons/window/maximize.svg"
+                            },
+                            WindowControlArea::Max,
+                            |_, window, _| window.zoom_window(),
+                        ))
+                        .child(window_control_button(
+                            palette,
+                            "lock-window-close",
+                            "icons/window/close.svg",
+                            WindowControlArea::Close,
+                            cx.listener(|this, _, window, cx| {
+                                this.handle_window_close_request(window, cx);
+                            }),
+                        )),
+                )
+            })
             .child(
                 div()
                     .flex_1()
