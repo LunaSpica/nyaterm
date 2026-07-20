@@ -543,6 +543,43 @@ impl NyaTermApp {
                     .track_focus(&self.terminal_focus)
                     .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                         this.mark_user_activity();
+                        let smart_input_selection = this
+                            .terminal_selection
+                            .is_some()
+                            .then(|| this.smart_cursor_selected_input_range())
+                            .flatten();
+                        let is_plain_text_input =
+                            terminal_plain_text_input_event(event);
+                        if is_plain_text_input {
+                            if this.credential_suggestions.is_some()
+                                && this.handle_credential_suggestion_key(event, cx)
+                            {
+                                cx.stop_propagation();
+                                return;
+                            }
+                            if this.terminal_selection.is_some()
+                                && smart_input_selection.is_some()
+                                && this.handle_smart_input_selection_key(event, cx)
+                            {
+                                cx.stop_propagation();
+                                return;
+                            }
+                            if this.terminal_should_defer_key_text_to_input_handler(event) {
+                                return;
+                            }
+                            cx.stop_propagation();
+                            // When a non-smart buffer selection is painted, still send
+                            // keystrokes but skip suggestion tracking so the selection
+                            // edit path stays isolated (Tauri preserves selection).
+                            let has_buffer_selection = this.terminal_selection.is_some()
+                                && smart_input_selection.is_none();
+                            if has_buffer_selection {
+                                this.send_terminal_key_event(event, false, cx);
+                            } else {
+                                this.send_terminal_key_event(event, true, cx);
+                            }
+                            return;
+                        }
                         if this.handle_global_shortcut(event, window, cx) {
                             cx.stop_propagation();
                             return;
@@ -609,7 +646,7 @@ impl NyaTermApp {
                         // keystrokes but skip suggestion tracking so the selection
                         // edit path stays isolated (Tauri preserves selection).
                         let has_buffer_selection = this.terminal_selection.is_some()
-                            && this.smart_cursor_selected_input_range().is_none();
+                            && smart_input_selection.is_none();
                         if has_buffer_selection {
                             this.send_terminal_key_event(event, false, cx);
                         } else {
