@@ -1,16 +1,52 @@
 use super::*;
 
 impl NyaTermApp {
+    pub(in crate::features) fn sorted_active_sessions(&self) -> Vec<SessionInfo> {
+        let mut sessions = self.ordered_sessions();
+        sessions.sort_by(|left, right| {
+            left.name
+                .to_lowercase()
+                .cmp(&right.name.to_lowercase())
+                .then_with(|| session_kind_label(left.kind).cmp(session_kind_label(right.kind)))
+        });
+        sessions
+    }
+
+    fn active_session_matches_query(&self, session: &SessionInfo, query: &str) -> bool {
+        query.is_empty()
+            || format!(
+                "{} {} {} {}",
+                self.session_display_name_by_info(session),
+                session.name,
+                session_kind_label(session.kind),
+                session.id
+            )
+            .to_lowercase()
+            .contains(query)
+    }
+
+    pub(in crate::features) fn active_sessions_header_count(&self) -> String {
+        let sessions = self.sorted_active_sessions();
+        let total = sessions.len();
+        let query = self.active_sessions_search_draft.trim().to_lowercase();
+        if query.is_empty() {
+            return total.to_string();
+        }
+
+        let visible = sessions
+            .iter()
+            .filter(|session| self.active_session_matches_query(session, &query))
+            .count();
+        format!("{visible}/{total}")
+    }
+
     pub(in crate::features) fn active_sessions_panel(
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let sessions = self.ordered_sessions();
-        let query = self
-            .active_sessions_search_draft
-            .trim()
-            .to_ascii_lowercase();
+        let sessions = self.sorted_active_sessions();
+        let query = self.active_sessions_search_draft.trim().to_lowercase();
         let mut rows = div().flex().flex_col().gap_1().p_2();
         let mut visible_count = 0usize;
         if sessions.is_empty() {
@@ -25,15 +61,7 @@ impl NyaTermApp {
         } else {
             for session in sessions {
                 let display_name = self.session_display_name_by_info(&session);
-                let haystack = format!(
-                    "{} {} {} {}",
-                    display_name,
-                    session.name,
-                    session_kind_label(session.kind),
-                    session.id
-                )
-                .to_ascii_lowercase();
-                if !query.is_empty() && !haystack.contains(&query) {
+                if !self.active_session_matches_query(&session, &query) {
                     continue;
                 }
                 visible_count += 1;
@@ -499,10 +527,10 @@ impl NyaTermApp {
                             .flex()
                             .items_center()
                             .gap_0()
-                    .flex_none()
-                    .opacity(if menu_open { 1. } else { 0. })
-                    .group_hover(row_group, |style| style.opacity(1.))
-                    .child(session_action_svg_button(
+                            .flex_none()
+                            .opacity(if menu_open { 1. } else { 0. })
+                            .group_hover(row_group, |style| style.opacity(1.))
+                            .child(session_action_svg_button(
                                 palette,
                                 format!("active-session-rename-{rename_session_id}"),
                                 "icons/session/rename.svg",
