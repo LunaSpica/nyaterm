@@ -531,19 +531,16 @@ impl NyaTermApp {
         match panel {
             NavItem::Connections => SharedString::from(""),
             NavItem::AiAssistant => {
-                let label = if !self.ai_model_draft.trim().is_empty() {
-                    truncate_preview(self.ai_model_draft.trim(), 28)
-                } else if let Some(id) = self
-                    .ai_settings
-                    .default_model_id
-                    .as_deref()
-                    .map(str::trim)
-                    .filter(|value| !value.is_empty())
-                {
-                    truncate_preview(id, 28)
-                } else {
-                    self.tr("ai.notConfigured").to_string()
-                };
+                let label = self
+                    .ai_selected_model_id()
+                    .and_then(|model_id| {
+                        self.ai_settings
+                            .models
+                            .iter()
+                            .find(|model| model.id == model_id)
+                            .map(|model| truncate_preview(&model.name, 28))
+                    })
+                    .unwrap_or_else(|| self.tr("ai.notConfigured").to_string());
                 SharedString::from(label)
             }
             NavItem::ActiveSessions => SharedString::from(self.active_sessions_header_count()),
