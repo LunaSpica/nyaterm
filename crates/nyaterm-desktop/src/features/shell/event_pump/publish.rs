@@ -53,7 +53,8 @@ impl NyaTermApp {
             terminal_view_count: self.terminal_views.len(),
             pending_start_count,
             host_prompt_active: self.active_host_key_prompt.is_some(),
-            credential_prompt_active: self.active_credential_prompt.is_some(),
+            credential_prompt_active: self.active_credential_prompt.is_some()
+                || self.active_keyboard_interactive_prompt.is_some(),
             zmodem_session_count: self.zmodem_sessions.len(),
         };
 

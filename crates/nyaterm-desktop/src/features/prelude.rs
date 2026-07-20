@@ -47,10 +47,10 @@ pub(super) use nyaterm_transport::{
     SftpDuplicateResolver, SftpFileEntry, SftpService, SftpTransferControl, SftpTransferDirection,
     SftpTransferOptions, SftpTransferProgress, SshCredentialPrompt, SshCredentialPromptKind,
     SshCredentialPromptReason, SshCredentialProvider, SshHostKey, SshHostKeyDecision,
-    SshHostKeyVerifier, SshKeyAuthConfig, SshMultiplexHandle, SshOtpProvider, SshProcessService,
-    SshProxyConfig, SshSessionConfig, SshTunnelConfig, SshTunnelInfo, SshTunnelManager,
-    SshTunnelMode, TelnetSessionConfig, TerminalHistorySearchRequest, open_ssh_multiplex_handle,
-    run_local_command,
+    SshHostKeyVerifier, SshKeyAuthConfig, SshKeyboardInteractiveRequest, SshMultiplexHandle,
+    SshOtpProvider, SshProcessService, SshProxyConfig, SshSessionConfig, SshTunnelConfig,
+    SshTunnelInfo, SshTunnelManager, SshTunnelMode, TelnetSessionConfig,
+    TerminalHistorySearchRequest, open_ssh_multiplex_handle, run_local_command,
 };
 
 pub(super) use crate::http::ai::{

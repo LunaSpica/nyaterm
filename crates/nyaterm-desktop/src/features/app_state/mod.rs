@@ -496,6 +496,8 @@ pub struct NyaTermApp {
     pub(in crate::features) active_host_key_prompt: Option<HostKeyPromptRequest>,
     pub(in crate::features) credential_prompts: Arc<CredentialPromptBroker>,
     pub(in crate::features) active_credential_prompt: Option<CredentialPromptState>,
+    pub(in crate::features) active_keyboard_interactive_prompt:
+        Option<KeyboardInteractivePromptState>,
     pub(in crate::features) credential_prompt_focus_pending: bool,
     pub(in crate::features) credential_focus: FocusHandle,
     pub(in crate::features) snapshot_password_focus: FocusHandle,

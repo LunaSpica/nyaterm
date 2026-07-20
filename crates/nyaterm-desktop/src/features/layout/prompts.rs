@@ -390,6 +390,246 @@ impl NyaTermApp {
             )
     }
 
+    pub(in crate::features) fn keyboard_interactive_prompt_banner(
+        &mut self,
+        prompt: KeyboardInteractivePromptState,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let palette = self.theme_palette();
+        let title = if prompt.request.round > 1 {
+            self.tr("otp.titleWithRound")
+                .replace("{{round}}", &prompt.request.round.to_string())
+        } else {
+            self.tr("otp.title").to_string()
+        };
+        let description = self
+            .tr("otp.description")
+            .replace("{{name}}", &prompt.request.connection_name);
+        let challenge_title = prompt.request.name.trim();
+        let challenge_instructions = prompt.request.instructions.trim();
+        let mut fields = div().min_w_0().flex().flex_col().gap_3();
+
+        if !challenge_title.is_empty() || !challenge_instructions.is_empty() {
+            let mut challenge = div()
+                .min_w_0()
+                .rounded_md()
+                .border_1()
+                .border_color(rgb(palette.border))
+                .bg(rgba((palette.surface_elevated << 8) | 0x4d))
+                .px_3()
+                .py_2();
+            if !challenge_title.is_empty() {
+                challenge = challenge.child(
+                    div()
+                        .text_xs()
+                        .font_weight(FontWeight(600.))
+                        .text_color(rgb(palette.text))
+                        .child(challenge_title.to_string()),
+                );
+            }
+            if !challenge_instructions.is_empty() {
+                challenge = challenge.child(
+                    div()
+                        .when(!challenge_title.is_empty(), |this| this.mt_1())
+                        .text_xs()
+                        .text_color(rgb(palette.text_muted))
+                        .child(challenge_instructions.to_string()),
+                );
+            }
+            fields = fields.child(challenge);
+        }
+
+        for (index, field) in prompt.request.prompts.iter().enumerate() {
+            let focused = prompt.focused_index == index;
+            let value = prompt.responses.get(index).cloned().unwrap_or_default();
+            let display_value = if value.is_empty() {
+                " ".to_string()
+            } else if field.echo {
+                value
+            } else {
+                "*".repeat(value.chars().count())
+            };
+            let request_id = prompt.id.clone();
+            let field_id = format!("keyboard-interactive-input-{request_id}-{index}");
+            fields = fields.child(
+                div()
+                    .min_w_0()
+                    .child(
+                        div()
+                            .text_size(px(11.))
+                            .text_color(rgb(palette.text_muted))
+                            .child(keyboard_interactive_prompt_label(&field.prompt, index)),
+                    )
+                    .child(
+                        div()
+                            .id(SharedString::from(field_id))
+                            .mt_1()
+                            .w_full()
+                            .h(px(36.))
+                            .px_3()
+                            .flex()
+                            .items_center()
+                            .rounded_sm()
+                            .border_1()
+                            .border_color(rgb(if focused {
+                                palette.focus_ring
+                            } else {
+                                palette.border
+                            }))
+                            .bg(rgb(palette.input))
+                            .font_family(crate::features::gpui_code_font_family())
+                            .text_sm()
+                            .cursor_text()
+                            .when(focused, |this| this.track_focus(&self.credential_focus))
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                cx.stop_propagation();
+                                if let Some(state) =
+                                    this.active_keyboard_interactive_prompt.as_mut()
+                                    && state.id == request_id
+                                {
+                                    state.focused_index = index;
+                                }
+                                window.focus(&this.credential_focus);
+                                cx.notify();
+                            }))
+                            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+                                cx.stop_propagation();
+                                this.handle_keyboard_interactive_key_down(event, cx);
+                            }))
+                            .child(display_value),
+                    ),
+            );
+        }
+
+        if prompt.request.otp_id.is_some() {
+            let display_code = prompt
+                .otp_code
+                .as_deref()
+                .map(format_keyboard_interactive_otp_code)
+                .unwrap_or_else(|| "--- ---".to_string());
+            let mut otp_panel = div()
+                .min_w_0()
+                .rounded_md()
+                .border_1()
+                .border_color(rgb(palette.border))
+                .bg(rgba((palette.surface_elevated << 8) | 0x4d))
+                .p_3()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(
+                    div()
+                        .text_size(px(11.))
+                        .text_color(rgb(palette.text_muted))
+                        .child(self.tr("otp.currentCode")),
+                )
+                .child(
+                    div()
+                        .font_family(crate::features::gpui_code_font_family())
+                        .text_size(px(18.))
+                        .font_weight(FontWeight(600.))
+                        .text_color(rgb(palette.text))
+                        .child(display_code),
+                );
+            if let Some(error) = prompt.otp_error.as_ref() {
+                otp_panel = otp_panel.child(
+                    div()
+                        .text_xs()
+                        .text_color(rgb(palette.danger))
+                        .child(error.clone()),
+                );
+            }
+            otp_panel = otp_panel.child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .gap_2()
+                    .child(small_button(
+                        palette,
+                        format!("keyboard-interactive-otp-generate-{}", prompt.id),
+                        self.tr("otp.generateCode"),
+                        cx.listener(|this, _, _, cx| {
+                            this.generate_keyboard_interactive_otp_code(cx);
+                        }),
+                    ))
+                    .child(small_button(
+                        palette,
+                        format!("keyboard-interactive-otp-copy-{}", prompt.id),
+                        self.tr("otp.copyCode"),
+                        cx.listener(|this, _, _, cx| {
+                            this.copy_keyboard_interactive_otp_code(cx);
+                        }),
+                    ))
+                    .child(dialog_action_button(
+                        palette,
+                        format!("keyboard-interactive-otp-send-{}", prompt.id),
+                        self.tr("otp.sendToInput"),
+                        false,
+                        cx.listener(|this, _, _, cx| {
+                            this.send_keyboard_interactive_otp_to_input(cx);
+                        }),
+                    )),
+            );
+            fields = fields.child(otp_panel);
+        }
+
+        div()
+            .id(SharedString::from(format!(
+                "keyboard-interactive-dialog-{}",
+                prompt.id
+            )))
+            .w_full()
+            .max_h(px((self.last_viewport_size.1 - 32.).max(240.)))
+            .overflow_y_scroll()
+            .rounded_md()
+            .border_1()
+            .border_color(rgb(palette.border))
+            .bg(self.shell_surface_color(palette.bg))
+            .shadow_lg()
+            .p_6()
+            .flex()
+            .flex_col()
+            .gap_4()
+            .on_click(|_, _, cx| cx.stop_propagation())
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .child(div().text_sm().font_weight(FontWeight(700.)).child(title))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(palette.text_muted))
+                            .child(description),
+                    ),
+            )
+            .child(fields)
+            .child(
+                div()
+                    .flex()
+                    .justify_end()
+                    .gap_2()
+                    .child(small_button(
+                        palette,
+                        format!("keyboard-interactive-cancel-{}", prompt.id),
+                        self.tr("otp.cancel"),
+                        cx.listener(|this, _, _, cx| {
+                            this.cancel_keyboard_interactive_prompt(cx);
+                        }),
+                    ))
+                    .child(dialog_action_button(
+                        palette,
+                        format!("keyboard-interactive-submit-{}", prompt.id),
+                        self.tr("otp.submit"),
+                        false,
+                        cx.listener(|this, _, _, cx| {
+                            this.submit_keyboard_interactive_prompt(cx);
+                        }),
+                    )),
+            )
+    }
+
     pub(in crate::features) fn snapshot_password_prompt_banner(
         &mut self,
         prompt: SnapshotPasswordPromptState,
@@ -511,5 +751,45 @@ impl NyaTermApp {
                             )),
                     ),
             )
+    }
+}
+
+fn keyboard_interactive_prompt_label(prompt: &str, index: usize) -> String {
+    let label = prompt.trim().trim_end_matches(':').trim();
+    if label.is_empty() {
+        format!("Response {}", index + 1)
+    } else {
+        label.to_string()
+    }
+}
+
+fn format_keyboard_interactive_otp_code(code: &str) -> String {
+    if code.chars().count() == 6 {
+        let mut chars = code.chars();
+        let first = chars.by_ref().take(3).collect::<String>();
+        format!("{first} {}", chars.collect::<String>())
+    } else {
+        code.to_string()
+    }
+}
+
+#[cfg(test)]
+mod keyboard_interactive_prompt_tests {
+    use super::{format_keyboard_interactive_otp_code, keyboard_interactive_prompt_label};
+
+    #[test]
+    fn prompt_labels_remove_only_trailing_colons() {
+        assert_eq!(keyboard_interactive_prompt_label(" Code:  ", 0), "Code");
+        assert_eq!(keyboard_interactive_prompt_label("", 1), "Response 2");
+        assert_eq!(
+            keyboard_interactive_prompt_label("Challenge: response", 0),
+            "Challenge: response"
+        );
+    }
+
+    #[test]
+    fn six_digit_otp_codes_are_grouped_for_display() {
+        assert_eq!(format_keyboard_interactive_otp_code("123456"), "123 456");
+        assert_eq!(format_keyboard_interactive_otp_code("12345678"), "12345678");
     }
 }

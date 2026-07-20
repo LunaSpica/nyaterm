@@ -434,7 +434,9 @@ impl NyaTermApp {
 
         content
             .when(
-                self.active_host_key_prompt.is_some() || self.active_credential_prompt.is_some(),
+                self.active_host_key_prompt.is_some()
+                    || self.active_credential_prompt.is_some()
+                    || self.active_keyboard_interactive_prompt.is_some(),
                 |this| this.child(self.ssh_auth_prompt_overlay(cx)),
             )
             .when(overlay.tab_actions_open, |this| {
@@ -635,6 +637,12 @@ impl NyaTermApp {
     fn ssh_auth_prompt_overlay(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let host_key_prompt = self.active_host_key_prompt.clone();
         let credential_prompt = self.active_credential_prompt.clone();
+        let keyboard_interactive_prompt = self.active_keyboard_interactive_prompt.clone();
+        let dialog_width = if keyboard_interactive_prompt.is_some() {
+            384.
+        } else {
+            416.
+        };
         div()
             .id(SharedString::from("ssh-auth-prompt-overlay"))
             .absolute()
@@ -656,12 +664,15 @@ impl NyaTermApp {
                 div()
                     .mx_auto()
                     .w_full()
-                    .max_w(px(416.))
+                    .max_w(px(dialog_width))
                     .when_some(host_key_prompt, |this, prompt| {
                         this.child(self.host_key_prompt_banner(prompt, cx))
                     })
                     .when_some(credential_prompt, |this, prompt| {
                         this.child(self.credential_prompt_banner(prompt, cx))
+                    })
+                    .when_some(keyboard_interactive_prompt, |this, prompt| {
+                        this.child(self.keyboard_interactive_prompt_banner(prompt, cx))
                     }),
             )
     }

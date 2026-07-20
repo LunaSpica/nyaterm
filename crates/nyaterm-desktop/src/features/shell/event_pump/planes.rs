@@ -35,7 +35,10 @@ impl NyaTermApp {
             self.transfer_rename_focus_pending = false;
             dirty = true;
         }
-        if self.credential_prompt_focus_pending && self.active_credential_prompt.is_some() {
+        if self.credential_prompt_focus_pending
+            && (self.active_credential_prompt.is_some()
+                || self.active_keyboard_interactive_prompt.is_some())
+        {
             window.focus(&self.credential_focus);
             self.credential_prompt_focus_pending = false;
             dirty = true;
@@ -409,6 +412,7 @@ impl NyaTermApp {
             && self.pending_saved_connection_queue.is_empty()
             && self.active_host_key_prompt.is_none()
             && self.active_credential_prompt.is_none()
+            && self.active_keyboard_interactive_prompt.is_none()
             && self.active_duplicate_prompt.is_none()
             && !self.host_key_prompts.has_pending()
             && !self.credential_prompts.has_pending()

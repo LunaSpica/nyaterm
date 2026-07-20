@@ -274,6 +274,7 @@ impl NyaTermApp {
             && self.trzsz_sessions.is_empty()
             && self.active_host_key_prompt.is_none()
             && self.active_credential_prompt.is_none()
+            && self.active_keyboard_interactive_prompt.is_none()
             && self.active_duplicate_prompt.is_none()
             && !self.host_key_prompts.has_pending()
             && !self.credential_prompts.has_pending()
@@ -399,6 +400,11 @@ impl NyaTermApp {
     }
 
     fn pending_session_auth_wait(&self) -> Option<PendingSessionAuthWait> {
+        if let Some(prompt) = self.active_keyboard_interactive_prompt.as_ref() {
+            return Some(PendingSessionAuthWait::Credential {
+                target: keyboard_interactive_prompt_target(&prompt.request),
+            });
+        }
         if let Some(prompt) = self.active_credential_prompt.as_ref() {
             return Some(PendingSessionAuthWait::Credential {
                 target: credential_prompt_target(&prompt.prompt),

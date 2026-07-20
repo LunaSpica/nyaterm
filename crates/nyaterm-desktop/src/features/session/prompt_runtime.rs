@@ -81,6 +81,101 @@ impl NyaTermApp {
         cx.notify();
     }
 
+    pub(in crate::features) fn submit_keyboard_interactive_prompt(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(state) = self.active_keyboard_interactive_prompt.take() else {
+            return;
+        };
+        let target = keyboard_interactive_prompt_target(&state.request);
+        let _ = state.response_tx.send(Some(state.responses));
+        self.credential_prompt_focus_pending = false;
+        self.terminal_status = format!("submitted SSH verification for {target}");
+        cx.notify();
+    }
+
+    pub(in crate::features) fn cancel_keyboard_interactive_prompt(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(state) = self.active_keyboard_interactive_prompt.take() else {
+            return;
+        };
+        let target = keyboard_interactive_prompt_target(&state.request);
+        let _ = state.response_tx.send(None);
+        self.credential_prompt_focus_pending = false;
+        self.terminal_status = format!("cancelled SSH verification for {target}");
+        cx.notify();
+    }
+
+    pub(in crate::features) fn generate_keyboard_interactive_otp_code(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(otp_id) = self
+            .active_keyboard_interactive_prompt
+            .as_ref()
+            .and_then(|state| state.request.otp_id.clone())
+        else {
+            return;
+        };
+        let result = self.otp_provider.request_otp_code(&otp_id);
+        let Some(state) = self.active_keyboard_interactive_prompt.as_mut() else {
+            return;
+        };
+        match result {
+            Ok(Some(code)) => {
+                state.otp_code = Some(code);
+                state.otp_error = None;
+                self.terminal_status = "OTP code ready".to_string();
+            }
+            Ok(None) => {
+                state.otp_code = None;
+                state.otp_error = Some("OTP entry not found".to_string());
+            }
+            Err(error) => {
+                state.otp_code = None;
+                state.otp_error = Some(error);
+            }
+        }
+        cx.notify();
+    }
+
+    pub(in crate::features) fn send_keyboard_interactive_otp_to_input(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(state) = self.active_keyboard_interactive_prompt.as_mut() else {
+            return;
+        };
+        let Some(code) = state.otp_code.clone() else {
+            return;
+        };
+        if let Some(response) = state.responses.first_mut() {
+            *response = code;
+            state.focused_index = 0;
+            self.terminal_status = "OTP code sent to verification input".to_string();
+            cx.notify();
+        }
+    }
+
+    pub(in crate::features) fn copy_keyboard_interactive_otp_code(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(code) = self
+            .active_keyboard_interactive_prompt
+            .as_ref()
+            .and_then(|state| state.otp_code.clone())
+        else {
+            return;
+        };
+        cx.write_to_clipboard(ClipboardItem::new_string(code));
+        self.terminal_status = "OTP code copied".to_string();
+        cx.notify();
+    }
+
     pub(in crate::features) fn handle_credential_key_down(
         &mut self,
         event: &KeyDownEvent,
@@ -119,6 +214,57 @@ impl NyaTermApp {
         }
     }
 
+    pub(in crate::features) fn handle_keyboard_interactive_key_down(
+        &mut self,
+        event: &KeyDownEvent,
+        cx: &mut Context<Self>,
+    ) {
+        self.mark_user_activity();
+        let Some(state) = self.active_keyboard_interactive_prompt.as_mut() else {
+            return;
+        };
+        let keystroke = &event.keystroke;
+        if keystroke.modifiers.platform || keystroke.modifiers.alt || keystroke.modifiers.control {
+            return;
+        }
+
+        match keystroke.key.as_str() {
+            "enter" => self.submit_keyboard_interactive_prompt(cx),
+            "escape" => self.cancel_keyboard_interactive_prompt(cx),
+            "tab" => {
+                let prompt_count = state.responses.len();
+                if prompt_count > 0 {
+                    state.focused_index = if keystroke.modifiers.shift {
+                        state
+                            .focused_index
+                            .checked_sub(1)
+                            .unwrap_or(prompt_count - 1)
+                    } else {
+                        (state.focused_index + 1) % prompt_count
+                    };
+                    cx.notify();
+                }
+            }
+            "backspace" => {
+                if let Some(response) = state.responses.get_mut(state.focused_index) {
+                    response.pop();
+                    cx.notify();
+                }
+            }
+            _ => {
+                if let Some(value) = keystroke
+                    .key_char
+                    .as_deref()
+                    .filter(|value| !value.is_empty())
+                    && let Some(response) = state.responses.get_mut(state.focused_index)
+                {
+                    response.push_str(value);
+                    cx.notify();
+                }
+            }
+        }
+    }
+
     pub(super) fn drain_host_key_prompts(&mut self) -> bool {
         if self.active_host_key_prompt.is_some() || !self.host_key_prompts.has_pending() {
             return false;
@@ -136,21 +282,53 @@ impl NyaTermApp {
     }
 
     pub(super) fn drain_credential_prompts(&mut self) -> bool {
-        if self.active_credential_prompt.is_some() || !self.credential_prompts.has_pending() {
+        if self.active_credential_prompt.is_some()
+            || self.active_keyboard_interactive_prompt.is_some()
+            || !self.credential_prompts.has_pending()
+        {
             return false;
         }
 
         if let Some(request) = self.credential_prompts.pop_pending() {
-            self.terminal_status = format!(
-                "SSH credential required for {}",
-                credential_prompt_target(&request.prompt)
-            );
-            self.active_credential_prompt = Some(CredentialPromptState {
-                id: request.id,
-                prompt: request.prompt,
-                response_tx: request.response_tx,
-                value: String::new(),
-            });
+            match request {
+                CredentialPromptRequest::Secret {
+                    id,
+                    prompt,
+                    response_tx,
+                } => {
+                    self.terminal_status = format!(
+                        "SSH credential required for {}",
+                        credential_prompt_target(&prompt)
+                    );
+                    self.active_credential_prompt = Some(CredentialPromptState {
+                        id,
+                        prompt,
+                        response_tx,
+                        value: String::new(),
+                    });
+                }
+                CredentialPromptRequest::KeyboardInteractive {
+                    id,
+                    request,
+                    response_tx,
+                } => {
+                    self.terminal_status = format!(
+                        "SSH verification required for {}",
+                        keyboard_interactive_prompt_target(&request)
+                    );
+                    let responses = vec![String::new(); request.prompts.len()];
+                    self.active_keyboard_interactive_prompt =
+                        Some(KeyboardInteractivePromptState {
+                            id,
+                            request,
+                            response_tx,
+                            responses,
+                            focused_index: 0,
+                            otp_code: None,
+                            otp_error: None,
+                        });
+                }
+            }
             self.credential_prompt_focus_pending = true;
             return true;
         }
@@ -200,6 +378,14 @@ pub(in crate::features) fn credential_prompt_id(prompt: &SshCredentialPrompt) ->
     format!("cred-{:016x}", hasher.finish())
 }
 
+pub(in crate::features) fn keyboard_interactive_prompt_id(
+    request: &SshKeyboardInteractiveRequest,
+) -> String {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    request.hash(&mut hasher);
+    format!("keyboard-interactive-{:016x}", hasher.finish())
+}
+
 pub(in crate::features) fn sftp_duplicate_prompt_id(request: &SftpDuplicateRequest) -> String {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     request.direction.hash(&mut hasher);
@@ -214,4 +400,14 @@ pub(in crate::features) fn credential_prompt_target(prompt: &SshCredentialPrompt
         "{}@{}:{} (attempt {})",
         prompt.username, prompt.host, prompt.port, prompt.attempt
     )
+}
+
+pub(in crate::features) fn keyboard_interactive_prompt_target(
+    request: &SshKeyboardInteractiveRequest,
+) -> String {
+    if request.connection_name.trim().is_empty() {
+        format!("{}@{}:{}", request.username, request.host, request.port)
+    } else {
+        request.connection_name.clone()
+    }
 }

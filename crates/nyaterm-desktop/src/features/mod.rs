@@ -162,9 +162,9 @@ pub(in crate::features) use appearance::{
     appearance_font_options, appearance_font_stack, gpui_code_font_family,
 };
 pub(in crate::features) use auth_runtime::{
-    CredentialPromptBroker, CredentialPromptState, HostKeyPromptBroker, HostKeyPromptChoice,
-    HostKeyPromptIssue, HostKeyPromptRequest, NativeHostKeyVerifier, NativeOtpProvider,
-    SftpDuplicatePromptBroker, SftpDuplicatePromptState,
+    CredentialPromptBroker, CredentialPromptRequest, CredentialPromptState, HostKeyPromptBroker,
+    HostKeyPromptChoice, HostKeyPromptIssue, HostKeyPromptRequest, KeyboardInteractivePromptState,
+    NativeHostKeyVerifier, NativeOtpProvider, SftpDuplicatePromptBroker, SftpDuplicatePromptState,
 };
 pub(in crate::features) use cloud_sync_provider::{
     pull_provider_snapshot, push_provider_snapshot, test_provider_connection,
@@ -177,7 +177,8 @@ pub(in crate::features) use connections::{
 };
 pub(in crate::features) use formatting::*;
 pub(in crate::features) use prompt_runtime::{
-    credential_prompt_id, credential_prompt_target, sftp_duplicate_prompt_id, uuid_like_prompt_id,
+    credential_prompt_id, credential_prompt_target, keyboard_interactive_prompt_id,
+    keyboard_interactive_prompt_target, sftp_duplicate_prompt_id, uuid_like_prompt_id,
 };
 pub(in crate::features) use quick_command_runtime::{
     QUICK_COMMAND_COLOR_OPTIONS, QUICK_COMMAND_ICON_OPTIONS, quick_command_category_label,

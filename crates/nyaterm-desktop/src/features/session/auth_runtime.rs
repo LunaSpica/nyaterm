@@ -386,10 +386,17 @@ impl HostKeyPromptBroker {
 }
 
 #[derive(Debug)]
-pub(in crate::features) struct CredentialPromptRequest {
-    pub(in crate::features) id: String,
-    pub(in crate::features) prompt: SshCredentialPrompt,
-    pub(in crate::features) response_tx: mpsc::Sender<Option<String>>,
+pub(in crate::features) enum CredentialPromptRequest {
+    Secret {
+        id: String,
+        prompt: SshCredentialPrompt,
+        response_tx: mpsc::Sender<Option<String>>,
+    },
+    KeyboardInteractive {
+        id: String,
+        request: SshKeyboardInteractiveRequest,
+        response_tx: mpsc::Sender<Option<Vec<String>>>,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -400,6 +407,17 @@ pub(in crate::features) struct CredentialPromptState {
     pub(in crate::features) value: String,
 }
 
+#[derive(Debug, Clone)]
+pub(in crate::features) struct KeyboardInteractivePromptState {
+    pub(in crate::features) id: String,
+    pub(in crate::features) request: SshKeyboardInteractiveRequest,
+    pub(in crate::features) response_tx: mpsc::Sender<Option<Vec<String>>>,
+    pub(in crate::features) responses: Vec<String>,
+    pub(in crate::features) focused_index: usize,
+    pub(in crate::features) otp_code: Option<String>,
+    pub(in crate::features) otp_error: Option<String>,
+}
+
 #[derive(Debug, Default)]
 pub(in crate::features) struct CredentialPromptBroker {
     pending: Mutex<VecDeque<CredentialPromptRequest>>,
@@ -408,7 +426,7 @@ pub(in crate::features) struct CredentialPromptBroker {
 impl CredentialPromptBroker {
     fn request_secret(&self, prompt: SshCredentialPrompt) -> Result<Option<String>, String> {
         let (response_tx, response_rx) = mpsc::channel();
-        let request = CredentialPromptRequest {
+        let request = CredentialPromptRequest::Secret {
             id: credential_prompt_id(&prompt),
             prompt,
             response_tx,
@@ -421,6 +439,26 @@ impl CredentialPromptBroker {
         response_rx
             .recv_timeout(Duration::from_secs(300))
             .map_err(|_| "SSH credential prompt timed out".to_string())
+    }
+
+    fn request_keyboard_interactive(
+        &self,
+        request: SshKeyboardInteractiveRequest,
+    ) -> Result<Option<Vec<String>>, String> {
+        let (response_tx, response_rx) = mpsc::channel();
+        let queued = CredentialPromptRequest::KeyboardInteractive {
+            id: keyboard_interactive_prompt_id(&request),
+            request,
+            response_tx,
+        };
+        self.pending
+            .lock()
+            .map_err(|_| "credential prompt queue is poisoned".to_string())?
+            .push_back(queued);
+
+        response_rx
+            .recv_timeout(Duration::from_secs(300))
+            .map_err(|_| "SSH keyboard-interactive prompt timed out".to_string())
     }
 
     pub(in crate::features) fn pop_pending(&self) -> Option<CredentialPromptRequest> {
@@ -441,5 +479,12 @@ impl CredentialPromptBroker {
 impl SshCredentialProvider for CredentialPromptBroker {
     fn request_secret(&self, prompt: &SshCredentialPrompt) -> Result<Option<String>, String> {
         CredentialPromptBroker::request_secret(self, prompt.clone())
+    }
+
+    fn request_keyboard_interactive(
+        &self,
+        request: &SshKeyboardInteractiveRequest,
+    ) -> Result<Option<Vec<String>>, String> {
+        CredentialPromptBroker::request_keyboard_interactive(self, request.clone())
     }
 }

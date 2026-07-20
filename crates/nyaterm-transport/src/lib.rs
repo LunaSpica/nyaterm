@@ -257,8 +257,59 @@ pub struct SshCredentialPrompt {
     pub echo: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct SshKeyboardInteractivePrompt {
+    pub prompt: String,
+    pub echo: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct SshKeyboardInteractiveRequest {
+    pub host: String,
+    pub port: u16,
+    pub username: String,
+    pub connection_name: String,
+    pub name: String,
+    pub instructions: String,
+    pub round: u32,
+    pub prompts: Vec<SshKeyboardInteractivePrompt>,
+    pub otp_id: Option<String>,
+}
+
 pub trait SshCredentialProvider: Send + Sync {
     fn request_secret(&self, prompt: &SshCredentialPrompt) -> Result<Option<String>, String>;
+
+    fn request_keyboard_interactive(
+        &self,
+        request: &SshKeyboardInteractiveRequest,
+    ) -> Result<Option<Vec<String>>, String> {
+        let prompt_count = request.prompts.len();
+        let mut responses = Vec::with_capacity(prompt_count);
+        for (index, prompt) in request.prompts.iter().enumerate() {
+            let response = self.request_secret(&SshCredentialPrompt {
+                host: request.host.clone(),
+                port: request.port,
+                username: request.username.clone(),
+                connection_name: request.connection_name.clone(),
+                kind: SshCredentialPromptKind::KeyboardInteractive,
+                reason: SshCredentialPromptReason::KeyboardInteractive,
+                attempt: request.round,
+                prompt_text: Some(format_keyboard_interactive_prompt(
+                    &request.name,
+                    &request.instructions,
+                    &prompt.prompt,
+                    index,
+                    prompt_count,
+                )),
+                echo: prompt.echo,
+            })?;
+            let Some(response) = response else {
+                return Ok(None);
+            };
+            responses.push(response);
+        }
+        Ok(Some(responses))
+    }
 }
 
 pub trait SshOtpProvider: Send + Sync {
@@ -6277,26 +6328,37 @@ fn request_keyboard_interactive_responses(
     round: u32,
 ) -> anyhow::Result<Vec<String>> {
     let prompt_count = prompts.len();
-    let mut responses = Vec::with_capacity(prompt_count);
-    for (index, prompt) in prompts.into_iter().enumerate() {
-        let Some(response) = request_runtime_secret(
-            config,
-            SshCredentialPromptKind::KeyboardInteractive,
-            SshCredentialPromptReason::KeyboardInteractive,
-            round,
-            Some(format_keyboard_interactive_prompt(
-                name,
-                instructions,
-                &prompt.prompt,
-                index,
-                prompt_count,
-            )),
-            prompt.echo,
-        )?
-        else {
-            anyhow::bail!("SSH keyboard-interactive prompt was cancelled");
-        };
-        responses.push(response);
+    let Some(provider) = config.credential_provider.as_ref() else {
+        anyhow::bail!("SSH runtime credential prompt is unavailable");
+    };
+    let request = SshKeyboardInteractiveRequest {
+        host: config.host.clone(),
+        port: config.port,
+        username: config.username.clone(),
+        connection_name: config.name.clone(),
+        name: name.to_string(),
+        instructions: instructions.to_string(),
+        round,
+        prompts: prompts
+            .into_iter()
+            .map(|prompt| SshKeyboardInteractivePrompt {
+                prompt: prompt.prompt,
+                echo: prompt.echo,
+            })
+            .collect(),
+        otp_id: config.otp_id.clone(),
+    };
+    let Some(responses) = provider
+        .request_keyboard_interactive(&request)
+        .map_err(|error| anyhow::anyhow!("SSH keyboard-interactive prompt failed: {error}"))?
+    else {
+        anyhow::bail!("SSH keyboard-interactive prompt was cancelled");
+    };
+    if responses.len() != prompt_count {
+        anyhow::bail!(
+            "SSH keyboard-interactive prompt returned {} responses for {prompt_count} prompts",
+            responses.len()
+        );
     }
     Ok(responses)
 }
@@ -7801,6 +7863,162 @@ mod tests {
         }];
         assert!(!should_auto_fill_otp_prompts(&selection_prompts));
         assert!(!should_auto_fill_password_prompts(&selection_prompts));
+    }
+
+    #[derive(Default)]
+    struct BatchKeyboardInteractiveProvider {
+        requests: Mutex<Vec<SshKeyboardInteractiveRequest>>,
+    }
+
+    impl SshCredentialProvider for BatchKeyboardInteractiveProvider {
+        fn request_secret(&self, _prompt: &SshCredentialPrompt) -> Result<Option<String>, String> {
+            panic!("batch keyboard-interactive should not fall back to request_secret")
+        }
+
+        fn request_keyboard_interactive(
+            &self,
+            request: &SshKeyboardInteractiveRequest,
+        ) -> Result<Option<Vec<String>>, String> {
+            self.requests.lock().unwrap().push(request.clone());
+            Ok(Some(vec!["alice".to_string(), "123456".to_string()]))
+        }
+    }
+
+    #[test]
+    fn keyboard_interactive_requests_are_delivered_as_one_challenge() {
+        let provider = Arc::new(BatchKeyboardInteractiveProvider::default());
+        let config = SshSessionConfig {
+            name: "Production".to_string(),
+            host: "host.example.com".to_string(),
+            port: 2222,
+            username: "root".to_string(),
+            otp_id: Some("otp-1".to_string()),
+            credential_provider: Some(provider.clone()),
+            ..SshSessionConfig::default()
+        };
+        let responses = request_keyboard_interactive_responses(
+            &config,
+            "Login verification",
+            "Complete both fields",
+            vec![
+                client::Prompt {
+                    prompt: "Account:".to_string(),
+                    echo: true,
+                },
+                client::Prompt {
+                    prompt: "Code:".to_string(),
+                    echo: false,
+                },
+            ],
+            2,
+        )
+        .expect("keyboard-interactive responses");
+
+        assert_eq!(responses, ["alice", "123456"]);
+        let requests = provider.requests.lock().unwrap();
+        assert_eq!(requests.len(), 1);
+        let request = &requests[0];
+        assert_eq!(request.connection_name, "Production");
+        assert_eq!(request.name, "Login verification");
+        assert_eq!(request.instructions, "Complete both fields");
+        assert_eq!(request.round, 2);
+        assert_eq!(request.otp_id.as_deref(), Some("otp-1"));
+        assert_eq!(request.prompts.len(), 2);
+        assert!(request.prompts[0].echo);
+        assert!(!request.prompts[1].echo);
+    }
+
+    #[derive(Default)]
+    struct LegacyCredentialProvider {
+        prompts: Mutex<Vec<SshCredentialPrompt>>,
+    }
+
+    impl SshCredentialProvider for LegacyCredentialProvider {
+        fn request_secret(&self, prompt: &SshCredentialPrompt) -> Result<Option<String>, String> {
+            self.prompts.lock().unwrap().push(prompt.clone());
+            Ok(Some("response".to_string()))
+        }
+    }
+
+    #[test]
+    fn keyboard_interactive_default_provider_keeps_single_prompt_compatibility() {
+        let provider = LegacyCredentialProvider::default();
+        let request = SshKeyboardInteractiveRequest {
+            host: "host.example.com".to_string(),
+            port: 22,
+            username: "root".to_string(),
+            connection_name: "Production".to_string(),
+            name: "Verification".to_string(),
+            instructions: "Use both factors".to_string(),
+            round: 3,
+            prompts: vec![
+                SshKeyboardInteractivePrompt {
+                    prompt: "Password:".to_string(),
+                    echo: false,
+                },
+                SshKeyboardInteractivePrompt {
+                    prompt: "Code:".to_string(),
+                    echo: false,
+                },
+            ],
+            otp_id: None,
+        };
+
+        let responses = provider
+            .request_keyboard_interactive(&request)
+            .expect("fallback responses")
+            .expect("not cancelled");
+
+        assert_eq!(responses, ["response", "response"]);
+        let prompts = provider.prompts.lock().unwrap();
+        assert_eq!(prompts.len(), 2);
+        assert_eq!(prompts[0].attempt, 3);
+        assert_eq!(
+            prompts[0].prompt_text.as_deref(),
+            Some("Verification\nUse both factors\nPassword:")
+        );
+    }
+
+    struct ShortKeyboardInteractiveProvider;
+
+    impl SshCredentialProvider for ShortKeyboardInteractiveProvider {
+        fn request_secret(&self, _prompt: &SshCredentialPrompt) -> Result<Option<String>, String> {
+            Ok(None)
+        }
+
+        fn request_keyboard_interactive(
+            &self,
+            _request: &SshKeyboardInteractiveRequest,
+        ) -> Result<Option<Vec<String>>, String> {
+            Ok(Some(vec!["only-one".to_string()]))
+        }
+    }
+
+    #[test]
+    fn keyboard_interactive_rejects_response_count_mismatches() {
+        let config = SshSessionConfig {
+            credential_provider: Some(Arc::new(ShortKeyboardInteractiveProvider)),
+            ..SshSessionConfig::default()
+        };
+        let error = request_keyboard_interactive_responses(
+            &config,
+            "Verification",
+            "",
+            vec![
+                client::Prompt {
+                    prompt: "First:".to_string(),
+                    echo: true,
+                },
+                client::Prompt {
+                    prompt: "Second:".to_string(),
+                    echo: false,
+                },
+            ],
+            1,
+        )
+        .expect_err("response count mismatch");
+
+        assert!(error.to_string().contains("1 responses for 2 prompts"));
     }
 
     fn x11_target_desc(target: X11DisplayTarget) -> String {
