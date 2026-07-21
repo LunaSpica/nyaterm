@@ -467,12 +467,19 @@ impl NyaTermApp {
             tick_started_at,
             TERMINAL_USER_SCROLL_ACTIVE_WINDOW,
         );
+        let input_latency_active =
+            self.terminal_runtime
+                .last_terminal_input_at
+                .is_some_and(|last| {
+                    tick_started_at.saturating_duration_since(last) < TERMINAL_INPUT_LATENCY_WINDOW
+                });
         let terminal_frame_apply_paced = terminal_frame_backlog_active
             && terminal_frame_apply_should_defer(
                 self.terminal_runtime.last_terminal_frame_apply_at,
                 tick_started_at,
                 critical_background_only,
                 user_scroll_frame_pending,
+                input_latency_active,
             );
         let defer_terminal_frame_after_output = runtime_background_should_defer_terminal_frames(
             self.terminal_runtime.session_event_last_output_event_count,
@@ -481,6 +488,7 @@ impl NyaTermApp {
             terminal_frame_backlog_active,
             terminal_frame_apply_paced,
             user_scroll_frame_pending,
+            input_latency_active,
         );
         let defer_terminal_frame_apply =
             defer_terminal_frame_after_output || terminal_frame_apply_paced;

@@ -75,8 +75,8 @@ pub fn terminal_resize_geometry_for_size_with_insets(
     let usable_width =
         (width - insets.left.max(0.) - insets.right.max(0.) - gutter_width).max(cell_width);
     let usable_height = (height - insets.top.max(0.) - insets.bottom.max(0.)).max(cell_height);
-    let raw_cols = (usable_width / cell_width).floor();
-    let raw_rows = (usable_height / cell_height).floor();
+    let raw_cols = (usable_width / cell_width).next_up().floor();
+    let raw_rows = (usable_height / cell_height).next_up().floor();
     let clamped_cols = raw_cols.clamp(20., 500.);
     let clamped_rows = raw_rows.clamp(4., 200.);
     let cols = clamped_cols as u16;
@@ -157,6 +157,22 @@ mod tests {
         assert_eq!(geometry.rows, 30);
         assert_eq!(geometry.pixel_width, 732);
         assert_eq!(geometry.pixel_height, 612);
+    }
+
+    #[test]
+    fn resize_geometry_uses_next_up_to_keep_edge_rows_visible() {
+        let almost_24_rows = f32::from_bits((18.0f32 * 24.0).to_bits() - 1);
+        let geometry = terminal_resize_geometry_for_size_with_insets(
+            424.,
+            almost_24_rows,
+            10.,
+            18.,
+            TerminalViewportInsets::symmetric(0.),
+            0.,
+        );
+
+        assert_eq!(geometry.cols, 42);
+        assert_eq!(geometry.rows, 24);
     }
 
     #[test]

@@ -271,6 +271,23 @@ impl NyaTermApp {
             self.resize_terminal_to_bounds_for_session(None, bounds)
         }
     }
+
+    pub(in crate::features) fn remember_terminal_surface_bounds_for_session_and_sync(
+        &mut self,
+        session_id: Option<&str>,
+        bounds: Bounds<Pixels>,
+        cx: &mut Context<Self>,
+    ) {
+        let resized = self.remember_terminal_surface_bounds_for_session(session_id, bounds);
+        if !resized {
+            return;
+        }
+        if let Some(session_id) = session_id.filter(|id| !id.is_empty()).map(str::to_string) {
+            self.sync_terminal_surface_paint(&session_id, cx);
+        } else {
+            cx.notify();
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]

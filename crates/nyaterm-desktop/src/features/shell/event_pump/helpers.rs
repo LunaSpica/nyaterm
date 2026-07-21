@@ -272,8 +272,9 @@ pub(super) fn runtime_background_should_defer_terminal_frames(
     terminal_frame_backlog_active: bool,
     terminal_frame_apply_paced: bool,
     user_scroll_frame_pending: bool,
+    input_latency_active: bool,
 ) -> bool {
-    if user_scroll_frame_pending {
+    if user_scroll_frame_pending || input_latency_active {
         return false;
     }
     let drained_output = output_event_count > 0 || drained_output_bytes > 0;
@@ -285,8 +286,9 @@ pub(super) fn terminal_frame_apply_should_defer(
     now: Instant,
     output_pressure: bool,
     user_scroll_frame_pending: bool,
+    input_latency_active: bool,
 ) -> bool {
-    if user_scroll_frame_pending {
+    if user_scroll_frame_pending || input_latency_active {
         return false;
     }
     output_pressure
@@ -684,26 +686,29 @@ mod tests {
     #[test]
     fn runtime_background_defers_terminal_frames_after_output() {
         assert!(!runtime_background_should_defer_terminal_frames(
-            0, 0, false, false, false
+            0, 0, false, false, false, false
         ));
         assert!(runtime_background_should_defer_terminal_frames(
-            1, 0, false, false, false
+            1, 0, false, false, false, false
         ));
         assert!(runtime_background_should_defer_terminal_frames(
-            0, 1, false, false, false
+            0, 1, false, false, false, false
         ));
         assert!(!runtime_background_should_defer_terminal_frames(
-            1, 1024, true, true, true
+            1, 1024, true, true, true, false
         ));
     }
 
     #[test]
     fn runtime_background_does_not_starve_due_terminal_frame_apply() {
         assert!(runtime_background_should_defer_terminal_frames(
-            1, 1024, true, true, false
+            1, 1024, true, true, false, false
         ));
         assert!(!runtime_background_should_defer_terminal_frames(
-            1, 1024, true, false, false
+            1, 1024, true, false, false, false
+        ));
+        assert!(!runtime_background_should_defer_terminal_frames(
+            1, 1024, true, true, false, true
         ));
     }
 
@@ -711,10 +716,13 @@ mod tests {
     fn terminal_frame_apply_pacing_only_defers_under_recent_pressure() {
         let now = Instant::now();
 
-        assert!(!terminal_frame_apply_should_defer(None, now, true, false));
+        assert!(!terminal_frame_apply_should_defer(
+            None, now, true, false, false
+        ));
         assert!(!terminal_frame_apply_should_defer(
             Some(now),
             now,
+            false,
             false,
             false
         ));
@@ -722,11 +730,20 @@ mod tests {
             Some(now),
             now,
             true,
+            false,
             false
         ));
         assert!(!terminal_frame_apply_should_defer(
             Some(now),
             now + TERMINAL_FRAME_APPLY_PRESSURE_INTERVAL,
+            true,
+            false,
+            false
+        ));
+        assert!(!terminal_frame_apply_should_defer(
+            Some(now),
+            now,
+            true,
             true,
             false
         ));
@@ -734,6 +751,7 @@ mod tests {
             Some(now),
             now,
             true,
+            false,
             true
         ));
     }

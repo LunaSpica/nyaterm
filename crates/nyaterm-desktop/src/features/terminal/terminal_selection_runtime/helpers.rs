@@ -15,10 +15,11 @@ pub(in crate::features) fn terminal_bounds_tracker(
             let entity = entity.clone();
             let session_id = tracked_session_id.clone();
             cx.defer(move |cx| {
-                let _ = entity.update(cx, |this, _cx| {
-                    this.remember_terminal_surface_bounds_for_session(
+                let _ = entity.update(cx, |this, cx| {
+                    this.remember_terminal_surface_bounds_for_session_and_sync(
                         session_id.as_deref(),
                         bounds,
+                        cx,
                     );
                 });
             });

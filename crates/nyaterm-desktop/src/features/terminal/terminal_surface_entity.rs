@@ -1720,6 +1720,32 @@ fn terminal_surface_fractional_prefetch_offset(
     scroll_offset.checked_sub(1).filter(|offset| *offset > 0)
 }
 
+fn terminal_surface_bounds_tracker(
+    app: Option<Entity<NyaTermApp>>,
+    session_id: String,
+) -> impl IntoElement {
+    gpui::canvas(
+        move |bounds, _window, cx| {
+            let Some(app) = app.clone() else {
+                return;
+            };
+            let session_id = session_id.clone();
+            cx.defer(move |cx| {
+                let _ = app.update(cx, |this, cx| {
+                    this.remember_terminal_surface_bounds_for_session_and_sync(
+                        Some(session_id.as_str()),
+                        bounds,
+                        cx,
+                    );
+                });
+            });
+        },
+        move |_bounds, _state, _window, _cx| {},
+    )
+    .absolute()
+    .size_full()
+}
+
 impl Render for TerminalSurface {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         TERMINAL_SURFACE_PAINT_COUNT.fetch_add(1, Ordering::Relaxed);
@@ -1759,6 +1785,8 @@ impl Render for TerminalSurface {
         let performance_overlay = self.performance_overlay;
         let skipped_output_chars = self.skipped_output_chars;
         let visual_bell = self.visual_bell && self.is_active;
+        let bounds_tracker =
+            terminal_surface_bounds_tracker(self.app.clone(), self.session_id.clone());
 
         let mut grid = NyaTerminalElement::new(
             snapshot.clone(),
@@ -1928,6 +1956,7 @@ impl Render for TerminalSurface {
                     .relative()
                     .overflow_hidden()
                     .child(body)
+                    .child(bounds_tracker)
                     .when_some(performance_overlay, |this, overlay| {
                         this.child(
                             div()
