@@ -32,6 +32,15 @@ pub struct TerminalLineDecorations {
 #[derive(Debug, Clone)]
 struct CachedTerminalPaintRow {
     line: Arc<ShapedLine>,
+    background_ranges: Vec<TerminalRowBackgroundRange>,
+    text_run_count: usize,
+}
+
+#[derive(Debug, Clone)]
+struct TerminalRowBackgroundRange {
+    bg: u32,
+    start: usize,
+    end: usize,
 }
 
 #[derive(Debug, Default)]
@@ -79,26 +88,47 @@ impl NyaTerminalLayoutCache {
         key: u64,
         shape: impl FnOnce() -> (Arc<ShapedLine>, std::time::Duration),
     ) -> (Arc<ShapedLine>, bool, std::time::Duration) {
+        let (row, did_shape, duration) = self.paint_row(_row, key, || {
+            let (line, duration) = shape();
+            (line, duration, 0, Vec::new())
+        });
+        (row.line, did_shape, duration)
+    }
+
+    fn paint_row(
+        &mut self,
+        _row: usize,
+        key: u64,
+        build: impl FnOnce() -> (
+            Arc<ShapedLine>,
+            std::time::Duration,
+            usize,
+            Vec<TerminalRowBackgroundRange>,
+        ),
+    ) -> (CachedTerminalPaintRow, bool, std::time::Duration) {
         if let Some(cached) = self.rows.get(&key) {
             self.hits = self.hits.saturating_add(1);
-            return (Arc::clone(&cached.line), false, std::time::Duration::ZERO);
+            return (cached.clone(), false, std::time::Duration::ZERO);
         }
         self.misses = self.misses.saturating_add(1);
         if self.rows.len() >= TERMINAL_LAYOUT_CACHE_ROW_CAP {
             self.rows.clear();
         }
-        let (line, duration) = shape();
+        let (line, duration, text_run_count, background_ranges) = build();
         self.shape_calls = self.shape_calls.saturating_add(1);
         self.shape_duration_us = self
             .shape_duration_us
             .saturating_add(duration.as_micros().min(u128::from(u64::MAX)) as u64);
+        let row = CachedTerminalPaintRow {
+            line: Arc::clone(&line),
+            background_ranges,
+            text_run_count,
+        };
         self.rows.insert(
             key,
-            CachedTerminalPaintRow {
-                line: Arc::clone(&line),
-            },
+            row.clone(),
         );
-        (line, true, duration)
+        (row, true, duration)
     }
 }
 
@@ -273,6 +303,44 @@ mod layout_cache_tests {
             element.row_layout_key(0, "same", None, &base),
             element.row_layout_key(0, "same", None, &active)
         );
+    }
+
+    #[test]
+    fn paint_row_cache_reuses_full_row_payload() {
+        let mut cache = NyaTerminalLayoutCache::default();
+        let mut build_calls = 0usize;
+
+        let (row, did_shape, duration) = cache.paint_row(0, 42, || {
+            build_calls += 1;
+            (
+                Arc::new(ShapedLine::default()),
+                std::time::Duration::ZERO,
+                3,
+                vec![TerminalRowBackgroundRange {
+                    bg: 0xff00ff,
+                    start: 2,
+                    end: 4,
+                }],
+            )
+        });
+
+        assert!(did_shape);
+        assert_eq!(duration, std::time::Duration::ZERO);
+        assert_eq!(build_calls, 1);
+        assert_eq!(row.text_run_count, 3);
+        assert_eq!(row.background_ranges.len(), 1);
+
+        let (cached, did_shape, duration) = cache.paint_row(0, 42, || {
+            panic!("cached row should not rebuild");
+        });
+
+        assert!(!did_shape);
+        assert_eq!(duration, std::time::Duration::ZERO);
+        assert_eq!(build_calls, 1);
+        assert_eq!(cached.text_run_count, 3);
+        assert_eq!(cached.background_ranges[0].bg, 0xff00ff);
+        assert_eq!(cached.background_ranges[0].start, 2);
+        assert_eq!(cached.background_ranges[0].end, 4);
     }
 
     #[test]
@@ -663,6 +731,35 @@ impl NyaTerminalElement {
         ));
         (line, true, started_at.elapsed())
     }
+
+    fn cached_paint_row(
+        &self,
+        row: usize,
+        row_key: u64,
+        window: &mut Window,
+        build: impl FnOnce(&mut Window) -> (
+            Arc<ShapedLine>,
+            std::time::Duration,
+            usize,
+            Vec<TerminalRowBackgroundRange>,
+        ),
+    ) -> (CachedTerminalPaintRow, bool, std::time::Duration) {
+        if let Some(cache) = self.layout_cache.as_ref()
+            && let Ok(mut cache) = cache.lock()
+        {
+            return cache.paint_row(row, row_key, || build(window));
+        }
+        let (line, duration, text_run_count, background_ranges) = build(window);
+        (
+            CachedTerminalPaintRow {
+                line,
+                background_ranges,
+                text_run_count,
+            },
+            true,
+            duration,
+        )
+    }
 }
 
 fn hash_stable_glyph_decorations<H: Hasher>(decorations: &TerminalLineDecorations, hasher: &mut H) {
@@ -716,6 +813,63 @@ fn terminal_ansi_spans_are_plain(ansi_spans: Option<&[nyaterm_terminal::StyledSp
     spans
         .iter()
         .all(|span| span.text.is_empty() || span.style == default_style)
+}
+
+fn terminal_background_ranges_for_spans(
+    spans: &[TerminalHighlightSpan],
+    palette: nyaterm_ui::ThemePalette,
+) -> Vec<TerminalRowBackgroundRange> {
+    let mut out = Vec::new();
+    let mut col = 0usize;
+    let mut pending_bg: Option<TerminalRowBackgroundRange> = None;
+    for span in spans {
+        let bg = span.bg.or_else(|| span.keyword.then_some(palette.surface));
+        let span_cols = terminal_cell_count(&span.text).max(1);
+        if let Some(bg) = bg {
+            match pending_bg.as_mut() {
+                Some(current) if current.bg == bg && current.end == col => {
+                    current.end = col + span_cols;
+                }
+                _ => {
+                    if let Some(range) = pending_bg.take() {
+                        out.push(range);
+                    }
+                    pending_bg = Some(TerminalRowBackgroundRange {
+                        bg,
+                        start: col,
+                        end: col + span_cols,
+                    });
+                }
+            }
+        } else if let Some(range) = pending_bg.take() {
+            out.push(range);
+        }
+        col += span_cols;
+    }
+    if let Some(range) = pending_bg.take() {
+        out.push(range);
+    }
+    out
+}
+
+fn push_terminal_background_ranges(
+    row: usize,
+    ranges: &[TerminalRowBackgroundRange],
+    bounds: Bounds<Pixels>,
+    cell_w: f32,
+    cell_h: f32,
+    out: &mut Vec<PaintQuad>,
+) {
+    for range in ranges {
+        flush_bg(
+            Some((range.bg, range.start, range.end)),
+            row,
+            bounds,
+            cell_w,
+            cell_h,
+            out,
+        );
+    }
 }
 
 fn push_dynamic_decoration_backgrounds(
@@ -888,171 +1042,6 @@ impl Element for NyaTerminalElement {
                 &mut plan.decoration_backgrounds,
             );
 
-            // Plain/degraded rows skip full highlight span work entirely.
-            if terminal_plain_row_fast_path(ansi, self.keyword_rules.as_slice(), decorations) {
-                let text = display_line.to_string();
-                let text_runs = vec![TextRun {
-                    len: text.len().max(1),
-                    font: terminal_run_font(
-                        base_font.clone(),
-                        false,
-                        false,
-                        self.normal_weight,
-                        self.bold_weight,
-                    ),
-                    color: rgb(self.palette.terminal_fg).into(),
-                    background_color: None,
-                    underline: None,
-                    strikethrough: None,
-                }];
-                let row_key = self.row_layout_key_with_keyword_key(
-                    row,
-                    display_line,
-                    ansi,
-                    decorations,
-                    keyword_rules_key,
-                );
-                plan.text_run_count = plan.text_run_count.saturating_add(text_runs.len());
-                let (shaped, did_shape, shape_duration) =
-                    self.shape_row(row, row_key, text, text_runs, font_size, window);
-                if did_shape {
-                    plan.shape_line_count = plan.shape_line_count.saturating_add(1);
-                    plan.shape_line_duration += shape_duration;
-                }
-                plan.rows.push(TerminalPaintRow { y, line: shaped });
-                continue;
-            }
-
-            // Base spans drive cell/keyword backgrounds only (under images).
-            let background_spans = terminal_highlight_spans_compiled(
-                display_line,
-                ansi,
-                &compiled_keyword_rules,
-                &[],
-                &[],
-                None,
-                &[],
-                self.palette,
-            );
-            // Glyph spans intentionally exclude search/selection/cursor state so
-            // dynamic overlays do not invalidate shaped base rows.
-            let mut spans = background_spans.clone();
-            if !decorations.link_ranges.is_empty() {
-                spans = apply_action_link_ranges(spans, &decorations.link_ranges, self.palette);
-            }
-            if !decorations.active_search_ranges.is_empty() {
-                spans = apply_search_ranges(
-                    spans,
-                    &decorations.active_search_ranges,
-                    true,
-                    self.palette,
-                );
-            }
-
-            // Cell / keyword backgrounds.
-            let mut col = 0usize;
-            let mut pending_bg: Option<(u32, usize, usize)> = None;
-            for span in &background_spans {
-                let bg = span
-                    .bg
-                    .or_else(|| span.keyword.then_some(self.palette.surface));
-                let span_cols = terminal_cell_count(&span.text).max(1);
-                if let Some(bg) = bg {
-                    match pending_bg.as_mut() {
-                        Some((current_bg, _start, end)) if *current_bg == bg && *end == col => {
-                            *end = col + span_cols;
-                        }
-                        _ => {
-                            flush_bg(
-                                pending_bg.take(),
-                                row,
-                                bounds,
-                                cell_w,
-                                cell_h,
-                                &mut plan.backgrounds,
-                            );
-                            pending_bg = Some((bg, col, col + span_cols));
-                        }
-                    }
-                } else {
-                    flush_bg(
-                        pending_bg.take(),
-                        row,
-                        bounds,
-                        cell_w,
-                        cell_h,
-                        &mut plan.backgrounds,
-                    );
-                }
-                col += span_cols;
-            }
-            flush_bg(
-                pending_bg.take(),
-                row,
-                bounds,
-                cell_w,
-                cell_h,
-                &mut plan.backgrounds,
-            );
-
-            let mut text = String::new();
-            let mut text_runs = Vec::new();
-            for span in spans {
-                let run_len = span.text.len();
-                text.push_str(&span.text);
-                if run_len > 0 {
-                    text_runs.push(TextRun {
-                        len: run_len,
-                        font: terminal_run_font(
-                            base_font.clone(),
-                            span.bold,
-                            span.italic,
-                            self.normal_weight,
-                            self.bold_weight,
-                        ),
-                        color: span
-                            .color
-                            .map(rgb)
-                            .unwrap_or_else(|| rgb(self.palette.terminal_fg))
-                            .into(),
-                        background_color: None,
-                        underline: span.underline.then(|| {
-                            line_underline_color(
-                                span.color
-                                    .map(rgb)
-                                    .unwrap_or_else(|| rgb(self.palette.accent))
-                                    .into(),
-                            )
-                        }),
-                        strikethrough: span.strikeout.then(|| {
-                            line_strike_color(
-                                span.color
-                                    .map(rgb)
-                                    .unwrap_or_else(|| rgb(self.palette.terminal_fg))
-                                    .into(),
-                            )
-                        }),
-                    });
-                }
-            }
-
-            if text.is_empty() {
-                text.push(' ');
-                text_runs.push(TextRun {
-                    len: 1,
-                    font: terminal_run_font(
-                        base_font.clone(),
-                        false,
-                        false,
-                        self.normal_weight,
-                        self.bold_weight,
-                    ),
-                    color: rgb(self.palette.terminal_fg).into(),
-                    background_color: None,
-                    underline: None,
-                    strikethrough: None,
-                });
-            }
             let row_key = self.row_layout_key_with_keyword_key(
                 row,
                 display_line,
@@ -1060,14 +1049,163 @@ impl Element for NyaTerminalElement {
                 decorations,
                 keyword_rules_key,
             );
-            plan.text_run_count = plan.text_run_count.saturating_add(text_runs.len());
-            let (shaped, did_shape, shape_duration) =
-                self.shape_row(row, row_key, text, text_runs, font_size, window);
+            let (painted_row, did_shape, shape_duration) = self.cached_paint_row(
+                row,
+                row_key,
+                window,
+                |window| {
+                    if terminal_plain_row_fast_path(ansi, self.keyword_rules.as_slice(), decorations)
+                    {
+                        let text = display_line.to_string();
+                        let text_runs = vec![TextRun {
+                            len: text.len().max(1),
+                            font: terminal_run_font(
+                                base_font.clone(),
+                                false,
+                                false,
+                                self.normal_weight,
+                                self.bold_weight,
+                            ),
+                            color: rgb(self.palette.terminal_fg).into(),
+                            background_color: None,
+                            underline: None,
+                            strikethrough: None,
+                        }];
+                        let line_started_at = Instant::now();
+                        let line = Arc::new(window.text_system().shape_line(
+                            SharedString::from(text),
+                            font_size,
+                            &text_runs,
+                            None,
+                        ));
+                        return (
+                            line,
+                            line_started_at.elapsed(),
+                            text_runs.len(),
+                            Vec::new(),
+                        );
+                    }
+
+                    // Base spans drive cell/keyword backgrounds only (under images).
+                    let background_spans = terminal_highlight_spans_compiled(
+                        display_line,
+                        ansi,
+                        &compiled_keyword_rules,
+                        &[],
+                        &[],
+                        None,
+                        &[],
+                        self.palette,
+                    );
+                    // Glyph spans intentionally exclude search/selection/cursor state so
+                    // dynamic overlays do not invalidate shaped base rows.
+                    let mut spans = background_spans.clone();
+                    if !decorations.link_ranges.is_empty() {
+                        spans = apply_action_link_ranges(spans, &decorations.link_ranges, self.palette);
+                    }
+                    if !decorations.active_search_ranges.is_empty() {
+                        spans = apply_search_ranges(
+                            spans,
+                            &decorations.active_search_ranges,
+                            true,
+                            self.palette,
+                        );
+                    }
+                    let background_ranges =
+                        terminal_background_ranges_for_spans(&background_spans, self.palette);
+
+                    let mut text = String::new();
+                    let mut text_runs = Vec::new();
+                    for span in spans {
+                        let run_len = span.text.len();
+                        text.push_str(&span.text);
+                        if run_len > 0 {
+                            text_runs.push(TextRun {
+                                len: run_len,
+                                font: terminal_run_font(
+                                    base_font.clone(),
+                                    span.bold,
+                                    span.italic,
+                                    self.normal_weight,
+                                    self.bold_weight,
+                                ),
+                                color: span
+                                    .color
+                                    .map(rgb)
+                                    .unwrap_or_else(|| rgb(self.palette.terminal_fg))
+                                    .into(),
+                                background_color: None,
+                                underline: span.underline.then(|| {
+                                    line_underline_color(
+                                        span.color
+                                            .map(rgb)
+                                            .unwrap_or_else(|| rgb(self.palette.accent))
+                                            .into(),
+                                    )
+                                }),
+                                strikethrough: span.strikeout.then(|| {
+                                    line_strike_color(
+                                        span.color
+                                            .map(rgb)
+                                            .unwrap_or_else(|| rgb(self.palette.terminal_fg))
+                                            .into(),
+                                    )
+                                }),
+                            });
+                        }
+                    }
+
+                    if text.is_empty() {
+                        text.push(' ');
+                        text_runs.push(TextRun {
+                            len: 1,
+                            font: terminal_run_font(
+                                base_font.clone(),
+                                false,
+                                false,
+                                self.normal_weight,
+                                self.bold_weight,
+                            ),
+                            color: rgb(self.palette.terminal_fg).into(),
+                            background_color: None,
+                            underline: None,
+                            strikethrough: None,
+                        });
+                    }
+                    let line_started_at = Instant::now();
+                    let line = Arc::new(window.text_system().shape_line(
+                        SharedString::from(text),
+                        font_size,
+                        &text_runs,
+                        None,
+                    ));
+                    (
+                        line,
+                        line_started_at.elapsed(),
+                        text_runs.len(),
+                        background_ranges,
+                    )
+                },
+            );
+            push_terminal_background_ranges(
+                row,
+                &painted_row.background_ranges,
+                bounds,
+                cell_w,
+                cell_h,
+                &mut plan.backgrounds,
+            );
+            plan.text_run_count = plan
+                .text_run_count
+                .saturating_add(painted_row.text_run_count);
             if did_shape {
                 plan.shape_line_count = plan.shape_line_count.saturating_add(1);
                 plan.shape_line_duration += shape_duration;
             }
-            plan.rows.push(TerminalPaintRow { y, line: shaped });
+            plan.rows.push(TerminalPaintRow {
+                y,
+                line: painted_row.line,
+            });
         }
 
         // Graphics protocol placements (Kitty / iTerm2 / Sixel).
