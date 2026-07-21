@@ -444,11 +444,7 @@ impl NyaTermApp {
         }
     }
 
-    fn tab_dock_drop_overlay(
-        &self,
-        zone: TabDockZone,
-        palette: ThemePalette,
-    ) -> impl IntoElement {
+    fn tab_dock_drop_overlay(&self, zone: TabDockZone, palette: ThemePalette) -> impl IntoElement {
         let label = match zone {
             TabDockZone::Center => "Merge into window",
             TabDockZone::Edge(TabDockEdge::Left) => "Split left",

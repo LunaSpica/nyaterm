@@ -341,7 +341,10 @@ impl NyaTermApp {
             .child(details)
             .child(
                 div()
-                    .id(SharedString::from(format!("credential-input-{}", prompt.id)))
+                    .id(SharedString::from(format!(
+                        "credential-input-{}",
+                        prompt.id
+                    )))
                     .w_full()
                     .h(px(36.))
                     .px_3()

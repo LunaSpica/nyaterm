@@ -13,11 +13,7 @@ fn connection_menu_position(
     let height = preferred_height.min(max_height);
     let max_x = (viewport_width - menu_width - margin).max(margin);
     let max_y = (viewport_height - height - margin).max(margin);
-    (
-        x.clamp(margin, max_x),
-        y.clamp(margin, max_y),
-        max_height,
-    )
+    (x.clamp(margin, max_x), y.clamp(margin, max_y), max_height)
 }
 
 impl NyaTermApp {
@@ -299,21 +295,22 @@ impl NyaTermApp {
                         }),
                     ))
                     .when(total_in_group > 0, |this| {
-                        this.child(menu_separator(palette)).child(menu_item_with_icon(
-                            palette,
-                            "connection-group-context-open-all",
-                            "icons/fe/forward.svg",
-                            self.tr("savedConnections.openAllConnections"),
-                            false,
-                            cx.listener(move |this, _, window, cx| {
-                                this.close_connection_context_menus(cx);
-                                this.open_connection_group_open_confirm(
-                                    group_id_open.clone(),
-                                    window,
-                                    cx,
-                                );
-                            }),
-                        ))
+                        this.child(menu_separator(palette))
+                            .child(menu_item_with_icon(
+                                palette,
+                                "connection-group-context-open-all",
+                                "icons/fe/forward.svg",
+                                self.tr("savedConnections.openAllConnections"),
+                                false,
+                                cx.listener(move |this, _, window, cx| {
+                                    this.close_connection_context_menus(cx);
+                                    this.open_connection_group_open_confirm(
+                                        group_id_open.clone(),
+                                        window,
+                                        cx,
+                                    );
+                                }),
+                            ))
                     })
                     .child(menu_separator(palette))
                     .child(menu_item_with_icon(

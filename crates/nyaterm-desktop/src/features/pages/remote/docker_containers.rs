@@ -208,7 +208,7 @@ fn docker_container_row(
                                 .child(truncate_preview(&container.image, 48)),
                         )
                         .child(div().flex_none().child(short.clone())),
-                )
+                ),
         )
         .on_click(cx.listener(move |this, _, window, cx| {
             this.docker_container_menu_id = None;

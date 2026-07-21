@@ -23,8 +23,7 @@ impl NyaTermApp {
         if !self.connections_clear_all_confirm_open {
             return;
         }
-        match self
-            .with_connection_store(|store| store.replace_sessions(&SessionsConfig::default()))
+        match self.with_connection_store(|store| store.replace_sessions(&SessionsConfig::default()))
         {
             Ok(()) => {
                 self.connections_clear_all_confirm_open = false;

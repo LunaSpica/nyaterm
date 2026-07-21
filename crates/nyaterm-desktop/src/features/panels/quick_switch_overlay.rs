@@ -242,30 +242,27 @@ impl NyaTermApp {
                                 ),
                             ))
                             .child(
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .child(
-                                        div()
-                                            .id("quick-switch-new-ssh")
-                                            .h(px(28.))
-                                            .px_3()
-                                            .flex()
-                                            .items_center()
-                                            .rounded_sm()
-                                            .bg(rgb(palette.primary))
-                                            .text_color(rgb(palette.on_primary))
-                                            .text_xs()
-                                            .cursor_pointer()
-                                            .hover(|this| this.bg(rgb(palette.primary_hover)))
-                                            .child(self.tr("sessionQuickSwitcher.newSsh"))
-                                            .on_click(cx.listener(|this, _, window, cx| {
-                                                this.quick_switch_open = false;
-                                                this.open_connection_editor(
-                                                    None, None, true, window, cx,
-                                                );
-                                            })),
-                                    ),
+                                div().flex().items_center().child(
+                                    div()
+                                        .id("quick-switch-new-ssh")
+                                        .h(px(28.))
+                                        .px_3()
+                                        .flex()
+                                        .items_center()
+                                        .rounded_sm()
+                                        .bg(rgb(palette.primary))
+                                        .text_color(rgb(palette.on_primary))
+                                        .text_xs()
+                                        .cursor_pointer()
+                                        .hover(|this| this.bg(rgb(palette.primary_hover)))
+                                        .child(self.tr("sessionQuickSwitcher.newSsh"))
+                                        .on_click(cx.listener(|this, _, window, cx| {
+                                            this.quick_switch_open = false;
+                                            this.open_connection_editor(
+                                                None, None, true, window, cx,
+                                            );
+                                        })),
+                                ),
                             ),
                     ),
             )

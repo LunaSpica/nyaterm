@@ -221,22 +221,17 @@ pub(super) fn network_group_editor_panel(
         .flex_col()
         .gap_4()
         .child(
-            div()
-                .flex()
-                .items_center()
-                .justify_between()
-                .gap_3()
-                .child(
-                    div()
-                        .text_size(px(15.))
-                        .font_weight(FontWeight(700.))
-                        .text_color(rgb(palette.text))
-                        .child(if editor.id.is_some() {
-                            app.tr("network.renameGroup")
-                        } else {
-                            app.tr("network.newGroup")
-                        }),
-                ),
+            div().flex().items_center().justify_between().gap_3().child(
+                div()
+                    .text_size(px(15.))
+                    .font_weight(FontWeight(700.))
+                    .text_color(rgb(palette.text))
+                    .child(if editor.id.is_some() {
+                        app.tr("network.renameGroup")
+                    } else {
+                        app.tr("network.newGroup")
+                    }),
+            ),
         )
         .child(
             div()

@@ -13,11 +13,7 @@ fn ai_message_menu_position(
     let height = menu_height.min(max_height);
     let max_x = (viewport_width - menu_width - margin).max(margin);
     let max_y = (viewport_height - height - margin).max(margin);
-    (
-        x.clamp(margin, max_x),
-        y.clamp(margin, max_y),
-        max_height,
-    )
+    (x.clamp(margin, max_x), y.clamp(margin, max_y), max_height)
 }
 
 impl NyaTermApp {
@@ -214,7 +210,7 @@ impl NyaTermApp {
                     .text_size(px(10.))
                     .font_weight(FontWeight(700.))
                     .text_color(rgb(palette.text_muted))
-            .child(role_label),
+                    .child(role_label),
             );
 
         if let Some(reasoning) = reasoning {

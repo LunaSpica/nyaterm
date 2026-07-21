@@ -379,7 +379,10 @@ pub fn can_suggest_from_tracked_command(state: &TerminalInputState, command: &st
     !state.desynced && !state.multiline && state.cursor == state.value.len() && !command.is_empty()
 }
 
-pub fn terminal_input_tracker_below_min_chars(state: &TerminalInputState, min_chars: usize) -> bool {
+pub fn terminal_input_tracker_below_min_chars(
+    state: &TerminalInputState,
+    min_chars: usize,
+) -> bool {
     state.value.chars().count() < min_chars.max(1)
 }
 

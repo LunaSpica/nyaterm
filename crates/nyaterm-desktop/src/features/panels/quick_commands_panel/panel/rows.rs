@@ -91,9 +91,7 @@ impl NyaTermApp {
                         .items_center()
                         .gap_1()
                         .cursor_pointer()
-                        .hover(move |this| {
-                            this.bg(rgba((palette.surface_elevated << 8) | 0x80))
-                        })
+                        .hover(move |this| this.bg(rgba((palette.surface_elevated << 8) | 0x80)))
                         .on_mouse_down(
                             MouseButton::Right,
                             cx.listener({

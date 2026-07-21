@@ -95,17 +95,15 @@ impl NyaTermApp {
                                     this.cancel_close_all_sessions_confirm(cx);
                                 }),
                             ))
-                            .child(
-                                dialog_action_button(
-                                    palette,
-                                    "close-all-sessions-confirm",
-                                    self.tr(action_key),
-                                    true,
-                                    cx.listener(|this, _, window, cx| {
-                                        this.confirm_close_all_sessions(window, cx);
-                                    }),
-                                ),
-                            ),
+                            .child(dialog_action_button(
+                                palette,
+                                "close-all-sessions-confirm",
+                                self.tr(action_key),
+                                true,
+                                cx.listener(|this, _, window, cx| {
+                                    this.confirm_close_all_sessions(window, cx);
+                                }),
+                            )),
                     ),
             )
             .into_any_element()

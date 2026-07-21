@@ -342,7 +342,7 @@ pub(in crate::features::pages::remote) fn docker_details_panel(
                         false,
                         labels.copy,
                         cx,
-                    ))
+                    )),
             )
         })
         .child(

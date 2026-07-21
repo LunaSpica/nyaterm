@@ -76,12 +76,7 @@ impl TransferPathPart {
 pub(in crate::features::pages::transfers) fn transfer_browser_table_width(
     widths: TransferBrowserColumnWidths,
 ) -> gpui::Pixels {
-    widths.name
-        + widths.modified
-        + widths.size
-        + widths.permissions
-        + widths.owner
-        + widths.group
+    widths.name + widths.modified + widths.size + widths.permissions + widths.owner + widths.group
 }
 
 pub(in crate::features::pages::transfers) fn transfer_path_part_value(

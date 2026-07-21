@@ -142,21 +142,19 @@ pub(in crate::features::pages::tunnels) fn network_tunnel_editor_panel(
                 }),
         )
         .when(!editor.is_dynamic(), |this| {
-            this.child(
-                tunnel_editor_input(
-                    palette,
-                    "network-tunnel-editor-target-host",
-                    match editor.tunnel_type.as_str() {
-                        "remote" => app.tr("network.targetHostRemote"),
-                        _ => app.tr("network.targetHostLocal"),
-                    },
-                    editor.target_host.clone(),
-                    editor.focused_field == NetworkTunnelEditorField::TargetHost,
-                    NetworkTunnelEditorField::TargetHost,
-                    focus,
-                    cx,
-                ),
-            )
+            this.child(tunnel_editor_input(
+                palette,
+                "network-tunnel-editor-target-host",
+                match editor.tunnel_type.as_str() {
+                    "remote" => app.tr("network.targetHostRemote"),
+                    _ => app.tr("network.targetHostLocal"),
+                },
+                editor.target_host.clone(),
+                editor.focused_field == NetworkTunnelEditorField::TargetHost,
+                NetworkTunnelEditorField::TargetHost,
+                focus,
+                cx,
+            ))
         })
         .child(
             div()

@@ -799,7 +799,7 @@ pub(super) fn settings_form_row(
                 .when_some(desc, |this, desc| {
                     this.child(
                         div()
-                        .text_size(px(12.))
+                            .text_size(px(12.))
                             .text_color(rgb(palette.text_dimmed))
                             .child(desc),
                     )

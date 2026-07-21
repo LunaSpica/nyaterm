@@ -102,11 +102,7 @@ fn transfer_menu_position(
     let height = preferred_height.min(max_height);
     let max_x = (viewport_width - menu_width - margin).max(margin);
     let max_y = (viewport_height - height - margin).max(margin);
-    (
-        x.clamp(margin, max_x),
-        y.clamp(margin, max_y),
-        max_height,
-    )
+    (x.clamp(margin, max_x), y.clamp(margin, max_y), max_height)
 }
 
 impl NyaTermApp {

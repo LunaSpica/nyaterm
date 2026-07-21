@@ -432,7 +432,12 @@ pub(super) fn connection_editor_group_select(
                         .flex_none()
                         .text_size(px(10.))
                         .text_color(rgb(palette.text_dimmed))
-                        .child(svg().size(px(14.)).flex_none().path("icons/chevron-down.svg")),
+                        .child(
+                            svg()
+                                .size(px(14.))
+                                .flex_none()
+                                .path("icons/chevron-down.svg"),
+                        ),
                 )
                 .on_click(cx.listener(|this, _, _, cx| {
                     this.toggle_connection_editor_menu(ConnectionEditorMenu::Group, cx);
@@ -626,7 +631,12 @@ pub(super) fn connection_editor_select(
                         .flex_none()
                         .text_size(px(10.))
                         .text_color(rgb(palette.text_dimmed))
-                        .child(svg().size(px(14.)).flex_none().path("icons/chevron-down.svg")),
+                        .child(
+                            svg()
+                                .size(px(14.))
+                                .flex_none()
+                                .path("icons/chevron-down.svg"),
+                        ),
                 )
                 .on_click(cx.listener(move |this, _, _, cx| {
                     this.toggle_connection_editor_menu(menu, cx);
@@ -865,13 +875,17 @@ pub(super) fn menu_item_with_icon(
         .cursor_pointer()
         .hover(|this| this.bg(rgb(palette.surface_elevated)))
         .on_click(on_click)
-        .child(svg().size(px(14.)).flex_none().path(icon).text_color(rgb(
-            if destructive {
-                palette.danger
-            } else {
-                palette.text_muted
-            },
-        )))
+        .child(
+            svg()
+                .size(px(14.))
+                .flex_none()
+                .path(icon)
+                .text_color(rgb(if destructive {
+                    palette.danger
+                } else {
+                    palette.text_muted
+                })),
+        )
         .child(div().min_w_0().flex_1().child(label.into()))
 }
 

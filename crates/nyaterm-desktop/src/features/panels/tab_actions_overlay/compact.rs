@@ -32,12 +32,7 @@ impl NyaTermApp {
         };
         let active_submenu = self.tab_actions_submenu;
 
-        let mut color_row = div()
-            .p_2()
-            .flex()
-            .flex_wrap()
-            .gap_1()
-            .items_center();
+        let mut color_row = div().p_2().flex().flex_wrap().gap_1().items_center();
         for (name, color) in TAB_PRESET_COLORS {
             let selected = active_color == Some(color);
             let color_session_id = session_id.clone();
@@ -572,11 +567,7 @@ impl NyaTermApp {
             .into_any_element()
     }
 
-    fn open_tab_actions_submenu(
-        &mut self,
-        submenu: TabActionsSubmenu,
-        cx: &mut Context<Self>,
-    ) {
+    fn open_tab_actions_submenu(&mut self, submenu: TabActionsSubmenu, cx: &mut Context<Self>) {
         if self.tab_actions_submenu != Some(submenu) {
             self.tab_actions_submenu = Some(submenu);
             cx.notify();

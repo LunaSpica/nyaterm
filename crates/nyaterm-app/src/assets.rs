@@ -213,9 +213,9 @@ fn icon_bytes(path: &str) -> Option<&'static [u8]> {
         "icons/fe/star-outline.svg" => Some(include_bytes!("../assets/icons/fe/star-outline.svg")),
         "icons/fe/sync.svg" => Some(include_bytes!("../assets/icons/fe/sync.svg")),
         "icons/fe/paste.svg" => Some(include_bytes!("../assets/icons/fe/paste.svg")),
-        "icons/fe/bookmark-remove.svg" => Some(include_bytes!(
-            "../assets/icons/fe/bookmark-remove.svg"
-        )),
+        "icons/fe/bookmark-remove.svg" => {
+            Some(include_bytes!("../assets/icons/fe/bookmark-remove.svg"))
+        }
         "icons/transfer/clear-all.svg" => {
             Some(include_bytes!("../assets/icons/transfer/clear-all.svg"))
         }

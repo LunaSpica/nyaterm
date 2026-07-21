@@ -323,12 +323,7 @@ impl NyaTermApp {
                     .when(side == ActivitySide::Left, |this| this.left_0())
                     .when(side == ActivitySide::Right, |this| this.right_0()),
             )
-            .child(activity_icon(
-                icon_path,
-                glyph,
-                icon_color.into(),
-                18.,
-            ))
+            .child(activity_icon(icon_path, glyph, icon_color.into(), 18.))
             .when(show_labels, |this| {
                 this.child(
                     div()

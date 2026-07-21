@@ -273,8 +273,8 @@ impl NyaTermApp {
                 .when(
                     has_left_activity_items && self.left_side_open() && !left_overlay_mode,
                     |this| {
-                    this.child(self.sidebar(cx))
-                        .child(self.panel_resize_handle(PanelResizeSide::Left, cx))
+                        this.child(self.sidebar(cx))
+                            .child(self.panel_resize_handle(PanelResizeSide::Left, cx))
                     },
                 )
                 .child(self.main_surface(cx))

@@ -16,9 +16,11 @@ pub(super) fn terminal_plain_text_input_event(event: &gpui::KeyDownEvent) -> boo
     if modifiers.control || modifiers.platform || modifiers.alt || modifiers.function {
         return false;
     }
-    event.keystroke.key_char.as_deref().is_some_and(|input| {
-        input.chars().count() == 1 && input.chars().all(|ch| !ch.is_control())
-    })
+    event
+        .keystroke
+        .key_char
+        .as_deref()
+        .is_some_and(|input| input.chars().count() == 1 && input.chars().all(|ch| !ch.is_control()))
 }
 
 #[cfg(test)]

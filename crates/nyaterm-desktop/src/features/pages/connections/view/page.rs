@@ -345,16 +345,17 @@ impl NyaTermApp {
                                     }),
                                 ))
                                 .when(can_clear_all, |this| {
-                                    this.child(menu_separator(palette)).child(menu_item_with_icon(
-                                        palette,
-                                        "connections-clear-all",
-                                        "icons/transfer/clear-all.svg",
-                                        self.tr("savedConnections.clearAll"),
-                                        true,
-                                        cx.listener(|this, _, _, cx| {
-                                            this.open_connections_clear_all_confirm(cx);
-                                        }),
-                                    ))
+                                    this.child(menu_separator(palette))
+                                        .child(menu_item_with_icon(
+                                            palette,
+                                            "connections-clear-all",
+                                            "icons/transfer/clear-all.svg",
+                                            self.tr("savedConnections.clearAll"),
+                                            true,
+                                            cx.listener(|this, _, _, cx| {
+                                                this.open_connections_clear_all_confirm(cx);
+                                            }),
+                                        ))
                                 }),
                         )
                     }),

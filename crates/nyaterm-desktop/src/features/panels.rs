@@ -2,10 +2,10 @@ use super::*;
 
 #[path = "panels/about_overlay.rs"]
 mod about_overlay;
-#[path = "panels/connection_import_overlay.rs"]
-mod connection_import_overlay;
 #[path = "panels/active_session_menu_overlay.rs"]
 mod active_session_menu_overlay;
+#[path = "panels/connection_import_overlay.rs"]
+mod connection_import_overlay;
 #[path = "panels/helpers.rs"]
 mod helpers;
 #[path = "panels/lock_screen_overlay.rs"]

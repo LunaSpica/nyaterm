@@ -61,35 +61,25 @@ pub(in crate::features::pages::tunnels) fn network_proxy_editor_panel(
             div()
                 .flex()
                 .gap_3()
-                .child(
-                    div()
-                        .w(px(144.))
-                        .flex_none()
-                        .child(tunnel_editor_selector(
-                            palette,
-                            "network-proxy-editor-protocol",
-                            app.tr("network.protocol"),
-                            protocol_label.to_string(),
-                            cx.listener(|this, _, _, cx| {
-                                this.cycle_network_proxy_protocol(cx);
-                            }),
-                        )),
-                )
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .child(proxy_editor_input(
-                            palette,
-                            "network-proxy-editor-name",
-                            app.tr("network.proxyName"),
-                            editor.name.clone(),
-                            editor.focused_field == NetworkProxyEditorField::Name,
-                            NetworkProxyEditorField::Name,
-                            focus,
-                            cx,
-                        )),
-                ),
+                .child(div().w(px(144.)).flex_none().child(tunnel_editor_selector(
+                    palette,
+                    "network-proxy-editor-protocol",
+                    app.tr("network.protocol"),
+                    protocol_label.to_string(),
+                    cx.listener(|this, _, _, cx| {
+                        this.cycle_network_proxy_protocol(cx);
+                    }),
+                )))
+                .child(div().flex_1().min_w_0().child(proxy_editor_input(
+                    palette,
+                    "network-proxy-editor-name",
+                    app.tr("network.proxyName"),
+                    editor.name.clone(),
+                    editor.focused_field == NetworkProxyEditorField::Name,
+                    NetworkProxyEditorField::Name,
+                    focus,
+                    cx,
+                ))),
         )
         .child(tunnel_editor_selector(
             palette,
