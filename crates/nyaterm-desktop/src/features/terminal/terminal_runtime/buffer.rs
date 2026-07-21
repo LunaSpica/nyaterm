@@ -1452,7 +1452,8 @@ fn terminal_snapshot_frame_matches_scroll_target(
     if frame_offset == 0 {
         return scroll_offset == 0;
     }
-    terminal_visual_display_offset(scroll_offset, residual_lines, scrollback_len) == frame_offset
+    terminal_frame_snapshot_prefetch_offset(scroll_offset, residual_lines, scrollback_len)
+        == frame_offset
 }
 
 fn terminal_snapshot_frame_covers_scroll_target(
