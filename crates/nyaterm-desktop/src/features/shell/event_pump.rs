@@ -56,6 +56,11 @@ impl NyaTermApp {
             .terminal_runtime
             .terminal_input_wake_generation
             .saturating_add(1);
+        // Pull through any PTY echo/frame work that is already queued. The
+        // delayed wake loop below still catches output that arrives just after
+        // the key write, but this avoids adding a fixed timer hop to echo that
+        // is ready now.
+        self.drain_terminal_input_wake(cx);
         if self.terminal_runtime.terminal_input_wake_armed {
             return;
         }
