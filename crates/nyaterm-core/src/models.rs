@@ -909,6 +909,8 @@ pub struct AppSettingsSummary {
     pub terminal_show_timestamp_milliseconds: bool,
     pub terminal_show_multi_line_paste_dialog: bool,
     pub terminal_paste_image_as_path: bool,
+    #[serde(default)]
+    pub terminal_low_latency_mode: bool,
     /// Detect clickable entities (IP/host:port/archive) in terminal output (Tauri action_links_enabled).
     #[serde(default)]
     pub terminal_action_links_enabled: bool,
@@ -1100,6 +1102,7 @@ impl Default for AppSettingsSummary {
             terminal_show_timestamp_milliseconds: false,
             terminal_show_multi_line_paste_dialog: true,
             terminal_paste_image_as_path: true,
+            terminal_low_latency_mode: false,
             terminal_action_links_enabled: false,
             terminal_action_links_matchers: ActionLinksMatcherSettings::default(),
             search_custom_engines: default_search_engines(),

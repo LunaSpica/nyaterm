@@ -163,6 +163,15 @@ pub(super) fn runtime_tick_interval_for_pressure(output_pressure: bool) -> Durat
     }
 }
 
+pub(super) fn viewport_change_terminal_session_ids(visible_session_ids: &[&str]) -> Vec<String> {
+    visible_session_ids
+        .iter()
+        .copied()
+        .filter(|session_id| !session_id.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
 pub(super) fn window_geometry_churn_active(
     last_viewport_change_at: Option<Instant>,
     now: Instant,
@@ -510,6 +519,14 @@ mod tests {
         assert_eq!(
             runtime_tick_interval_for_pressure(true),
             RUNTIME_PRESSURE_TICK_INTERVAL
+        );
+    }
+
+    #[test]
+    fn viewport_change_terminal_session_ids_skips_empty_ids() {
+        assert_eq!(
+            viewport_change_terminal_session_ids(&["", "alpha", "beta"]),
+            vec!["alpha".to_string(), "beta".to_string()]
         );
     }
 

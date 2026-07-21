@@ -1352,6 +1352,7 @@ impl ConnectionStore {
                 &["terminal", "paste_image_as_path"],
                 true,
             ),
+            terminal_low_latency_mode: json_bool(&value, &["terminal", "low_latency_mode"], false),
             terminal_action_links_enabled: json_bool(
                 &value,
                 &["terminal", "action_links_enabled"],
@@ -2128,6 +2129,11 @@ impl ConnectionStore {
             &mut value,
             &["terminal", "paste_image_as_path"],
             serde_json::Value::Bool(settings.terminal_paste_image_as_path),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["terminal", "low_latency_mode"],
+            serde_json::Value::Bool(settings.terminal_low_latency_mode),
         );
         set_nested_json_value(
             &mut value,
@@ -6408,7 +6414,8 @@ mod tests {
                 "show_timestamps": true,
                 "show_timestamp_milliseconds": true,
                 "show_multi_line_paste_dialog": false,
-                "paste_image_as_path": false
+                "paste_image_as_path": false,
+                "low_latency_mode": true
             },
             "ui": {
                 "language": "zh-CN",
@@ -6471,6 +6478,7 @@ mod tests {
         assert!(summary.terminal_show_timestamp_milliseconds);
         assert!(!summary.terminal_show_multi_line_paste_dialog);
         assert!(!summary.terminal_paste_image_as_path);
+        assert!(summary.terminal_low_latency_mode);
         assert!(!summary.ui_show_remote_stats);
         assert_eq!(summary.ui_remote_stats_interval, 9);
         assert!(!summary.ui_show_process_manager);
@@ -6745,6 +6753,7 @@ mod tests {
         terminal_update.terminal_scrollback_lines = 12_000;
         terminal_update.terminal_keep_alive_interval = 20;
         terminal_update.terminal_show_multi_line_paste_dialog = true;
+        terminal_update.terminal_low_latency_mode = true;
         terminal_update.ui_show_remote_stats = true;
         terminal_update.ui_remote_stats_interval = 4;
         let saved_terminal = store
@@ -6753,6 +6762,7 @@ mod tests {
         assert_eq!(saved_terminal.terminal_scrollback_lines, 12_000);
         assert_eq!(saved_terminal.terminal_keep_alive_interval, 20);
         assert!(saved_terminal.terminal_show_multi_line_paste_dialog);
+        assert!(saved_terminal.terminal_low_latency_mode);
         assert!(saved_terminal.ui_show_remote_stats);
         assert_eq!(saved_terminal.ui_remote_stats_interval, 4);
         let stored = store
@@ -6765,6 +6775,10 @@ mod tests {
         assert_eq!(
             json_path(&stored, &["ui", "remote_stats_interval"]).and_then(|value| value.as_u64()),
             Some(4)
+        );
+        assert_eq!(
+            json_path(&stored, &["terminal", "low_latency_mode"]).and_then(|value| value.as_bool()),
+            Some(true)
         );
 
         let mut quick_command_update = saved_terminal.clone();

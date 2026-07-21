@@ -41,6 +41,27 @@ impl NyaTermApp {
         self.save_terminal_settings(cx);
     }
 
+    pub(in crate::features) fn toggle_terminal_low_latency_mode(&mut self, cx: &mut Context<Self>) {
+        self.settings.terminal_low_latency_mode = !self.settings.terminal_low_latency_mode;
+        self.command_suggestion_search_gen = self.command_suggestion_search_gen.saturating_add(1);
+        if self.settings.terminal_low_latency_mode {
+            self.command_suggestions = None;
+            self.command_input_tracker = TerminalInputState::new();
+            self.command_suggestions_suppressed = false;
+            self.pending_command_history_entry = None;
+        }
+        self.invalidate_paint_theme_caches();
+        self.save_terminal_settings(cx);
+        let session_ids = self
+            .visible_terminal_session_ids()
+            .into_iter()
+            .map(str::to_string)
+            .collect::<Vec<_>>();
+        for session_id in session_ids {
+            self.notify_terminal_surface_only(Some(session_id.as_str()), cx);
+        }
+    }
+
     pub(in crate::features) fn adjust_terminal_scrollback_lines(
         &mut self,
         delta: i32,

@@ -1,8 +1,11 @@
 use super::*;
+use crate::features::terminal_runtime::TERMINAL_INPUT_LATENCY_WINDOW;
 use gpui::{Bounds, Pixels};
 
 const COMMAND_SUGGESTION_INPUT_SLOW_THRESHOLD: Duration = Duration::from_millis(4);
 const COMMAND_SUGGESTION_REFRESH_SLOW_THRESHOLD: Duration = Duration::from_millis(8);
+const COMMAND_SUGGESTION_REFRESH_DEBOUNCE: Duration = Duration::from_millis(80);
+const COMMAND_SUGGESTION_REFRESH_PRESSURE_RETRY: Duration = Duration::from_millis(120);
 
 #[derive(Clone, Copy, Default)]
 struct CommandSuggestionInputTiming {
@@ -62,6 +65,42 @@ impl CommandSuggestionRefreshTiming {
     }
 }
 
+fn command_suggestion_refresh_input_delay(
+    last_terminal_input_at: Option<Instant>,
+    now: Instant,
+) -> Option<Duration> {
+    last_terminal_input_at.and_then(|last| {
+        let elapsed = now.saturating_duration_since(last);
+        (elapsed < TERMINAL_INPUT_LATENCY_WINDOW).then(|| TERMINAL_INPUT_LATENCY_WINDOW - elapsed)
+    })
+}
+
+fn command_suggestion_input_can_defer_refresh(state: &TerminalInputState) -> bool {
+    !state.desynced && !state.multiline && state.cursor == state.value.len()
+}
+
+fn command_suggestion_input_obvious_pager_prefix(state: &TerminalInputState) -> bool {
+    let value = state.value.trim_start();
+    value.starts_with('/') || value.starts_with('?') || value.starts_with(':')
+}
+
+fn command_suggestion_input_candidate_chars(state: &TerminalInputState) -> usize {
+    state.value.trim_start().chars().count()
+}
+
+fn command_history_input_update(
+    state: &TerminalInputState,
+    text: &str,
+) -> (TerminalInputState, Option<String>) {
+    let submitted = if text.contains('\r') || text.contains('\n') {
+        let submitted = get_tracked_submission_command(state);
+        (!submitted.is_empty()).then_some(submitted)
+    } else {
+        None
+    };
+    (apply_terminal_input_data(state, text), submitted)
+}
+
 impl NyaTermApp {
     pub(in crate::features) fn dismiss_command_suggestions(&mut self, cx: &mut Context<Self>) {
         self.command_suggestion_search_gen = self.command_suggestion_search_gen.saturating_add(1);
@@ -115,6 +154,10 @@ impl NyaTermApp {
 
         if self.credential_suggestions.is_some() || self.is_credential_prompt_input_mode() {
             return;
+        }
+        if self.settings.terminal_low_latency_mode {
+            self.clear_command_suggestion_draft(cx);
+            finish!("low_latency_mode", 0);
         }
         if !self.settings.interaction_command_suggestions_enabled {
             self.clear_command_suggestion_draft(cx);
@@ -193,11 +236,11 @@ impl NyaTermApp {
             finish!("suppressed", 0);
         }
 
+        let min_chars_started_at = Instant::now();
         let min_chars = self
             .settings
             .interaction_command_suggestion_min_chars
             .max(1) as usize;
-        let min_chars_started_at = Instant::now();
         let below_min_chars =
             terminal_input_tracker_below_min_chars(&self.command_input_tracker, min_chars);
         timing.min_chars = min_chars_started_at.elapsed();
@@ -213,12 +256,12 @@ impl NyaTermApp {
         }
 
         let pattern_started_at = Instant::now();
-        let pattern = get_tracked_command(&self.command_input_tracker);
-        let pattern_chars = pattern.chars().count();
+        let pattern_chars = command_suggestion_input_candidate_chars(&self.command_input_tracker);
         timing.pattern = pattern_started_at.elapsed();
 
         let pager_started_at = Instant::now();
-        let pager_input = is_pager_search_or_command_input(&pattern);
+        let pager_input =
+            command_suggestion_input_obvious_pager_prefix(&self.command_input_tracker);
         timing.pager = pager_started_at.elapsed();
         if pager_input {
             let hide_started_at = Instant::now();
@@ -232,7 +275,7 @@ impl NyaTermApp {
         }
 
         let eligibility_started_at = Instant::now();
-        let can_suggest = can_suggest_from_tracked_command(&self.command_input_tracker, &pattern);
+        let can_suggest = command_suggestion_input_can_defer_refresh(&self.command_input_tracker);
         timing.eligibility = eligibility_started_at.elapsed();
         if !can_suggest {
             let hide_started_at = Instant::now();
@@ -250,17 +293,75 @@ impl NyaTermApp {
         finish!("scheduled", pattern_chars);
     }
 
+    pub(in crate::features) fn note_command_history_input(&mut self, bytes: &[u8]) {
+        if self.credential_suggestions.is_some() || self.is_credential_prompt_input_mode() {
+            return;
+        }
+        let Ok(text) = std::str::from_utf8(bytes) else {
+            self.command_input_tracker = TerminalInputState::new();
+            return;
+        };
+        if text.is_empty() {
+            return;
+        }
+        if self.command_suggestions_suppressed {
+            if text == "\u{0003}" || text == "q" {
+                self.command_suggestions_suppressed = false;
+                self.command_input_tracker = TerminalInputState::new();
+            }
+            return;
+        }
+
+        let (next_state, submitted) =
+            command_history_input_update(&self.command_input_tracker, text);
+        if let Some(submitted) = submitted {
+            if command_starts_suggestion_suppressing_program(&submitted) {
+                self.command_suggestions_suppressed = true;
+            }
+            self.pending_command_history_entry = Some(submitted);
+        }
+        self.command_input_tracker = next_state;
+    }
+
     pub(in crate::features) fn schedule_command_suggestion_refresh(
         &mut self,
         cx: &mut Context<Self>,
     ) {
         // Tauri useCommandHistory: 80ms debounce before fuzzy search.
+        self.schedule_command_suggestion_refresh_after(COMMAND_SUGGESTION_REFRESH_DEBOUNCE, cx);
+    }
+
+    fn schedule_command_suggestion_refresh_after(
+        &mut self,
+        delay: Duration,
+        cx: &mut Context<Self>,
+    ) {
         self.command_suggestion_search_gen = self.command_suggestion_search_gen.saturating_add(1);
         let request_id = self.command_suggestion_search_gen;
         cx.spawn(async move |this, cx| {
-            Timer::after(Duration::from_millis(80)).await;
+            Timer::after(delay).await;
             let _ = this.update(cx, |this, cx| {
                 if this.command_suggestion_search_gen != request_id {
+                    return;
+                }
+                if this.settings.terminal_low_latency_mode {
+                    this.hide_command_suggestions_if_present(cx);
+                    return;
+                }
+                let now = Instant::now();
+                if let Some(delay) = command_suggestion_refresh_input_delay(
+                    this.terminal_runtime.last_terminal_input_at,
+                    now,
+                ) {
+                    this.schedule_command_suggestion_refresh_after(delay, cx);
+                    return;
+                }
+                if this.runtime_output_pressure_active() {
+                    this.hide_command_suggestions_if_present(cx);
+                    this.schedule_command_suggestion_refresh_after(
+                        COMMAND_SUGGESTION_REFRESH_PRESSURE_RETRY,
+                        cx,
+                    );
                     return;
                 }
                 this.refresh_command_suggestions(cx);
@@ -336,6 +437,12 @@ impl NyaTermApp {
         let pattern = get_tracked_command(&self.command_input_tracker);
         let pattern_chars = pattern.chars().count();
         timing.pattern = pattern_started_at.elapsed();
+        if !can_suggest_from_tracked_command(&self.command_input_tracker, &pattern) {
+            let hide_started_at = Instant::now();
+            self.hide_command_suggestions_if_present(cx);
+            timing.hide_popup = hide_started_at.elapsed();
+            finish_refresh!("not_eligible", pattern_chars, 0);
+        }
         if pattern_chars < min_chars {
             let hide_started_at = Instant::now();
             self.hide_command_suggestions_if_present(cx);
@@ -954,6 +1061,7 @@ fn terminal_line_prefix_for_cell_col(line: &str, cell_col: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::features::terminal_runtime::TERMINAL_INPUT_LATENCY_WINDOW;
 
     #[test]
     fn terminal_line_prefix_uses_terminal_cells_for_wide_chars() {
@@ -970,5 +1078,66 @@ mod tests {
         assert_eq!(terminal_line_prefix_for_cell_col(text, 0), "");
         assert_eq!(terminal_line_prefix_for_cell_col(text, 1), "e\u{301}");
         assert_eq!(terminal_line_prefix_for_cell_col(text, 2), "e\u{301}x");
+    }
+
+    #[test]
+    fn command_suggestion_refresh_input_delay_waits_for_terminal_idle_window() {
+        let now = Instant::now();
+        assert_eq!(
+            command_suggestion_refresh_input_delay(Some(now), now),
+            Some(TERMINAL_INPUT_LATENCY_WINDOW)
+        );
+        assert_eq!(
+            command_suggestion_refresh_input_delay(
+                Some(now - TERMINAL_INPUT_LATENCY_WINDOW - Duration::from_millis(1)),
+                now
+            ),
+            None
+        );
+        assert_eq!(command_suggestion_refresh_input_delay(None, now), None);
+    }
+
+    #[test]
+    fn command_suggestion_input_defer_refresh_requires_cursor_at_end() {
+        let mut state = TerminalInputState {
+            value: "git status".to_string(),
+            cursor: 3,
+            ..TerminalInputState::default()
+        };
+        assert!(!command_suggestion_input_can_defer_refresh(&state));
+
+        state.cursor = state.value.len();
+        assert!(command_suggestion_input_can_defer_refresh(&state));
+
+        state.desynced = true;
+        assert!(!command_suggestion_input_can_defer_refresh(&state));
+    }
+
+    #[test]
+    fn command_suggestion_input_detects_obvious_pager_prefix_without_sanitizing() {
+        let state = TerminalInputState {
+            value: "  /search".to_string(),
+            cursor: 9,
+            ..TerminalInputState::default()
+        };
+        assert!(command_suggestion_input_obvious_pager_prefix(&state));
+
+        let state = TerminalInputState {
+            value: "git status".to_string(),
+            cursor: 10,
+            ..TerminalInputState::default()
+        };
+        assert!(!command_suggestion_input_obvious_pager_prefix(&state));
+        assert_eq!(command_suggestion_input_candidate_chars(&state), 10);
+    }
+
+    #[test]
+    fn command_history_input_update_captures_submission_before_enter_reset() {
+        let state = apply_terminal_input_data(&TerminalInputState::new(), "git status");
+
+        let (next, submitted) = command_history_input_update(&state, "\r");
+
+        assert_eq!(submitted.as_deref(), Some("git status"));
+        assert!(next.value.is_empty());
     }
 }

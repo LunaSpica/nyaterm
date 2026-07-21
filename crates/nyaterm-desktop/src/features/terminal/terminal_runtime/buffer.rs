@@ -208,7 +208,7 @@ impl NyaTermApp {
         self.terminal_frame_pipeline.request_snapshot(
             session_id.to_string(),
             offset,
-            self.settings.terminal_action_links_enabled,
+            self.settings.terminal_action_links_enabled && !self.settings.terminal_low_latency_mode,
             self.settings.terminal_action_links_matchers.clone(),
         );
         true
@@ -297,7 +297,11 @@ impl NyaTermApp {
         session_id: &str,
         offset: usize,
     ) -> bool {
-        if session_id.is_empty() || offset == 0 || !self.settings.terminal_action_links_enabled {
+        if session_id.is_empty()
+            || offset == 0
+            || !self.settings.terminal_action_links_enabled
+            || self.settings.terminal_low_latency_mode
+        {
             return false;
         }
         let matcher_key =
@@ -771,8 +775,9 @@ impl NyaTermApp {
         }
         // Snapshot applies only dirties the surface, not chrome.
         let now = Instant::now();
-        let current_action_link_matcher_key =
-            self.settings.terminal_action_links_enabled.then(|| {
+        let current_action_link_matcher_key = (self.settings.terminal_action_links_enabled
+            && !self.settings.terminal_low_latency_mode)
+            .then(|| {
                 terminal_action_link_matcher_key(
                     true,
                     &self.settings.terminal_action_links_matchers,

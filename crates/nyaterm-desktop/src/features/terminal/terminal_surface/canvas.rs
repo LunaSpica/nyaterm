@@ -27,6 +27,8 @@ impl NyaTermApp {
             && self
                 .terminal_protocol_state_for_session(&session_id)
                 .mouse_reporting;
+        let low_latency_mode = self.settings.terminal_low_latency_mode;
+        let action_links_enabled = self.settings.terminal_action_links_enabled && !low_latency_mode;
         let render_output_pressure = self.runtime_output_pressure_active();
         let render_pressure = self
             .terminal_views
@@ -38,8 +40,12 @@ impl NyaTermApp {
                     view.performance_mode,
                 )
             })
-            .unwrap_or(render_output_pressure);
-        if render_pressure && let Some(view) = self.terminal_views.get_mut(&session_id) {
+            .unwrap_or(render_output_pressure)
+            || low_latency_mode;
+        if render_pressure
+            && !low_latency_mode
+            && let Some(view) = self.terminal_views.get_mut(&session_id)
+        {
             view.enter_render_degraded_mode();
         }
         let render_degraded = self
@@ -53,7 +59,7 @@ impl NyaTermApp {
             .map(|view| (view.output_burst_bytes, view.performance_mode))
             .unwrap_or((0, TerminalPerformanceMode::Normal));
         let expensive_interactions_enabled = terminal_expensive_interactions_enabled(
-            self.settings.terminal_action_links_enabled,
+            action_links_enabled,
             is_active,
             render_degraded,
             render_output_pressure,
@@ -61,7 +67,7 @@ impl NyaTermApp {
             performance_mode,
         );
         let action_link_matcher_key = terminal_action_link_matcher_key(
-            self.settings.terminal_action_links_enabled,
+            action_links_enabled,
             &self.settings.terminal_action_links_matchers,
         );
         let keyword_rules = if session_id.is_empty() {

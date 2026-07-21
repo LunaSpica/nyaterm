@@ -71,6 +71,9 @@ impl NyaTermApp {
     pub(in crate::features) fn resolved_keyword_highlight_rules(
         &self,
     ) -> std::sync::Arc<Vec<nyaterm_core::ResolvedKeywordHighlightRule>> {
+        if self.settings.terminal_low_latency_mode {
+            return std::sync::Arc::new(Vec::new());
+        }
         if let Some(cached) = self.cached_keyword_highlight_rules.as_ref() {
             return cached.clone();
         }
@@ -92,6 +95,10 @@ impl NyaTermApp {
     }
 
     fn ensure_keyword_highlight_rules_cache(&mut self) {
+        if self.settings.terminal_low_latency_mode {
+            self.cached_keyword_highlight_rules = Some(std::sync::Arc::new(Vec::new()));
+            return;
+        }
         if self.cached_keyword_highlight_rules.is_some() {
             return;
         }

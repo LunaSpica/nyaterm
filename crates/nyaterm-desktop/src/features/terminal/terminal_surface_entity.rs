@@ -102,6 +102,7 @@ pub(in crate::features) struct TerminalSurface {
     pending_local_scroll_sync: Option<TerminalSurfacePendingScrollSync>,
     local_scroll_sync_armed: bool,
     pending_scroll_snapshot_offsets: BTreeSet<usize>,
+    bounds_tracker_last_bounds: Arc<Mutex<Option<gpui::Bounds<gpui::Pixels>>>>,
     revision: u64,
     scroll_snapshot_pending_since: Option<Instant>,
     last_scroll_snapshot_pending_warn_at: Option<Instant>,
@@ -150,6 +151,7 @@ impl TerminalSurface {
             pending_local_scroll_sync: None,
             local_scroll_sync_armed: false,
             pending_scroll_snapshot_offsets: BTreeSet::new(),
+            bounds_tracker_last_bounds: Arc::new(Mutex::new(None)),
             revision: 0,
             scroll_snapshot_pending_since: None,
             last_scroll_snapshot_pending_warn_at: None,
@@ -1723,9 +1725,16 @@ fn terminal_surface_fractional_prefetch_offset(
 fn terminal_surface_bounds_tracker(
     app: Option<Entity<NyaTermApp>>,
     session_id: String,
+    last_bounds: Arc<Mutex<Option<gpui::Bounds<gpui::Pixels>>>>,
 ) -> impl IntoElement {
     gpui::canvas(
         move |bounds, _window, cx| {
+            if let Ok(mut last_bounds) = last_bounds.lock() {
+                if last_bounds.as_ref().is_some_and(|last| *last == bounds) {
+                    return;
+                }
+                *last_bounds = Some(bounds);
+            }
             let Some(app) = app.clone() else {
                 return;
             };
@@ -1785,8 +1794,11 @@ impl Render for TerminalSurface {
         let performance_overlay = self.performance_overlay;
         let skipped_output_chars = self.skipped_output_chars;
         let visual_bell = self.visual_bell && self.is_active;
-        let bounds_tracker =
-            terminal_surface_bounds_tracker(self.app.clone(), self.session_id.clone());
+        let bounds_tracker = terminal_surface_bounds_tracker(
+            self.app.clone(),
+            self.session_id.clone(),
+            self.bounds_tracker_last_bounds.clone(),
+        );
 
         let mut grid = NyaTerminalElement::new(
             snapshot.clone(),

@@ -1496,6 +1496,8 @@
     "interactionEncodingDesc": "配置终端数据流的默认字符编码。",
     "keepAliveInterval": "Keep-Alive 间隔 (秒)",
     "keepAliveIntervalDesc": "每隔 X 秒发送 SSH keep-alive 数据包。设置为 0 以禁用。",
+    "lowLatencyMode": "低延迟模式",
+    "lowLatencyModeDesc": "临时跳过联想补全、关键字高亮和动作链接富化，让终端输入与滚动保持纯粹。",
     "keyFileLoaded": "密钥文件已加载",
     "keyManagement": "密钥",
     "keyName": "密钥名称",

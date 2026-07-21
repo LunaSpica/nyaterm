@@ -1487,6 +1487,8 @@ impl NyaTermApp {
                 view.screen.resize(cols, rows);
                 view.clamp_scroll_offset();
                 view.clear_scrollback_query_caches();
+                view.frame_snapshot = Some(view.live_snapshot_with_scroll_window());
+                view.frame_action_links = None;
                 self.terminal_scroll_delta_residuals.remove(session_id);
                 self.terminal_frame_pipeline
                     .resize_session(session_id.to_string(), cols, rows);

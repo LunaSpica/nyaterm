@@ -33,6 +33,7 @@ impl NyaTermApp {
         if self.last_viewport_size != before_viewport {
             // Geometry churn (resize / some window managers during move).
             self.last_viewport_change_at = Some(Instant::now());
+            self.notify_terminal_surfaces_for_viewport_change(cx);
         }
         if terminal_cell_metrics_refresh_needed(self.terminal_cell_metrics) {
             self.refresh_terminal_cell_metrics(cx);
@@ -42,6 +43,14 @@ impl NyaTermApp {
             self.resize_all_known_terminal_surfaces();
         }
         self.last_viewport_size != before_viewport || self.terminal_cell_metrics != before_metrics
+    }
+
+    fn notify_terminal_surfaces_for_viewport_change(&mut self, cx: &mut Context<Self>) {
+        let session_ids =
+            viewport_change_terminal_session_ids(&self.visible_terminal_session_ids());
+        for session_id in session_ids {
+            self.notify_terminal_surface_only(Some(session_id.as_str()), cx);
+        }
     }
 
     pub(in crate::features) fn mark_user_activity(&mut self) {

@@ -89,9 +89,22 @@ fn terminal_paint_window_snapshot_for_view(
     retained_surface_snapshot: Option<std::sync::Arc<TerminalSnapshot>>,
 ) -> Option<std::sync::Arc<TerminalSnapshot>> {
     if display_offset == 0 {
-        return view
-            .and_then(|view| view.frame_snapshot.clone())
-            .or(retained_surface_snapshot);
+        let Some(view) = view else {
+            return retained_surface_snapshot;
+        };
+        let scrollback_len = view.screen.scrollback_len();
+        if let Some(snapshot) = view.frame_snapshot.as_ref()
+            && snapshot.cols == view.screen.cols()
+            && terminal_snapshot_covers_display_offset(
+                snapshot.as_ref(),
+                display_offset,
+                viewport_rows,
+                scrollback_len,
+            )
+        {
+            return Some(snapshot.clone());
+        }
+        return Some(view.live_snapshot_with_scroll_window());
     }
     if let Some(snapshot) = retained_surface_snapshot {
         return Some(snapshot);
@@ -240,8 +253,7 @@ fn terminal_snapshot_with_retained_scroll_window(
             Vec::with_capacity(snapshot.line_signatures.len() + older_rows.len());
         let mut line_timestamps_ms =
             Vec::with_capacity(snapshot.line_timestamps_ms.len() + older_rows.len());
-        let mut line_wrapped =
-            Vec::with_capacity(snapshot.line_wrapped.len() + older_rows.len());
+        let mut line_wrapped = Vec::with_capacity(snapshot.line_wrapped.len() + older_rows.len());
         let mut hyperlink_lines =
             Vec::with_capacity(snapshot.hyperlink_lines.len() + older_rows.len());
         let mut command_marks = Vec::with_capacity(snapshot.command_marks.len() + older_rows.len());
@@ -482,6 +494,13 @@ fn terminal_user_scroll_active(
 fn terminal_input_latency_active(last_input_at: Option<Instant>, now: Instant) -> bool {
     last_input_at
         .is_some_and(|last| now.saturating_duration_since(last) < TERMINAL_INPUT_LATENCY_WINDOW)
+}
+
+fn terminal_should_track_command_suggestion_input(
+    track_suggestions: bool,
+    low_latency_mode: bool,
+) -> bool {
+    track_suggestions && !low_latency_mode
 }
 
 impl NyaTermApp {
@@ -727,9 +746,22 @@ impl NyaTermApp {
         }
         let write_duration = write_started_at.elapsed();
 
+        let input_wake_started_at = Instant::now();
+        if !ok_sessions.is_empty() {
+            self.arm_terminal_input_wake(cx);
+        }
+        let input_wake_duration = input_wake_started_at.elapsed();
+
         let suggestion_started_at = Instant::now();
         if track_suggestions {
-            self.note_command_suggestion_input(&bytes, cx);
+            if terminal_should_track_command_suggestion_input(
+                track_suggestions,
+                self.settings.terminal_low_latency_mode,
+            ) {
+                self.note_command_suggestion_input(&bytes, cx);
+            } else {
+                self.note_command_history_input(&bytes);
+            }
         }
         let suggestion_duration = suggestion_started_at.elapsed();
 
@@ -744,10 +776,7 @@ impl NyaTermApp {
             self.terminal_status = terminal_input_fanout_status("sent", byte_count, synced, failed);
             cx.notify();
         }
-        if failed == 0 {
-            self.arm_terminal_input_wake(cx);
-        }
-        let notify_duration = notify_started_at.elapsed();
+        let notify_duration = input_wake_duration + notify_started_at.elapsed();
         log_slow_terminal_input_diagnostic(
             "input_bytes",
             byte_count,
@@ -843,9 +872,22 @@ impl NyaTermApp {
         }
         let write_duration = write_started_at.elapsed();
 
+        let input_wake_started_at = Instant::now();
+        if !ok_sessions.is_empty() {
+            self.arm_terminal_input_wake(cx);
+        }
+        let input_wake_duration = input_wake_started_at.elapsed();
+
         let suggestion_started_at = Instant::now();
         if track_suggestions {
-            self.note_command_suggestion_input(&primary_bytes, cx);
+            if terminal_should_track_command_suggestion_input(
+                track_suggestions,
+                self.settings.terminal_low_latency_mode,
+            ) {
+                self.note_command_suggestion_input(&primary_bytes, cx);
+            } else {
+                self.note_command_history_input(&primary_bytes);
+            }
         }
         let suggestion_duration = suggestion_started_at.elapsed();
 
@@ -860,10 +902,7 @@ impl NyaTermApp {
             self.terminal_status = terminal_input_fanout_status("sent", byte_count, synced, failed);
             cx.notify();
         }
-        if failed == 0 {
-            self.arm_terminal_input_wake(cx);
-        }
-        let notify_duration = notify_started_at.elapsed();
+        let notify_duration = input_wake_duration + notify_started_at.elapsed();
         log_slow_terminal_input_diagnostic(
             "key_down",
             byte_count,
@@ -1721,7 +1760,7 @@ impl NyaTermApp {
         let is_active = self.active_session_id.as_deref() == Some(session_id);
         let visual_bell = is_active && self.terminal_runtime.visual_bell_ticks > 0;
         let layout_cache = view.render_cache.layout_cache.clone();
-        let render_degraded = view.render_degraded;
+        let render_degraded = view.render_degraded || self.settings.terminal_low_latency_mode;
         let output_burst_bytes = view.output_burst_bytes;
         let performance_mode = view.performance_mode;
         let has_new = view.has_new_while_scrolled;
@@ -1730,6 +1769,7 @@ impl NyaTermApp {
         let protocol_state = view.protocol_state;
         let search_matches = if is_active
             && !input_latency_active
+            && !self.settings.terminal_low_latency_mode
             && self.terminal_search_open
             && self.terminal_search_mode == TerminalSearchMode::Buffer
         {
@@ -1740,7 +1780,7 @@ impl NyaTermApp {
         let decorations = terminal_scroll_text_first_decorations(
             snapshot.as_ref(),
             (!search_matches.is_empty()).then_some(search_matches.as_slice()),
-            is_active && !input_latency_active,
+            is_active && !input_latency_active && !self.settings.terminal_low_latency_mode,
         );
         let keyword_rules = if terminal_scroll_text_first_keywords_allowed(
             is_active,
@@ -1856,7 +1896,8 @@ impl NyaTermApp {
             || burst > 0
             || mode == TerminalPerformanceMode::Overloaded
             || user_scroll_active
-            || input_latency_active;
+            || input_latency_active
+            || self.settings.terminal_low_latency_mode;
         let render_degraded = render_degraded_view || render_pressure;
         let keyword_rules = if render_degraded || !is_active {
             std::sync::Arc::new(Vec::new())
@@ -1992,18 +2033,20 @@ impl NyaTermApp {
         };
 
         let search_mapping_started_at = Instant::now();
+        let action_links_enabled =
+            self.settings.terminal_action_links_enabled && !self.settings.terminal_low_latency_mode;
         let paint_policy = EffectiveTerminalPaintPolicy::resolve(
             is_active,
             render_degraded,
             render_output_pressure,
             burst,
             mode,
-            self.settings.terminal_action_links_enabled,
+            action_links_enabled,
         );
         let enhanced = paint_policy.enhanced_decorations;
         let expensive_interactions = paint_policy.expensive_interactions;
         let action_link_matcher_key = terminal_action_link_matcher_key(
-            self.settings.terminal_action_links_enabled,
+            action_links_enabled,
             &self.settings.terminal_action_links_matchers,
         );
         let frame_action_links = frame_action_links
@@ -2632,6 +2675,49 @@ mod tests {
     }
 
     #[test]
+    fn terminal_paint_window_snapshot_refreshes_stale_live_frame_after_resize() {
+        let mut view = TerminalViewState::from_output(terminal_output_lines(80));
+        let old_snapshot = std::sync::Arc::new(view.screen.viewport_snapshot(0));
+        let old_rows = old_snapshot.rows;
+        view.frame_snapshot = Some(old_snapshot.clone());
+
+        view.screen
+            .resize(view.screen.cols() as u16, (old_rows + 16) as u16);
+        let viewport_rows = view.viewport_rows_for_ui();
+        assert!(viewport_rows > old_rows);
+
+        let snapshot = terminal_paint_window_snapshot_for_view(Some(&view), 0, viewport_rows, None)
+            .expect("live frame snapshot should be rebuilt after viewport resize");
+
+        assert!(!std::sync::Arc::ptr_eq(&snapshot, &old_snapshot));
+        assert!(snapshot.rows >= viewport_rows);
+        assert!(terminal_snapshot_covers_display_offset(
+            snapshot.as_ref(),
+            0,
+            viewport_rows,
+            view.screen.scrollback_len()
+        ));
+    }
+
+    #[test]
+    fn terminal_paint_window_snapshot_refreshes_stale_live_frame_after_width_resize() {
+        let mut view = TerminalViewState::from_output(terminal_output_lines(80));
+        let old_snapshot = std::sync::Arc::new(view.screen.viewport_snapshot(0));
+        let old_cols = old_snapshot.cols;
+        view.frame_snapshot = Some(old_snapshot.clone());
+
+        view.screen
+            .resize((old_cols + 24) as u16, view.screen.rows() as u16);
+        let viewport_rows = view.viewport_rows_for_ui();
+
+        let snapshot = terminal_paint_window_snapshot_for_view(Some(&view), 0, viewport_rows, None)
+            .expect("live frame snapshot should be rebuilt after column resize");
+
+        assert!(!std::sync::Arc::ptr_eq(&snapshot, &old_snapshot));
+        assert_eq!(snapshot.cols, old_cols + 24);
+    }
+
+    #[test]
     fn terminal_retained_snapshot_rejects_synthetic_edge_row_snapshot() {
         let view = TerminalViewState::from_output(terminal_output_lines(40));
         let base = std::sync::Arc::new(view.screen.viewport_snapshot(1));
@@ -3180,6 +3266,15 @@ mod tests {
             now,
         ));
         assert!(!terminal_input_latency_active(None, now));
+    }
+
+    #[test]
+    fn terminal_command_suggestion_input_tracking_skips_low_latency_mode() {
+        assert!(terminal_should_track_command_suggestion_input(true, false));
+        assert!(!terminal_should_track_command_suggestion_input(true, true));
+        assert!(!terminal_should_track_command_suggestion_input(
+            false, false
+        ));
     }
 
     #[test]

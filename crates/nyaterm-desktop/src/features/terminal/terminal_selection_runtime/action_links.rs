@@ -43,7 +43,10 @@ impl NyaTermApp {
         event: &MouseMoveEvent,
         cx: &mut Context<Self>,
     ) {
-        if !self.settings.terminal_action_links_enabled || self.runtime_output_pressure_active() {
+        if !self.settings.terminal_action_links_enabled
+            || self.settings.terminal_low_latency_mode
+            || self.runtime_output_pressure_active()
+        {
             self.clear_action_link_tooltip(cx);
             return;
         }
@@ -391,7 +394,7 @@ impl NyaTermApp {
             || view.output_burst_bytes > 0
             || view.performance_mode == TerminalPerformanceMode::Overloaded;
         terminal_expensive_interactions_enabled(
-            self.settings.terminal_action_links_enabled,
+            self.settings.terminal_action_links_enabled && !self.settings.terminal_low_latency_mode,
             is_active,
             render_degraded,
             runtime_output_pressure,

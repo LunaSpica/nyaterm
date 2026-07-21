@@ -214,7 +214,11 @@ mod layout_cache_tests {
         assert_eq!(cache.rows.len(), TERMINAL_LAYOUT_CACHE_ROW_CAP);
         assert!(!cache.rows.contains_key(&0));
         assert!(cache.rows.contains_key(&1));
-        assert!(cache.rows.contains_key(&(TERMINAL_LAYOUT_CACHE_ROW_CAP as u64)));
+        assert!(
+            cache
+                .rows
+                .contains_key(&(TERMINAL_LAYOUT_CACHE_ROW_CAP as u64))
+        );
 
         let _ = cache.paint_row(0, 1, || {
             panic!("remaining rows should survive cache pressure");
@@ -743,7 +747,9 @@ impl NyaTerminalElement {
         row: usize,
         row_key: u64,
         window: &mut Window,
-        build: impl FnOnce(&mut Window) -> (
+        build: impl FnOnce(
+            &mut Window,
+        ) -> (
             Arc<ShapedLine>,
             std::time::Duration,
             usize,
@@ -982,8 +988,16 @@ impl Element for NyaTerminalElement {
         let cell_h = self.cell_height.max(1.);
         let font_size = px(self.font_size.max(8.));
         let base_font = font(SharedString::from(self.font_family.clone()));
-        let keyword_rules_key = self.keyword_rules_key();
-        let compiled_keyword_rules = self.compiled_keyword_rules_for_key(keyword_rules_key);
+        let keyword_rules_key = if self.keyword_rules.is_empty() {
+            0
+        } else {
+            self.keyword_rules_key()
+        };
+        let compiled_keyword_rules = if self.keyword_rules.is_empty() {
+            Vec::new()
+        } else {
+            self.compiled_keyword_rules_for_key(keyword_rules_key)
+        };
 
         let visual_y_offset = self.visual_y_offset;
         let visible_rows =
@@ -1055,13 +1069,13 @@ impl Element for NyaTerminalElement {
                 decorations,
                 keyword_rules_key,
             );
-            let (painted_row, did_shape, shape_duration) = self.cached_paint_row(
-                row,
-                row_key,
-                window,
-                |window| {
-                    if terminal_plain_row_fast_path(ansi, self.keyword_rules.as_slice(), decorations)
-                    {
+            let (painted_row, did_shape, shape_duration) =
+                self.cached_paint_row(row, row_key, window, |window| {
+                    if terminal_plain_row_fast_path(
+                        ansi,
+                        self.keyword_rules.as_slice(),
+                        decorations,
+                    ) {
                         let text = display_line.to_string();
                         let text_runs = vec![TextRun {
                             len: text.len().max(1),
@@ -1084,12 +1098,7 @@ impl Element for NyaTerminalElement {
                             &text_runs,
                             None,
                         ));
-                        return (
-                            line,
-                            line_started_at.elapsed(),
-                            text_runs.len(),
-                            Vec::new(),
-                        );
+                        return (line, line_started_at.elapsed(), text_runs.len(), Vec::new());
                     }
 
                     // Base spans drive cell/keyword backgrounds only (under images).
@@ -1107,7 +1116,8 @@ impl Element for NyaTerminalElement {
                     // dynamic overlays do not invalidate shaped base rows.
                     let mut spans = background_spans.clone();
                     if !decorations.link_ranges.is_empty() {
-                        spans = apply_action_link_ranges(spans, &decorations.link_ranges, self.palette);
+                        spans =
+                            apply_action_link_ranges(spans, &decorations.link_ranges, self.palette);
                     }
                     if !decorations.active_search_ranges.is_empty() {
                         spans = apply_search_ranges(
@@ -1191,8 +1201,7 @@ impl Element for NyaTerminalElement {
                         text_runs.len(),
                         background_ranges,
                     )
-                },
-            );
+                });
             push_terminal_background_ranges(
                 row,
                 &painted_row.background_ranges,

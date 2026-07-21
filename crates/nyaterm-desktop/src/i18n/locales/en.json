@@ -1496,6 +1496,8 @@
     "interactionEncodingDesc": "Configure the default character encoding for terminal streams.",
     "keepAliveInterval": "Keep-Alive Interval (seconds)",
     "keepAliveIntervalDesc": "Send SSH keep-alive packets every X seconds. 0 to disable.",
+    "lowLatencyMode": "Low Latency Mode",
+    "lowLatencyModeDesc": "Temporarily skip suggestions, keyword highlights, and action-link enrichment so terminal input and scrolling stay plain.",
     "keyFileLoaded": "Key file loaded",
     "keyManagement": "Keys",
     "keyName": "Key Name",

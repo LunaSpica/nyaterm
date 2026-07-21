@@ -111,6 +111,19 @@ impl NyaTermApp {
                     ))
                     .child(settings_form_row(
                         palette,
+                        self.tr("settings.lowLatencyMode"),
+                        Some(SharedString::from(self.tr("settings.lowLatencyModeDesc"))),
+                        settings_switch(
+                            palette,
+                            "terminal-low-latency-mode",
+                            self.settings.terminal_low_latency_mode,
+                            cx.listener(|this, _, _, cx| {
+                                this.toggle_terminal_low_latency_mode(cx);
+                            }),
+                        ),
+                    ))
+                    .child(settings_form_row(
+                        palette,
                         self.tr("settings.showWorkspacePadding"),
                         Some(SharedString::from(
                             self.tr("settings.showWorkspacePaddingDesc"),
