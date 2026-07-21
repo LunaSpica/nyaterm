@@ -8,6 +8,7 @@ use crate::features::terminal_selection_runtime::{
     terminal_gutter_metrics, terminal_line_number_digits,
 };
 use std::collections::{BTreeMap, BTreeSet};
+use std::ops::Range;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -68,6 +69,8 @@ pub(in crate::features) struct TerminalSurface {
     retained_rows: BTreeMap<usize, TerminalSurfaceRetainedRow>,
     keyword_rules: Arc<Vec<nyaterm_core::ResolvedKeywordHighlightRule>>,
     decorations: Arc<[TerminalLineDecorations]>,
+    selection_visual: Option<TerminalSelection>,
+    selection_visual_row_range: Option<Range<usize>>,
     palette: ThemePalette,
     font_family: String,
     font_size: f32,
@@ -114,6 +117,8 @@ impl TerminalSurface {
             retained_rows: BTreeMap::new(),
             keyword_rules: Arc::new(Vec::new()),
             decorations: Arc::from(Vec::<TerminalLineDecorations>::new()),
+            selection_visual: None,
+            selection_visual_row_range: None,
             palette: crate::theme::theme_palette("github-dark"),
             font_family: "monospace".to_string(),
             font_size: 14.0,
@@ -396,6 +401,8 @@ impl TerminalSurface {
         self.retained_snapshots.clear();
         self.retained_rows.clear();
         self.decorations = Arc::from(Vec::<TerminalLineDecorations>::new());
+        self.selection_visual = None;
+        self.selection_visual_row_range = None;
         self.has_action_link_decorations = false;
         self.scroll_snapshot_pending = false;
         self.scroll_snapshot_pending_since = None;
@@ -429,6 +436,8 @@ impl TerminalSurface {
         self.skipped_output_chars = skipped_output_chars;
         self.keyword_rules = Arc::new(Vec::new());
         self.decorations = Arc::from(Vec::<TerminalLineDecorations>::new());
+        self.selection_visual = None;
+        self.selection_visual_row_range = None;
         self.has_action_link_decorations = false;
         self.show_cursor = false;
         self.revision = self.revision.saturating_add(1);
@@ -454,6 +463,8 @@ impl TerminalSurface {
         if self.snapshot.as_ref().map(terminal_snapshot_identity) != previous_snapshot_key {
             self.keyword_rules = Arc::new(Vec::new());
             self.decorations = Arc::from(Vec::<TerminalLineDecorations>::new());
+            self.selection_visual = None;
+            self.selection_visual_row_range = None;
             self.has_action_link_decorations = false;
             self.show_cursor = false;
         }
@@ -918,6 +929,9 @@ impl TerminalSurface {
         show_cursor: bool,
         cursor_style: impl Into<String>,
     ) {
+        self.selection_visual = None;
+        self.selection_visual_row_range =
+            terminal_selection_visual_row_range_from_decorations(&decorations);
         self.decorations = decorations.into();
         self.keyword_rules = keyword_rules;
         self.show_cursor = show_cursor && !self.visual_scroll_active();
@@ -935,6 +949,27 @@ impl TerminalSurface {
         if line_count == 0 {
             return false;
         }
+        if self.selection_visual == selection {
+            return false;
+        }
+
+        let next_rows = terminal_selection_visual_row_range(selection, line_count);
+        let update_rows = terminal_selection_visual_row_union(
+            self.selection_visual_row_range.clone(),
+            next_rows.clone(),
+        );
+        let Some(update_rows) = update_rows else {
+            if self.decorations.is_empty() {
+                self.selection_visual = selection;
+                self.selection_visual_row_range = None;
+                return false;
+            }
+            self.selection_visual = selection;
+            self.selection_visual_row_range = None;
+            self.decorations = Arc::from(Vec::<TerminalLineDecorations>::new());
+            self.revision = self.revision.saturating_add(1);
+            return true;
+        };
 
         let mut next = if self.decorations.is_empty() {
             vec![TerminalLineDecorations::default(); line_count]
@@ -945,7 +980,7 @@ impl TerminalSurface {
         };
 
         let mut changed = false;
-        for (line_index, decoration) in next.iter_mut().enumerate() {
+        for line_index in update_rows {
             let selection_cols = selection.and_then(|selection| {
                 let viewport_row = line_index.checked_sub(selection.viewport_anchor_row)?;
                 let (start, end) = selection.cols_for_row(viewport_row)?;
@@ -953,15 +988,20 @@ impl TerminalSurface {
                 let end = end.min(snapshot.cols);
                 (end > start).then_some((start, end))
             });
+            let decoration = &mut next[line_index];
             if decoration.selection_cols != selection_cols {
                 decoration.selection_cols = selection_cols;
                 changed = true;
             }
         }
         if !changed {
+            self.selection_visual = selection;
+            self.selection_visual_row_range = next_rows;
             return false;
         }
 
+        self.selection_visual = selection;
+        self.selection_visual_row_range = next_rows;
         if next
             .iter()
             .all(|decoration| *decoration == TerminalLineDecorations::default())
@@ -1592,7 +1632,7 @@ fn terminal_surface_visible_rows_for_viewport(
     snapshot_rows: usize,
     visual_y_offset: f32,
     cell_height: f32,
-) -> std::ops::Range<usize> {
+) -> Range<usize> {
     if snapshot_rows == 0 {
         return 0..0;
     }
@@ -1611,6 +1651,57 @@ fn terminal_surface_visible_rows_for_viewport(
         return start..start;
     }
     start..end
+}
+
+fn terminal_selection_visual_row_range(
+    selection: Option<TerminalSelection>,
+    line_count: usize,
+) -> Option<Range<usize>> {
+    let selection = selection?;
+    if selection.all_buffer {
+        return Some(0..line_count);
+    }
+    if selection.is_empty() {
+        return None;
+    }
+    let (start, end) = selection.ordered();
+    let start_row = selection
+        .viewport_anchor_row
+        .saturating_add(start.row)
+        .min(line_count);
+    let end_row = selection
+        .viewport_anchor_row
+        .saturating_add(end.row)
+        .saturating_add(1)
+        .min(line_count);
+    (start_row < end_row).then_some(start_row..end_row)
+}
+
+fn terminal_selection_visual_row_union(
+    previous: Option<Range<usize>>,
+    next: Option<Range<usize>>,
+) -> Option<Range<usize>> {
+    match (previous, next) {
+        (Some(previous), Some(next)) => {
+            Some(previous.start.min(next.start)..previous.end.max(next.end))
+        }
+        (Some(previous), None) => Some(previous),
+        (None, Some(next)) => Some(next),
+        (None, None) => None,
+    }
+}
+
+fn terminal_selection_visual_row_range_from_decorations(
+    decorations: &[TerminalLineDecorations],
+) -> Option<Range<usize>> {
+    let start = decorations
+        .iter()
+        .position(|decoration| decoration.selection_cols.is_some())?;
+    let end = decorations
+        .iter()
+        .rposition(|decoration| decoration.selection_cols.is_some())?
+        .saturating_add(1);
+    Some(start..end)
 }
 
 fn terminal_surface_fractional_prefetch_offset(
@@ -2331,6 +2422,128 @@ mod tests {
         assert_eq!(surface.decorations[0].link_ranges, vec![(1, 3)]);
         assert_eq!(surface.decorations[0].selection_cols, None);
         assert_eq!(surface.decorations[1].selection_cols, None);
+    }
+
+    #[test]
+    fn selection_visual_row_range_tracks_viewport_anchor_and_union() {
+        assert_eq!(terminal_selection_visual_row_range(None, 8), None);
+        assert_eq!(
+            terminal_selection_visual_row_range(
+                Some(TerminalSelection::new(TerminalCellPos::new(2, 4))),
+                8
+            ),
+            None
+        );
+        assert_eq!(
+            terminal_selection_visual_row_range(Some(TerminalSelection::all_buffer(80)), 8),
+            Some(0..8)
+        );
+        assert_eq!(
+            terminal_selection_visual_row_range(
+                Some(TerminalSelection::from_range(
+                    TerminalCellPos::new(2, 1),
+                    TerminalCellPos::new(4, 3),
+                    0,
+                    3,
+                )),
+                10,
+            ),
+            Some(5..8)
+        );
+        assert_eq!(
+            terminal_selection_visual_row_range(
+                Some(TerminalSelection::from_range(
+                    TerminalCellPos::new(0, 1),
+                    TerminalCellPos::new(5, 3),
+                    0,
+                    8,
+                )),
+                10,
+            ),
+            Some(8..10)
+        );
+        assert_eq!(
+            terminal_selection_visual_row_union(Some(2..4), Some(3..6)),
+            Some(2..6)
+        );
+        assert_eq!(
+            terminal_selection_visual_row_union(Some(2..4), None),
+            Some(2..4)
+        );
+        assert_eq!(
+            terminal_selection_visual_row_union(None, Some(3..6)),
+            Some(3..6)
+        );
+        assert_eq!(terminal_selection_visual_row_union(None, None), None);
+    }
+
+    #[test]
+    fn selection_visual_update_replaces_only_selection_cols() {
+        let snapshot = Arc::new(TerminalScreen::default().viewport_snapshot(0));
+        let rows = snapshot.rows;
+        let mut surface = TerminalSurface::new("session");
+
+        surface.apply_frame_snapshot(
+            snapshot.clone(),
+            0,
+            0.0,
+            0,
+            10,
+            rows,
+            false,
+            None,
+            0,
+            false,
+            true,
+            "block",
+        );
+
+        let mut decorations = vec![TerminalLineDecorations::default(); snapshot.lines.len()];
+        decorations[0].link_ranges = vec![(1, 3)];
+        decorations[2].selection_cols = Some((3, snapshot.cols));
+        decorations[3].selection_cols = Some((0, 6));
+        decorations[8].search_ranges = vec![(2, 5)];
+        surface.set_decorations_and_keywords(decorations, Arc::new(Vec::new()), true, "block");
+
+        assert_eq!(surface.selection_visual_row_range, Some(2..4));
+        let revision_before = surface.revision;
+        assert!(
+            surface.set_selection_visual(Some(TerminalSelection::from_range(
+                TerminalCellPos::new(3, 1),
+                TerminalCellPos::new(4, 4),
+                0,
+                0,
+            )))
+        );
+
+        assert_eq!(surface.decorations[0].link_ranges, vec![(1, 3)]);
+        assert_eq!(surface.decorations[2].selection_cols, None);
+        assert_eq!(
+            surface.decorations[3].selection_cols,
+            Some((1, snapshot.cols))
+        );
+        assert_eq!(surface.decorations[4].selection_cols, Some((0, 5)));
+        assert_eq!(surface.decorations[8].search_ranges, vec![(2, 5)]);
+        assert_eq!(surface.selection_visual_row_range, Some(3..5));
+        assert_eq!(surface.revision, revision_before.saturating_add(1));
+
+        let revision_before_same_selection = surface.revision;
+        assert!(
+            !surface.set_selection_visual(Some(TerminalSelection::from_range(
+                TerminalCellPos::new(3, 1),
+                TerminalCellPos::new(4, 4),
+                0,
+                0,
+            )))
+        );
+        assert_eq!(surface.revision, revision_before_same_selection);
+
+        assert!(surface.set_selection_visual(None));
+        assert_eq!(surface.decorations[0].link_ranges, vec![(1, 3)]);
+        assert_eq!(surface.decorations[3].selection_cols, None);
+        assert_eq!(surface.decorations[4].selection_cols, None);
+        assert_eq!(surface.decorations[8].search_ranges, vec![(2, 5)]);
+        assert_eq!(surface.selection_visual_row_range, None);
     }
 
     #[test]
