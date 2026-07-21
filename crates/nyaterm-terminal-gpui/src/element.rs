@@ -1,5 +1,5 @@
 use super::*;
-use std::collections::{HashMap, hash_map::DefaultHasher};
+use std::collections::{HashMap, VecDeque, hash_map::DefaultHasher};
 use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
@@ -46,6 +46,7 @@ struct TerminalRowBackgroundRange {
 #[derive(Debug, Default)]
 pub struct NyaTerminalLayoutCache {
     rows: HashMap<u64, CachedTerminalPaintRow>,
+    row_order: VecDeque<u64>,
     compiled_keyword_key: Option<u64>,
     compiled_keyword_rules: CompiledKeywordRules,
     pub hits: u64,
@@ -61,6 +62,7 @@ const TERMINAL_ELEMENT_PAINT_SLOW_MS: u128 = 12;
 impl NyaTerminalLayoutCache {
     pub fn clear(&mut self) {
         self.rows.clear();
+        self.row_order.clear();
         self.compiled_keyword_key = None;
         self.compiled_keyword_rules.clear();
         self.hits = 0;
@@ -82,6 +84,7 @@ impl NyaTerminalLayoutCache {
         self.compiled_keyword_rules.clone()
     }
 
+    #[cfg(test)]
     fn shaped_line(
         &mut self,
         _row: usize,
@@ -112,7 +115,7 @@ impl NyaTerminalLayoutCache {
         }
         self.misses = self.misses.saturating_add(1);
         if self.rows.len() >= TERMINAL_LAYOUT_CACHE_ROW_CAP {
-            self.rows.clear();
+            self.evict_oldest_row();
         }
         let (line, duration, text_run_count, background_ranges) = build();
         self.shape_calls = self.shape_calls.saturating_add(1);
@@ -124,11 +127,21 @@ impl NyaTerminalLayoutCache {
             background_ranges,
             text_run_count,
         };
-        self.rows.insert(
-            key,
-            row.clone(),
-        );
+        self.rows.insert(key, row.clone());
+        self.row_order.push_back(key);
         (row, true, duration)
+    }
+
+    fn evict_oldest_row(&mut self) {
+        while self.rows.len() >= TERMINAL_LAYOUT_CACHE_ROW_CAP {
+            let Some(key) = self.row_order.pop_front() else {
+                self.rows.clear();
+                return;
+            };
+            if self.rows.remove(&key).is_some() {
+                return;
+            }
+        }
     }
 }
 
@@ -166,6 +179,7 @@ mod layout_cache_tests {
             (Arc::new(ShapedLine::default()), std::time::Duration::ZERO)
         });
         assert_eq!(cache.misses, 1);
+        assert_eq!(cache.row_order.len(), 1);
     }
 
     #[test]
@@ -181,6 +195,31 @@ mod layout_cache_tests {
 
         assert_eq!(cache.misses, 2);
         assert_eq!(cache.hits, 0);
+    }
+
+    #[test]
+    fn row_cache_evicts_incrementally_when_full() {
+        let mut cache = NyaTerminalLayoutCache::default();
+        for key in 0..=TERMINAL_LAYOUT_CACHE_ROW_CAP as u64 {
+            let _ = cache.paint_row(0, key, || {
+                (
+                    Arc::new(ShapedLine::default()),
+                    std::time::Duration::ZERO,
+                    1,
+                    Vec::new(),
+                )
+            });
+        }
+
+        assert_eq!(cache.rows.len(), TERMINAL_LAYOUT_CACHE_ROW_CAP);
+        assert!(!cache.rows.contains_key(&0));
+        assert!(cache.rows.contains_key(&1));
+        assert!(cache.rows.contains_key(&(TERMINAL_LAYOUT_CACHE_ROW_CAP as u64)));
+
+        let _ = cache.paint_row(0, 1, || {
+            panic!("remaining rows should survive cache pressure");
+        });
+        assert_eq!(cache.hits, 1);
     }
 
     #[test]
@@ -697,39 +736,6 @@ impl NyaTerminalElement {
             return cache.compiled_keyword_rules(key, self.keyword_rules.as_slice());
         }
         compile_keyword_rules(self.keyword_rules.as_slice())
-    }
-
-    fn shape_row(
-        &self,
-        row: usize,
-        row_key: u64,
-        text: String,
-        text_runs: Vec<TextRun>,
-        font_size: Pixels,
-        window: &mut Window,
-    ) -> (Arc<ShapedLine>, bool, std::time::Duration) {
-        if let Some(cache) = self.layout_cache.as_ref() {
-            if let Ok(mut cache) = cache.lock() {
-                return cache.shaped_line(row, row_key, || {
-                    let started_at = Instant::now();
-                    let line = Arc::new(window.text_system().shape_line(
-                        SharedString::from(text),
-                        font_size,
-                        &text_runs,
-                        None,
-                    ));
-                    (line, started_at.elapsed())
-                });
-            }
-        }
-        let started_at = Instant::now();
-        let line = Arc::new(window.text_system().shape_line(
-            SharedString::from(text),
-            font_size,
-            &text_runs,
-            None,
-        ));
-        (line, true, started_at.elapsed())
     }
 
     fn cached_paint_row(
