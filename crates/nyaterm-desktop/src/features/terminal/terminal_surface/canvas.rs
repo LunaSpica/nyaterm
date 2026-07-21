@@ -548,8 +548,7 @@ impl NyaTermApp {
                             .is_some()
                             .then(|| this.smart_cursor_selected_input_range())
                             .flatten();
-                        let is_plain_text_input =
-                            terminal_plain_text_input_event(event);
+                        let is_plain_text_input = terminal_plain_text_input_event(event);
                         if is_plain_text_input {
                             if this.credential_suggestions.is_some()
                                 && this.handle_credential_suggestion_key(event, cx)
@@ -645,8 +644,8 @@ impl NyaTermApp {
                         // When a non-smart buffer selection is painted, still send
                         // keystrokes but skip suggestion tracking so the selection
                         // edit path stays isolated (Tauri preserves selection).
-                        let has_buffer_selection = this.terminal_selection.is_some()
-                            && smart_input_selection.is_none();
+                        let has_buffer_selection =
+                            this.terminal_selection.is_some() && smart_input_selection.is_none();
                         if has_buffer_selection {
                             this.send_terminal_key_event(event, false, cx);
                         } else {
@@ -686,24 +685,29 @@ impl NyaTermApp {
                                 ),
                         )
                     })
-                    .when(!session_id.is_empty() && !self.terminal_status.trim().is_empty() && !is_active, |this| {
-                        this.child(
-                            div()
-                                .h(px(22.))
-                                .flex()
-                                .items_center()
-                                .px_3()
-                                .border_b_1()
-                                .border_color(rgb(palette.border))
-                                .bg(self.shell_surface_color(palette.input))
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(rgb(palette.text_muted))
-                                        .child(self.terminal_status.clone()),
-                                ),
-                        )
-                    })
+                    .when(
+                        !session_id.is_empty()
+                            && !self.terminal_status.trim().is_empty()
+                            && !is_active,
+                        |this| {
+                            this.child(
+                                div()
+                                    .h(px(22.))
+                                    .flex()
+                                    .items_center()
+                                    .px_3()
+                                    .border_b_1()
+                                    .border_color(rgb(palette.border))
+                                    .bg(self.shell_surface_color(palette.input))
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .text_color(rgb(palette.text_muted))
+                                            .child(self.terminal_status.clone()),
+                                    ),
+                            )
+                        },
+                    )
                     // Empty-workspace bootstrap actions stay available when no session is selected.
                     .when(session_id.is_empty(), |this| {
                         this.child(
@@ -778,40 +782,41 @@ impl NyaTermApp {
                             })
                             .on_drop({
                                 let session_id = output_session_id.clone();
-                                cx.listener(
-                                    move |this, paths: &gpui::ExternalPaths, _, cx| {
-                                        this.handle_terminal_external_file_drop(
-                                            session_id.clone(),
-                                            paths.paths().to_vec(),
-                                            cx,
-                                        );
-                                    },
-                                )
+                                cx.listener(move |this, paths: &gpui::ExternalPaths, _, cx| {
+                                    this.handle_terminal_external_file_drop(
+                                        session_id.clone(),
+                                        paths.paths().to_vec(),
+                                        cx,
+                                    );
+                                })
                             })
-                            .on_mouse_down(
-                                MouseButton::Left,
-                                {
-                                    let session_id = output_session_id.clone();
-                                    cx.listener(move |this, event: &gpui::MouseDownEvent, window, cx| {
+                            .on_mouse_down(MouseButton::Left, {
+                                let session_id = output_session_id.clone();
+                                cx.listener(
+                                    move |this, event: &gpui::MouseDownEvent, window, cx| {
                                         this.activate_workspace_pane(session_id.clone(), cx);
                                         window.focus(&this.terminal_focus);
                                         this.close_terminal_context_menu(cx);
                                         this.close_action_link_menu(cx);
                                         let mods = event.modifiers;
-                                        let skip_selection = this.settings.terminal_action_links_enabled
-                                            && (mods.alt || mods.control || mods.platform);
+                                        let skip_selection =
+                                            this.settings.terminal_action_links_enabled
+                                                && (mods.alt || mods.control || mods.platform);
                                         if !skip_selection {
-                                            this.start_terminal_selection(event, cx);
+                                            this.start_terminal_selection_for_session(
+                                                Some(session_id.as_str()),
+                                                event,
+                                                cx,
+                                            );
                                         }
                                         cx.stop_propagation();
-                                    })
-                                },
-                            )
-                            .on_mouse_down(
-                                MouseButton::Right,
-                                {
-                                    let session_id = output_session_id.clone();
-                                    cx.listener(move |this, event: &gpui::MouseDownEvent, window, cx| {
+                                    },
+                                )
+                            })
+                            .on_mouse_down(MouseButton::Right, {
+                                let session_id = output_session_id.clone();
+                                cx.listener(
+                                    move |this, event: &gpui::MouseDownEvent, window, cx| {
                                         this.activate_workspace_pane(session_id.clone(), cx);
                                         window.focus(&this.terminal_focus);
                                         if let Some(cell) = this.point_to_terminal_cell_for_session(
@@ -839,14 +844,13 @@ impl NyaTermApp {
                                             this.open_terminal_context_menu(event, cx);
                                         }
                                         cx.stop_propagation();
-                                    })
-                                },
-                            )
-                            .on_mouse_down(
-                                MouseButton::Middle,
-                                {
-                                    let session_id = output_session_id.clone();
-                                    cx.listener(move |this, event: &gpui::MouseDownEvent, window, cx| {
+                                    },
+                                )
+                            })
+                            .on_mouse_down(MouseButton::Middle, {
+                                let session_id = output_session_id.clone();
+                                cx.listener(
+                                    move |this, event: &gpui::MouseDownEvent, window, cx| {
                                         // xterm/Linux middle-click paste convention.
                                         this.activate_workspace_pane(session_id.clone(), cx);
                                         window.focus(&this.terminal_focus);
@@ -872,40 +876,40 @@ impl NyaTermApp {
                                         }
                                         this.paste_from_clipboard(window, cx);
                                         cx.stop_propagation();
-                                    })
-                                },
-                            )
+                                    },
+                                )
+                            })
                             .on_click({
                                 let session_id = output_session_id.clone();
                                 cx.listener(move |this, event: &ClickEvent, window, cx| {
-                                this.activate_workspace_pane(session_id.clone(), cx);
-                                if event.is_right_click() {
-                                    // Right-click is handled on mouse_down for Tauri-like context menu.
-                                    cx.stop_propagation();
-                                    return;
-                                }
-                                window.focus(&this.terminal_focus);
-                                let modifiers = event.modifiers();
-                                if this.settings.terminal_action_links_enabled {
-                                    if modifiers.alt {
-                                        if this.try_open_action_link_menu_at_click(event, cx) {
-                                            cx.stop_propagation();
-                                            return;
-                                        }
-                                    } else if modifiers.control || modifiers.platform {
-                                        if this.try_activate_action_link_at_click(event, cx) {
-                                            cx.stop_propagation();
-                                            return;
+                                    this.activate_workspace_pane(session_id.clone(), cx);
+                                    if event.is_right_click() {
+                                        // Right-click is handled on mouse_down for Tauri-like context menu.
+                                        cx.stop_propagation();
+                                        return;
+                                    }
+                                    window.focus(&this.terminal_focus);
+                                    let modifiers = event.modifiers();
+                                    if this.settings.terminal_action_links_enabled {
+                                        if modifiers.alt {
+                                            if this.try_open_action_link_menu_at_click(event, cx) {
+                                                cx.stop_propagation();
+                                                return;
+                                            }
+                                        } else if modifiers.control || modifiers.platform {
+                                            if this.try_activate_action_link_at_click(event, cx) {
+                                                cx.stop_propagation();
+                                                return;
+                                            }
                                         }
                                     }
-                                }
-                                if this.terminal_selection.is_none()
-                                    && this.terminal_status != "terminal focused"
-                                {
-                                    this.terminal_status = "terminal focused".to_string();
-                                    cx.notify();
-                                }
-                            })
+                                    if this.terminal_selection.is_none()
+                                        && this.terminal_status != "terminal focused"
+                                    {
+                                        this.terminal_status = "terminal focused".to_string();
+                                        cx.notify();
+                                    }
+                                })
                             })
                             .child(
                                 div()
@@ -913,13 +917,7 @@ impl NyaTermApp {
                                     .flex()
                                     .flex_row()
                                     .min_h_0()
-                                    .child(
-                                        div()
-                                            .flex_1()
-                                            .min_w_0()
-                                            .min_h_0()
-                                            .child(output),
-                                    )
+                                    .child(div().flex_1().min_w_0().min_h_0().child(output))
                                     // Scrollbar is painted by TerminalSurface for live sessions.
                                     .when(session_id.is_empty(), |this| {
                                         this.child(self.terminal_scrollbar_element(
@@ -942,9 +940,7 @@ impl NyaTermApp {
                                 )
                             })
                             .when_some(
-                                ime_preedit_text
-                                    .clone()
-                                    .zip(ime_preedit_position),
+                                ime_preedit_text.clone().zip(ime_preedit_position),
                                 |this, (marked_text, (x, y))| {
                                     this.child(
                                         div()
@@ -1185,13 +1181,11 @@ impl NyaTermApp {
                                             div()
                                                 .text_xs()
                                                 .font_weight(FontWeight(700.))
-                                                .text_color(rgb(
-                                                    if has_new_while_scrolled {
-                                                        palette.warning
-                                                    } else {
-                                                        palette.link
-                                                    },
-                                                ))
+                                                .text_color(rgb(if has_new_while_scrolled {
+                                                    palette.warning
+                                                } else {
+                                                    palette.link
+                                                }))
                                                 .child(if has_new_while_scrolled {
                                                     "↓ New"
                                                 } else {

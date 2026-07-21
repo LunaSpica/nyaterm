@@ -819,6 +819,7 @@ impl NyaTermApp {
             pending_session_events: VecDeque::new(),
             diagnostic_log_last_at: HashMap::new(),
             terminal_selection: None,
+            terminal_selection_session_id: None,
             terminal_selection_dragging: false,
             terminal_mouse_report_button: None,
             terminal_mouse_report_session_id: None,
