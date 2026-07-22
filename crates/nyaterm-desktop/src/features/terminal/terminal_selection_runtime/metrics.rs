@@ -125,11 +125,37 @@ impl NyaTermApp {
         &self,
         session_id: Option<&str>,
     ) -> (usize, usize) {
-        let offset = self.terminal_display_offset_for_session(session_id);
-        let snapshot = self.terminal_snapshot_for_session(session_id, offset);
         let rows = self.terminal_viewport_rows_for_session(session_id);
-        let cols = snapshot.cols.max(80);
+        let cols = session_id
+            .filter(|id| !id.is_empty())
+            .and_then(|id| self.terminal_views.get(id))
+            .map(|view| view.screen.cols())
+            .unwrap_or_else(|| {
+                let offset = self.terminal_display_offset_for_session(session_id);
+                self.terminal_snapshot_for_session(session_id, offset).cols
+            })
+            .max(1);
         (rows, cols)
+    }
+
+    pub(in crate::features) fn terminal_content_insets_for_bounds(
+        &self,
+        session_id: Option<&str>,
+        bounds: Bounds<Pixels>,
+    ) -> TerminalViewportInsets {
+        let session_id = session_id.filter(|id| !id.is_empty());
+        if session_id.is_some_and(|id| {
+            self.terminal_session_surface_bounds
+                .get(id)
+                .is_some_and(|tracked| *tracked == bounds)
+        }) {
+            // TerminalSurface is already laid out inside the shell's padding.
+            // Its bounds are the content box, so applying the shell inset again
+            // shifts resize and pointer geometry by one padding width.
+            TerminalViewportInsets::symmetric(0.)
+        } else {
+            self.terminal_content_insets()
+        }
     }
 
     pub(in crate::features) fn terminal_viewport_rows_for_session(
@@ -202,7 +228,7 @@ impl NyaTermApp {
             .and_then(|id| self.terminal_session_surface_bounds.get(id).copied())
             .or(self.terminal_surface_bounds)?;
         let (cell_w, cell_h) = self.terminal_cell_size();
-        let insets = self.terminal_content_insets();
+        let insets = self.terminal_content_insets_for_bounds(session_id, bounds);
         let gutter = self.terminal_gutter_width_px_for_session(session_id);
         let (rows, cols) = self.terminal_grid_size_for_session(session_id);
         let target_display_offset = self.terminal_display_offset_for_session(session_id);

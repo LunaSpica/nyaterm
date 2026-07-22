@@ -1,6 +1,13 @@
 use super::*;
 use std::ops::Range;
 
+fn terminal_input_selection() -> UTF16Selection {
+    UTF16Selection {
+        range: 0..0,
+        reversed: false,
+    }
+}
+
 /// Invisible canvas child that records the terminal output bounds for selection hit-testing.
 pub(in crate::features) fn terminal_bounds_tracker(
     entity: gpui::Entity<NyaTermApp>,
@@ -9,8 +16,15 @@ pub(in crate::features) fn terminal_bounds_tracker(
 ) -> impl IntoElement {
     let input_entity = entity.clone();
     let tracked_session_id = session_id.clone();
+    // Live sessions publish their actual content bounds from TerminalSurface.
+    // The shell-level tracker remains the IME input-handler anchor, but must not
+    // overwrite the surface bounds with the larger padded output container.
+    let track_surface_bounds = session_id.is_none();
     gpui::canvas(
         move |bounds, _window, cx| {
+            if !track_surface_bounds {
+                return;
+            }
             // Defer mutation so we never re-enter the entity while layout/prepaint is running.
             let entity = entity.clone();
             let session_id = tracked_session_id.clone();
@@ -221,7 +235,10 @@ impl EntityInputHandler for NyaTermApp {
                 reversed: false,
             });
         }
-        None
+        // GPUI's IME contract needs a valid insertion range even when there is
+        // no marked text. This is also what lets CJK candidate windows anchor to
+        // the terminal cursor instead of treating the surface as non-editable.
+        Some(terminal_input_selection())
     }
 
     fn marked_text_range(
@@ -586,6 +603,19 @@ impl EntityInputHandler for NyaTermApp {
             return Some(self.startup_command_draft.encode_utf16().count());
         }
         Some(0)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn terminal_input_selection_keeps_a_valid_insertion_point() {
+        let selection = terminal_input_selection();
+
+        assert_eq!(selection.range, 0..0);
+        assert!(!selection.reversed);
     }
 }
 

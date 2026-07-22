@@ -1410,7 +1410,7 @@ impl NyaTermApp {
         session_id: Option<&str>,
     ) -> TerminalResizeGeometry {
         let (cell_w, cell_h) = self.terminal_cell_size();
-        let insets = self.terminal_content_insets();
+        let insets = self.terminal_content_insets_for_bounds(session_id, bounds);
         let gutter = self.terminal_gutter_width_px_for_session(session_id);
         terminal_resize_geometry_for_size_with_insets(
             f32::from(bounds.size.width),
