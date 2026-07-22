@@ -79,7 +79,7 @@ fn terminal_retained_snapshot_matches_view(
     display_offset: usize,
     viewport_rows: usize,
 ) -> bool {
-    let scrollback_len = view.screen.scrollback_len();
+    let scrollback_len = view.scrollback_len_for_ui();
     terminal_snapshot_matches_grid_geometry(snapshot, view.screen.cols(), view.screen.rows())
         && snapshot.scrollback_len == scrollback_len
         && terminal_snapshot_covers_display_offset(
@@ -103,9 +103,13 @@ fn terminal_paint_window_snapshot_for_view(
         let Some(view) = view else {
             return retained_surface_snapshot;
         };
-        let scrollback_len = view.screen.scrollback_len();
+        let scrollback_len = view.scrollback_len_for_ui();
         if let Some(snapshot) = view.frame_snapshot.as_ref()
-            && snapshot.cols == view.screen.cols()
+            && terminal_snapshot_matches_grid_geometry(
+                snapshot.as_ref(),
+                view.screen.cols(),
+                view.screen.rows(),
+            )
             && terminal_snapshot_covers_display_offset(
                 snapshot.as_ref(),
                 display_offset,
@@ -115,7 +119,18 @@ fn terminal_paint_window_snapshot_for_view(
         {
             return Some(snapshot.clone());
         }
-        return Some(view.live_snapshot_with_scroll_window());
+        return retained_surface_snapshot.filter(|snapshot| {
+            terminal_snapshot_matches_grid_geometry(
+                snapshot.as_ref(),
+                view.screen.cols(),
+                view.screen.rows(),
+            ) && terminal_snapshot_covers_display_offset(
+                snapshot.as_ref(),
+                display_offset,
+                viewport_rows,
+                scrollback_len,
+            )
+        });
     }
     if let Some(snapshot) = retained_surface_snapshot {
         return Some(snapshot);
@@ -613,10 +628,26 @@ impl NyaTermApp {
                         .clone()
                         .unwrap_or_else(|| view.live_snapshot_with_scroll_window());
                 }
+                if let Some(snapshot) = view.scrollback_snapshots.get(&offset).cloned() {
+                    return snapshot;
+                }
+                if let Some(snapshot) = view.frame_snapshot.as_ref()
+                    && terminal_snapshot_covers_display_offset(
+                        snapshot.as_ref(),
+                        offset,
+                        view.viewport_rows_for_ui(),
+                        view.scrollback_len_for_ui(),
+                    )
+                {
+                    return snapshot.clone();
+                }
+                // A live session's UI screen is only a geometry/encoding mirror;
+                // it may not contain the worker's latest output. Use the nearest
+                // authoritative frame when the requested history window is still
+                // being fetched instead of painting or hit-testing stale content.
                 return view
-                    .scrollback_snapshots
-                    .get(&offset)
-                    .cloned()
+                    .frame_snapshot
+                    .clone()
                     .unwrap_or_else(|| std::sync::Arc::new(view.screen.viewport_snapshot(offset)));
             }
         }
@@ -2693,6 +2724,44 @@ mod tests {
         .expect("live frame snapshot should be available");
 
         assert!(std::sync::Arc::ptr_eq(&snapshot, &latest));
+    }
+
+    #[test]
+    fn terminal_paint_window_keeps_worker_snapshot_when_ui_screen_is_stale() {
+        let view = TerminalViewState::from_output(terminal_output_lines(8));
+        let mut worker_screen = TerminalScreen::default();
+        worker_screen.advance_decoded_text(&terminal_output_lines(160));
+        let worker_snapshot = std::sync::Arc::new(worker_screen.snapshot());
+        let mut view = view;
+        view.frame_snapshot = Some(worker_snapshot.clone());
+
+        let snapshot = terminal_paint_window_snapshot_for_view(
+            Some(&view),
+            0,
+            view.viewport_rows_for_ui(),
+            None,
+        )
+        .expect("authoritative worker snapshot should be paintable");
+
+        assert!(std::sync::Arc::ptr_eq(&snapshot, &worker_snapshot));
+        assert!(snapshot.lines.iter().any(|line| line.contains("line 159")));
+    }
+
+    #[test]
+    fn terminal_retained_snapshot_uses_worker_scrollback_length() {
+        let view = TerminalViewState::from_output(terminal_output_lines(8));
+        let mut worker_screen = TerminalScreen::default();
+        worker_screen.advance_decoded_text(&terminal_output_lines(160));
+        let worker_snapshot = std::sync::Arc::new(worker_screen.snapshot());
+        let mut view = view;
+        view.frame_snapshot = Some(worker_snapshot.clone());
+
+        assert!(terminal_retained_snapshot_matches_view(
+            worker_snapshot.as_ref(),
+            &view,
+            0,
+            view.viewport_rows_for_ui(),
+        ));
     }
 
     #[test]
