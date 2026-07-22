@@ -16,7 +16,7 @@ impl NyaTermApp {
         if !self.can_use_smart_cursor_selection() {
             return;
         }
-        let Some(target) = self.input_index_at_mouse(event.position) else {
+        let Some(target) = self.input_index_at_mouse(event.position, cx) else {
             return;
         };
         let _ = self.move_smart_input_cursor(target, cx);
@@ -25,6 +25,7 @@ impl NyaTermApp {
     pub(in crate::features) fn input_index_at_mouse(
         &self,
         position: Point<Pixels>,
+        cx: &App,
     ) -> Option<usize> {
         if !self.can_use_smart_cursor_selection() {
             return None;
@@ -33,7 +34,7 @@ impl NyaTermApp {
         if state.value.is_empty() {
             return None;
         }
-        let cell = self.point_to_terminal_cell(position)?;
+        let cell = self.point_to_terminal_cell(position, cx)?;
         let offset = self.active_terminal_display_offset();
         if offset != 0 {
             return None;

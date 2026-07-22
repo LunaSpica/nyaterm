@@ -59,7 +59,7 @@ impl NyaTermApp {
             self.clear_action_link_tooltip(cx);
             return;
         }
-        let Some((item, actions)) = self.action_link_at_point(event.position) else {
+        let Some((item, actions)) = self.action_link_at_point(event.position, cx) else {
             self.clear_action_link_tooltip(cx);
             return;
         };
@@ -126,6 +126,7 @@ impl NyaTermApp {
     pub(in crate::features) fn action_link_at_point(
         &self,
         position: Point<Pixels>,
+        cx: &App,
     ) -> Option<(ActionLinkMatch, Vec<ActionLinkAction>)> {
         if !self.settings.terminal_action_links_enabled {
             return None;
@@ -149,7 +150,7 @@ impl NyaTermApp {
         if local_y >= cell_h * rows as f32 || local_x >= cell_w * cols as f32 {
             return None;
         }
-        let cell = self.point_to_terminal_cell_for_session(session_id, position)?;
+        let cell = self.point_to_terminal_cell_for_session(session_id, position, cx)?;
         let action_link_matcher_key = terminal_action_link_matcher_key(
             self.settings.terminal_action_links_enabled,
             &self.settings.terminal_action_links_matchers,
@@ -247,7 +248,7 @@ impl NyaTermApp {
         event: &ClickEvent,
         cx: &mut Context<Self>,
     ) -> bool {
-        let Some((item, actions)) = self.action_link_at_click(event) else {
+        let Some((item, actions)) = self.action_link_at_click(event, cx) else {
             return false;
         };
         if actions.is_empty() {
@@ -282,8 +283,9 @@ impl NyaTermApp {
     pub(in crate::features) fn action_link_at_click(
         &self,
         event: &ClickEvent,
+        cx: &App,
     ) -> Option<(ActionLinkMatch, Vec<ActionLinkAction>)> {
-        self.action_link_at_point(event.position())
+        self.action_link_at_point(event.position(), cx)
     }
 
     /// Ctrl/Cmd-click OSC 8 hyperlinks (uri from the terminal screen model).
@@ -298,7 +300,7 @@ impl NyaTermApp {
         }) {
             return false;
         }
-        let Some(pos) = self.point_to_terminal_cell(event.position()) else {
+        let Some(pos) = self.point_to_terminal_cell(event.position(), cx) else {
             return false;
         };
         let session_id = self.active_session_id.clone().unwrap_or_default();
@@ -350,7 +352,7 @@ impl NyaTermApp {
         if self.try_activate_osc8_hyperlink_at_click(event, cx) {
             return true;
         }
-        let Some((item, actions)) = self.action_link_at_click(event) else {
+        let Some((item, actions)) = self.action_link_at_click(event, cx) else {
             return false;
         };
         self.action_link_tooltip = None;

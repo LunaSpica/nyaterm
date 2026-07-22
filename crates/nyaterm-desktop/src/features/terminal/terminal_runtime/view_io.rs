@@ -73,13 +73,21 @@ fn terminal_cached_scrollback_snapshot_covering_display_offset(
         .cloned()
 }
 
-#[cfg(test)]
 fn terminal_retained_snapshot_matches_view(
     snapshot: &TerminalSnapshot,
+    view: &TerminalViewState,
     display_offset: usize,
     viewport_rows: usize,
 ) -> bool {
-    snapshot.display_offset == display_offset && snapshot.rows == viewport_rows.max(1)
+    let scrollback_len = view.screen.scrollback_len();
+    snapshot.cols == view.screen.cols()
+        && snapshot.scrollback_len == scrollback_len
+        && terminal_snapshot_covers_display_offset(
+            snapshot,
+            display_offset,
+            viewport_rows,
+            scrollback_len,
+        )
 }
 
 fn terminal_paint_window_snapshot_for_view(
@@ -1137,7 +1145,7 @@ impl NyaTermApp {
             return false;
         }
         let Some(cell) =
-            self.point_to_terminal_cell_for_session(Some(session_id.as_str()), event.position)
+            self.point_to_terminal_cell_for_session(Some(session_id.as_str()), event.position, cx)
         else {
             return false;
         };
@@ -1239,7 +1247,7 @@ impl NyaTermApp {
             return false;
         };
         let (col, row) = if let Some(cell) =
-            self.point_to_terminal_cell_for_session(Some(session_id.as_str()), event.position)
+            self.point_to_terminal_cell_for_session(Some(session_id.as_str()), event.position, cx)
         {
             (cell.col as u16, cell.row as u16)
         } else if let Some((col, row)) = self.terminal_mouse_report_position {
@@ -1916,6 +1924,16 @@ impl NyaTermApp {
                         viewport_rows,
                         scrollback_len,
                     )
+                })
+                .filter(|snapshot| {
+                    view.is_some_and(|view| {
+                        terminal_retained_snapshot_matches_view(
+                            snapshot.as_ref(),
+                            view,
+                            display_offset,
+                            viewport_rows,
+                        )
+                    })
                 })
         } else {
             None
@@ -2718,17 +2736,36 @@ mod tests {
     }
 
     #[test]
-    fn terminal_retained_snapshot_rejects_synthetic_edge_row_snapshot() {
-        let view = TerminalViewState::from_output(terminal_output_lines(40));
-        let base = std::sync::Arc::new(view.screen.viewport_snapshot(1));
-        let viewport_rows = base.rows;
-        let newer = std::sync::Arc::new(view.screen.viewport_snapshot(0));
-        let synthetic = terminal_snapshot_with_newer_edge_row(base, newer);
+    fn terminal_retained_snapshot_accepts_current_scroll_window_geometry() {
+        let view = TerminalViewState::from_output(terminal_output_lines(80));
+        let display_offset = 4;
+        let snapshot = view.snapshot_with_scroll_window(display_offset);
+        let viewport_rows = view.viewport_rows_for_ui();
+
+        assert!(terminal_retained_snapshot_matches_view(
+            snapshot.as_ref(),
+            &view,
+            display_offset,
+            viewport_rows,
+        ));
+    }
+
+    #[test]
+    fn terminal_retained_snapshot_rejects_pre_resize_geometry() {
+        let mut view = TerminalViewState::from_output(terminal_output_lines(80));
+        let display_offset = 4;
+        let snapshot = view.snapshot_with_scroll_window(display_offset);
+        let viewport_rows = view.viewport_rows_for_ui();
+        let resized_cols = view.screen.cols().saturating_add(8) as u16;
+        let resized_rows = view.screen.rows().saturating_add(6) as u16;
+
+        view.screen.resize(resized_cols, resized_rows);
 
         assert!(!terminal_retained_snapshot_matches_view(
-            synthetic.as_ref(),
-            1,
-            viewport_rows
+            snapshot.as_ref(),
+            &view,
+            display_offset,
+            viewport_rows,
         ));
     }
 

@@ -373,7 +373,8 @@ impl NyaTermApp {
             return TerminalScrollWheelStateResult::default();
         }
 
-        if let Some(cell) = self.point_to_terminal_cell_for_session(Some(session_id), position) {
+        if let Some(cell) = self.point_to_terminal_cell_for_session(Some(session_id), position, cx)
+        {
             let button = if delta > 0 { 64u8 } else { 65u8 };
             let steps = delta.unsigned_abs().min(8);
             let mut reported = false;
@@ -1485,9 +1486,14 @@ impl NyaTermApp {
             }
             if grid_changed {
                 view.screen.resize(cols, rows);
-                view.clamp_scroll_offset();
                 view.clear_scrollback_query_caches();
                 view.frame_snapshot = Some(view.live_snapshot_with_scroll_window());
+                view.clamp_scroll_offset();
+                let scroll_offset = view.scroll_offset;
+                if scroll_offset > 0 {
+                    let snapshot = view.snapshot_with_scroll_window(scroll_offset);
+                    view.remember_scrollback_snapshot(scroll_offset, snapshot);
+                }
                 view.frame_action_links = None;
                 self.terminal_scroll_delta_residuals.remove(session_id);
                 self.terminal_frame_pipeline
@@ -1502,6 +1508,9 @@ impl NyaTermApp {
                     pixel_width,
                     pixel_height,
                 );
+            }
+            if grid_changed {
+                self.clear_terminal_selection_state_for_session(session_id);
             }
         } else {
             let current_rows = self.terminal_screen.rows() as u16;

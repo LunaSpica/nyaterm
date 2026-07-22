@@ -557,6 +557,14 @@ impl TerminalViewState {
         terminal_frame_snapshot_with_scroll_window(&self.screen, 0, true)
     }
 
+    pub(crate) fn snapshot_with_scroll_window(&self, offset: usize) -> Arc<TerminalSnapshot> {
+        terminal_frame_snapshot_with_scroll_window(
+            &self.screen,
+            offset.min(self.screen.scrollback_len()),
+            true,
+        )
+    }
+
     fn clone_snapshot_with_scrollback_delta(
         snapshot: &Arc<TerminalSnapshot>,
         delta: usize,
@@ -2591,6 +2599,28 @@ mod tests {
             snapshot.as_ref(),
             priority_offset,
             viewport_rows
+        ));
+    }
+
+    #[test]
+    fn terminal_view_scroll_snapshot_uses_resized_grid_geometry() {
+        let mut view = TerminalViewState::from_output(terminal_output_lines(320));
+        let old_cols = view.screen.cols();
+        let old_rows = view.screen.rows();
+        let resized_cols = old_cols.saturating_add(12) as u16;
+        let resized_rows = old_rows.saturating_add(6) as u16;
+
+        view.screen.resize(resized_cols, resized_rows);
+        let display_offset = 8.min(view.screen.scrollback_len());
+        let viewport_rows = view.viewport_rows_for_ui();
+        let snapshot = view.snapshot_with_scroll_window(display_offset);
+
+        assert_eq!(snapshot.cols, resized_cols as usize);
+        assert_eq!(snapshot.scrollback_len, view.screen.scrollback_len());
+        assert!(snapshot_covers_offset(
+            snapshot.as_ref(),
+            display_offset,
+            viewport_rows,
         ));
     }
 

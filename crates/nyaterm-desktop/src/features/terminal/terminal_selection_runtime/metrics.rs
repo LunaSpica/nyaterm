@@ -177,22 +177,25 @@ impl NyaTermApp {
     pub(in crate::features) fn point_to_terminal_cell(
         &self,
         position: Point<Pixels>,
+        cx: &App,
     ) -> Option<TerminalCellPos> {
-        self.point_to_terminal_cell_for_session(self.active_session_id.as_deref(), position)
+        self.point_to_terminal_cell_for_session(self.active_session_id.as_deref(), position, cx)
     }
 
     pub(in crate::features) fn point_to_terminal_cell_for_session(
         &self,
         session_id: Option<&str>,
         position: Point<Pixels>,
+        cx: &App,
     ) -> Option<TerminalCellPos> {
-        let geometry = self.terminal_hit_test_geometry_for_session(session_id)?;
+        let geometry = self.terminal_hit_test_geometry_for_session(session_id, cx)?;
         Some(terminal_cell_for_visual_geometry(position, &geometry))
     }
 
     pub(in crate::features) fn terminal_hit_test_geometry_for_session(
         &self,
         session_id: Option<&str>,
+        cx: &App,
     ) -> Option<TerminalHitTestGeometry> {
         let session_id = session_id.filter(|id| !id.is_empty());
         let bounds = session_id
@@ -202,16 +205,25 @@ impl NyaTermApp {
         let insets = self.terminal_content_insets();
         let gutter = self.terminal_gutter_width_px_for_session(session_id);
         let (rows, cols) = self.terminal_grid_size_for_session(session_id);
-        let display_offset = self.terminal_display_offset_for_session(session_id);
-        let snapshot = self.terminal_snapshot_for_session(session_id, display_offset);
+        let target_display_offset = self.terminal_display_offset_for_session(session_id);
+        let snapshot = self.terminal_snapshot_for_session(session_id, target_display_offset);
         let viewport_rows = self.terminal_viewport_rows_for_session(session_id);
         let scrollback_len = self.terminal_scrollback_len_for_session(session_id);
-        let viewport_anchor_row = terminal_snapshot_anchor_row_for_display_offset(
+        let fallback_viewport_anchor_row = terminal_snapshot_anchor_row_for_display_offset(
             snapshot.as_ref(),
-            display_offset,
+            target_display_offset,
             viewport_rows,
             scrollback_len,
         );
+        let scroll_geometry = session_id
+            .and_then(|session_id| self.terminal_surfaces.get(session_id))
+            .and_then(|surface| surface.read(cx).hit_test_scroll_geometry())
+            .unwrap_or(TerminalSurfaceHitTestScrollGeometry {
+                snapshot_pending: false,
+                display_offset: target_display_offset,
+                snapshot_rows: snapshot.rows,
+                viewport_anchor_row: fallback_viewport_anchor_row,
+            });
         let (scroll_offset, residual_lines) = if let Some(session_id) = session_id {
             self.terminal_views
                 .get(session_id)
@@ -221,17 +233,23 @@ impl NyaTermApp {
                         self.terminal_scroll_residual_for_session(Some(session_id)),
                     )
                 })
-                .unwrap_or((display_offset, 0.0))
+                .unwrap_or((target_display_offset, 0.0))
         } else {
             (
                 self.terminal_scroll_offset,
                 self.terminal_scroll_residual_for_session(None),
             )
         };
-        let visual_y_offset = ((scroll_offset as isize - display_offset as isize) as f32
-            + residual_lines)
-            * cell_h.max(1.0)
-            - (viewport_anchor_row as f32) * cell_h.max(1.0);
+        let visual_y_offset = terminal_hit_test_visual_y_offset_px(
+            scroll_geometry.snapshot_pending,
+            scroll_offset,
+            scroll_geometry.display_offset,
+            residual_lines,
+            scroll_geometry.viewport_anchor_row,
+            scroll_geometry.snapshot_rows,
+            viewport_rows,
+            cell_h,
+        );
         Some(TerminalHitTestGeometry {
             bounds,
             cell_w,
@@ -241,8 +259,8 @@ impl NyaTermApp {
             gutter,
             rows,
             cols,
-            display_offset,
-            viewport_anchor_row,
+            display_offset: scroll_geometry.display_offset,
+            viewport_anchor_row: scroll_geometry.viewport_anchor_row,
             visual_y_offset,
         })
     }
@@ -303,6 +321,28 @@ pub(in crate::features) struct TerminalHitTestGeometry {
     pub(in crate::features) display_offset: usize,
     pub(in crate::features) viewport_anchor_row: usize,
     pub(in crate::features) visual_y_offset: f32,
+}
+
+fn terminal_hit_test_visual_y_offset_px(
+    snapshot_pending: bool,
+    target_offset: usize,
+    displayed_offset: usize,
+    residual_lines: f32,
+    viewport_anchor_row: usize,
+    snapshot_rows: usize,
+    viewport_rows: usize,
+    cell_height: f32,
+) -> f32 {
+    terminal_effective_visual_scroll_offset_px(
+        snapshot_pending,
+        target_offset,
+        displayed_offset,
+        residual_lines,
+        viewport_anchor_row,
+        snapshot_rows,
+        viewport_rows,
+        cell_height,
+    ) - viewport_anchor_row as f32 * cell_height.max(1.0)
 }
 
 pub(in crate::features) fn terminal_cell_for_visual_geometry(
@@ -573,5 +613,97 @@ mod tests {
         );
 
         assert_eq!(cell, TerminalCellPos::new(9, 4));
+    }
+
+    #[test]
+    fn terminal_visual_hit_test_clamps_pending_scroll_to_retained_rows() {
+        let cell_h = 16.0;
+        let viewport_anchor_row = 12;
+        let visual_y_offset = terminal_hit_test_visual_y_offset_px(
+            true,
+            40,
+            0,
+            0.0,
+            viewport_anchor_row,
+            40,
+            20,
+            cell_h,
+        );
+        let geometry = TerminalHitTestGeometry {
+            bounds: gpui::bounds(
+                Point {
+                    x: px(0.0),
+                    y: px(0.0),
+                },
+                Size {
+                    width: px(640.0),
+                    height: px(320.0),
+                },
+            ),
+            cell_w: 8.0,
+            cell_h,
+            padding_left: 0.0,
+            padding_top: 0.0,
+            gutter: 0.0,
+            rows: 20,
+            cols: 80,
+            display_offset: 0,
+            viewport_anchor_row,
+            visual_y_offset,
+        };
+        let viewport_row = 3;
+        let cell = terminal_cell_for_visual_geometry(
+            Point {
+                x: px(4.5 * geometry.cell_w),
+                y: px(visual_y_offset
+                    + (viewport_anchor_row + viewport_row) as f32 * cell_h
+                    + cell_h * 0.5),
+            },
+            &geometry,
+        );
+
+        assert_eq!(visual_y_offset, 0.0);
+        assert_eq!(cell, TerminalCellPos::new(viewport_row, 4));
+    }
+
+    #[test]
+    fn terminal_visual_hit_test_is_stable_across_cell_metric_scaling() {
+        for (cell_w, cell_h) in [(8.0, 16.0), (12.0, 24.0), (16.0, 32.0)] {
+            let viewport_anchor_row = 5;
+            let viewport_row = 7;
+            let snapshot_row = viewport_anchor_row + viewport_row;
+            let visual_y_offset = -3.25 * cell_h;
+            let geometry = TerminalHitTestGeometry {
+                bounds: gpui::bounds(
+                    Point {
+                        x: px(10.0),
+                        y: px(20.0),
+                    },
+                    Size {
+                        width: px(800.0),
+                        height: px(600.0),
+                    },
+                ),
+                cell_w,
+                cell_h,
+                padding_left: 0.0,
+                padding_top: 0.0,
+                gutter: 0.0,
+                rows: 24,
+                cols: 80,
+                display_offset: 4,
+                viewport_anchor_row,
+                visual_y_offset,
+            };
+            let cell = terminal_cell_for_visual_geometry(
+                Point {
+                    x: px(10.0 + 9.5 * cell_w),
+                    y: px(20.0 + visual_y_offset + (snapshot_row as f32 + 0.5) * cell_h),
+                },
+                &geometry,
+            );
+
+            assert_eq!(cell, TerminalCellPos::new(viewport_row, 9));
+        }
     }
 }

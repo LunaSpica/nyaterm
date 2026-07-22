@@ -3,6 +3,22 @@ use super::*;
 const TERMINAL_SELECTION_DRAG_NOTIFY_DELAY: Duration = Duration::from_millis(8);
 
 impl NyaTermApp {
+    pub(in crate::features) fn clear_terminal_selection_state_for_session(
+        &mut self,
+        session_id: &str,
+    ) {
+        let selection_session_id = self
+            .terminal_selection_session_id
+            .as_deref()
+            .or(self.active_session_id.as_deref());
+        if selection_session_id != Some(session_id) {
+            return;
+        }
+        self.terminal_selection = None;
+        self.terminal_selection_session_id = None;
+        self.terminal_selection_dragging = false;
+    }
+
     fn notify_terminal_selection_owner_surface(&mut self, cx: &mut Context<Self>) {
         let session_id = self
             .terminal_selection_session_id
@@ -130,7 +146,7 @@ impl NyaTermApp {
                     .filter(|session_id| !session_id.is_empty())
             });
         let Some(geometry) =
-            self.terminal_hit_test_geometry_for_session(selection_session_id.as_deref())
+            self.terminal_hit_test_geometry_for_session(selection_session_id.as_deref(), cx)
         else {
             return;
         };
@@ -222,8 +238,11 @@ impl NyaTermApp {
                 .clone()
                 .or_else(|| self.active_session_id.clone());
             if let Some(session_id) = captured_session_id
-                && let Some(cell) = self
-                    .point_to_terminal_cell_for_session(Some(session_id.as_str()), event.position)
+                && let Some(cell) = self.point_to_terminal_cell_for_session(
+                    Some(session_id.as_str()),
+                    event.position,
+                    cx,
+                )
                 && self.maybe_send_mouse_report_for_session(
                     &session_id,
                     button,
@@ -246,7 +265,7 @@ impl NyaTermApp {
             .as_deref()
             .or(self.active_session_id.as_deref())
             .filter(|session_id| !session_id.is_empty());
-        let Some(geometry) = self.terminal_hit_test_geometry_for_session(selection_session_id)
+        let Some(geometry) = self.terminal_hit_test_geometry_for_session(selection_session_id, cx)
         else {
             return;
         };
@@ -287,7 +306,9 @@ impl NyaTermApp {
             .as_deref()
             .or(self.active_session_id.as_deref())
             .filter(|session_id| !session_id.is_empty());
-        if let Some(geometry) = self.terminal_hit_test_geometry_for_session(selection_session_id) {
+        if let Some(geometry) =
+            self.terminal_hit_test_geometry_for_session(selection_session_id, cx)
+        {
             let cell = terminal_cell_for_visual_geometry(event.position, &geometry);
             if let Some(selection) = self.terminal_selection.as_mut() {
                 selection.head = cell;
@@ -306,7 +327,7 @@ impl NyaTermApp {
             // Collapse caret toward click/edge, then clear selection (Tauri path).
             let target = if event.click_count >= 2 {
                 selected.end
-            } else if let Some(index) = self.input_index_at_mouse(event.position) {
+            } else if let Some(index) = self.input_index_at_mouse(event.position, cx) {
                 index.clamp(selected.start, selected.end)
             } else {
                 selected.end
@@ -424,8 +445,12 @@ impl NyaTermApp {
         (start, end)
     }
 
-    fn terminal_selection_viewport_state(&self, session_id: Option<&str>) -> (usize, usize) {
-        if let Some(geometry) = self.terminal_hit_test_geometry_for_session(session_id) {
+    fn terminal_selection_viewport_state(
+        &self,
+        session_id: Option<&str>,
+        cx: &App,
+    ) -> (usize, usize) {
+        if let Some(geometry) = self.terminal_hit_test_geometry_for_session(session_id, cx) {
             return (geometry.display_offset, geometry.viewport_anchor_row);
         }
         let display_offset = self.terminal_display_offset_for_session(session_id);

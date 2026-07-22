@@ -238,14 +238,22 @@ impl NyaTermApp {
             return;
         }
         self.settings.terminal_font_family = family.to_string();
-        self.invalidate_terminal_cell_metrics();
+        self.invalidate_terminal_cell_metrics(cx);
         self.save_appearance_settings(cx);
     }
 
-    pub(in crate::features) fn invalidate_terminal_cell_metrics(&mut self) {
+    pub(in crate::features) fn invalidate_terminal_cell_metrics(&mut self, cx: &mut Context<Self>) {
         self.terminal_cell_metrics = None;
+        // Refresh the measured metrics before resizing the terminal. Using the
+        // font-size fallback here makes the app and surface briefly disagree;
+        // that is especially visible while scrolled or dragging a selection.
+        self.refresh_terminal_cell_metrics(cx);
         self.sync_terminal_cell_metrics_to_screens();
+        for view in self.terminal_views.values_mut() {
+            view.render_cache.clear();
+        }
         self.resize_all_known_terminal_surfaces();
+        self.refresh_visible_terminal_surfaces(cx);
     }
 
     pub(in crate::features) fn adjust_terminal_font_size(
@@ -259,7 +267,7 @@ impl NyaTermApp {
             return;
         }
         self.settings.terminal_font_size = next as u16;
-        self.invalidate_terminal_cell_metrics();
+        self.invalidate_terminal_cell_metrics(cx);
         self.save_appearance_settings(cx);
     }
 
@@ -269,7 +277,7 @@ impl NyaTermApp {
             return;
         }
         self.settings.terminal_font_size = default_size;
-        self.invalidate_terminal_cell_metrics();
+        self.invalidate_terminal_cell_metrics(cx);
         self.save_appearance_settings(cx);
     }
 
@@ -444,7 +452,7 @@ impl NyaTermApp {
             return;
         }
         self.settings.terminal_font_weight = weight;
-        self.invalidate_terminal_cell_metrics();
+        self.invalidate_terminal_cell_metrics(cx);
         self.save_appearance_settings(cx);
     }
 
@@ -461,7 +469,7 @@ impl NyaTermApp {
             return;
         }
         self.settings.terminal_font_weight_bold = weight;
-        self.invalidate_terminal_cell_metrics();
+        self.invalidate_terminal_cell_metrics(cx);
         self.save_appearance_settings(cx);
     }
 

@@ -41,6 +41,7 @@ impl NyaTermApp {
         if self.terminal_cell_metrics != before_metrics {
             self.sync_terminal_cell_metrics_to_screens();
             self.resize_all_known_terminal_surfaces();
+            self.refresh_visible_terminal_surfaces(cx);
         }
         self.last_viewport_size != before_viewport || self.terminal_cell_metrics != before_metrics
     }

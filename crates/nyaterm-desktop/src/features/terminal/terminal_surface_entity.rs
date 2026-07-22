@@ -48,6 +48,14 @@ struct TerminalSurfaceLocalScrollResult {
     needs_text_snapshot: bool,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(in crate::features) struct TerminalSurfaceHitTestScrollGeometry {
+    pub(in crate::features) snapshot_pending: bool,
+    pub(in crate::features) display_offset: usize,
+    pub(in crate::features) snapshot_rows: usize,
+    pub(in crate::features) viewport_anchor_row: usize,
+}
+
 pub(in crate::features) fn terminal_surface_paint_count() -> u64 {
     TERMINAL_SURFACE_PAINT_COUNT.load(Ordering::Relaxed)
 }
@@ -164,6 +172,24 @@ impl TerminalSurface {
 
     pub(in crate::features) fn has_snapshot(&self) -> bool {
         self.snapshot.is_some()
+    }
+
+    pub(in crate::features) fn hit_test_scroll_geometry(
+        &self,
+    ) -> Option<TerminalSurfaceHitTestScrollGeometry> {
+        let snapshot = self.snapshot.as_ref()?;
+        let viewport_anchor_row = terminal_snapshot_anchor_row_for_display_offset(
+            snapshot.as_ref(),
+            self.display_offset,
+            self.viewport_rows,
+            self.scrollback_len,
+        );
+        Some(TerminalSurfaceHitTestScrollGeometry {
+            snapshot_pending: self.scroll_snapshot_pending,
+            display_offset: self.display_offset,
+            snapshot_rows: snapshot.rows,
+            viewport_anchor_row,
+        })
     }
 
     pub(in crate::features) fn snapshot_covering_display_offset(

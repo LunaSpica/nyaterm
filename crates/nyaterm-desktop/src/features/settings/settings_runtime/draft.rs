@@ -341,7 +341,7 @@ impl NyaTermApp {
                     self.command_suggestions_suppressed = false;
                     self.pending_command_history_entry = None;
                 }
-                self.invalidate_terminal_cell_metrics();
+                self.invalidate_terminal_cell_metrics(cx);
                 self.refresh_visible_terminal_surfaces(cx);
                 if !self.settings.startup_restore_window_layout {
                     let _ = ConnectionStore::open_with_portable_key_path(
@@ -392,7 +392,7 @@ impl NyaTermApp {
             self.transfer_duplicate_policy =
                 SftpDuplicatePolicy::from_legacy_value(&self.settings.transfer_duplicate_strategy);
             self.sync_terminal_encodings_from_settings();
-            self.invalidate_terminal_cell_metrics();
+            self.invalidate_terminal_cell_metrics(cx);
             self.invalidate_paint_theme_caches();
             self.sync_ai_drafts_from_active_profile();
             self.translate_target_language = self.translation_settings.target_language.clone();

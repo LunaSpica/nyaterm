@@ -828,6 +828,7 @@ impl NyaTermApp {
                                         if let Some(cell) = this.point_to_terminal_cell_for_session(
                                             Some(session_id.as_str()),
                                             event.position,
+                                            cx,
                                         ) {
                                             if this.maybe_send_mouse_report_for_session(
                                                 &session_id,
@@ -865,6 +866,7 @@ impl NyaTermApp {
                                         if let Some(cell) = this.point_to_terminal_cell_for_session(
                                             Some(session_id.as_str()),
                                             event.position,
+                                            cx,
                                         ) {
                                             if this.maybe_send_mouse_report_for_session(
                                                 &session_id,
