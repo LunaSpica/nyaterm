@@ -3430,14 +3430,14 @@ enum ManagedSession {
 pub struct LocalPtyTransport {
     info: SessionInfo,
     master: Box<dyn MasterPty + Send>,
-    writer: Box<dyn Write + Send>,
+    writer: QueuedTransportWriter,
     child: Box<dyn Child + Send + Sync>,
     reader_thread: Option<JoinHandle<()>>,
 }
 
 pub struct TelnetTransport {
     info: SessionInfo,
-    writer: TcpStream,
+    writer: QueuedTransportWriter,
     reader_stream: TcpStream,
     config: TelnetSessionConfig,
     reader_thread: Option<JoinHandle<()>>,
@@ -3452,10 +3452,88 @@ pub struct SshChannelTransport {
 
 pub struct SerialTransport {
     info: SessionInfo,
-    writer: Box<dyn SerialPort>,
+    writer: QueuedTransportWriter,
     backspace_as_bs: bool,
     stop_reader: Arc<AtomicBool>,
     reader_thread: Option<JoinHandle<()>>,
+}
+
+struct QueuedTransportWriter {
+    command_tx: mpsc::Sender<TransportWriterCommand>,
+    worker_thread: Option<JoinHandle<()>>,
+}
+
+enum TransportWriterCommand {
+    Write(Vec<u8>),
+    Close,
+}
+
+impl QueuedTransportWriter {
+    fn spawn<W>(
+        session_id: String,
+        writer: W,
+        flush_each_byte: bool,
+        event_queue: SessionEventQueue,
+    ) -> Self
+    where
+        W: Write + Send + 'static,
+    {
+        let (command_tx, command_rx) = mpsc::channel();
+        let worker_thread = std::thread::spawn(move || {
+            run_transport_writer(session_id, writer, flush_each_byte, command_rx, event_queue)
+        });
+        Self {
+            command_tx,
+            worker_thread: Some(worker_thread),
+        }
+    }
+
+    fn write(&self, data: Vec<u8>) -> anyhow::Result<()> {
+        if data.is_empty() {
+            return Ok(());
+        }
+        self.command_tx
+            .send(TransportWriterCommand::Write(data))
+            .map_err(|_| anyhow::anyhow!("transport writer stopped"))
+    }
+
+    fn close(&mut self) {
+        let _ = self.command_tx.send(TransportWriterCommand::Close);
+        if let Some(worker_thread) = self.worker_thread.take() {
+            let _ = worker_thread.join();
+        }
+    }
+}
+
+fn run_transport_writer<W>(
+    session_id: String,
+    mut writer: W,
+    flush_each_byte: bool,
+    command_rx: mpsc::Receiver<TransportWriterCommand>,
+    event_queue: SessionEventQueue,
+) where
+    W: Write,
+{
+    while let Ok(command) = command_rx.recv() {
+        match command {
+            TransportWriterCommand::Write(data) => {
+                let write_result = if flush_each_byte {
+                    data.iter().try_for_each(|byte| {
+                        writer
+                            .write_all(std::slice::from_ref(byte))
+                            .and_then(|_| writer.flush())
+                    })
+                } else {
+                    writer.write_all(&data).and_then(|_| writer.flush())
+                };
+                if let Err(error) = write_result {
+                    send_session_error(&event_queue, &session_id, error);
+                    break;
+                }
+            }
+            TransportWriterCommand::Close => break,
+        }
+    }
 }
 
 enum SshCommand {
@@ -3561,6 +3639,12 @@ impl SessionManager {
         };
         let reader_thread =
             spawn_reader_thread(session_id.clone(), reader, self.event_queue.clone());
+        let writer = QueuedTransportWriter::spawn(
+            session_id.clone(),
+            writer,
+            false,
+            self.event_queue.clone(),
+        );
         let session = LocalPtyTransport {
             info: info.clone(),
             master: pair.master,
@@ -3633,6 +3717,12 @@ impl SessionManager {
                 })?,
             response_writer,
             config.clone(),
+            self.event_queue.clone(),
+        );
+        let writer = QueuedTransportWriter::spawn(
+            session_id.clone(),
+            writer,
+            config.force_character_at_a_time,
             self.event_queue.clone(),
         );
 
@@ -3768,9 +3858,11 @@ impl SessionManager {
             stop_reader.clone(),
             self.event_queue.clone(),
         );
+        let writer =
+            QueuedTransportWriter::spawn(session_id.clone(), port, false, self.event_queue.clone());
         let session = SerialTransport {
             info: info.clone(),
-            writer: port,
+            writer,
             backspace_as_bs: config.backspace_mode == "ctrl_h",
             stop_reader,
             reader_thread: Some(reader_thread),
@@ -3936,9 +4028,7 @@ impl ManagedSession {
 
 impl TerminalTransport for LocalPtyTransport {
     fn write(&mut self, data: &[u8]) -> anyhow::Result<()> {
-        self.writer.write_all(data)?;
-        self.writer.flush()?;
-        Ok(())
+        self.writer.write(data.to_vec())
     }
 
     fn resize(
@@ -3957,6 +4047,7 @@ impl TerminalTransport for LocalPtyTransport {
 
     fn close(&mut self) -> anyhow::Result<()> {
         let _ = self.child.kill();
+        self.writer.close();
         if let Some(reader_thread) = self.reader_thread.take() {
             let _ = reader_thread.join();
         }
@@ -3967,16 +4058,7 @@ impl TerminalTransport for LocalPtyTransport {
 impl TerminalTransport for TelnetTransport {
     fn write(&mut self, data: &[u8]) -> anyhow::Result<()> {
         let data = normalize_telnet_input(data, &self.config);
-        if self.config.force_character_at_a_time {
-            for chunk in data.chunks(1) {
-                self.writer.write_all(chunk)?;
-                self.writer.flush()?;
-            }
-        } else {
-            self.writer.write_all(&data)?;
-            self.writer.flush()?;
-        }
-        Ok(())
+        self.writer.write(data)
     }
 
     fn resize(
@@ -3989,15 +4071,14 @@ impl TerminalTransport for TelnetTransport {
         self.info.cols = cols;
         self.info.rows = rows;
         if let Some(naws) = maybe_build_naws(cols, rows, &self.config) {
-            self.writer.write_all(&naws)?;
-            self.writer.flush()?;
+            self.writer.write(naws)?;
         }
         Ok(())
     }
 
     fn close(&mut self) -> anyhow::Result<()> {
-        let _ = self.writer.shutdown(Shutdown::Both);
         let _ = self.reader_stream.shutdown(Shutdown::Both);
+        self.writer.close();
         if let Some(reader_thread) = self.reader_thread.take() {
             let _ = reader_thread.join();
         }
@@ -4054,9 +4135,7 @@ impl TerminalTransport for SerialTransport {
         } else {
             data.to_vec()
         };
-        self.writer.write_all(&data)?;
-        self.writer.flush()?;
-        Ok(())
+        self.writer.write(data)
     }
 
     fn resize(
@@ -4073,6 +4152,7 @@ impl TerminalTransport for SerialTransport {
 
     fn close(&mut self) -> anyhow::Result<()> {
         self.stop_reader.store(true, Ordering::Relaxed);
+        self.writer.close();
         if let Some(reader_thread) = self.reader_thread.take() {
             let _ = reader_thread.join();
         }
@@ -7092,6 +7172,90 @@ mod tests {
     use super::*;
     use std::net::TcpListener;
     use std::time::{Duration, Instant};
+
+    struct GatedWriter {
+        started_tx: mpsc::SyncSender<()>,
+        release_rx: mpsc::Receiver<()>,
+        output: Arc<Mutex<Vec<u8>>>,
+    }
+
+    impl Write for GatedWriter {
+        fn write(&mut self, data: &[u8]) -> std::io::Result<usize> {
+            let _ = self.started_tx.send(());
+            let _ = self.release_rx.recv();
+            self.output
+                .lock()
+                .expect("output lock")
+                .extend_from_slice(data);
+            Ok(data.len())
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    struct WriteCapture(Arc<Mutex<Vec<Vec<u8>>>>);
+
+    impl Write for WriteCapture {
+        fn write(&mut self, data: &[u8]) -> std::io::Result<usize> {
+            self.0
+                .lock()
+                .expect("write capture lock")
+                .push(data.to_vec());
+            Ok(data.len())
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn queued_transport_writer_returns_before_blocking_write_completes() {
+        let (started_tx, started_rx) = mpsc::sync_channel(1);
+        let (release_tx, release_rx) = mpsc::sync_channel(1);
+        let output = Arc::new(Mutex::new(Vec::new()));
+        let mut writer = QueuedTransportWriter::spawn(
+            "queued".to_string(),
+            GatedWriter {
+                started_tx,
+                release_rx,
+                output: output.clone(),
+            },
+            false,
+            SessionEventQueue::new(),
+        );
+
+        writer.write(b"input".to_vec()).expect("queue input");
+        started_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("background write should start");
+        assert!(output.lock().expect("output lock").is_empty());
+
+        release_tx.send(()).expect("release writer");
+        writer.close();
+        assert_eq!(*output.lock().expect("output lock"), b"input");
+    }
+
+    #[test]
+    fn queued_transport_writer_preserves_character_at_a_time_mode() {
+        let writes = Arc::new(Mutex::new(Vec::new()));
+        let mut writer = QueuedTransportWriter::spawn(
+            "character-mode".to_string(),
+            WriteCapture(writes.clone()),
+            true,
+            SessionEventQueue::new(),
+        );
+
+        writer.write(b"abc".to_vec()).expect("queue input");
+        writer.close();
+
+        assert_eq!(
+            *writes.lock().expect("write capture lock"),
+            vec![vec![b'a'], vec![b'b'], vec![b'c']]
+        );
+    }
 
     #[test]
     fn directory_progress_accumulates_file_bytes_and_preserves_item_counts() {
