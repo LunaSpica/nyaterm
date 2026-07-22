@@ -659,12 +659,31 @@ impl TerminalSurface {
         viewport_rows: usize,
         scrollback_len: usize,
     ) -> bool {
+        // Scrolling usually stays inside the retained window already assigned
+        // to the surface. Keep that Arc in place: rebuilding retained rows here
+        // clones the entire viewport on every pixel-wheel event.
+        if self.snapshot.as_ref().is_some_and(|snapshot| {
+            terminal_snapshot_covers_display_offset(
+                snapshot,
+                display_offset,
+                viewport_rows,
+                scrollback_len,
+            )
+        }) {
+            return true;
+        }
         let Some(snapshot) =
             self.snapshot_covering_display_offset(display_offset, viewport_rows, scrollback_len)
         else {
             return false;
         };
-        self.remember_retained_snapshot(snapshot.clone());
+        let already_retained = self
+            .retained_snapshots
+            .iter()
+            .any(|retained| Arc::ptr_eq(retained, &snapshot));
+        if !already_retained {
+            self.remember_retained_snapshot(snapshot.clone());
+        }
         self.snapshot = Some(snapshot);
         true
     }
@@ -954,15 +973,16 @@ impl TerminalSurface {
 
     pub(in crate::features) fn set_decorations_and_keywords(
         &mut self,
-        decorations: Vec<TerminalLineDecorations>,
+        decorations: impl Into<Arc<[TerminalLineDecorations]>>,
         keyword_rules: Arc<Vec<nyaterm_core::ResolvedKeywordHighlightRule>>,
         show_cursor: bool,
         cursor_style: impl Into<String>,
     ) {
+        let decorations = decorations.into();
         self.selection_visual = None;
         self.selection_visual_row_range =
             terminal_selection_visual_row_range_from_decorations(&decorations);
-        self.decorations = decorations.into();
+        self.decorations = decorations;
         self.keyword_rules = keyword_rules;
         self.show_cursor = show_cursor && !self.visual_scroll_active();
         self.cursor_style = cursor_style.into();
@@ -1324,8 +1344,12 @@ impl TerminalSurface {
             );
             if text_first_repaint_ready {
                 let session_id = state.session_id.clone();
-                let _ = app.update(cx, |this, cx| {
-                    this.notify_terminal_scroll_position_only(session_id.as_str(), cx);
+                // The app notification may read/update this surface. Wait until
+                // the current entity update has released its GPUI lease.
+                cx.defer(move |cx| {
+                    let _ = app.update(cx, |this, cx| {
+                        this.notify_terminal_scroll_position_only(session_id.as_str(), cx);
+                    });
                 });
             }
             cx.notify();
@@ -2332,6 +2356,20 @@ mod tests {
         assert_eq!(surface.scroll_residual_lines, 0.25);
         assert!(surface.has_new_while_scrolled);
         assert_eq!(surface.skipped_output_chars, 7);
+    }
+
+    #[test]
+    fn promoting_current_scroll_window_does_not_retain_it_again() {
+        let (snapshot, rows) = terminal_test_retained_live_snapshot(80);
+        let snapshot = Arc::new(snapshot);
+        let scrollback_len = snapshot.scrollback_len;
+        let mut surface = TerminalSurface::new("session");
+        surface.snapshot = Some(snapshot.clone());
+
+        assert!(surface.promote_snapshot_covering_display_offset(1, rows, scrollback_len));
+        assert!(surface.retained_snapshots.is_empty());
+        assert!(surface.retained_rows.is_empty());
+        assert!(Arc::ptr_eq(surface.snapshot.as_ref().unwrap(), &snapshot));
     }
 
     #[test]

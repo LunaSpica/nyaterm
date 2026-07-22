@@ -168,7 +168,7 @@ impl NyaTermApp {
         {
             return view.viewport_rows_for_ui();
         }
-        self.terminal_screen.viewport_snapshot(0).lines.len().max(1)
+        self.terminal_screen.rows().max(1)
     }
 
     pub(in crate::features) fn terminal_scrollback_len_for_session(

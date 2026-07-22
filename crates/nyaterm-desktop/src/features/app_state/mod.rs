@@ -114,6 +114,8 @@ pub struct NyaTermApp {
     pub(in crate::features) pending_command_history_entry: Option<String>,
     /// Bumps to cancel in-flight 80ms suggestion search timers (Tauri searchTimer).
     pub(in crate::features) command_suggestion_search_gen: u64,
+    /// Owning the debounce task lets a newer key cancel the previous timer.
+    pub(in crate::features) command_suggestion_refresh_task: Option<gpui::Task<()>>,
     /// Terminal-output credential autofill panel (Tauri CredentialSuggestions).
     pub(in crate::features) credential_suggestions: Option<CredentialSuggestionState>,
     pub(in crate::features) credential_autofill_buffer: String,

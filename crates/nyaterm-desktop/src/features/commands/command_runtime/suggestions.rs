@@ -104,6 +104,7 @@ fn command_history_input_update(
 impl NyaTermApp {
     pub(in crate::features) fn dismiss_command_suggestions(&mut self, cx: &mut Context<Self>) {
         self.command_suggestion_search_gen = self.command_suggestion_search_gen.saturating_add(1);
+        self.command_suggestion_refresh_task = None;
         let mut changed = false;
         if self.command_suggestions.take().is_some() {
             changed = true;
@@ -116,6 +117,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn clear_command_suggestion_draft(&mut self, cx: &mut Context<Self>) {
         self.command_suggestion_search_gen = self.command_suggestion_search_gen.saturating_add(1);
+        self.command_suggestion_refresh_task = None;
         let mut changed = false;
         if self.command_input_tracker != TerminalInputState::new() {
             self.command_input_tracker = TerminalInputState::new();
@@ -338,7 +340,7 @@ impl NyaTermApp {
     ) {
         self.command_suggestion_search_gen = self.command_suggestion_search_gen.saturating_add(1);
         let request_id = self.command_suggestion_search_gen;
-        cx.spawn(async move |this, cx| {
+        self.command_suggestion_refresh_task = Some(cx.spawn(async move |this, cx| {
             Timer::after(delay).await;
             let _ = this.update(cx, |this, cx| {
                 if this.command_suggestion_search_gen != request_id {
@@ -366,8 +368,7 @@ impl NyaTermApp {
                 }
                 this.refresh_command_suggestions(cx);
             });
-        })
-        .detach();
+        }));
     }
 
     pub(in crate::features) fn read_active_terminal_input_line(&self) -> Option<String> {

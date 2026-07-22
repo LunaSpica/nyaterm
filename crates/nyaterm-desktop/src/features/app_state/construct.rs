@@ -330,6 +330,7 @@ impl NyaTermApp {
             command_suggestions_suppressed: false,
             pending_command_history_entry: None,
             command_suggestion_search_gen: 0,
+            command_suggestion_refresh_task: None,
             credential_suggestions: None,
             credential_autofill_buffer: String::new(),
             credential_autofill_recent: HashMap::new(),

@@ -2213,10 +2213,10 @@ impl NyaTermApp {
                 view.render_cache
                     .line_decorations(decoration_cache_key, build)
             } else {
-                build()
+                build().into()
             }
         } else {
-            Vec::new()
+            std::sync::Arc::from(Vec::<TerminalLineDecorations>::new())
         };
         let decorations_duration = decorations_started_at.elapsed();
 

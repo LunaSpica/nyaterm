@@ -66,15 +66,19 @@ impl NyaTermApp {
             .terminal_runtime
             .terminal_input_wake_generation
             .saturating_add(1);
-        // Pull through any PTY echo/frame work that is already queued. The
-        // delayed wake loop below still catches output that arrives just after
-        // the key write, but this avoids adding a fixed timer hop to echo that
-        // is ready now.
-        self.drain_terminal_input_wake(cx);
         if self.terminal_runtime.terminal_input_wake_armed {
             return;
         }
         self.terminal_runtime.terminal_input_wake_armed = true;
+        // Keep key dispatch limited to encoding and the PTY notifier. Pull
+        // through already queued echo after the current input event. The armed
+        // state coalesces a burst of keys into one deferred drain.
+        let app = cx.entity();
+        cx.defer(move |cx| {
+            let _ = app.update(cx, |this, cx| {
+                this.drain_terminal_input_wake(cx);
+            });
+        });
         let mut observed_generation = self.terminal_runtime.terminal_input_wake_generation;
         cx.spawn(async move |this, cx| {
             loop {

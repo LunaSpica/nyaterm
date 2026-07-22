@@ -4,6 +4,15 @@ use crate::features::terminal_selection_runtime::{
 };
 use crate::models::TerminalPerformanceMode;
 
+fn terminal_shell_placeholder_snapshot() -> std::sync::Arc<TerminalSnapshot> {
+    static SNAPSHOT: std::sync::OnceLock<std::sync::Arc<TerminalSnapshot>> =
+        std::sync::OnceLock::new();
+    std::sync::Arc::clone(
+        SNAPSHOT
+            .get_or_init(|| std::sync::Arc::new(TerminalScreen::default().viewport_snapshot(0))),
+    )
+}
+
 impl NyaTermApp {
     pub(in crate::features) fn terminal_canvas(
         &mut self,
@@ -122,8 +131,9 @@ impl NyaTermApp {
                 display_offset,
             )
         } else {
-            // Cheap placeholder: chrome wrappers do not paint cells from this value.
-            std::sync::Arc::new(TerminalScreen::default().viewport_snapshot(0))
+            // Chrome wrappers do not paint cells from this value. Reuse one immutable
+            // placeholder instead of rebuilding an 80x24 snapshot on every shell paint.
+            terminal_shell_placeholder_snapshot()
         };
         let line_count = snapshot.lines.len();
         let cursor_row = snapshot.cursor_row;
@@ -164,7 +174,7 @@ impl NyaTermApp {
         ) = if !session_id.is_empty() {
             // Decorations live on TerminalSurface (sync_terminal_surface_paint).
             (
-                Vec::new(),
+                std::sync::Arc::from(Vec::<TerminalLineDecorations>::new()),
                 Duration::ZERO,
                 Duration::ZERO,
                 Duration::ZERO,
@@ -286,10 +296,10 @@ impl NyaTermApp {
                     view.render_cache
                         .line_decorations(decoration_cache_key, build)
                 } else {
-                    build()
+                    build().into()
                 }
             } else {
-                Vec::new()
+                std::sync::Arc::from(Vec::<TerminalLineDecorations>::new())
             };
             let decorations_duration = decoration_stage_started_at.elapsed();
             (
