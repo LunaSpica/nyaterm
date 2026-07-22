@@ -815,6 +815,7 @@ impl TerminalSurface {
 
         Some(Arc::new(TerminalSnapshot {
             cols,
+            viewport_rows,
             rows: viewport_rows,
             cells,
             cursor: hidden_terminal_cursor_snapshot(),
@@ -875,6 +876,7 @@ impl TerminalSurface {
 
         Some(Arc::new(TerminalSnapshot {
             cols,
+            viewport_rows,
             rows: viewport_rows,
             cells,
             cursor: hidden_terminal_cursor_snapshot(),
@@ -1595,8 +1597,13 @@ pub(in crate::features) fn terminal_snapshot_anchor_row_for_display_offset(
         .unwrap_or(0)
 }
 
-fn terminal_snapshot_identity(snapshot: &Arc<TerminalSnapshot>) -> (usize, usize, usize) {
-    (snapshot.display_offset, snapshot.total_rows, snapshot.rows)
+fn terminal_snapshot_identity(snapshot: &Arc<TerminalSnapshot>) -> (usize, usize, usize, usize) {
+    (
+        snapshot.display_offset,
+        snapshot.total_rows,
+        snapshot.viewport_rows,
+        snapshot.rows,
+    )
 }
 
 fn hidden_terminal_cursor_snapshot() -> nyaterm_terminal::CursorSnapshot {

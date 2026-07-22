@@ -112,6 +112,9 @@ pub struct SelectionSnapshot {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TerminalSnapshot {
     pub cols: usize,
+    /// Rows in the underlying terminal viewport. `rows` may be larger when a
+    /// retained scroll window is attached for smooth painting.
+    pub viewport_rows: usize,
     pub rows: usize,
     pub cells: Vec<RenderCell>,
     pub cursor: CursorSnapshot,
@@ -1002,6 +1005,7 @@ fn snapshot_from_term(
 
     TerminalSnapshot {
         cols,
+        viewport_rows: rows,
         rows,
         cells,
         cursor: CursorSnapshot {

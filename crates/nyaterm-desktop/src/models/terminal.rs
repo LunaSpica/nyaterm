@@ -459,6 +459,8 @@ pub(crate) struct TerminalViewState {
     pub(crate) output_decoder: TerminalOutputDecoder,
     pub(crate) recording_decoder: TerminalOutputDecoder,
     pub(crate) screen_revision: u64,
+    /// True while the frame worker is rebuilding content for a new grid size.
+    pub(crate) grid_resize_pending: bool,
     pub(crate) render_cache: TerminalRenderCache,
     pub(crate) has_unread: bool,
     /// Viewport offset from the live bottom (0 = follow output).
@@ -498,6 +500,7 @@ impl TerminalViewState {
             output_decoder: TerminalOutputDecoder::default(),
             recording_decoder: TerminalOutputDecoder::default(),
             screen_revision: 0,
+            grid_resize_pending: false,
             render_cache: TerminalRenderCache::default(),
             has_unread: false,
             scroll_offset: 0,
@@ -531,6 +534,7 @@ impl TerminalViewState {
             output_decoder: TerminalOutputDecoder::default(),
             recording_decoder: TerminalOutputDecoder::default(),
             screen_revision: 0,
+            grid_resize_pending: false,
             render_cache: TerminalRenderCache::default(),
             has_unread: false,
             scroll_offset: 0,
@@ -557,6 +561,7 @@ impl TerminalViewState {
         terminal_frame_snapshot_with_scroll_window(&self.screen, 0, true)
     }
 
+    #[cfg(test)]
     pub(crate) fn snapshot_with_scroll_window(&self, offset: usize) -> Arc<TerminalSnapshot> {
         terminal_frame_snapshot_with_scroll_window(
             &self.screen,
@@ -642,6 +647,7 @@ impl TerminalViewState {
         self.screen.advance_decoded_text(text);
         self.screen_revision = self.screen_revision.saturating_add(1);
         self.frame_snapshot = Some(self.live_snapshot_with_scroll_window());
+        self.grid_resize_pending = false;
         self.frame_action_links = None;
         self.enter_render_degraded_mode();
         self.protocol_state = TerminalProtocolState::from_screen(&self.screen);
@@ -663,6 +669,7 @@ impl TerminalViewState {
         self.screen.advance(data);
         self.screen_revision = self.screen_revision.saturating_add(1);
         self.frame_snapshot = Some(self.live_snapshot_with_scroll_window());
+        self.grid_resize_pending = false;
         self.frame_action_links = None;
         self.enter_render_degraded_mode();
         self.protocol_state = TerminalProtocolState::from_screen(&self.screen);
@@ -779,6 +786,7 @@ impl TerminalViewState {
         self.output_decoder.reset_decoder();
         self.recording_decoder.reset_decoder();
         self.screen_revision = self.screen_revision.saturating_add(1);
+        self.grid_resize_pending = false;
         self.render_cache.clear();
         self.has_unread = false;
         self.scroll_offset = 0;
@@ -824,6 +832,7 @@ impl TerminalViewState {
         self.frame_action_links = action_links;
         self.protocol_state = protocol_state;
         self.screen_revision = revision;
+        self.grid_resize_pending = false;
         self.output_burst_bytes = self.output_burst_bytes.saturating_add(accepted_bytes);
         if accepted_bytes > 0 {
             self.enter_render_degraded_mode();
@@ -844,6 +853,7 @@ impl TerminalViewState {
         let new_scrollback_len = snapshot.scrollback_len;
         self.frame_snapshot = Some(snapshot);
         self.frame_action_links = action_links;
+        self.grid_resize_pending = false;
         if revision > self.screen_revision {
             self.screen_revision = revision;
         }
@@ -863,6 +873,7 @@ impl TerminalViewState {
         if let Some(snapshot) = snapshot {
             self.frame_snapshot = Some(snapshot);
             self.frame_action_links = action_links;
+            self.grid_resize_pending = false;
         } else {
             // Drop heavy paint state while backgrounded under pressure.
             self.frame_snapshot = None;
@@ -1545,6 +1556,14 @@ fn terminal_frame_snapshot_with_scroll_window(
     Arc::new(snapshot)
 }
 
+pub(crate) fn terminal_snapshot_matches_grid_geometry(
+    snapshot: &TerminalSnapshot,
+    cols: usize,
+    viewport_rows: usize,
+) -> bool {
+    snapshot.cols == cols.max(1) && snapshot.viewport_rows == viewport_rows.max(1)
+}
+
 fn terminal_frame_snapshot_older_row_slices(
     screen: &TerminalScreen,
     offset: usize,
@@ -1683,6 +1702,21 @@ impl TerminalFrameSession {
         if self.screen.cols() as u16 != cols || self.screen.rows() as u16 != rows {
             self.screen.resize(cols, rows);
             self.revision = self.revision.saturating_add(1);
+        }
+    }
+
+    fn resized_live_snapshot_event(
+        &self,
+        session_id: String,
+        started_at: Instant,
+    ) -> TerminalFrameSnapshotEvent {
+        TerminalFrameSnapshotEvent {
+            session_id,
+            offset: 0,
+            snapshot: terminal_frame_snapshot_with_scroll_window(&self.screen, 0, true),
+            action_links: None,
+            revision: self.revision,
+            process_duration: started_at.elapsed(),
         }
     }
 
@@ -2188,7 +2222,10 @@ fn run_terminal_frame_processor(
                 rows,
             } => {
                 if let Some(session) = sessions.get_mut(&session_id) {
+                    let started_at = Instant::now();
                     session.resize(cols, rows);
+                    let event = session.resized_live_snapshot_event(session_id, started_at);
+                    event_queue.push(TerminalFrameEvent::Snapshot(event));
                 }
             }
             TerminalFrameCommand::Output {
@@ -2617,10 +2654,38 @@ mod tests {
 
         assert_eq!(snapshot.cols, resized_cols as usize);
         assert_eq!(snapshot.scrollback_len, view.screen.scrollback_len());
+        assert!(terminal_snapshot_matches_grid_geometry(
+            snapshot.as_ref(),
+            view.screen.cols(),
+            view.screen.rows(),
+        ));
         assert!(snapshot_covers_offset(
             snapshot.as_ref(),
             display_offset,
             viewport_rows,
+        ));
+    }
+
+    #[test]
+    fn terminal_snapshot_geometry_rejects_height_only_resize() {
+        let mut view = TerminalViewState::from_output(terminal_output_lines(80));
+        let snapshot = view.live_snapshot_with_scroll_window();
+        let old_cols = view.screen.cols();
+        let old_rows = view.screen.rows();
+
+        assert!(terminal_snapshot_matches_grid_geometry(
+            snapshot.as_ref(),
+            old_cols,
+            old_rows,
+        ));
+
+        view.screen
+            .resize(old_cols as u16, old_rows.saturating_add(5) as u16);
+
+        assert!(!terminal_snapshot_matches_grid_geometry(
+            snapshot.as_ref(),
+            view.screen.cols(),
+            view.screen.rows(),
         ));
     }
 
@@ -2759,6 +2824,25 @@ mod tests {
             event.snapshot.as_ref(),
             offset + 1,
             viewport_rows
+        ));
+    }
+
+    #[test]
+    fn terminal_frame_resize_snapshot_preserves_worker_content_and_geometry() {
+        let mut session = TerminalFrameSession::new("UTF-8", 1000);
+        session.screen = screen_from_line_count(120);
+
+        session.resize(100, 30);
+        let event = session.resized_live_snapshot_event("s1".to_string(), Instant::now());
+
+        assert_eq!(event.offset, 0);
+        assert_eq!(event.snapshot.cols, 100);
+        assert_eq!(event.snapshot.viewport_rows, 30);
+        assert!(event.snapshot.lines.join("\n").contains("line 119"));
+        assert!(terminal_snapshot_matches_grid_geometry(
+            event.snapshot.as_ref(),
+            100,
+            30,
         ));
     }
 

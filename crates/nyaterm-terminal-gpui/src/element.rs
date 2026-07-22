@@ -285,6 +285,37 @@ mod layout_cache_tests {
     }
 
     #[test]
+    fn row_layout_key_tracks_cell_width() {
+        let mut snapshot = TerminalScreen::default().snapshot();
+        snapshot.lines[0] = "same".to_string();
+        snapshot.line_signatures[0] = 7;
+        let make_element = |cell_width| {
+            NyaTerminalElement::new(
+                Arc::new(snapshot.clone()),
+                Arc::new(Vec::new()),
+                Vec::new(),
+                false,
+                "block",
+                cell_width,
+                16.0,
+                nyaterm_ui::theme_palette("github-dark"),
+                "monospace".to_string(),
+                14.0,
+                400.0,
+                700.0,
+            )
+        };
+        let narrow = make_element(8.0);
+        let wide = make_element(12.0);
+        let decorations = TerminalLineDecorations::default();
+
+        assert_ne!(
+            narrow.row_layout_key(0, "same", None, &decorations),
+            wide.row_layout_key(0, "same", None, &decorations),
+        );
+    }
+
+    #[test]
     fn row_layout_key_ignores_dynamic_overlay_decorations() {
         let mut snapshot = TerminalScreen::default().snapshot();
         snapshot.lines[0] = "same".to_string();
@@ -718,6 +749,7 @@ impl NyaTerminalElement {
         self.font_size.to_bits().hash(&mut hasher);
         self.normal_weight.to_bits().hash(&mut hasher);
         self.bold_weight.to_bits().hash(&mut hasher);
+        self.cell_width.max(1.0).to_bits().hash(&mut hasher);
         hasher.finish()
     }
 
@@ -1096,7 +1128,7 @@ impl Element for NyaTerminalElement {
                             SharedString::from(text),
                             font_size,
                             &text_runs,
-                            None,
+                            Some(px(cell_w)),
                         ));
                         return (line, line_started_at.elapsed(), text_runs.len(), Vec::new());
                     }
@@ -1193,7 +1225,7 @@ impl Element for NyaTerminalElement {
                         SharedString::from(text),
                         font_size,
                         &text_runs,
-                        None,
+                        Some(px(cell_w)),
                     ));
                     (
                         line,
@@ -1326,7 +1358,7 @@ impl Element for NyaTerminalElement {
                     SharedString::from(cursor_text),
                     font_size,
                     &cursor_runs,
-                    None,
+                    Some(px(cell_w)),
                 ));
                 plan.shape_line_count = plan.shape_line_count.saturating_add(1);
                 plan.shape_line_duration += started_at.elapsed();

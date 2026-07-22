@@ -1487,13 +1487,7 @@ impl NyaTermApp {
             if grid_changed {
                 view.screen.resize(cols, rows);
                 view.clear_scrollback_query_caches();
-                view.frame_snapshot = Some(view.live_snapshot_with_scroll_window());
-                view.clamp_scroll_offset();
-                let scroll_offset = view.scroll_offset;
-                if scroll_offset > 0 {
-                    let snapshot = view.snapshot_with_scroll_window(scroll_offset);
-                    view.remember_scrollback_snapshot(scroll_offset, snapshot);
-                }
+                view.grid_resize_pending = true;
                 view.frame_action_links = None;
                 self.terminal_scroll_delta_residuals.remove(session_id);
                 self.terminal_frame_pipeline

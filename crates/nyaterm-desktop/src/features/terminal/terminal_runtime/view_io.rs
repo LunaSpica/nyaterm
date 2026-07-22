@@ -80,7 +80,7 @@ fn terminal_retained_snapshot_matches_view(
     viewport_rows: usize,
 ) -> bool {
     let scrollback_len = view.screen.scrollback_len();
-    snapshot.cols == view.screen.cols()
+    terminal_snapshot_matches_grid_geometry(snapshot, view.screen.cols(), view.screen.rows())
         && snapshot.scrollback_len == scrollback_len
         && terminal_snapshot_covers_display_offset(
             snapshot,
@@ -96,6 +96,9 @@ fn terminal_paint_window_snapshot_for_view(
     viewport_rows: usize,
     retained_surface_snapshot: Option<std::sync::Arc<TerminalSnapshot>>,
 ) -> Option<std::sync::Arc<TerminalSnapshot>> {
+    if view.is_some_and(|view| view.grid_resize_pending) {
+        return retained_surface_snapshot;
+    }
     if display_offset == 0 {
         let Some(view) = view else {
             return retained_surface_snapshot;
@@ -2693,7 +2696,7 @@ mod tests {
     }
 
     #[test]
-    fn terminal_paint_window_snapshot_refreshes_stale_live_frame_after_resize() {
+    fn terminal_paint_window_waits_for_worker_after_height_resize() {
         let mut view = TerminalViewState::from_output(terminal_output_lines(80));
         let old_snapshot = std::sync::Arc::new(view.screen.viewport_snapshot(0));
         let old_rows = old_snapshot.rows;
@@ -2701,24 +2704,21 @@ mod tests {
 
         view.screen
             .resize(view.screen.cols() as u16, (old_rows + 16) as u16);
+        view.grid_resize_pending = true;
         let viewport_rows = view.viewport_rows_for_ui();
         assert!(viewport_rows > old_rows);
 
-        let snapshot = terminal_paint_window_snapshot_for_view(Some(&view), 0, viewport_rows, None)
-            .expect("live frame snapshot should be rebuilt after viewport resize");
+        let snapshot = terminal_paint_window_snapshot_for_view(Some(&view), 0, viewport_rows, None);
 
-        assert!(!std::sync::Arc::ptr_eq(&snapshot, &old_snapshot));
-        assert!(snapshot.rows >= viewport_rows);
-        assert!(terminal_snapshot_covers_display_offset(
-            snapshot.as_ref(),
-            0,
-            viewport_rows,
-            view.screen.scrollback_len()
+        assert!(snapshot.is_none());
+        assert!(std::sync::Arc::ptr_eq(
+            view.frame_snapshot.as_ref().unwrap(),
+            &old_snapshot,
         ));
     }
 
     #[test]
-    fn terminal_paint_window_snapshot_refreshes_stale_live_frame_after_width_resize() {
+    fn terminal_paint_window_waits_for_worker_after_width_resize() {
         let mut view = TerminalViewState::from_output(terminal_output_lines(80));
         let old_snapshot = std::sync::Arc::new(view.screen.viewport_snapshot(0));
         let old_cols = old_snapshot.cols;
@@ -2726,13 +2726,13 @@ mod tests {
 
         view.screen
             .resize((old_cols + 24) as u16, view.screen.rows() as u16);
+        view.grid_resize_pending = true;
         let viewport_rows = view.viewport_rows_for_ui();
 
-        let snapshot = terminal_paint_window_snapshot_for_view(Some(&view), 0, viewport_rows, None)
-            .expect("live frame snapshot should be rebuilt after column resize");
+        let snapshot = terminal_paint_window_snapshot_for_view(Some(&view), 0, viewport_rows, None);
 
-        assert!(!std::sync::Arc::ptr_eq(&snapshot, &old_snapshot));
-        assert_eq!(snapshot.cols, old_cols + 24);
+        assert!(snapshot.is_none());
+        assert_eq!(view.frame_snapshot.as_ref().unwrap().cols, old_cols);
     }
 
     #[test]

@@ -602,6 +602,13 @@ impl NyaTermApp {
                 view.has_unread = true;
             }
             let unread_changed = !is_active && !had_unread;
+            let snapshot = snapshot.filter(|snapshot| {
+                terminal_snapshot_matches_grid_geometry(
+                    snapshot.as_ref(),
+                    view.screen.cols(),
+                    view.screen.rows(),
+                )
+            });
             if is_visible {
                 if let Some(snapshot) = snapshot {
                     view.apply_terminal_frame_parts(
@@ -726,6 +733,13 @@ impl NyaTermApp {
             };
             view.pending_snapshot_offsets.remove(&frame.offset);
             view.priority_pending_snapshot_offsets.remove(&frame.offset);
+            if !terminal_snapshot_matches_grid_geometry(
+                frame.snapshot.as_ref(),
+                view.screen.cols(),
+                view.screen.rows(),
+            ) {
+                return TerminalFrameApplyResult::default();
+            }
             view.screen_revision
         };
         if frame.revision < current_revision {
