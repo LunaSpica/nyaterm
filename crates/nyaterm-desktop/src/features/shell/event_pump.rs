@@ -146,13 +146,13 @@ impl NyaTermApp {
 
     fn flush_terminal_input_idle_notify(&mut self, cx: &mut Context<Self>) {
         let now = Instant::now();
-        if self
-            .terminal_runtime
-            .last_terminal_input_at
-            .is_some_and(|last| now.saturating_duration_since(last) < TERMINAL_INPUT_LATENCY_WINDOW)
-        {
+        if let Some(delay) = terminal_input_idle_remaining_delay(
+            self.terminal_runtime.last_terminal_input_at,
+            now,
+            TERMINAL_INPUT_LATENCY_WINDOW,
+        ) {
             cx.spawn(async move |this, cx| {
-                Timer::after(TERMINAL_INPUT_LATENCY_WINDOW).await;
+                Timer::after(delay).await;
                 let _ = this.update(cx, |this, cx| {
                     this.flush_terminal_input_idle_notify(cx);
                 });

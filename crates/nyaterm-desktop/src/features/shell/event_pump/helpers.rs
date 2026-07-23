@@ -319,6 +319,17 @@ pub(super) fn terminal_user_scroll_frame_apply_pending(
         })
 }
 
+pub(super) fn terminal_input_idle_remaining_delay(
+    last_input_at: Option<Instant>,
+    now: Instant,
+    active_window: Duration,
+) -> Option<Duration> {
+    let last_input_at = last_input_at?;
+    active_window
+        .checked_sub(now.saturating_duration_since(last_input_at))
+        .filter(|delay| !delay.is_zero())
+}
+
 pub(super) fn terminal_render_work_pressure_active(
     runtime_output_pressure: bool,
     pending_session_start: bool,
@@ -801,6 +812,41 @@ mod tests {
             now,
             TERMINAL_FRAME_APPLY_PRESSURE_INTERVAL
         ));
+    }
+
+    #[test]
+    fn terminal_input_idle_remaining_delay_uses_remainder_of_window() {
+        let now = Instant::now();
+        let active_window = Duration::from_millis(80);
+
+        assert_eq!(
+            terminal_input_idle_remaining_delay(Some(now), now, active_window),
+            Some(active_window)
+        );
+        assert_eq!(
+            terminal_input_idle_remaining_delay(
+                Some(now - Duration::from_millis(1)),
+                now,
+                active_window
+            ),
+            Some(active_window - Duration::from_millis(1))
+        );
+        assert_eq!(
+            terminal_input_idle_remaining_delay(Some(now - active_window), now, active_window),
+            None
+        );
+        assert_eq!(
+            terminal_input_idle_remaining_delay(
+                Some(now - active_window - Duration::from_millis(1)),
+                now,
+                active_window
+            ),
+            None
+        );
+        assert_eq!(
+            terminal_input_idle_remaining_delay(None, now, active_window),
+            None
+        );
     }
 
     #[test]
