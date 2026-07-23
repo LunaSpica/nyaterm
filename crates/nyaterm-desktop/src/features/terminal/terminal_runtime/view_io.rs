@@ -1873,7 +1873,21 @@ impl NyaTermApp {
                 "block",
             );
             if frame_applied {
-                surface.set_decorations_and_keywords(decorations, keyword_rules, false, "block");
+                if render_degraded || user_scroll_active || input_latency_active {
+                    surface.set_decorations_and_keywords_preserving_stale(
+                        decorations,
+                        keyword_rules,
+                        false,
+                        "block",
+                    );
+                } else {
+                    surface.set_decorations_and_keywords(
+                        decorations,
+                        keyword_rules,
+                        false,
+                        "block",
+                    );
+                }
                 surface.schedule_keyword_highlights(clear_keyword_highlights, cx);
             }
             cx.notify();
@@ -2286,12 +2300,21 @@ impl NyaTermApp {
                 cursor_style.clone(),
             );
             if frame_applied {
-                surface.set_decorations_and_keywords(
-                    decorations,
-                    keyword_rules,
-                    show_cursor,
-                    cursor_style,
-                );
+                if render_degraded {
+                    surface.set_decorations_and_keywords_preserving_stale(
+                        decorations,
+                        keyword_rules,
+                        show_cursor,
+                        cursor_style,
+                    );
+                } else {
+                    surface.set_decorations_and_keywords(
+                        decorations,
+                        keyword_rules,
+                        show_cursor,
+                        cursor_style,
+                    );
+                }
                 surface.schedule_keyword_highlights(clear_keyword_highlights, cx);
             }
             cx.notify();

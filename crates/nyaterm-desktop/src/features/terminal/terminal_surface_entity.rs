@@ -990,6 +990,33 @@ impl TerminalSurface {
         cursor_style: impl Into<String>,
     ) {
         let decorations = decorations.into();
+        self.apply_decorations_and_keywords(decorations, keyword_rules, show_cursor, cursor_style);
+    }
+
+    pub(in crate::features) fn set_decorations_and_keywords_preserving_stale(
+        &mut self,
+        decorations: impl Into<Arc<[TerminalLineDecorations]>>,
+        keyword_rules: Arc<Vec<nyaterm_core::ResolvedKeywordHighlightRule>>,
+        show_cursor: bool,
+        cursor_style: impl Into<String>,
+    ) {
+        let decorations = decorations.into();
+        if decorations.is_empty() && !self.decorations.is_empty() {
+            self.keyword_rules = keyword_rules;
+            self.show_cursor = show_cursor && !self.visual_scroll_active();
+            self.cursor_style = cursor_style.into();
+            return;
+        }
+        self.apply_decorations_and_keywords(decorations, keyword_rules, show_cursor, cursor_style);
+    }
+
+    fn apply_decorations_and_keywords(
+        &mut self,
+        decorations: Arc<[TerminalLineDecorations]>,
+        keyword_rules: Arc<Vec<nyaterm_core::ResolvedKeywordHighlightRule>>,
+        show_cursor: bool,
+        cursor_style: impl Into<String>,
+    ) {
         self.selection_visual = None;
         self.selection_visual_row_range =
             terminal_selection_visual_row_range_from_decorations(&decorations);
@@ -2225,6 +2252,52 @@ mod tests {
             ),
             0.0
         );
+    }
+
+    #[test]
+    fn degraded_empty_decorations_preserve_stale_paint_state() {
+        let snapshot = Arc::new(TerminalScreen::default().viewport_snapshot(0));
+        let rows = snapshot.rows;
+        let mut surface = TerminalSurface::new("session");
+
+        surface.apply_frame_snapshot(
+            snapshot, 0, 0.0, 0, 10, rows, false, None, 0, false, true, "block",
+        );
+        surface.set_decorations_and_keywords(
+            vec![TerminalLineDecorations {
+                search_ranges: vec![(2, 5)],
+                link_ranges: vec![(1, 3)],
+                ..TerminalLineDecorations::default()
+            }],
+            Arc::new(Vec::new()),
+            true,
+            "block",
+        );
+
+        surface.set_decorations_and_keywords_preserving_stale(
+            Vec::new(),
+            Arc::new(Vec::new()),
+            true,
+            "beam",
+        );
+
+        assert_eq!(surface.decorations[0].search_ranges, vec![(2, 5)]);
+        assert_eq!(surface.decorations[0].link_ranges, vec![(1, 3)]);
+        assert_eq!(surface.cursor_style, "beam");
+
+        surface.set_decorations_and_keywords_preserving_stale(
+            vec![TerminalLineDecorations {
+                active_search_ranges: vec![(6, 8)],
+                ..TerminalLineDecorations::default()
+            }],
+            Arc::new(Vec::new()),
+            true,
+            "underline",
+        );
+
+        assert!(surface.decorations[0].search_ranges.is_empty());
+        assert_eq!(surface.decorations[0].active_search_ranges, vec![(6, 8)]);
+        assert_eq!(surface.cursor_style, "underline");
     }
 
     #[test]
