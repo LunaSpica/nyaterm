@@ -489,24 +489,14 @@ impl TerminalSurface {
         performance_overlay: Option<TerminalPerformanceOverlay>,
         skipped_output_chars: u64,
     ) {
-        let previous_snapshot = self.snapshot.clone();
         self.promote_snapshot_covering_display_offset(
             display_offset,
             viewport_rows,
             scrollback_len,
         );
-        let snapshot_changed = match (previous_snapshot.as_ref(), self.snapshot.as_ref()) {
-            (Some(previous), Some(current)) => !Arc::ptr_eq(previous, current),
-            (None, None) => false,
-            _ => true,
-        };
-        if snapshot_changed {
-            self.decorations = Arc::from(Vec::<TerminalLineDecorations>::new());
-            self.selection_visual = None;
-            self.selection_visual_row_range = None;
-            self.has_action_link_decorations = false;
-            self.show_cursor = false;
-        }
+        // This is the scroll-only path. Keep stale decorations attached until a
+        // full surface sync computes replacements, matching Zed/editor style
+        // stale-until-recomputed highlights and avoiding a flash to plain text.
         self.scroll_offset = scroll_offset;
         self.scroll_residual_lines = scroll_residual_lines;
         self.display_offset = display_offset;
@@ -3099,7 +3089,7 @@ mod tests {
         assert!(text_updated);
         assert!(!surface.scroll_snapshot_pending);
         assert_eq!(surface.display_offset, first_offset);
-        assert!(!surface.has_action_link_decorations);
+        assert!(surface.has_action_link_decorations);
         assert_eq!(
             surface.snapshot.as_ref().unwrap().display_offset,
             first_offset
@@ -3467,6 +3457,61 @@ mod tests {
             ),
             0.0
         );
+    }
+
+    #[test]
+    fn scroll_position_reuse_preserves_stale_decorations_until_recomputed() {
+        let mut screen = TerminalScreen::default();
+        screen.advance_decoded_text(&terminal_test_output_lines(80));
+        let old_display_offset = 6;
+        let snapshot = Arc::new(screen.viewport_snapshot(old_display_offset));
+        let rows = snapshot.rows;
+        let old_scrollback_len = snapshot.scrollback_len;
+        let growth = 3;
+        let new_display_offset = old_display_offset + growth;
+        let new_scrollback_len = old_scrollback_len + growth;
+        let mut surface = TerminalSurface::new("session");
+
+        surface.apply_frame_snapshot(
+            snapshot,
+            old_display_offset,
+            0.0,
+            old_display_offset,
+            old_scrollback_len,
+            rows,
+            false,
+            None,
+            0,
+            true,
+            true,
+            "block",
+        );
+        surface.set_decorations_and_keywords(
+            vec![TerminalLineDecorations {
+                search_ranges: vec![(2, 5)],
+                link_ranges: vec![(1, 3)],
+                ..TerminalLineDecorations::default()
+            }],
+            Arc::new(Vec::new()),
+            true,
+            "block",
+        );
+
+        surface.update_scroll_position_without_snapshot(
+            new_display_offset,
+            0.0,
+            new_display_offset,
+            new_scrollback_len,
+            rows,
+            true,
+            None,
+            0,
+        );
+
+        assert_eq!(surface.display_offset, new_display_offset);
+        assert_eq!(surface.decorations[0].search_ranges, vec![(2, 5)]);
+        assert_eq!(surface.decorations[0].link_ranges, vec![(1, 3)]);
+        assert!(surface.has_action_link_decorations);
     }
 
     #[test]
