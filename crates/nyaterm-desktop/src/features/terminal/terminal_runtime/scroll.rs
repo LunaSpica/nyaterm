@@ -107,6 +107,19 @@ fn terminal_scroll_to_bottom_state_needs_update(
         || (residual_lines.is_finite() && residual_lines.abs() >= f32::EPSILON * 8.0)
 }
 
+fn terminal_scroll_offset_state_needs_update(
+    current_offset: usize,
+    current_residual_lines: f32,
+    current_has_new_while_scrolled: bool,
+    next_offset: usize,
+) -> bool {
+    current_offset != next_offset
+        || (next_offset == 0 && current_has_new_while_scrolled)
+        || (next_offset == 0
+            && current_residual_lines.is_finite()
+            && current_residual_lines.abs() >= f32::EPSILON * 8.0)
+}
+
 pub(in crate::features) fn terminal_visual_scroll_active_for_state(
     scroll_offset: usize,
     residual_lines: f32,
@@ -1123,26 +1136,12 @@ impl NyaTermApp {
         offset: usize,
         cx: &mut Context<Self>,
     ) {
-        if let Some(session_id) = self.active_session_id.clone() {
-            if let Some(view) = self.terminal_views.get_mut(&session_id) {
-                let max = view.scrollback_len_for_ui();
-                view.scroll_offset = offset.min(max);
-                if view.scroll_offset == 0 {
-                    view.has_new_while_scrolled = false;
-                    self.terminal_scroll_delta_residuals.remove(&session_id);
-                }
-            }
-        } else {
-            let max = self.terminal_screen.scrollback_len();
-            self.terminal_scroll_offset = offset.min(max);
-            if self.terminal_scroll_offset == 0 {
-                self.clear_terminal_scroll_residual_for_session(None);
-            }
+        let session_id = self.active_session_id.clone();
+        let repaint_session_id =
+            self.set_terminal_scroll_offset_for_session_state_only(session_id.as_deref(), offset);
+        if repaint_session_id.is_some() {
+            self.notify_terminal_scroll_after_state_change(repaint_session_id.as_deref(), cx);
         }
-        self.notify_terminal_scroll_after_state_change(
-            self.active_session_id.clone().as_deref(),
-            cx,
-        );
     }
 
     pub(in crate::features) fn active_terminal_scroll_max(&self) -> usize {
@@ -1178,7 +1177,9 @@ impl NyaTermApp {
     ) {
         let repaint_session_id =
             self.set_terminal_scroll_offset_for_session_state_only(session_id, offset);
-        self.notify_terminal_scroll_after_state_change(repaint_session_id.as_deref(), cx);
+        if repaint_session_id.is_some() {
+            self.notify_terminal_scroll_after_state_change(repaint_session_id.as_deref(), cx);
+        }
     }
 
     pub(in crate::features) fn set_terminal_scroll_offset_for_session_state_only(
@@ -1186,32 +1187,45 @@ impl NyaTermApp {
         session_id: Option<&str>,
         offset: usize,
     ) -> Option<String> {
-        let mut snapshot_request: Option<(String, usize)> = None;
         if let Some(session_id) = session_id.filter(|id| !id.is_empty()) {
+            let current_residual = self.terminal_scroll_residual_for_session(Some(session_id));
             if let Some(view) = self.terminal_views.get_mut(session_id) {
                 let max = view.scrollback_len_for_ui();
-                view.scroll_offset = offset.min(max);
+                let next_offset = offset.min(max);
+                if !terminal_scroll_offset_state_needs_update(
+                    view.scroll_offset,
+                    current_residual,
+                    view.has_new_while_scrolled,
+                    next_offset,
+                ) {
+                    return None;
+                }
+                view.scroll_offset = next_offset;
                 if view.scroll_offset == 0 {
                     view.has_new_while_scrolled = false;
                     self.terminal_scroll_delta_residuals.remove(session_id);
-                } else {
-                    snapshot_request = Some((session_id.to_string(), view.scroll_offset));
                 }
+                return Some(session_id.to_string());
             }
+            return None;
         } else {
             let max = self.terminal_screen.scrollback_len();
-            self.terminal_scroll_offset = offset.min(max);
+            let next_offset = offset.min(max);
+            let current_residual = self.terminal_scroll_residual_for_session(None);
+            if !terminal_scroll_offset_state_needs_update(
+                self.terminal_scroll_offset,
+                current_residual,
+                false,
+                next_offset,
+            ) {
+                return None;
+            }
+            self.terminal_scroll_offset = next_offset;
             if self.terminal_scroll_offset == 0 {
                 self.clear_terminal_scroll_residual_for_session(None);
             }
         }
-        if let Some((session_id, _)) = snapshot_request {
-            return Some(session_id);
-        }
-        session_id
-            .filter(|id| !id.is_empty())
-            .map(str::to_string)
-            .or_else(|| self.active_session_id.clone())
+        self.active_session_id.clone()
     }
 
     /// Map a vertical pointer position (0..=1 top→bottom of track) to scroll_offset.
@@ -1237,7 +1251,9 @@ impl NyaTermApp {
     ) {
         let repaint_session_id =
             self.set_terminal_scroll_from_track_ratio_for_session_state_only(session_id, ratio);
-        self.notify_terminal_scroll_after_state_change(repaint_session_id.as_deref(), cx);
+        if repaint_session_id.is_some() {
+            self.notify_terminal_scroll_after_state_change(repaint_session_id.as_deref(), cx);
+        }
     }
 
     pub(in crate::features) fn set_terminal_scroll_from_track_ratio_for_session_state_only(
@@ -1291,7 +1307,9 @@ impl NyaTermApp {
             drag_session_id.as_deref(),
             ratio,
         );
-        self.queue_terminal_scrollbar_drag_visual_notify(repaint_session_id.as_deref(), cx);
+        if repaint_session_id.is_some() {
+            self.queue_terminal_scrollbar_drag_visual_notify(repaint_session_id.as_deref(), cx);
+        }
     }
 
     pub(in crate::features) fn finish_terminal_scrollbar_drag(&mut self, cx: &mut Context<Self>) {
@@ -1869,6 +1887,24 @@ mod tests {
         assert!(terminal_scroll_to_bottom_state_needs_update(2, 0.0, false));
         assert!(terminal_scroll_to_bottom_state_needs_update(0, 0.25, false));
         assert!(terminal_scroll_to_bottom_state_needs_update(0, 0.0, true));
+    }
+
+    #[test]
+    fn terminal_scroll_offset_state_skips_identical_offset() {
+        assert!(!terminal_scroll_offset_state_needs_update(4, 0.0, false, 4));
+        assert!(terminal_scroll_offset_state_needs_update(4, 0.0, false, 5));
+    }
+
+    #[test]
+    fn terminal_scroll_offset_state_keeps_bottom_cleanup() {
+        assert!(terminal_scroll_offset_state_needs_update(0, 0.25, false, 0));
+        assert!(terminal_scroll_offset_state_needs_update(0, 0.0, true, 0));
+        assert!(!terminal_scroll_offset_state_needs_update(
+            0,
+            f32::NAN,
+            false,
+            0
+        ));
     }
 
     #[test]
