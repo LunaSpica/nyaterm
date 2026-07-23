@@ -1196,11 +1196,7 @@ impl TerminalSurface {
         self.keyword_highlight_pending_key = Some(request_key);
         // Keep the last published snapshot drawable while the replacement is parsed in the
         // background, matching the editor's stale-until-reparsed behavior.
-        let highlighter = self
-            .keyword_highlighter_rules
-            .as_ref()
-            .filter(|cached_rules| Arc::ptr_eq(cached_rules, &rules))
-            .and(self.keyword_highlighter.clone());
+        let highlighter = self.cached_keyword_highlighter_for_rules(&rules);
         let palette = self.palette;
         self.keyword_highlight_task = Some(cx.spawn(async move |this, cx| {
             let (rules, highlighter, highlights) = cx
@@ -1227,6 +1223,16 @@ impl TerminalSurface {
                 cx.notify();
             });
         }));
+    }
+
+    fn cached_keyword_highlighter_for_rules(
+        &self,
+        rules: &Arc<Vec<nyaterm_core::ResolvedKeywordHighlightRule>>,
+    ) -> Option<Arc<TerminalKeywordHighlighter>> {
+        self.keyword_highlighter_rules
+            .as_ref()
+            .filter(|cached_rules| terminal_keyword_rule_sets_equal(cached_rules, rules))
+            .and(self.keyword_highlighter.clone())
     }
 
     fn cancel_pending_keyword_highlights(&mut self) {
@@ -2519,6 +2525,29 @@ mod tests {
         );
         assert!(surface.keyword_highlighter_rules.is_some());
         assert!(surface.keyword_highlighter.is_some());
+    }
+
+    #[test]
+    fn cached_keyword_highlighter_reuses_equal_rule_sets() {
+        let cached_rules = Arc::new(vec![nyaterm_core::ResolvedKeywordHighlightRule {
+            id: "alpha".to_string(),
+            name: "Alpha".to_string(),
+            patterns: vec!["alpha".to_string()],
+            color: "#ff0000".to_string(),
+            enabled: true,
+        }]);
+        let equivalent_rules = Arc::new(cached_rules.as_ref().clone());
+        assert!(!Arc::ptr_eq(&cached_rules, &equivalent_rules));
+        let highlighter = Arc::new(compile_terminal_keyword_highlighter(cached_rules.as_ref()));
+        let mut surface = TerminalSurface::new("session");
+        surface.keyword_highlighter_rules = Some(cached_rules);
+        surface.keyword_highlighter = Some(highlighter.clone());
+
+        assert!(
+            surface
+                .cached_keyword_highlighter_for_rules(&equivalent_rules)
+                .is_some_and(|cached| Arc::ptr_eq(&cached, &highlighter))
+        );
     }
 
     #[test]
