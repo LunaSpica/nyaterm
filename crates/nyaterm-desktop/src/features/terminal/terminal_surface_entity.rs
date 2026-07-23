@@ -7,7 +7,9 @@ use crate::features::terminal_runtime::{
 use crate::features::terminal_selection_runtime::{
     terminal_gutter_metrics, terminal_line_number_digits,
 };
+use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeMap, BTreeSet};
+use std::hash::{Hash, Hasher};
 use std::ops::Range;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -49,6 +51,28 @@ struct TerminalSurfaceLocalScrollResult {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct TerminalKeywordHighlightRequestKey {
+    rules_key: u64,
+    display_offset: usize,
+    row_count: usize,
+    line_signatures_key: u64,
+}
+
+fn terminal_keyword_highlight_request_key(
+    snapshot: &TerminalSnapshot,
+    rules_key: u64,
+) -> TerminalKeywordHighlightRequestKey {
+    let mut hasher = DefaultHasher::new();
+    snapshot.line_signatures.hash(&mut hasher);
+    TerminalKeywordHighlightRequestKey {
+        rules_key,
+        display_offset: snapshot.display_offset,
+        row_count: snapshot.rows,
+        line_signatures_key: hasher.finish(),
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(in crate::features) struct TerminalSurfaceHitTestScrollGeometry {
     pub(in crate::features) snapshot_pending: bool,
     pub(in crate::features) display_offset: usize,
@@ -79,6 +103,7 @@ pub(in crate::features) struct TerminalSurface {
     keyword_highlights: Option<Arc<TerminalKeywordHighlightSnapshot>>,
     keyword_highlight_generation: u64,
     keyword_highlight_task: Option<gpui::Task<()>>,
+    keyword_highlight_pending_key: Option<TerminalKeywordHighlightRequestKey>,
     keyword_highlighter_rules: Option<Arc<Vec<nyaterm_core::ResolvedKeywordHighlightRule>>>,
     keyword_highlighter: Option<Arc<TerminalKeywordHighlighter>>,
     decorations: Arc<[TerminalLineDecorations]>,
@@ -132,6 +157,7 @@ impl TerminalSurface {
             keyword_highlights: None,
             keyword_highlight_generation: 0,
             keyword_highlight_task: None,
+            keyword_highlight_pending_key: None,
             keyword_highlighter_rules: None,
             keyword_highlighter: None,
             decorations: Arc::from(Vec::<TerminalLineDecorations>::new()),
@@ -1026,21 +1052,34 @@ impl TerminalSurface {
                 self.keyword_highlight_generation =
                     self.keyword_highlight_generation.saturating_add(1);
                 self.keyword_highlight_task = None;
+                self.keyword_highlight_pending_key = None;
                 self.keyword_highlighter_rules = None;
                 self.keyword_highlighter = None;
                 self.keyword_highlights = None;
             }
             return;
         }
-        self.keyword_highlight_generation = self.keyword_highlight_generation.saturating_add(1);
-        let generation = self.keyword_highlight_generation;
-        self.keyword_highlight_task = None;
-        // Keep the last published snapshot drawable while the replacement is parsed in the
-        // background, matching the editor's stale-until-reparsed behavior.
         let Some(snapshot) = self.snapshot.clone() else {
             return;
         };
         let rules = self.keyword_rules.clone();
+        let rules_key = terminal_keyword_rules_key(rules.as_slice());
+        let request_key = terminal_keyword_highlight_request_key(snapshot.as_ref(), rules_key);
+        if self.keyword_highlight_pending_key == Some(request_key) {
+            return;
+        }
+        if self.keyword_highlights.as_ref().is_some_and(|highlights| {
+            highlights.rules_key() == rules_key && highlights.matches_snapshot(snapshot.as_ref())
+        }) {
+            self.keyword_highlight_pending_key = None;
+            return;
+        }
+        self.keyword_highlight_generation = self.keyword_highlight_generation.saturating_add(1);
+        let generation = self.keyword_highlight_generation;
+        self.keyword_highlight_task = None;
+        self.keyword_highlight_pending_key = Some(request_key);
+        // Keep the last published snapshot drawable while the replacement is parsed in the
+        // background, matching the editor's stale-until-reparsed behavior.
         let highlighter = self
             .keyword_highlighter_rules
             .as_ref()
@@ -1068,6 +1107,7 @@ impl TerminalSurface {
                 this.keyword_highlighter_rules = Some(rules);
                 this.keyword_highlighter = Some(highlighter);
                 this.keyword_highlights = Some(Arc::new(highlights));
+                this.keyword_highlight_pending_key = None;
                 cx.notify();
             });
         }));
@@ -2200,6 +2240,45 @@ mod tests {
         assert!(!terminal_surface_text_first_repaint_ready(
             &state, true, true
         ));
+    }
+
+    #[test]
+    fn keyword_highlight_request_key_tracks_snapshot_and_rules() {
+        let mut screen = TerminalScreen::default();
+        screen.advance_decoded_text("alpha\nbeta\n");
+        let snapshot = screen.viewport_snapshot(0);
+        let rules = vec![nyaterm_core::ResolvedKeywordHighlightRule {
+            id: "alpha".to_string(),
+            name: "Alpha".to_string(),
+            patterns: vec!["alpha".to_string()],
+            color: "#ff0000".to_string(),
+            enabled: true,
+        }];
+        let rules_key = terminal_keyword_rules_key(&rules);
+        let key = terminal_keyword_highlight_request_key(&snapshot, rules_key);
+
+        assert_eq!(
+            key,
+            terminal_keyword_highlight_request_key(&snapshot, rules_key)
+        );
+        assert_ne!(
+            key,
+            terminal_keyword_highlight_request_key(&snapshot, rules_key.saturating_add(1))
+        );
+
+        let mut scrolled_snapshot = snapshot.clone();
+        scrolled_snapshot.display_offset = scrolled_snapshot.display_offset.saturating_add(1);
+        assert_ne!(
+            key,
+            terminal_keyword_highlight_request_key(&scrolled_snapshot, rules_key)
+        );
+
+        let mut edited_snapshot = snapshot.clone();
+        edited_snapshot.line_signatures[0] = edited_snapshot.line_signatures[0].wrapping_add(1);
+        assert_ne!(
+            key,
+            terminal_keyword_highlight_request_key(&edited_snapshot, rules_key)
+        );
     }
 
     #[test]

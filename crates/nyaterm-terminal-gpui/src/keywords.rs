@@ -20,8 +20,13 @@ pub struct TerminalKeywordHighlightSnapshot {
 }
 
 impl TerminalKeywordHighlightSnapshot {
-    pub(super) fn rules_key(&self) -> u64 {
+    pub fn rules_key(&self) -> u64 {
         self.rules_key
+    }
+
+    pub fn matches_snapshot(&self, snapshot: &TerminalSnapshot) -> bool {
+        self.display_offset == snapshot.display_offset
+            && self.line_signatures == snapshot.line_signatures
     }
 
     pub(super) fn row(
@@ -107,7 +112,7 @@ pub fn compile_terminal_keyword_highlighter(
     }
 }
 
-pub(super) fn terminal_keyword_rules_key(rules: &[ResolvedKeywordHighlightRule]) -> u64 {
+pub fn terminal_keyword_rules_key(rules: &[ResolvedKeywordHighlightRule]) -> u64 {
     let mut hasher = DefaultHasher::new();
     for rule in rules {
         rule.id.hash(&mut hasher);
@@ -419,6 +424,10 @@ mod tests {
                 .stale_row(0, Some(41), 1, snapshot.rows)
                 .is_none()
         );
+        assert!(highlights.matches_snapshot(&snapshot));
+        let mut shifted_snapshot = snapshot.clone();
+        shifted_snapshot.display_offset = shifted_snapshot.display_offset.saturating_add(1);
+        assert!(!highlights.matches_snapshot(&shifted_snapshot));
         assert!(highlights.rows.iter().skip(1).all(Option::is_none));
     }
 
