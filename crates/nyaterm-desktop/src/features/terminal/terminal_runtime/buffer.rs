@@ -749,7 +749,8 @@ impl NyaTermApp {
                 "slow terminal frame processing"
             );
         }
-        let surface_notify = terminal_output_frame_surface_notify(is_visible, output_scroll_offset);
+        let surface_notify =
+            terminal_output_frame_surface_notify(is_visible, output_scroll_offset, accepted_bytes);
         let chrome_notify =
             terminal_output_frame_needs_chrome_notify(unread_changed, effects_need_ui_apply);
         if chrome_notify {
@@ -2187,8 +2188,9 @@ fn terminal_effects_need_ui_apply(effects: &TerminalEffects) -> bool {
 fn terminal_output_frame_surface_notify(
     is_visible: bool,
     scroll_offset: usize,
+    accepted_bytes: usize,
 ) -> Option<TerminalSurfaceFrameNotify> {
-    if !is_visible {
+    if !is_visible || accepted_bytes == 0 {
         return None;
     }
     if scroll_offset > 0 {
@@ -2325,14 +2327,15 @@ mod tests {
         assert!(terminal_output_frame_needs_chrome_notify(true, false));
         assert!(terminal_output_frame_needs_chrome_notify(false, true));
         assert_eq!(
-            terminal_output_frame_surface_notify(true, 0),
+            terminal_output_frame_surface_notify(true, 0, 8),
             Some(TerminalSurfaceFrameNotify::Full(String::new()))
         );
         assert_eq!(
-            terminal_output_frame_surface_notify(true, 5),
+            terminal_output_frame_surface_notify(true, 5, 8),
             Some(TerminalSurfaceFrameNotify::ScrollPositionOnly(String::new()))
         );
-        assert_eq!(terminal_output_frame_surface_notify(false, 0), None);
+        assert_eq!(terminal_output_frame_surface_notify(false, 0, 8), None);
+        assert_eq!(terminal_output_frame_surface_notify(true, 0, 0), None);
     }
 
     #[test]
