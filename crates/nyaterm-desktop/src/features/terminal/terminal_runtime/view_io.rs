@@ -817,8 +817,11 @@ impl NyaTermApp {
         let should_notify = synced > 0 || failed > 0;
         let notify_started_at = Instant::now();
         if should_notify {
-            self.terminal_status = terminal_input_fanout_status("sent", byte_count, synced, failed);
-            cx.notify();
+            if self.set_terminal_status_if_changed(terminal_input_fanout_status(
+                "sent", byte_count, synced, failed,
+            )) {
+                cx.notify();
+            }
         }
         let notify_duration = input_wake_duration + notify_started_at.elapsed();
         log_slow_terminal_input_diagnostic(
@@ -944,8 +947,11 @@ impl NyaTermApp {
         let should_notify = synced > 0 || failed > 0;
         let notify_started_at = Instant::now();
         if should_notify {
-            self.terminal_status = terminal_input_fanout_status("sent", byte_count, synced, failed);
-            cx.notify();
+            if self.set_terminal_status_if_changed(terminal_input_fanout_status(
+                "sent", byte_count, synced, failed,
+            )) {
+                cx.notify();
+            }
         }
         let notify_duration = input_wake_duration + notify_started_at.elapsed();
         log_slow_terminal_input_diagnostic(
@@ -1010,8 +1016,11 @@ impl NyaTermApp {
             }
         }
         if synced > 0 || failed > 0 {
-            self.terminal_status = terminal_input_fanout_status("sent", byte_count, synced, failed);
-            cx.notify();
+            if self.set_terminal_status_if_changed(terminal_input_fanout_status(
+                "sent", byte_count, synced, failed,
+            )) {
+                cx.notify();
+            }
         }
         failed == 0
     }
