@@ -1,5 +1,5 @@
 use super::*;
-use std::collections::hash_map::DefaultHasher;
+use std::collections::{HashMap, hash_map::DefaultHasher};
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
@@ -13,8 +13,10 @@ pub struct TerminalKeywordHighlighter {
 /// Immutable keyword data prepared away from GPUI's paint path.
 pub struct TerminalKeywordHighlightSnapshot {
     rules_key: u64,
+    display_offset: usize,
     line_signatures: Vec<u64>,
     rows: Vec<Option<Arc<Vec<TerminalHighlightSpan>>>>,
+    rows_by_signature: HashMap<u64, Arc<Vec<TerminalHighlightSpan>>>,
 }
 
 impl TerminalKeywordHighlightSnapshot {
@@ -27,7 +29,21 @@ impl TerminalKeywordHighlightSnapshot {
         row: usize,
         line_signature: Option<u64>,
     ) -> Option<&Arc<Vec<TerminalHighlightSpan>>> {
-        if self.line_signatures.get(row).copied() != line_signature {
+        let signature = line_signature?;
+        if self.line_signatures.get(row).copied() == Some(signature) {
+            return self.rows.get(row)?.as_ref();
+        }
+        self.rows_by_signature.get(&signature)
+    }
+
+    pub(super) fn stale_row(
+        &self,
+        row: usize,
+        display_offset: usize,
+        current_row_count: usize,
+    ) -> Option<&Arc<Vec<TerminalHighlightSpan>>> {
+        if self.display_offset != display_offset || self.line_signatures.len() != current_row_count
+        {
             return None;
         }
         self.rows.get(row)?.as_ref()
@@ -39,7 +55,7 @@ pub fn precompute_terminal_keyword_highlights(
     highlighter: &TerminalKeywordHighlighter,
     palette: nyaterm_ui::ThemePalette,
 ) -> TerminalKeywordHighlightSnapshot {
-    let rows = snapshot
+    let rows: Vec<Option<Arc<Vec<TerminalHighlightSpan>>>> = snapshot
         .lines
         .iter()
         .enumerate()
@@ -62,10 +78,19 @@ pub fn precompute_terminal_keyword_highlights(
                 .then(|| Arc::new(spans))
         })
         .collect();
+    let rows_by_signature = snapshot
+        .line_signatures
+        .iter()
+        .copied()
+        .zip(rows.iter())
+        .filter_map(|(signature, spans)| spans.as_ref().map(|spans| (signature, spans.clone())))
+        .collect();
     TerminalKeywordHighlightSnapshot {
         rules_key: highlighter.rules_key,
+        display_offset: snapshot.display_offset,
         line_signatures: snapshot.line_signatures.clone(),
         rows,
+        rows_by_signature,
     }
 }
 
@@ -374,7 +399,37 @@ mod tests {
 
         assert!(highlights.row(0, Some(41)).is_some());
         assert!(highlights.row(0, Some(42)).is_none());
+        assert!(highlights.stale_row(0, 0, snapshot.rows).is_some());
+        assert!(highlights.stale_row(0, 1, snapshot.rows).is_none());
         assert!(highlights.rows.iter().skip(1).all(Option::is_none));
+    }
+
+    #[test]
+    fn precomputed_keyword_snapshot_reuses_matching_rows_after_scroll() {
+        let mut snapshot = TerminalScreen::default().snapshot();
+        snapshot.lines[0] = "prefix ERROR suffix".to_string();
+        snapshot.styled_lines[0] = vec![nyaterm_terminal::StyledSpan {
+            text: snapshot.lines[0].clone(),
+            style: nyaterm_terminal::CellStyle::default(),
+        }];
+        snapshot.line_signatures[0] = 41;
+        let rules = vec![ResolvedKeywordHighlightRule {
+            id: "error".to_string(),
+            name: "Error".to_string(),
+            patterns: vec!["ERROR".to_string()],
+            color: "#ff2244".to_string(),
+            enabled: true,
+        }];
+
+        let highlighter = compile_terminal_keyword_highlighter(&rules);
+        let highlights = precompute_terminal_keyword_highlights(
+            &snapshot,
+            &highlighter,
+            nyaterm_ui::theme_palette("github-dark"),
+        );
+
+        assert!(highlights.row(0, Some(41)).is_some());
+        assert!(highlights.row(3, Some(41)).is_some());
     }
 
     #[test]

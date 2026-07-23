@@ -475,7 +475,6 @@ impl TerminalSurface {
         self.keyword_rules = Arc::new(Vec::new());
         self.keyword_highlight_generation = self.keyword_highlight_generation.saturating_add(1);
         self.keyword_highlight_task = None;
-        self.keyword_highlights = None;
         self.decorations = Arc::from(Vec::<TerminalLineDecorations>::new());
         self.selection_visual = None;
         self.selection_visual_row_range = None;
@@ -505,7 +504,6 @@ impl TerminalSurface {
             self.keyword_rules = Arc::new(Vec::new());
             self.keyword_highlight_generation = self.keyword_highlight_generation.saturating_add(1);
             self.keyword_highlight_task = None;
-            self.keyword_highlights = None;
             self.decorations = Arc::from(Vec::<TerminalLineDecorations>::new());
             self.selection_visual = None;
             self.selection_visual_row_range = None;
@@ -1004,12 +1002,20 @@ impl TerminalSurface {
         self.cursor_style = cursor_style.into();
     }
 
-    pub(in crate::features) fn schedule_keyword_highlights(&mut self, cx: &mut Context<Self>) {
+    pub(in crate::features) fn schedule_keyword_highlights(
+        &mut self,
+        clear_if_empty: bool,
+        cx: &mut Context<Self>,
+    ) {
         self.keyword_highlight_generation = self.keyword_highlight_generation.saturating_add(1);
         let generation = self.keyword_highlight_generation;
         self.keyword_highlight_task = None;
-        self.keyword_highlights = None;
+        // Keep the last published snapshot drawable while the replacement is parsed in the
+        // background, matching the editor's stale-until-reparsed behavior.
         if self.keyword_rules.is_empty() {
+            if clear_if_empty {
+                self.keyword_highlights = None;
+            }
             return;
         }
         let Some(snapshot) = self.snapshot.clone() else {

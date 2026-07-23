@@ -1824,6 +1824,8 @@ impl NyaTermApp {
             (!search_matches.is_empty()).then_some(search_matches.as_slice()),
             is_active && !input_latency_active && !self.settings.terminal_low_latency_mode,
         );
+        let configured_keyword_rules = self.resolved_keyword_highlight_rules();
+        let clear_keyword_highlights = configured_keyword_rules.is_empty();
         let keyword_rules = if terminal_scroll_text_first_keywords_allowed(
             is_active,
             render_degraded,
@@ -1833,7 +1835,7 @@ impl NyaTermApp {
             user_scroll_active,
             input_latency_active,
         ) {
-            self.resolved_keyword_highlight_rules()
+            configured_keyword_rules.clone()
         } else {
             std::sync::Arc::new(Vec::new())
         };
@@ -1872,7 +1874,7 @@ impl NyaTermApp {
             );
             if frame_applied {
                 surface.set_decorations_and_keywords(decorations, keyword_rules, false, "block");
-                surface.schedule_keyword_highlights(cx);
+                surface.schedule_keyword_highlights(clear_keyword_highlights, cx);
             }
             cx.notify();
         });
@@ -1942,10 +1944,12 @@ impl NyaTermApp {
             || input_latency_active
             || self.settings.terminal_low_latency_mode;
         let render_degraded = render_degraded_view || render_pressure;
+        let configured_keyword_rules = self.resolved_keyword_highlight_rules();
+        let clear_keyword_highlights = configured_keyword_rules.is_empty();
         let keyword_rules = if render_degraded || !is_active {
             std::sync::Arc::new(Vec::new())
         } else {
-            self.resolved_keyword_highlight_rules()
+            configured_keyword_rules.clone()
         };
         let retained_lookup_started_at = Instant::now();
         let retained_surface_snapshot = if display_offset > 0 {
@@ -2288,7 +2292,7 @@ impl NyaTermApp {
                     show_cursor,
                     cursor_style,
                 );
-                surface.schedule_keyword_highlights(cx);
+                surface.schedule_keyword_highlights(clear_keyword_highlights, cx);
             }
             cx.notify();
         });

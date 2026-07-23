@@ -1099,10 +1099,11 @@ impl Element for NyaTerminalElement {
             let display_line = if line.is_empty() { " " } else { line };
             let ansi = self.snapshot.styled_lines.get(row).map(Vec::as_slice);
             let line_signature = self.snapshot.line_signatures.get(row).copied();
-            let keyword_spans = self
-                .keyword_highlights
-                .as_ref()
-                .and_then(|highlights| highlights.row(row, line_signature));
+            let keyword_spans = self.keyword_highlights.as_ref().and_then(|highlights| {
+                highlights.row(row, line_signature).or_else(|| {
+                    highlights.stale_row(row, self.snapshot.display_offset, self.snapshot.rows)
+                })
+            });
             let default_decorations;
             let decorations = if let Some(decorations) = self.decorations.get(row) {
                 decorations
