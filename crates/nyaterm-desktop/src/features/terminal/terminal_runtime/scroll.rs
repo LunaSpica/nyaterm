@@ -235,6 +235,17 @@ const TERMINAL_SCROLLBAR_DRAG_NOTIFY_DELAY: Duration = Duration::from_millis(8);
 pub(in crate::features) const TERMINAL_USER_SCROLL_ACTIVE_WINDOW: Duration =
     Duration::from_millis(140);
 
+fn terminal_user_scroll_idle_remaining_delay(
+    last_scroll_at: Option<Instant>,
+    now: Instant,
+    active_window: Duration,
+) -> Option<Duration> {
+    let last_scroll_at = last_scroll_at?;
+    active_window
+        .checked_sub(now.saturating_duration_since(last_scroll_at))
+        .filter(|delay| !delay.is_zero())
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub(in crate::features) struct TerminalScrollVisualState {
     pub session_id: String,
@@ -803,15 +814,13 @@ impl NyaTermApp {
 
     fn flush_terminal_user_scroll_idle_notify(&mut self, cx: &mut Context<Self>) {
         let now = Instant::now();
-        if self
-            .terminal_runtime
-            .last_terminal_user_scroll_at
-            .is_some_and(|last| {
-                now.saturating_duration_since(last) < TERMINAL_USER_SCROLL_ACTIVE_WINDOW
-            })
-        {
+        if let Some(delay) = terminal_user_scroll_idle_remaining_delay(
+            self.terminal_runtime.last_terminal_user_scroll_at,
+            now,
+            TERMINAL_USER_SCROLL_ACTIVE_WINDOW,
+        ) {
             cx.spawn(async move |this, cx| {
-                Timer::after(TERMINAL_USER_SCROLL_ACTIVE_WINDOW).await;
+                Timer::after(delay).await;
                 let _ = this.update(cx, |this, cx| {
                     this.flush_terminal_user_scroll_idle_notify(cx);
                 });
@@ -1681,6 +1690,45 @@ mod tests {
             -1
         );
         assert!((residual + 0.1).abs() < f32::EPSILON * 8.0);
+    }
+
+    #[test]
+    fn terminal_user_scroll_idle_remaining_delay_uses_remainder_of_window() {
+        let now = Instant::now();
+        let active_window = Duration::from_millis(140);
+
+        assert_eq!(
+            terminal_user_scroll_idle_remaining_delay(Some(now), now, active_window),
+            Some(active_window)
+        );
+        assert_eq!(
+            terminal_user_scroll_idle_remaining_delay(
+                Some(now - Duration::from_millis(1)),
+                now,
+                active_window
+            ),
+            Some(active_window - Duration::from_millis(1))
+        );
+        assert_eq!(
+            terminal_user_scroll_idle_remaining_delay(
+                Some(now - active_window),
+                now,
+                active_window
+            ),
+            None
+        );
+        assert_eq!(
+            terminal_user_scroll_idle_remaining_delay(
+                Some(now - active_window - Duration::from_millis(1)),
+                now,
+                active_window
+            ),
+            None
+        );
+        assert_eq!(
+            terminal_user_scroll_idle_remaining_delay(None, now, active_window),
+            None
+        );
     }
 
     #[test]
