@@ -104,18 +104,15 @@ mod terminal_selection_runtime;
 pub(in crate::features) use terminal_selection_runtime::terminal_bounds_tracker;
 #[path = "terminal/terminal_surface.rs"]
 mod terminal_surface;
-pub(in crate::features) use terminal_surface::{
-    build_terminal_line_decorations, terminal_line_decorations_cache_key,
-    terminal_line_decorations_needed, terminal_snapshot_absolute_range,
-};
+pub(in crate::features) use terminal_surface::terminal_snapshot_absolute_range;
 #[path = "terminal/terminal_surface_entity.rs"]
 mod terminal_surface_entity;
 mod transfer_external_sync_window;
 pub(in crate::features) use terminal_surface_entity::{
-    FULL_SHELL_PAINT_COUNT, TERMINAL_SURFACE_PAINT_COUNT, TerminalSurface,
-    TerminalSurfaceHitTestScrollGeometry, full_shell_paint_count,
-    terminal_effective_visual_scroll_offset_px, terminal_snapshot_anchor_row_for_display_offset,
-    terminal_snapshot_covers_display_offset, terminal_surface_paint_count,
+    FULL_SHELL_PAINT_COUNT, TerminalSurface, TerminalSurfaceHitTestScrollGeometry,
+    full_shell_paint_count, terminal_effective_visual_scroll_offset_px,
+    terminal_snapshot_anchor_row_for_display_offset, terminal_snapshot_covers_display_offset,
+    terminal_surface_paint_count,
 };
 #[path = "transfers/transfer_events.rs"]
 mod transfer_events;

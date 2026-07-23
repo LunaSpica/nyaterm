@@ -115,7 +115,6 @@ pub(in crate::features) struct TerminalSurface {
     pending_local_scroll_sync: Option<TerminalSurfacePendingScrollSync>,
     local_scroll_sync_armed: bool,
     pending_scroll_snapshot_offsets: BTreeSet<usize>,
-    bounds_tracker_last_bounds: Arc<Mutex<Option<gpui::Bounds<gpui::Pixels>>>>,
     revision: u64,
     scroll_snapshot_pending_since: Option<Instant>,
     last_scroll_snapshot_pending_warn_at: Option<Instant>,
@@ -169,7 +168,6 @@ impl TerminalSurface {
             pending_local_scroll_sync: None,
             local_scroll_sync_armed: false,
             pending_scroll_snapshot_offsets: BTreeSet::new(),
-            bounds_tracker_last_bounds: Arc::new(Mutex::new(None)),
             revision: 0,
             scroll_snapshot_pending_since: None,
             last_scroll_snapshot_pending_warn_at: None,
@@ -472,9 +470,6 @@ impl TerminalSurface {
         self.has_new_while_scrolled = has_new_while_scrolled;
         self.performance_overlay = performance_overlay;
         self.skipped_output_chars = skipped_output_chars;
-        self.keyword_rules = Arc::new(Vec::new());
-        self.keyword_highlight_generation = self.keyword_highlight_generation.saturating_add(1);
-        self.keyword_highlight_task = None;
         self.decorations = Arc::from(Vec::<TerminalLineDecorations>::new());
         self.selection_visual = None;
         self.selection_visual_row_range = None;
@@ -494,16 +489,18 @@ impl TerminalSurface {
         performance_overlay: Option<TerminalPerformanceOverlay>,
         skipped_output_chars: u64,
     ) {
-        let previous_snapshot_key = self.snapshot.as_ref().map(terminal_snapshot_identity);
+        let previous_snapshot = self.snapshot.clone();
         self.promote_snapshot_covering_display_offset(
             display_offset,
             viewport_rows,
             scrollback_len,
         );
-        if self.snapshot.as_ref().map(terminal_snapshot_identity) != previous_snapshot_key {
-            self.keyword_rules = Arc::new(Vec::new());
-            self.keyword_highlight_generation = self.keyword_highlight_generation.saturating_add(1);
-            self.keyword_highlight_task = None;
+        let snapshot_changed = match (previous_snapshot.as_ref(), self.snapshot.as_ref()) {
+            (Some(previous), Some(current)) => !Arc::ptr_eq(previous, current),
+            (None, None) => false,
+            _ => true,
+        };
+        if snapshot_changed {
             self.decorations = Arc::from(Vec::<TerminalLineDecorations>::new());
             self.selection_visual = None;
             self.selection_visual_row_range = None;
@@ -1687,15 +1684,6 @@ pub(in crate::features) fn terminal_snapshot_anchor_row_for_display_offset(
         .unwrap_or(0)
 }
 
-fn terminal_snapshot_identity(snapshot: &Arc<TerminalSnapshot>) -> (usize, usize, usize, usize) {
-    (
-        snapshot.display_offset,
-        snapshot.total_rows,
-        snapshot.viewport_rows,
-        snapshot.rows,
-    )
-}
-
 fn hidden_terminal_cursor_snapshot() -> nyaterm_terminal::CursorSnapshot {
     nyaterm_terminal::CursorSnapshot {
         row: usize::MAX,
@@ -1845,39 +1833,6 @@ fn terminal_surface_fractional_prefetch_offset(
     scroll_offset.checked_sub(1).filter(|offset| *offset > 0)
 }
 
-fn terminal_surface_bounds_tracker(
-    app: Option<Entity<NyaTermApp>>,
-    session_id: String,
-    last_bounds: Arc<Mutex<Option<gpui::Bounds<gpui::Pixels>>>>,
-) -> impl IntoElement {
-    gpui::canvas(
-        move |bounds, _window, cx| {
-            if let Ok(mut last_bounds) = last_bounds.lock() {
-                if last_bounds.as_ref().is_some_and(|last| *last == bounds) {
-                    return;
-                }
-                *last_bounds = Some(bounds);
-            }
-            let Some(app) = app.clone() else {
-                return;
-            };
-            let session_id = session_id.clone();
-            cx.defer(move |cx| {
-                let _ = app.update(cx, |this, cx| {
-                    this.remember_terminal_surface_bounds_for_session_and_sync(
-                        Some(session_id.as_str()),
-                        bounds,
-                        cx,
-                    );
-                });
-            });
-        },
-        move |_bounds, _state, _window, _cx| {},
-    )
-    .absolute()
-    .size_full()
-}
-
 impl Render for TerminalSurface {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         TERMINAL_SURFACE_PAINT_COUNT.fetch_add(1, Ordering::Relaxed);
@@ -1917,12 +1872,6 @@ impl Render for TerminalSurface {
         let performance_overlay = self.performance_overlay;
         let skipped_output_chars = self.skipped_output_chars;
         let visual_bell = self.visual_bell && self.is_active;
-        let bounds_tracker = terminal_surface_bounds_tracker(
-            self.app.clone(),
-            self.session_id.clone(),
-            self.bounds_tracker_last_bounds.clone(),
-        );
-
         let mut grid = NyaTerminalElement::new(
             snapshot.clone(),
             Arc::new(Vec::new()),
@@ -1940,6 +1889,7 @@ impl Render for TerminalSurface {
         grid = grid
             .with_layout_cache(self.layout_cache.clone())
             .with_layout_rows(self.viewport_rows)
+            .with_fill_height(true)
             .with_visual_y_offset(visual_y_offset);
         if let Some(highlights) = self.keyword_highlights.clone() {
             grid = grid.with_keyword_highlights(highlights);
@@ -2037,7 +1987,7 @@ impl Render for TerminalSurface {
                 .min_w_0()
                 .min_h_0()
                 .child(gutter)
-                .child(grid)
+                .child(div().flex_1().min_w_0().min_h_0().child(grid))
         } else {
             div()
                 .flex()
@@ -2045,7 +1995,7 @@ impl Render for TerminalSurface {
                 .flex_1()
                 .min_w_0()
                 .min_h_0()
-                .child(grid)
+                .child(div().flex_1().min_w_0().min_h_0().child(grid))
         };
 
         // Build interactive chrome one at a time to satisfy impl Trait borrow rules.
@@ -2094,7 +2044,6 @@ impl Render for TerminalSurface {
                     .relative()
                     .overflow_hidden()
                     .child(body)
-                    .child(bounds_tracker)
                     .when_some(performance_overlay, |this, overlay| {
                         this.child(
                             div()
@@ -2232,7 +2181,7 @@ mod tests {
     }
 
     #[test]
-    fn scroll_without_target_snapshot_preserves_offset_and_drops_expensive_paint() {
+    fn scroll_without_target_snapshot_preserves_stale_paint_state() {
         let snapshot = Arc::new(TerminalScreen::default().viewport_snapshot(0));
         let rows = snapshot.rows;
         let mut surface = TerminalSurface::new("session");
@@ -2251,7 +2200,7 @@ mod tests {
 
         assert_eq!(surface.display_offset, 0);
         assert!(surface.scroll_snapshot_pending);
-        assert!(surface.keyword_rules.is_empty());
+        assert!(!surface.keyword_rules.is_empty());
         assert!(!surface.has_action_link_decorations);
         assert_eq!(
             terminal_effective_visual_scroll_offset_px(

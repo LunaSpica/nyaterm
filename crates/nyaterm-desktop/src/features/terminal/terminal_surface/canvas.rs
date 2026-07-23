@@ -426,12 +426,20 @@ impl NyaTermApp {
         };
         let output = if let Some(surface) = surface_entity {
             div()
+                .size_full()
                 .flex()
                 .flex_row()
                 .flex_1()
                 .min_h_0()
                 .min_w_0()
-                .child(surface)
+                .child(
+                    div()
+                        .size_full()
+                        .flex_1()
+                        .min_h_0()
+                        .min_w_0()
+                        .child(surface),
+                )
         } else if let Some(gutter) = gutter {
             // Fallback empty session: keep a local element path.
             let mut grid = NyaTerminalElement::new(
@@ -451,7 +459,11 @@ impl NyaTermApp {
             if let Some(cache) = layout_cache {
                 grid = grid.with_layout_cache(cache);
             }
-            div().flex().flex_row().child(gutter).child(grid)
+            div()
+                .flex()
+                .flex_row()
+                .child(gutter)
+                .child(div().flex_1().min_h_0().child(grid.with_fill_height(true)))
         } else {
             let mut grid = NyaTerminalElement::new(
                 snapshot,
@@ -470,7 +482,10 @@ impl NyaTermApp {
             if let Some(cache) = layout_cache {
                 grid = grid.with_layout_cache(cache);
             }
-            div().flex().flex_row().child(grid)
+            div()
+                .flex()
+                .flex_row()
+                .child(div().flex_1().min_h_0().child(grid.with_fill_height(true)))
         };
         let active_sync_group = self.active_sync_group_for_session(&session_id);
         let show_sync_action_overlay = active_sync_group.is_some() && !session_id.is_empty();
@@ -544,6 +559,7 @@ impl NyaTermApp {
 
         let canvas = div()
             .flex_1()
+            .h_full()
             .min_h_0()
             .font_family(terminal_font_family.clone())
             .text_size(px(terminal_font_size))
@@ -935,6 +951,7 @@ impl NyaTermApp {
                                     .flex()
                                     .flex_row()
                                     .min_h_0()
+                                    .relative()
                                     .child(div().flex_1().min_w_0().min_h_0().child(output))
                                     // Scrollbar is painted by TerminalSurface for live sessions.
                                     .when(session_id.is_empty(), |this| {
@@ -944,7 +961,13 @@ impl NyaTermApp {
                                             scroll_offset,
                                             cx,
                                         ))
-                                    }),
+                                    })
+                                    .child(terminal_bounds_tracker(
+                                        cx.entity(),
+                                        (!output_session_id.is_empty())
+                                            .then_some(output_session_id.clone()),
+                                        is_active,
+                                    )),
                             )
                             .when(show_visual_bell, |this| {
                                 this.child(
@@ -1211,12 +1234,7 @@ impl NyaTermApp {
                                                 }),
                                         ),
                                 )
-                            })
-                            .child(terminal_bounds_tracker(
-                                cx.entity(),
-                                (!output_session_id.is_empty()).then_some(output_session_id),
-                                is_active,
-                            )),
+                            }),
                     )
                     .when(is_active && self.terminal_search_open, |this| {
                         this.child(self.terminal_search_bar(cx))
