@@ -650,10 +650,11 @@ impl NyaTermApp {
                                     // Ctrl+D closes disconnected tab (Tauri onDisconnectedClose).
                                     this.close_session(session_id, cx);
                                 } else {
-                                    this.terminal_status =
-                                        "session disconnected — press Enter to reconnect"
-                                            .to_string();
-                                    cx.notify();
+                                    if this.set_terminal_status_if_changed(
+                                        "session disconnected — press Enter to reconnect",
+                                    ) {
+                                        cx.notify();
+                                    }
                                 }
                                 return;
                             }
