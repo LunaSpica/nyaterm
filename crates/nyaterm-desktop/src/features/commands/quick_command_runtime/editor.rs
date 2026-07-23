@@ -180,7 +180,7 @@ impl NyaTermApp {
         .and_then(|store| store.upsert_quick_command(command.clone(), new_category))
         {
             Ok(config) => {
-                self.quick_commands = config.commands;
+                self.quick_commands = Arc::from(config.commands);
                 self.quick_command_categories = config.categories;
                 self.quick_command_editor = None;
                 self.quick_command_window = None;

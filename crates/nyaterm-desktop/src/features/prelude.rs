@@ -137,10 +137,11 @@ pub(super) use crate::send_command::{
 pub(super) use crate::shortcuts::{event_to_hotkey_string, shortcut_matches};
 pub(super) use crate::terminal::{
     NyaTerminalElement, NyaTerminalLayoutCache, TerminalBufferMatch, TerminalKeyMode,
-    TerminalLineDecorations, TerminalTextCell, initial_terminal_screen,
-    terminal_byte_index_for_cell_col, terminal_cell_count, terminal_is_zero_width_mark,
-    terminal_key_bytes_with_mode, terminal_key_release_bytes_with_mode, terminal_text_cell_slice,
-    terminal_text_cells,
+    TerminalKeywordHighlightSnapshot, TerminalKeywordHighlighter, TerminalLineDecorations,
+    TerminalTextCell, compile_terminal_keyword_highlighter, initial_terminal_screen,
+    precompute_terminal_keyword_highlights, terminal_byte_index_for_cell_col, terminal_cell_count,
+    terminal_is_zero_width_mark, terminal_key_bytes_with_mode,
+    terminal_key_release_bytes_with_mode, terminal_text_cell_slice, terminal_text_cells,
 };
 pub(super) use crate::widgets::{
     capability_line, empty_panel, mode_button, session_info_row, small_button, status_pill,

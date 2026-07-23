@@ -354,8 +354,7 @@ impl NyaTermApp {
             ))
             .is_ok()
         {
-            if let Some(command) = self
-                .quick_commands
+            if let Some(command) = Arc::make_mut(&mut self.quick_commands)
                 .iter_mut()
                 .find(|command| command.id == command_id)
             {
@@ -389,7 +388,7 @@ impl NyaTermApp {
             dirty = true;
             match event {
                 CommandPersistenceResult::History(Ok(history)) => {
-                    self.command_history = history;
+                    self.command_history = Arc::from(history);
                 }
                 CommandPersistenceResult::History(Err(error)) => {
                     self.store_status.message = format!("command history save failed: {error}");
@@ -397,8 +396,7 @@ impl NyaTermApp {
                 }
                 CommandPersistenceResult::QuickCommandUseCount { command_id, result } => {
                     if let Err(error) = result {
-                        if let Some(command) = self
-                            .quick_commands
+                        if let Some(command) = Arc::make_mut(&mut self.quick_commands)
                             .iter_mut()
                             .find(|command| command.id == command_id)
                         {

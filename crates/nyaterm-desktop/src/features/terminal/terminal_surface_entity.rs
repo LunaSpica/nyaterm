@@ -76,6 +76,11 @@ pub(in crate::features) struct TerminalSurface {
     retained_snapshots: Vec<Arc<TerminalSnapshot>>,
     retained_rows: BTreeMap<usize, TerminalSurfaceRetainedRow>,
     keyword_rules: Arc<Vec<nyaterm_core::ResolvedKeywordHighlightRule>>,
+    keyword_highlights: Option<Arc<TerminalKeywordHighlightSnapshot>>,
+    keyword_highlight_generation: u64,
+    keyword_highlight_task: Option<gpui::Task<()>>,
+    keyword_highlighter_rules: Option<Arc<Vec<nyaterm_core::ResolvedKeywordHighlightRule>>>,
+    keyword_highlighter: Option<Arc<TerminalKeywordHighlighter>>,
     decorations: Arc<[TerminalLineDecorations]>,
     selection_visual: Option<TerminalSelection>,
     selection_visual_row_range: Option<Range<usize>>,
@@ -125,6 +130,11 @@ impl TerminalSurface {
             retained_snapshots: Vec::new(),
             retained_rows: BTreeMap::new(),
             keyword_rules: Arc::new(Vec::new()),
+            keyword_highlights: None,
+            keyword_highlight_generation: 0,
+            keyword_highlight_task: None,
+            keyword_highlighter_rules: None,
+            keyword_highlighter: None,
             decorations: Arc::from(Vec::<TerminalLineDecorations>::new()),
             selection_visual: None,
             selection_visual_row_range: None,
@@ -463,6 +473,9 @@ impl TerminalSurface {
         self.performance_overlay = performance_overlay;
         self.skipped_output_chars = skipped_output_chars;
         self.keyword_rules = Arc::new(Vec::new());
+        self.keyword_highlight_generation = self.keyword_highlight_generation.saturating_add(1);
+        self.keyword_highlight_task = None;
+        self.keyword_highlights = None;
         self.decorations = Arc::from(Vec::<TerminalLineDecorations>::new());
         self.selection_visual = None;
         self.selection_visual_row_range = None;
@@ -490,6 +503,9 @@ impl TerminalSurface {
         );
         if self.snapshot.as_ref().map(terminal_snapshot_identity) != previous_snapshot_key {
             self.keyword_rules = Arc::new(Vec::new());
+            self.keyword_highlight_generation = self.keyword_highlight_generation.saturating_add(1);
+            self.keyword_highlight_task = None;
+            self.keyword_highlights = None;
             self.decorations = Arc::from(Vec::<TerminalLineDecorations>::new());
             self.selection_visual = None;
             self.selection_visual_row_range = None;
@@ -986,6 +1002,50 @@ impl TerminalSurface {
         self.keyword_rules = keyword_rules;
         self.show_cursor = show_cursor && !self.visual_scroll_active();
         self.cursor_style = cursor_style.into();
+    }
+
+    pub(in crate::features) fn schedule_keyword_highlights(&mut self, cx: &mut Context<Self>) {
+        self.keyword_highlight_generation = self.keyword_highlight_generation.saturating_add(1);
+        let generation = self.keyword_highlight_generation;
+        self.keyword_highlight_task = None;
+        self.keyword_highlights = None;
+        if self.keyword_rules.is_empty() {
+            return;
+        }
+        let Some(snapshot) = self.snapshot.clone() else {
+            return;
+        };
+        let rules = self.keyword_rules.clone();
+        let highlighter = self
+            .keyword_highlighter_rules
+            .as_ref()
+            .filter(|cached_rules| Arc::ptr_eq(cached_rules, &rules))
+            .and(self.keyword_highlighter.clone());
+        let palette = self.palette;
+        self.keyword_highlight_task = Some(cx.spawn(async move |this, cx| {
+            let (rules, highlighter, highlights) = cx
+                .background_spawn(async move {
+                    let highlighter = highlighter.unwrap_or_else(|| {
+                        Arc::new(compile_terminal_keyword_highlighter(rules.as_ref()))
+                    });
+                    let highlights = precompute_terminal_keyword_highlights(
+                        snapshot.as_ref(),
+                        highlighter.as_ref(),
+                        palette,
+                    );
+                    (rules, highlighter, highlights)
+                })
+                .await;
+            let _ = this.update(cx, |this, cx| {
+                if this.keyword_highlight_generation != generation {
+                    return;
+                }
+                this.keyword_highlighter_rules = Some(rules);
+                this.keyword_highlighter = Some(highlighter);
+                this.keyword_highlights = Some(Arc::new(highlights));
+                cx.notify();
+            });
+        }));
     }
 
     pub(in crate::features) fn set_selection_visual(
@@ -1859,7 +1919,7 @@ impl Render for TerminalSurface {
 
         let mut grid = NyaTerminalElement::new(
             snapshot.clone(),
-            self.keyword_rules.clone(),
+            Arc::new(Vec::new()),
             self.decorations.clone(),
             self.show_cursor,
             self.cursor_style.clone(),
@@ -1875,6 +1935,9 @@ impl Render for TerminalSurface {
             .with_layout_cache(self.layout_cache.clone())
             .with_layout_rows(self.viewport_rows)
             .with_visual_y_offset(visual_y_offset);
+        if let Some(highlights) = self.keyword_highlights.clone() {
+            grid = grid.with_keyword_highlights(highlights);
+        }
 
         let gutter = if gutter_enabled {
             let gutter_metrics = terminal_gutter_metrics(

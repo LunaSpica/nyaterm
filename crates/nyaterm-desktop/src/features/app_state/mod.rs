@@ -67,7 +67,7 @@ pub struct NyaTermApp {
     pub(in crate::features) network_proxy_editor_focus: FocusHandle,
     pub(in crate::features) selected_connection_ids: HashSet<String>,
     pub(in crate::features) last_selected_connection_id: Option<String>,
-    pub(in crate::features) quick_commands: Vec<QuickCommand>,
+    pub(in crate::features) quick_commands: Arc<[QuickCommand]>,
     pub(in crate::features) quick_command_categories: Vec<QuickCommandCategory>,
     pub(in crate::features) quick_command_search_draft: String,
     pub(in crate::features) quick_command_search_focus: FocusHandle,
@@ -98,7 +98,7 @@ pub struct NyaTermApp {
     pub(in crate::features) quick_command_variable_focus: FocusHandle,
     pub(in crate::features) quick_command_import_focus: FocusHandle,
     pub(in crate::features) quick_command_ai_focus: FocusHandle,
-    pub(in crate::features) command_history: Vec<CommandHistoryEntry>,
+    pub(in crate::features) command_history: Arc<[CommandHistoryEntry]>,
     pub(in crate::features) command_persistence_tx: mpsc::Sender<CommandPersistenceRequest>,
     pub(in crate::features) command_persistence_rx: mpsc::Receiver<CommandPersistenceResult>,
     pub(in crate::features) command_persistence_pending: usize,
@@ -597,6 +597,8 @@ pub struct NyaTermApp {
     pub(in crate::features) terminal_output_decoder: TerminalOutputDecoder,
     pub(in crate::features) terminal_screen: TerminalScreen,
     pub(in crate::features) terminal_frame_pipeline: TerminalFramePipeline,
+    pub(in crate::features) terminal_live_prefetch_generation: u64,
+    pub(in crate::features) terminal_live_prefetch_task: Option<gpui::Task<()>>,
     /// Scroll offset for the fallback/global terminal screen (no session view).
     pub(in crate::features) terminal_scroll_offset: usize,
     /// Fractional wheel/touchpad scroll deltas that have not yet reached one row.

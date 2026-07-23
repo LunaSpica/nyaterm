@@ -633,9 +633,10 @@ impl NyaTermApp {
                         self.proxies = store.list_proxies().unwrap_or_default();
                         self.proxy_groups = store.list_proxy_groups().unwrap_or_default();
                         let quick_commands = store.load_quick_commands().unwrap_or_default();
-                        self.quick_commands = quick_commands.commands;
+                        self.quick_commands = Arc::from(quick_commands.commands);
                         self.quick_command_categories = quick_commands.categories;
-                        self.command_history = store.list_command_history(64).unwrap_or_default();
+                        self.command_history =
+                            Arc::from(store.list_command_history(64).unwrap_or_default());
                         self.keyword_highlights =
                             store.load_keyword_highlights().unwrap_or_default();
                         self.apply_gpui_settings(
@@ -687,9 +688,9 @@ impl NyaTermApp {
                         self.tunnel_groups.clear();
                         self.proxies.clear();
                         self.proxy_groups.clear();
-                        self.quick_commands.clear();
+                        self.quick_commands = Arc::default();
                         self.quick_command_categories.clear();
-                        self.command_history.clear();
+                        self.command_history = Arc::default();
                         self.keyword_highlights = KeywordHighlightConfig::default();
                         self.apply_gpui_settings(AppSettingsSummary::default());
                         self.translation_settings = TranslationSettings::default();
@@ -710,9 +711,9 @@ impl NyaTermApp {
                 self.tunnel_groups.clear();
                 self.proxies.clear();
                 self.proxy_groups.clear();
-                self.quick_commands.clear();
+                self.quick_commands = Arc::default();
                 self.quick_command_categories.clear();
-                self.command_history.clear();
+                self.command_history = Arc::default();
                 self.apply_gpui_settings(AppSettingsSummary::default());
                 self.translation_settings = TranslationSettings::default();
                 self.translation_secret_draft = TranslationSecretDraft::default();

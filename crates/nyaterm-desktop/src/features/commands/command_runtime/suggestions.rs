@@ -50,6 +50,20 @@ struct CommandSuggestionRefreshTiming {
     hide_popup: Duration,
 }
 
+struct CommandSuggestionSearchRequest {
+    request_id: u64,
+    session_id: String,
+    pattern: String,
+    pattern_chars: usize,
+    min_chars: usize,
+    max_chars: usize,
+    history: Arc<[CommandHistoryEntry]>,
+    quick_commands: Arc<[QuickCommand]>,
+    started_at: Instant,
+    popup_visible_at_start: bool,
+    timing: CommandSuggestionRefreshTiming,
+}
+
 impl CommandSuggestionRefreshTiming {
     fn max_stage(self) -> Duration {
         [
@@ -342,13 +356,13 @@ impl NyaTermApp {
         let request_id = self.command_suggestion_search_gen;
         self.command_suggestion_refresh_task = Some(cx.spawn(async move |this, cx| {
             Timer::after(delay).await;
-            let _ = this.update(cx, |this, cx| {
+            let request = this.update(cx, |this, cx| {
                 if this.command_suggestion_search_gen != request_id {
-                    return;
+                    return None;
                 }
                 if this.settings.terminal_low_latency_mode {
                     this.hide_command_suggestions_if_present(cx);
-                    return;
+                    return None;
                 }
                 let now = Instant::now();
                 if let Some(delay) = command_suggestion_refresh_input_delay(
@@ -356,7 +370,7 @@ impl NyaTermApp {
                     now,
                 ) {
                     this.schedule_command_suggestion_refresh_after(delay, cx);
-                    return;
+                    return None;
                 }
                 if this.runtime_output_pressure_active() {
                     this.hide_command_suggestions_if_present(cx);
@@ -364,9 +378,33 @@ impl NyaTermApp {
                         COMMAND_SUGGESTION_REFRESH_PRESSURE_RETRY,
                         cx,
                     );
-                    return;
+                    return None;
                 }
-                this.refresh_command_suggestions(cx);
+                this.prepare_command_suggestion_search(request_id, cx)
+            });
+            let Ok(Some(request)) = request else {
+                return;
+            };
+            let search_started_at = Instant::now();
+            let pattern = request.pattern.clone();
+            let min_chars = request.min_chars;
+            let max_chars = request.max_chars;
+            let history = request.history.clone();
+            let quick_commands = request.quick_commands.clone();
+            let search_task = cx.background_spawn(async move {
+                search_command_sources(
+                    &history,
+                    &quick_commands,
+                    &pattern,
+                    12,
+                    Some(min_chars),
+                    Some(max_chars),
+                )
+            });
+            let results = search_task.await;
+            let search_duration = search_started_at.elapsed();
+            let _ = this.update(cx, |this, cx| {
+                this.publish_command_suggestion_search(request, results, search_duration, cx);
             });
         }));
     }
@@ -383,6 +421,14 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn refresh_command_suggestions(&mut self, cx: &mut Context<Self>) {
+        self.schedule_command_suggestion_refresh_after(Duration::ZERO, cx);
+    }
+
+    fn prepare_command_suggestion_search(
+        &mut self,
+        request_id: u64,
+        cx: &mut Context<Self>,
+    ) -> Option<CommandSuggestionSearchRequest> {
         let started_at = Instant::now();
         let popup_visible_at_start = self.command_suggestions.is_some();
         let mut timing = CommandSuggestionRefreshTiming::default();
@@ -396,7 +442,7 @@ impl NyaTermApp {
                     $result_count,
                     timing,
                 );
-                return;
+                return None;
             }};
         }
 
@@ -457,22 +503,62 @@ impl NyaTermApp {
             timing.hide_popup = hide_started_at.elapsed();
             finish_refresh!("pager_prefix", pattern_chars, 0);
         }
-        let search_started_at = Instant::now();
-        let results = search_command_sources(
-            &self.command_history,
-            &self.quick_commands,
-            &pattern,
-            12,
-            Some(min_chars),
-            Some(max_chars),
-        );
-        timing.search = search_started_at.elapsed();
+        Some(CommandSuggestionSearchRequest {
+            request_id,
+            session_id,
+            pattern,
+            pattern_chars,
+            min_chars,
+            max_chars,
+            history: self.command_history.clone(),
+            quick_commands: self.quick_commands.clone(),
+            started_at,
+            popup_visible_at_start,
+            timing,
+        })
+    }
+
+    fn publish_command_suggestion_search(
+        &mut self,
+        request: CommandSuggestionSearchRequest,
+        results: Vec<nyaterm_core::FuzzyResult>,
+        search_duration: Duration,
+        cx: &mut Context<Self>,
+    ) {
+        if self.command_suggestion_search_gen != request.request_id
+            || self.active_session_id.as_deref() != Some(request.session_id.as_str())
+            || self.credential_suggestions.is_some()
+            || self.is_credential_prompt_input_mode()
+            || self.command_suggestions_suppressed
+            || !self.settings.interaction_command_suggestions_enabled
+            || get_tracked_command(&self.command_input_tracker) != request.pattern
+        {
+            return;
+        }
+        let CommandSuggestionSearchRequest {
+            session_id,
+            pattern,
+            pattern_chars,
+            started_at,
+            popup_visible_at_start,
+            mut timing,
+            ..
+        } = request;
+        timing.search = search_duration;
         let result_count = results.len();
         if results.is_empty() {
             let hide_started_at = Instant::now();
             self.hide_command_suggestions_if_present(cx);
             timing.hide_popup = hide_started_at.elapsed();
-            finish_refresh!("search_empty", pattern_chars, result_count);
+            self.log_command_suggestion_refresh_diagnostic(
+                started_at,
+                popup_visible_at_start,
+                "search_empty",
+                pattern_chars,
+                result_count,
+                timing,
+            );
+            return;
         }
         let cursor_started_at = Instant::now();
         let (cursor_row, cursor_col) = self.active_terminal_cursor_cell();
@@ -503,7 +589,14 @@ impl NyaTermApp {
         });
         timing.update_state = update_started_at.elapsed();
         cx.notify();
-        finish_refresh!("shown", pattern_chars, result_count);
+        self.log_command_suggestion_refresh_diagnostic(
+            started_at,
+            popup_visible_at_start,
+            "shown",
+            pattern_chars,
+            result_count,
+            timing,
+        );
     }
 
     fn log_command_suggestion_input_diagnostic(
@@ -729,7 +822,8 @@ impl NyaTermApp {
                     cx.notify();
                     return;
                 }
-                self.command_history = store.list_command_history(64).unwrap_or_default();
+                self.command_history =
+                    Arc::from(store.list_command_history(64).unwrap_or_default());
                 for history in self.session_command_history.values_mut() {
                     history.retain(|entry| entry != &command);
                 }

@@ -40,6 +40,10 @@ pub use input::{
     terminal_key_release_bytes_with_mode, terminal_screen_from_output, trim_terminal_output,
 };
 pub use keywords::terminal_buffer_matches;
+pub use keywords::{
+    TerminalKeywordHighlightSnapshot, TerminalKeywordHighlighter,
+    compile_terminal_keyword_highlighter, precompute_terminal_keyword_highlights,
+};
 
 #[cfg(test)]
 #[path = "tests.rs"]

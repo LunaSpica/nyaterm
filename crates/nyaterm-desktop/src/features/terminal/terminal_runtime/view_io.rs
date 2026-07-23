@@ -1872,6 +1872,7 @@ impl NyaTermApp {
             );
             if frame_applied {
                 surface.set_decorations_and_keywords(decorations, keyword_rules, false, "block");
+                surface.schedule_keyword_highlights(cx);
             }
             cx.notify();
         });
@@ -2287,6 +2288,7 @@ impl NyaTermApp {
                     show_cursor,
                     cursor_style,
                 );
+                surface.schedule_keyword_highlights(cx);
             }
             cx.notify();
         });

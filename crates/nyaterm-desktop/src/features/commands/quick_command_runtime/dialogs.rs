@@ -130,7 +130,7 @@ impl NyaTermApp {
             Ok((config, deleted))
         }) {
             Ok((config, deleted)) => {
-                self.quick_commands = config.commands;
+                self.quick_commands = Arc::from(config.commands);
                 self.quick_command_categories = config.categories;
                 self.quick_command_delete = None;
                 self.store_status.message = if deleted {
@@ -215,7 +215,7 @@ impl NyaTermApp {
             Ok((config, deleted_category, deleted_commands))
         }) {
             Ok((config, deleted_category, deleted_commands)) => {
-                self.quick_commands = config.commands;
+                self.quick_commands = Arc::from(config.commands);
                 self.quick_command_categories = config.categories;
                 self.quick_command_category_delete = None;
                 if self.quick_command_selected_category == delete.id {
@@ -342,7 +342,7 @@ impl NyaTermApp {
             Ok((config, renamed))
         }) {
             Ok((config, renamed)) => {
-                self.quick_commands = config.commands;
+                self.quick_commands = Arc::from(config.commands);
                 self.quick_command_categories = config.categories;
                 if renamed {
                     self.quick_command_category_rename = None;

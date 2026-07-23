@@ -47,8 +47,10 @@ struct TerminalRowBackgroundRange {
 pub struct NyaTerminalLayoutCache {
     rows: HashMap<u64, Arc<CachedTerminalPaintRow>>,
     row_order: VecDeque<u64>,
+    keyword_rules_source: Option<Arc<Vec<ResolvedKeywordHighlightRule>>>,
+    keyword_rules_key: u64,
     compiled_keyword_key: Option<u64>,
-    compiled_keyword_rules: CompiledKeywordRules,
+    compiled_keyword_rules: Arc<CompiledKeywordRules>,
     pub hits: u64,
     pub misses: u64,
     pub shape_calls: u64,
@@ -63,25 +65,40 @@ impl NyaTerminalLayoutCache {
     pub fn clear(&mut self) {
         self.rows.clear();
         self.row_order.clear();
+        self.keyword_rules_source = None;
+        self.keyword_rules_key = 0;
         self.compiled_keyword_key = None;
-        self.compiled_keyword_rules.clear();
+        self.compiled_keyword_rules = Arc::default();
         self.hits = 0;
         self.misses = 0;
         self.shape_calls = 0;
         self.shape_duration_us = 0;
     }
 
+    fn keyword_rules_key(&mut self, rules: &Arc<Vec<ResolvedKeywordHighlightRule>>) -> u64 {
+        if self
+            .keyword_rules_source
+            .as_ref()
+            .is_some_and(|cached| Arc::ptr_eq(cached, rules))
+        {
+            return self.keyword_rules_key;
+        }
+        self.keyword_rules_key = terminal_keyword_rules_key(rules);
+        self.keyword_rules_source = Some(Arc::clone(rules));
+        self.keyword_rules_key
+    }
+
     fn compiled_keyword_rules(
         &mut self,
         key: u64,
         rules: &[ResolvedKeywordHighlightRule],
-    ) -> CompiledKeywordRules {
+    ) -> Arc<CompiledKeywordRules> {
         if self.compiled_keyword_key == Some(key) {
-            return self.compiled_keyword_rules.clone();
+            return Arc::clone(&self.compiled_keyword_rules);
         }
         self.compiled_keyword_key = Some(key);
-        self.compiled_keyword_rules = compile_keyword_rules(rules);
-        self.compiled_keyword_rules.clone()
+        self.compiled_keyword_rules = Arc::new(compile_keyword_rules(rules));
+        Arc::clone(&self.compiled_keyword_rules)
     }
 
     #[cfg(test)]
@@ -646,6 +663,7 @@ mod layout_cache_tests {
 pub struct NyaTerminalElement {
     snapshot: Arc<TerminalSnapshot>,
     keyword_rules: Arc<Vec<ResolvedKeywordHighlightRule>>,
+    keyword_highlights: Option<Arc<TerminalKeywordHighlightSnapshot>>,
     decorations: Arc<[TerminalLineDecorations]>,
     layout_cache: Option<Arc<Mutex<NyaTerminalLayoutCache>>>,
     show_cursor: bool,
@@ -719,6 +737,7 @@ impl NyaTerminalElement {
         Self {
             snapshot,
             keyword_rules,
+            keyword_highlights: None,
             decorations: decorations.into(),
             layout_cache: None,
             show_cursor,
@@ -737,6 +756,14 @@ impl NyaTerminalElement {
 
     pub fn with_layout_cache(mut self, cache: Arc<Mutex<NyaTerminalLayoutCache>>) -> Self {
         self.layout_cache = Some(cache);
+        self
+    }
+
+    pub fn with_keyword_highlights(
+        mut self,
+        highlights: Arc<TerminalKeywordHighlightSnapshot>,
+    ) -> Self {
+        self.keyword_highlights = Some(highlights);
         self
     }
 
@@ -810,15 +837,7 @@ impl NyaTerminalElement {
     }
 
     fn keyword_rules_key(&self) -> u64 {
-        let mut hasher = DefaultHasher::new();
-        for rule in self.keyword_rules.iter() {
-            rule.id.hash(&mut hasher);
-            rule.name.hash(&mut hasher);
-            rule.patterns.hash(&mut hasher);
-            rule.color.hash(&mut hasher);
-            rule.enabled.hash(&mut hasher);
-        }
-        hasher.finish()
+        terminal_keyword_rules_key(&self.keyword_rules)
     }
 }
 
@@ -1041,18 +1060,22 @@ impl Element for NyaTerminalElement {
         let cell_h = self.cell_height.max(1.);
         let font_size = px(self.font_size.max(8.));
         let base_font = font(SharedString::from(self.font_family.clone()));
-        let keyword_rules_key = if self.keyword_rules.is_empty() {
+        let keyword_rules_key = if let Some(highlights) = self.keyword_highlights.as_ref() {
+            highlights.rules_key()
+        } else if self.keyword_rules.is_empty() {
             0
+        } else if let Some(cache) = layout_cache.as_deref_mut() {
+            cache.keyword_rules_key(&self.keyword_rules)
         } else {
             self.keyword_rules_key()
         };
         let paint_style_key = self.paint_style_key(keyword_rules_key);
         let compiled_keyword_rules = if self.keyword_rules.is_empty() {
-            Vec::new()
+            Arc::default()
         } else if let Some(cache) = layout_cache.as_deref_mut() {
             cache.compiled_keyword_rules(keyword_rules_key, self.keyword_rules.as_slice())
         } else {
-            compile_keyword_rules(self.keyword_rules.as_slice())
+            Arc::new(compile_keyword_rules(self.keyword_rules.as_slice()))
         };
 
         let visual_y_offset = self.visual_y_offset;
@@ -1075,6 +1098,11 @@ impl Element for NyaTerminalElement {
                 .unwrap_or("");
             let display_line = if line.is_empty() { " " } else { line };
             let ansi = self.snapshot.styled_lines.get(row).map(Vec::as_slice);
+            let line_signature = self.snapshot.line_signatures.get(row).copied();
+            let keyword_spans = self
+                .keyword_highlights
+                .as_ref()
+                .and_then(|highlights| highlights.row(row, line_signature));
             let default_decorations;
             let decorations = if let Some(decorations) = self.decorations.get(row) {
                 decorations
@@ -1134,7 +1162,13 @@ impl Element for NyaTerminalElement {
             paint_style_key.hash(&mut row_key_hasher);
             let row_key = row_key_hasher.finish();
             let build_row = |window: &mut Window| {
-                if terminal_plain_row_fast_path(ansi, self.keyword_rules.as_slice(), decorations) {
+                if keyword_spans.is_none()
+                    && terminal_plain_row_fast_path(
+                        ansi,
+                        self.keyword_rules.as_slice(),
+                        decorations,
+                    )
+                {
                     let text = display_line.to_string();
                     let text_runs = vec![TextRun {
                         len: text.len().max(1),
@@ -1161,16 +1195,20 @@ impl Element for NyaTerminalElement {
                 }
 
                 // Base spans drive cell/keyword backgrounds only (under images).
-                let background_spans = terminal_highlight_spans_compiled(
-                    display_line,
-                    ansi,
-                    &compiled_keyword_rules,
-                    &[],
-                    &[],
-                    None,
-                    &[],
-                    self.palette,
-                );
+                let background_spans = keyword_spans
+                    .map(|spans| spans.as_ref().clone())
+                    .unwrap_or_else(|| {
+                        terminal_highlight_spans_compiled(
+                            display_line,
+                            ansi,
+                            compiled_keyword_rules.as_slice(),
+                            &[],
+                            &[],
+                            None,
+                            &[],
+                            self.palette,
+                        )
+                    });
                 // Glyph spans intentionally exclude search/selection/cursor state so
                 // dynamic overlays do not invalidate shaped base rows.
                 let mut spans = background_spans.clone();

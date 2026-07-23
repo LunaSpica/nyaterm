@@ -1,6 +1,94 @@
 use super::*;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
+use std::sync::Arc;
 
 pub(super) type CompiledKeywordRules = Vec<(regex::Regex, u32)>;
+
+pub struct TerminalKeywordHighlighter {
+    rules_key: u64,
+    compiled: CompiledKeywordRules,
+}
+
+/// Immutable keyword data prepared away from GPUI's paint path.
+pub struct TerminalKeywordHighlightSnapshot {
+    rules_key: u64,
+    line_signatures: Vec<u64>,
+    rows: Vec<Option<Arc<Vec<TerminalHighlightSpan>>>>,
+}
+
+impl TerminalKeywordHighlightSnapshot {
+    pub(super) fn rules_key(&self) -> u64 {
+        self.rules_key
+    }
+
+    pub(super) fn row(
+        &self,
+        row: usize,
+        line_signature: Option<u64>,
+    ) -> Option<&Arc<Vec<TerminalHighlightSpan>>> {
+        if self.line_signatures.get(row).copied() != line_signature {
+            return None;
+        }
+        self.rows.get(row)?.as_ref()
+    }
+}
+
+pub fn precompute_terminal_keyword_highlights(
+    snapshot: &TerminalSnapshot,
+    highlighter: &TerminalKeywordHighlighter,
+    palette: nyaterm_ui::ThemePalette,
+) -> TerminalKeywordHighlightSnapshot {
+    let rows = snapshot
+        .lines
+        .iter()
+        .enumerate()
+        .map(|(row, line)| {
+            let display_line = if line.is_empty() { " " } else { line };
+            let ansi = snapshot.styled_lines.get(row).map(Vec::as_slice);
+            let spans = terminal_highlight_spans_compiled(
+                display_line,
+                ansi,
+                &highlighter.compiled,
+                &[],
+                &[],
+                None,
+                &[],
+                palette,
+            );
+            spans
+                .iter()
+                .any(|span| span.keyword)
+                .then(|| Arc::new(spans))
+        })
+        .collect();
+    TerminalKeywordHighlightSnapshot {
+        rules_key: highlighter.rules_key,
+        line_signatures: snapshot.line_signatures.clone(),
+        rows,
+    }
+}
+
+pub fn compile_terminal_keyword_highlighter(
+    rules: &[ResolvedKeywordHighlightRule],
+) -> TerminalKeywordHighlighter {
+    TerminalKeywordHighlighter {
+        rules_key: terminal_keyword_rules_key(rules),
+        compiled: compile_keyword_rules(rules),
+    }
+}
+
+pub(super) fn terminal_keyword_rules_key(rules: &[ResolvedKeywordHighlightRule]) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    for rule in rules {
+        rule.id.hash(&mut hasher);
+        rule.name.hash(&mut hasher);
+        rule.patterns.hash(&mut hasher);
+        rule.color.hash(&mut hasher);
+        rule.enabled.hash(&mut hasher);
+    }
+    hasher.finish()
+}
 
 pub(super) fn keyword_highlight_spans_compiled(
     line: &str,
@@ -238,6 +326,56 @@ pub(super) fn parse_hex_rgb(value: &str) -> Option<u32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn keyword_highlights_keep_earliest_longest_and_rule_priority() {
+        let compiled = vec![
+            (regex::Regex::new("ERR").unwrap(), 1),
+            (regex::Regex::new("ERROR").unwrap(), 2),
+            (regex::Regex::new("ERROR").unwrap(), 3),
+        ];
+
+        let spans = keyword_highlight_spans_compiled("x ERROR ERR", &compiled);
+
+        assert_eq!(
+            spans
+                .iter()
+                .map(|span| span.text.as_str())
+                .collect::<Vec<_>>(),
+            vec!["x ", "ERROR", " ", "ERR"]
+        );
+        assert_eq!(spans[1].color, Some(2));
+        assert_eq!(spans[3].color, Some(1));
+    }
+
+    #[test]
+    fn precomputed_keyword_snapshot_checks_line_signatures() {
+        let mut snapshot = TerminalScreen::default().snapshot();
+        snapshot.lines[0] = "prefix ERROR suffix".to_string();
+        snapshot.styled_lines[0] = vec![nyaterm_terminal::StyledSpan {
+            text: snapshot.lines[0].clone(),
+            style: nyaterm_terminal::CellStyle::default(),
+        }];
+        snapshot.line_signatures[0] = 41;
+        let rules = vec![ResolvedKeywordHighlightRule {
+            id: "error".to_string(),
+            name: "Error".to_string(),
+            patterns: vec!["ERROR".to_string()],
+            color: "#ff2244".to_string(),
+            enabled: true,
+        }];
+
+        let highlighter = compile_terminal_keyword_highlighter(&rules);
+        let highlights = precompute_terminal_keyword_highlights(
+            &snapshot,
+            &highlighter,
+            nyaterm_ui::theme_palette("github-dark"),
+        );
+
+        assert!(highlights.row(0, Some(41)).is_some());
+        assert!(highlights.row(0, Some(42)).is_none());
+        assert!(highlights.rows.iter().skip(1).all(Option::is_none));
+    }
 
     #[test]
     fn terminal_buffer_matches_count_combining_marks_with_previous_cell() {

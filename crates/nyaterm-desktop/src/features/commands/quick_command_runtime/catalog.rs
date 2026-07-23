@@ -16,7 +16,7 @@ impl NyaTermApp {
         .and_then(|store| store.load_quick_commands())
         {
             Ok(config) => {
-                self.quick_commands = config.commands;
+                self.quick_commands = Arc::from(config.commands);
                 self.quick_command_categories = config.categories;
             }
             Err(error) => {

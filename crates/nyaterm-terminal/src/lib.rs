@@ -712,6 +712,36 @@ impl TerminalCore {
         snapshot
     }
 
+    pub fn viewport_snapshot_with_window(
+        &self,
+        offset: usize,
+        older_rows: usize,
+        newer_rows: usize,
+    ) -> TerminalSnapshot {
+        let scrollback_len = self.scrollback_len();
+        let offset = offset.min(scrollback_len);
+        let older_rows = older_rows.min(scrollback_len.saturating_sub(offset));
+        let newer_rows = newer_rows.min(offset);
+        let mut snapshot = snapshot_window_from_term(
+            &self.term,
+            offset,
+            older_rows,
+            newer_rows,
+            &self.line_timestamps_ms,
+            &self.command_marks,
+        );
+        snapshot.images = self
+            .graphics
+            .viewport_images(offset, self.rows, snapshot.cols)
+            .into_iter()
+            .map(|mut image| {
+                image.row = image.row.saturating_add(older_rows);
+                image
+            })
+            .collect();
+        snapshot
+    }
+
     pub fn lines(&self) -> Vec<String> {
         self.snapshot().lines
     }
@@ -908,9 +938,30 @@ fn snapshot_from_term(
     line_timestamps_by_line: &HashMap<i32, u64>,
     command_marks_by_line: &HashMap<i32, ShellCommandMark>,
 ) -> TerminalSnapshot {
+    snapshot_window_from_term(
+        term,
+        requested_offset,
+        0,
+        0,
+        line_timestamps_by_line,
+        command_marks_by_line,
+    )
+}
+
+fn snapshot_window_from_term(
+    term: &Term<NyaTermEventProxy>,
+    requested_offset: usize,
+    older_rows: usize,
+    newer_rows: usize,
+    line_timestamps_by_line: &HashMap<i32, u64>,
+    command_marks_by_line: &HashMap<i32, ShellCommandMark>,
+) -> TerminalSnapshot {
     let content = term.renderable_content();
     let cols = term.columns();
-    let rows = term.screen_lines();
+    let viewport_rows = term.screen_lines();
+    let rows = older_rows
+        .saturating_add(viewport_rows)
+        .saturating_add(newer_rows);
     let display_offset = requested_offset;
     let mut row_cells = vec![Vec::<RenderCell>::with_capacity(cols); rows];
     let mut line_timestamps_ms = vec![None; rows];
@@ -920,7 +971,7 @@ fn snapshot_from_term(
     let topmost = term.topmost_line();
     let bottommost = term.bottommost_line();
     for row in 0..rows {
-        let line = Line(row as i32 - requested_offset as i32);
+        let line = Line(row as i32 - requested_offset as i32 - older_rows as i32);
         if line < topmost || line > bottommost {
             continue;
         }
@@ -979,7 +1030,7 @@ fn snapshot_from_term(
 
     let cursor_point = content.cursor.point;
     let cursor_row = if requested_offset == 0 {
-        usize::try_from(cursor_point.line.0 + requested_offset as i32).unwrap_or(usize::MAX)
+        usize::try_from(cursor_point.line.0 + older_rows as i32).unwrap_or(usize::MAX)
     } else {
         usize::MAX
     };
@@ -1005,7 +1056,7 @@ fn snapshot_from_term(
 
     TerminalSnapshot {
         cols,
-        viewport_rows: rows,
+        viewport_rows,
         rows,
         cells,
         cursor: CursorSnapshot {
@@ -1028,7 +1079,9 @@ fn snapshot_from_term(
         cursor_row,
         cursor_col,
         scrollback_len,
-        total_rows: scrollback_len + rows,
+        total_rows: scrollback_len
+            .saturating_add(viewport_rows)
+            .saturating_add(newer_rows),
         display_offset,
         images: Vec::new(),
         command_marks: {
@@ -1753,6 +1806,48 @@ mod tests {
                 .zip(snap.lines.iter())
                 .any(|(timestamp, line)| timestamp.is_some() && line.contains("one"))
         );
+    }
+
+    #[test]
+    fn window_snapshot_matches_adjacent_viewports() {
+        let mut screen = TerminalScreen::new(20, 3);
+        for line in 0..12 {
+            screen.advance(format!("line-{line:02}\r\n").as_bytes());
+        }
+        let offset = 3;
+        let older_rows = 2;
+        let newer_rows = 2;
+        let window = screen.viewport_snapshot_with_window(offset, older_rows, newer_rows);
+        let base = screen.viewport_snapshot(offset);
+        let older = screen.viewport_snapshot(offset + older_rows);
+        let newer = screen.viewport_snapshot(offset - newer_rows);
+
+        assert_eq!(window.viewport_rows, base.rows);
+        assert_eq!(window.rows, base.rows + older_rows + newer_rows);
+        assert_eq!(
+            &window.lines[older_rows..older_rows + base.rows],
+            base.lines.as_slice()
+        );
+        assert_eq!(&window.lines[..older_rows], &older.lines[..older_rows]);
+        assert_eq!(
+            &window.lines[older_rows + base.rows..],
+            &newer.lines[base.rows - newer_rows..]
+        );
+    }
+
+    #[test]
+    fn live_window_snapshot_offsets_cursor_by_prepended_rows() {
+        let mut screen = TerminalScreen::new(20, 3);
+        for line in 0..8 {
+            screen.advance(format!("line-{line:02}\r\n").as_bytes());
+        }
+        let base = screen.viewport_snapshot(0);
+        let window = screen.viewport_snapshot_with_window(0, 4, 4);
+
+        assert_eq!(window.rows, base.rows + 4);
+        assert_eq!(window.cursor_row, base.cursor_row + 4);
+        assert_eq!(window.cursor.row, base.cursor.row + 4);
+        assert_eq!(window.total_rows, base.total_rows);
     }
 
     #[test]

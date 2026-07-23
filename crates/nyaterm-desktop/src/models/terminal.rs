@@ -1405,18 +1405,6 @@ pub(crate) struct TerminalFrameBufferTextEvent {
     pub(crate) process_duration: Duration,
 }
 
-#[derive(Clone)]
-struct TerminalFrameSnapshotRowSlice {
-    cells: Vec<nyaterm_terminal::RenderCell>,
-    line: String,
-    styled_line: Vec<nyaterm_terminal::StyledSpan>,
-    line_signature: u64,
-    line_timestamp_ms: Option<u64>,
-    line_wrapped: bool,
-    hyperlink_line: Vec<nyaterm_terminal::HyperlinkSpan>,
-    command_mark: Option<nyaterm_terminal::ShellCommandMark>,
-}
-
 fn terminal_frame_scroll_window_extra_rows(viewport_rows: usize, priority: bool) -> usize {
     let viewport_rows = viewport_rows.max(1);
     if priority {
@@ -1431,147 +1419,25 @@ fn terminal_frame_scroll_window_extra_rows(viewport_rows: usize, priority: bool)
         .min(TERMINAL_FRAME_SCROLL_WINDOW_MAX_EXTRA_ROWS)
 }
 
-fn terminal_frame_snapshot_row_slice(
-    snapshot: &TerminalSnapshot,
-    row: usize,
-) -> Option<TerminalFrameSnapshotRowSlice> {
-    if snapshot.cols == 0 || row >= snapshot.rows {
-        return None;
-    }
-    let start = row.checked_mul(snapshot.cols)?;
-    let end = start.checked_add(snapshot.cols)?;
-    let cells = snapshot.cells.get(start..end)?.to_vec();
-    Some(TerminalFrameSnapshotRowSlice {
-        cells,
-        line: snapshot.lines.get(row).cloned().unwrap_or_default(),
-        styled_line: snapshot.styled_lines.get(row).cloned().unwrap_or_default(),
-        line_signature: *snapshot.line_signatures.get(row).unwrap_or(&0),
-        line_timestamp_ms: *snapshot.line_timestamps_ms.get(row).unwrap_or(&None),
-        line_wrapped: *snapshot.line_wrapped.get(row).unwrap_or(&false),
-        hyperlink_line: snapshot
-            .hyperlink_lines
-            .get(row)
-            .cloned()
-            .unwrap_or_default(),
-        command_mark: *snapshot.command_marks.get(row).unwrap_or(&None),
-    })
-}
-
-fn terminal_frame_snapshot_row_slices(
-    snapshot: &TerminalSnapshot,
-    start_row: usize,
-    row_count: usize,
-) -> Vec<TerminalFrameSnapshotRowSlice> {
-    if row_count == 0 || start_row >= snapshot.rows {
-        return Vec::new();
-    }
-    let end_row = start_row.saturating_add(row_count).min(snapshot.rows);
-    (start_row..end_row)
-        .filter_map(|row| terminal_frame_snapshot_row_slice(snapshot, row))
-        .collect()
-}
-
 fn terminal_frame_snapshot_with_scroll_window(
     screen: &TerminalScreen,
     offset: usize,
     priority: bool,
 ) -> Arc<TerminalSnapshot> {
-    let mut snapshot = screen.viewport_snapshot(offset);
-    if snapshot.cols == 0 || snapshot.rows == 0 {
-        return Arc::new(snapshot);
-    }
+    let extra_rows = terminal_frame_scroll_window_extra_rows(screen.rows(), priority);
+    terminal_frame_snapshot_with_extra_rows(screen, offset, extra_rows)
+}
 
-    let scrollback_len = snapshot.scrollback_len;
-    if scrollback_len == 0 {
-        return Arc::new(snapshot);
-    }
+fn terminal_frame_live_snapshot(screen: &TerminalScreen) -> Arc<TerminalSnapshot> {
+    Arc::new(screen.viewport_snapshot(0))
+}
 
-    let base_rows = snapshot.rows;
-    let extra = terminal_frame_scroll_window_extra_rows(base_rows, priority);
-    let older_count = scrollback_len.saturating_sub(offset).min(extra);
-    let newer_count = offset.min(extra);
-    if older_count == 0 && newer_count == 0 {
-        return Arc::new(snapshot);
-    }
-
-    let mut retained_older_count = 0usize;
-    if older_count > 0 {
-        let older_rows = terminal_frame_snapshot_older_row_slices(screen, offset, older_count);
-        retained_older_count = older_rows.len();
-        if !older_rows.is_empty() {
-            let mut cells = Vec::with_capacity((snapshot.rows + older_rows.len()) * snapshot.cols);
-            let mut lines = Vec::with_capacity(snapshot.lines.len() + older_rows.len());
-            let mut styled_lines =
-                Vec::with_capacity(snapshot.styled_lines.len() + older_rows.len());
-            let mut line_signatures =
-                Vec::with_capacity(snapshot.line_signatures.len() + older_rows.len());
-            let mut line_timestamps_ms =
-                Vec::with_capacity(snapshot.line_timestamps_ms.len() + older_rows.len());
-            let mut line_wrapped =
-                Vec::with_capacity(snapshot.line_wrapped.len() + older_rows.len());
-            let mut hyperlink_lines =
-                Vec::with_capacity(snapshot.hyperlink_lines.len() + older_rows.len());
-            let mut command_marks =
-                Vec::with_capacity(snapshot.command_marks.len() + older_rows.len());
-            for row in older_rows {
-                cells.extend(row.cells);
-                lines.push(row.line);
-                styled_lines.push(row.styled_line);
-                line_signatures.push(row.line_signature);
-                line_timestamps_ms.push(row.line_timestamp_ms);
-                line_wrapped.push(row.line_wrapped);
-                hyperlink_lines.push(row.hyperlink_line);
-                command_marks.push(row.command_mark);
-            }
-            cells.extend(snapshot.cells);
-            lines.extend(snapshot.lines);
-            styled_lines.extend(snapshot.styled_lines);
-            line_signatures.extend(snapshot.line_signatures);
-            line_timestamps_ms.extend(snapshot.line_timestamps_ms);
-            line_wrapped.extend(snapshot.line_wrapped);
-            hyperlink_lines.extend(snapshot.hyperlink_lines);
-            command_marks.extend(snapshot.command_marks);
-            snapshot.cells = cells;
-            snapshot.lines = lines;
-            snapshot.styled_lines = styled_lines;
-            snapshot.line_signatures = line_signatures;
-            snapshot.line_timestamps_ms = line_timestamps_ms;
-            snapshot.line_wrapped = line_wrapped;
-            snapshot.hyperlink_lines = hyperlink_lines;
-            snapshot.command_marks = command_marks;
-            snapshot.rows = snapshot.rows.saturating_add(retained_older_count);
-            if snapshot.cursor_row != usize::MAX {
-                snapshot.cursor_row = snapshot.cursor_row.saturating_add(retained_older_count);
-                snapshot.cursor.row = snapshot.cursor.row.saturating_add(retained_older_count);
-            }
-        }
-    }
-
-    if newer_count > 0 {
-        for row in terminal_frame_snapshot_newer_row_slices(screen, offset, newer_count) {
-            snapshot.cells.extend(row.cells);
-            snapshot.lines.push(row.line);
-            snapshot.styled_lines.push(row.styled_line);
-            snapshot.line_signatures.push(row.line_signature);
-            snapshot.line_timestamps_ms.push(row.line_timestamp_ms);
-            snapshot.line_wrapped.push(row.line_wrapped);
-            snapshot.hyperlink_lines.push(row.hyperlink_line);
-            snapshot.command_marks.push(row.command_mark);
-            snapshot.rows = snapshot.rows.saturating_add(1);
-            snapshot.total_rows = snapshot.total_rows.saturating_add(1);
-        }
-    }
-
-    snapshot.images = snapshot
-        .images
-        .into_iter()
-        .filter(|image| image.row < base_rows)
-        .map(|mut image| {
-            image.row = image.row.saturating_add(retained_older_count);
-            image
-        })
-        .collect();
-    Arc::new(snapshot)
+fn terminal_frame_snapshot_with_extra_rows(
+    screen: &TerminalScreen,
+    offset: usize,
+    extra_rows: usize,
+) -> Arc<TerminalSnapshot> {
+    Arc::new(screen.viewport_snapshot_with_window(offset, extra_rows, extra_rows))
 }
 
 pub(crate) fn terminal_snapshot_matches_grid_geometry(
@@ -1580,52 +1446,6 @@ pub(crate) fn terminal_snapshot_matches_grid_geometry(
     viewport_rows: usize,
 ) -> bool {
     snapshot.cols == cols.max(1) && snapshot.viewport_rows == viewport_rows.max(1)
-}
-
-fn terminal_frame_snapshot_older_row_slices(
-    screen: &TerminalScreen,
-    offset: usize,
-    row_count: usize,
-) -> Vec<TerminalFrameSnapshotRowSlice> {
-    let mut rows = Vec::new();
-    let mut remaining = row_count;
-    while remaining > 0 {
-        let snapshot = screen.viewport_snapshot(offset.saturating_add(remaining));
-        if snapshot.rows == 0 {
-            break;
-        }
-        let take = remaining.min(snapshot.rows);
-        rows.extend(terminal_frame_snapshot_row_slices(&snapshot, 0, take));
-        remaining = remaining.saturating_sub(take);
-    }
-    rows
-}
-
-fn terminal_frame_snapshot_newer_row_slices(
-    screen: &TerminalScreen,
-    offset: usize,
-    row_count: usize,
-) -> Vec<TerminalFrameSnapshotRowSlice> {
-    let mut rows = Vec::new();
-    let mut consumed = 0usize;
-    let viewport_rows = screen.viewport_snapshot(offset).rows.max(1);
-    while consumed < row_count {
-        let remaining = row_count - consumed;
-        let take = remaining.min(viewport_rows);
-        let offset_delta = consumed.saturating_add(take);
-        let snapshot = screen.viewport_snapshot(offset.saturating_sub(offset_delta));
-        if snapshot.rows == 0 {
-            break;
-        }
-        let take = take.min(snapshot.rows);
-        rows.extend(terminal_frame_snapshot_row_slices(
-            &snapshot,
-            snapshot.rows.saturating_sub(take),
-            take,
-        ));
-        consumed = consumed.saturating_add(take);
-    }
-    rows
 }
 
 fn compact_terminal_frame_event_queue(
@@ -1829,11 +1649,7 @@ impl TerminalFrameSession {
         // Hidden/low-priority sessions keep protocol/effects without paying for a
         // full grid snapshot every output frame.
         let snapshot = if self.include_live_snapshot {
-            Some(terminal_frame_snapshot_with_scroll_window(
-                &self.screen,
-                0,
-                false,
-            ))
+            Some(terminal_frame_live_snapshot(&self.screen))
         } else {
             None
         };
@@ -1862,7 +1678,11 @@ impl TerminalFrameSession {
         priority: bool,
     ) -> TerminalFrameSnapshotEvent {
         let started_at = Instant::now();
-        let snapshot = terminal_frame_snapshot_with_scroll_window(&self.screen, offset, priority);
+        let snapshot = if priority {
+            terminal_frame_snapshot_with_scroll_window(&self.screen, offset, true)
+        } else {
+            terminal_frame_snapshot_with_scroll_window(&self.screen, offset, false)
+        };
         let action_links = prepare_terminal_frame_action_links(
             &snapshot,
             action_links_enabled,
@@ -2109,12 +1929,19 @@ fn push_terminal_frame_command(
             encoding,
             scrollback_limit,
         } => {
-            commands.push_back(TerminalFrameCommand::Output {
-                session_id,
-                data,
-                encoding,
-                scrollback_limit,
-            });
+            let insert_at = commands
+                .iter()
+                .rposition(|queued| !terminal_frame_command_is_low_priority_derived(queued))
+                .map_or(0, |index| index + 1);
+            commands.insert(
+                insert_at,
+                TerminalFrameCommand::Output {
+                    session_id,
+                    data,
+                    encoding,
+                    scrollback_limit,
+                },
+            );
         }
         TerminalFrameCommand::ResizeSession {
             session_id,
@@ -2145,6 +1972,16 @@ fn push_terminal_frame_command(
             action_link_matchers,
             priority: true,
         } => {
+            commands.retain(|queued| {
+                !matches!(
+                    queued,
+                    TerminalFrameCommand::RequestSnapshot {
+                        session_id: queued_session_id,
+                        priority: true,
+                        ..
+                    } if queued_session_id == &session_id
+                )
+            });
             let insert_at = commands
                 .iter()
                 .position(terminal_frame_command_priority_snapshot_insert_before)
@@ -2183,12 +2020,18 @@ fn compact_stale_terminal_frame_commands(commands: &mut VecDeque<TerminalFrameCo
         return;
     }
     let mut seen_snapshots: HashSet<(String, usize)> = HashSet::new();
+    let mut seen_priority_snapshots: HashSet<String> = HashSet::new();
     let mut seen_searches: HashSet<String> = HashSet::new();
     let mut kept_snapshot_priority = false;
     let mut compacted = VecDeque::with_capacity(commands.len());
 
     for command in commands.drain(..).rev() {
         let keep = match &command {
+            TerminalFrameCommand::RequestSnapshot {
+                session_id,
+                priority: true,
+                ..
+            } => seen_priority_snapshots.insert(session_id.clone()),
             TerminalFrameCommand::RequestSnapshot {
                 session_id, offset, ..
             } => seen_snapshots.insert((session_id.clone(), *offset)),
@@ -2220,6 +2063,17 @@ fn terminal_frame_command_can_drop_under_pressure(command: &TerminalFrameCommand
             priority: false,
             ..
         } | TerminalFrameCommand::RequestSearch { .. }
+    )
+}
+
+fn terminal_frame_command_is_low_priority_derived(command: &TerminalFrameCommand) -> bool {
+    matches!(
+        command,
+        TerminalFrameCommand::RequestSnapshot {
+            priority: false,
+            ..
+        } | TerminalFrameCommand::RequestSearch { .. }
+            | TerminalFrameCommand::RequestBufferText { .. }
     )
 }
 
@@ -2377,19 +2231,16 @@ fn process_terminal_frame_output_burst(
     let started_at = Instant::now();
     let mut batch = TerminalFrameOutputBatch::default();
     let mut processed_bytes = data.len();
-    {
-        let session = sessions
-            .entry(session_id.clone())
-            .or_insert_with(|| TerminalFrameSession::new(&encoding, scrollback_limit));
-        batch.absorb(session.process_output_chunk(
-            &session_id,
-            &data,
-            &encoding,
-            scrollback_limit,
-            recording_writer,
-        ));
-        emit(session.output_event_from_batch(session_id.clone(), batch, started_at));
-    }
+    let session = sessions
+        .entry(session_id.clone())
+        .or_insert_with(|| TerminalFrameSession::new(&encoding, scrollback_limit));
+    batch.absorb(session.process_output_chunk(
+        &session_id,
+        &data,
+        &encoding,
+        scrollback_limit,
+        recording_writer,
+    ));
 
     let mut trailing_data = Vec::new();
     loop {
@@ -2437,22 +2288,16 @@ fn process_terminal_frame_output_burst(
         }
     }
 
-    if trailing_data.is_empty() {
-        return;
+    if !trailing_data.is_empty() {
+        batch.absorb(session.process_output_chunk(
+            &session_id,
+            &trailing_data,
+            &encoding,
+            scrollback_limit,
+            recording_writer,
+        ));
     }
-    let trailing_started_at = Instant::now();
-    let mut trailing_batch = TerminalFrameOutputBatch::default();
-    let session = sessions
-        .entry(session_id.clone())
-        .or_insert_with(|| TerminalFrameSession::new(&encoding, scrollback_limit));
-    trailing_batch.absorb(session.process_output_chunk(
-        &session_id,
-        &trailing_data,
-        &encoding,
-        scrollback_limit,
-        recording_writer,
-    ));
-    emit(session.output_event_from_batch(session_id, trailing_batch, trailing_started_at));
+    emit(session.output_event_from_batch(session_id, batch, started_at));
 }
 
 fn next_terminal_frame_command(
@@ -3018,7 +2863,6 @@ mod tests {
         let offset = 300;
         let viewport_rows = session.screen.viewport_snapshot(offset).rows;
         let fast_delta = viewport_rows.saturating_mul(6);
-
         let event = session.snapshot_event(
             "s1".to_string(),
             offset,
@@ -3317,7 +3161,7 @@ mod tests {
     }
 
     #[test]
-    fn terminal_frame_output_live_snapshot_covers_first_scroll_step() {
+    fn terminal_frame_output_live_snapshot_stays_viewport_only() {
         let mut session = TerminalFrameSession::new("UTF-8", 1000);
         session.include_live_snapshot = true;
         session.screen = screen_from_line_count(80);
@@ -3331,13 +3175,13 @@ mod tests {
             .snapshot
             .expect("visible output should include a live snapshot");
 
-        assert!(snapshot.rows > viewport_rows);
+        assert_eq!(snapshot.rows, viewport_rows);
         assert!(snapshot_covers_offset(snapshot.as_ref(), 0, viewport_rows));
-        assert!(snapshot_covers_offset(snapshot.as_ref(), 1, viewport_rows));
+        assert!(!snapshot_covers_offset(snapshot.as_ref(), 1, viewport_rows));
     }
 
     #[test]
-    fn terminal_frame_output_live_snapshot_covers_viewport_scroll_burst() {
+    fn terminal_frame_output_live_snapshot_bounds_scroll_prefetch() {
         let mut session = TerminalFrameSession::new("UTF-8", 1000);
         session.include_live_snapshot = true;
         session.screen = screen_from_line_count(160);
@@ -3351,36 +3195,35 @@ mod tests {
             .snapshot
             .expect("visible output should include a live snapshot");
 
-        assert!(snapshot.rows >= viewport_rows.saturating_mul(2));
+        assert_eq!(snapshot.rows, viewport_rows);
         assert!(snapshot_covers_offset(snapshot.as_ref(), 0, viewport_rows));
-        assert!(snapshot_covers_offset(
-            snapshot.as_ref(),
-            viewport_rows,
-            viewport_rows
-        ));
-        let anchor =
-            snapshot_anchor_row_for_offset(snapshot.as_ref(), viewport_rows, viewport_rows);
-        assert_eq!(
-            snapshot.lines[anchor],
-            session.screen.viewport_snapshot(viewport_rows).lines[0]
-        );
+        assert!(!snapshot_covers_offset(snapshot.as_ref(), 1, viewport_rows));
     }
 
     #[test]
-    fn terminal_frame_output_live_snapshot_uses_normal_scroll_window() {
+    fn terminal_frame_scroll_request_keeps_normal_scroll_window() {
         let mut session = TerminalFrameSession::new("UTF-8", 1000);
         session.include_live_snapshot = true;
         session.screen = screen_from_line_count(320);
         let viewport_rows = session.screen.viewport_snapshot(0).rows;
         let normal_offset = viewport_rows.saturating_mul(2);
-        let event = session.output_event_from_batch(
-            "visible".to_string(),
-            TerminalFrameOutputBatch::default(),
-            Instant::now(),
-        );
-        let snapshot = event
+        let live_snapshot = session
+            .output_event_from_batch(
+                "visible".to_string(),
+                TerminalFrameOutputBatch::default(),
+                Instant::now(),
+            )
             .snapshot
             .expect("visible output should include a live snapshot");
+        let snapshot = session
+            .snapshot_event(
+                "visible".to_string(),
+                0,
+                false,
+                ActionLinksMatcherSettings::default(),
+                false,
+            )
+            .snapshot;
 
         assert!(
             snapshot.rows
@@ -3394,6 +3237,7 @@ mod tests {
                 < viewport_rows
                     .saturating_add(terminal_frame_scroll_window_extra_rows(viewport_rows, true,))
         );
+        assert!(snapshot.rows > live_snapshot.rows);
         assert!(snapshot_covers_offset(
             snapshot.as_ref(),
             normal_offset,
@@ -4012,8 +3856,15 @@ mod tests {
     }
 
     #[test]
-    fn terminal_frame_worker_emits_first_output_before_collecting_trailing_burst() {
+    fn terminal_frame_worker_collects_trailing_output_before_emitting() {
         let (tx, rx) = terminal_frame_command_channel();
+        assert!(tx.send(TerminalFrameCommand::Output {
+            session_id: "s1".to_string(),
+            data: b"bc".to_vec(),
+            encoding: "UTF-8".to_string(),
+            scrollback_limit: 1000,
+        }));
+        drop(tx);
         let recording_manager = Arc::new(nyaterm_transport::RecordingManager::new());
         let recording_pipeline =
             super::super::RecordingWritePipeline::spawn(Arc::clone(&recording_manager));
@@ -4030,24 +3881,12 @@ mod tests {
             b"a".to_vec(),
             "UTF-8".to_string(),
             1000,
-            |event| {
-                if events.is_empty() {
-                    assert!(tx.send(TerminalFrameCommand::Output {
-                        session_id: "s1".to_string(),
-                        data: b"bc".to_vec(),
-                        encoding: "UTF-8".to_string(),
-                        scrollback_limit: 1000,
-                    }));
-                }
-                events.push(event);
-            },
+            |event| events.push(event),
         );
 
-        assert_eq!(events.len(), 2);
-        assert_eq!(events[0].visible_text, "a");
-        assert_eq!(events[0].revision, 1);
-        assert_eq!(events[1].visible_text, "bc");
-        assert_eq!(events[1].revision, 2);
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].visible_text, "abc");
+        assert_eq!(events[0].revision, 2);
     }
 
     #[test]
@@ -4284,6 +4123,38 @@ mod tests {
     }
 
     #[test]
+    fn terminal_frame_command_queue_runs_output_before_idle_snapshot() {
+        let (tx, rx) = terminal_frame_command_channel();
+        assert!(tx.send(TerminalFrameCommand::RequestSnapshot {
+            session_id: "s1".to_string(),
+            offset: 0,
+            action_links_enabled: false,
+            action_link_matchers: ActionLinksMatcherSettings::default(),
+            priority: false,
+        }));
+        assert!(tx.send(TerminalFrameCommand::Output {
+            session_id: "s1".to_string(),
+            data: b"echo".to_vec(),
+            encoding: "UTF-8".to_string(),
+            scrollback_limit: 1000,
+        }));
+
+        assert!(matches!(
+            rx.try_recv(),
+            Some(TerminalFrameCommand::Output { data, .. }) if data == b"echo"
+        ));
+        assert!(matches!(
+            rx.try_recv(),
+            Some(TerminalFrameCommand::RequestSnapshot {
+                offset: 0,
+                priority: false,
+                ..
+            })
+        ));
+        assert!(rx.try_recv().is_none());
+    }
+
+    #[test]
     fn terminal_frame_command_queue_caps_rebuildable_render_requests() {
         let (tx, rx) = terminal_frame_command_channel();
         for offset in 0..TERMINAL_FRAME_COMMAND_QUEUE_CAP + 32 {
@@ -4351,6 +4222,31 @@ mod tests {
             rx.try_recv(),
             Some(TerminalFrameCommand::RequestSearch { .. })
         ));
+    }
+
+    #[test]
+    fn terminal_frame_command_queue_keeps_latest_user_scroll_target_per_session() {
+        let (tx, rx) = terminal_frame_command_channel();
+        for offset in [12, 24, 48] {
+            assert!(tx.send(TerminalFrameCommand::RequestSnapshot {
+                session_id: "s1".to_string(),
+                offset,
+                action_links_enabled: false,
+                action_link_matchers: ActionLinksMatcherSettings::default(),
+                priority: true,
+            }));
+        }
+
+        assert!(matches!(
+            rx.try_recv(),
+            Some(TerminalFrameCommand::RequestSnapshot {
+                session_id,
+                offset: 48,
+                priority: true,
+                ..
+            }) if session_id == "s1"
+        ));
+        assert!(rx.try_recv().is_none());
     }
 
     #[test]

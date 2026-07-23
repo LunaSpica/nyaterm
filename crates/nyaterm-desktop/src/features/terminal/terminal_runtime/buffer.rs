@@ -5,6 +5,23 @@ use super::*;
 use crate::models::append_terminal_ui_output_tail;
 
 const MAX_OSC52_REPLY_CHARS: usize = 1_048_576;
+const TERMINAL_LIVE_PREFETCH_IDLE_DELAY: Duration = Duration::from_millis(80);
+
+fn terminal_live_scrollback_prefetch_offset(view: &TerminalViewState) -> Option<usize> {
+    if view.scroll_offset != 0 {
+        return None;
+    }
+    let snapshot = view.frame_snapshot.as_ref()?;
+    if snapshot.scrollback_len == 0 || snapshot.rows > snapshot.viewport_rows {
+        return None;
+    }
+    Some(
+        snapshot
+            .viewport_rows
+            .saturating_mul(2)
+            .min(snapshot.scrollback_len),
+    )
+}
 
 fn terminal_view_has_cached_scrollback_snapshot_covering_offset(
     view: &TerminalViewState,
@@ -118,8 +135,15 @@ fn terminal_scroll_snapshot_request_should_enqueue(
         if terminal_view_has_cached_scroll_snapshot_ready_for_user_scroll(view, offset) {
             return false;
         }
+        if view.priority_pending_snapshot_offsets.contains(&offset) {
+            return false;
+        }
+        for stale_offset in std::mem::take(&mut view.priority_pending_snapshot_offsets) {
+            view.pending_snapshot_offsets.remove(&stale_offset);
+        }
         view.pending_snapshot_offsets.insert(offset);
-        return view.priority_pending_snapshot_offsets.insert(offset);
+        view.priority_pending_snapshot_offsets.insert(offset);
+        return true;
     }
 
     !terminal_view_has_cached_scrollback_snapshot_covering_offset(view, offset)
@@ -216,6 +240,46 @@ impl NyaTermApp {
 
     pub(in crate::features) fn request_terminal_live_snapshot(&mut self, session_id: &str) -> bool {
         self.request_terminal_frame_snapshot(session_id, 0)
+    }
+
+    fn request_terminal_live_scrollback_prefetch(&mut self, session_id: &str) -> bool {
+        if session_id.is_empty() {
+            return false;
+        }
+        let Some(view) = self.terminal_views.get_mut(session_id) else {
+            return false;
+        };
+        let Some(offset) = terminal_live_scrollback_prefetch_offset(view) else {
+            return false;
+        };
+        if !view.pending_snapshot_offsets.insert(offset) {
+            return false;
+        }
+        self.terminal_frame_pipeline.request_snapshot(
+            session_id.to_string(),
+            offset,
+            false,
+            self.settings.terminal_action_links_matchers.clone(),
+        );
+        true
+    }
+
+    fn schedule_terminal_live_scrollback_prefetch(
+        &mut self,
+        session_id: String,
+        cx: &mut Context<Self>,
+    ) {
+        self.terminal_live_prefetch_generation =
+            self.terminal_live_prefetch_generation.saturating_add(1);
+        let generation = self.terminal_live_prefetch_generation;
+        self.terminal_live_prefetch_task = Some(cx.spawn(async move |this, cx| {
+            Timer::after(TERMINAL_LIVE_PREFETCH_IDLE_DELAY).await;
+            let _ = this.update(cx, |this, _cx| {
+                if this.terminal_live_prefetch_generation == generation {
+                    this.request_terminal_live_scrollback_prefetch(&session_id);
+                }
+            });
+        }));
     }
 
     pub(in crate::features) fn terminal_scroll_text_cached_for_session(
@@ -664,6 +728,9 @@ impl NyaTermApp {
         }
         if need_live_snapshot {
             self.request_terminal_live_snapshot(&session_id);
+        }
+        if is_visible && output_scroll_offset == 0 && accepted_bytes > 0 {
+            self.schedule_terminal_live_scrollback_prefetch(session_id.clone(), cx);
         }
         if effects_need_ui_apply {
             self.apply_terminal_effects(&session_id, effects, command_running, cx);
@@ -1695,6 +1762,26 @@ mod frame_event_queue_tests {
     }
 
     #[test]
+    fn terminal_live_scrollback_prefetch_only_runs_for_viewport_only_snapshot() {
+        let mut view = terminal_view_with_scrollback(0);
+        view.frame_snapshot = Some(std::sync::Arc::new(view.screen.viewport_snapshot(0)));
+        let viewport_rows = view.viewport_rows_for_ui();
+        assert_eq!(
+            terminal_live_scrollback_prefetch_offset(&view),
+            Some(viewport_rows.saturating_mul(2))
+        );
+
+        view.frame_snapshot = Some(std::sync::Arc::new(
+            view.screen.viewport_snapshot_with_window(0, 32, 32),
+        ));
+        assert_eq!(terminal_live_scrollback_prefetch_offset(&view), None);
+
+        view.frame_snapshot = Some(std::sync::Arc::new(view.screen.viewport_snapshot(0)));
+        view.scroll_offset = 1;
+        assert_eq!(terminal_live_scrollback_prefetch_offset(&view), None);
+    }
+
+    #[test]
     fn terminal_user_scroll_snapshot_cache_requires_edge_margin() {
         let mut view = terminal_view_with_scrollback(20);
         let offset = 20;
@@ -1748,6 +1835,20 @@ mod frame_event_queue_tests {
         assert!(!terminal_scroll_snapshot_request_should_enqueue(
             &mut view, offset, true
         ));
+
+        let newer_offset = offset + 3;
+        assert!(terminal_scroll_snapshot_request_should_enqueue(
+            &mut view,
+            newer_offset,
+            true
+        ));
+        assert!(!view.pending_snapshot_offsets.contains(&offset));
+        assert!(!view.priority_pending_snapshot_offsets.contains(&offset));
+        assert!(view.pending_snapshot_offsets.contains(&newer_offset));
+        assert!(
+            view.priority_pending_snapshot_offsets
+                .contains(&newer_offset)
+        );
     }
 
     #[test]
