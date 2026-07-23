@@ -1556,23 +1556,31 @@ impl NyaTermApp {
             return false;
         }
         if self.is_session_disconnected(&session_id) {
-            self.terminal_status = "session disconnected — reconnect before sending".to_string();
-            cx.notify();
+            if self.set_terminal_status_if_changed(
+                "session disconnected — reconnect before sending".to_string(),
+            ) {
+                cx.notify();
+            }
             return false;
         }
         let sent = match self.write_session_input_recorded(&session_id, &bytes) {
             Ok(()) => {
                 self.record_command_history_from_bytes(Some(&session_id), &bytes);
-                self.terminal_status = format!("sent {} byte(s)", bytes.len());
+                let terminal_status_changed =
+                    self.set_terminal_status_if_changed(format!("sent {} byte(s)", bytes.len()));
                 self.arm_terminal_input_wake(cx);
+                if terminal_status_changed {
+                    cx.notify();
+                }
                 true
             }
             Err(error) => {
-                self.terminal_status = format!("input failed: {error}");
+                if self.set_terminal_status_if_changed(format!("input failed: {error}")) {
+                    cx.notify();
+                }
                 false
             }
         };
-        cx.notify();
         sent
     }
 
@@ -1586,27 +1594,47 @@ impl NyaTermApp {
             return false;
         }
         if self.is_session_disconnected(&session_id) {
-            self.terminal_status = "session disconnected — reconnect before sending".to_string();
-            cx.notify();
+            if self.set_terminal_status_if_changed(
+                "session disconnected — reconnect before sending".to_string(),
+            ) {
+                cx.notify();
+            }
             return false;
         }
         let sent = match self.write_session_raw_input_recorded(&session_id, &bytes) {
             Ok(()) => {
-                self.terminal_status = format!("sent {} byte(s)", bytes.len());
+                let terminal_status_changed =
+                    self.set_terminal_status_if_changed(format!("sent {} byte(s)", bytes.len()));
                 self.arm_terminal_input_wake(cx);
+                if terminal_status_changed {
+                    cx.notify();
+                }
                 true
             }
             Err(error) => {
-                self.terminal_status = format!("input failed: {error}");
+                if self.set_terminal_status_if_changed(format!("input failed: {error}")) {
+                    cx.notify();
+                }
                 false
             }
         };
-        cx.notify();
         sent
     }
 
     pub(in crate::features) fn active_terminal_key_mode(&self) -> TerminalKeyMode {
         self.terminal_key_mode_for_session(self.active_session_id.as_deref())
+    }
+
+    pub(in crate::features) fn set_terminal_status_if_changed(
+        &mut self,
+        status: impl Into<String>,
+    ) -> bool {
+        let status = status.into();
+        if !terminal_status_changed(self.terminal_status.as_str(), status.as_str()) {
+            return false;
+        }
+        self.terminal_status = status;
+        true
     }
 
     pub(in crate::features) fn terminal_key_mode_for_session(
@@ -2708,6 +2736,10 @@ fn terminal_should_defer_key_text_to_input_handler_for_state(
     })
 }
 
+fn terminal_status_changed(current: &str, next: &str) -> bool {
+    current != next
+}
+
 #[allow(clippy::too_many_arguments)]
 fn log_slow_terminal_input_diagnostic(
     kind: &'static str,
@@ -3554,5 +3586,11 @@ mod tests {
         assert!(terminal_should_defer_key_text_to_input_handler_for_state(
             true, "", &event
         ));
+    }
+
+    #[test]
+    fn terminal_status_changed_detects_identical_text() {
+        assert!(!terminal_status_changed("sent 1 byte(s)", "sent 1 byte(s)"));
+        assert!(terminal_status_changed("idle", "sent 1 byte(s)"));
     }
 }
