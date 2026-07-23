@@ -12,7 +12,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::hash::{Hash, Hasher};
 use std::ops::Range;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 /// Process-wide surface paint counter (Phase 0 isolation diagnostics).
@@ -77,6 +77,11 @@ fn terminal_keyword_rule_sets_equal(
     right: &Arc<Vec<nyaterm_core::ResolvedKeywordHighlightRule>>,
 ) -> bool {
     Arc::ptr_eq(left, right) || left.as_ref() == right.as_ref()
+}
+
+fn empty_terminal_keyword_rules() -> Arc<Vec<nyaterm_core::ResolvedKeywordHighlightRule>> {
+    static RULES: OnceLock<Arc<Vec<nyaterm_core::ResolvedKeywordHighlightRule>>> = OnceLock::new();
+    Arc::clone(RULES.get_or_init(|| Arc::new(Vec::new())))
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -2139,7 +2144,7 @@ impl Render for TerminalSurface {
         let visual_bell = self.visual_bell && self.is_active;
         let mut grid = NyaTerminalElement::new(
             snapshot.clone(),
-            Arc::new(Vec::new()),
+            empty_terminal_keyword_rules(),
             self.decorations.clone(),
             self.show_cursor,
             self.cursor_style.clone(),
@@ -2347,6 +2352,15 @@ mod tests {
         (0..count)
             .map(|index| format!("line {index:03}\n"))
             .collect::<String>()
+    }
+
+    #[test]
+    fn empty_terminal_keyword_rules_reuses_arc() {
+        let first = empty_terminal_keyword_rules();
+        let second = empty_terminal_keyword_rules();
+
+        assert!(first.is_empty());
+        assert!(Arc::ptr_eq(&first, &second));
     }
 
     fn terminal_test_retained_live_snapshot(count: usize) -> (TerminalSnapshot, usize) {
