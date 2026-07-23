@@ -1021,17 +1021,22 @@ impl TerminalSurface {
         clear_if_empty: bool,
         cx: &mut Context<Self>,
     ) {
+        if self.keyword_rules.is_empty() {
+            if clear_if_empty {
+                self.keyword_highlight_generation =
+                    self.keyword_highlight_generation.saturating_add(1);
+                self.keyword_highlight_task = None;
+                self.keyword_highlighter_rules = None;
+                self.keyword_highlighter = None;
+                self.keyword_highlights = None;
+            }
+            return;
+        }
         self.keyword_highlight_generation = self.keyword_highlight_generation.saturating_add(1);
         let generation = self.keyword_highlight_generation;
         self.keyword_highlight_task = None;
         // Keep the last published snapshot drawable while the replacement is parsed in the
         // background, matching the editor's stale-until-reparsed behavior.
-        if self.keyword_rules.is_empty() {
-            if clear_if_empty {
-                self.keyword_highlights = None;
-            }
-            return;
-        }
         let Some(snapshot) = self.snapshot.clone() else {
             return;
         };
