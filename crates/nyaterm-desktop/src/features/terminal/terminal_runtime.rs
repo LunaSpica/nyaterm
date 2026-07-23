@@ -1,6 +1,6 @@
 use super::*;
 
-pub(in crate::features) const TERMINAL_INPUT_LATENCY_WINDOW: Duration = Duration::from_millis(120);
+pub(in crate::features) const TERMINAL_INPUT_LATENCY_WINDOW: Duration = Duration::from_millis(80);
 
 #[path = "terminal_runtime/buffer.rs"]
 mod buffer;
