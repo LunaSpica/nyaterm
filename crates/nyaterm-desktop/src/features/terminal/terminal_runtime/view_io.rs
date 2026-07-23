@@ -525,8 +525,9 @@ fn terminal_input_latency_active(last_input_at: Option<Instant>, now: Instant) -
 fn terminal_should_track_command_suggestion_input(
     track_suggestions: bool,
     low_latency_mode: bool,
+    command_suggestions_enabled: bool,
 ) -> bool {
-    track_suggestions && !low_latency_mode
+    track_suggestions && !low_latency_mode && command_suggestions_enabled
 }
 
 impl NyaTermApp {
@@ -799,6 +800,7 @@ impl NyaTermApp {
             if terminal_should_track_command_suggestion_input(
                 track_suggestions,
                 self.settings.terminal_low_latency_mode,
+                self.settings.interaction_command_suggestions_enabled,
             ) {
                 self.note_command_suggestion_input(&bytes, cx);
             } else {
@@ -925,6 +927,7 @@ impl NyaTermApp {
             if terminal_should_track_command_suggestion_input(
                 track_suggestions,
                 self.settings.terminal_low_latency_mode,
+                self.settings.interaction_command_suggestions_enabled,
             ) {
                 self.note_command_suggestion_input(&primary_bytes, cx);
             } else {
@@ -3456,10 +3459,21 @@ mod tests {
 
     #[test]
     fn terminal_command_suggestion_input_tracking_skips_low_latency_mode() {
-        assert!(terminal_should_track_command_suggestion_input(true, false));
-        assert!(!terminal_should_track_command_suggestion_input(true, true));
+        assert!(terminal_should_track_command_suggestion_input(
+            true, false, true
+        ));
         assert!(!terminal_should_track_command_suggestion_input(
-            false, false
+            true, true, true
+        ));
+        assert!(!terminal_should_track_command_suggestion_input(
+            false, false, true
+        ));
+    }
+
+    #[test]
+    fn terminal_command_suggestion_input_tracking_skips_disabled_suggestions() {
+        assert!(!terminal_should_track_command_suggestion_input(
+            true, false, false
         ));
     }
 
