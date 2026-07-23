@@ -72,6 +72,13 @@ fn terminal_keyword_highlight_request_key(
     }
 }
 
+fn terminal_keyword_rule_sets_equal(
+    left: &Arc<Vec<nyaterm_core::ResolvedKeywordHighlightRule>>,
+    right: &Arc<Vec<nyaterm_core::ResolvedKeywordHighlightRule>>,
+) -> bool {
+    Arc::ptr_eq(left, right) || left.as_ref() == right.as_ref()
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(in crate::features) struct TerminalSurfaceHitTestScrollGeometry {
     pub(in crate::features) snapshot_pending: bool,
@@ -1098,9 +1105,9 @@ impl TerminalSurface {
         keyword_rules: Arc<Vec<nyaterm_core::ResolvedKeywordHighlightRule>>,
         show_cursor: bool,
         cursor_style: impl Into<String>,
-    ) {
+    ) -> bool {
         let decorations = decorations.into();
-        self.apply_decorations_and_keywords(decorations, keyword_rules, show_cursor, cursor_style);
+        self.apply_decorations_and_keywords(decorations, keyword_rules, show_cursor, cursor_style)
     }
 
     pub(in crate::features) fn set_decorations_and_keywords_preserving_stale(
@@ -1109,15 +1116,20 @@ impl TerminalSurface {
         keyword_rules: Arc<Vec<nyaterm_core::ResolvedKeywordHighlightRule>>,
         show_cursor: bool,
         cursor_style: impl Into<String>,
-    ) {
+    ) -> bool {
         let decorations = decorations.into();
         if decorations.is_empty() && !self.decorations.is_empty() {
+            let show_cursor = show_cursor && !self.visual_scroll_active();
+            let cursor_style = cursor_style.into();
+            let changed = !terminal_keyword_rule_sets_equal(&self.keyword_rules, &keyword_rules)
+                || self.show_cursor != show_cursor
+                || self.cursor_style != cursor_style;
             self.keyword_rules = keyword_rules;
-            self.show_cursor = show_cursor && !self.visual_scroll_active();
-            self.cursor_style = cursor_style.into();
-            return;
+            self.show_cursor = show_cursor;
+            self.cursor_style = cursor_style;
+            return changed;
         }
-        self.apply_decorations_and_keywords(decorations, keyword_rules, show_cursor, cursor_style);
+        self.apply_decorations_and_keywords(decorations, keyword_rules, show_cursor, cursor_style)
     }
 
     fn apply_decorations_and_keywords(
@@ -1126,14 +1138,27 @@ impl TerminalSurface {
         keyword_rules: Arc<Vec<nyaterm_core::ResolvedKeywordHighlightRule>>,
         show_cursor: bool,
         cursor_style: impl Into<String>,
-    ) {
-        self.selection_visual = None;
-        self.selection_visual_row_range =
+    ) -> bool {
+        let selection_visual_row_range =
             terminal_selection_visual_row_range_from_decorations(&decorations);
+        let show_cursor = show_cursor && !self.visual_scroll_active();
+        let cursor_style = cursor_style.into();
+        let changed = self.selection_visual.is_some()
+            || self.selection_visual_row_range != selection_visual_row_range
+            || self.decorations.as_ref() != decorations.as_ref()
+            || !terminal_keyword_rule_sets_equal(&self.keyword_rules, &keyword_rules)
+            || self.show_cursor != show_cursor
+            || self.cursor_style != cursor_style;
+        if !changed {
+            return false;
+        }
+        self.selection_visual = None;
+        self.selection_visual_row_range = selection_visual_row_range;
         self.decorations = decorations;
         self.keyword_rules = keyword_rules;
-        self.show_cursor = show_cursor && !self.visual_scroll_active();
-        self.cursor_style = cursor_style.into();
+        self.show_cursor = show_cursor;
+        self.cursor_style = cursor_style;
+        true
     }
 
     pub(in crate::features) fn schedule_keyword_highlights(
@@ -2639,6 +2664,57 @@ mod tests {
         assert!(surface.decorations[0].search_ranges.is_empty());
         assert_eq!(surface.decorations[0].active_search_ranges, vec![(6, 8)]);
         assert_eq!(surface.cursor_style, "underline");
+    }
+
+    #[test]
+    fn restored_keyword_rules_report_paint_detail_change_without_new_frame() {
+        let snapshot = Arc::new(TerminalScreen::default().viewport_snapshot(0));
+        let rows = snapshot.rows;
+        let mut surface = TerminalSurface::new("session");
+        let rules = Arc::new(vec![nyaterm_core::ResolvedKeywordHighlightRule {
+            id: "alpha".to_string(),
+            name: "Alpha".to_string(),
+            patterns: vec!["alpha".to_string()],
+            color: "#ff0000".to_string(),
+            enabled: true,
+        }]);
+        let decorations = vec![TerminalLineDecorations {
+            search_ranges: vec![(1, 5)],
+            ..TerminalLineDecorations::default()
+        }];
+
+        assert!(surface.apply_frame_snapshot(
+            snapshot.clone(),
+            0,
+            0.0,
+            0,
+            10,
+            rows,
+            false,
+            None,
+            0,
+            false,
+            true,
+            "block",
+        ));
+        assert!(surface.set_decorations_and_keywords(
+            decorations.clone(),
+            Arc::new(Vec::new()),
+            true,
+            "block",
+        ));
+
+        assert!(!surface.apply_frame_snapshot(
+            snapshot, 0, 0.0, 0, 10, rows, false, None, 0, false, true, "block",
+        ));
+        assert!(surface.set_decorations_and_keywords(decorations, rules.clone(), true, "block",));
+        assert_eq!(surface.keyword_rules.as_ref(), rules.as_ref());
+        assert!(!surface.set_decorations_and_keywords(
+            surface.decorations.to_vec(),
+            rules,
+            true,
+            "block",
+        ));
     }
 
     #[test]

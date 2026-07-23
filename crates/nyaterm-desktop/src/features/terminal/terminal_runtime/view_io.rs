@@ -1927,25 +1927,26 @@ impl NyaTermApp {
                 false,
                 "block",
             );
-            if frame_applied {
+            let paint_details_changed = if frame_applied {
                 if render_degraded || user_scroll_active || input_latency_active {
                     surface.set_decorations_and_keywords_preserving_stale(
                         decorations,
                         keyword_rules,
                         false,
                         "block",
-                    );
+                    )
                 } else {
-                    surface.set_decorations_and_keywords(
-                        decorations,
-                        keyword_rules,
-                        false,
-                        "block",
-                    );
+                    surface.set_decorations_and_keywords(decorations, keyword_rules, false, "block")
                 }
+            } else if !render_degraded && !user_scroll_active && !input_latency_active {
+                surface.set_decorations_and_keywords(decorations, keyword_rules, false, "block")
+            } else {
+                false
+            };
+            if frame_applied || paint_details_changed {
                 surface.schedule_keyword_highlights(clear_keyword_highlights, cx);
             }
-            if changed || frame_applied || had_pending_local_scroll_sync {
+            if changed || frame_applied || paint_details_changed || had_pending_local_scroll_sync {
                 cx.notify();
             }
         });
@@ -2361,25 +2362,36 @@ impl NyaTermApp {
                 show_cursor,
                 cursor_style.clone(),
             );
-            if frame_applied {
+            let paint_details_changed = if frame_applied {
                 if render_degraded {
                     surface.set_decorations_and_keywords_preserving_stale(
                         decorations,
                         keyword_rules,
                         show_cursor,
                         cursor_style,
-                    );
+                    )
                 } else {
                     surface.set_decorations_and_keywords(
                         decorations,
                         keyword_rules,
                         show_cursor,
                         cursor_style,
-                    );
+                    )
                 }
+            } else if !render_degraded {
+                surface.set_decorations_and_keywords(
+                    decorations,
+                    keyword_rules,
+                    show_cursor,
+                    cursor_style,
+                )
+            } else {
+                false
+            };
+            if frame_applied || paint_details_changed {
                 surface.schedule_keyword_highlights(clear_keyword_highlights, cx);
             }
-            if changed || frame_applied || had_pending_local_scroll_sync {
+            if changed || frame_applied || paint_details_changed || had_pending_local_scroll_sync {
                 cx.notify();
             }
         });
