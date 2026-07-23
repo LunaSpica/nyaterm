@@ -1415,6 +1415,18 @@ impl TerminalSurface {
         }
     }
 
+    fn scroll_visual_state_needs_repaint(&self, state: &TerminalScrollVisualState) -> bool {
+        if self.has_snapshot_covering_display_offset(
+            state.display_offset,
+            state.viewport_rows,
+            state.scrollback_len,
+        ) {
+            !self.scroll_position_state_matches(state)
+        } else {
+            !self.scroll_chrome_state_matches(state)
+        }
+    }
+
     fn handle_scroll_wheel(&mut self, event: &ScrollWheelEvent, cx: &mut Context<Self>) {
         let Some(app) = self.app.clone() else {
             return;
@@ -1472,10 +1484,13 @@ impl TerminalSurface {
         });
 
         if let Some(state) = result.visual_state {
+            let repaint_needed = self.scroll_visual_state_needs_repaint(&state);
             let text_updated = self.apply_scroll_visual_state(state.clone());
             let needs_text_first_repaint =
                 terminal_scroll_needs_text_first_repaint(&state, text_updated);
-            cx.notify();
+            if repaint_needed {
+                cx.notify();
+            }
             if needs_text_first_repaint {
                 let _ = app.update(cx, |this, cx| {
                     this.notify_terminal_scroll_position_only(session_id.as_str(), cx);
@@ -1610,6 +1625,7 @@ impl TerminalSurface {
             return;
         }
         if let Some(state) = state {
+            let repaint_needed = self.scroll_visual_state_needs_repaint(&state);
             let text_updated = self.apply_scroll_visual_state(state.clone());
             let text_first_repaint_ready = terminal_surface_text_first_repaint_ready(
                 &state,
@@ -1631,7 +1647,9 @@ impl TerminalSurface {
                     });
                 });
             }
-            cx.notify();
+            if repaint_needed {
+                cx.notify();
+            }
         }
     }
 
@@ -2501,6 +2519,33 @@ mod tests {
 
         assert!(!surface.apply_scroll_visual_state(state));
         assert_eq!(surface.revision, revision_before);
+    }
+
+    #[test]
+    fn repeated_pending_scroll_visual_state_does_not_need_repaint() {
+        let snapshot = Arc::new(TerminalScreen::default().viewport_snapshot(0));
+        let rows = snapshot.rows;
+        let mut surface = TerminalSurface::new("session");
+        surface.apply_frame_snapshot(
+            snapshot, 0, 0.0, 0, 10, rows, false, None, 0, false, false, "block",
+        );
+        let state = TerminalScrollVisualState {
+            session_id: "session".to_string(),
+            scroll_offset: 1,
+            scroll_residual_lines: 0.0,
+            display_offset: 1,
+            scrollback_len: 10,
+            viewport_rows: rows,
+            has_new_while_scrolled: false,
+            performance_overlay: None,
+            skipped_output_chars: 0,
+        };
+
+        assert!(surface.scroll_visual_state_needs_repaint(&state));
+        assert!(!surface.apply_scroll_visual_state(state.clone()));
+
+        assert!(!surface.scroll_visual_state_needs_repaint(&state));
+        assert!(surface.scroll_snapshot_pending);
     }
 
     #[test]
