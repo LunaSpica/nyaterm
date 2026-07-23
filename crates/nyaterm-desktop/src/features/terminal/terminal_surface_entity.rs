@@ -1142,11 +1142,8 @@ impl TerminalSurface {
         cx: &mut Context<Self>,
     ) {
         if self.keyword_rules.is_empty() {
+            self.cancel_pending_keyword_highlights();
             if clear_if_empty {
-                self.keyword_highlight_generation =
-                    self.keyword_highlight_generation.saturating_add(1);
-                self.keyword_highlight_task = None;
-                self.keyword_highlight_pending_key = None;
                 self.keyword_highlighter_rules = None;
                 self.keyword_highlighter = None;
                 self.keyword_highlights = None;
@@ -1205,6 +1202,15 @@ impl TerminalSurface {
                 cx.notify();
             });
         }));
+    }
+
+    fn cancel_pending_keyword_highlights(&mut self) {
+        if self.keyword_highlight_task.is_none() && self.keyword_highlight_pending_key.is_none() {
+            return;
+        }
+        self.keyword_highlight_generation = self.keyword_highlight_generation.saturating_add(1);
+        self.keyword_highlight_task = None;
+        self.keyword_highlight_pending_key = None;
     }
 
     pub(in crate::features) fn set_selection_visual(
@@ -2427,6 +2433,49 @@ mod tests {
             key,
             terminal_keyword_highlight_request_key(&edited_snapshot, rules_key)
         );
+    }
+
+    #[test]
+    fn cancelling_pending_keyword_highlights_keeps_published_highlights() {
+        let mut screen = TerminalScreen::default();
+        screen.advance_decoded_text("alpha\nbeta\n");
+        let snapshot = screen.viewport_snapshot(0);
+        let rules = vec![nyaterm_core::ResolvedKeywordHighlightRule {
+            id: "alpha".to_string(),
+            name: "Alpha".to_string(),
+            patterns: vec!["alpha".to_string()],
+            color: "#ff0000".to_string(),
+            enabled: true,
+        }];
+        let rules = Arc::new(rules);
+        let highlighter = Arc::new(compile_terminal_keyword_highlighter(rules.as_ref()));
+        let highlights = Arc::new(precompute_terminal_keyword_highlights(
+            &snapshot,
+            highlighter.as_ref(),
+            nyaterm_ui::theme_palette("github-dark"),
+        ));
+        let pending_key =
+            terminal_keyword_highlight_request_key(&snapshot, terminal_keyword_rules_key(&rules));
+        let mut surface = TerminalSurface::new("session");
+        surface.keyword_highlight_generation = 41;
+        surface.keyword_highlight_pending_key = Some(pending_key);
+        surface.keyword_highlighter_rules = Some(rules);
+        surface.keyword_highlighter = Some(highlighter);
+        surface.keyword_highlights = Some(highlights.clone());
+
+        surface.cancel_pending_keyword_highlights();
+
+        assert_eq!(surface.keyword_highlight_generation, 42);
+        assert!(surface.keyword_highlight_pending_key.is_none());
+        assert!(surface.keyword_highlight_task.is_none());
+        assert!(
+            surface
+                .keyword_highlights
+                .as_ref()
+                .is_some_and(|stored| Arc::ptr_eq(stored, &highlights))
+        );
+        assert!(surface.keyword_highlighter_rules.is_some());
+        assert!(surface.keyword_highlighter.is_some());
     }
 
     #[test]
