@@ -76,12 +76,14 @@ impl NyaTerminalLayoutCache {
     }
 
     fn keyword_rules_key(&mut self, rules: &Arc<Vec<ResolvedKeywordHighlightRule>>) -> u64 {
-        if self
-            .keyword_rules_source
-            .as_ref()
-            .is_some_and(|cached| Arc::ptr_eq(cached, rules))
-        {
-            return self.keyword_rules_key;
+        if let Some(cached) = self.keyword_rules_source.as_ref() {
+            if Arc::ptr_eq(cached, rules) {
+                return self.keyword_rules_key;
+            }
+            if cached.as_ref() == rules.as_ref() {
+                self.keyword_rules_source = Some(Arc::clone(rules));
+                return self.keyword_rules_key;
+            }
         }
         self.keyword_rules_key = terminal_keyword_rules_key(rules);
         self.keyword_rules_source = Some(Arc::clone(rules));
@@ -197,6 +199,34 @@ mod layout_cache_tests {
         });
         assert_eq!(cache.misses, 1);
         assert_eq!(cache.row_order.len(), 1);
+    }
+
+    #[test]
+    fn keyword_rules_key_reuses_equal_rule_sets() {
+        let mut cache = NyaTerminalLayoutCache::default();
+        let first = Arc::new(vec![ResolvedKeywordHighlightRule {
+            id: "error".to_string(),
+            name: "Error".to_string(),
+            patterns: vec!["error".to_string()],
+            color: "#ff0000".to_string(),
+            enabled: true,
+        }]);
+        let second = Arc::new(vec![ResolvedKeywordHighlightRule {
+            id: "error".to_string(),
+            name: "Error".to_string(),
+            patterns: vec!["error".to_string()],
+            color: "#ff0000".to_string(),
+            enabled: true,
+        }]);
+
+        let key = cache.keyword_rules_key(&first);
+        assert_eq!(cache.keyword_rules_key(&second), key);
+        assert!(
+            cache
+                .keyword_rules_source
+                .as_ref()
+                .is_some_and(|cached| Arc::ptr_eq(cached, &second))
+        );
     }
 
     #[test]
