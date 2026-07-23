@@ -3,7 +3,7 @@
 
 /// Shell chrome palette keyed by appearance.theme (Tauri theme ids).
 /// Field names map to Tauri `ThemeColors` / CSS vars (`--df-*`).
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ThemePalette {
     pub bg: u32,
     pub surface: u32,

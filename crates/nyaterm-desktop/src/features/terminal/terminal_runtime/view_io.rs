@@ -1841,9 +1841,10 @@ impl NyaTermApp {
         };
         self.remember_terminal_scroll_window_snapshot(session_id, display_offset, &snapshot);
         surface.update(cx, |surface, cx| {
-            surface.set_layout_cache(layout_cache);
-            surface.set_background_transparent(transparent_background);
-            surface.set_paint_chrome(
+            let mut changed = false;
+            changed |= surface.set_layout_cache(layout_cache);
+            changed |= surface.set_background_transparent(transparent_background);
+            changed |= surface.set_paint_chrome(
                 palette,
                 font_family,
                 font_size,
@@ -1857,7 +1858,8 @@ impl NyaTermApp {
                 is_active,
                 visual_bell,
             );
-            surface.set_protocol_state(protocol_state);
+            changed |= surface.set_protocol_state(protocol_state);
+            let had_pending_local_scroll_sync = surface.has_pending_local_scroll_sync();
             let frame_applied = surface.apply_frame_snapshot(
                 snapshot,
                 scroll_offset,
@@ -1890,7 +1892,9 @@ impl NyaTermApp {
                 }
                 surface.schedule_keyword_highlights(clear_keyword_highlights, cx);
             }
-            cx.notify();
+            if changed || frame_applied || had_pending_local_scroll_sync {
+                cx.notify();
+            }
         });
         true
     }
@@ -2052,9 +2056,10 @@ impl NyaTermApp {
                 }
             }
             surface.update(cx, |surface, cx| {
-                surface.set_layout_cache(layout_cache);
-                surface.set_background_transparent(transparent_background);
-                surface.set_paint_chrome(
+                let mut changed = false;
+                changed |= surface.set_layout_cache(layout_cache);
+                changed |= surface.set_background_transparent(transparent_background);
+                changed |= surface.set_paint_chrome(
                     palette,
                     font_family,
                     font_size,
@@ -2068,8 +2073,8 @@ impl NyaTermApp {
                     is_active,
                     visual_bell,
                 );
-                surface.set_protocol_state(protocol_state);
-                surface.update_scroll_chrome_without_snapshot(
+                changed |= surface.set_protocol_state(protocol_state);
+                changed |= surface.update_scroll_chrome_without_snapshot(
                     scroll_offset,
                     scroll_residual_lines,
                     display_offset,
@@ -2079,7 +2084,9 @@ impl NyaTermApp {
                     performance_overlay,
                     skipped,
                 );
-                cx.notify();
+                if changed {
+                    cx.notify();
+                }
             });
             return;
         };
@@ -2268,9 +2275,10 @@ impl NyaTermApp {
 
         self.remember_terminal_scroll_window_snapshot(session_id, display_offset, &snapshot);
         surface.update(cx, |surface, cx| {
-            surface.set_layout_cache(layout_cache);
-            surface.set_background_transparent(transparent_background);
-            surface.set_paint_chrome(
+            let mut changed = false;
+            changed |= surface.set_layout_cache(layout_cache);
+            changed |= surface.set_background_transparent(transparent_background);
+            changed |= surface.set_paint_chrome(
                 palette,
                 font_family,
                 font_size,
@@ -2284,7 +2292,8 @@ impl NyaTermApp {
                 is_active,
                 visual_bell,
             );
-            surface.set_protocol_state(protocol_state);
+            changed |= surface.set_protocol_state(protocol_state);
+            let had_pending_local_scroll_sync = surface.has_pending_local_scroll_sync();
             let frame_applied = surface.apply_frame_snapshot(
                 snapshot,
                 scroll_offset,
@@ -2317,7 +2326,9 @@ impl NyaTermApp {
                 }
                 surface.schedule_keyword_highlights(clear_keyword_highlights, cx);
             }
-            cx.notify();
+            if changed || frame_applied || had_pending_local_scroll_sync {
+                cx.notify();
+            }
         });
     }
 
@@ -2406,7 +2417,7 @@ impl NyaTermApp {
                 }
             }
             surface.update(cx, |surface, cx| {
-                surface.update_scroll_chrome_without_snapshot(
+                let changed = surface.update_scroll_chrome_without_snapshot(
                     scroll_offset,
                     scroll_residual_lines,
                     display_offset,
@@ -2416,7 +2427,9 @@ impl NyaTermApp {
                     performance_overlay,
                     skipped,
                 );
-                cx.notify();
+                if changed {
+                    cx.notify();
+                }
             });
             let elapsed = notify_started_at.elapsed();
             if elapsed >= TERMINAL_SCROLL_POSITION_NOTIFY_SLOW
@@ -2439,7 +2452,7 @@ impl NyaTermApp {
             return;
         }
         surface.update(cx, |surface, cx| {
-            surface.update_scroll_position_without_snapshot(
+            let changed = surface.update_scroll_position_without_snapshot(
                 scroll_offset,
                 scroll_residual_lines,
                 display_offset,
@@ -2449,7 +2462,9 @@ impl NyaTermApp {
                 performance_overlay,
                 skipped,
             );
-            cx.notify();
+            if changed {
+                cx.notify();
+            }
         });
         let elapsed = notify_started_at.elapsed();
         if elapsed >= TERMINAL_SCROLL_POSITION_NOTIFY_SLOW
@@ -2521,7 +2536,7 @@ impl NyaTermApp {
             self.request_terminal_frame_snapshot_for_user_scroll(session_id, display_offset);
         }
         surface.update(cx, |surface, cx| {
-            if can_reuse_snapshot {
+            let changed = if can_reuse_snapshot {
                 surface.update_scroll_position_without_snapshot(
                     scroll_offset,
                     scroll_residual_lines,
@@ -2531,7 +2546,7 @@ impl NyaTermApp {
                     has_new,
                     performance_overlay,
                     skipped,
-                );
+                )
             } else {
                 surface.update_scroll_chrome_without_snapshot(
                     scroll_offset,
@@ -2542,9 +2557,11 @@ impl NyaTermApp {
                     has_new,
                     performance_overlay,
                     skipped,
-                );
+                )
+            };
+            if changed {
+                cx.notify();
             }
-            cx.notify();
         });
         let elapsed = notify_started_at.elapsed();
         if elapsed >= TERMINAL_SCROLL_POSITION_NOTIFY_SLOW

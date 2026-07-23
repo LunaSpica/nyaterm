@@ -347,6 +347,10 @@ impl TerminalSurface {
     ) -> bool {
         // Decorations/keywords are pushed separately so frame notifies can keep
         // selection/search highlights until the next decoration rebuild.
+        let cursor_style = cursor_style.into();
+        let viewport_rows = viewport_rows.max(1);
+        let desired_show_cursor = show_cursor
+            && !terminal_visual_scroll_active_for_state(scroll_offset, scroll_residual_lines);
         let retained_rows_should_reset =
             self.retained_rows_should_reset(snapshot.as_ref(), scrollback_len, viewport_rows);
         let pending_local_scroll_state = (!retained_rows_should_reset)
@@ -363,6 +367,27 @@ impl TerminalSurface {
                 )
             })
             .flatten();
+        if !retained_rows_should_reset
+            && pending_local_scroll_state.is_none()
+            && !self.has_pending_local_scroll_sync()
+            && self
+                .snapshot
+                .as_ref()
+                .is_some_and(|current| Arc::ptr_eq(current, &snapshot))
+            && self.scroll_offset == scroll_offset
+            && (self.scroll_residual_lines - scroll_residual_lines).abs() < f32::EPSILON * 8.0
+            && self.display_offset == display_offset
+            && self.scrollback_len == scrollback_len
+            && self.viewport_rows == viewport_rows
+            && self.has_new_while_scrolled == has_new_while_scrolled
+            && self.has_action_link_decorations == has_action_link_decorations
+            && self.performance_overlay == performance_overlay
+            && self.skipped_output_chars == skipped_output_chars
+            && self.show_cursor == desired_show_cursor
+            && self.cursor_style == cursor_style
+        {
+            return false;
+        }
         if retained_rows_should_reset {
             self.clear_retained_scroll_state();
         }
@@ -382,14 +407,13 @@ impl TerminalSurface {
         self.scroll_snapshot_pending_since = None;
         self.clear_pending_scroll_snapshot_offsets_if_scrollback_changed(scrollback_len);
         self.scrollback_len = scrollback_len;
-        self.viewport_rows = viewport_rows.max(1);
+        self.viewport_rows = viewport_rows;
         self.has_new_while_scrolled = has_new_while_scrolled;
         self.has_action_link_decorations = has_action_link_decorations;
         self.performance_overlay = performance_overlay;
         self.skipped_output_chars = skipped_output_chars;
-        self.show_cursor = show_cursor
-            && !terminal_visual_scroll_active_for_state(scroll_offset, scroll_residual_lines);
-        self.cursor_style = cursor_style.into();
+        self.show_cursor = desired_show_cursor;
+        self.cursor_style = cursor_style;
         self.prune_pending_scroll_snapshot_offsets();
         self.revision = self.revision.saturating_add(1);
         true
@@ -481,7 +505,23 @@ impl TerminalSurface {
         has_new_while_scrolled: bool,
         performance_overlay: Option<TerminalPerformanceOverlay>,
         skipped_output_chars: u64,
-    ) {
+    ) -> bool {
+        let state_matches = self.scroll_offset == scroll_offset
+            && (self.scroll_residual_lines - scroll_residual_lines).abs() < f32::EPSILON * 8.0
+            && self.scrollback_len == scrollback_len
+            && self.viewport_rows == viewport_rows.max(1)
+            && self.has_new_while_scrolled == has_new_while_scrolled
+            && self.performance_overlay == performance_overlay
+            && self.skipped_output_chars == skipped_output_chars
+            && !self.show_cursor
+            && if self.snapshot.is_some() {
+                self.scroll_snapshot_pending == (self.display_offset != display_offset)
+            } else {
+                self.display_offset == display_offset && !self.scroll_snapshot_pending
+            };
+        if state_matches {
+            return false;
+        }
         self.scroll_offset = scroll_offset;
         self.scroll_residual_lines = scroll_residual_lines;
         if self.snapshot.is_none() {
@@ -502,6 +542,7 @@ impl TerminalSurface {
         // than a visible flash to an undecorated terminal surface.
         self.show_cursor = false;
         self.revision = self.revision.saturating_add(1);
+        true
     }
 
     pub(in crate::features) fn update_scroll_position_without_snapshot(
@@ -514,7 +555,29 @@ impl TerminalSurface {
         has_new_while_scrolled: bool,
         performance_overlay: Option<TerminalPerformanceOverlay>,
         skipped_output_chars: u64,
-    ) {
+    ) -> bool {
+        let viewport_rows = viewport_rows.max(1);
+        let snapshot_covers_display_offset = self.snapshot.as_ref().is_some_and(|snapshot| {
+            terminal_snapshot_covers_display_offset(
+                snapshot.as_ref(),
+                display_offset,
+                viewport_rows,
+                scrollback_len,
+            )
+        });
+        let state_matches = snapshot_covers_display_offset
+            && self.scroll_offset == scroll_offset
+            && (self.scroll_residual_lines - scroll_residual_lines).abs() < f32::EPSILON * 8.0
+            && self.display_offset == display_offset
+            && self.scrollback_len == scrollback_len
+            && self.viewport_rows == viewport_rows
+            && self.has_new_while_scrolled == has_new_while_scrolled
+            && self.performance_overlay == performance_overlay
+            && self.skipped_output_chars == skipped_output_chars
+            && (!self.visual_scroll_active() || !self.show_cursor);
+        if state_matches {
+            return false;
+        }
         self.promote_snapshot_covering_display_offset(
             display_offset,
             viewport_rows,
@@ -539,6 +602,7 @@ impl TerminalSurface {
         }
         self.prune_pending_scroll_snapshot_offsets();
         self.revision = self.revision.saturating_add(1);
+        true
     }
 
     fn scroll_snapshot_request_offsets_to_enqueue(&mut self, offsets: Vec<usize>) -> Vec<usize> {
@@ -957,23 +1021,45 @@ impl TerminalSurface {
         show_timestamp_ms: bool,
         is_active: bool,
         visual_bell: bool,
-    ) {
+    ) -> bool {
+        let cell_width = cell_width.max(1.0);
+        let cell_height = cell_height.max(1.0);
+        let state_matches = self.palette == palette
+            && self.font_family == font_family
+            && (self.font_size - font_size).abs() < f32::EPSILON * 8.0
+            && (self.normal_weight - normal_weight).abs() < f32::EPSILON * 8.0
+            && (self.bold_weight - bold_weight).abs() < f32::EPSILON * 8.0
+            && (self.cell_width - cell_width).abs() < f32::EPSILON * 8.0
+            && (self.cell_height - cell_height).abs() < f32::EPSILON * 8.0
+            && self.show_line_numbers == show_line_numbers
+            && self.show_timestamps == show_timestamps
+            && self.show_timestamp_ms == show_timestamp_ms
+            && self.is_active == is_active
+            && self.visual_bell == visual_bell;
+        if state_matches {
+            return false;
+        }
         self.palette = palette;
         self.font_family = font_family;
         self.font_size = font_size;
         self.normal_weight = normal_weight;
         self.bold_weight = bold_weight;
-        self.cell_width = cell_width.max(1.0);
-        self.cell_height = cell_height.max(1.0);
+        self.cell_width = cell_width;
+        self.cell_height = cell_height;
         self.show_line_numbers = show_line_numbers;
         self.show_timestamps = show_timestamps;
         self.show_timestamp_ms = show_timestamp_ms;
         self.is_active = is_active;
         self.visual_bell = visual_bell;
+        true
     }
 
-    pub(in crate::features) fn set_background_transparent(&mut self, transparent: bool) {
+    pub(in crate::features) fn set_background_transparent(&mut self, transparent: bool) -> bool {
+        if self.transparent_background == transparent {
+            return false;
+        }
         self.transparent_background = transparent;
+        true
     }
 
     pub(in crate::features) fn set_cursor_blink_visible(&mut self, show_cursor: bool) {
@@ -983,8 +1069,12 @@ impl TerminalSurface {
     pub(in crate::features) fn set_protocol_state(
         &mut self,
         protocol_state: TerminalProtocolState,
-    ) {
+    ) -> bool {
+        if self.protocol_state == protocol_state {
+            return false;
+        }
         self.protocol_state = protocol_state;
+        true
     }
 
     pub(in crate::features) fn set_visual_bell(&mut self, visual_bell: bool) {
@@ -994,8 +1084,12 @@ impl TerminalSurface {
     pub(in crate::features) fn set_layout_cache(
         &mut self,
         layout_cache: Arc<Mutex<NyaTerminalLayoutCache>>,
-    ) {
+    ) -> bool {
+        if Arc::ptr_eq(&self.layout_cache, &layout_cache) {
+            return false;
+        }
         self.layout_cache = layout_cache;
+        true
     }
 
     pub(in crate::features) fn set_decorations_and_keywords(
@@ -1207,6 +1301,40 @@ impl TerminalSurface {
             && self.skipped_output_chars == state.skipped_output_chars
     }
 
+    fn scroll_position_state_matches(&self, state: &TerminalScrollVisualState) -> bool {
+        self.snapshot.as_ref().is_some_and(|snapshot| {
+            terminal_snapshot_covers_display_offset(
+                snapshot.as_ref(),
+                state.display_offset,
+                state.viewport_rows,
+                state.scrollback_len,
+            )
+        }) && self.scroll_visual_state_matches(state)
+            && self.display_offset == state.display_offset
+            && !self.scroll_snapshot_pending
+            && (!self.visual_scroll_active() || !self.show_cursor)
+    }
+
+    fn scroll_chrome_state_matches(&self, state: &TerminalScrollVisualState) -> bool {
+        self.scroll_offset == state.scroll_offset
+            && (self.scroll_residual_lines - state.scroll_residual_lines).abs() < f32::EPSILON * 8.0
+            && self.scrollback_len == state.scrollback_len
+            && self.viewport_rows == state.viewport_rows.max(1)
+            && self.has_new_while_scrolled == state.has_new_while_scrolled
+            && self.performance_overlay == state.performance_overlay
+            && self.skipped_output_chars == state.skipped_output_chars
+            && if self.snapshot.is_some() {
+                self.scroll_snapshot_pending == (self.display_offset != state.display_offset)
+            } else {
+                self.display_offset == state.display_offset && !self.scroll_snapshot_pending
+            }
+            && !self.show_cursor
+    }
+
+    pub(in crate::features) fn has_pending_local_scroll_sync(&self) -> bool {
+        self.pending_local_scroll_sync.is_some()
+    }
+
     fn defer_surface_repaint(
         app: Entity<NyaTermApp>,
         session_id: Option<String>,
@@ -1244,14 +1372,14 @@ impl TerminalSurface {
         &mut self,
         state: TerminalScrollVisualState,
     ) -> bool {
-        if self.scroll_visual_state_matches(&state) {
-            return false;
-        }
         if self.has_snapshot_covering_display_offset(
             state.display_offset,
             state.viewport_rows,
             state.scrollback_len,
         ) {
+            if self.scroll_position_state_matches(&state) {
+                return false;
+            }
             self.update_scroll_position_without_snapshot(
                 state.scroll_offset,
                 state.scroll_residual_lines,
@@ -1264,6 +1392,9 @@ impl TerminalSurface {
             );
             true
         } else {
+            if self.scroll_chrome_state_matches(&state) {
+                return false;
+            }
             self.update_scroll_chrome_without_snapshot(
                 state.scroll_offset,
                 state.scroll_residual_lines,
@@ -2532,6 +2663,97 @@ mod tests {
             ),
             0.0
         );
+    }
+
+    #[test]
+    fn repeated_pending_scroll_chrome_update_is_noop() {
+        let mut screen = TerminalScreen::default();
+        screen.advance_decoded_text(&terminal_test_output_lines(80));
+        let snapshot = Arc::new(screen.viewport_snapshot(0));
+        let rows = snapshot.rows;
+        let scrollback_len = snapshot.scrollback_len;
+        let mut surface = TerminalSurface::new("session");
+
+        surface.apply_frame_snapshot(
+            snapshot,
+            0,
+            0.0,
+            0,
+            scrollback_len,
+            rows,
+            false,
+            None,
+            0,
+            false,
+            false,
+            "block",
+        );
+
+        assert!(surface.update_scroll_chrome_without_snapshot(
+            1,
+            0.0,
+            1,
+            scrollback_len,
+            rows,
+            false,
+            None,
+            0
+        ));
+        assert!(surface.scroll_snapshot_pending);
+        let revision_before_repeat = surface.revision;
+
+        assert!(!surface.update_scroll_chrome_without_snapshot(
+            1,
+            0.0,
+            1,
+            scrollback_len,
+            rows,
+            false,
+            None,
+            0
+        ));
+        assert_eq!(surface.revision, revision_before_repeat);
+        assert!(surface.scroll_snapshot_pending);
+    }
+
+    #[test]
+    fn identical_frame_snapshot_update_is_noop() {
+        let snapshot = Arc::new(TerminalScreen::default().viewport_snapshot(0));
+        let rows = snapshot.rows;
+        let scrollback_len = snapshot.scrollback_len;
+        let mut surface = TerminalSurface::new("session");
+
+        assert!(surface.apply_frame_snapshot(
+            snapshot.clone(),
+            0,
+            0.0,
+            0,
+            scrollback_len,
+            rows,
+            false,
+            None,
+            0,
+            false,
+            false,
+            "block",
+        ));
+        let revision_before_repeat = surface.revision;
+
+        assert!(!surface.apply_frame_snapshot(
+            snapshot,
+            0,
+            0.0,
+            0,
+            scrollback_len,
+            rows,
+            false,
+            None,
+            0,
+            false,
+            false,
+            "block",
+        ));
+        assert_eq!(surface.revision, revision_before_repeat);
     }
 
     #[test]
