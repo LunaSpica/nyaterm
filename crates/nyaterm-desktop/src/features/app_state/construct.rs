@@ -6,6 +6,7 @@ impl NyaTermApp {
         stores: crate::entities::UiStoreHandles,
         cx: &mut Context<Self>,
     ) -> Self {
+        nyaterm_core::warm_terminal_input_tracker();
         let legacy = LegacyProject::new(LEGACY_ROOT);
         let inventory = nyaterm_legacy::inventory(&legacy);
         let (session_start_tx, session_start_rx) = mpsc::channel();
@@ -830,6 +831,7 @@ impl NyaTermApp {
             terminal_mouse_report_position: None,
             terminal_surface_bounds: None,
             terminal_session_surface_bounds: HashMap::new(),
+            terminal_scale_factor: 1.0,
             terminal_cell_metrics: None,
             cached_terminal_theme_palette: None,
             cached_keyword_highlight_rules: None,

@@ -627,6 +627,8 @@ pub struct NyaTermApp {
     /// Last painted terminal text-area bounds per live session pane.
     pub(in crate::features) terminal_session_surface_bounds:
         HashMap<String, gpui::Bounds<gpui::Pixels>>,
+    /// Device scale used when terminal viewport bounds were last painted.
+    pub(in crate::features) terminal_scale_factor: f32,
     /// Measured monospaced cell size (width, height) from the terminal font when available.
     pub(in crate::features) terminal_cell_metrics: Option<(f32, f32)>,
     /// Cached terminal surface palette (theme + contrast fingerprint).

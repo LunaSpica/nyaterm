@@ -1412,13 +1412,14 @@ impl NyaTermApp {
         let (cell_w, cell_h) = self.terminal_cell_size();
         let insets = self.terminal_content_insets_for_bounds(session_id, bounds);
         let gutter = self.terminal_gutter_width_px_for_session(session_id);
-        terminal_resize_geometry_for_size_with_insets(
+        terminal_resize_geometry_for_size_with_insets_and_scale(
             f32::from(bounds.size.width),
             f32::from(bounds.size.height),
             cell_w,
             cell_h,
             insets,
             gutter,
+            self.terminal_scale_factor,
         )
     }
 
@@ -1466,6 +1467,9 @@ impl NyaTermApp {
         session_id: Option<&str>,
         bounds: gpui::Bounds<gpui::Pixels>,
     ) -> bool {
+        let (cell_width, cell_height) = self.terminal_cell_size();
+        let snapped_cell_height =
+            terminal_snapped_cell_height(cell_height, self.terminal_scale_factor);
         let TerminalResizeGeometry {
             cols,
             rows,
@@ -1484,6 +1488,23 @@ impl NyaTermApp {
             if !grid_changed && !backend_changed {
                 return false;
             }
+            tracing::info!(
+                diagnostic = "terminal_resize",
+                session_id,
+                scale_factor = self.terminal_scale_factor,
+                bounds_width = f32::from(bounds.size.width),
+                bounds_height = f32::from(bounds.size.height),
+                cell_width,
+                cell_height,
+                snapped_cell_height,
+                cols,
+                rows,
+                pixel_width,
+                pixel_height,
+                grid_changed,
+                backend_changed,
+                "resizing terminal viewport"
+            );
             if grid_changed {
                 view.screen.resize(cols, rows);
                 view.clear_scrollback_query_caches();
@@ -1835,7 +1856,7 @@ mod tests {
     }
 
     #[test]
-    fn terminal_resize_geometry_keeps_usable_pixel_remainder() {
+    fn terminal_resize_geometry_snaps_to_complete_rows() {
         let bounds = Bounds::new(point(px(0.), px(0.)), size(px(812.), px(612.)));
 
         let geometry = terminal_resize_geometry_for_bounds(bounds, 10., 20., 8., 72.);
@@ -1846,7 +1867,7 @@ mod tests {
                 cols: 72,
                 rows: 29,
                 pixel_width: 724,
-                pixel_height: 596,
+                pixel_height: 580,
             }
         );
     }

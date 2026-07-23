@@ -39,11 +39,15 @@ impl TerminalKeywordHighlightSnapshot {
     pub(super) fn stale_row(
         &self,
         row: usize,
+        line_signature: Option<u64>,
         display_offset: usize,
         current_row_count: usize,
     ) -> Option<&Arc<Vec<TerminalHighlightSpan>>> {
         if self.display_offset != display_offset || self.line_signatures.len() != current_row_count
         {
+            return None;
+        }
+        if self.line_signatures.get(row).copied() != line_signature {
             return None;
         }
         self.rows.get(row)?.as_ref()
@@ -399,8 +403,22 @@ mod tests {
 
         assert!(highlights.row(0, Some(41)).is_some());
         assert!(highlights.row(0, Some(42)).is_none());
-        assert!(highlights.stale_row(0, 0, snapshot.rows).is_some());
-        assert!(highlights.stale_row(0, 1, snapshot.rows).is_none());
+        assert!(
+            highlights
+                .stale_row(0, Some(41), 0, snapshot.rows)
+                .is_some()
+        );
+        assert!(
+            highlights
+                .stale_row(0, Some(42), 0, snapshot.rows)
+                .is_none()
+        );
+        assert!(highlights.stale_row(0, None, 0, snapshot.rows).is_none());
+        assert!(
+            highlights
+                .stale_row(0, Some(41), 1, snapshot.rows)
+                .is_none()
+        );
         assert!(highlights.rows.iter().skip(1).all(Option::is_none));
     }
 

@@ -15,14 +15,16 @@ pub(in crate::features) fn terminal_bounds_tracker(
     active: bool,
 ) -> impl IntoElement {
     let input_entity = entity.clone();
+    let bounds_entity = input_entity.clone();
     let tracked_session_id = session_id.clone();
-    // Live sessions publish their actual content bounds from TerminalSurface.
-    // The shell-level tracker remains the IME input-handler anchor, but must not
-    // overwrite the surface bounds with the larger padded output container.
-    let track_surface_bounds = session_id.is_none();
     gpui::canvas(
-        move |bounds, _window, cx| {
-            if !track_surface_bounds {
+        move |bounds, window, cx| {
+            let scale_factor = window.scale_factor();
+            let unchanged = bounds_entity
+                .read(cx)
+                .terminal_surface_bounds_for_session(session_id.as_deref())
+                .is_some_and(|previous| previous == bounds);
+            if unchanged && bounds_entity.read(cx).terminal_scale_factor == scale_factor {
                 return;
             }
             // Defer mutation so we never re-enter the entity while layout/prepaint is running.
@@ -33,6 +35,7 @@ pub(in crate::features) fn terminal_bounds_tracker(
                     this.remember_terminal_surface_bounds_for_session_and_sync(
                         session_id.as_deref(),
                         bounds,
+                        scale_factor,
                         cx,
                     );
                 });

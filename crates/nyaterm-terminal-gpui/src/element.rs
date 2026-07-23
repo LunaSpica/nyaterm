@@ -677,6 +677,7 @@ pub struct NyaTerminalElement {
     bold_weight: f32,
     visual_y_offset: f32,
     layout_rows: Option<usize>,
+    fill_height: bool,
 }
 
 struct TerminalPaintRow {
@@ -751,6 +752,7 @@ impl NyaTerminalElement {
             bold_weight,
             visual_y_offset: 0.0,
             layout_rows: None,
+            fill_height: false,
         }
     }
 
@@ -774,6 +776,13 @@ impl NyaTerminalElement {
 
     pub fn with_layout_rows(mut self, rows: usize) -> Self {
         self.layout_rows = Some(rows.max(1));
+        self
+    }
+
+    /// Let the parent viewport own the element height, like an editor viewport.
+    /// The snapshot row count still limits which rows are painted.
+    pub fn with_fill_height(mut self, fill: bool) -> Self {
+        self.fill_height = fill;
         self
     }
 
@@ -1027,12 +1036,16 @@ impl Element for NyaTerminalElement {
     ) -> (LayoutId, Self::RequestLayoutState) {
         let mut style = Style::default();
         style.size.width = relative(1.).into();
-        style.size.height = px(terminal_layout_height_px(
-            self.cell_height,
-            self.snapshot.rows,
-            self.layout_rows,
-        ))
-        .into();
+        style.size.height = if self.fill_height {
+            relative(1.).into()
+        } else {
+            px(terminal_layout_height_px(
+                self.cell_height,
+                self.snapshot.rows,
+                self.layout_rows,
+            ))
+            .into()
+        };
         (window.request_layout(style, [], cx), ())
     }
 
@@ -1057,7 +1070,8 @@ impl Element for NyaTerminalElement {
             .map(|cache| (cache.hits, cache.misses));
         let mut plan = NyaTerminalPaintPlan::default();
         let cell_w = self.cell_width.max(1.);
-        let cell_h = self.cell_height.max(1.);
+        let scale_factor = window.scale_factor();
+        let cell_h = nyaterm_core::terminal_snapped_cell_height(self.cell_height, scale_factor);
         let font_size = px(self.font_size.max(8.));
         let base_font = font(SharedString::from(self.font_family.clone()));
         let keyword_rules_key = if let Some(highlights) = self.keyword_highlights.as_ref() {
@@ -1101,7 +1115,12 @@ impl Element for NyaTerminalElement {
             let line_signature = self.snapshot.line_signatures.get(row).copied();
             let keyword_spans = self.keyword_highlights.as_ref().and_then(|highlights| {
                 highlights.row(row, line_signature).or_else(|| {
-                    highlights.stale_row(row, self.snapshot.display_offset, self.snapshot.rows)
+                    highlights.stale_row(
+                        row,
+                        line_signature,
+                        self.snapshot.display_offset,
+                        self.snapshot.rows,
+                    )
                 })
             });
             let default_decorations;
@@ -1511,6 +1530,8 @@ impl Element for NyaTerminalElement {
         cx: &mut App,
     ) {
         let started_at = Instant::now();
+        let cell_height =
+            nyaterm_core::terminal_snapped_cell_height(self.cell_height, window.scale_factor());
         let backgrounds = prepaint.backgrounds.len();
         let images_under = prepaint.images_under.len();
         let placeholders_under = prepaint.placeholders_under.len();
@@ -1551,12 +1572,9 @@ impl Element for NyaTerminalElement {
                 window.paint_quad(quad);
             }
             for row in prepaint.rows.drain(..) {
-                let _ = row.line.paint(
-                    point(bounds.left(), row.y),
-                    px(self.cell_height.max(1.)),
-                    window,
-                    cx,
-                );
+                let _ = row
+                    .line
+                    .paint(point(bounds.left(), row.y), px(cell_height), window, cx);
             }
             for image in prepaint.images_above.drain(..) {
                 let _ = window.paint_image(
@@ -1574,12 +1592,9 @@ impl Element for NyaTerminalElement {
                 window.paint_quad(cursor);
             }
             if let Some(cursor_glyph) = prepaint.cursor_glyph.take() {
-                let _ = cursor_glyph.line.paint(
-                    cursor_glyph.origin,
-                    px(self.cell_height.max(1.)),
-                    window,
-                    cx,
-                );
+                let _ = cursor_glyph
+                    .line
+                    .paint(cursor_glyph.origin, px(cell_height), window, cx);
             }
         });
         let elapsed = started_at.elapsed();

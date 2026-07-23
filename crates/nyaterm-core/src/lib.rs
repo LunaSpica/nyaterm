@@ -114,13 +114,14 @@ pub use terminal_input_tracker::{
     can_suggest_from_tracked_command, can_suggest_from_tracker, char_index_to_byte,
     delete_terminal_input_range, get_tracked_command, get_tracked_submission_command,
     resync_from_terminal_line, sanitize_terminal_command, strip_terminal_command_prompt,
-    terminal_input_tracker_below_min_chars,
+    terminal_input_tracker_below_min_chars, warm_terminal_input_tracker,
 };
 pub use terminal_mouse::{TerminalMouseReportEligibility, terminal_mouse_report_should_send};
 pub use terminal_resize::{
     TerminalBackendResize, TerminalResizeGeometry, TerminalViewportInsets,
     terminal_backend_resize_changed, terminal_resize_geometry_for_size,
     terminal_resize_geometry_for_size_with_insets,
+    terminal_resize_geometry_for_size_with_insets_and_scale, terminal_snapped_cell_height,
 };
 pub use terminal_wire_write::{
     TerminalWireWriteDisposition, TerminalWireWriteKind, terminal_wire_write_disposition,

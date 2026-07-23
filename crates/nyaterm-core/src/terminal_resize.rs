@@ -33,6 +33,16 @@ pub struct TerminalBackendResize {
     pub pixel_height: u16,
 }
 
+pub fn terminal_snapped_cell_height(cell_height: f32, scale_factor: f32) -> f32 {
+    let cell_height = cell_height.max(1.0);
+    let scale_factor = if scale_factor.is_finite() {
+        scale_factor.max(1e-3)
+    } else {
+        1.0
+    };
+    (cell_height * scale_factor).round().max(1.0) / scale_factor
+}
+
 impl TerminalBackendResize {
     pub fn new(cols: u16, rows: u16, pixel_width: u16, pixel_height: u16) -> Self {
         Self {
@@ -70,13 +80,44 @@ pub fn terminal_resize_geometry_for_size_with_insets(
     insets: TerminalViewportInsets,
     gutter_width: f32,
 ) -> TerminalResizeGeometry {
+    terminal_resize_geometry_for_size_with_insets_and_scale(
+        width,
+        height,
+        cell_width,
+        cell_height,
+        insets,
+        gutter_width,
+        1.0,
+    )
+}
+
+/// Calculate the grid from the same device-pixel-snapped viewport used by the painter.
+pub fn terminal_resize_geometry_for_size_with_insets_and_scale(
+    width: f32,
+    height: f32,
+    cell_width: f32,
+    cell_height: f32,
+    insets: TerminalViewportInsets,
+    gutter_width: f32,
+    scale_factor: f32,
+) -> TerminalResizeGeometry {
     let cell_width = cell_width.max(1.);
     let cell_height = cell_height.max(1.);
+    let scale_factor = if scale_factor.is_finite() {
+        scale_factor.max(1e-3)
+    } else {
+        1.0
+    };
     let usable_width =
         (width - insets.left.max(0.) - insets.right.max(0.) - gutter_width).max(cell_width);
     let usable_height = (height - insets.top.max(0.) - insets.bottom.max(0.)).max(cell_height);
     let raw_cols = (usable_width / cell_width).next_up().floor();
-    let raw_rows = (usable_height / cell_height).next_up().floor();
+    let snapped_cell_height = terminal_snapped_cell_height(cell_height, scale_factor);
+    let line_height_device_px = snapped_cell_height * scale_factor;
+    let available_height_device_px = (usable_height * scale_factor).floor().max(0.0);
+    let raw_rows = (available_height_device_px / line_height_device_px)
+        .next_up()
+        .floor();
     let clamped_cols = raw_cols.clamp(20., 500.);
     let clamped_rows = raw_rows.clamp(4., 200.);
     let cols = clamped_cols as u16;
@@ -86,11 +127,8 @@ pub fn terminal_resize_geometry_for_size_with_insets(
     } else {
         clamped_cols * cell_width
     };
-    let pixel_height = if (raw_rows - clamped_rows).abs() < f32::EPSILON {
-        usable_height
-    } else {
-        clamped_rows * cell_height
-    };
+    // Keep the remainder outside the grid so the renderer and PTY never disagree by a row.
+    let pixel_height = clamped_rows * line_height_device_px / scale_factor;
     let pixel_width = pixel_width.round().clamp(1., u16::MAX as f32) as u16;
     let pixel_height = pixel_height.round().clamp(1., u16::MAX as f32) as u16;
     TerminalResizeGeometry {
@@ -122,7 +160,7 @@ mod tests {
                 cols: 72,
                 rows: 29,
                 pixel_width: 724,
-                pixel_height: 596,
+                pixel_height: 580,
             }
         );
     }
@@ -156,11 +194,11 @@ mod tests {
         assert_eq!(geometry.cols, 73);
         assert_eq!(geometry.rows, 30);
         assert_eq!(geometry.pixel_width, 732);
-        assert_eq!(geometry.pixel_height, 612);
+        assert_eq!(geometry.pixel_height, 600);
     }
 
     #[test]
-    fn resize_geometry_uses_next_up_to_keep_edge_rows_visible() {
+    fn resize_geometry_does_not_promote_a_partial_device_pixel_row() {
         let almost_24_rows = f32::from_bits((18.0f32 * 24.0).to_bits() - 1);
         let geometry = terminal_resize_geometry_for_size_with_insets(
             424.,
@@ -172,7 +210,23 @@ mod tests {
         );
 
         assert_eq!(geometry.cols, 42);
-        assert_eq!(geometry.rows, 24);
+        assert_eq!(geometry.rows, 23);
+    }
+
+    #[test]
+    fn resize_geometry_snaps_rows_at_fractional_scale() {
+        let geometry = terminal_resize_geometry_for_size_with_insets_and_scale(
+            812.,
+            612.,
+            10.,
+            18.,
+            TerminalViewportInsets::symmetric(0.),
+            0.,
+            1.25,
+        );
+
+        assert_eq!(geometry.rows, 33);
+        assert_eq!(geometry.pixel_height, 607);
     }
 
     #[test]

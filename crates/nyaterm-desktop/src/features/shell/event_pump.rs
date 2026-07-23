@@ -14,10 +14,13 @@ mod session_events;
 use crate::features::terminal_runtime::TERMINAL_INPUT_LATENCY_WINDOW;
 use helpers::*;
 
-const TERMINAL_INPUT_WAKE_DELAYS: [Duration; 3] = [
+// These intervals produce wake deadlines at 4ms, 12ms, and 24ms. `Timer::after`
+// calls below are sequential, so storing the absolute deadlines here would
+// accidentally move the final echo poll out to 40ms.
+const TERMINAL_INPUT_WAKE_INTERVALS: [Duration; 3] = [
     Duration::from_millis(4),
+    Duration::from_millis(8),
     Duration::from_millis(12),
-    Duration::from_millis(24),
 ];
 
 impl NyaTermApp {
@@ -82,7 +85,7 @@ impl NyaTermApp {
         let mut observed_generation = self.terminal_runtime.terminal_input_wake_generation;
         cx.spawn(async move |this, cx| {
             loop {
-                for delay in TERMINAL_INPUT_WAKE_DELAYS {
+                for delay in TERMINAL_INPUT_WAKE_INTERVALS {
                     Timer::after(delay).await;
                     let _ = this.update(cx, |this, cx| {
                         this.drain_terminal_input_wake(cx);

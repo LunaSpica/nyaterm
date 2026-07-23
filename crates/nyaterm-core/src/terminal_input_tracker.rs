@@ -53,6 +53,19 @@ fn windows_prompt_prefix() -> &'static Regex {
     RE.get_or_init(|| Regex::new(r"^[A-Za-z]:(?:[\\/][^>\r\n]*)?>\s*").expect("windows prompt"))
 }
 
+/// Compile prompt matchers before the first interactive submission.
+///
+/// These matchers are used from the UI input path. Keeping their lazy
+/// initialization there makes the first Enter key pay the regex compilation
+/// cost, which is visible as an input hitch.
+pub fn warm_terminal_input_tracker() {
+    let _ = leading_env_prefix();
+    let _ = bracket_prompt_prefix();
+    let _ = posix_prompt_prefix();
+    let _ = powershell_prompt_prefix();
+    let _ = windows_prompt_prefix();
+}
+
 fn strip_leading_env_prefixes(input: &str) -> String {
     let mut remaining = input.to_string();
     loop {

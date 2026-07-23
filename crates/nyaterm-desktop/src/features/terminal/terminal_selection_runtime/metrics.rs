@@ -2,10 +2,13 @@ use super::*;
 
 impl NyaTermApp {
     pub(in crate::features) fn terminal_cell_size(&self) -> (f32, f32) {
-        if let Some(metrics) = self.terminal_cell_metrics {
-            return metrics;
-        }
-        self.fallback_terminal_cell_size()
+        let (cell_w, cell_h) = self
+            .terminal_cell_metrics
+            .unwrap_or_else(|| self.fallback_terminal_cell_size());
+        (
+            cell_w,
+            nyaterm_core::terminal_snapped_cell_height(cell_h, self.terminal_scale_factor),
+        )
     }
 
     pub(in crate::features) fn fallback_terminal_cell_size(&self) -> (f32, f32) {
@@ -320,8 +323,14 @@ impl NyaTermApp {
         &mut self,
         session_id: Option<&str>,
         bounds: Bounds<Pixels>,
+        scale_factor: f32,
         cx: &mut Context<Self>,
     ) {
+        self.terminal_scale_factor = if scale_factor.is_finite() {
+            scale_factor.max(1e-3)
+        } else {
+            1.0
+        };
         let resized = self.remember_terminal_surface_bounds_for_session(session_id, bounds);
         if !resized {
             return;

@@ -33,6 +33,7 @@ pub(super) use nyaterm_core::{
     redact_sensitive_text, resync_from_terminal_line, search_command_sources,
     terminal_input_fanout_status, terminal_input_tracker_below_min_chars,
     terminal_mouse_report_should_send, terminal_resize_geometry_for_size_with_insets,
+    terminal_resize_geometry_for_size_with_insets_and_scale, terminal_snapped_cell_height,
     terminal_wire_write_disposition, truncate_preview, uuid,
 };
 pub(super) use nyaterm_legacy::{LegacyProject, MigrationInventory};
@@ -139,7 +140,7 @@ pub(super) use crate::terminal::{
     NyaTerminalElement, NyaTerminalLayoutCache, TerminalBufferMatch, TerminalKeyMode,
     TerminalKeywordHighlightSnapshot, TerminalKeywordHighlighter, TerminalLineDecorations,
     TerminalTextCell, compile_terminal_keyword_highlighter, initial_terminal_screen,
-    precompute_terminal_keyword_highlights, terminal_byte_index_for_cell_col, terminal_cell_count,
+    precompute_terminal_keyword_highlights, terminal_byte_index_for_cell_col,
     terminal_is_zero_width_mark, terminal_key_bytes_with_mode,
     terminal_key_release_bytes_with_mode, terminal_text_cell_slice, terminal_text_cells,
 };
