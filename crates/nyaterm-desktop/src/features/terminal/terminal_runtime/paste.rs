@@ -112,13 +112,17 @@ impl NyaTermApp {
             return;
         }
         let Some(session_id) = self.active_session_id.clone() else {
-            self.terminal_status = "no active session for paste".to_string();
-            cx.notify();
+            if self.set_terminal_status_if_changed("no active session for paste") {
+                cx.notify();
+            }
             return;
         };
         if self.is_session_disconnected(&session_id) {
-            self.terminal_status = "session disconnected — press Enter to reconnect".to_string();
-            cx.notify();
+            if self
+                .set_terminal_status_if_changed("session disconnected — press Enter to reconnect")
+            {
+                cx.notify();
+            }
             return;
         }
         if self.active_terminal_visual_scroll_active() {
@@ -137,8 +141,9 @@ impl NyaTermApp {
         ) {
             Ok(()) => ok_sessions.push(session_id),
             Err(error) => {
-                self.terminal_status = format!("paste failed: {error}");
-                cx.notify();
+                if self.set_terminal_status_if_changed(format!("paste failed: {error}")) {
+                    cx.notify();
+                }
                 return;
             }
         }
@@ -162,8 +167,11 @@ impl NyaTermApp {
         let session_refs: Vec<&str> = ok_sessions.iter().map(String::as_str).collect();
         self.record_command_history_for_sessions(&session_refs, history_bytes);
 
-        self.terminal_status = terminal_input_fanout_status("pasted", byte_count, synced, failed);
-        cx.notify();
+        if self.set_terminal_status_if_changed(terminal_input_fanout_status(
+            "pasted", byte_count, synced, failed,
+        )) {
+            cx.notify();
+        }
     }
 
     pub(in crate::features) fn close_multi_line_paste(&mut self, cx: &mut Context<Self>) {

@@ -739,14 +739,18 @@ impl NyaTermApp {
             self.terminal_selection_dragging = false;
         }
         let Some(session_id) = self.active_session_id.clone() else {
-            self.terminal_status = "start a session before typing".to_string();
-            cx.notify();
+            if self.set_terminal_status_if_changed("start a session before typing") {
+                cx.notify();
+            }
             return false;
         };
         if self.is_session_disconnected(&session_id) {
             // Key handler owns Enter-to-reconnect (needs Window). Block writes here.
-            self.terminal_status = "session disconnected — press Enter to reconnect".to_string();
-            cx.notify();
+            if self
+                .set_terminal_status_if_changed("session disconnected — press Enter to reconnect")
+            {
+                cx.notify();
+            }
             return false;
         }
         // Typing while scrolled in history returns to the live bottom (xterm-like).
@@ -768,8 +772,9 @@ impl NyaTermApp {
         match self.write_session_input_recorded(&session_id, &bytes) {
             Ok(()) => ok_sessions.push(session_id),
             Err(error) => {
-                self.terminal_status = format!("input failed: {error}");
-                cx.notify();
+                if self.set_terminal_status_if_changed(format!("input failed: {error}")) {
+                    cx.notify();
+                }
                 return false;
             }
         }
@@ -853,13 +858,17 @@ impl NyaTermApp {
             self.terminal_selection_dragging = false;
         }
         let Some(session_id) = self.active_session_id.clone() else {
-            self.terminal_status = "start a session before typing".to_string();
-            cx.notify();
+            if self.set_terminal_status_if_changed("start a session before typing") {
+                cx.notify();
+            }
             return false;
         };
         if self.is_session_disconnected(&session_id) {
-            self.terminal_status = "session disconnected — press Enter to reconnect".to_string();
-            cx.notify();
+            if self
+                .set_terminal_status_if_changed("session disconnected — press Enter to reconnect")
+            {
+                cx.notify();
+            }
             return false;
         }
         let encode_started_at = Instant::now();
@@ -887,8 +896,9 @@ impl NyaTermApp {
         match self.write_session_input_recorded(&session_id, &primary_bytes) {
             Ok(()) => ok_sessions.push(session_id),
             Err(error) => {
-                self.terminal_status = format!("input failed: {error}");
-                cx.notify();
+                if self.set_terminal_status_if_changed(format!("input failed: {error}")) {
+                    cx.notify();
+                }
                 return false;
             }
         }
@@ -996,8 +1006,9 @@ impl NyaTermApp {
         match self.write_session_input_recorded(&session_id, &primary_bytes) {
             Ok(()) => {}
             Err(error) => {
-                self.terminal_status = format!("input failed: {error}");
-                cx.notify();
+                if self.set_terminal_status_if_changed(format!("input failed: {error}")) {
+                    cx.notify();
+                }
                 return false;
             }
         }
@@ -1044,8 +1055,9 @@ impl NyaTermApp {
             return false;
         };
         if let Err(error) = self.write_session_input_recorded(session_id, &payload) {
-            self.terminal_status = format!("alternate scroll failed: {error}");
-            cx.notify();
+            if self.set_terminal_status_if_changed(format!("alternate scroll failed: {error}")) {
+                cx.notify();
+            }
             return true;
         }
 
@@ -1269,8 +1281,9 @@ impl NyaTermApp {
             return MouseReportWriteResult::NotHandled;
         }
         if let Err(error) = self.write_session_input_recorded(session_id, &bytes) {
-            self.terminal_status = format!("mouse report failed: {error}");
-            cx.notify();
+            if self.set_terminal_status_if_changed(format!("mouse report failed: {error}")) {
+                cx.notify();
+            }
             return MouseReportWriteResult::Failed;
         }
         MouseReportWriteResult::Sent
