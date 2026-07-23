@@ -470,10 +470,10 @@ impl TerminalSurface {
         self.has_new_while_scrolled = has_new_while_scrolled;
         self.performance_overlay = performance_overlay;
         self.skipped_output_chars = skipped_output_chars;
-        self.decorations = Arc::from(Vec::<TerminalLineDecorations>::new());
-        self.selection_visual = None;
-        self.selection_visual_row_range = None;
-        self.has_action_link_decorations = false;
+        // Keep decorations tied to the retained snapshot while the target
+        // scrollback snapshot is still loading. The editor follows the same
+        // stale-until-recomputed rule for highlights: old adornments are better
+        // than a visible flash to an undecorated terminal surface.
         self.show_cursor = false;
         self.revision = self.revision.saturating_add(1);
     }
@@ -2192,6 +2192,15 @@ mod tests {
             color: "#ff0000".to_string(),
             enabled: true,
         }]);
+        surface.set_decorations_and_keywords(
+            vec![TerminalLineDecorations {
+                link_ranges: vec![(1, 3)],
+                ..TerminalLineDecorations::default()
+            }],
+            surface.keyword_rules.clone(),
+            true,
+            "block",
+        );
 
         surface.apply_frame_snapshot(
             snapshot, 0, 0.0, 0, 10, rows, false, None, 0, true, true, "block",
@@ -2201,7 +2210,8 @@ mod tests {
         assert_eq!(surface.display_offset, 0);
         assert!(surface.scroll_snapshot_pending);
         assert!(!surface.keyword_rules.is_empty());
-        assert!(!surface.has_action_link_decorations);
+        assert_eq!(surface.decorations[0].link_ranges, vec![(1, 3)]);
+        assert!(surface.has_action_link_decorations);
         assert_eq!(
             terminal_effective_visual_scroll_offset_px(
                 surface.scroll_snapshot_pending,
