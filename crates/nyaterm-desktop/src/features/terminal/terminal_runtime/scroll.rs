@@ -97,6 +97,16 @@ fn terminal_scroll_residual_clamped_for_offset(
     }
 }
 
+fn terminal_scroll_to_bottom_state_needs_update(
+    scroll_offset: usize,
+    residual_lines: f32,
+    has_new_while_scrolled: bool,
+) -> bool {
+    scroll_offset != 0
+        || has_new_while_scrolled
+        || (residual_lines.is_finite() && residual_lines.abs() >= f32::EPSILON * 8.0)
+}
+
 pub(in crate::features) fn terminal_visual_scroll_active_for_state(
     scroll_offset: usize,
     residual_lines: f32,
@@ -1058,22 +1068,40 @@ impl NyaTermApp {
 
     pub(in crate::features) fn scroll_terminal_to_bottom_state_only(&mut self) -> Option<String> {
         if let Some(session_id) = self.active_session_id.clone() {
+            let residual_lines = self.terminal_scroll_residual_for_session(Some(&session_id));
             if let Some(view) = self.terminal_views.get_mut(&session_id) {
+                let changed = terminal_scroll_to_bottom_state_needs_update(
+                    view.scroll_offset,
+                    residual_lines,
+                    view.has_new_while_scrolled,
+                );
                 view.scroll_offset = 0;
                 view.has_new_while_scrolled = false;
+                self.clear_terminal_scroll_residual_for_session(Some(&session_id));
+                if !changed {
+                    return None;
+                }
+                return Some(session_id);
             }
-            self.clear_terminal_scroll_residual_for_session(Some(&session_id));
-            Some(session_id)
-        } else {
+            let changed = terminal_scroll_to_bottom_state_needs_update(
+                self.terminal_scroll_offset,
+                self.terminal_scroll_residual_for_session(None),
+                false,
+            );
             self.terminal_scroll_offset = 0;
             self.clear_terminal_scroll_residual_for_session(None);
-            None
+            return changed.then_some(session_id);
         }
+        self.terminal_scroll_offset = 0;
+        self.clear_terminal_scroll_residual_for_session(None);
+        None
     }
 
     pub(in crate::features) fn scroll_terminal_to_bottom(&mut self, cx: &mut Context<Self>) {
         let session_id = self.scroll_terminal_to_bottom_state_only();
-        self.notify_terminal_surface_only(session_id.as_deref(), cx);
+        if session_id.is_some() {
+            self.notify_terminal_surface_only(session_id.as_deref(), cx);
+        }
     }
 
     pub(in crate::features) fn scroll_terminal_to_top(&mut self, cx: &mut Context<Self>) {
@@ -1824,6 +1852,23 @@ mod tests {
         assert!(terminal_scroll_should_request_immediate_text_snapshot(
             4, false
         ));
+    }
+
+    #[test]
+    fn terminal_scroll_to_bottom_state_detects_noop_bottom_state() {
+        assert!(!terminal_scroll_to_bottom_state_needs_update(0, 0.0, false));
+        assert!(!terminal_scroll_to_bottom_state_needs_update(
+            0,
+            f32::NAN,
+            false
+        ));
+    }
+
+    #[test]
+    fn terminal_scroll_to_bottom_state_detects_pending_scroll_state() {
+        assert!(terminal_scroll_to_bottom_state_needs_update(2, 0.0, false));
+        assert!(terminal_scroll_to_bottom_state_needs_update(0, 0.25, false));
+        assert!(terminal_scroll_to_bottom_state_needs_update(0, 0.0, true));
     }
 
     #[test]
