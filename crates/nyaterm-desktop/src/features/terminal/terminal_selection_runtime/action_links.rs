@@ -1,4 +1,21 @@
 use super::*;
+use crate::features::terminal_runtime::{
+    TERMINAL_INPUT_LATENCY_WINDOW, TERMINAL_USER_SCROLL_ACTIVE_WINDOW,
+};
+
+fn action_link_hover_should_yield_to_terminal_latency(
+    last_input_at: Option<Instant>,
+    last_user_scroll_at: Option<Instant>,
+    visual_scroll_active: bool,
+    now: Instant,
+) -> bool {
+    last_input_at
+        .is_some_and(|last| now.saturating_duration_since(last) < TERMINAL_INPUT_LATENCY_WINDOW)
+        || (visual_scroll_active
+            && last_user_scroll_at.is_some_and(|last| {
+                now.saturating_duration_since(last) < TERMINAL_USER_SCROLL_ACTIVE_WINDOW
+            }))
+}
 
 impl NyaTermApp {
     pub(in crate::features) fn clear_action_link_tooltip(&mut self, cx: &mut Context<Self>) {
@@ -56,6 +73,25 @@ impl NyaTermApp {
             || self.terminal_selection_dragging
             || self.translation_dialog.is_some()
         {
+            self.clear_action_link_tooltip(cx);
+            return;
+        }
+        let now = Instant::now();
+        let hover_session = self.terminal_session_at_point(event.position);
+        let hover_session_id = hover_session
+            .as_ref()
+            .and_then(|session| session.as_deref());
+        let visual_scroll_active = hover_session_id
+            .filter(|session_id| !session_id.is_empty())
+            .is_some_and(|session_id| {
+                self.terminal_visual_scroll_active_for_session(Some(session_id))
+            });
+        if action_link_hover_should_yield_to_terminal_latency(
+            self.terminal_runtime.last_terminal_input_at,
+            self.terminal_runtime.last_terminal_user_scroll_at,
+            visual_scroll_active,
+            now,
+        ) {
             self.clear_action_link_tooltip(cx);
             return;
         }
@@ -409,6 +445,48 @@ impl NyaTermApp {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn action_link_hover_yields_to_recent_input() {
+        let now = Instant::now();
+
+        assert!(action_link_hover_should_yield_to_terminal_latency(
+            Some(now),
+            None,
+            false,
+            now,
+        ));
+        assert!(!action_link_hover_should_yield_to_terminal_latency(
+            Some(now - TERMINAL_INPUT_LATENCY_WINDOW - Duration::from_millis(1)),
+            None,
+            false,
+            now,
+        ));
+    }
+
+    #[test]
+    fn action_link_hover_yields_to_recent_visual_scroll_only_for_scrolled_surface() {
+        let now = Instant::now();
+
+        assert!(action_link_hover_should_yield_to_terminal_latency(
+            None,
+            Some(now),
+            true,
+            now,
+        ));
+        assert!(!action_link_hover_should_yield_to_terminal_latency(
+            None,
+            Some(now),
+            false,
+            now,
+        ));
+        assert!(!action_link_hover_should_yield_to_terminal_latency(
+            None,
+            Some(now - TERMINAL_USER_SCROLL_ACTIVE_WINDOW - Duration::from_millis(1)),
+            true,
+            now,
+        ));
+    }
 
     fn tooltip(match_key: &str) -> ActionLinkTooltipState {
         ActionLinkTooltipState {
