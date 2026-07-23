@@ -502,6 +502,55 @@ mod layout_cache_tests {
     }
 
     #[test]
+    fn row_layout_key_tracks_precomputed_keyword_presence() {
+        let mut snapshot = TerminalScreen::default().snapshot();
+        snapshot.lines[0] = "ERROR".to_string();
+        snapshot.line_signatures[0] = 7;
+        let keyword_rule = ResolvedKeywordHighlightRule {
+            id: "errors".to_string(),
+            name: "Errors".to_string(),
+            patterns: vec!["ERROR".to_string()],
+            color: "#ff0000".to_string(),
+            enabled: true,
+        };
+        let element = NyaTerminalElement::new(
+            Arc::new(snapshot),
+            Arc::new(Vec::new()),
+            Vec::new(),
+            false,
+            "block",
+            8.0,
+            16.0,
+            nyaterm_ui::theme_palette("github-dark"),
+            "monospace".to_string(),
+            14.0,
+            400.0,
+            700.0,
+        );
+        let decorations = TerminalLineDecorations::default();
+        let keyword_rules_key = terminal_keyword_rules_key(&[keyword_rule]);
+
+        assert_ne!(
+            element.row_layout_key_with_keyword_key(
+                0,
+                "ERROR",
+                None,
+                &decorations,
+                keyword_rules_key,
+                false,
+            ),
+            element.row_layout_key_with_keyword_key(
+                0,
+                "ERROR",
+                None,
+                &decorations,
+                keyword_rules_key,
+                true,
+            ),
+        );
+    }
+
+    #[test]
     fn terminal_glyph_decorations_detects_glyph_only_work() {
         assert!(!terminal_glyph_decorations_needed(
             &TerminalLineDecorations::default()
@@ -800,6 +849,7 @@ impl NyaTerminalElement {
             ansi_spans,
             decorations,
             self.keyword_rules_key(),
+            false,
         )
     }
 
@@ -811,6 +861,7 @@ impl NyaTerminalElement {
         ansi_spans: Option<&[nyaterm_terminal::StyledSpan]>,
         decorations: &TerminalLineDecorations,
         keyword_rules_key: u64,
+        keyword_spans_present: bool,
     ) -> u64 {
         let paint_style_key = self.paint_style_key(keyword_rules_key);
         let mut hasher = DefaultHasher::new();
@@ -823,6 +874,7 @@ impl NyaTerminalElement {
             hash_styled_spans(ansi_spans, &mut hasher);
         }
         hash_stable_glyph_decorations(decorations, &mut hasher);
+        keyword_spans_present.hash(&mut hasher);
         paint_style_key.hash(&mut hasher);
         hasher.finish()
     }
@@ -1123,6 +1175,7 @@ impl Element for NyaTerminalElement {
                     )
                 })
             });
+            let keyword_spans_present = keyword_spans.is_some();
             let default_decorations;
             let decorations = if let Some(decorations) = self.decorations.get(row) {
                 decorations
@@ -1179,6 +1232,7 @@ impl Element for NyaTerminalElement {
                 hash_styled_spans(ansi, &mut row_key_hasher);
             }
             hash_stable_glyph_decorations(decorations, &mut row_key_hasher);
+            keyword_spans_present.hash(&mut row_key_hasher);
             paint_style_key.hash(&mut row_key_hasher);
             let row_key = row_key_hasher.finish();
             let build_row = |window: &mut Window| {
