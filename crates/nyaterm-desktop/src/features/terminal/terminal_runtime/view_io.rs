@@ -2343,14 +2343,31 @@ impl NyaTermApp {
         let has_new = view.has_new_while_scrolled;
         let performance_overlay = view.performance_overlay;
         let skipped = view.skipped_output_chars;
-        let can_reuse_snapshot = {
+        let desired_scroll_state = TerminalScrollVisualState {
+            session_id: session_id.to_string(),
+            scroll_offset,
+            scroll_residual_lines,
+            display_offset,
+            scrollback_len,
+            viewport_rows,
+            has_new_while_scrolled: has_new,
+            performance_overlay,
+            skipped_output_chars: skipped,
+        };
+        let (can_reuse_snapshot, scroll_state_current) = {
             let surface = surface.read(cx);
-            surface.has_snapshot_covering_display_offset(
-                display_offset,
-                viewport_rows,
-                scrollback_len,
+            (
+                surface.has_snapshot_covering_display_offset(
+                    display_offset,
+                    viewport_rows,
+                    scrollback_len,
+                ),
+                surface.scroll_visual_state_matches(&desired_scroll_state),
             )
         };
+        if can_reuse_snapshot && scroll_state_current {
+            return;
+        }
         if !can_reuse_snapshot {
             if display_offset > 0 {
                 self.request_terminal_frame_snapshot_for_user_scroll(session_id, display_offset);
@@ -2475,14 +2492,31 @@ impl NyaTermApp {
         let has_new = view.has_new_while_scrolled;
         let performance_overlay = view.performance_overlay;
         let skipped = view.skipped_output_chars;
-        let can_reuse_snapshot = {
+        let desired_scroll_state = TerminalScrollVisualState {
+            session_id: session_id.to_string(),
+            scroll_offset,
+            scroll_residual_lines,
+            display_offset,
+            scrollback_len,
+            viewport_rows,
+            has_new_while_scrolled: has_new,
+            performance_overlay,
+            skipped_output_chars: skipped,
+        };
+        let (can_reuse_snapshot, scroll_state_current) = {
             let surface = surface.read(cx);
-            surface.has_snapshot_covering_display_offset(
-                display_offset,
-                viewport_rows,
-                scrollback_len,
+            (
+                surface.has_snapshot_covering_display_offset(
+                    display_offset,
+                    viewport_rows,
+                    scrollback_len,
+                ),
+                surface.scroll_visual_state_matches(&desired_scroll_state),
             )
         };
+        if can_reuse_snapshot && scroll_state_current {
+            return;
+        }
         if !can_reuse_snapshot && display_offset > 0 {
             self.request_terminal_frame_snapshot_for_user_scroll(session_id, display_offset);
         }
