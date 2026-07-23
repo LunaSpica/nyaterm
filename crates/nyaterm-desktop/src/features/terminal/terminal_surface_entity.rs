@@ -1193,6 +1193,20 @@ impl TerminalSurface {
         terminal_visual_scroll_active_for_state(self.scroll_offset, self.scroll_residual_lines)
     }
 
+    pub(in crate::features) fn scroll_visual_state_matches(
+        &self,
+        state: &TerminalScrollVisualState,
+    ) -> bool {
+        self.scroll_offset == state.scroll_offset
+            && (self.scroll_residual_lines - state.scroll_residual_lines).abs() < f32::EPSILON * 8.0
+            && self.display_offset == state.display_offset
+            && self.scrollback_len == state.scrollback_len
+            && self.viewport_rows == state.viewport_rows
+            && self.has_new_while_scrolled == state.has_new_while_scrolled
+            && self.performance_overlay == state.performance_overlay
+            && self.skipped_output_chars == state.skipped_output_chars
+    }
+
     fn defer_surface_repaint(
         app: Entity<NyaTermApp>,
         session_id: Option<String>,
@@ -1230,6 +1244,9 @@ impl TerminalSurface {
         &mut self,
         state: TerminalScrollVisualState,
     ) -> bool {
+        if self.scroll_visual_state_matches(&state) {
+            return false;
+        }
         if self.has_snapshot_covering_display_offset(
             state.display_offset,
             state.viewport_rows,
@@ -2279,6 +2296,31 @@ mod tests {
             key,
             terminal_keyword_highlight_request_key(&edited_snapshot, rules_key)
         );
+    }
+
+    #[test]
+    fn applying_identical_scroll_visual_state_is_a_noop() {
+        let snapshot = Arc::new(TerminalScreen::default().viewport_snapshot(0));
+        let rows = snapshot.rows;
+        let mut surface = TerminalSurface::new("session");
+        surface.apply_frame_snapshot(
+            snapshot, 0, 0.0, 0, 10, rows, false, None, 0, false, false, "block",
+        );
+        let state = TerminalScrollVisualState {
+            session_id: "session".to_string(),
+            scroll_offset: 0,
+            scroll_residual_lines: 0.0,
+            display_offset: 0,
+            scrollback_len: 10,
+            viewport_rows: rows,
+            has_new_while_scrolled: false,
+            performance_overlay: None,
+            skipped_output_chars: 0,
+        };
+        let revision_before = surface.revision;
+
+        assert!(!surface.apply_scroll_visual_state(state));
+        assert_eq!(surface.revision, revision_before);
     }
 
     #[test]
