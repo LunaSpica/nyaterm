@@ -23,6 +23,11 @@ fn terminal_live_scrollback_prefetch_offset(view: &TerminalViewState) -> Option<
     )
 }
 
+fn terminal_live_scrollback_prefetch_request_offset(view: &TerminalViewState) -> Option<usize> {
+    let offset = terminal_live_scrollback_prefetch_offset(view)?;
+    (!terminal_view_has_cached_scrollback_snapshot_covering_offset(view, offset)).then_some(offset)
+}
+
 fn terminal_view_has_cached_scrollback_snapshot_covering_offset(
     view: &TerminalViewState,
     offset: usize,
@@ -249,7 +254,7 @@ impl NyaTermApp {
         let Some(view) = self.terminal_views.get_mut(session_id) else {
             return false;
         };
-        let Some(offset) = terminal_live_scrollback_prefetch_offset(view) else {
+        let Some(offset) = terminal_live_scrollback_prefetch_request_offset(view) else {
             return false;
         };
         if !view.pending_snapshot_offsets.insert(offset) {
@@ -1780,6 +1785,23 @@ mod frame_event_queue_tests {
         view.frame_snapshot = Some(std::sync::Arc::new(view.screen.viewport_snapshot(0)));
         view.scroll_offset = 1;
         assert_eq!(terminal_live_scrollback_prefetch_offset(&view), None);
+    }
+
+    #[test]
+    fn terminal_live_scrollback_prefetch_skips_cached_target_window() {
+        let mut view = terminal_view_with_scrollback(0);
+        view.frame_snapshot = Some(std::sync::Arc::new(view.screen.viewport_snapshot(0)));
+        let offset = terminal_live_scrollback_prefetch_offset(&view).expect("prefetch offset");
+        view.scrollback_snapshots.insert(
+            offset,
+            std::sync::Arc::new(view.screen.viewport_snapshot(offset)),
+        );
+
+        assert!(terminal_view_has_cached_scrollback_snapshot_covering_offset(&view, offset));
+        assert_eq!(
+            terminal_live_scrollback_prefetch_request_offset(&view),
+            None
+        );
     }
 
     #[test]
