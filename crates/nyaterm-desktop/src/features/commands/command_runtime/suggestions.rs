@@ -570,7 +570,7 @@ impl NyaTermApp {
             .map(|state| state.selected_index.min(results.len().saturating_sub(1)))
             .unwrap_or(0);
         let update_started_at = Instant::now();
-        self.command_suggestions = Some(CommandSuggestionState {
+        let next_state = CommandSuggestionState {
             session_id,
             draft: pattern,
             items: results
@@ -586,7 +586,20 @@ impl NyaTermApp {
             selected_index,
             cursor_row,
             cursor_col,
-        });
+        };
+        if !command_suggestion_state_changed(self.command_suggestions.as_ref(), &next_state) {
+            timing.update_state = update_started_at.elapsed();
+            self.log_command_suggestion_refresh_diagnostic(
+                started_at,
+                popup_visible_at_start,
+                "unchanged",
+                pattern_chars,
+                result_count,
+                timing,
+            );
+            return;
+        }
+        self.command_suggestions = Some(next_state);
         timing.update_state = update_started_at.elapsed();
         cx.notify();
         self.log_command_suggestion_refresh_diagnostic(
@@ -1077,6 +1090,13 @@ impl NyaTermApp {
     }
 }
 
+fn command_suggestion_state_changed(
+    current: Option<&CommandSuggestionState>,
+    next: &CommandSuggestionState,
+) -> bool {
+    current != Some(next)
+}
+
 pub(in crate::features) fn suggestion_overlay_position(
     bounds: Bounds<Pixels>,
     cell_size: (f32, f32),
@@ -1224,6 +1244,30 @@ mod tests {
         };
         assert!(!command_suggestion_input_obvious_pager_prefix(&state));
         assert_eq!(command_suggestion_input_candidate_chars(&state), 10);
+    }
+
+    #[test]
+    fn command_suggestion_state_change_skips_identical_overlay() {
+        let state = CommandSuggestionState {
+            session_id: "session".to_string(),
+            draft: "git".to_string(),
+            items: vec![CommandSuggestionItem {
+                command: "git status".to_string(),
+                display: "git status".to_string(),
+                source: "history".to_string(),
+                score: 42,
+                indices: vec![0, 1, 2],
+            }],
+            selected_index: 0,
+            cursor_row: 3,
+            cursor_col: 4,
+        };
+        let mut selected = state.clone();
+        selected.selected_index = 1;
+
+        assert!(!command_suggestion_state_changed(Some(&state), &state));
+        assert!(command_suggestion_state_changed(None, &state));
+        assert!(command_suggestion_state_changed(Some(&state), &selected));
     }
 
     #[test]
