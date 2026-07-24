@@ -81,10 +81,9 @@ impl NyaTermApp {
             let snapshot_row = selection
                 .viewport_anchor_row
                 .checked_add(row)
-                .filter(|row| *row < snapshot.lines.len());
+                .filter(|row| *row < snapshot.row_count());
             let line = snapshot_row
-                .and_then(|row| snapshot.lines.get(row))
-                .map(String::as_str)
+                .and_then(|row| snapshot.line(row))
                 .unwrap_or("");
             let cells = terminal_text_cells(line);
             let (col_start, col_end_excl) = selection.cols_for_row(row)?;
@@ -418,10 +417,9 @@ impl NyaTermApp {
     ) -> (usize, usize) {
         let snapshot_row = viewport_anchor_row
             .checked_add(cell.row)
-            .filter(|row| *row < snapshot.lines.len());
+            .filter(|row| *row < snapshot.row_count());
         let line = snapshot_row
-            .and_then(|row| snapshot.lines.get(row))
-            .map(String::as_str)
+            .and_then(|row| snapshot.line(row))
             .unwrap_or("");
         let cells = terminal_text_cells(line);
         if cells.is_empty() {

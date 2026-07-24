@@ -94,12 +94,12 @@ impl NyaTermApp {
         let offset = self.active_terminal_display_offset();
         let snapshot =
             self.terminal_snapshot_for_session(self.active_session_id.as_deref(), offset);
-        let row = if snapshot.cursor_row == usize::MAX {
-            snapshot.lines.len().saturating_sub(1)
+        let row = if snapshot.cursor.row == usize::MAX {
+            snapshot.row_count().saturating_sub(1)
         } else {
-            snapshot.cursor_row
+            snapshot.cursor.row
         };
-        (row, snapshot.cursor_col)
+        (row, snapshot.cursor.col)
     }
 
     pub(in crate::features) fn drain_pending_credential_autofill_detection(
@@ -727,7 +727,15 @@ fn credential_autofill_prompt_text_from_snapshot(snapshot: &TerminalSnapshot) ->
 }
 
 fn credential_autofill_prompt_line_from_snapshot(snapshot: &TerminalSnapshot) -> Option<&str> {
-    credential_autofill_prompt_line_from_viewport(&snapshot.lines, snapshot.cursor_row)
+    if snapshot.cursor.row != usize::MAX {
+        return snapshot.line(snapshot.cursor.row);
+    }
+    snapshot
+        .rows()
+        .iter()
+        .rev()
+        .find(|row| !row.text.trim().is_empty())
+        .map(|row| row.text.as_str())
 }
 
 fn credential_autofill_prompt_line_from_viewport(

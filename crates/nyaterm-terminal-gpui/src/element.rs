@@ -230,6 +230,15 @@ impl NyaTerminalLayoutCache {
 mod layout_cache_tests {
     use super::*;
 
+    fn edit_snapshot_row(
+        snapshot: &mut TerminalSnapshot,
+        row: usize,
+        edit: impl FnOnce(&mut nyaterm_terminal::TerminalSnapshotRow),
+    ) {
+        let rows = Arc::make_mut(&mut snapshot.row_data);
+        edit(Arc::make_mut(&mut rows[row]));
+    }
+
     #[test]
     fn shaped_line_cache_reuses_matching_row_key() {
         let mut cache = NyaTerminalLayoutCache::default();
@@ -379,23 +388,6 @@ mod layout_cache_tests {
 
     #[test]
     fn row_layout_key_falls_back_to_styled_spans_without_signature() {
-        let mut snapshot = TerminalScreen::default().snapshot();
-        snapshot.lines[0] = "same".to_string();
-        snapshot.line_signatures.clear();
-        let element = NyaTerminalElement::new(
-            Arc::new(snapshot),
-            Arc::new(Vec::new()),
-            Vec::new(),
-            false,
-            "block",
-            8.0,
-            16.0,
-            nyaterm_ui::theme_palette("github-dark"),
-            "monospace".to_string(),
-            14.0,
-            400.0,
-            700.0,
-        );
         let decorations = TerminalLineDecorations::default();
         let plain = vec![nyaterm_terminal::StyledSpan {
             text: "same".to_string(),
@@ -411,17 +403,17 @@ mod layout_cache_tests {
         }];
 
         assert_ne!(
-            element.row_layout_key(0, "same", Some(&plain), &decorations),
-            element.row_layout_key(0, "same", Some(&bold), &decorations)
+            terminal_row_layout_key(None, "same", Some(&plain), &decorations, false, 0),
+            terminal_row_layout_key(None, "same", Some(&bold), &decorations, false, 0)
         );
     }
 
     #[test]
     fn row_layout_key_uses_authoritative_line_signature() {
         let mut first_snapshot = TerminalScreen::default().snapshot();
-        first_snapshot.line_signatures[0] = 7;
+        edit_snapshot_row(&mut first_snapshot, 0, |row| row.signature = 7);
         let mut second_snapshot = first_snapshot.clone();
-        second_snapshot.line_signatures[0] = 8;
+        edit_snapshot_row(&mut second_snapshot, 0, |row| row.signature = 8);
         let make_element = |snapshot| {
             NyaTerminalElement::new(
                 Arc::new(snapshot),
@@ -451,8 +443,10 @@ mod layout_cache_tests {
     #[test]
     fn row_layout_key_tracks_cell_width() {
         let mut snapshot = TerminalScreen::default().snapshot();
-        snapshot.lines[0] = "same".to_string();
-        snapshot.line_signatures[0] = 7;
+        edit_snapshot_row(&mut snapshot, 0, |row| {
+            row.text = "same".to_string();
+            row.signature = 7;
+        });
         let make_element = |cell_width| {
             NyaTerminalElement::new(
                 Arc::new(snapshot.clone()),
@@ -482,8 +476,10 @@ mod layout_cache_tests {
     #[test]
     fn row_layout_key_ignores_dynamic_overlay_decorations() {
         let mut snapshot = TerminalScreen::default().snapshot();
-        snapshot.lines[0] = "same".to_string();
-        snapshot.line_signatures[0] = 7;
+        edit_snapshot_row(&mut snapshot, 0, |row| {
+            row.text = "same".to_string();
+            row.signature = 7;
+        });
         let element = NyaTerminalElement::new(
             Arc::new(snapshot),
             Arc::new(Vec::new()),
@@ -515,8 +511,10 @@ mod layout_cache_tests {
     #[test]
     fn row_layout_key_tracks_active_search_glyph_decorations() {
         let mut snapshot = TerminalScreen::default().snapshot();
-        snapshot.lines[0] = "same".to_string();
-        snapshot.line_signatures[0] = 7;
+        edit_snapshot_row(&mut snapshot, 0, |row| {
+            row.text = "same".to_string();
+            row.signature = 7;
+        });
         let element = NyaTerminalElement::new(
             Arc::new(snapshot),
             Arc::new(Vec::new()),
@@ -611,8 +609,10 @@ mod layout_cache_tests {
     #[test]
     fn row_layout_key_tracks_link_glyph_decorations() {
         let mut snapshot = TerminalScreen::default().snapshot();
-        snapshot.lines[0] = "same".to_string();
-        snapshot.line_signatures[0] = 7;
+        edit_snapshot_row(&mut snapshot, 0, |row| {
+            row.text = "same".to_string();
+            row.signature = 7;
+        });
         let element = NyaTerminalElement::new(
             Arc::new(snapshot),
             Arc::new(Vec::new()),
@@ -642,8 +642,10 @@ mod layout_cache_tests {
     #[test]
     fn row_layout_key_tracks_precomputed_keyword_presence() {
         let mut snapshot = TerminalScreen::default().snapshot();
-        snapshot.lines[0] = "ERROR".to_string();
-        snapshot.line_signatures[0] = 7;
+        edit_snapshot_row(&mut snapshot, 0, |row| {
+            row.text = "ERROR".to_string();
+            row.signature = 7;
+        });
         let keyword_rule = ResolvedKeywordHighlightRule {
             id: "errors".to_string(),
             name: "Errors".to_string(),
@@ -691,12 +693,15 @@ mod layout_cache_tests {
     #[test]
     fn precomputed_keyword_match_does_not_reuse_plain_pending_row() {
         let mut snapshot = TerminalScreen::default().snapshot();
-        snapshot.lines[0] = "ERROR".to_string();
-        snapshot.styled_lines[0] = vec![nyaterm_terminal::StyledSpan {
-            text: "ERROR".to_string(),
-            style: nyaterm_terminal::CellStyle::default(),
-        }];
-        snapshot.line_signatures[0] = 7;
+        edit_snapshot_row(&mut snapshot, 0, |row| {
+            row.text = "ERROR".to_string();
+            row.styled_spans = vec![nyaterm_terminal::StyledSpan {
+                text: "ERROR".to_string(),
+                style: nyaterm_terminal::CellStyle::default(),
+            }]
+            .into_boxed_slice();
+            row.signature = 7;
+        });
         let rules = vec![ResolvedKeywordHighlightRule {
             id: "errors".to_string(),
             name: "Errors".to_string(),
@@ -742,8 +747,10 @@ mod layout_cache_tests {
     #[test]
     fn row_layout_key_ignores_keyword_rules_for_known_empty_keyword_rows() {
         let mut snapshot = TerminalScreen::default().snapshot();
-        snapshot.lines[0] = "plain".to_string();
-        snapshot.line_signatures[0] = 7;
+        edit_snapshot_row(&mut snapshot, 0, |row| {
+            row.text = "plain".to_string();
+            row.signature = 7;
+        });
         let element = NyaTerminalElement::new(
             Arc::new(snapshot),
             Arc::new(Vec::new()),
@@ -785,8 +792,10 @@ mod layout_cache_tests {
     #[test]
     fn row_layout_key_keeps_keyword_rules_for_pending_keyword_rows() {
         let mut snapshot = TerminalScreen::default().snapshot();
-        snapshot.lines[0] = "plain".to_string();
-        snapshot.line_signatures[0] = 7;
+        edit_snapshot_row(&mut snapshot, 0, |row| {
+            row.text = "plain".to_string();
+            row.signature = 7;
+        });
         let element = NyaTerminalElement::new(
             Arc::new(snapshot),
             Arc::new(Vec::new()),
@@ -991,13 +1000,13 @@ mod layout_cache_tests {
     #[test]
     fn concealed_cursor_cell_suppresses_cursor_glyph() {
         let mut snapshot = TerminalScreen::default().snapshot();
-        snapshot.cursor_row = 0;
-        snapshot.cursor_col = 0;
-        snapshot.cells[0].style.hidden = true;
+        snapshot.cursor.row = 0;
+        snapshot.cursor.col = 0;
+        edit_snapshot_row(&mut snapshot, 0, |row| row.cells[0].style.hidden = true);
 
         assert!(terminal_cursor_cell_hidden(&snapshot));
 
-        snapshot.cells[0].style.hidden = false;
+        edit_snapshot_row(&mut snapshot, 0, |row| row.cells[0].style.hidden = false);
         assert!(!terminal_cursor_cell_hidden(&snapshot));
     }
 }
@@ -1183,7 +1192,7 @@ impl NyaTerminalElement {
             terminal_effective_keyword_rules_key(keyword_rules_key, keyword_result_known_empty);
         let paint_style_key = self.paint_style_key(effective_keyword_rules_key);
         terminal_row_layout_key(
-            self.snapshot.line_signatures.get(row).copied(),
+            self.snapshot.row(row).map(|row| row.signature),
             display_line,
             ansi_spans,
             decorations,
@@ -1228,22 +1237,18 @@ impl NyaTerminalElement {
         keyword_paint_style_key: u64,
         empty_keyword_paint_style_key: u64,
     ) -> (u64, Option<u64>) {
-        let line = self
-            .snapshot
-            .lines
-            .get(row)
-            .map(String::as_str)
-            .unwrap_or("");
+        let snapshot_row = self.snapshot.row(row);
+        let line = snapshot_row.map(|row| row.text.as_str()).unwrap_or("");
         let display_line = if line.is_empty() { " " } else { line };
-        let ansi = self.snapshot.styled_lines.get(row).map(Vec::as_slice);
-        let line_signature = self.snapshot.line_signatures.get(row).copied();
+        let ansi = snapshot_row.map(|row| row.styled_spans.as_ref());
+        let line_signature = snapshot_row.map(|row| row.signature);
         let keyword_lookup = self.keyword_highlights.as_ref().and_then(|highlights| {
             highlights.lookup(row, line_signature).or_else(|| {
                 highlights.stale_lookup(
                     row,
                     line_signature,
                     self.snapshot.display_offset,
-                    self.snapshot.rows,
+                    self.snapshot.row_count(),
                 )
             })
         });
@@ -1330,10 +1335,7 @@ fn hash_styled_spans<H: Hasher>(
 
 fn terminal_cursor_cell_hidden(snapshot: &TerminalSnapshot) -> bool {
     snapshot
-        .cursor_row
-        .checked_mul(snapshot.cols)
-        .and_then(|row_start| row_start.checked_add(snapshot.cursor_col))
-        .and_then(|index| snapshot.cells.get(index))
+        .cell(snapshot.cursor.row, snapshot.cursor.col)
         .is_some_and(|cell| cell.style.hidden)
 }
 
@@ -1527,7 +1529,7 @@ impl Element for NyaTerminalElement {
         } else {
             px(terminal_layout_height_px(
                 self.cell_height,
-                self.snapshot.rows,
+                self.snapshot.row_count(),
                 self.layout_rows,
             ))
             .into()
@@ -1588,7 +1590,7 @@ impl Element for NyaTerminalElement {
             bounds,
             visible_bounds,
             cell_h,
-            self.snapshot.rows,
+            self.snapshot.row_count(),
             visual_y_offset,
         );
         let visible_row_start = visible_rows.start;
@@ -1599,7 +1601,7 @@ impl Element for NyaTerminalElement {
         // Any changed visible row suppresses this work, keeping input/output
         // latency ahead of speculative scroll preparation.
         let prefetch_row = layout_cache.as_deref().and_then(|cache| {
-            terminal_layout_prefetch_row(visible_rows.clone(), self.snapshot.rows, |row| {
+            terminal_layout_prefetch_row(visible_rows.clone(), self.snapshot.row_count(), |row| {
                 let (key, reuse_key) = self.row_layout_cache_keys(
                     row,
                     keyword_paint_style_key,
@@ -1615,22 +1617,18 @@ impl Element for NyaTerminalElement {
         }
         for row in rows_to_prepare {
             let row_is_visible = row >= visible_row_start && row < visible_row_end;
-            let line = self
-                .snapshot
-                .lines
-                .get(row)
-                .map(String::as_str)
-                .unwrap_or("");
+            let snapshot_row = self.snapshot.row(row);
+            let line = snapshot_row.map(|row| row.text.as_str()).unwrap_or("");
             let display_line = if line.is_empty() { " " } else { line };
-            let ansi = self.snapshot.styled_lines.get(row).map(Vec::as_slice);
-            let line_signature = self.snapshot.line_signatures.get(row).copied();
+            let ansi = snapshot_row.map(|row| row.styled_spans.as_ref());
+            let line_signature = snapshot_row.map(|row| row.signature);
             let keyword_lookup = self.keyword_highlights.as_ref().and_then(|highlights| {
                 highlights.lookup(row, line_signature).or_else(|| {
                     highlights.stale_lookup(
                         row,
                         line_signature,
                         self.snapshot.display_offset,
-                        self.snapshot.rows,
+                        self.snapshot.row_count(),
                     )
                 })
             });
@@ -1949,22 +1947,22 @@ impl Element for NyaTerminalElement {
         }
 
         if self.show_cursor
-            && self.snapshot.cursor_row < self.snapshot.rows
-            && self.snapshot.cursor_col < self.snapshot.cols.max(1)
-            && self.snapshot.cursor_row >= visible_row_start
-            && self.snapshot.cursor_row < visible_row_end
+            && self.snapshot.cursor.row < self.snapshot.row_count()
+            && self.snapshot.cursor.col < self.snapshot.cols.max(1)
+            && self.snapshot.cursor.row >= visible_row_start
+            && self.snapshot.cursor.row < visible_row_end
         {
             let left =
-                (f32::from(bounds.left()) + self.snapshot.cursor_col as f32 * cell_w).floor();
+                (f32::from(bounds.left()) + self.snapshot.cursor.col as f32 * cell_w).floor();
             let top = (f32::from(bounds.top())
                 + visual_y_offset
-                + self.snapshot.cursor_row as f32 * cell_h)
+                + self.snapshot.cursor.row as f32 * cell_h)
                 .floor();
             let right =
-                (f32::from(bounds.left()) + (self.snapshot.cursor_col + 1) as f32 * cell_w).ceil();
+                (f32::from(bounds.left()) + (self.snapshot.cursor.col + 1) as f32 * cell_w).ceil();
             let bottom = (f32::from(bounds.top())
                 + visual_y_offset
-                + (self.snapshot.cursor_row + 1) as f32 * cell_h)
+                + (self.snapshot.cursor.row + 1) as f32 * cell_h)
                 .ceil();
             let x = px(left);
             let y = px(top);
@@ -1982,13 +1980,8 @@ impl Element for NyaTerminalElement {
                 && self.cursor_style.as_str() != "underline"
                 && !terminal_cursor_cell_hidden(&self.snapshot)
             {
-                let cursor_line = self
-                    .snapshot
-                    .lines
-                    .get(self.snapshot.cursor_row)
-                    .map(String::as_str)
-                    .unwrap_or("");
-                let cursor_text = terminal_cell_text_at_col(cursor_line, self.snapshot.cursor_col);
+                let cursor_line = self.snapshot.line(self.snapshot.cursor.row).unwrap_or("");
+                let cursor_text = terminal_cell_text_at_col(cursor_line, self.snapshot.cursor.col);
                 let cursor_runs = vec![TextRun {
                     len: cursor_text.len().max(1),
                     font: terminal_run_font(
@@ -2058,9 +2051,9 @@ impl Element for NyaTerminalElement {
                 visible_row_start,
                 visible_row_end,
                 visible_row_count,
-                snapshot_rows = self.snapshot.rows,
+                snapshot_rows = self.snapshot.row_count(),
                 snapshot_cols = self.snapshot.cols,
-                styled_lines = self.snapshot.styled_lines.len(),
+                styled_lines = self.snapshot.row_count(),
                 decorations = self.decorations.len(),
                 keyword_rules = self.keyword_rules.len(),
                 images = self.snapshot.images.len(),
@@ -2170,7 +2163,7 @@ impl Element for NyaTerminalElement {
             tracing::warn!(
                 diagnostic = "terminal_element_paint",
                 total_ms = elapsed.as_millis(),
-                snapshot_rows = self.snapshot.rows,
+                snapshot_rows = self.snapshot.row_count(),
                 snapshot_cols = self.snapshot.cols,
                 backgrounds,
                 decoration_backgrounds,

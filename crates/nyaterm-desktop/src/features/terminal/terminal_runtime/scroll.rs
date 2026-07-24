@@ -1404,7 +1404,7 @@ impl NyaTermApp {
                 }
             }
         }
-        let rows = self.terminal_snapshot_for_session(None, 0).lines.len();
+        let rows = self.terminal_snapshot_for_session(None, 0).row_count();
         if rows > 0 { rows } else { 24 }
     }
 

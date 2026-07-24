@@ -28,19 +28,6 @@ const TERMINAL_SURFACE_LOCAL_SCROLL_SYNC_DELAY: Duration = Duration::from_millis
 const TERMINAL_KEYWORD_HIGHLIGHT_PREFETCH_VIEWPORTS: usize = 2;
 
 #[derive(Clone)]
-struct TerminalSurfaceRetainedRow {
-    cols: usize,
-    cells: Vec<nyaterm_terminal::RenderCell>,
-    line: String,
-    styled_line: Vec<nyaterm_terminal::StyledSpan>,
-    line_signature: u64,
-    line_timestamp_ms: Option<u64>,
-    line_wrapped: bool,
-    hyperlink_line: Vec<nyaterm_terminal::HyperlinkSpan>,
-    command_mark: Option<nyaterm_terminal::ShellCommandMark>,
-}
-
-#[derive(Clone)]
 struct TerminalSurfacePendingScrollSync {
     state: TerminalScrollVisualState,
     generation: u64,
@@ -67,13 +54,16 @@ fn terminal_keyword_highlight_request_key(
     rules_key: u64,
     rows: Range<usize>,
 ) -> TerminalKeywordHighlightRequestKey {
-    let row_start = rows.start.min(snapshot.rows);
-    let row_end = rows.end.min(snapshot.rows).max(row_start);
+    let row_start = rows.start.min(snapshot.row_count());
+    let row_end = rows.end.min(snapshot.row_count()).max(row_start);
     let mut hasher = DefaultHasher::new();
     snapshot
-        .line_signatures
+        .rows()
         .get(row_start..row_end)
         .unwrap_or_default()
+        .iter()
+        .map(|row| row.signature)
+        .collect::<Vec<_>>()
         .hash(&mut hasher);
     TerminalKeywordHighlightRequestKey {
         rules_key,
@@ -122,7 +112,7 @@ pub(in crate::features) struct TerminalSurface {
     app: Option<Entity<NyaTermApp>>,
     snapshot: Option<Arc<TerminalSnapshot>>,
     retained_snapshots: Vec<Arc<TerminalSnapshot>>,
-    retained_rows: BTreeMap<usize, TerminalSurfaceRetainedRow>,
+    retained_rows: BTreeMap<usize, Arc<nyaterm_terminal::TerminalSnapshotRow>>,
     keyword_rules: Arc<Vec<nyaterm_core::ResolvedKeywordHighlightRule>>,
     keyword_highlights: Option<Arc<TerminalKeywordHighlightSnapshot>>,
     keyword_highlight_generation: u64,
@@ -245,7 +235,7 @@ impl TerminalSurface {
         Some(TerminalSurfaceHitTestScrollGeometry {
             snapshot_pending: self.scroll_snapshot_pending,
             display_offset: self.display_offset,
-            snapshot_rows: snapshot.rows,
+            snapshot_rows: snapshot.row_count(),
             viewport_anchor_row,
         })
     }
@@ -350,7 +340,7 @@ impl TerminalSurface {
         &mut self,
         snapshot: Arc<TerminalSnapshot>,
     ) -> bool {
-        if snapshot.rows == 0
+        if snapshot.row_count() == 0
             || self.snapshot.as_ref().is_some_and(|current| {
                 current.cols != snapshot.cols
                     || current.viewport_rows != snapshot.viewport_rows
@@ -739,7 +729,7 @@ impl TerminalSurface {
             scrollback_len = self.scrollback_len,
             viewport_rows = self.viewport_rows,
             snapshot_display_offset = snapshot.display_offset,
-            snapshot_rows = snapshot.rows,
+            snapshot_rows = snapshot.row_count(),
             snapshot_total_rows = snapshot.total_rows,
             retained_snapshots = self.retained_snapshots.len(),
             retained_rows = self.retained_rows.len(),
@@ -749,14 +739,14 @@ impl TerminalSurface {
     }
 
     fn remember_retained_snapshot(&mut self, snapshot: Arc<TerminalSnapshot>) {
-        if snapshot.rows == 0 {
+        if snapshot.row_count() == 0 {
             return;
         }
         self.remember_retained_snapshot_rows(snapshot.as_ref());
         self.retained_snapshots.retain(|retained| {
             !(retained.display_offset == snapshot.display_offset
                 && retained.total_rows == snapshot.total_rows
-                && retained.rows == snapshot.rows)
+                && retained.row_count() == snapshot.row_count())
         });
         self.retained_snapshots.push(snapshot);
         let excess = self
@@ -773,20 +763,19 @@ impl TerminalSurface {
             return 0;
         };
         let mut refreshed_rows = 0usize;
-        for row in 0..snapshot.rows {
+        for row in 0..snapshot.row_count() {
             let Some(abs_row) = start.checked_add(row) else {
                 continue;
             };
+            let Some(snapshot_row) = snapshot.rows().get(row) else {
+                continue;
+            };
             if self.retained_rows.get(&abs_row).is_some_and(|retained| {
-                terminal_surface_retained_row_matches_snapshot(retained, snapshot, row)
+                Arc::ptr_eq(retained, snapshot_row) || retained.as_ref() == snapshot_row.as_ref()
             }) {
                 continue;
             }
-            let Some(retained_row) = terminal_surface_retained_row_from_snapshot(snapshot, row)
-            else {
-                continue;
-            };
-            self.retained_rows.insert(abs_row, retained_row);
+            self.retained_rows.insert(abs_row, Arc::clone(snapshot_row));
             refreshed_rows = refreshed_rows.saturating_add(1);
         }
         while self.retained_rows.len() > TERMINAL_SURFACE_RETAINED_ROW_LIMIT {
@@ -851,14 +840,14 @@ impl TerminalSurface {
         let Some(first_row) = self.retained_rows.get(&desired_start) else {
             return false;
         };
-        let cols = first_row.cols;
+        let cols = first_row.cells.len();
         if cols == 0 {
             return false;
         }
         (desired_start..desired_end).all(|abs_row| {
             self.retained_rows
                 .get(&abs_row)
-                .is_some_and(|row| row.cols == cols && row.cells.len() == cols)
+                .is_some_and(|row| row.cells.len() == cols)
         })
     }
 
@@ -894,9 +883,9 @@ impl TerminalSurface {
                 .chain(self.retained_snapshots.iter())
                 .any(|snapshot| {
                     terminal_snapshot_row_for_absolute_row(snapshot, abs_row).is_some_and(|row| {
-                        let cell_start = row.saturating_mul(cols);
-                        let cell_end = cell_start.saturating_add(cols);
-                        snapshot.cells.get(cell_start..cell_end).is_some()
+                        snapshot
+                            .row(row)
+                            .is_some_and(|snapshot_row| snapshot_row.cells.len() == cols)
                     })
                 })
         })
@@ -986,67 +975,22 @@ impl TerminalSurface {
         window_end: usize,
     ) -> Option<Arc<TerminalSnapshot>> {
         let first_row = self.retained_rows.get(&window_start)?;
-        let cols = first_row.cols;
+        let cols = first_row.cells.len();
         let rows = window_end.checked_sub(window_start)?;
         if cols == 0 || rows < viewport_rows.max(1) {
             return None;
         }
         let real_total_rows = scrollback_len.saturating_add(viewport_rows);
         let display_offset = real_total_rows.checked_sub(window_end)?;
-        let mut cells = Vec::with_capacity(rows.saturating_mul(cols));
-        let mut lines = Vec::with_capacity(rows);
-        let mut styled_lines = Vec::with_capacity(rows);
-        let mut line_signatures = Vec::with_capacity(rows);
-        let mut line_timestamps_ms = Vec::with_capacity(rows);
-        let mut line_wrapped = Vec::with_capacity(rows);
-        let mut hyperlink_lines = Vec::with_capacity(rows);
-        let mut command_marks = Vec::with_capacity(rows);
+        let mut row_data = Vec::with_capacity(rows);
 
         for abs_row in window_start..window_end {
             let row = self.retained_rows.get(&abs_row)?;
-            if row.cols != cols || row.cells.len() != cols {
+            if row.cells.len() != cols {
                 return None;
             }
-            cells.extend_from_slice(&row.cells);
-            lines.push(row.line.clone());
-            styled_lines.push(row.styled_line.clone());
-            line_signatures.push(row.line_signature);
-            line_timestamps_ms.push(row.line_timestamp_ms);
-            line_wrapped.push(row.line_wrapped);
-            hyperlink_lines.push(row.hyperlink_line.clone());
-            command_marks.push(row.command_mark);
+            row_data.push(Arc::clone(row));
         }
-
-        let row_data = cells
-            .chunks_exact(cols)
-            .zip(lines)
-            .zip(styled_lines)
-            .zip(line_signatures)
-            .zip(line_timestamps_ms)
-            .zip(line_wrapped)
-            .zip(hyperlink_lines)
-            .zip(command_marks)
-            .map(
-                |(
-                    (
-                        (((((cells, text), styled_spans), signature), timestamp_ms), wrapped),
-                        hyperlinks,
-                    ),
-                    command_mark,
-                )| {
-                    Arc::new(nyaterm_terminal::TerminalSnapshotRow {
-                        cells: cells.to_vec().into_boxed_slice(),
-                        text,
-                        styled_spans: styled_spans.into_boxed_slice(),
-                        signature,
-                        timestamp_ms,
-                        wrapped,
-                        hyperlinks: hyperlinks.into_boxed_slice(),
-                        command_mark,
-                    })
-                },
-            )
-            .collect::<Vec<_>>();
         Some(Arc::new(TerminalSnapshot::from_rows(
             nyaterm_terminal::TerminalSnapshotMeta {
                 cols,
@@ -1072,11 +1016,11 @@ impl TerminalSurface {
         if !self.retained_rows_cover_absolute_range(desired_start, desired_end) {
             return None;
         }
-        let cols = self.retained_rows.get(&desired_start)?.cols;
+        let cols = self.retained_rows.get(&desired_start)?.cells.len();
         let row_is_compatible = |absolute_row: usize| {
             self.retained_rows
                 .get(&absolute_row)
-                .is_some_and(|row| row.cols == cols && row.cells.len() == cols)
+                .is_some_and(|row| row.cells.len() == cols)
         };
 
         let mut window_start = desired_start;
@@ -1376,7 +1320,7 @@ impl TerminalSurface {
         let Some(snapshot) = self.snapshot.as_ref() else {
             return false;
         };
-        let line_count = snapshot.lines.len();
+        let line_count = snapshot.row_count();
         if line_count == 0 {
             return false;
         }
@@ -2087,11 +2031,11 @@ fn terminal_keyword_highlight_visible_rows(
         viewport_rows,
         scrollback_len,
     );
-    let start = anchor.saturating_sub(1).min(snapshot.rows);
+    let start = anchor.saturating_sub(1).min(snapshot.row_count());
     let end = anchor
         .saturating_add(viewport_rows.max(1))
         .saturating_add(1)
-        .min(snapshot.rows)
+        .min(snapshot.row_count())
         .max(start);
     start..end
 }
@@ -2113,12 +2057,12 @@ fn terminal_keyword_highlight_prefetch_rows(
     let start = anchor
         .saturating_sub(extra_rows)
         .saturating_sub(1)
-        .min(snapshot.rows);
+        .min(snapshot.row_count());
     let end = anchor
         .saturating_add(viewport_rows)
         .saturating_add(extra_rows)
         .saturating_add(1)
-        .min(snapshot.rows)
+        .min(snapshot.row_count())
         .max(start);
     start..end
 }
@@ -2141,59 +2085,6 @@ fn terminal_surface_synthesized_window_extra_rows(viewport_rows: usize) -> usize
         .min(TERMINAL_SURFACE_SYNTHESIZED_WINDOW_MAX_EXTRA_ROWS)
 }
 
-fn terminal_surface_retained_row_matches_snapshot(
-    retained: &TerminalSurfaceRetainedRow,
-    snapshot: &TerminalSnapshot,
-    row: usize,
-) -> bool {
-    retained.cols == snapshot.cols
-        && snapshot
-            .line_signatures
-            .get(row)
-            .is_some_and(|signature| retained.line_signature == *signature)
-        && snapshot
-            .lines
-            .get(row)
-            .is_some_and(|line| retained.line == *line)
-        && snapshot
-            .styled_lines
-            .get(row)
-            .is_some_and(|line| retained.styled_line == *line)
-        && retained.line_timestamp_ms == snapshot.line_timestamps_ms.get(row).copied().flatten()
-        && retained.line_wrapped == snapshot.line_wrapped.get(row).copied().unwrap_or(false)
-        && snapshot
-            .hyperlink_lines
-            .get(row)
-            .is_some_and(|line| retained.hyperlink_line == *line)
-        && retained.command_mark == snapshot.command_marks.get(row).copied().flatten()
-}
-
-fn terminal_surface_retained_row_from_snapshot(
-    snapshot: &TerminalSnapshot,
-    row: usize,
-) -> Option<TerminalSurfaceRetainedRow> {
-    if snapshot.cols == 0 || row >= snapshot.rows {
-        return None;
-    }
-    let cell_start = row.checked_mul(snapshot.cols)?;
-    let cell_end = cell_start.checked_add(snapshot.cols)?;
-    Some(TerminalSurfaceRetainedRow {
-        cols: snapshot.cols,
-        cells: snapshot.cells.get(cell_start..cell_end)?.to_vec(),
-        line: snapshot.lines.get(row).cloned().unwrap_or_default(),
-        styled_line: snapshot.styled_lines.get(row).cloned().unwrap_or_default(),
-        line_signature: *snapshot.line_signatures.get(row).unwrap_or(&0),
-        line_timestamp_ms: *snapshot.line_timestamps_ms.get(row).unwrap_or(&None),
-        line_wrapped: *snapshot.line_wrapped.get(row).unwrap_or(&false),
-        hyperlink_line: snapshot
-            .hyperlink_lines
-            .get(row)
-            .cloned()
-            .unwrap_or_default(),
-        command_mark: *snapshot.command_marks.get(row).unwrap_or(&None),
-    })
-}
-
 fn terminal_snapshot_row_for_absolute_row(
     snapshot: &TerminalSnapshot,
     absolute_row: usize,
@@ -2206,11 +2097,11 @@ fn terminal_snapshot_row_for_absolute_row(
 }
 
 fn terminal_snapshot_absolute_window(snapshot: &TerminalSnapshot) -> Option<(usize, usize)> {
-    if snapshot.rows == 0 {
+    if snapshot.row_count() == 0 {
         return None;
     }
     let end = snapshot.total_rows.saturating_sub(snapshot.display_offset);
-    let start = end.saturating_sub(snapshot.rows);
+    let start = end.saturating_sub(snapshot.row_count());
     Some((start, end))
 }
 
@@ -2330,11 +2221,11 @@ impl Render for TerminalSurface {
             self.display_offset,
             self.scroll_residual_lines,
             viewport_anchor_row,
-            snapshot.rows,
+            snapshot.row_count(),
             self.viewport_rows,
             cell_h,
         ) - viewport_anchor_row as f32 * cell_h;
-        let line_count = snapshot.lines.len();
+        let line_count = snapshot.row_count();
         let visible_gutter_rows = terminal_surface_visible_rows_for_viewport(
             self.viewport_rows,
             line_count,
@@ -2384,7 +2275,7 @@ impl Render for TerminalSurface {
             let abs_start = snapshot
                 .total_rows
                 .saturating_sub(snapshot.display_offset)
-                .saturating_sub(snapshot.rows);
+                .saturating_sub(snapshot.row_count());
             let gutter_y_offset = visual_y_offset + visible_gutter_rows.start as f32 * cell_h;
             let mut gutter_rows = div()
                 .absolute()
@@ -2393,19 +2284,13 @@ impl Render for TerminalSurface {
                 .flex()
                 .flex_col();
             for line_index in visible_gutter_rows {
-                let is_wrapped = snapshot
-                    .line_wrapped
-                    .get(line_index)
-                    .copied()
-                    .unwrap_or(false);
+                let snapshot_row = snapshot.row(line_index);
+                let is_wrapped = snapshot_row.is_some_and(|row| row.wrapped);
                 let has_rendered_row =
-                    snapshot.cursor_row == usize::MAX || line_index <= snapshot.cursor_row;
+                    snapshot.cursor.row == usize::MAX || line_index <= snapshot.cursor.row;
                 let ts_label = if self.show_timestamps && has_rendered_row && !is_wrapped {
-                    snapshot
-                        .line_timestamps_ms
-                        .get(line_index)
-                        .copied()
-                        .flatten()
+                    snapshot_row
+                        .and_then(|row| row.timestamp_ms)
                         .map(|ms| format_terminal_line_timestamp_ms(ms, self.show_timestamp_ms))
                         .unwrap_or_else(|| {
                             if self.show_timestamp_ms {
@@ -2581,53 +2466,18 @@ mod tests {
         let mut screen = TerminalScreen::default();
         screen.advance_decoded_text(&terminal_test_output_lines(count));
         let base = screen.viewport_snapshot(0);
-        let viewport_rows = base.rows.max(1);
+        let viewport_rows = base.row_count().max(1);
         let older = screen.viewport_snapshot(viewport_rows);
-        let retained_older_rows = older.rows.min(viewport_rows);
+        let retained_older_rows = older.row_count().min(viewport_rows);
         let mut snapshot = base;
         if retained_older_rows == 0 || snapshot.cols == 0 {
             return (snapshot, viewport_rows);
         }
 
-        let older_start = older.rows.saturating_sub(retained_older_rows);
-        let mut cells = Vec::with_capacity((snapshot.rows + retained_older_rows) * snapshot.cols);
-        for row in older_start..older.rows {
-            let start = row.saturating_mul(older.cols);
-            let end = start.saturating_add(older.cols).min(older.cells.len());
-            cells.extend_from_slice(&older.cells[start..end]);
-        }
-        cells.extend(snapshot.cells);
-        snapshot.cells = cells;
-
-        let mut lines = older.lines[older_start..].to_vec();
-        lines.extend(snapshot.lines);
-        snapshot.lines = lines;
-
-        let mut styled_lines = older.styled_lines[older_start..].to_vec();
-        styled_lines.extend(snapshot.styled_lines);
-        snapshot.styled_lines = styled_lines;
-
-        let mut line_signatures = older.line_signatures[older_start..].to_vec();
-        line_signatures.extend(snapshot.line_signatures);
-        snapshot.line_signatures = line_signatures;
-
-        let mut line_timestamps_ms = older.line_timestamps_ms[older_start..].to_vec();
-        line_timestamps_ms.extend(snapshot.line_timestamps_ms);
-        snapshot.line_timestamps_ms = line_timestamps_ms;
-
-        let mut line_wrapped = older.line_wrapped[older_start..].to_vec();
-        line_wrapped.extend(snapshot.line_wrapped);
-        snapshot.line_wrapped = line_wrapped;
-
-        let mut hyperlink_lines = older.hyperlink_lines[older_start..].to_vec();
-        hyperlink_lines.extend(snapshot.hyperlink_lines);
-        snapshot.hyperlink_lines = hyperlink_lines;
-
-        let mut command_marks = older.command_marks[older_start..].to_vec();
-        command_marks.extend(snapshot.command_marks);
-        snapshot.command_marks = command_marks;
-
-        snapshot.rows = snapshot.rows.saturating_add(retained_older_rows);
+        let older_start = older.row_count().saturating_sub(retained_older_rows);
+        let mut rows = older.rows()[older_start..].to_vec();
+        rows.extend(snapshot.rows().iter().cloned());
+        snapshot.row_data = rows.into();
         (snapshot, viewport_rows)
     }
 
@@ -2640,12 +2490,13 @@ mod tests {
 
         assert_eq!(
             surface.remember_retained_snapshot_rows(&snapshot),
-            snapshot.rows
+            snapshot.row_count()
         );
         assert_eq!(surface.remember_retained_snapshot_rows(&snapshot), 0);
 
         let mut metadata_changed = snapshot.clone();
-        metadata_changed.line_timestamps_ms[0] = Some(42);
+        let rows = Arc::make_mut(&mut metadata_changed.row_data);
+        Arc::make_mut(&mut rows[0]).timestamp_ms = Some(42);
         assert_eq!(
             surface.remember_retained_snapshot_rows(&metadata_changed),
             1
@@ -2714,7 +2565,7 @@ mod tests {
             enabled: true,
         }];
         let rules_key = terminal_keyword_rules_key(&rules);
-        let rows = 0..snapshot.rows;
+        let rows = 0..snapshot.row_count();
         let key = terminal_keyword_highlight_request_key(&snapshot, rules_key, rows.clone());
 
         assert_eq!(
@@ -2731,7 +2582,7 @@ mod tests {
         );
         assert_ne!(
             key,
-            terminal_keyword_highlight_request_key(&snapshot, rules_key, 1..snapshot.rows)
+            terminal_keyword_highlight_request_key(&snapshot, rules_key, 1..snapshot.row_count())
         );
 
         let mut scrolled_snapshot = snapshot.clone();
@@ -2742,7 +2593,9 @@ mod tests {
         );
 
         let mut edited_snapshot = snapshot.clone();
-        edited_snapshot.line_signatures[0] = edited_snapshot.line_signatures[0].wrapping_add(1);
+        let row_data = Arc::make_mut(&mut edited_snapshot.row_data);
+        let row = Arc::make_mut(&mut row_data[0]);
+        row.signature = row.signature.wrapping_add(1);
         assert_ne!(
             key,
             terminal_keyword_highlight_request_key(&edited_snapshot, rules_key, rows)
@@ -2752,8 +2605,9 @@ mod tests {
         let visible_key =
             terminal_keyword_highlight_request_key(&snapshot, rules_key, visible_rows.clone());
         let mut edited_outside_visible_rows = snapshot.clone();
-        edited_outside_visible_rows.line_signatures[1] =
-            edited_outside_visible_rows.line_signatures[1].wrapping_add(1);
+        let rows = Arc::make_mut(&mut edited_outside_visible_rows.row_data);
+        let row = Arc::make_mut(&mut rows[1]);
+        row.signature = row.signature.wrapping_add(1);
         assert_eq!(
             visible_key,
             terminal_keyword_highlight_request_key(
@@ -2785,7 +2639,7 @@ mod tests {
 
         assert!(rows.contains(&anchor));
         assert!(rows.len() <= viewport_rows.saturating_add(2));
-        assert!(snapshot.rows > rows.len());
+        assert!(snapshot.row_count() > rows.len());
         assert_ne!(
             rows,
             terminal_keyword_highlight_visible_rows(
@@ -2821,7 +2675,7 @@ mod tests {
             assert!(rows.end >= visible_rows.end);
         }
         assert!(rows.len() <= viewport_rows.saturating_mul(5).saturating_add(2));
-        assert!(snapshot.rows > rows.len());
+        assert!(snapshot.row_count() > rows.len());
     }
 
     #[test]
@@ -2847,7 +2701,7 @@ mod tests {
         let pending_key = terminal_keyword_highlight_request_key(
             &snapshot,
             terminal_keyword_rules_key(&rules),
-            0..snapshot.rows,
+            0..snapshot.row_count(),
         );
         let mut surface = TerminalSurface::new("session");
         surface.keyword_highlight_generation = 41;
@@ -2956,7 +2810,7 @@ mod tests {
     #[test]
     fn applying_identical_scroll_visual_state_is_a_noop() {
         let snapshot = Arc::new(TerminalScreen::default().viewport_snapshot(0));
-        let rows = snapshot.rows;
+        let rows = snapshot.row_count();
         let mut surface = TerminalSurface::new("session");
         surface.apply_frame_snapshot(
             snapshot, 0, 0.0, 0, 10, rows, false, None, 0, false, false, "block",
@@ -2981,7 +2835,7 @@ mod tests {
     #[test]
     fn repeated_pending_scroll_visual_state_does_not_need_repaint() {
         let snapshot = Arc::new(TerminalScreen::default().viewport_snapshot(0));
-        let rows = snapshot.rows;
+        let rows = snapshot.row_count();
         let mut surface = TerminalSurface::new("session");
         surface.apply_frame_snapshot(
             snapshot, 0, 0.0, 0, 10, rows, false, None, 0, false, false, "block",
@@ -3008,7 +2862,7 @@ mod tests {
     #[test]
     fn scroll_without_target_snapshot_preserves_stale_paint_state() {
         let snapshot = Arc::new(TerminalScreen::default().viewport_snapshot(0));
-        let rows = snapshot.rows;
+        let rows = snapshot.row_count();
         let mut surface = TerminalSurface::new("session");
         surface.keyword_rules = Arc::new(vec![nyaterm_core::ResolvedKeywordHighlightRule {
             id: "test".to_string(),
@@ -3055,7 +2909,7 @@ mod tests {
     #[test]
     fn degraded_empty_decorations_preserve_stale_paint_state() {
         let snapshot = Arc::new(TerminalScreen::default().viewport_snapshot(0));
-        let rows = snapshot.rows;
+        let rows = snapshot.row_count();
         let mut surface = TerminalSurface::new("session");
 
         surface.apply_frame_snapshot(
@@ -3101,7 +2955,7 @@ mod tests {
     #[test]
     fn restored_keyword_rules_report_paint_detail_change_without_new_frame() {
         let snapshot = Arc::new(TerminalScreen::default().viewport_snapshot(0));
-        let rows = snapshot.rows;
+        let rows = snapshot.row_count();
         let mut surface = TerminalSurface::new("session");
         let rules = Arc::new(vec![nyaterm_core::ResolvedKeywordHighlightRule {
             id: "alpha".to_string(),
@@ -3184,7 +3038,7 @@ mod tests {
             0,
             0.0,
             anchor,
-            snapshot.rows,
+            snapshot.row_count(),
             viewport_rows,
             cell_h,
         ) - anchor as f32 * cell_h;
@@ -3226,7 +3080,7 @@ mod tests {
     #[test]
     fn matching_scroll_snapshot_clears_pending_visual_freeze() {
         let snapshot = Arc::new(TerminalScreen::default().viewport_snapshot(0));
-        let rows = snapshot.rows;
+        let rows = snapshot.row_count();
         let mut surface = TerminalSurface::new("session");
 
         surface.apply_frame_snapshot(
@@ -3272,7 +3126,7 @@ mod tests {
         let mut screen = TerminalScreen::default();
         screen.advance_decoded_text(&terminal_test_output_lines(80));
         let snapshot = Arc::new(screen.viewport_snapshot(0));
-        let rows = snapshot.rows;
+        let rows = snapshot.row_count();
         let scrollback_len = snapshot.scrollback_len;
         let mut surface = TerminalSurface::new("session");
 
@@ -3321,7 +3175,7 @@ mod tests {
     #[test]
     fn identical_frame_snapshot_update_is_noop() {
         let snapshot = Arc::new(TerminalScreen::default().viewport_snapshot(0));
-        let rows = snapshot.rows;
+        let rows = snapshot.row_count();
         let scrollback_len = snapshot.scrollback_len;
         let mut surface = TerminalSurface::new("session");
 
@@ -3465,7 +3319,7 @@ mod tests {
     #[test]
     fn local_surface_fractional_wheel_keeps_live_text_window_stable() {
         let snapshot = Arc::new(TerminalScreen::default().viewport_snapshot(0));
-        let rows = snapshot.rows;
+        let rows = snapshot.row_count();
         let mut surface = TerminalSurface::new("session");
 
         surface.apply_frame_snapshot(
@@ -3487,7 +3341,7 @@ mod tests {
     #[test]
     fn local_surface_fractional_scroll_counts_as_visual_scroll_for_cursor() {
         let snapshot = Arc::new(TerminalScreen::default().viewport_snapshot(0));
-        let rows = snapshot.rows;
+        let rows = snapshot.row_count();
         let mut surface = TerminalSurface::new("session");
 
         surface.apply_frame_snapshot(
@@ -3526,7 +3380,7 @@ mod tests {
     #[test]
     fn selection_visual_update_preserves_existing_decorations() {
         let snapshot = Arc::new(TerminalScreen::default().viewport_snapshot(0));
-        let rows = snapshot.rows;
+        let rows = snapshot.row_count();
         let mut surface = TerminalSurface::new("session");
 
         surface.apply_frame_snapshot(
@@ -3633,7 +3487,7 @@ mod tests {
     #[test]
     fn selection_visual_update_replaces_only_selection_cols() {
         let snapshot = Arc::new(TerminalScreen::default().viewport_snapshot(0));
-        let rows = snapshot.rows;
+        let rows = snapshot.row_count();
         let mut surface = TerminalSurface::new("session");
 
         surface.apply_frame_snapshot(
@@ -3651,7 +3505,7 @@ mod tests {
             "block",
         );
 
-        let mut decorations = vec![TerminalLineDecorations::default(); snapshot.lines.len()];
+        let mut decorations = vec![TerminalLineDecorations::default(); snapshot.row_count()];
         decorations[0].link_ranges = vec![(1, 3)];
         decorations[2].selection_cols = Some((3, snapshot.cols));
         decorations[3].selection_cols = Some((0, 6));
@@ -3730,7 +3584,7 @@ mod tests {
     #[test]
     fn local_surface_snapshot_requests_are_deduped_until_covered() {
         let snapshot = Arc::new(TerminalScreen::default().viewport_snapshot(0));
-        let rows = snapshot.rows;
+        let rows = snapshot.row_count();
         let mut surface = TerminalSurface::new("session");
 
         surface.apply_frame_snapshot(
@@ -3775,7 +3629,7 @@ mod tests {
     #[test]
     fn local_surface_snapshot_request_dedupe_resets_when_scrollback_changes() {
         let snapshot = Arc::new(TerminalScreen::default().viewport_snapshot(0));
-        let rows = snapshot.rows;
+        let rows = snapshot.row_count();
         let mut surface = TerminalSurface::new("session");
 
         surface.apply_frame_snapshot(
@@ -3801,7 +3655,7 @@ mod tests {
     #[test]
     fn local_surface_wheel_consumes_edge_noop_without_visual_sync() {
         let snapshot = Arc::new(TerminalScreen::default().viewport_snapshot(0));
-        let rows = snapshot.rows;
+        let rows = snapshot.row_count();
         let mut surface = TerminalSurface::new("session");
 
         let frame_applied = surface.apply_frame_snapshot(
@@ -3826,7 +3680,7 @@ mod tests {
     #[test]
     fn local_surface_wheel_flags_missing_text_snapshot_immediately() {
         let snapshot = Arc::new(TerminalScreen::default().viewport_snapshot(0));
-        let rows = snapshot.rows;
+        let rows = snapshot.row_count();
         let mut surface = TerminalSurface::new("session");
 
         surface.apply_frame_snapshot(
@@ -3954,7 +3808,7 @@ mod tests {
     #[test]
     fn local_surface_scroll_state_marks_pending_when_snapshot_missing() {
         let snapshot = Arc::new(TerminalScreen::default().viewport_snapshot(0));
-        let rows = snapshot.rows;
+        let rows = snapshot.row_count();
         let mut surface = TerminalSurface::new("session");
 
         surface.apply_frame_snapshot(
@@ -3986,7 +3840,7 @@ mod tests {
         let second_offset = 30;
         let first_snapshot = Arc::new(screen.viewport_snapshot(first_offset));
         let second_snapshot = Arc::new(screen.viewport_snapshot(second_offset));
-        let rows = first_snapshot.rows.max(1);
+        let rows = first_snapshot.row_count().max(1);
         let scrollback_len = first_snapshot.scrollback_len;
         let mut surface = TerminalSurface::new("session");
 
@@ -4095,14 +3949,14 @@ mod tests {
         ));
 
         let mut refreshed_prefetch = prefetched_snapshot.as_ref().clone();
-        refreshed_prefetch.lines[0] = "refreshed".to_string();
+        let rows = Arc::make_mut(&mut refreshed_prefetch.row_data);
+        Arc::make_mut(&mut rows[0]).text = "refreshed".to_string();
         assert!(surface.retain_prefetched_snapshot(Arc::new(refreshed_prefetch)));
         assert_eq!(
             surface
                 .retained_snapshots
                 .last()
-                .and_then(|snapshot| snapshot.lines.first())
-                .map(String::as_str),
+                .and_then(|snapshot| snapshot.line(0)),
             Some("refreshed")
         );
     }
@@ -4112,7 +3966,7 @@ mod tests {
         let mut screen = TerminalScreen::default();
         screen.advance_decoded_text(&terminal_test_output_lines(160));
         let live_snapshot = Arc::new(screen.viewport_snapshot(0));
-        let rows = live_snapshot.rows.max(2);
+        let rows = live_snapshot.row_count().max(2);
         let older_offset = rows;
         let target_offset = rows / 2;
         let older_snapshot = Arc::new(screen.viewport_snapshot(older_offset));
@@ -4182,7 +4036,7 @@ mod tests {
         let mut screen = TerminalScreen::default();
         screen.advance_decoded_text(&terminal_test_output_lines(160));
         let live_snapshot = Arc::new(screen.viewport_snapshot(0));
-        let rows = live_snapshot.rows.max(2);
+        let rows = live_snapshot.row_count().max(2);
         let older_offset = rows;
         let target_offset = rows / 2;
         let older_snapshot = Arc::new(screen.viewport_snapshot(older_offset));
@@ -4250,7 +4104,7 @@ mod tests {
         let mut screen = TerminalScreen::default();
         screen.advance_decoded_text(&terminal_test_output_lines(160));
         let live_snapshot = Arc::new(screen.viewport_snapshot(0));
-        let rows = live_snapshot.rows.max(2);
+        let rows = live_snapshot.row_count().max(2);
         let older_offset = rows;
         let target_offset = rows / 2;
         let older_snapshot = Arc::new(screen.viewport_snapshot(older_offset));
@@ -4296,7 +4150,7 @@ mod tests {
         let synthesized = surface
             .snapshot_covering_display_offset(target_offset, rows, scrollback_len)
             .expect("retained rows should synthesize the target viewport");
-        assert!(synthesized.rows > rows);
+        assert!(synthesized.row_count() > rows);
         assert!(synthesized.display_offset <= target_offset);
         assert!(terminal_snapshot_covers_display_offset(
             synthesized.as_ref(),
@@ -4323,7 +4177,7 @@ mod tests {
         let mut screen = TerminalScreen::default();
         screen.advance_decoded_text(&terminal_test_output_lines(200));
         let live_snapshot = Arc::new(screen.viewport_snapshot(0));
-        let rows = live_snapshot.rows.max(2);
+        let rows = live_snapshot.row_count().max(2);
         let far_offset = rows.saturating_mul(2);
         let target_offset = rows;
         let far_snapshot = Arc::new(screen.viewport_snapshot(far_offset));
@@ -4383,7 +4237,7 @@ mod tests {
         screen.advance_decoded_text(&terminal_test_output_lines(80));
         let old_display_offset = 6;
         let snapshot = Arc::new(screen.viewport_snapshot(old_display_offset));
-        let rows = snapshot.rows;
+        let rows = snapshot.row_count();
         let old_scrollback_len = snapshot.scrollback_len;
         let growth = 3;
         let new_display_offset = old_display_offset + growth;
@@ -4423,7 +4277,7 @@ mod tests {
         screen.advance_decoded_text(&terminal_test_output_lines(80));
         let old_display_offset = 6;
         let snapshot = Arc::new(screen.viewport_snapshot(old_display_offset));
-        let rows = snapshot.rows;
+        let rows = snapshot.row_count();
         let old_scrollback_len = snapshot.scrollback_len;
         let growth = 3;
         let new_display_offset = old_display_offset + growth;
@@ -4485,7 +4339,7 @@ mod tests {
         screen.advance_decoded_text(&terminal_test_output_lines(80));
         let old_display_offset = 6;
         let snapshot = Arc::new(screen.viewport_snapshot(old_display_offset));
-        let rows = snapshot.rows;
+        let rows = snapshot.row_count();
         let old_scrollback_len = snapshot.scrollback_len;
         let growth = 3;
         let new_display_offset = old_display_offset + growth;
@@ -4540,7 +4394,7 @@ mod tests {
         old_screen.advance_decoded_text(&terminal_test_output_lines(120));
         let old_offset = 12;
         let old_snapshot = Arc::new(old_screen.viewport_snapshot(old_offset));
-        let old_rows = old_snapshot.rows;
+        let old_rows = old_snapshot.row_count();
         let mut surface = TerminalSurface::new("session");
 
         surface.apply_frame_snapshot(
@@ -4563,7 +4417,7 @@ mod tests {
         let mut new_screen = TerminalScreen::default();
         new_screen.advance_decoded_text("after clear\n");
         let new_snapshot = Arc::new(new_screen.viewport_snapshot(0));
-        let new_rows = new_snapshot.rows;
+        let new_rows = new_snapshot.row_count();
         surface.apply_frame_snapshot(
             new_snapshot.clone(),
             0,
@@ -4594,7 +4448,7 @@ mod tests {
         screen.advance_decoded_text(&terminal_test_output_lines(120));
         let old_offset = 12;
         let old_snapshot = Arc::new(screen.viewport_snapshot(old_offset));
-        let old_rows = old_snapshot.rows.max(2);
+        let old_rows = old_snapshot.row_count().max(2);
         let new_snapshot = Arc::new(screen.viewport_snapshot(0));
         let new_viewport_rows = old_rows - 1;
         let mut surface = TerminalSurface::new("session");

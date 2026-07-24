@@ -17,17 +17,7 @@ const TERMINAL_SCROLL_RETAINED_WINDOW_MIN_EXTRA_ROWS: usize = 32;
 const TERMINAL_SCROLL_RETAINED_WINDOW_MAX_EXTRA_ROWS: usize = 192;
 
 #[cfg(test)]
-#[derive(Clone)]
-struct TerminalSnapshotRowSlice {
-    cells: Vec<nyaterm_terminal::RenderCell>,
-    line: String,
-    styled_line: Vec<nyaterm_terminal::StyledSpan>,
-    line_signature: u64,
-    line_timestamp_ms: Option<u64>,
-    line_wrapped: bool,
-    hyperlink_line: Vec<nyaterm_terminal::HyperlinkSpan>,
-    command_mark: Option<nyaterm_terminal::ShellCommandMark>,
-}
+type TerminalSnapshotRowSlice = std::sync::Arc<nyaterm_terminal::TerminalSnapshotRow>;
 
 #[cfg(test)]
 fn terminal_paint_snapshot_for_view(
@@ -210,41 +200,25 @@ fn terminal_snapshot_with_newer_edge_row(
     base: std::sync::Arc<TerminalSnapshot>,
     newer: std::sync::Arc<TerminalSnapshot>,
 ) -> std::sync::Arc<TerminalSnapshot> {
-    if base.cols == 0 || base.rows == 0 || base.cols != newer.cols || newer.rows == 0 {
+    if base.cols == 0 || base.row_count() == 0 || base.cols != newer.cols || newer.row_count() == 0
+    {
         return base;
     }
-    let mut snapshot = (*base).clone();
-    let row = newer.rows - 1;
-    let start = row.saturating_mul(newer.cols);
-    let end = start.saturating_add(newer.cols).min(newer.cells.len());
-    if end.saturating_sub(start) != newer.cols {
-        return std::sync::Arc::new(snapshot);
-    }
-    snapshot.cells.extend_from_slice(&newer.cells[start..end]);
-    snapshot
-        .lines
-        .push(newer.lines.get(row).cloned().unwrap_or_default());
-    snapshot
-        .styled_lines
-        .push(newer.styled_lines.get(row).cloned().unwrap_or_default());
-    snapshot
-        .line_signatures
-        .push(*newer.line_signatures.get(row).unwrap_or(&0));
-    snapshot
-        .line_timestamps_ms
-        .push(*newer.line_timestamps_ms.get(row).unwrap_or(&None));
-    snapshot
-        .line_wrapped
-        .push(*newer.line_wrapped.get(row).unwrap_or(&false));
-    snapshot
-        .hyperlink_lines
-        .push(newer.hyperlink_lines.get(row).cloned().unwrap_or_default());
-    snapshot
-        .command_marks
-        .push(*newer.command_marks.get(row).unwrap_or(&None));
-    snapshot.rows = snapshot.rows.saturating_add(1);
-    snapshot.total_rows = snapshot.total_rows.saturating_add(1);
-    std::sync::Arc::new(snapshot)
+    let mut rows = base.rows().to_vec();
+    rows.push(newer.rows().last().unwrap().clone());
+    std::sync::Arc::new(TerminalSnapshot::from_rows(
+        nyaterm_terminal::TerminalSnapshotMeta {
+            cols: base.cols,
+            viewport_rows: base.viewport_rows,
+            cursor: base.cursor.clone(),
+            selection: base.selection.clone(),
+            scrollback_len: base.scrollback_len,
+            total_rows: base.total_rows.saturating_add(1),
+            display_offset: base.display_offset,
+            images: base.images.clone(),
+        },
+        rows,
+    ))
 }
 
 #[cfg(test)]
@@ -255,7 +229,7 @@ fn terminal_snapshot_with_retained_scroll_window(
     viewport_rows: usize,
     scrollback_len: usize,
 ) -> std::sync::Arc<TerminalSnapshot> {
-    if base.cols == 0 || base.rows == 0 {
+    if base.cols == 0 || base.row_count() == 0 {
         return base;
     }
     let extra = terminal_scroll_retained_window_extra_rows(viewport_rows);
@@ -264,68 +238,23 @@ fn terminal_snapshot_with_retained_scroll_window(
     if older_count == 0 && newer_count == 0 {
         return base;
     }
-    let mut snapshot = (*base).clone();
     let older_rows = if older_count == 0 {
         Vec::new()
     } else {
         terminal_snapshot_older_row_slices(&view.screen, display_offset, older_count)
     };
     let older_count = older_rows.len();
-    if !older_rows.is_empty() {
-        let mut cells = Vec::with_capacity((snapshot.rows + older_rows.len()) * snapshot.cols);
-        let mut lines = Vec::with_capacity(snapshot.lines.len() + older_rows.len());
-        let mut styled_lines = Vec::with_capacity(snapshot.styled_lines.len() + older_rows.len());
-        let mut line_signatures =
-            Vec::with_capacity(snapshot.line_signatures.len() + older_rows.len());
-        let mut line_timestamps_ms =
-            Vec::with_capacity(snapshot.line_timestamps_ms.len() + older_rows.len());
-        let mut line_wrapped = Vec::with_capacity(snapshot.line_wrapped.len() + older_rows.len());
-        let mut hyperlink_lines =
-            Vec::with_capacity(snapshot.hyperlink_lines.len() + older_rows.len());
-        let mut command_marks = Vec::with_capacity(snapshot.command_marks.len() + older_rows.len());
-        for row in older_rows {
-            cells.extend(row.cells);
-            lines.push(row.line);
-            styled_lines.push(row.styled_line);
-            line_signatures.push(row.line_signature);
-            line_timestamps_ms.push(row.line_timestamp_ms);
-            line_wrapped.push(row.line_wrapped);
-            hyperlink_lines.push(row.hyperlink_line);
-            command_marks.push(row.command_mark);
-        }
-        cells.extend(snapshot.cells);
-        lines.extend(snapshot.lines);
-        styled_lines.extend(snapshot.styled_lines);
-        line_signatures.extend(snapshot.line_signatures);
-        line_timestamps_ms.extend(snapshot.line_timestamps_ms);
-        line_wrapped.extend(snapshot.line_wrapped);
-        hyperlink_lines.extend(snapshot.hyperlink_lines);
-        command_marks.extend(snapshot.command_marks);
-        snapshot.cells = cells;
-        snapshot.lines = lines;
-        snapshot.styled_lines = styled_lines;
-        snapshot.line_signatures = line_signatures;
-        snapshot.line_timestamps_ms = line_timestamps_ms;
-        snapshot.line_wrapped = line_wrapped;
-        snapshot.hyperlink_lines = hyperlink_lines;
-        snapshot.command_marks = command_marks;
-        snapshot.rows = snapshot.rows.saturating_add(older_count);
-    }
+    let mut rows = Vec::with_capacity(older_count + base.row_count() + newer_count);
+    rows.extend(older_rows);
+    rows.extend(base.rows().iter().cloned());
     if newer_count > 0 {
-        for row in terminal_snapshot_newer_row_slices(&view.screen, display_offset, newer_count) {
-            snapshot.cells.extend(row.cells);
-            snapshot.lines.push(row.line);
-            snapshot.styled_lines.push(row.styled_line);
-            snapshot.line_signatures.push(row.line_signature);
-            snapshot.line_timestamps_ms.push(row.line_timestamp_ms);
-            snapshot.line_wrapped.push(row.line_wrapped);
-            snapshot.hyperlink_lines.push(row.hyperlink_line);
-            snapshot.command_marks.push(row.command_mark);
-            snapshot.rows = snapshot.rows.saturating_add(1);
-            snapshot.total_rows = snapshot.total_rows.saturating_add(1);
-        }
+        rows.extend(terminal_snapshot_newer_row_slices(
+            &view.screen,
+            display_offset,
+            newer_count,
+        ));
     }
-    snapshot.images = view
+    let images = view
         .screen
         .viewport_snapshot(display_offset)
         .images
@@ -336,7 +265,19 @@ fn terminal_snapshot_with_retained_scroll_window(
             image
         })
         .collect();
-    std::sync::Arc::new(snapshot)
+    std::sync::Arc::new(TerminalSnapshot::from_rows(
+        nyaterm_terminal::TerminalSnapshotMeta {
+            cols: base.cols,
+            viewport_rows: base.viewport_rows,
+            cursor: base.cursor.clone(),
+            selection: base.selection.clone(),
+            scrollback_len: base.scrollback_len,
+            total_rows: base.total_rows.saturating_add(newer_count),
+            display_offset: base.display_offset,
+            images,
+        },
+        rows,
+    ))
 }
 
 #[cfg(test)]
@@ -349,10 +290,10 @@ fn terminal_snapshot_older_row_slices(
     let mut remaining = row_count;
     while remaining > 0 {
         let snapshot = screen.viewport_snapshot(display_offset.saturating_add(remaining));
-        if snapshot.rows == 0 {
+        if snapshot.row_count() == 0 {
             break;
         }
-        let take = remaining.min(snapshot.rows);
+        let take = remaining.min(snapshot.row_count());
         rows.extend(terminal_snapshot_row_slices(&snapshot, 0, take));
         remaining = remaining.saturating_sub(take);
     }
@@ -367,19 +308,19 @@ fn terminal_snapshot_newer_row_slices(
 ) -> Vec<TerminalSnapshotRowSlice> {
     let mut rows = Vec::new();
     let mut consumed = 0usize;
-    let viewport_rows = screen.viewport_snapshot(display_offset).rows.max(1);
+    let viewport_rows = screen.viewport_snapshot(display_offset).row_count().max(1);
     while consumed < row_count {
         let remaining = row_count - consumed;
         let take = remaining.min(viewport_rows);
         let offset_delta = consumed.saturating_add(take);
         let snapshot = screen.viewport_snapshot(display_offset.saturating_sub(offset_delta));
-        if snapshot.rows == 0 {
+        if snapshot.row_count() == 0 {
             break;
         }
-        let take = take.min(snapshot.rows);
+        let take = take.min(snapshot.row_count());
         rows.extend(terminal_snapshot_row_slices(
             &snapshot,
-            snapshot.rows.saturating_sub(take),
+            snapshot.row_count().saturating_sub(take),
             take,
         ));
         consumed = consumed.saturating_add(take);
@@ -393,10 +334,12 @@ fn terminal_snapshot_row_slices(
     start_row: usize,
     row_count: usize,
 ) -> Vec<TerminalSnapshotRowSlice> {
-    if row_count == 0 || start_row >= snapshot.rows {
+    if row_count == 0 || start_row >= snapshot.row_count() {
         return Vec::new();
     }
-    let end_row = start_row.saturating_add(row_count).min(snapshot.rows);
+    let end_row = start_row
+        .saturating_add(row_count)
+        .min(snapshot.row_count());
     (start_row..end_row)
         .filter_map(|row| terminal_snapshot_row_slice(snapshot, row))
         .collect()
@@ -407,26 +350,7 @@ fn terminal_snapshot_row_slice(
     snapshot: &TerminalSnapshot,
     row: usize,
 ) -> Option<TerminalSnapshotRowSlice> {
-    if snapshot.cols == 0 || row >= snapshot.rows {
-        return None;
-    }
-    let start = row.checked_mul(snapshot.cols)?;
-    let end = start.checked_add(snapshot.cols)?;
-    let cells = snapshot.cells.get(start..end)?.to_vec();
-    Some(TerminalSnapshotRowSlice {
-        cells,
-        line: snapshot.lines.get(row).cloned().unwrap_or_default(),
-        styled_line: snapshot.styled_lines.get(row).cloned().unwrap_or_default(),
-        line_signature: *snapshot.line_signatures.get(row).unwrap_or(&0),
-        line_timestamp_ms: *snapshot.line_timestamps_ms.get(row).unwrap_or(&None),
-        line_wrapped: *snapshot.line_wrapped.get(row).unwrap_or(&false),
-        hyperlink_line: snapshot
-            .hyperlink_lines
-            .get(row)
-            .cloned()
-            .unwrap_or_default(),
-        command_mark: *snapshot.command_marks.get(row).unwrap_or(&None),
-    })
+    snapshot.rows().get(row).cloned()
 }
 
 fn terminal_scroll_text_first_decorations(
@@ -435,7 +359,7 @@ fn terminal_scroll_text_first_decorations(
     include_command_marks: bool,
 ) -> Vec<TerminalLineDecorations> {
     let has_command_marks =
-        include_command_marks && snapshot.command_marks.iter().any(Option::is_some);
+        include_command_marks && snapshot.rows().iter().any(|row| row.command_mark.is_some());
     let Some(search_matches) = search_matches else {
         if !has_command_marks {
             return Vec::new();
@@ -553,7 +477,12 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn active_terminal_visible_text(&self) -> String {
-        self.active_terminal_snapshot().lines.join("\n")
+        self.active_terminal_snapshot()
+            .rows()
+            .iter()
+            .map(|row| row.text.as_str())
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 
     pub(in crate::features) fn active_terminal_buffer_text(&self) -> String {
@@ -2127,7 +2056,7 @@ impl NyaTermApp {
             });
             return;
         };
-        let cursor_row = snapshot.cursor_row;
+        let cursor_row = snapshot.cursor.row;
         let remote_cursor_visible = snapshot.cursor.visible
             && snapshot.cursor.shape != nyaterm_terminal::CursorShape::Hidden
             && cursor_row != usize::MAX;
@@ -2229,14 +2158,11 @@ impl NyaTermApp {
                     .iter()
                     .any(|ranges| !ranges.is_empty())
             });
-        let has_hyperlinks = expensive_interactions
-            && snapshot
-                .hyperlink_lines
-                .iter()
-                .any(|spans| !spans.is_empty());
+        let has_hyperlinks =
+            expensive_interactions && snapshot.rows().iter().any(|row| !row.hyperlinks.is_empty());
         let include_command_marks = paint_policy.include_command_marks;
         let has_command_marks =
-            include_command_marks && snapshot.command_marks.iter().any(Option::is_some);
+            include_command_marks && snapshot.rows().iter().any(|row| row.command_mark.is_some());
         let decorations_started_at = Instant::now();
         let decorations = if crate::features::terminal_surface::terminal_line_decorations_needed(
             has_selection,
@@ -2299,7 +2225,7 @@ impl NyaTermApp {
                 residual_lines = scroll_residual_lines,
                 viewport_rows,
                 scrollback_len,
-                snapshot_rows = snapshot.rows,
+                snapshot_rows = snapshot.row_count(),
                 retained_snapshot_reused,
                 retained_lookup_us = retained_lookup_duration.as_micros(),
                 snapshot_us = snapshot_duration.as_micros(),
@@ -2876,7 +2802,12 @@ mod tests {
         .expect("authoritative worker snapshot should be paintable");
 
         assert!(std::sync::Arc::ptr_eq(&snapshot, &worker_snapshot));
-        assert!(snapshot.lines.iter().any(|line| line.contains("line 159")));
+        assert!(
+            snapshot
+                .rows()
+                .iter()
+                .any(|row| row.text.contains("line 159"))
+        );
     }
 
     #[test]
@@ -2900,7 +2831,7 @@ mod tests {
     fn terminal_paint_window_waits_for_worker_after_height_resize() {
         let mut view = TerminalViewState::from_output(terminal_output_lines(80));
         let old_snapshot = std::sync::Arc::new(view.screen.viewport_snapshot(0));
-        let old_rows = old_snapshot.rows;
+        let old_rows = old_snapshot.row_count();
         view.frame_snapshot = Some(old_snapshot.clone());
 
         view.screen
@@ -3014,14 +2945,22 @@ mod tests {
         let view = TerminalViewState::from_output(terminal_output_lines(40));
         let base = std::sync::Arc::new(view.screen.viewport_snapshot(1));
         let newer = std::sync::Arc::new(view.screen.viewport_snapshot(0));
-        let base_rows = base.rows;
-        let newer_tail = newer.lines.last().cloned();
+        let base_rows = base.row_count();
+        let newer_tail = newer.rows().last().map(|row| row.text.clone());
 
         let snapshot = terminal_snapshot_with_newer_edge_row(base, newer);
 
-        assert_eq!(snapshot.rows, base_rows + 1);
-        assert_eq!(snapshot.lines.last().cloned(), newer_tail);
-        assert_eq!(snapshot.cells.len(), snapshot.rows * snapshot.cols);
+        assert_eq!(snapshot.row_count(), base_rows + 1);
+        assert_eq!(
+            snapshot.rows().last().map(|row| row.text.clone()),
+            newer_tail
+        );
+        assert!(
+            snapshot
+                .rows()
+                .iter()
+                .all(|row| row.cells.len() == snapshot.cols)
+        );
     }
 
     #[test]
@@ -3066,7 +3005,7 @@ mod tests {
         )
         .expect("window snapshot should be available");
 
-        assert!(snapshot.rows > viewport_rows);
+        assert!(snapshot.row_count() > viewport_rows);
         assert!(terminal_snapshot_covers_display_offset(
             snapshot.as_ref(),
             display_offset,
@@ -3134,8 +3073,8 @@ mod tests {
             scrollback_len,
         );
         assert_eq!(
-            snapshot.lines[anchor],
-            view.screen.viewport_snapshot(target_offset).lines[0]
+            snapshot.line(anchor),
+            view.screen.viewport_snapshot(target_offset).line(0)
         );
     }
 
@@ -3153,7 +3092,7 @@ mod tests {
             viewport_rows,
             scrollback_len,
         );
-        let retained_rows = retained.rows;
+        let retained_rows = retained.row_count();
         view.scrollback_snapshots
             .insert(display_offset, retained.clone());
 
@@ -3165,7 +3104,7 @@ mod tests {
         )
         .expect("cached retained window should be reusable");
 
-        assert_eq!(snapshot.rows, retained_rows);
+        assert_eq!(snapshot.row_count(), retained_rows);
         assert!(std::sync::Arc::ptr_eq(&snapshot, &retained));
         assert!(terminal_snapshot_covers_display_offset(
             snapshot.as_ref(),
@@ -3245,7 +3184,12 @@ mod tests {
         )
         .expect("cached window snapshot should cover multi-viewport fast scroll runs");
 
-        assert_eq!(snapshot.cells.len(), snapshot.rows * snapshot.cols);
+        assert!(
+            snapshot
+                .rows()
+                .iter()
+                .all(|row| row.cells.len() == snapshot.cols)
+        );
         assert!(terminal_snapshot_covers_display_offset(
             snapshot.as_ref(),
             display_offset.saturating_sub(fast_delta),
@@ -3277,8 +3221,8 @@ mod tests {
                 scrollback_len,
             );
             assert_eq!(
-                snapshot.lines[anchor],
-                view.screen.viewport_snapshot(offset).lines[0]
+                snapshot.line(anchor),
+                view.screen.viewport_snapshot(offset).line(0)
             );
         }
     }
@@ -3337,13 +3281,13 @@ mod tests {
             scrollback_len
         ));
         assert_eq!(
-            snapshot.lines[terminal_snapshot_anchor_row_for_display_offset(
+            snapshot.line(terminal_snapshot_anchor_row_for_display_offset(
                 snapshot.as_ref(),
                 display_offset,
                 viewport_rows,
                 scrollback_len
-            )],
-            view.screen.viewport_snapshot(display_offset).lines[0]
+            )),
+            view.screen.viewport_snapshot(display_offset).line(0)
         );
     }
 
@@ -3392,7 +3336,7 @@ mod tests {
         let decorations =
             terminal_scroll_text_first_decorations(&snapshot, Some(matches.as_slice()), false);
 
-        assert_eq!(decorations.len(), snapshot.lines.len());
+        assert_eq!(decorations.len(), snapshot.row_count());
         assert_eq!(decorations[1].search_ranges, vec![(2, 6)]);
         assert!(decorations[1].active_search_ranges.is_empty());
         assert!(decorations[1].link_ranges.is_empty());

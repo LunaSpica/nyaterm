@@ -46,21 +46,17 @@ impl NyaTermApp {
             0,
             cell.row,
         )?;
-        if snapshot_row != snapshot.cursor_row {
+        if snapshot_row != snapshot.cursor.row {
             return None;
         }
-        let line = snapshot
-            .lines
-            .get(snapshot_row)
-            .map(String::as_str)
-            .unwrap_or("");
+        let line = snapshot.line(snapshot_row).unwrap_or("");
         let line_cells = smart_input_cells(line);
         let value_cells = smart_input_cells(&state.value);
         if value_cells.is_empty() || value_cells.len() > line_cells.len() {
             return None;
         }
         let input_start_col =
-            find_smart_input_start_col(&line_cells, &value_cells, snapshot.cursor_col)?;
+            find_smart_input_start_col(&line_cells, &value_cells, snapshot.cursor.col)?;
         let input_end_col = input_start_col + value_cells.len();
         if cell.col < input_start_col {
             return None;
@@ -151,15 +147,11 @@ impl NyaTermApp {
             0,
             start.row,
         )?;
-        if snapshot_row != snapshot.cursor_row {
+        if snapshot_row != snapshot.cursor.row {
             return None;
         }
 
-        let line = snapshot
-            .lines
-            .get(snapshot_row)
-            .map(String::as_str)
-            .unwrap_or("");
+        let line = snapshot.line(snapshot_row).unwrap_or("");
         let line_cells = smart_input_cells(line);
         let (col_start, col_end_excl) = selection.cols_for_row(start.row)?;
         let col_end = col_end_excl.min(line_cells.len().max(col_start));
@@ -180,7 +172,7 @@ impl NyaTermApp {
         // Prefer alignment ending at cursor_col (input ends at cursor when typing at end).
         // Fall back to last occurrence of value as a contiguous span on the line.
         let input_start_col =
-            find_smart_input_start_col(&line_cells, &value_cells, snapshot.cursor_col)?;
+            find_smart_input_start_col(&line_cells, &value_cells, snapshot.cursor.col)?;
         let input_end_col = input_start_col + value_cells.len();
 
         if col_start < input_start_col || col_end > input_end_col {

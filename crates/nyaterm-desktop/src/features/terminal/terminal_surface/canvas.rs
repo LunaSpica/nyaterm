@@ -135,10 +135,10 @@ impl NyaTermApp {
             // placeholder instead of rebuilding an 80x24 snapshot on every shell paint.
             terminal_shell_placeholder_snapshot()
         };
-        let line_count = snapshot.lines.len();
-        let cursor_row = snapshot.cursor_row;
-        let cursor_col = snapshot.cursor_col;
-        let snapshot_rows = snapshot.rows;
+        let line_count = snapshot.row_count();
+        let cursor_row = snapshot.cursor.row;
+        let cursor_col = snapshot.cursor.col;
+        let snapshot_rows = snapshot.row_count();
         let snapshot_cols = snapshot.cols;
         let viewport_snapshot_duration = snapshot_stage_started_at.elapsed();
         let show_line_numbers = self.settings.terminal_show_line_numbers;
@@ -246,15 +246,12 @@ impl NyaTermApp {
                         .any(|ranges| !ranges.is_empty())
                 });
             let has_hyperlinks = expensive_interactions_enabled
-                && snapshot
-                    .hyperlink_lines
-                    .iter()
-                    .any(|spans| !spans.is_empty());
+                && snapshot.rows().iter().any(|row| !row.hyperlinks.is_empty());
             let include_command_marks = is_active
                 && render_profile.enhanced_decorations_enabled()
                 && !render_output_pressure;
-            let has_command_marks =
-                include_command_marks && snapshot.command_marks.iter().any(Option::is_some);
+            let has_command_marks = include_command_marks
+                && snapshot.rows().iter().any(|row| row.command_mark.is_some());
             let needs_line_decorations = terminal_line_decorations_needed(
                 has_selection,
                 has_search_decorations,
@@ -353,19 +350,13 @@ impl NyaTermApp {
                 .border_r_1()
                 .border_color(rgb(palette.border));
             for line_index in 0..line_count {
-                let is_wrapped = snapshot
-                    .line_wrapped
-                    .get(line_index)
-                    .copied()
-                    .unwrap_or(false);
+                let snapshot_row = snapshot.row(line_index);
+                let is_wrapped = snapshot_row.is_some_and(|row| row.wrapped);
                 let has_rendered_row =
-                    snapshot.cursor_row == usize::MAX || line_index <= snapshot.cursor_row;
+                    snapshot.cursor.row == usize::MAX || line_index <= snapshot.cursor.row;
                 let ts_label = if show_timestamps && has_rendered_row && !is_wrapped {
-                    snapshot
-                        .line_timestamps_ms
-                        .get(line_index)
-                        .copied()
-                        .flatten()
+                    snapshot_row
+                        .and_then(|row| row.timestamp_ms)
                         .map(|ms| format_terminal_line_timestamp_ms(ms, show_timestamp_ms))
                         .unwrap_or_else(|| {
                             if show_timestamp_ms {

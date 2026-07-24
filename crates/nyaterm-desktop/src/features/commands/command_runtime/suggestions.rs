@@ -413,11 +413,11 @@ impl NyaTermApp {
         let offset = self.active_terminal_display_offset();
         let snapshot =
             self.terminal_snapshot_for_session(self.active_session_id.as_deref(), offset);
-        if snapshot.cursor_row == usize::MAX {
+        if snapshot.cursor.row == usize::MAX {
             return None;
         }
-        let line = snapshot.lines.get(snapshot.cursor_row)?;
-        Some(terminal_line_prefix_for_cell_col(line, snapshot.cursor_col))
+        let line = snapshot.line(snapshot.cursor.row)?;
+        Some(terminal_line_prefix_for_cell_col(line, snapshot.cursor.col))
     }
 
     pub(in crate::features) fn refresh_command_suggestions(&mut self, cx: &mut Context<Self>) {
@@ -708,12 +708,12 @@ impl NyaTermApp {
         let offset = self.active_terminal_display_offset();
         let snapshot =
             self.terminal_snapshot_for_session(self.active_session_id.as_deref(), offset);
-        let row = if snapshot.cursor_row == usize::MAX {
-            snapshot.lines.len().saturating_sub(1)
+        let row = if snapshot.cursor.row == usize::MAX {
+            snapshot.row_count().saturating_sub(1)
         } else {
-            snapshot.cursor_row
+            snapshot.cursor.row
         };
-        (row, snapshot.cursor_col)
+        (row, snapshot.cursor.col)
     }
 
     /// Handle suggestion popup keys. Returns true when the key was consumed.

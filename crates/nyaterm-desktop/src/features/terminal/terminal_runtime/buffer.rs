@@ -12,7 +12,7 @@ fn terminal_live_scrollback_prefetch_offset(view: &TerminalViewState) -> Option<
         return None;
     }
     let snapshot = view.frame_snapshot.as_ref()?;
-    if snapshot.scrollback_len == 0 || snapshot.rows > snapshot.viewport_rows {
+    if snapshot.scrollback_len == 0 || snapshot.row_count() > snapshot.viewport_rows {
         return None;
     }
     Some(
@@ -1760,8 +1760,15 @@ mod frame_event_queue_tests {
     fn terminal_snapshot_frame_covers_nearby_scroll_target() {
         let view = terminal_view_with_scrollback(6);
         let mut snapshot = view.screen.viewport_snapshot(6);
-        let viewport_rows = snapshot.rows.max(1);
-        snapshot.rows = snapshot.rows.saturating_add(viewport_rows);
+        let viewport_rows = snapshot.row_count().max(1);
+        snapshot.row_data = snapshot
+            .rows()
+            .iter()
+            .cloned()
+            .cycle()
+            .take(snapshot.row_count().saturating_add(viewport_rows))
+            .collect::<Vec<_>>()
+            .into();
 
         assert!(terminal_snapshot_frame_covers_scroll_target(
             6,
@@ -1850,9 +1857,16 @@ mod frame_event_queue_tests {
         let mut view = terminal_view_with_scrollback(20);
         let offset = 20;
         let mut snapshot = view.screen.viewport_snapshot(offset);
-        let viewport_rows = snapshot.rows.max(1);
+        let viewport_rows = snapshot.row_count().max(1);
         let margin_rows = terminal_scroll_snapshot_ready_margin_rows(viewport_rows);
-        snapshot.rows = viewport_rows.saturating_add(margin_rows.saturating_mul(2));
+        snapshot.row_data = snapshot
+            .rows()
+            .iter()
+            .cloned()
+            .cycle()
+            .take(viewport_rows.saturating_add(margin_rows.saturating_mul(2)))
+            .collect::<Vec<_>>()
+            .into();
         snapshot.total_rows = snapshot.total_rows.saturating_add(margin_rows);
         view.scrollback_snapshots
             .insert(offset, std::sync::Arc::new(snapshot));

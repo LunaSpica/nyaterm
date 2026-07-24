@@ -72,7 +72,10 @@ impl NyaTermApp {
         let visible_for_ai = terminal_action_prompt_text(
             &self
                 .terminal_snapshot_for_session(Some(session_id.as_str()), scroll_offset)
-                .lines
+                .rows()
+                .iter()
+                .map(|row| row.text.as_str())
+                .collect::<Vec<_>>()
                 .join("\n"),
             2_800,
         );

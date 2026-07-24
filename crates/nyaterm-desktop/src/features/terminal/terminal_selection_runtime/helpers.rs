@@ -556,12 +556,15 @@ impl EntityInputHandler for NyaTermApp {
         let insets = self.terminal_content_insets();
         let gutter = self.terminal_gutter_width_px();
         let snapshot = self.terminal_snapshot_for_session(self.active_session_id.as_deref(), 0);
-        let row = if snapshot.cursor_row == usize::MAX {
-            snapshot.lines.len().saturating_sub(1)
+        let row = if snapshot.cursor.row == usize::MAX {
+            snapshot.row_count().saturating_sub(1)
         } else {
-            snapshot.cursor_row.min(snapshot.rows.saturating_sub(1))
+            snapshot
+                .cursor
+                .row
+                .min(snapshot.row_count().saturating_sub(1))
         };
-        let col = snapshot.cursor_col.min(snapshot.cols.saturating_sub(1));
+        let col = snapshot.cursor.col.min(snapshot.cols.saturating_sub(1));
         let origin_x = f32::from(element_bounds.origin.x);
         let origin_y = f32::from(element_bounds.origin.y);
         let max_x = origin_x + f32::from(element_bounds.size.width) - cell_w.max(1.);

@@ -142,26 +142,10 @@ pub struct TerminalSnapshotBuildStats {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TerminalSnapshot {
     pub cols: usize,
-    /// Rows in the underlying terminal viewport. `rows` may be larger when a
-    /// retained scroll window is attached for smooth painting.
     pub viewport_rows: usize,
-    pub rows: usize,
     pub row_data: Arc<[Arc<TerminalSnapshotRow>]>,
-    pub cells: Vec<RenderCell>,
     pub cursor: CursorSnapshot,
     pub selection: Option<SelectionSnapshot>,
-    pub lines: Vec<String>,
-    pub styled_lines: Vec<Vec<StyledSpan>>,
-    /// Stable content/style signature for each viewport row.
-    pub line_signatures: Vec<u64>,
-    /// Wall-clock stamp (unix ms) for each viewport row, if known.
-    pub line_timestamps_ms: Vec<Option<u64>>,
-    /// Whether each viewport row continues a wrapped logical line.
-    pub line_wrapped: Vec<bool>,
-    /// OSC 8 hyperlink spans per viewport line (char columns).
-    pub hyperlink_lines: Vec<Vec<HyperlinkSpan>>,
-    pub cursor_row: usize,
-    pub cursor_col: usize,
     /// Rows available above the live screen (scrollback).
     pub scrollback_len: usize,
     /// Total rows in scrollback + live screen.
@@ -170,8 +154,6 @@ pub struct TerminalSnapshot {
     pub display_offset: usize,
     /// Inline graphics placements visible in this viewport (Kitty / iTerm2 / Sixel).
     pub images: Vec<GraphicsImageSnapshot>,
-    /// OSC 133 command marks for each viewport row (prompt / output / finished).
-    pub command_marks: Vec<Option<ShellCommandMark>>,
 }
 
 impl TerminalSnapshot {
@@ -180,42 +162,16 @@ impl TerminalSnapshot {
         rows: impl Into<Arc<[Arc<TerminalSnapshotRow>]>>,
     ) -> Self {
         let row_data = rows.into();
-        let cells = row_data
-            .iter()
-            .flat_map(|row| row.cells.iter().cloned())
-            .collect();
-        let lines = row_data.iter().map(|row| row.text.clone()).collect();
-        let styled_lines = row_data
-            .iter()
-            .map(|row| row.styled_spans.to_vec())
-            .collect();
-        let line_signatures = row_data.iter().map(|row| row.signature).collect();
-        let line_timestamps_ms = row_data.iter().map(|row| row.timestamp_ms).collect();
-        let line_wrapped = row_data.iter().map(|row| row.wrapped).collect();
-        let hyperlink_lines = row_data.iter().map(|row| row.hyperlinks.to_vec()).collect();
-        let command_marks = row_data.iter().map(|row| row.command_mark).collect();
-        let rows = row_data.len();
         Self {
             cols: meta.cols,
             viewport_rows: meta.viewport_rows,
-            rows,
             row_data,
-            cells,
             cursor: meta.cursor,
             selection: meta.selection,
-            lines,
-            styled_lines,
-            line_signatures,
-            line_timestamps_ms,
-            line_wrapped,
-            hyperlink_lines,
-            cursor_row: meta.cursor.row,
-            cursor_col: meta.cursor.col,
             scrollback_len: meta.scrollback_len,
             total_rows: meta.total_rows,
             display_offset: meta.display_offset,
             images: meta.images,
-            command_marks,
         }
     }
 
@@ -233,6 +189,10 @@ impl TerminalSnapshot {
 
     pub fn cell(&self, row: usize, col: usize) -> Option<&RenderCell> {
         self.row(row)?.cells.get(col)
+    }
+
+    pub fn line(&self, row: usize) -> Option<&str> {
+        self.row(row).map(|row| row.text.as_str())
     }
 }
 
@@ -871,9 +831,9 @@ impl TerminalCore {
             &self.command_marks,
             &self.snapshot_row_cache,
         );
-        snapshot.images = self
-            .graphics
-            .viewport_images(offset, snapshot.rows, snapshot.cols);
+        snapshot.images =
+            self.graphics
+                .viewport_images(offset, snapshot.row_count(), snapshot.cols);
         (snapshot, stats)
     }
 
@@ -920,11 +880,19 @@ impl TerminalCore {
     }
 
     pub fn lines(&self) -> Vec<String> {
-        self.snapshot().lines
+        self.snapshot()
+            .rows()
+            .iter()
+            .map(|row| row.text.clone())
+            .collect()
     }
 
     pub fn styled_lines(&self) -> Vec<Vec<StyledSpan>> {
-        self.snapshot().styled_lines
+        self.snapshot()
+            .rows()
+            .iter()
+            .map(|row| row.styled_spans.to_vec())
+            .collect()
     }
 
     pub fn all_lines(&self) -> Vec<String> {
@@ -935,7 +903,7 @@ impl TerminalCore {
         let mut out = Vec::new();
         for offset in (0..=max).rev() {
             let snap = self.viewport_snapshot(offset);
-            out.extend(snap.lines);
+            out.extend(snap.rows().iter().map(|row| row.text.clone()));
         }
         dedup_overlapping_viewports(out, self.rows)
     }
@@ -1933,6 +1901,14 @@ pub fn alternate_scroll_key_bytes(up: bool, application_cursor: bool) -> Vec<u8>
 mod tests {
     use super::*;
 
+    fn snapshot_text(snapshot: &TerminalSnapshot) -> String {
+        snapshot
+            .rows()
+            .iter()
+            .map(|row| row.text.as_str())
+            .collect()
+    }
+
     #[test]
     fn osc7_sets_cwd() {
         let mut screen = TerminalScreen::new(40, 3);
@@ -2000,8 +1976,9 @@ mod tests {
         screen.advance(b"\x1b]133;C\x07out\n");
         screen.advance(b"\x1b]133;D;0\x07");
         let snap = screen.snapshot();
+        let mut marks = snap.rows().iter().map(|row| row.command_mark);
         assert!(
-            snap.command_marks.iter().any(|m| {
+            marks.clone().any(|m| {
                 matches!(
                     m,
                     Some(
@@ -2012,14 +1989,18 @@ mod tests {
                 )
             }),
             "marks={:?}",
-            snap.command_marks
+            snap.rows()
+                .iter()
+                .map(|row| row.command_mark)
+                .collect::<Vec<_>>()
         );
         assert!(
-            snap.command_marks
-                .iter()
-                .any(|m| { matches!(m, Some(ShellCommandMark::Finished { exit_code: Some(0) })) }),
+            marks.any(|m| { matches!(m, Some(ShellCommandMark::Finished { exit_code: Some(0) })) }),
             "expected Finished with exit 0, marks={:?}",
-            snap.command_marks
+            snap.rows()
+                .iter()
+                .map(|row| row.command_mark)
+                .collect::<Vec<_>>()
         );
     }
 
@@ -2029,20 +2010,28 @@ mod tests {
         screen.advance(b"\x1b]133;D;1\x07");
         let snap = screen.snapshot();
         assert!(
-            snap.command_marks
+            snap.rows()
                 .iter()
+                .map(|row| row.command_mark)
                 .any(|m| { matches!(m, Some(ShellCommandMark::Finished { exit_code: Some(1) })) }),
             "marks={:?}",
-            snap.command_marks
+            snap.rows()
+                .iter()
+                .map(|row| row.command_mark)
+                .collect::<Vec<_>>()
         );
         screen.advance(b"\x1b]133;D;0\x07");
         let snap = screen.snapshot();
         assert!(
-            snap.command_marks
+            snap.rows()
                 .iter()
+                .map(|row| row.command_mark)
                 .any(|m| { matches!(m, Some(ShellCommandMark::Finished { exit_code: Some(0) })) }),
             "marks={:?}",
-            snap.command_marks
+            snap.rows()
+                .iter()
+                .map(|row| row.command_mark)
+                .collect::<Vec<_>>()
         );
     }
 
@@ -2051,7 +2040,7 @@ mod tests {
         let mut screen = TerminalScreen::new(40, 3);
         screen.advance(b"\x1b]8;;https://example.com\x07click\x1b]8;;\x07 plain");
         let snap = screen.viewport_snapshot(0);
-        let spans = &snap.hyperlink_lines[0];
+        let spans = &snap.row(0).expect("first row").hyperlinks;
         assert_eq!(spans.len(), 1);
         assert_eq!(spans[0].uri, "https://example.com");
         assert_eq!(spans[0].start_col, 0);
@@ -2098,8 +2087,8 @@ mod tests {
         screen.advance(b"abcdef");
         let snapshot = screen.viewport_snapshot(0);
 
-        assert_eq!(snapshot.line_wrapped.first().copied(), Some(false));
-        assert_eq!(snapshot.line_wrapped.get(1).copied(), Some(true));
+        assert_eq!(snapshot.row(0).map(|row| row.wrapped), Some(false));
+        assert_eq!(snapshot.row(1).map(|row| row.wrapped), Some(true));
     }
 
     #[test]
@@ -2109,16 +2098,14 @@ mod tests {
         let snap = screen.viewport_snapshot(0);
 
         assert!(
-            snap.line_timestamps_ms
+            snap.rows()
                 .iter()
-                .zip(snap.lines.iter())
-                .any(|(timestamp, line)| timestamp.is_some() && line.contains("alpha"))
+                .any(|row| row.timestamp_ms.is_some() && row.text.contains("alpha"))
         );
         assert!(
-            snap.line_timestamps_ms
+            snap.rows()
                 .iter()
-                .zip(snap.lines.iter())
-                .any(|(timestamp, line)| timestamp.is_some() && line.contains("beta"))
+                .any(|row| row.timestamp_ms.is_some() && row.text.contains("beta"))
         );
     }
 
@@ -2128,14 +2115,9 @@ mod tests {
         screen.advance(b"alpha\nbeta");
         let snap = screen.viewport_snapshot(0);
 
-        assert_eq!(snap.line_signatures.len(), snap.rows);
-        assert!(snap.line_signatures.iter().any(|signature| *signature != 0));
-        for (signature, cells) in snap
-            .line_signatures
-            .iter()
-            .zip(snap.cells.chunks_exact(snap.cols))
-        {
-            assert_eq!(*signature, render_row_signature(cells));
+        assert!(snap.rows().iter().any(|row| row.signature != 0));
+        for row in snap.rows() {
+            assert_eq!(row.signature, render_row_signature(&row.cells));
         }
     }
 
@@ -2260,10 +2242,16 @@ mod tests {
         let screen = TerminalScreen::new(80, 24);
         let snapshot = screen.viewport_snapshot(0);
 
-        assert!(snapshot.cells.iter().all(|cell| cell.text.is_empty()));
-        assert!(snapshot.lines.iter().all(String::is_empty));
-        assert!(snapshot.styled_lines.iter().all(|spans| {
-            spans
+        assert!(
+            snapshot
+                .rows()
+                .iter()
+                .flat_map(|row| row.cells.iter())
+                .all(|cell| cell.text.is_empty())
+        );
+        assert!(snapshot.rows().iter().all(|row| row.text.is_empty()));
+        assert!(snapshot.rows().iter().all(|row| {
+            row.styled_spans
                 .iter()
                 .map(|span| span.text.as_str())
                 .collect::<String>()
@@ -2277,29 +2265,25 @@ mod tests {
         screen.advance("界 a".as_bytes());
         let snapshot = screen.viewport_snapshot(0);
 
-        assert_eq!(snapshot.lines[0], "界 a");
-        assert!(snapshot.cells[1].text.is_empty());
-        for (signature, cells) in snapshot
-            .line_signatures
-            .iter()
-            .zip(snapshot.cells.chunks_exact(snapshot.cols))
-        {
-            assert_eq!(*signature, render_row_signature(cells));
+        assert_eq!(snapshot.line(0), Some("界 a"));
+        assert!(snapshot.cell(0, 1).is_some_and(|cell| cell.text.is_empty()));
+        for row in snapshot.rows() {
+            assert_eq!(row.signature, render_row_signature(&row.cells));
         }
     }
 
     #[test]
     fn row_signatures_change_with_content_and_style() {
         let mut screen = TerminalScreen::new(20, 2);
-        let initial = screen.viewport_snapshot(0).line_signatures[0];
+        let initial = screen.viewport_snapshot(0).row(0).unwrap().signature;
 
         screen.advance(b"alpha");
-        let text_signature = screen.viewport_snapshot(0).line_signatures[0];
+        let text_signature = screen.viewport_snapshot(0).row(0).unwrap().signature;
         assert_ne!(text_signature, initial);
 
         screen.clear();
         screen.advance(b"\x1b[31malpha");
-        let styled_signature = screen.viewport_snapshot(0).line_signatures[0];
+        let styled_signature = screen.viewport_snapshot(0).row(0).unwrap().signature;
         assert_ne!(styled_signature, text_signature);
     }
 
@@ -2330,10 +2314,9 @@ mod tests {
 
         let snap = screen.viewport_snapshot(1);
         assert!(
-            snap.line_timestamps_ms
+            snap.rows()
                 .iter()
-                .zip(snap.lines.iter())
-                .any(|(timestamp, line)| timestamp.is_some() && line.contains("one"))
+                .any(|row| row.timestamp_ms.is_some() && row.text.contains("one"))
         );
     }
 
@@ -2351,16 +2334,19 @@ mod tests {
         let older = screen.viewport_snapshot(offset + older_rows);
         let newer = screen.viewport_snapshot(offset - newer_rows);
 
-        assert_eq!(window.viewport_rows, base.rows);
-        assert_eq!(window.rows, base.rows + older_rows + newer_rows);
+        assert_eq!(window.viewport_rows, base.row_count());
         assert_eq!(
-            &window.lines[older_rows..older_rows + base.rows],
-            base.lines.as_slice()
+            window.row_count(),
+            base.row_count() + older_rows + newer_rows
         );
-        assert_eq!(&window.lines[..older_rows], &older.lines[..older_rows]);
         assert_eq!(
-            &window.lines[older_rows + base.rows..],
-            &newer.lines[base.rows - newer_rows..]
+            &window.rows()[older_rows..older_rows + base.row_count()],
+            base.rows()
+        );
+        assert_eq!(&window.rows()[..older_rows], &older.rows()[..older_rows]);
+        assert_eq!(
+            &window.rows()[older_rows + base.row_count()..],
+            &newer.rows()[base.row_count() - newer_rows..]
         );
     }
 
@@ -2373,8 +2359,7 @@ mod tests {
         let base = screen.viewport_snapshot(0);
         let window = screen.viewport_snapshot_with_window(0, 4, 4);
 
-        assert_eq!(window.rows, base.rows + 4);
-        assert_eq!(window.cursor_row, base.cursor_row + 4);
+        assert_eq!(window.row_count(), base.row_count() + 4);
         assert_eq!(window.cursor.row, base.cursor.row + 4);
         assert_eq!(window.total_rows, base.total_rows);
     }
@@ -2413,12 +2398,14 @@ mod tests {
         assert_eq!(screen.scrollback_len(), 1);
         let snap = screen.viewport_snapshot(1);
         assert!(
-            snap.line_timestamps_ms
+            snap.rows()
                 .iter()
-                .zip(snap.lines.iter())
-                .any(|(timestamp, line)| timestamp.is_some() && line.contains("two")),
+                .any(|row| row.timestamp_ms.is_some() && row.text.contains("two")),
             "{:?}",
-            snap.lines
+            snap.rows()
+                .iter()
+                .map(|row| row.text.as_str())
+                .collect::<Vec<_>>()
         );
     }
 
@@ -2714,7 +2701,7 @@ mod tests {
         // Minimal "PNG" base64 payload via iTerm2 inline.
         screen.advance(b"pre\x1b]1337;File=name=x.png;width=3;height=2;inline=1:UE5H\x07post");
         let snap = screen.snapshot();
-        let joined = snap.lines.join("");
+        let joined = snapshot_text(&snap);
         assert!(joined.contains("pre"), "{joined:?}");
         assert!(joined.contains("post"), "{joined:?}");
         assert!(
@@ -2733,7 +2720,7 @@ mod tests {
         let mut screen = TerminalScreen::new(40, 8);
         screen.advance(b"pre\x1b]1337;File=name=x.png;width=3;height=2:UE5H\x07post");
         let snap = screen.snapshot();
-        let joined = snap.lines.join("");
+        let joined = snapshot_text(&snap);
         assert!(joined.contains("pre"), "{joined:?}");
         assert!(joined.contains("post"), "{joined:?}");
         assert!(
@@ -2800,8 +2787,8 @@ mod tests {
         let snap = screen.snapshot();
         assert_eq!(snap.images.len(), 1);
         // After CUD1 + CHA4: row=1, col=3 (0-based).
-        assert_eq!(snap.cursor_row, 1);
-        assert_eq!(snap.cursor_col, 3);
+        assert_eq!(snap.cursor.row, 1);
+        assert_eq!(snap.cursor.col, 3);
     }
 
     #[test]
@@ -2811,7 +2798,7 @@ mod tests {
         let snap = screen.snapshot();
         assert_eq!(snap.images.len(), 1);
         assert_eq!(
-            snap.images[0].row, snap.cursor_row,
+            snap.images[0].row, snap.cursor.row,
             "image placed after scroll should not be shifted into history"
         );
     }
@@ -2861,7 +2848,7 @@ mod tests {
         // GBK "测"
         screen.advance(&[0xb2, 0xe2]);
         let snap = screen.snapshot();
-        let joined = snap.lines.join("");
+        let joined = snapshot_text(&snap);
         assert!(joined.contains('测'), "grid={joined:?}");
     }
 
@@ -2872,7 +2859,7 @@ mod tests {
 
         screen.advance_decoded_text("本地提示");
 
-        let joined = screen.snapshot().lines.join("");
+        let joined = snapshot_text(&screen.snapshot());
         let compact = joined.replace(' ', "");
         assert!(compact.contains("本地提示"), "grid={joined:?}");
         assert!(!joined.contains('\u{fffd}'), "grid={joined:?}");
@@ -2885,11 +2872,11 @@ mod tests {
         // GBK "测试" split in the middle of the first character.
         screen.advance(&[0xb2]);
         assert!(
-            !screen.snapshot().lines.join("").contains('\u{fffd}'),
+            !snapshot_text(&screen.snapshot()).contains('\u{fffd}'),
             "incomplete byte should not render as replacement"
         );
         screen.advance(&[0xe2, 0xca, 0xd4]);
-        let joined = screen.snapshot().lines.join("");
+        let joined = snapshot_text(&screen.snapshot());
         assert!(
             joined.contains('测') && joined.contains('试') && !joined.contains('\u{fffd}'),
             "grid={joined:?}"

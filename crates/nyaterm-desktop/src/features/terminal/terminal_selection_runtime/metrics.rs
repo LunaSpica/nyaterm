@@ -250,7 +250,7 @@ impl NyaTermApp {
             .unwrap_or(TerminalSurfaceHitTestScrollGeometry {
                 snapshot_pending: false,
                 display_offset: target_display_offset,
-                snapshot_rows: snapshot.rows,
+                snapshot_rows: snapshot.row_count(),
                 viewport_anchor_row: fallback_viewport_anchor_row,
             });
         let (scroll_offset, residual_lines) = if let Some(session_id) = session_id {
@@ -488,7 +488,7 @@ pub(in crate::features) fn terminal_snapshot_row_for_viewport_row(
     );
     anchor
         .checked_add(viewport_row)
-        .filter(|row| *row < snapshot.lines.len())
+        .filter(|row| *row < snapshot.row_count())
 }
 
 #[cfg(test)]
@@ -506,20 +506,15 @@ mod tests {
         let mut screen = nyaterm_terminal::TerminalScreen::default();
         screen.advance_decoded_text(&terminal_output_lines(80));
         let base = screen.viewport_snapshot(0);
-        let viewport_rows = base.rows.max(1);
+        let viewport_rows = base.row_count().max(1);
         let older = screen.viewport_snapshot(viewport_rows);
-        let retained_older_rows = older.rows.min(viewport_rows);
+        let retained_older_rows = older.row_count().min(viewport_rows);
         assert!(retained_older_rows > 0);
 
         let mut snapshot = base.clone();
-        let mut lines = older
-            .lines
-            .into_iter()
-            .take(retained_older_rows)
-            .collect::<Vec<_>>();
-        lines.extend(snapshot.lines);
-        snapshot.lines = lines;
-        snapshot.rows = snapshot.rows.saturating_add(retained_older_rows);
+        let mut rows = older.rows()[..retained_older_rows].to_vec();
+        rows.extend(snapshot.rows().iter().cloned());
+        snapshot.row_data = rows.into();
 
         let first_visible_row = terminal_snapshot_row_for_viewport_row(
             &snapshot,
@@ -537,10 +532,10 @@ mod tests {
         );
 
         assert_eq!(first_visible_row, Some(retained_older_rows));
-        assert_eq!(snapshot.lines[first_visible_row.unwrap()], base.lines[0],);
+        assert_eq!(snapshot.line(first_visible_row.unwrap()), base.line(0),);
         assert_eq!(
-            snapshot.lines[last_visible_row.unwrap()],
-            base.lines[viewport_rows.saturating_sub(1)],
+            snapshot.line(last_visible_row.unwrap()),
+            base.line(viewport_rows.saturating_sub(1)),
         );
     }
     #[test]

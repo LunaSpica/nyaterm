@@ -213,7 +213,7 @@ impl NyaTermApp {
             offset,
             cell.row,
         )?;
-        let line = snapshot.lines.get(snapshot_row)?;
+        let line = snapshot.line(snapshot_row)?;
         if line.is_empty() {
             return None;
         }
@@ -351,7 +351,7 @@ impl NyaTermApp {
         ) else {
             return false;
         };
-        let Some(spans) = snapshot.hyperlink_lines.get(snapshot_row) else {
+        let Some(spans) = snapshot.row(snapshot_row).map(|row| &row.hyperlinks) else {
             return false;
         };
         let col = pos.col;

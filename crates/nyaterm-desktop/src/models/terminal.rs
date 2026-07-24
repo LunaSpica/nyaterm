@@ -338,14 +338,15 @@ fn prepare_terminal_frame_action_links(
     if !enabled {
         return Some(TerminalFrameActionLinks {
             matcher_key: terminal_action_link_matcher_key(false, matchers),
-            matches_by_line: vec![Vec::new(); snapshot.lines.len()],
-            cell_ranges_by_line: vec![Vec::new(); snapshot.lines.len()],
+            matches_by_line: vec![Vec::new(); snapshot.row_count()],
+            cell_ranges_by_line: vec![Vec::new(); snapshot.row_count()],
         });
     }
     let matches_by_line = snapshot
-        .lines
+        .rows()
         .iter()
-        .map(|line| {
+        .map(|row| {
+            let line = &row.text;
             if line.is_empty() {
                 Vec::new()
             } else {
@@ -354,10 +355,11 @@ fn prepare_terminal_frame_action_links(
         })
         .collect::<Vec<_>>();
     let cell_ranges_by_line = snapshot
-        .lines
+        .rows()
         .iter()
         .zip(matches_by_line.iter())
-        .map(|(line, matches)| {
+        .map(|(row, matches)| {
+            let line = &row.text;
             matches
                 .iter()
                 .map(|item| {
@@ -2626,7 +2628,7 @@ mod tests {
         let viewport_rows = viewport_rows.max(1);
         let real_total_rows = snapshot.scrollback_len.saturating_add(viewport_rows);
         let snapshot_end = snapshot.total_rows.saturating_sub(snapshot.display_offset);
-        let snapshot_start = snapshot_end.saturating_sub(snapshot.rows);
+        let snapshot_start = snapshot_end.saturating_sub(snapshot.row_count());
         let desired_end = real_total_rows.saturating_sub(display_offset);
         let desired_start = desired_end.saturating_sub(viewport_rows);
         snapshot_start <= desired_start && desired_end <= snapshot_end
@@ -2640,7 +2642,7 @@ mod tests {
         let viewport_rows = viewport_rows.max(1);
         let real_total_rows = snapshot.scrollback_len.saturating_add(viewport_rows);
         let snapshot_end = snapshot.total_rows.saturating_sub(snapshot.display_offset);
-        let snapshot_start = snapshot_end.saturating_sub(snapshot.rows);
+        let snapshot_start = snapshot_end.saturating_sub(snapshot.row_count());
         let desired_end = real_total_rows.saturating_sub(display_offset);
         let desired_start = desired_end.saturating_sub(viewport_rows);
         desired_start.saturating_sub(snapshot_start)
@@ -2678,7 +2680,7 @@ mod tests {
     #[test]
     fn terminal_view_local_text_live_snapshot_keeps_scroll_window() {
         let mut view = TerminalViewState::from_output(terminal_output_lines(80));
-        let viewport_rows = view.screen.viewport_snapshot(0).rows;
+        let viewport_rows = view.screen.viewport_snapshot(0).row_count();
 
         view.append_text("local status\n");
 
@@ -2686,7 +2688,7 @@ mod tests {
             .frame_snapshot
             .as_ref()
             .expect("local append should publish a live snapshot");
-        assert!(snapshot.rows > viewport_rows);
+        assert!(snapshot.row_count() > viewport_rows);
         assert!(snapshot_covers_offset(snapshot.as_ref(), 0, viewport_rows));
         assert!(snapshot_covers_offset(snapshot.as_ref(), 1, viewport_rows));
     }
@@ -2694,7 +2696,7 @@ mod tests {
     #[test]
     fn terminal_view_ui_viewport_rows_ignore_retained_snapshot_rows() {
         let mut view = TerminalViewState::from_output(terminal_output_lines(80));
-        let viewport_rows = view.screen.viewport_snapshot(0).rows;
+        let viewport_rows = view.screen.viewport_snapshot(0).row_count();
 
         view.append_text("local status\n");
 
@@ -2702,7 +2704,7 @@ mod tests {
             .frame_snapshot
             .as_ref()
             .expect("local append should publish a live snapshot")
-            .rows;
+            .row_count();
         assert!(snapshot_rows > viewport_rows);
         assert_eq!(view.viewport_rows_for_ui(), viewport_rows);
     }
@@ -2710,20 +2712,20 @@ mod tests {
     #[test]
     fn terminal_view_live_snapshot_uses_normal_scroll_window() {
         let view = TerminalViewState::from_output(terminal_output_lines(320));
-        let viewport_rows = view.screen.viewport_snapshot(0).rows;
+        let viewport_rows = view.screen.viewport_snapshot(0).row_count();
         let normal_offset = viewport_rows.saturating_mul(2);
 
         let snapshot = view.live_snapshot_with_scroll_window();
 
         assert!(
-            snapshot.rows
+            snapshot.row_count()
                 >= viewport_rows.saturating_add(terminal_frame_scroll_window_extra_rows(
                     viewport_rows,
                     false,
                 ))
         );
         assert!(
-            snapshot.rows
+            snapshot.row_count()
                 < viewport_rows
                     .saturating_add(terminal_frame_scroll_window_extra_rows(viewport_rows, true,))
         );
@@ -2788,7 +2790,7 @@ mod tests {
     #[test]
     fn terminal_view_unprotected_bytes_live_snapshot_keeps_scroll_window() {
         let mut view = TerminalViewState::from_output(terminal_output_lines(80));
-        let viewport_rows = view.screen.viewport_snapshot(0).rows;
+        let viewport_rows = view.screen.viewport_snapshot(0).row_count();
 
         view.append_bytes_unprotected(b"byte status\n");
 
@@ -2796,7 +2798,7 @@ mod tests {
             .frame_snapshot
             .as_ref()
             .expect("byte append should publish a live snapshot");
-        assert!(snapshot.rows > viewport_rows);
+        assert!(snapshot.row_count() > viewport_rows);
         assert!(snapshot_covers_offset(snapshot.as_ref(), 0, viewport_rows));
         assert!(snapshot_covers_offset(snapshot.as_ref(), 1, viewport_rows));
     }
@@ -2894,7 +2896,7 @@ mod tests {
         let mut session = TerminalFrameSession::new("UTF-8", 1000);
         session.screen = screen_from_line_count(120);
         let offset = 20;
-        let viewport_rows = session.screen.viewport_snapshot(offset).rows;
+        let viewport_rows = session.screen.viewport_snapshot(offset).row_count();
 
         let event = session.snapshot_event(
             "s1".to_string(),
@@ -2905,7 +2907,7 @@ mod tests {
         );
 
         assert_eq!(event.offset, offset);
-        assert!(event.snapshot.rows > viewport_rows);
+        assert!(event.snapshot.row_count() > viewport_rows);
         assert!(snapshot_covers_offset(
             event.snapshot.as_ref(),
             offset,
@@ -2934,7 +2936,13 @@ mod tests {
         assert_eq!(event.offset, 0);
         assert_eq!(event.snapshot.cols, 100);
         assert_eq!(event.snapshot.viewport_rows, 30);
-        assert!(event.snapshot.lines.join("\n").contains("line 119"));
+        assert!(
+            event
+                .snapshot
+                .rows()
+                .iter()
+                .any(|row| row.text.contains("line 119"))
+        );
         assert!(terminal_snapshot_matches_grid_geometry(
             event.snapshot.as_ref(),
             100,
@@ -2947,7 +2955,7 @@ mod tests {
         let mut session = TerminalFrameSession::new("UTF-8", 1000);
         session.screen = screen_from_line_count(240);
         let offset = 80;
-        let viewport_rows = session.screen.viewport_snapshot(offset).rows;
+        let viewport_rows = session.screen.viewport_snapshot(offset).row_count();
         let fast_delta = viewport_rows.saturating_mul(2);
 
         let event = session.snapshot_event(
@@ -2959,9 +2967,12 @@ mod tests {
         );
 
         assert_eq!(event.offset, offset);
-        assert_eq!(
-            event.snapshot.cells.len(),
-            event.snapshot.rows * event.snapshot.cols
+        assert!(
+            event
+                .snapshot
+                .rows()
+                .iter()
+                .all(|row| row.cells.len() == event.snapshot.cols)
         );
         assert!(snapshot_covers_offset(
             event.snapshot.as_ref(),
@@ -2985,7 +2996,7 @@ mod tests {
         let mut session = TerminalFrameSession::new("UTF-8", 2000);
         session.screen = screen_from_line_count(900);
         let offset = 300;
-        let viewport_rows = session.screen.viewport_snapshot(offset).rows;
+        let viewport_rows = session.screen.viewport_snapshot(offset).row_count();
         let fast_delta = viewport_rows.saturating_mul(3);
         let event = session.snapshot_event(
             "s1".to_string(),
@@ -3023,7 +3034,7 @@ mod tests {
         let mut session = TerminalFrameSession::new("UTF-8", 1000);
         session.screen = screen_from_line_count(80);
         let offset = 0;
-        let viewport_rows = session.screen.viewport_snapshot(offset).rows;
+        let viewport_rows = session.screen.viewport_snapshot(offset).row_count();
         assert!(session.screen.scrollback_len() > 0);
 
         let event = session.snapshot_event(
@@ -3035,7 +3046,7 @@ mod tests {
         );
 
         assert_eq!(event.offset, offset);
-        assert!(event.snapshot.rows > viewport_rows);
+        assert!(event.snapshot.row_count() > viewport_rows);
         assert!(snapshot_covers_offset(
             event.snapshot.as_ref(),
             offset,
@@ -3063,11 +3074,11 @@ mod tests {
             false,
         );
 
-        let prepended_rows = event.snapshot.rows.saturating_sub(base.rows);
+        let prepended_rows = event.snapshot.row_count().saturating_sub(base.row_count());
         assert!(prepended_rows > 0);
         assert_eq!(
-            event.snapshot.cursor_row,
-            base.cursor_row.saturating_add(prepended_rows)
+            event.snapshot.cursor.row,
+            base.cursor.row.saturating_add(prepended_rows)
         );
         assert_eq!(
             event.snapshot.cursor.row,
@@ -3278,9 +3289,9 @@ mod tests {
         assert!(event.snapshot.is_some());
         let snap = event.snapshot.unwrap();
         assert!(
-            snap.lines
+            snap.rows()
                 .iter()
-                .any(|line| line.contains("visible-output") || !line.is_empty())
+                .any(|row| row.text.contains("visible-output") || !row.text.is_empty())
         );
     }
 
@@ -3289,7 +3300,7 @@ mod tests {
         let mut session = TerminalFrameSession::new("UTF-8", 1000);
         session.include_live_snapshot = true;
         session.screen = screen_from_line_count(80);
-        let viewport_rows = session.screen.viewport_snapshot(0).rows;
+        let viewport_rows = session.screen.viewport_snapshot(0).row_count();
         let event = session.output_event_from_batch(
             "visible".to_string(),
             TerminalFrameOutputBatch::default(),
@@ -3299,7 +3310,7 @@ mod tests {
             .snapshot
             .expect("visible output should include a live snapshot");
 
-        assert_eq!(snapshot.rows, viewport_rows);
+        assert_eq!(snapshot.row_count(), viewport_rows);
         assert!(snapshot_covers_offset(snapshot.as_ref(), 0, viewport_rows));
         assert!(!snapshot_covers_offset(snapshot.as_ref(), 1, viewport_rows));
     }
@@ -3309,7 +3320,7 @@ mod tests {
         let mut session = TerminalFrameSession::new("UTF-8", 1000);
         session.include_live_snapshot = true;
         session.screen = screen_from_line_count(160);
-        let viewport_rows = session.screen.viewport_snapshot(0).rows;
+        let viewport_rows = session.screen.viewport_snapshot(0).row_count();
         let event = session.output_event_from_batch(
             "visible".to_string(),
             TerminalFrameOutputBatch::default(),
@@ -3319,7 +3330,7 @@ mod tests {
             .snapshot
             .expect("visible output should include a live snapshot");
 
-        assert_eq!(snapshot.rows, viewport_rows);
+        assert_eq!(snapshot.row_count(), viewport_rows);
         assert!(snapshot_covers_offset(snapshot.as_ref(), 0, viewport_rows));
         assert!(!snapshot_covers_offset(snapshot.as_ref(), 1, viewport_rows));
     }
@@ -3329,7 +3340,7 @@ mod tests {
         let mut session = TerminalFrameSession::new("UTF-8", 1000);
         session.include_live_snapshot = true;
         session.screen = screen_from_line_count(320);
-        let viewport_rows = session.screen.viewport_snapshot(0).rows;
+        let viewport_rows = session.screen.viewport_snapshot(0).row_count();
         let normal_offset = viewport_rows.saturating_mul(2);
         let live_snapshot = session
             .output_event_from_batch(
@@ -3350,18 +3361,18 @@ mod tests {
             .snapshot;
 
         assert!(
-            snapshot.rows
+            snapshot.row_count()
                 >= viewport_rows.saturating_add(terminal_frame_scroll_window_extra_rows(
                     viewport_rows,
                     false,
                 ))
         );
         assert!(
-            snapshot.rows
+            snapshot.row_count()
                 < viewport_rows
                     .saturating_add(terminal_frame_scroll_window_extra_rows(viewport_rows, true,))
         );
-        assert!(snapshot.rows > live_snapshot.rows);
+        assert!(snapshot.row_count() > live_snapshot.row_count());
         assert!(snapshot_covers_offset(
             snapshot.as_ref(),
             normal_offset,
@@ -3370,14 +3381,8 @@ mod tests {
         let anchor =
             snapshot_anchor_row_for_offset(snapshot.as_ref(), normal_offset, viewport_rows);
         assert_eq!(
-            snapshot.lines[anchor],
-            session
-                .screen
-                .viewport_snapshot(normal_offset)
-                .lines
-                .first()
-                .cloned()
-                .unwrap_or_default()
+            snapshot.line(anchor),
+            session.screen.viewport_snapshot(normal_offset).line(0)
         );
     }
 
@@ -3472,8 +3477,9 @@ mod tests {
 
         let snapshot = view.screen.snapshot();
         let red_cell = snapshot
-            .cells
+            .rows()
             .iter()
+            .flat_map(|row| row.cells.iter())
             .find(|cell| cell.text == "r")
             .expect("styled red cell");
         assert_eq!(red_cell.style.fg, Some(1));
@@ -3846,8 +3852,8 @@ mod tests {
 
         let links = prepare_terminal_frame_action_links(&snapshot, true, &matchers).unwrap();
 
-        assert_eq!(links.matches_by_line.len(), snapshot.lines.len());
-        assert_eq!(links.cell_ranges_by_line.len(), snapshot.lines.len());
+        assert_eq!(links.matches_by_line.len(), snapshot.row_count());
+        assert_eq!(links.cell_ranges_by_line.len(), snapshot.row_count());
         assert!(
             links
                 .matches_by_line
@@ -4010,8 +4016,10 @@ mod tests {
                 .snapshot
                 .as_ref()
                 .unwrap()
-                .lines
-                .join("")
+                .rows()
+                .iter()
+                .map(|row| row.text.as_str())
+                .collect::<String>()
                 .contains("abc")
         );
         assert!(pending.is_empty());

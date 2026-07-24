@@ -108,8 +108,7 @@ impl NyaTermApp {
             let total = self.terminal_screen.total_rows().max(1);
             let rows = self
                 .terminal_snapshot_for_session(None, 0)
-                .lines
-                .len()
+                .row_count()
                 .max(1);
             let max_start = total.saturating_sub(rows);
             let start = abs_line.min(max_start);

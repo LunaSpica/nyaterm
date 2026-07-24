@@ -49,7 +49,7 @@ impl TerminalKeywordHighlightSnapshot {
         snapshot: &TerminalSnapshot,
         palette: nyaterm_ui::ThemePalette,
     ) -> bool {
-        self.matches_snapshot_rows(snapshot, palette, 0..snapshot.rows)
+        self.matches_snapshot_rows(snapshot, palette, 0..snapshot.row_count())
     }
 
     pub fn matches_snapshot_rows(
@@ -64,13 +64,12 @@ impl TerminalKeywordHighlightSnapshot {
         if self.palette_key != terminal_keyword_palette_key(palette) {
             return false;
         }
-        let start = rows.start.min(snapshot.rows);
-        let end = rows.end.min(snapshot.rows).max(start);
+        let start = rows.start.min(snapshot.row_count());
+        let end = rows.end.min(snapshot.row_count()).max(start);
         (start..end).all(|row| {
             snapshot
-                .line_signatures
-                .get(row)
-                .is_some_and(|signature| self.has_signature_at_row(row, *signature))
+                .row(row)
+                .is_some_and(|snapshot_row| self.has_signature_at_row(row, snapshot_row.signature))
         })
     }
 
@@ -127,7 +126,7 @@ pub fn precompute_terminal_keyword_highlights(
         highlighter,
         palette,
         previous,
-        0..snapshot.rows,
+        0..snapshot.row_count(),
     )
 }
 
@@ -142,17 +141,20 @@ pub fn precompute_terminal_keyword_highlights_for_rows(
     let previous = previous.filter(|previous| {
         previous.rules_key == highlighter.rules_key && previous.palette_key == palette_key
     });
-    let requested_start = requested_rows.start.min(snapshot.rows);
-    let requested_end = requested_rows.end.min(snapshot.rows).max(requested_start);
-    let mut known_rows = Vec::with_capacity(snapshot.rows);
+    let requested_start = requested_rows.start.min(snapshot.row_count());
+    let requested_end = requested_rows
+        .end
+        .min(snapshot.row_count())
+        .max(requested_start);
+    let mut known_rows = Vec::with_capacity(snapshot.row_count());
     let rows: Vec<Option<Arc<Vec<TerminalHighlightSpan>>>> = snapshot
-        .lines
+        .rows()
         .iter()
         .enumerate()
-        .map(|(row, line)| {
-            if let Some(reused) = snapshot.line_signatures.get(row).and_then(|signature| {
-                previous.and_then(|previous| previous.rows_by_signature.get(signature))
-            }) {
+        .map(|(row, snapshot_row)| {
+            if let Some(reused) = previous
+                .and_then(|previous| previous.rows_by_signature.get(&snapshot_row.signature))
+            {
                 known_rows.push(true);
                 return reused.clone();
             }
@@ -160,8 +162,12 @@ pub fn precompute_terminal_keyword_highlights_for_rows(
                 known_rows.push(false);
                 return None;
             }
-            let display_line = if line.is_empty() { " " } else { line };
-            let ansi = snapshot.styled_lines.get(row).map(Vec::as_slice);
+            let display_line = if snapshot_row.text.is_empty() {
+                " "
+            } else {
+                snapshot_row.text.as_str()
+            };
+            let ansi = Some(snapshot_row.styled_spans.as_ref());
             let spans = terminal_highlight_spans_compiled(
                 display_line,
                 ansi,
@@ -180,9 +186,9 @@ pub fn precompute_terminal_keyword_highlights_for_rows(
         })
         .collect();
     let rows_by_signature = snapshot
-        .line_signatures
+        .rows()
         .iter()
-        .copied()
+        .map(|row| row.signature)
         .zip(known_rows.iter().copied())
         .zip(rows.iter())
         .filter_map(|((signature, known), spans)| known.then(|| (signature, spans.clone())))
@@ -191,7 +197,7 @@ pub fn precompute_terminal_keyword_highlights_for_rows(
         rules_key: highlighter.rules_key,
         palette_key,
         display_offset: snapshot.display_offset,
-        line_signatures: snapshot.line_signatures.clone(),
+        line_signatures: snapshot.rows().iter().map(|row| row.signature).collect(),
         known_rows,
         rows,
         rows_by_signature,
@@ -468,6 +474,24 @@ pub(super) fn parse_hex_rgb(value: &str) -> Option<u32> {
 mod tests {
     use super::*;
 
+    fn set_snapshot_row(
+        snapshot: &mut TerminalSnapshot,
+        row: usize,
+        text: impl Into<String>,
+        signature: u64,
+    ) {
+        let text = text.into();
+        let rows = Arc::make_mut(&mut snapshot.row_data);
+        let row = Arc::make_mut(&mut rows[row]);
+        row.text = text.clone();
+        row.styled_spans = vec![nyaterm_terminal::StyledSpan {
+            text,
+            style: nyaterm_terminal::CellStyle::default(),
+        }]
+        .into_boxed_slice();
+        row.signature = signature;
+    }
+
     #[test]
     fn keyword_highlights_keep_earliest_longest_and_rule_priority() {
         let compiled = vec![
@@ -492,12 +516,7 @@ mod tests {
     #[test]
     fn precomputed_keyword_snapshot_checks_line_signatures() {
         let mut snapshot = TerminalScreen::default().snapshot();
-        snapshot.lines[0] = "prefix ERROR suffix".to_string();
-        snapshot.styled_lines[0] = vec![nyaterm_terminal::StyledSpan {
-            text: snapshot.lines[0].clone(),
-            style: nyaterm_terminal::CellStyle::default(),
-        }];
-        snapshot.line_signatures[0] = 41;
+        set_snapshot_row(&mut snapshot, 0, "prefix ERROR suffix", 41);
         let rules = vec![ResolvedKeywordHighlightRule {
             id: "error".to_string(),
             name: "Error".to_string(),
@@ -524,19 +543,23 @@ mod tests {
         ));
         assert!(
             highlights
-                .stale_lookup(0, Some(41), 0, snapshot.rows)
+                .stale_lookup(0, Some(41), 0, snapshot.row_count())
                 .and_then(|row| row.spans())
                 .is_some()
         );
         assert!(
             highlights
-                .stale_lookup(0, Some(42), 0, snapshot.rows)
+                .stale_lookup(0, Some(42), 0, snapshot.row_count())
                 .is_none()
         );
-        assert!(highlights.stale_lookup(0, None, 0, snapshot.rows).is_none());
         assert!(
             highlights
-                .stale_lookup(0, Some(41), 1, snapshot.rows)
+                .stale_lookup(0, None, 0, snapshot.row_count())
+                .is_none()
+        );
+        assert!(
+            highlights
+                .stale_lookup(0, Some(41), 1, snapshot.row_count())
                 .is_none()
         );
         assert!(highlights.matches_snapshot(&snapshot, palette));
@@ -552,12 +575,7 @@ mod tests {
     #[test]
     fn precomputed_keyword_snapshot_marks_empty_rows_as_known() {
         let mut snapshot = TerminalScreen::default().snapshot();
-        snapshot.lines[0] = "plain text".to_string();
-        snapshot.styled_lines[0] = vec![nyaterm_terminal::StyledSpan {
-            text: snapshot.lines[0].clone(),
-            style: nyaterm_terminal::CellStyle::default(),
-        }];
-        snapshot.line_signatures[0] = 41;
+        set_snapshot_row(&mut snapshot, 0, "plain text", 41);
         let rules = vec![ResolvedKeywordHighlightRule {
             id: "error".to_string(),
             name: "Error".to_string(),
@@ -583,12 +601,7 @@ mod tests {
     fn partial_keyword_snapshot_keeps_unparsed_rows_unknown_and_accumulates() {
         let mut snapshot = TerminalScreen::default().snapshot();
         for (row, signature) in [(0, 41), (1, 42)] {
-            snapshot.lines[row] = format!("row {row} ERROR");
-            snapshot.styled_lines[row] = vec![nyaterm_terminal::StyledSpan {
-                text: snapshot.lines[row].clone(),
-                style: nyaterm_terminal::CellStyle::default(),
-            }];
-            snapshot.line_signatures[row] = signature;
+            set_snapshot_row(&mut snapshot, row, format!("row {row} ERROR"), signature);
         }
         let rules = vec![ResolvedKeywordHighlightRule {
             id: "error".to_string(),
@@ -627,12 +640,7 @@ mod tests {
     #[test]
     fn precomputed_keyword_snapshot_reuses_matching_rows_after_scroll() {
         let mut snapshot = TerminalScreen::default().snapshot();
-        snapshot.lines[0] = "prefix ERROR suffix".to_string();
-        snapshot.styled_lines[0] = vec![nyaterm_terminal::StyledSpan {
-            text: snapshot.lines[0].clone(),
-            style: nyaterm_terminal::CellStyle::default(),
-        }];
-        snapshot.line_signatures[0] = 41;
+        set_snapshot_row(&mut snapshot, 0, "prefix ERROR suffix", 41);
         let rules = vec![ResolvedKeywordHighlightRule {
             id: "error".to_string(),
             name: "Error".to_string(),
@@ -666,16 +674,9 @@ mod tests {
     #[test]
     fn precomputed_keyword_snapshot_reuses_previous_rows_by_signature() {
         let mut first_snapshot = TerminalScreen::default().snapshot();
-        first_snapshot.lines[0] = "prefix ERROR suffix".to_string();
-        first_snapshot.styled_lines[0] = vec![nyaterm_terminal::StyledSpan {
-            text: first_snapshot.lines[0].clone(),
-            style: nyaterm_terminal::CellStyle::default(),
-        }];
-        first_snapshot.line_signatures[0] = 41;
+        set_snapshot_row(&mut first_snapshot, 0, "prefix ERROR suffix", 41);
         let mut second_snapshot = TerminalScreen::default().snapshot();
-        second_snapshot.lines[5] = first_snapshot.lines[0].clone();
-        second_snapshot.styled_lines[5] = first_snapshot.styled_lines[0].clone();
-        second_snapshot.line_signatures[5] = 41;
+        set_snapshot_row(&mut second_snapshot, 5, "prefix ERROR suffix", 41);
         let rules = vec![ResolvedKeywordHighlightRule {
             id: "error".to_string(),
             name: "Error".to_string(),

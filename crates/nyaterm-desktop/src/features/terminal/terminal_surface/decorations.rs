@@ -8,7 +8,7 @@ pub(in crate::features) fn terminal_snapshot_absolute_range(
     snapshot: &nyaterm_terminal::TerminalSnapshot,
 ) -> (usize, usize) {
     let end = snapshot.total_rows.saturating_sub(snapshot.display_offset);
-    let start = end.saturating_sub(snapshot.rows);
+    let start = end.saturating_sub(snapshot.row_count());
     (start, end)
 }
 
@@ -24,10 +24,12 @@ pub(in crate::features) fn terminal_line_decorations_cache_key(
     include_command_marks: bool,
 ) -> u64 {
     let mut hasher = DefaultHasher::new();
-    snapshot.rows.hash(&mut hasher);
+    snapshot.row_count().hash(&mut hasher);
     snapshot.cols.hash(&mut hasher);
     snapshot.display_offset.hash(&mut hasher);
-    snapshot.line_signatures.hash(&mut hasher);
+    for row in snapshot.rows() {
+        row.signature.hash(&mut hasher);
+    }
     selection.hash(&mut hasher);
     selection_viewport_anchor_row.hash(&mut hasher);
     include_action_links.hash(&mut hasher);
@@ -44,8 +46,9 @@ pub(in crate::features) fn terminal_line_decorations_cache_key(
         }
     }
     if include_hyperlinks {
-        snapshot.hyperlink_lines.len().hash(&mut hasher);
-        for spans in &snapshot.hyperlink_lines {
+        snapshot.row_count().hash(&mut hasher);
+        for row in snapshot.rows() {
+            let spans = &row.hyperlinks;
             spans.len().hash(&mut hasher);
             for span in spans {
                 span.start_col.hash(&mut hasher);
@@ -55,7 +58,9 @@ pub(in crate::features) fn terminal_line_decorations_cache_key(
         }
     }
     if include_command_marks {
-        snapshot.command_marks.hash(&mut hasher);
+        for row in snapshot.rows() {
+            row.command_mark.hash(&mut hasher);
+        }
     }
     hasher.finish()
 }
@@ -88,7 +93,7 @@ pub(in crate::features) fn build_terminal_line_decorations(
     include_hyperlinks: bool,
     include_command_marks: bool,
 ) -> Vec<TerminalLineDecorations> {
-    let line_count = snapshot.lines.len();
+    let line_count = snapshot.row_count();
     let mut line_decorations = Vec::with_capacity(line_count);
     let empty_ranges: [(usize, usize); 0] = [];
     for line_index in 0..line_count {
@@ -105,7 +110,9 @@ pub(in crate::features) fn build_terminal_line_decorations(
         } else {
             Vec::new()
         };
-        if include_hyperlinks && let Some(spans) = snapshot.hyperlink_lines.get(line_index) {
+        if include_hyperlinks
+            && let Some(spans) = snapshot.row(line_index).map(|row| &row.hyperlinks)
+        {
             for span in spans {
                 let start = span.start_col;
                 let end = span.end_col.saturating_add(1);
@@ -123,7 +130,7 @@ pub(in crate::features) fn build_terminal_line_decorations(
             .map(|ranges| ranges.as_slice())
             .unwrap_or(&empty_ranges);
         let command_mark = include_command_marks
-            .then(|| snapshot.command_marks.get(line_index).copied().flatten())
+            .then(|| snapshot.row(line_index).and_then(|row| row.command_mark))
             .flatten();
         line_decorations.push(TerminalLineDecorations {
             search_ranges: line_search_ranges.to_vec(),
