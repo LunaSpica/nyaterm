@@ -486,22 +486,11 @@ fn terminal_scroll_text_first_decorations(
     )
 }
 
-fn terminal_scroll_text_first_keywords_allowed(
-    is_active: bool,
-    render_degraded: bool,
-    runtime_output_pressure: bool,
-    output_burst_bytes: usize,
-    performance_mode: TerminalPerformanceMode,
-    user_scroll_active: bool,
-    input_latency_active: bool,
-) -> bool {
+fn terminal_keyword_highlight_updates_allowed(is_active: bool) -> bool {
+    // TerminalSurface paints only precomputed keyword spans. Keeping the rule
+    // source available under transient pressure lets its background worker
+    // catch up without putting regex work back on the paint path.
     is_active
-        && !render_degraded
-        && !runtime_output_pressure
-        && output_burst_bytes == 0
-        && performance_mode != TerminalPerformanceMode::Overloaded
-        && !user_scroll_active
-        && !input_latency_active
 }
 
 fn terminal_user_scroll_active(
@@ -1856,8 +1845,6 @@ impl NyaTermApp {
         let visual_bell = is_active && self.terminal_runtime.visual_bell_ticks > 0;
         let layout_cache = view.render_cache.layout_cache.clone();
         let render_degraded = view.render_degraded || self.settings.terminal_low_latency_mode;
-        let output_burst_bytes = view.output_burst_bytes;
-        let performance_mode = view.performance_mode;
         let has_new = view.has_new_while_scrolled;
         let performance_overlay = view.performance_overlay;
         let skipped = view.skipped_output_chars;
@@ -1879,15 +1866,7 @@ impl NyaTermApp {
         );
         let configured_keyword_rules = self.resolved_keyword_highlight_rules();
         let clear_keyword_highlights = configured_keyword_rules.is_empty();
-        let keyword_rules = if terminal_scroll_text_first_keywords_allowed(
-            is_active,
-            render_degraded,
-            self.runtime_output_pressure_active(),
-            output_burst_bytes,
-            performance_mode,
-            user_scroll_active,
-            input_latency_active,
-        ) {
+        let keyword_rules = if terminal_keyword_highlight_updates_allowed(is_active) {
             configured_keyword_rules.clone()
         } else {
             std::sync::Arc::new(Vec::new())
@@ -2018,7 +1997,7 @@ impl NyaTermApp {
         let render_degraded = render_degraded_view || render_pressure;
         let configured_keyword_rules = self.resolved_keyword_highlight_rules();
         let clear_keyword_highlights = configured_keyword_rules.is_empty();
-        let keyword_rules = if render_degraded || !is_active {
+        let keyword_rules = if !terminal_keyword_highlight_updates_allowed(is_active) {
             std::sync::Arc::new(Vec::new())
         } else {
             configured_keyword_rules.clone()
@@ -3417,82 +3396,13 @@ mod tests {
     }
 
     #[test]
-    fn terminal_scroll_text_first_keywords_stay_enabled_for_normal_active_scroll() {
-        assert!(terminal_scroll_text_first_keywords_allowed(
-            true,
-            false,
-            false,
-            0,
-            TerminalPerformanceMode::Normal,
-            false,
-            false,
-        ));
+    fn terminal_keyword_highlight_updates_stay_enabled_for_active_surface() {
+        assert!(terminal_keyword_highlight_updates_allowed(true));
     }
 
     #[test]
-    fn terminal_scroll_text_first_keywords_disable_under_pressure() {
-        assert!(!terminal_scroll_text_first_keywords_allowed(
-            true,
-            false,
-            true,
-            0,
-            TerminalPerformanceMode::Normal,
-            false,
-            false,
-        ));
-        assert!(!terminal_scroll_text_first_keywords_allowed(
-            true,
-            true,
-            false,
-            0,
-            TerminalPerformanceMode::Normal,
-            false,
-            false,
-        ));
-        assert!(!terminal_scroll_text_first_keywords_allowed(
-            true,
-            false,
-            false,
-            1,
-            TerminalPerformanceMode::Normal,
-            false,
-            false,
-        ));
-        assert!(!terminal_scroll_text_first_keywords_allowed(
-            true,
-            false,
-            false,
-            0,
-            TerminalPerformanceMode::Overloaded,
-            false,
-            false,
-        ));
-    }
-
-    #[test]
-    fn terminal_scroll_text_first_keywords_disable_during_user_scroll() {
-        assert!(!terminal_scroll_text_first_keywords_allowed(
-            true,
-            false,
-            false,
-            0,
-            TerminalPerformanceMode::Normal,
-            true,
-            false,
-        ));
-    }
-
-    #[test]
-    fn terminal_scroll_text_first_keywords_disable_during_input_latency() {
-        assert!(!terminal_scroll_text_first_keywords_allowed(
-            true,
-            false,
-            false,
-            0,
-            TerminalPerformanceMode::Normal,
-            false,
-            true,
-        ));
+    fn terminal_keyword_highlight_updates_pause_for_inactive_surface() {
+        assert!(!terminal_keyword_highlight_updates_allowed(false));
     }
 
     #[test]

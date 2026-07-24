@@ -1242,12 +1242,19 @@ impl TerminalSurface {
             highlights.rules_key() == rules_key
                 && highlights.matches_snapshot(snapshot.as_ref(), self.palette)
         }) {
-            self.keyword_highlight_pending_key = None;
+            if self.keyword_highlight_task.is_none() {
+                self.keyword_highlight_pending_key = None;
+            }
+            return;
+        }
+        // Let one parse finish, then have its completion schedule the newest
+        // surface snapshot. Replacing the task on every output frame can starve
+        // highlighting indefinitely during continuous input.
+        if self.keyword_highlight_task.is_some() {
             return;
         }
         self.keyword_highlight_generation = self.keyword_highlight_generation.saturating_add(1);
         let generation = self.keyword_highlight_generation;
-        self.keyword_highlight_task = None;
         self.keyword_highlight_pending_key = Some(request_key);
         // Keep the last published snapshot drawable while the replacement is parsed in the
         // background, matching the editor's stale-until-reparsed behavior.
@@ -1273,11 +1280,18 @@ impl TerminalSurface {
                 if this.keyword_highlight_generation != generation {
                     return;
                 }
-                this.keyword_highlighter_rules = Some(rules);
-                this.keyword_highlighter = Some(highlighter);
-                this.keyword_highlights = Some(Arc::new(highlights));
+                this.keyword_highlight_task = None;
                 this.keyword_highlight_pending_key = None;
-                cx.notify();
+                let publish = terminal_keyword_rule_sets_equal(&this.keyword_rules, &rules);
+                if publish {
+                    this.keyword_highlighter_rules = Some(rules);
+                    this.keyword_highlighter = Some(highlighter);
+                    this.keyword_highlights = Some(Arc::new(highlights));
+                    cx.notify();
+                }
+                // The surface may have advanced while this task was running.
+                // Schedule exactly one follow-up for its latest snapshot.
+                this.schedule_keyword_highlights(clear_if_empty, cx);
             });
         }));
     }
