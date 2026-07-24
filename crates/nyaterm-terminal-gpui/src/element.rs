@@ -47,6 +47,8 @@ struct TerminalRowBackgroundRange {
 pub struct NyaTerminalLayoutCache {
     rows: HashMap<u64, Arc<CachedTerminalPaintRow>>,
     row_order: VecDeque<u64>,
+    cursor_glyphs: HashMap<u64, Arc<ShapedLine>>,
+    cursor_glyph_order: VecDeque<u64>,
     keyword_rules_source: Option<Arc<Vec<ResolvedKeywordHighlightRule>>>,
     keyword_rules_key: u64,
     compiled_keyword_key: Option<u64>,
@@ -58,6 +60,7 @@ pub struct NyaTerminalLayoutCache {
 }
 
 const TERMINAL_LAYOUT_CACHE_ROW_CAP: usize = 4096;
+const TERMINAL_LAYOUT_CACHE_CURSOR_GLYPH_CAP: usize = 256;
 const TERMINAL_ELEMENT_PREPAINT_SLOW_MS: u128 = 12;
 const TERMINAL_ELEMENT_PAINT_SLOW_MS: u128 = 12;
 
@@ -65,6 +68,8 @@ impl NyaTerminalLayoutCache {
     pub fn clear(&mut self) {
         self.rows.clear();
         self.row_order.clear();
+        self.cursor_glyphs.clear();
+        self.cursor_glyph_order.clear();
         self.keyword_rules_source = None;
         self.keyword_rules_key = 0;
         self.compiled_keyword_key = None;
@@ -151,6 +156,31 @@ impl NyaTerminalLayoutCache {
         (row, true, duration)
     }
 
+    fn cursor_glyph(
+        &mut self,
+        key: u64,
+        shape: impl FnOnce() -> (Arc<ShapedLine>, std::time::Duration),
+    ) -> (Arc<ShapedLine>, bool, std::time::Duration) {
+        if let Some(cached) = self.cursor_glyphs.get(&key) {
+            self.hits = self.hits.saturating_add(1);
+            return (Arc::clone(cached), false, std::time::Duration::ZERO);
+        }
+        self.misses = self.misses.saturating_add(1);
+        if self.cursor_glyphs.len() >= TERMINAL_LAYOUT_CACHE_CURSOR_GLYPH_CAP
+            && let Some(oldest) = self.cursor_glyph_order.pop_front()
+        {
+            self.cursor_glyphs.remove(&oldest);
+        }
+        let (line, duration) = shape();
+        self.shape_calls = self.shape_calls.saturating_add(1);
+        self.shape_duration_us = self
+            .shape_duration_us
+            .saturating_add(duration.as_micros().min(u128::from(u64::MAX)) as u64);
+        self.cursor_glyphs.insert(key, Arc::clone(&line));
+        self.cursor_glyph_order.push_back(key);
+        (line, true, duration)
+    }
+
     fn evict_oldest_row(&mut self) {
         while self.rows.len() >= TERMINAL_LAYOUT_CACHE_ROW_CAP {
             let Some(key) = self.row_order.pop_front() else {
@@ -199,6 +229,25 @@ mod layout_cache_tests {
         });
         assert_eq!(cache.misses, 1);
         assert_eq!(cache.row_order.len(), 1);
+    }
+
+    #[test]
+    fn cursor_glyph_cache_reuses_matching_layout() {
+        let mut cache = NyaTerminalLayoutCache::default();
+
+        let (first, did_shape, _) = cache.cursor_glyph(42, || {
+            (Arc::new(ShapedLine::default()), std::time::Duration::ZERO)
+        });
+        assert!(did_shape);
+
+        let (second, did_shape, _) = cache.cursor_glyph(42, || {
+            panic!("matching cursor glyph should reuse its shaped layout")
+        });
+        assert!(!did_shape);
+        assert!(Arc::ptr_eq(&first, &second));
+        assert_eq!(cache.misses, 1);
+        assert_eq!(cache.hits, 1);
+        assert_eq!(cache.shape_calls, 1);
     }
 
     #[test]
@@ -1037,6 +1086,14 @@ impl NyaTerminalElement {
         hasher.finish()
     }
 
+    fn cursor_glyph_layout_key(&self, text: &str) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        "terminal-cursor-glyph".hash(&mut hasher);
+        text.hash(&mut hasher);
+        self.paint_style_key(0).hash(&mut hasher);
+        hasher.finish()
+    }
+
     fn keyword_rules_key(&self) -> u64 {
         terminal_keyword_rules_key(&self.keyword_rules)
     }
@@ -1574,9 +1631,6 @@ impl Element for NyaTerminalElement {
                 line: Arc::clone(&painted_row.line),
             });
         }
-        let cache_stats_after = layout_cache
-            .as_ref()
-            .map(|cache| (cache.hits, cache.misses));
         drop(layout_cache);
 
         // Graphics protocol placements (Kitty / iTerm2 / Sixel).
@@ -1679,15 +1733,32 @@ impl Element for NyaTerminalElement {
                     underline: None,
                     strikethrough: None,
                 }];
-                let started_at = Instant::now();
-                let line = Arc::new(window.text_system().shape_line(
-                    SharedString::from(cursor_text),
-                    font_size,
-                    &cursor_runs,
-                    Some(px(cell_w)),
-                ));
-                plan.shape_line_count = plan.shape_line_count.saturating_add(1);
-                plan.shape_line_duration += started_at.elapsed();
+                let cursor_key = self.cursor_glyph_layout_key(&cursor_text);
+                let build_cursor_glyph = |window: &mut Window| {
+                    let started_at = Instant::now();
+                    let line = Arc::new(window.text_system().shape_line(
+                        SharedString::from(cursor_text),
+                        font_size,
+                        &cursor_runs,
+                        Some(px(cell_w)),
+                    ));
+                    (line, started_at.elapsed())
+                };
+                let cursor_layout_cache = self.layout_cache.clone();
+                let mut cursor_layout_cache = cursor_layout_cache
+                    .as_ref()
+                    .and_then(|cache| cache.lock().ok());
+                let (line, did_shape, shape_duration) =
+                    if let Some(cache) = cursor_layout_cache.as_deref_mut() {
+                        cache.cursor_glyph(cursor_key, || build_cursor_glyph(window))
+                    } else {
+                        let (line, duration) = build_cursor_glyph(window);
+                        (line, true, duration)
+                    };
+                if did_shape {
+                    plan.shape_line_count = plan.shape_line_count.saturating_add(1);
+                    plan.shape_line_duration += shape_duration;
+                }
                 plan.text_run_count = plan.text_run_count.saturating_add(cursor_runs.len());
                 plan.cursor_glyph = Some(TerminalCursorGlyphPaint {
                     origin: point(x, y),
@@ -1696,6 +1767,11 @@ impl Element for NyaTerminalElement {
             }
         }
 
+        let cache_stats_after = self
+            .layout_cache
+            .as_ref()
+            .and_then(|cache| cache.lock().ok())
+            .map(|cache| (cache.hits, cache.misses));
         let elapsed = started_at.elapsed();
         if elapsed.as_millis() >= TERMINAL_ELEMENT_PREPAINT_SLOW_MS {
             let (cache_hits, cache_misses) = cache_stats_after.unwrap_or((0, 0));
