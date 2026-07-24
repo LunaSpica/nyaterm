@@ -25,6 +25,7 @@ const TERMINAL_SURFACE_SYNTHESIZED_WINDOW_MAX_EXTRA_ROWS: usize = 192;
 const TERMINAL_SURFACE_SCROLL_PENDING_WARN_AFTER: Duration = Duration::from_millis(48);
 const TERMINAL_SURFACE_SCROLL_PENDING_WARN_INTERVAL: Duration = Duration::from_millis(500);
 const TERMINAL_SURFACE_LOCAL_SCROLL_SYNC_DELAY: Duration = Duration::from_millis(16);
+const TERMINAL_KEYWORD_HIGHLIGHT_PREFETCH_VIEWPORTS: usize = 2;
 
 #[derive(Clone)]
 struct TerminalSurfaceRetainedRow {
@@ -1263,7 +1264,7 @@ impl TerminalSurface {
         let Some(snapshot) = self.snapshot.clone() else {
             return;
         };
-        let requested_rows = terminal_keyword_highlight_visible_rows(
+        let visible_rows = terminal_keyword_highlight_visible_rows(
             snapshot.as_ref(),
             self.display_offset,
             self.viewport_rows,
@@ -1271,25 +1272,27 @@ impl TerminalSurface {
         );
         let rules = self.keyword_rules.clone();
         let rules_key = terminal_keyword_rules_key(rules.as_slice());
+        if self.keyword_highlights.as_ref().is_some_and(|highlights| {
+            highlights.rules_key() == rules_key
+                && highlights.matches_snapshot_rows(snapshot.as_ref(), self.palette, visible_rows)
+        }) {
+            if self.keyword_highlight_task.is_none() {
+                self.keyword_highlight_pending_key = None;
+            }
+            return;
+        }
+        let requested_rows = terminal_keyword_highlight_prefetch_rows(
+            snapshot.as_ref(),
+            self.display_offset,
+            self.viewport_rows,
+            self.scrollback_len,
+        );
         let request_key = terminal_keyword_highlight_request_key(
             snapshot.as_ref(),
             rules_key,
             requested_rows.clone(),
         );
         if self.keyword_highlight_pending_key == Some(request_key) {
-            return;
-        }
-        if self.keyword_highlights.as_ref().is_some_and(|highlights| {
-            highlights.rules_key() == rules_key
-                && highlights.matches_snapshot_rows(
-                    snapshot.as_ref(),
-                    self.palette,
-                    requested_rows.clone(),
-                )
-        }) {
-            if self.keyword_highlight_task.is_none() {
-                self.keyword_highlight_pending_key = None;
-            }
             return;
         }
         // Let one parse finish, then have its completion schedule the newest
@@ -2101,6 +2104,33 @@ fn terminal_keyword_highlight_visible_rows(
     start..end
 }
 
+fn terminal_keyword_highlight_prefetch_rows(
+    snapshot: &TerminalSnapshot,
+    display_offset: usize,
+    viewport_rows: usize,
+    scrollback_len: usize,
+) -> Range<usize> {
+    let viewport_rows = viewport_rows.max(1);
+    let anchor = terminal_snapshot_anchor_row_for_display_offset(
+        snapshot,
+        display_offset,
+        viewport_rows,
+        scrollback_len,
+    );
+    let extra_rows = viewport_rows.saturating_mul(TERMINAL_KEYWORD_HIGHLIGHT_PREFETCH_VIEWPORTS);
+    let start = anchor
+        .saturating_sub(extra_rows)
+        .saturating_sub(1)
+        .min(snapshot.rows);
+    let end = anchor
+        .saturating_add(viewport_rows)
+        .saturating_add(extra_rows)
+        .saturating_add(1)
+        .min(snapshot.rows)
+        .max(start);
+    start..end
+}
+
 fn hidden_terminal_cursor_snapshot() -> nyaterm_terminal::CursorSnapshot {
     nyaterm_terminal::CursorSnapshot {
         row: usize::MAX,
@@ -2773,6 +2803,33 @@ mod tests {
                 snapshot.scrollback_len,
             )
         );
+    }
+
+    #[test]
+    fn keyword_highlight_prefetch_covers_two_viewports_of_local_scroll() {
+        let mut screen = TerminalScreen::new(80, 24);
+        screen.advance_decoded_text(&terminal_test_output_lines(240));
+        let snapshot = screen.viewport_snapshot_with_window(80, 64, 64);
+        let viewport_rows = snapshot.viewport_rows;
+        let rows = terminal_keyword_highlight_prefetch_rows(
+            &snapshot,
+            80,
+            viewport_rows,
+            snapshot.scrollback_len,
+        );
+
+        for display_offset in 80..=80usize.saturating_add(viewport_rows.saturating_mul(2)) {
+            let visible_rows = terminal_keyword_highlight_visible_rows(
+                &snapshot,
+                display_offset,
+                viewport_rows,
+                snapshot.scrollback_len,
+            );
+            assert!(rows.start <= visible_rows.start);
+            assert!(rows.end >= visible_rows.end);
+        }
+        assert!(rows.len() <= viewport_rows.saturating_mul(5).saturating_add(2));
+        assert!(snapshot.rows > rows.len());
     }
 
     #[test]
