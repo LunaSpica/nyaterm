@@ -662,8 +662,11 @@ impl NyaTermApp {
             accepted_bytes,
             skipped_output_bytes,
             revision,
+            snapshot_duration,
+            snapshot_stats,
             process_duration,
         } = frame;
+        let has_snapshot = snapshot.is_some();
         let is_active = self.active_session_id.as_deref() == Some(session_id.as_str());
         let is_visible = self.terminal_session_has_visible_surface(&session_id);
         if is_visible
@@ -769,8 +772,21 @@ impl NyaTermApp {
                 skipped_output_bytes,
                 visible_text_bytes = visible_text.len(),
                 recording_text_bytes,
+                snapshot_ms = snapshot_duration.as_millis(),
+                snapshot_reused_rows = snapshot_stats.reused_rows,
+                snapshot_rebuilt_rows = snapshot_stats.rebuilt_rows,
                 process_ms = process_duration.as_millis(),
                 "slow terminal frame processing"
+            );
+        }
+        if has_snapshot {
+            tracing::debug!(
+                diagnostic = "terminal_frame_snapshot_rows",
+                session_id = %session_id,
+                snapshot_us = snapshot_duration.as_micros(),
+                snapshot_reused_rows = snapshot_stats.reused_rows,
+                snapshot_rebuilt_rows = snapshot_stats.rebuilt_rows,
+                "terminal frame snapshot row reuse"
             );
         }
         let surface_notify =
@@ -875,10 +891,22 @@ impl NyaTermApp {
                 session_id = %frame.session_id,
                 offset = frame.offset,
                 revision = frame.revision,
+                snapshot_ms = frame.snapshot_duration.as_millis(),
+                snapshot_reused_rows = frame.snapshot_stats.reused_rows,
+                snapshot_rebuilt_rows = frame.snapshot_stats.rebuilt_rows,
                 process_ms = frame.process_duration.as_millis(),
                 "slow terminal frame snapshot"
             );
         }
+        tracing::debug!(
+            diagnostic = "terminal_frame_snapshot_rows",
+            session_id = %frame.session_id,
+            offset = frame.offset,
+            snapshot_us = frame.snapshot_duration.as_micros(),
+            snapshot_reused_rows = frame.snapshot_stats.reused_rows,
+            snapshot_rebuilt_rows = frame.snapshot_stats.rebuilt_rows,
+            "terminal frame snapshot row reuse"
+        );
         // Snapshot applies only dirties the surface, not chrome.
         let now = Instant::now();
         let current_action_link_matcher_key = (self.settings.terminal_action_links_enabled
@@ -1492,6 +1520,8 @@ fn merge_terminal_output_frame_for_apply(
     older.protocol_state = newer.protocol_state;
     older.command_running = newer.command_running;
     older.revision = newer.revision;
+    older.snapshot_duration = newer.snapshot_duration;
+    older.snapshot_stats = newer.snapshot_stats;
     older.process_duration = older
         .process_duration
         .saturating_add(newer.process_duration);
@@ -1670,6 +1700,11 @@ mod frame_event_queue_tests {
             accepted_bytes: revision as usize,
             skipped_output_bytes: 0,
             revision,
+            snapshot_duration: Duration::from_millis(revision),
+            snapshot_stats: nyaterm_terminal::TerminalSnapshotBuildStats {
+                reused_rows: revision as usize,
+                rebuilt_rows: revision.saturating_add(1) as usize,
+            },
             process_duration: Duration::ZERO,
         })
     }
@@ -1693,6 +1728,8 @@ mod frame_event_queue_tests {
             ),
             action_links: None,
             revision: 1,
+            snapshot_duration: Duration::ZERO,
+            snapshot_stats: Default::default(),
             process_duration: Duration::ZERO,
         })
     }
@@ -1972,6 +2009,13 @@ mod frame_event_queue_tests {
             &frames[0],
             TerminalFrameEvent::Output(frame)
                 if frame.accepted_bytes == 3 && frame.visible_text == "rev-1rev-2"
+        ));
+        assert!(matches!(
+            &frames[0],
+            TerminalFrameEvent::Output(frame)
+                if frame.snapshot_duration == Duration::from_millis(2)
+                    && frame.snapshot_stats.reused_rows == 2
+                    && frame.snapshot_stats.rebuilt_rows == 3
         ));
         assert!(matches!(
             &frames[1],

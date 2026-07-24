@@ -4,7 +4,7 @@ use nyaterm_core::{
 };
 use nyaterm_terminal::{
     TerminalEffects, TerminalOutputDecoder, TerminalScreen, TerminalSnapshot,
-    terminal_cell_col_for_byte_index,
+    TerminalSnapshotBuildStats, terminal_cell_col_for_byte_index,
 };
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::hash::{Hash, Hasher};
@@ -1453,6 +1453,8 @@ pub(crate) struct TerminalFrameOutputEvent {
     pub(crate) accepted_bytes: usize,
     pub(crate) skipped_output_bytes: usize,
     pub(crate) revision: u64,
+    pub(crate) snapshot_duration: Duration,
+    pub(crate) snapshot_stats: TerminalSnapshotBuildStats,
     pub(crate) process_duration: Duration,
 }
 
@@ -1463,6 +1465,8 @@ pub(crate) struct TerminalFrameSnapshotEvent {
     pub(crate) snapshot: Arc<TerminalSnapshot>,
     pub(crate) action_links: Option<TerminalFrameActionLinks>,
     pub(crate) revision: u64,
+    pub(crate) snapshot_duration: Duration,
+    pub(crate) snapshot_stats: TerminalSnapshotBuildStats,
     pub(crate) process_duration: Duration,
 }
 
@@ -1504,20 +1508,35 @@ fn terminal_frame_snapshot_with_scroll_window(
     offset: usize,
     priority: bool,
 ) -> Arc<TerminalSnapshot> {
+    terminal_frame_snapshot_with_scroll_window_and_stats(screen, offset, priority).0
+}
+
+fn terminal_frame_snapshot_with_scroll_window_and_stats(
+    screen: &TerminalScreen,
+    offset: usize,
+    priority: bool,
+) -> (Arc<TerminalSnapshot>, Duration, TerminalSnapshotBuildStats) {
     let extra_rows = terminal_frame_scroll_window_extra_rows(screen.rows(), priority);
-    terminal_frame_snapshot_with_extra_rows(screen, offset, extra_rows)
+    terminal_frame_snapshot_with_extra_rows_and_stats(screen, offset, extra_rows)
 }
 
-fn terminal_frame_live_snapshot(screen: &TerminalScreen) -> Arc<TerminalSnapshot> {
-    Arc::new(screen.viewport_snapshot(0))
+fn terminal_frame_live_snapshot_with_stats(
+    screen: &TerminalScreen,
+) -> (Arc<TerminalSnapshot>, Duration, TerminalSnapshotBuildStats) {
+    let started_at = Instant::now();
+    let (snapshot, stats) = screen.viewport_snapshot_with_stats(0);
+    (Arc::new(snapshot), started_at.elapsed(), stats)
 }
 
-fn terminal_frame_snapshot_with_extra_rows(
+fn terminal_frame_snapshot_with_extra_rows_and_stats(
     screen: &TerminalScreen,
     offset: usize,
     extra_rows: usize,
-) -> Arc<TerminalSnapshot> {
-    Arc::new(screen.viewport_snapshot_with_window(offset, extra_rows, extra_rows))
+) -> (Arc<TerminalSnapshot>, Duration, TerminalSnapshotBuildStats) {
+    let started_at = Instant::now();
+    let (snapshot, stats) =
+        screen.viewport_snapshot_with_window_and_stats(offset, extra_rows, extra_rows);
+    (Arc::new(snapshot), started_at.elapsed(), stats)
 }
 
 pub(crate) fn terminal_snapshot_matches_grid_geometry(
@@ -1657,12 +1676,16 @@ impl TerminalFrameSession {
         session_id: String,
         started_at: Instant,
     ) -> TerminalFrameSnapshotEvent {
+        let (snapshot, snapshot_duration, snapshot_stats) =
+            terminal_frame_snapshot_with_scroll_window_and_stats(&self.screen, 0, false);
         TerminalFrameSnapshotEvent {
             session_id,
             offset: 0,
-            snapshot: terminal_frame_snapshot_with_scroll_window(&self.screen, 0, false),
+            snapshot,
             action_links: None,
             revision: self.revision,
+            snapshot_duration,
+            snapshot_stats,
             process_duration: started_at.elapsed(),
         }
     }
@@ -1728,10 +1751,11 @@ impl TerminalFrameSession {
         let protocol_state = TerminalProtocolState::from_screen(&self.screen);
         // Hidden/low-priority sessions keep protocol/effects without paying for a
         // full grid snapshot every output frame.
-        let snapshot = if self.include_live_snapshot {
-            Some(terminal_frame_live_snapshot(&self.screen))
+        let (snapshot, snapshot_duration, snapshot_stats) = if self.include_live_snapshot {
+            let (snapshot, duration, stats) = terminal_frame_live_snapshot_with_stats(&self.screen);
+            (Some(snapshot), duration, stats)
         } else {
-            None
+            (None, Duration::ZERO, TerminalSnapshotBuildStats::default())
         };
         TerminalFrameOutputEvent {
             session_id,
@@ -1745,6 +1769,8 @@ impl TerminalFrameSession {
             accepted_bytes: batch.accepted_bytes,
             skipped_output_bytes: batch.skipped_output_bytes,
             revision: self.revision,
+            snapshot_duration,
+            snapshot_stats,
             process_duration: started_at.elapsed(),
         }
     }
@@ -1758,10 +1784,10 @@ impl TerminalFrameSession {
         priority: bool,
     ) -> TerminalFrameSnapshotEvent {
         let started_at = Instant::now();
-        let snapshot = if priority {
-            terminal_frame_snapshot_with_scroll_window(&self.screen, offset, true)
+        let (snapshot, snapshot_duration, snapshot_stats) = if priority {
+            terminal_frame_snapshot_with_scroll_window_and_stats(&self.screen, offset, true)
         } else {
-            terminal_frame_snapshot_with_scroll_window(&self.screen, offset, false)
+            terminal_frame_snapshot_with_scroll_window_and_stats(&self.screen, offset, false)
         };
         let action_links = prepare_terminal_frame_action_links(
             &snapshot,
@@ -1774,6 +1800,8 @@ impl TerminalFrameSession {
             snapshot,
             action_links,
             revision: self.revision,
+            snapshot_duration,
+            snapshot_stats,
             process_duration: started_at.elapsed(),
         }
     }
@@ -2574,6 +2602,8 @@ mod tests {
             accepted_bytes,
             skipped_output_bytes,
             revision: 1,
+            snapshot_duration: Duration::ZERO,
+            snapshot_stats: Default::default(),
             process_duration: Duration::ZERO,
         }
     }
@@ -3296,6 +3326,34 @@ mod tests {
     }
 
     #[test]
+    fn terminal_frame_output_reports_single_line_snapshot_reuse() {
+        let mut session = TerminalFrameSession::new("UTF-8", 1000);
+        session.include_live_snapshot = true;
+        session.screen.advance(b"prompt> ");
+        let first = session.output_event_from_batch(
+            "visible".to_string(),
+            TerminalFrameOutputBatch::default(),
+            Instant::now(),
+        );
+        let viewport_rows = first.snapshot.as_ref().unwrap().row_count();
+
+        session.screen.advance(b"x");
+        let second = session.output_event_from_batch(
+            "visible".to_string(),
+            TerminalFrameOutputBatch::default(),
+            Instant::now(),
+        );
+
+        assert_eq!(
+            second.snapshot_stats.reused_rows + second.snapshot_stats.rebuilt_rows,
+            viewport_rows
+        );
+        assert!(second.snapshot_stats.reused_rows >= viewport_rows.saturating_sub(1));
+        assert!(second.snapshot_stats.rebuilt_rows <= 1);
+        drop(first);
+    }
+
+    #[test]
     fn terminal_frame_output_live_snapshot_stays_viewport_only() {
         let mut session = TerminalFrameSession::new("UTF-8", 1000);
         session.include_live_snapshot = true;
@@ -3716,6 +3774,8 @@ mod tests {
             snapshot: Arc::new(screen.snapshot()),
             action_links: None,
             revision: 1,
+            snapshot_duration: Duration::ZERO,
+            snapshot_stats: Default::default(),
             process_duration: Duration::ZERO,
         }));
         assert!(matches!(wake_rx.try_recv(), Ok(())));
