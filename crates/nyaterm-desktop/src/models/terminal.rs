@@ -2031,6 +2031,22 @@ fn push_terminal_frame_command(
                 .iter()
                 .rposition(|queued| !terminal_frame_command_is_low_priority_derived(queued))
                 .map_or(0, |index| index + 1);
+            if let Some(TerminalFrameCommand::Output {
+                session_id: queued_session_id,
+                data: queued_data,
+                encoding: queued_encoding,
+                scrollback_limit: queued_scrollback_limit,
+            }) = insert_at
+                .checked_sub(1)
+                .and_then(|index| commands.get_mut(index))
+                && queued_session_id == &session_id
+                && queued_encoding == &encoding
+                && *queued_scrollback_limit == scrollback_limit
+                && queued_data.len().saturating_add(data.len()) <= TERMINAL_FRAME_OUTPUT_CHUNK_SIZE
+            {
+                queued_data.extend(data);
+                return;
+            }
             commands.insert(
                 insert_at,
                 TerminalFrameCommand::Output {
@@ -2471,11 +2487,11 @@ const TERMINAL_FRAME_COMMAND_QUEUE_CAP: usize = 512;
 const TERMINAL_FRAME_OUTPUT_CHUNK_SIZE: usize = 8 * 1024;
 #[cfg(test)]
 const TERMINAL_FRAME_OUTPUT_COALESCE_BYTE_LIMIT: usize = 32 * 1024;
-// Parse several PTY reads before materializing the next owned viewport. Zed
-// renders from the terminal grid directly, so it does not pay this snapshot
-// cost for every 8 KiB event-loop chunk.
-const TERMINAL_FRAME_OUTPUT_BURST_BYTE_LIMIT: usize = 64 * 1024;
-const TERMINAL_FRAME_OUTPUT_BURST_WALL_BUDGET: Duration = Duration::from_millis(4);
+// Parse roughly one display frame of bulk PTY output before materializing the
+// next owned viewport. Zed renders from the terminal grid directly, so it does
+// not pay this snapshot cost for every 8 KiB event-loop chunk.
+const TERMINAL_FRAME_OUTPUT_BURST_BYTE_LIMIT: usize = 128 * 1024;
+const TERMINAL_FRAME_OUTPUT_BURST_WALL_BUDGET: Duration = Duration::from_millis(8);
 const TERMINAL_FRAME_INTERACTIVE_BURST_WALL_BUDGET: Duration = Duration::from_millis(1);
 const TERMINAL_FRAME_INTERACTIVE_BURST_MAX_BYTES: usize = 1024;
 
@@ -4037,9 +4053,9 @@ mod tests {
     }
 
     #[test]
-    fn terminal_frame_worker_amortizes_snapshot_across_eight_pty_chunks() {
+    fn terminal_frame_worker_amortizes_snapshot_across_sixteen_pty_chunks() {
         let (tx, rx) = terminal_frame_command_channel();
-        for _ in 0..8 {
+        for _ in 0..16 {
             assert!(tx.send(TerminalFrameCommand::Output {
                 session_id: "s1".to_string(),
                 data: vec![b'x'; TERMINAL_FRAME_OUTPUT_CHUNK_SIZE],
@@ -4171,7 +4187,7 @@ mod tests {
     }
 
     #[test]
-    fn terminal_frame_command_queue_keeps_output_chunks_separate_for_worker() {
+    fn terminal_frame_command_queue_merges_small_pty_reads_for_worker() {
         let (tx, rx) = terminal_frame_command_channel();
         assert!(tx.send(TerminalFrameCommand::Output {
             session_id: "s1".to_string(),
@@ -4188,7 +4204,31 @@ mod tests {
 
         assert!(matches!(
             rx.try_recv(),
-            Some(TerminalFrameCommand::Output { data, .. }) if data == b"a"
+            Some(TerminalFrameCommand::Output { data, .. }) if data == b"abc"
+        ));
+        assert!(rx.try_recv().is_none());
+    }
+
+    #[test]
+    fn terminal_frame_command_queue_caps_merged_output_at_worker_chunk_size() {
+        let (tx, rx) = terminal_frame_command_channel();
+        assert!(tx.send(TerminalFrameCommand::Output {
+            session_id: "s1".to_string(),
+            data: vec![b'a'; TERMINAL_FRAME_OUTPUT_CHUNK_SIZE - 1],
+            encoding: "UTF-8".to_string(),
+            scrollback_limit: 1000,
+        }));
+        assert!(tx.send(TerminalFrameCommand::Output {
+            session_id: "s1".to_string(),
+            data: b"bc".to_vec(),
+            encoding: "UTF-8".to_string(),
+            scrollback_limit: 1000,
+        }));
+
+        assert!(matches!(
+            rx.try_recv(),
+            Some(TerminalFrameCommand::Output { data, .. })
+                if data.len() == TERMINAL_FRAME_OUTPUT_CHUNK_SIZE - 1
         ));
         assert!(matches!(
             rx.try_recv(),
