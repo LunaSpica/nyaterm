@@ -7,6 +7,7 @@ use nyaterm_terminal::{
 };
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::hash::{Hash, Hasher};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -1789,6 +1790,8 @@ struct TerminalFrameCommandReceiver {
 struct TerminalFrameCommandQueueShared {
     inner: Mutex<TerminalFrameCommandQueueInner>,
     ready: Condvar,
+    // Approximate backpressure gauge; command ordering remains protected by `inner`.
+    queued_output_bytes: AtomicUsize,
 }
 
 #[derive(Debug)]
@@ -1804,6 +1807,7 @@ fn terminal_frame_command_channel() -> (TerminalFrameCommandSender, TerminalFram
             sender_count: 1,
         }),
         ready: Condvar::new(),
+        queued_output_bytes: AtomicUsize::new(0),
     });
     (
         TerminalFrameCommandSender {
@@ -1818,7 +1822,11 @@ impl TerminalFrameCommandSender {
         let Ok(mut inner) = self.shared.inner.lock() else {
             return false;
         };
+        let output_bytes = terminal_frame_command_output_bytes(&command);
         push_terminal_frame_command(&mut inner.commands, command);
+        self.shared
+            .queued_output_bytes
+            .fetch_add(output_bytes, Ordering::Relaxed);
         self.shared.ready.notify_one();
         true
     }
@@ -1832,7 +1840,11 @@ impl TerminalFrameCommandSender {
         };
         let mut sent = false;
         for command in commands {
+            let output_bytes = terminal_frame_command_output_bytes(&command);
             push_terminal_frame_command(&mut inner.commands, command);
+            self.shared
+                .queued_output_bytes
+                .fetch_add(output_bytes, Ordering::Relaxed);
             sent = true;
         }
         if sent {
@@ -1850,11 +1862,7 @@ impl TerminalFrameCommandSender {
     }
 
     fn queued_output_bytes(&self) -> usize {
-        self.shared
-            .inner
-            .lock()
-            .map(|inner| terminal_frame_command_queue_output_bytes(&inner.commands))
-            .unwrap_or(0)
+        self.shared.queued_output_bytes.load(Ordering::Relaxed)
     }
 }
 
@@ -1883,7 +1891,7 @@ impl TerminalFrameCommandReceiver {
     fn recv(&self) -> Option<TerminalFrameCommand> {
         let mut inner = self.shared.inner.lock().ok()?;
         loop {
-            if let Some(command) = inner.commands.pop_front() {
+            if let Some(command) = pop_terminal_frame_command(&self.shared, &mut inner) {
                 return Some(command);
             }
             if inner.sender_count == 0 {
@@ -1894,14 +1902,15 @@ impl TerminalFrameCommandReceiver {
     }
 
     fn try_recv(&self) -> Option<TerminalFrameCommand> {
-        self.shared.inner.lock().ok()?.commands.pop_front()
+        let mut inner = self.shared.inner.lock().ok()?;
+        pop_terminal_frame_command(&self.shared, &mut inner)
     }
 
     fn recv_timeout(&self, timeout: Duration) -> Option<TerminalFrameCommand> {
         let deadline = Instant::now() + timeout;
         let mut inner = self.shared.inner.lock().ok()?;
         loop {
-            if let Some(command) = inner.commands.pop_front() {
+            if let Some(command) = pop_terminal_frame_command(&self.shared, &mut inner) {
                 return Some(command);
             }
             if inner.sender_count == 0 {
@@ -1919,6 +1928,18 @@ impl TerminalFrameCommandReceiver {
             }
         }
     }
+}
+
+fn pop_terminal_frame_command(
+    shared: &TerminalFrameCommandQueueShared,
+    inner: &mut TerminalFrameCommandQueueInner,
+) -> Option<TerminalFrameCommand> {
+    let command = inner.commands.pop_front()?;
+    shared.queued_output_bytes.fetch_sub(
+        terminal_frame_command_output_bytes(&command),
+        Ordering::Relaxed,
+    );
+    Some(command)
 }
 
 fn push_terminal_frame_command(
@@ -2090,14 +2111,11 @@ fn terminal_frame_command_priority_snapshot_insert_before(command: &TerminalFram
     )
 }
 
-fn terminal_frame_command_queue_output_bytes(commands: &VecDeque<TerminalFrameCommand>) -> usize {
-    commands
-        .iter()
-        .map(|command| match command {
-            TerminalFrameCommand::Output { data, .. } => data.len(),
-            _ => 0,
-        })
-        .sum()
+fn terminal_frame_command_output_bytes(command: &TerminalFrameCommand) -> usize {
+    match command {
+        TerminalFrameCommand::Output { data, .. } => data.len(),
+        _ => 0,
+    }
 }
 
 fn run_terminal_frame_processor(
@@ -4366,7 +4384,7 @@ mod tests {
 
     #[test]
     fn terminal_frame_command_queue_reports_queued_output_bytes() {
-        let (tx, _rx) = terminal_frame_command_channel();
+        let (tx, rx) = terminal_frame_command_channel();
         assert!(tx.send(TerminalFrameCommand::Output {
             session_id: "s1".to_string(),
             data: b"abc".to_vec(),
@@ -4386,6 +4404,21 @@ mod tests {
         }));
 
         assert_eq!(tx.queued_output_bytes(), 5);
+        assert!(matches!(
+            rx.try_recv(),
+            Some(TerminalFrameCommand::Output { data, .. }) if data == b"abc"
+        ));
+        assert_eq!(tx.queued_output_bytes(), 2);
+        assert!(matches!(
+            rx.try_recv(),
+            Some(TerminalFrameCommand::ResizeSession { .. })
+        ));
+        assert_eq!(tx.queued_output_bytes(), 2);
+        assert!(matches!(
+            rx.try_recv(),
+            Some(TerminalFrameCommand::Output { data, .. }) if data == b"de"
+        ));
+        assert_eq!(tx.queued_output_bytes(), 0);
     }
 
     #[test]
