@@ -1604,6 +1604,7 @@ impl TerminalSurface {
             if let Some(result) = self.apply_local_scroll_wheel_visual_state(raw_lines) {
                 if result.visual_changed {
                     let state = self.current_scroll_visual_state();
+                    self.schedule_keyword_highlights(false, cx);
                     cx.notify();
                     let mut request_offsets = Vec::new();
                     if result.needs_text_snapshot && state.display_offset > 0 {
