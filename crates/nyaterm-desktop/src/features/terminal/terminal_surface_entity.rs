@@ -55,6 +55,7 @@ fn terminal_keyword_highlight_request_key(
     rules_key: u64,
     rows: Range<usize>,
 ) -> TerminalKeywordHighlightRequestKey {
+    let rows = terminal_keyword_highlight_expanded_rows(snapshot, rows);
     let row_start = rows.start.min(snapshot.row_count());
     let row_end = rows.end.min(snapshot.row_count()).max(row_start);
     let mut hasher = DefaultHasher::new();
@@ -63,7 +64,7 @@ fn terminal_keyword_highlight_request_key(
         .get(row_start..row_end)
         .unwrap_or_default()
         .iter()
-        .map(|row| row.signature)
+        .map(|row| (row.signature, row.wrapped))
         .collect::<Vec<_>>()
         .hash(&mut hasher);
     TerminalKeywordHighlightRequestKey {
@@ -1207,11 +1208,17 @@ impl TerminalSurface {
             self.viewport_rows,
             self.scrollback_len,
         );
+        let visible_rows =
+            terminal_keyword_highlight_expanded_rows(snapshot.as_ref(), visible_rows);
         let rules = self.keyword_rules.clone();
         let rules_key = terminal_keyword_rules_key(rules.as_slice());
         if self.keyword_highlights.as_ref().is_some_and(|highlights| {
             highlights.rules_key() == rules_key
-                && highlights.matches_snapshot_rows(snapshot.as_ref(), self.palette, visible_rows)
+                && highlights.matches_snapshot_rows(
+                    snapshot.as_ref(),
+                    self.palette,
+                    visible_rows.clone(),
+                )
         }) {
             if self.keyword_highlight_task.is_none() {
                 self.keyword_highlight_pending_key = None;
@@ -1224,6 +1231,8 @@ impl TerminalSurface {
             self.viewport_rows,
             self.scrollback_len,
         );
+        let requested_rows =
+            terminal_keyword_highlight_expanded_rows(snapshot.as_ref(), requested_rows);
         let request_key = terminal_keyword_highlight_request_key(
             snapshot.as_ref(),
             rules_key,
@@ -2561,6 +2570,31 @@ mod tests {
                 visible_rows,
             )
         );
+    }
+
+    #[test]
+    fn keyword_highlight_request_key_tracks_wrapped_row_context() {
+        let mut snapshot = TerminalScreen::new(3, 4).snapshot();
+        {
+            let rows = Arc::make_mut(&mut snapshot.row_data);
+            Arc::make_mut(&mut rows[0]).signature = 41;
+            Arc::make_mut(&mut rows[1]).signature = 42;
+        }
+        let rules_key = 7;
+        let plain_key = terminal_keyword_highlight_request_key(&snapshot, rules_key, 1..2);
+
+        let mut wrapped = snapshot.clone();
+        {
+            let rows = Arc::make_mut(&mut wrapped.row_data);
+            Arc::make_mut(&mut rows[1]).wrapped = true;
+        }
+        let wrapped_key = terminal_keyword_highlight_request_key(&wrapped, rules_key, 1..2);
+        let expanded_key = terminal_keyword_highlight_request_key(&wrapped, rules_key, 0..2);
+
+        assert_ne!(plain_key, wrapped_key);
+        assert_eq!(wrapped_key, expanded_key);
+        assert_eq!(wrapped_key.row_start, 0);
+        assert_eq!(wrapped_key.row_end, 2);
     }
 
     #[test]

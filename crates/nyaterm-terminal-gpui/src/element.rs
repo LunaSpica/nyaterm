@@ -700,6 +700,10 @@ mod layout_cache_tests {
                 style: nyaterm_terminal::CellStyle::default(),
             }]
             .into_boxed_slice();
+            for (idx, ch) in "ERROR".chars().enumerate() {
+                row.cells[idx].text = ch.to_string();
+                row.cells[idx].width = 1;
+            }
             row.signature = 7;
         });
         let rules = vec![ResolvedKeywordHighlightRule {
@@ -1243,21 +1247,16 @@ impl NyaTerminalElement {
         let ansi = snapshot_row.map(|row| row.styled_spans.as_ref());
         let line_signature = snapshot_row.map(|row| row.signature);
         let keyword_lookup = self.keyword_highlights.as_ref().and_then(|highlights| {
-            highlights.lookup(row, line_signature).or_else(|| {
-                highlights.stale_lookup(
-                    row,
-                    line_signature,
-                    self.snapshot.display_offset,
-                    self.snapshot.row_count(),
-                )
-            })
+            highlights
+                .lookup(row, self.snapshot.as_ref())
+                .or_else(|| highlights.stale_lookup(row, self.snapshot.as_ref()))
         });
         let keyword_result_known_empty = keyword_lookup
             .as_ref()
             .is_some_and(|lookup| lookup.is_known_empty());
         let keyword_spans_present = keyword_lookup
             .as_ref()
-            .and_then(|lookup| lookup.spans())
+            .and_then(|lookup| lookup.ranges())
             .is_some();
         let paint_style_key = if keyword_result_known_empty {
             empty_keyword_paint_style_key
@@ -1623,20 +1622,15 @@ impl Element for NyaTerminalElement {
             let ansi = snapshot_row.map(|row| row.styled_spans.as_ref());
             let line_signature = snapshot_row.map(|row| row.signature);
             let keyword_lookup = self.keyword_highlights.as_ref().and_then(|highlights| {
-                highlights.lookup(row, line_signature).or_else(|| {
-                    highlights.stale_lookup(
-                        row,
-                        line_signature,
-                        self.snapshot.display_offset,
-                        self.snapshot.row_count(),
-                    )
-                })
+                highlights
+                    .lookup(row, self.snapshot.as_ref())
+                    .or_else(|| highlights.stale_lookup(row, self.snapshot.as_ref()))
             });
             let keyword_result_known_empty = keyword_lookup
                 .as_ref()
                 .is_some_and(|lookup| lookup.is_known_empty());
-            let keyword_spans = keyword_lookup.as_ref().and_then(|lookup| lookup.spans());
-            let keyword_spans_present = keyword_spans.is_some();
+            let keyword_ranges = keyword_lookup.as_ref().and_then(|lookup| lookup.ranges());
+            let keyword_spans_present = keyword_ranges.is_some();
             let row_paint_style_key = if keyword_result_known_empty {
                 empty_keyword_paint_style_key
             } else {
@@ -1718,7 +1712,7 @@ impl Element for NyaTerminalElement {
                     } else {
                         self.keyword_rules.as_slice()
                     };
-                if keyword_spans.is_none()
+                if keyword_ranges.is_none()
                     && terminal_plain_row_fast_path(ansi, row_keyword_rules, decorations)
                 {
                     let text = display_line.to_string();
@@ -1747,8 +1741,15 @@ impl Element for NyaTerminalElement {
                 }
 
                 // Base spans drive cell/keyword backgrounds only (under images).
-                let background_spans = keyword_spans
-                    .map(|spans| spans.as_ref().clone())
+                let background_spans = keyword_ranges
+                    .map(|ranges| {
+                        terminal_highlight_spans_with_keyword_ranges(
+                            display_line,
+                            ansi,
+                            Some(ranges.as_ref()),
+                            self.palette,
+                        )
+                    })
                     .unwrap_or_else(|| {
                         let row_compiled_keyword_rules: &[(regex::Regex, u32)] =
                             if keyword_result_known_empty {

@@ -294,6 +294,126 @@ pub(super) fn apply_search_ranges(
     }
     compress_flat_cells(flat)
 }
+
+pub(super) fn terminal_highlight_spans_with_keyword_ranges(
+    line: &str,
+    ansi_spans: Option<&[nyaterm_terminal::StyledSpan]>,
+    keyword_ranges: Option<&[TerminalKeywordRange]>,
+    palette: nyaterm_ui::ThemePalette,
+) -> Vec<TerminalHighlightSpan> {
+    let mut flat = flatten_base_cells_with_keyword_permissions(line, ansi_spans, palette);
+    if let Some(ranges) = keyword_ranges {
+        for range in ranges {
+            if range.start_col >= range.end_col {
+                continue;
+            }
+            let end = range.end_col.min(flat.len());
+            let start = range.start_col.min(end);
+            for cell in &mut flat[start..end] {
+                if !cell.allow_keyword {
+                    continue;
+                }
+                cell.cell.color = Some(range.color);
+                cell.cell.keyword = true;
+            }
+        }
+    }
+    compress_flat_cells(flat.into_iter().map(|cell| cell.cell).collect())
+}
+
+struct KeywordPermissionCell {
+    cell: FlatTerminalCell,
+    allow_keyword: bool,
+}
+
+fn flatten_base_cells_with_keyword_permissions(
+    line: &str,
+    ansi_spans: Option<&[nyaterm_terminal::StyledSpan]>,
+    palette: nyaterm_ui::ThemePalette,
+) -> Vec<KeywordPermissionCell> {
+    let Some(ansi) = ansi_spans else {
+        return flatten_plain_cells_with_keyword_permissions(line);
+    };
+    if ansi.is_empty() || (ansi.len() == 1 && ansi[0].text.is_empty()) {
+        return flatten_plain_cells_with_keyword_permissions(line);
+    }
+
+    let mut flat = Vec::new();
+    for span in ansi {
+        if span.text.is_empty() {
+            continue;
+        }
+        let bg = palette.resolve_cell_bg(span.style);
+        let color = if span.style.hidden {
+            bg.unwrap_or(palette.terminal_bg)
+        } else {
+            palette.resolve_cell_fg(span.style)
+        };
+        let allow_keyword =
+            !span.style.hidden && span.style.fg.is_none() && span.style.fg_rgb.is_none();
+        let highlight = TerminalHighlightSpan {
+            text: String::new(),
+            color: Some(color),
+            bg,
+            keyword: false,
+            underline: span.style.underline,
+            strikeout: span.style.strikeout,
+            bold: span.style.bold,
+            italic: span.style.italic,
+        };
+        push_permission_cells_for_text(&mut flat, &highlight, &span.text, allow_keyword);
+    }
+    if flat.is_empty() {
+        return flatten_plain_cells_with_keyword_permissions(line);
+    }
+    flat
+}
+
+fn flatten_plain_cells_with_keyword_permissions(line: &str) -> Vec<KeywordPermissionCell> {
+    let highlight = TerminalHighlightSpan {
+        text: String::new(),
+        color: None,
+        bg: None,
+        keyword: false,
+        underline: false,
+        strikeout: false,
+        bold: false,
+        italic: false,
+    };
+    let text = if line.is_empty() { " " } else { line };
+    let mut flat = Vec::new();
+    push_permission_cells_for_text(&mut flat, &highlight, text, true);
+    flat
+}
+
+fn push_permission_cells_for_text(
+    flat: &mut Vec<KeywordPermissionCell>,
+    span: &TerminalHighlightSpan,
+    text: &str,
+    allow_keyword: bool,
+) {
+    for ch in text.chars() {
+        if terminal_is_zero_width_mark(ch)
+            && let Some(previous) = flat.last_mut()
+        {
+            previous.cell.text.push(ch);
+            continue;
+        }
+        flat.push(KeywordPermissionCell {
+            cell: FlatTerminalCell::from_span_char(span, ch),
+            allow_keyword,
+        });
+        for _ in 1..terminal_char_cell_width(ch) {
+            let mut spacer = FlatTerminalCell::from_span_char(span, ' ');
+            spacer.text.clear();
+            flat.push(KeywordPermissionCell {
+                cell: spacer,
+                allow_keyword,
+            });
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(super) struct FlatTerminalCell {
     pub(super) text: String,
@@ -485,6 +605,103 @@ mod tests {
             bold: false,
             italic: false,
         }
+    }
+
+    fn styled_span(
+        text: &str,
+        style: nyaterm_terminal::CellStyle,
+    ) -> Vec<nyaterm_terminal::StyledSpan> {
+        vec![nyaterm_terminal::StyledSpan {
+            text: text.to_string(),
+            style,
+        }]
+    }
+
+    #[test]
+    fn keyword_ranges_apply_to_columns_after_wide_chars() {
+        let palette = nyaterm_ui::theme_palette("github-dark");
+        let spans = terminal_highlight_spans_with_keyword_ranges(
+            "界ERROR",
+            None,
+            Some(&[TerminalKeywordRange {
+                start_col: 2,
+                end_col: 7,
+                color: 0xff2244,
+            }]),
+            palette,
+        );
+
+        assert_eq!(spans.len(), 2);
+        assert_eq!(spans[0].text, "界");
+        assert!(!spans[0].keyword);
+        assert_eq!(spans[1].text, "ERROR");
+        assert!(spans[1].keyword);
+        assert_eq!(spans[1].color, Some(0xff2244));
+    }
+
+    #[test]
+    fn keyword_ranges_preserve_ansi_underline() {
+        let palette = nyaterm_ui::theme_palette("github-dark");
+        let style = nyaterm_terminal::CellStyle {
+            underline: true,
+            ..nyaterm_terminal::CellStyle::default()
+        };
+        let spans = terminal_highlight_spans_with_keyword_ranges(
+            "ERROR",
+            Some(&styled_span("ERROR", style)),
+            Some(&[TerminalKeywordRange {
+                start_col: 0,
+                end_col: 5,
+                color: 0xff2244,
+            }]),
+            palette,
+        );
+
+        assert_eq!(spans.len(), 1);
+        assert_eq!(spans[0].text, "ERROR");
+        assert!(spans[0].keyword);
+        assert!(spans[0].underline);
+        assert_eq!(spans[0].color, Some(0xff2244));
+    }
+
+    #[test]
+    fn keyword_ranges_do_not_override_explicit_or_hidden_ansi_text() {
+        let palette = nyaterm_ui::theme_palette("github-dark");
+        let explicit = nyaterm_terminal::CellStyle {
+            fg_rgb: Some(0x112233),
+            ..nyaterm_terminal::CellStyle::default()
+        };
+        let explicit_spans = terminal_highlight_spans_with_keyword_ranges(
+            "ERROR",
+            Some(&styled_span("ERROR", explicit)),
+            Some(&[TerminalKeywordRange {
+                start_col: 0,
+                end_col: 5,
+                color: 0xff2244,
+            }]),
+            palette,
+        );
+        assert_eq!(explicit_spans[0].color, Some(0x112233));
+        assert!(!explicit_spans[0].keyword);
+
+        let hidden = nyaterm_terminal::CellStyle {
+            bg_rgb: Some(0x445566),
+            hidden: true,
+            ..nyaterm_terminal::CellStyle::default()
+        };
+        let hidden_spans = terminal_highlight_spans_with_keyword_ranges(
+            "secret",
+            Some(&styled_span("secret", hidden)),
+            Some(&[TerminalKeywordRange {
+                start_col: 0,
+                end_col: 6,
+                color: 0xff2244,
+            }]),
+            palette,
+        );
+        assert_eq!(hidden_spans[0].color, Some(0x445566));
+        assert_eq!(hidden_spans[0].bg, Some(0x445566));
+        assert!(!hidden_spans[0].keyword);
     }
 
     #[test]
