@@ -88,7 +88,7 @@ pub(in crate::features) fn transfer_entry_icon(
     };
     let color = if selected { 0x58a6ffu32 } else { color };
     svg()
-        .size(px(14.))
+        .size(px(16.))
         .flex_none()
         .path(path)
         .text_color(rgb(color))

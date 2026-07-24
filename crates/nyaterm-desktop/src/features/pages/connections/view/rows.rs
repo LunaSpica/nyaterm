@@ -280,7 +280,7 @@ impl NyaTermApp {
                                 palette,
                                 resolve_connection_icon(Some("folder"), "SSH"),
                                 false,
-                                13.,
+                                16.,
                             ))
                             .child(
                                 div()
@@ -474,7 +474,7 @@ impl NyaTermApp {
                 }),
             )
             // Single-line name row; details live in the explicit selection panel.
-            .child(connection_type_icon(palette, icon_def, selected, 14.))
+            .child(connection_type_icon(palette, icon_def, selected, 16.))
             .child(
                 div()
                     .min_w_0()
