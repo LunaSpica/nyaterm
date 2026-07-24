@@ -45,8 +45,8 @@ pub(crate) const TERMINAL_UI_OUTPUT_TAIL_CAP: usize = 128 * 1024;
 const TERMINAL_FRAME_VISIBLE_TEXT_TAIL_CAP: usize = 16 * 1024;
 const TERMINAL_FRAME_SCROLL_WINDOW_MIN_EXTRA_ROWS: usize = 32;
 const TERMINAL_FRAME_SCROLL_WINDOW_MAX_EXTRA_ROWS: usize = 192;
-const TERMINAL_FRAME_PRIORITY_SCROLL_WINDOW_MIN_EXTRA_ROWS: usize = 128;
-const TERMINAL_FRAME_PRIORITY_SCROLL_WINDOW_MAX_EXTRA_ROWS: usize = 768;
+const TERMINAL_FRAME_PRIORITY_SCROLL_WINDOW_MIN_EXTRA_ROWS: usize = 64;
+const TERMINAL_FRAME_PRIORITY_SCROLL_WINDOW_MAX_EXTRA_ROWS: usize = 256;
 const TERMINAL_SCROLLBACK_SNAPSHOT_CACHE_LIMIT: usize = 16;
 /// ~3s recovery notice at the 50ms event-pump cadence.
 pub(crate) const TERMINAL_PERFORMANCE_RECOVERY_TICKS: u8 = 60;
@@ -1405,11 +1405,14 @@ pub(crate) struct TerminalFrameBufferTextEvent {
     pub(crate) process_duration: Duration,
 }
 
-fn terminal_frame_scroll_window_extra_rows(viewport_rows: usize, priority: bool) -> usize {
+pub(crate) fn terminal_frame_scroll_window_extra_rows(
+    viewport_rows: usize,
+    priority: bool,
+) -> usize {
     let viewport_rows = viewport_rows.max(1);
     if priority {
         return viewport_rows
-            .saturating_mul(6)
+            .saturating_mul(3)
             .max(TERMINAL_FRAME_PRIORITY_SCROLL_WINDOW_MIN_EXTRA_ROWS)
             .min(TERMINAL_FRAME_PRIORITY_SCROLL_WINDOW_MAX_EXTRA_ROWS);
     }
@@ -2229,6 +2232,7 @@ fn process_terminal_frame_output_burst(
     mut emit: impl FnMut(TerminalFrameOutputEvent),
 ) {
     let started_at = Instant::now();
+    let wall_budget = terminal_frame_output_burst_wall_budget(data.len());
     let mut batch = TerminalFrameOutputBatch::default();
     let mut processed_bytes = data.len();
     let session = sessions
@@ -2251,8 +2255,7 @@ fn process_terminal_frame_output_burst(
             .pop_front()
             .or_else(|| command_rx.try_recv())
             .or_else(|| {
-                let remaining =
-                    TERMINAL_FRAME_OUTPUT_BURST_WALL_BUDGET.saturating_sub(started_at.elapsed());
+                let remaining = wall_budget.saturating_sub(started_at.elapsed());
                 (!remaining.is_zero())
                     .then(|| command_rx.recv_timeout(remaining))
                     .flatten()
@@ -2376,8 +2379,21 @@ const TERMINAL_FRAME_COMMAND_QUEUE_CAP: usize = 512;
 const TERMINAL_FRAME_OUTPUT_CHUNK_SIZE: usize = 8 * 1024;
 #[cfg(test)]
 const TERMINAL_FRAME_OUTPUT_COALESCE_BYTE_LIMIT: usize = 32 * 1024;
-const TERMINAL_FRAME_OUTPUT_BURST_BYTE_LIMIT: usize = 16 * 1024;
+// Parse several PTY reads before materializing the next owned viewport. Zed
+// renders from the terminal grid directly, so it does not pay this snapshot
+// cost for every 8 KiB event-loop chunk.
+const TERMINAL_FRAME_OUTPUT_BURST_BYTE_LIMIT: usize = 64 * 1024;
 const TERMINAL_FRAME_OUTPUT_BURST_WALL_BUDGET: Duration = Duration::from_millis(4);
+const TERMINAL_FRAME_INTERACTIVE_BURST_WALL_BUDGET: Duration = Duration::from_millis(1);
+const TERMINAL_FRAME_INTERACTIVE_BURST_MAX_BYTES: usize = 1024;
+
+fn terminal_frame_output_burst_wall_budget(initial_bytes: usize) -> Duration {
+    if initial_bytes <= TERMINAL_FRAME_INTERACTIVE_BURST_MAX_BYTES {
+        TERMINAL_FRAME_INTERACTIVE_BURST_WALL_BUDGET
+    } else {
+        TERMINAL_FRAME_OUTPUT_BURST_WALL_BUDGET
+    }
+}
 
 #[cfg(test)]
 fn terminal_frame_output_batch_should_continue(
@@ -2857,12 +2873,12 @@ mod tests {
     }
 
     #[test]
-    fn terminal_priority_snapshot_event_covers_long_user_scroll_runs() {
+    fn terminal_priority_snapshot_event_covers_predictive_user_scroll_runs() {
         let mut session = TerminalFrameSession::new("UTF-8", 2000);
         session.screen = screen_from_line_count(900);
         let offset = 300;
         let viewport_rows = session.screen.viewport_snapshot(offset).rows;
-        let fast_delta = viewport_rows.saturating_mul(6);
+        let fast_delta = viewport_rows.saturating_mul(3);
         let event = session.snapshot_event(
             "s1".to_string(),
             offset,
@@ -2889,9 +2905,9 @@ mod tests {
         assert_eq!(terminal_frame_scroll_window_extra_rows(12, false), 32);
         assert_eq!(terminal_frame_scroll_window_extra_rows(40, false), 80);
         assert_eq!(terminal_frame_scroll_window_extra_rows(120, false), 192);
-        assert_eq!(terminal_frame_scroll_window_extra_rows(12, true), 128);
-        assert_eq!(terminal_frame_scroll_window_extra_rows(40, true), 240);
-        assert_eq!(terminal_frame_scroll_window_extra_rows(160, true), 768);
+        assert_eq!(terminal_frame_scroll_window_extra_rows(12, true), 64);
+        assert_eq!(terminal_frame_scroll_window_extra_rows(40, true), 120);
+        assert_eq!(terminal_frame_scroll_window_extra_rows(160, true), 256);
     }
 
     #[test]
@@ -3890,6 +3906,50 @@ mod tests {
     }
 
     #[test]
+    fn terminal_frame_worker_amortizes_snapshot_across_eight_pty_chunks() {
+        let (tx, rx) = terminal_frame_command_channel();
+        for _ in 0..8 {
+            assert!(tx.send(TerminalFrameCommand::Output {
+                session_id: "s1".to_string(),
+                data: vec![b'x'; TERMINAL_FRAME_OUTPUT_CHUNK_SIZE],
+                encoding: "UTF-8".to_string(),
+                scrollback_limit: 1000,
+            }));
+        }
+        drop(tx);
+
+        let recording_manager = Arc::new(nyaterm_transport::RecordingManager::new());
+        let recording_pipeline =
+            super::super::RecordingWritePipeline::spawn(Arc::clone(&recording_manager));
+        let mut pending = VecDeque::new();
+        let mut sessions = HashMap::new();
+        let mut events = Vec::new();
+        process_terminal_frame_output_burst(
+            &rx,
+            &mut pending,
+            &mut sessions,
+            &recording_pipeline.writer(),
+            "s1".to_string(),
+            vec![b'x'; TERMINAL_FRAME_OUTPUT_CHUNK_SIZE],
+            "UTF-8".to_string(),
+            1000,
+            |event| events.push(event),
+        );
+
+        assert_eq!(events.len(), 1);
+        assert_eq!(
+            events[0].accepted_bytes,
+            TERMINAL_FRAME_OUTPUT_BURST_BYTE_LIMIT
+        );
+        assert!(pending.is_empty());
+        assert!(matches!(
+            rx.try_recv(),
+            Some(TerminalFrameCommand::Output { data, .. })
+                if data.len() == TERMINAL_FRAME_OUTPUT_CHUNK_SIZE
+        ));
+    }
+
+    #[test]
     fn terminal_frame_worker_batch_stops_at_resize_boundary() {
         let (tx, rx) = terminal_frame_command_channel();
         assert!(tx.send(TerminalFrameCommand::ResizeSession {
@@ -3949,6 +4009,24 @@ mod tests {
             TERMINAL_FRAME_OUTPUT_BURST_BYTE_LIMIT,
             TERMINAL_FRAME_OUTPUT_BURST_WALL_BUDGET,
         ));
+    }
+
+    #[test]
+    fn terminal_frame_output_burst_uses_short_budget_for_interactive_echo() {
+        assert_eq!(
+            terminal_frame_output_burst_wall_budget(1),
+            TERMINAL_FRAME_INTERACTIVE_BURST_WALL_BUDGET
+        );
+        assert_eq!(
+            terminal_frame_output_burst_wall_budget(TERMINAL_FRAME_INTERACTIVE_BURST_MAX_BYTES),
+            TERMINAL_FRAME_INTERACTIVE_BURST_WALL_BUDGET
+        );
+        assert_eq!(
+            terminal_frame_output_burst_wall_budget(
+                TERMINAL_FRAME_INTERACTIVE_BURST_MAX_BYTES.saturating_add(1)
+            ),
+            TERMINAL_FRAME_OUTPUT_BURST_WALL_BUDGET
+        );
     }
 
     #[test]

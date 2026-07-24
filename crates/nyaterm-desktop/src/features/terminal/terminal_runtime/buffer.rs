@@ -2,7 +2,7 @@ use std::borrow::Cow;
 use std::fmt::Write as _;
 
 use super::*;
-use crate::models::append_terminal_ui_output_tail;
+use crate::models::{append_terminal_ui_output_tail, terminal_frame_scroll_window_extra_rows};
 
 const MAX_OSC52_REPLY_CHARS: usize = 1_048_576;
 const TERMINAL_LIVE_PREFETCH_IDLE_DELAY: Duration = Duration::from_millis(80);
@@ -51,7 +51,7 @@ fn terminal_view_has_cached_scrollback_snapshot_covering_offset(
 }
 
 fn terminal_scroll_snapshot_ready_margin_rows(viewport_rows: usize) -> usize {
-    viewport_rows.max(1).saturating_mul(6).max(128).min(768)
+    terminal_frame_scroll_window_extra_rows(viewport_rows, true)
 }
 
 fn terminal_snapshot_margin_for_display_offset(
@@ -1853,9 +1853,9 @@ mod frame_event_queue_tests {
 
     #[test]
     fn terminal_user_scroll_snapshot_ready_margin_matches_priority_window_scale() {
-        assert_eq!(terminal_scroll_snapshot_ready_margin_rows(12), 128);
-        assert_eq!(terminal_scroll_snapshot_ready_margin_rows(40), 240);
-        assert_eq!(terminal_scroll_snapshot_ready_margin_rows(160), 768);
+        assert_eq!(terminal_scroll_snapshot_ready_margin_rows(12), 64);
+        assert_eq!(terminal_scroll_snapshot_ready_margin_rows(40), 120);
+        assert_eq!(terminal_scroll_snapshot_ready_margin_rows(160), 256);
     }
 
     #[test]
