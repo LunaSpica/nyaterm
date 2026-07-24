@@ -1190,7 +1190,8 @@ impl TerminalSurface {
             return;
         }
         if self.keyword_highlights.as_ref().is_some_and(|highlights| {
-            highlights.rules_key() == rules_key && highlights.matches_snapshot(snapshot.as_ref())
+            highlights.rules_key() == rules_key
+                && highlights.matches_snapshot(snapshot.as_ref(), self.palette)
         }) {
             self.keyword_highlight_pending_key = None;
             return;
@@ -1203,6 +1204,7 @@ impl TerminalSurface {
         // background, matching the editor's stale-until-reparsed behavior.
         let highlighter = self.cached_keyword_highlighter_for_rules(&rules);
         let palette = self.palette;
+        let previous_highlights = self.keyword_highlights.clone();
         self.keyword_highlight_task = Some(cx.spawn(async move |this, cx| {
             let (rules, highlighter, highlights) = cx
                 .background_spawn(async move {
@@ -1213,6 +1215,7 @@ impl TerminalSurface {
                         snapshot.as_ref(),
                         highlighter.as_ref(),
                         palette,
+                        previous_highlights.as_deref(),
                     );
                     (rules, highlighter, highlights)
                 })
@@ -2516,6 +2519,7 @@ mod tests {
             &snapshot,
             highlighter.as_ref(),
             nyaterm_ui::theme_palette("github-dark"),
+            None,
         ));
         let pending_key =
             terminal_keyword_highlight_request_key(&snapshot, terminal_keyword_rules_key(&rules));

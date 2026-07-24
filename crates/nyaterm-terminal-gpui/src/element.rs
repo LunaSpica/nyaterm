@@ -581,6 +581,92 @@ mod layout_cache_tests {
     }
 
     #[test]
+    fn row_layout_key_ignores_keyword_rules_for_known_empty_keyword_rows() {
+        let mut snapshot = TerminalScreen::default().snapshot();
+        snapshot.lines[0] = "plain".to_string();
+        snapshot.line_signatures[0] = 7;
+        let element = NyaTerminalElement::new(
+            Arc::new(snapshot),
+            Arc::new(Vec::new()),
+            Vec::new(),
+            false,
+            "block",
+            8.0,
+            16.0,
+            nyaterm_ui::theme_palette("github-dark"),
+            "monospace".to_string(),
+            14.0,
+            400.0,
+            700.0,
+        );
+        let decorations = TerminalLineDecorations::default();
+
+        assert_eq!(
+            element.row_layout_key_with_keyword_state(
+                0,
+                "plain",
+                None,
+                &decorations,
+                11,
+                false,
+                true,
+            ),
+            element.row_layout_key_with_keyword_state(
+                0,
+                "plain",
+                None,
+                &decorations,
+                99,
+                false,
+                true,
+            ),
+        );
+    }
+
+    #[test]
+    fn row_layout_key_keeps_keyword_rules_for_pending_keyword_rows() {
+        let mut snapshot = TerminalScreen::default().snapshot();
+        snapshot.lines[0] = "plain".to_string();
+        snapshot.line_signatures[0] = 7;
+        let element = NyaTerminalElement::new(
+            Arc::new(snapshot),
+            Arc::new(Vec::new()),
+            Vec::new(),
+            false,
+            "block",
+            8.0,
+            16.0,
+            nyaterm_ui::theme_palette("github-dark"),
+            "monospace".to_string(),
+            14.0,
+            400.0,
+            700.0,
+        );
+        let decorations = TerminalLineDecorations::default();
+
+        assert_ne!(
+            element.row_layout_key_with_keyword_state(
+                0,
+                "plain",
+                None,
+                &decorations,
+                11,
+                false,
+                false,
+            ),
+            element.row_layout_key_with_keyword_state(
+                0,
+                "plain",
+                None,
+                &decorations,
+                99,
+                false,
+                false,
+            ),
+        );
+    }
+
+    #[test]
     fn terminal_glyph_decorations_detects_glyph_only_work() {
         assert!(!terminal_glyph_decorations_needed(
             &TerminalLineDecorations::default()
@@ -893,7 +979,31 @@ impl NyaTerminalElement {
         keyword_rules_key: u64,
         keyword_spans_present: bool,
     ) -> u64 {
-        let paint_style_key = self.paint_style_key(keyword_rules_key);
+        self.row_layout_key_with_keyword_state(
+            row,
+            display_line,
+            ansi_spans,
+            decorations,
+            keyword_rules_key,
+            keyword_spans_present,
+            false,
+        )
+    }
+
+    #[cfg(test)]
+    fn row_layout_key_with_keyword_state(
+        &self,
+        row: usize,
+        display_line: &str,
+        ansi_spans: Option<&[nyaterm_terminal::StyledSpan]>,
+        decorations: &TerminalLineDecorations,
+        keyword_rules_key: u64,
+        keyword_spans_present: bool,
+        keyword_result_known_empty: bool,
+    ) -> u64 {
+        let effective_keyword_rules_key =
+            terminal_effective_keyword_rules_key(keyword_rules_key, keyword_result_known_empty);
+        let paint_style_key = self.paint_style_key(effective_keyword_rules_key);
         let mut hasher = DefaultHasher::new();
         if let Some(signature) = self.snapshot.line_signatures.get(row) {
             signature.hash(&mut hasher);
@@ -983,6 +1093,10 @@ fn terminal_ansi_spans_are_plain(ansi_spans: Option<&[nyaterm_terminal::StyledSp
     spans
         .iter()
         .all(|span| span.text.is_empty() || span.style == default_style)
+}
+
+fn terminal_effective_keyword_rules_key(keyword_rules_key: u64, known_empty: bool) -> u64 {
+    if known_empty { 0 } else { keyword_rules_key }
 }
 
 fn terminal_background_ranges_for_spans(
@@ -1165,7 +1279,6 @@ impl Element for NyaTerminalElement {
         } else {
             self.keyword_rules_key()
         };
-        let paint_style_key = self.paint_style_key(keyword_rules_key);
         let compiled_keyword_rules = if self.keyword_rules.is_empty() {
             Arc::default()
         } else if let Some(cache) = layout_cache.as_deref_mut() {
@@ -1195,9 +1308,9 @@ impl Element for NyaTerminalElement {
             let display_line = if line.is_empty() { " " } else { line };
             let ansi = self.snapshot.styled_lines.get(row).map(Vec::as_slice);
             let line_signature = self.snapshot.line_signatures.get(row).copied();
-            let keyword_spans = self.keyword_highlights.as_ref().and_then(|highlights| {
-                highlights.row(row, line_signature).or_else(|| {
-                    highlights.stale_row(
+            let keyword_lookup = self.keyword_highlights.as_ref().and_then(|highlights| {
+                highlights.lookup(row, line_signature).or_else(|| {
+                    highlights.stale_lookup(
                         row,
                         line_signature,
                         self.snapshot.display_offset,
@@ -1205,7 +1318,14 @@ impl Element for NyaTerminalElement {
                     )
                 })
             });
+            let keyword_result_known_empty = keyword_lookup
+                .as_ref()
+                .is_some_and(|lookup| lookup.is_known_empty());
+            let keyword_spans = keyword_lookup.as_ref().and_then(|lookup| lookup.spans());
             let keyword_spans_present = keyword_spans.is_some();
+            let effective_keyword_rules_key =
+                terminal_effective_keyword_rules_key(keyword_rules_key, keyword_result_known_empty);
+            let row_paint_style_key = self.paint_style_key(effective_keyword_rules_key);
             let default_decorations;
             let decorations = if let Some(decorations) = self.decorations.get(row) {
                 decorations
@@ -1263,15 +1383,17 @@ impl Element for NyaTerminalElement {
             }
             hash_stable_glyph_decorations(decorations, &mut row_key_hasher);
             keyword_spans_present.hash(&mut row_key_hasher);
-            paint_style_key.hash(&mut row_key_hasher);
+            row_paint_style_key.hash(&mut row_key_hasher);
             let row_key = row_key_hasher.finish();
             let build_row = |window: &mut Window| {
+                let row_keyword_rules: &[ResolvedKeywordHighlightRule] =
+                    if keyword_result_known_empty {
+                        &[]
+                    } else {
+                        self.keyword_rules.as_slice()
+                    };
                 if keyword_spans.is_none()
-                    && terminal_plain_row_fast_path(
-                        ansi,
-                        self.keyword_rules.as_slice(),
-                        decorations,
-                    )
+                    && terminal_plain_row_fast_path(ansi, row_keyword_rules, decorations)
                 {
                     let text = display_line.to_string();
                     let text_runs = vec![TextRun {
@@ -1302,10 +1424,16 @@ impl Element for NyaTerminalElement {
                 let background_spans = keyword_spans
                     .map(|spans| spans.as_ref().clone())
                     .unwrap_or_else(|| {
+                        let row_compiled_keyword_rules: &[(regex::Regex, u32)] =
+                            if keyword_result_known_empty {
+                                &[]
+                            } else {
+                                compiled_keyword_rules.as_slice()
+                            };
                         terminal_highlight_spans_compiled(
                             display_line,
                             ansi,
-                            compiled_keyword_rules.as_slice(),
+                            row_compiled_keyword_rules,
                             &[],
                             &[],
                             None,

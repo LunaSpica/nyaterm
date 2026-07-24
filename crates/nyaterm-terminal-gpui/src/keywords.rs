@@ -13,10 +13,28 @@ pub struct TerminalKeywordHighlighter {
 /// Immutable keyword data prepared away from GPUI's paint path.
 pub struct TerminalKeywordHighlightSnapshot {
     rules_key: u64,
+    palette_key: u64,
     display_offset: usize,
     line_signatures: Vec<u64>,
     rows: Vec<Option<Arc<Vec<TerminalHighlightSpan>>>>,
-    rows_by_signature: HashMap<u64, Arc<Vec<TerminalHighlightSpan>>>,
+    rows_by_signature: HashMap<u64, Option<Arc<Vec<TerminalHighlightSpan>>>>,
+}
+
+pub(super) enum TerminalKeywordHighlightLookup<'a> {
+    Current(Option<&'a Arc<Vec<TerminalHighlightSpan>>>),
+    Reused(Option<&'a Arc<Vec<TerminalHighlightSpan>>>),
+}
+
+impl<'a> TerminalKeywordHighlightLookup<'a> {
+    pub(super) fn spans(&self) -> Option<&'a Arc<Vec<TerminalHighlightSpan>>> {
+        match self {
+            Self::Current(spans) | Self::Reused(spans) => *spans,
+        }
+    }
+
+    pub(super) fn is_known_empty(&self) -> bool {
+        self.spans().is_none()
+    }
 }
 
 impl TerminalKeywordHighlightSnapshot {
@@ -24,30 +42,39 @@ impl TerminalKeywordHighlightSnapshot {
         self.rules_key
     }
 
-    pub fn matches_snapshot(&self, snapshot: &TerminalSnapshot) -> bool {
+    pub fn matches_snapshot(
+        &self,
+        snapshot: &TerminalSnapshot,
+        palette: nyaterm_ui::ThemePalette,
+    ) -> bool {
         self.display_offset == snapshot.display_offset
+            && self.palette_key == terminal_keyword_palette_key(palette)
             && self.line_signatures == snapshot.line_signatures
     }
 
-    pub(super) fn row(
+    pub(super) fn lookup(
         &self,
         row: usize,
         line_signature: Option<u64>,
-    ) -> Option<&Arc<Vec<TerminalHighlightSpan>>> {
+    ) -> Option<TerminalKeywordHighlightLookup<'_>> {
         let signature = line_signature?;
         if self.line_signatures.get(row).copied() == Some(signature) {
-            return self.rows.get(row)?.as_ref();
+            return Some(TerminalKeywordHighlightLookup::Current(
+                self.rows.get(row)?.as_ref(),
+            ));
         }
-        self.rows_by_signature.get(&signature)
+        self.rows_by_signature
+            .get(&signature)
+            .map(|spans| TerminalKeywordHighlightLookup::Reused(spans.as_ref()))
     }
 
-    pub(super) fn stale_row(
+    pub(super) fn stale_lookup(
         &self,
         row: usize,
         line_signature: Option<u64>,
         display_offset: usize,
         current_row_count: usize,
-    ) -> Option<&Arc<Vec<TerminalHighlightSpan>>> {
+    ) -> Option<TerminalKeywordHighlightLookup<'_>> {
         if self.display_offset != display_offset || self.line_signatures.len() != current_row_count
         {
             return None;
@@ -55,7 +82,9 @@ impl TerminalKeywordHighlightSnapshot {
         if self.line_signatures.get(row).copied() != line_signature {
             return None;
         }
-        self.rows.get(row)?.as_ref()
+        Some(TerminalKeywordHighlightLookup::Current(
+            self.rows.get(row)?.as_ref(),
+        ))
     }
 }
 
@@ -63,12 +92,22 @@ pub fn precompute_terminal_keyword_highlights(
     snapshot: &TerminalSnapshot,
     highlighter: &TerminalKeywordHighlighter,
     palette: nyaterm_ui::ThemePalette,
+    previous: Option<&TerminalKeywordHighlightSnapshot>,
 ) -> TerminalKeywordHighlightSnapshot {
+    let palette_key = terminal_keyword_palette_key(palette);
+    let previous = previous.filter(|previous| {
+        previous.rules_key == highlighter.rules_key && previous.palette_key == palette_key
+    });
     let rows: Vec<Option<Arc<Vec<TerminalHighlightSpan>>>> = snapshot
         .lines
         .iter()
         .enumerate()
         .map(|(row, line)| {
+            if let Some(reused) = snapshot.line_signatures.get(row).and_then(|signature| {
+                previous.and_then(|previous| previous.rows_by_signature.get(signature))
+            }) {
+                return reused.clone();
+            }
             let display_line = if line.is_empty() { " " } else { line };
             let ansi = snapshot.styled_lines.get(row).map(Vec::as_slice);
             let spans = terminal_highlight_spans_compiled(
@@ -92,10 +131,11 @@ pub fn precompute_terminal_keyword_highlights(
         .iter()
         .copied()
         .zip(rows.iter())
-        .filter_map(|(signature, spans)| spans.as_ref().map(|spans| (signature, spans.clone())))
+        .map(|(signature, spans)| (signature, spans.clone()))
         .collect();
     TerminalKeywordHighlightSnapshot {
         rules_key: highlighter.rules_key,
+        palette_key,
         display_offset: snapshot.display_offset,
         line_signatures: snapshot.line_signatures.clone(),
         rows,
@@ -121,6 +161,18 @@ pub fn terminal_keyword_rules_key(rules: &[ResolvedKeywordHighlightRule]) -> u64
         rule.color.hash(&mut hasher);
         rule.enabled.hash(&mut hasher);
     }
+    hasher.finish()
+}
+
+pub(super) fn terminal_keyword_palette_key(palette: nyaterm_ui::ThemePalette) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    palette.bg.hash(&mut hasher);
+    palette.surface.hash(&mut hasher);
+    palette.accent.hash(&mut hasher);
+    palette.warning.hash(&mut hasher);
+    palette.terminal_fg.hash(&mut hasher);
+    palette.terminal_bg.hash(&mut hasher);
+    palette.terminal_ansi.hash(&mut hasher);
     hasher.finish()
 }
 
@@ -400,35 +452,76 @@ mod tests {
         }];
 
         let highlighter = compile_terminal_keyword_highlighter(&rules);
-        let highlights = precompute_terminal_keyword_highlights(
-            &snapshot,
-            &highlighter,
-            nyaterm_ui::theme_palette("github-dark"),
-        );
+        let palette = nyaterm_ui::theme_palette("github-dark");
+        let highlights =
+            precompute_terminal_keyword_highlights(&snapshot, &highlighter, palette, None);
 
-        assert!(highlights.row(0, Some(41)).is_some());
-        assert!(highlights.row(0, Some(42)).is_none());
         assert!(
             highlights
-                .stale_row(0, Some(41), 0, snapshot.rows)
+                .lookup(0, Some(41))
+                .and_then(|row| row.spans())
+                .is_some()
+        );
+        assert!(highlights.lookup(0, Some(42)).is_none());
+        assert!(matches!(
+            highlights.lookup(0, Some(41)),
+            Some(TerminalKeywordHighlightLookup::Current(_))
+        ));
+        assert!(
+            highlights
+                .stale_lookup(0, Some(41), 0, snapshot.rows)
+                .and_then(|row| row.spans())
                 .is_some()
         );
         assert!(
             highlights
-                .stale_row(0, Some(42), 0, snapshot.rows)
+                .stale_lookup(0, Some(42), 0, snapshot.rows)
                 .is_none()
         );
-        assert!(highlights.stale_row(0, None, 0, snapshot.rows).is_none());
+        assert!(highlights.stale_lookup(0, None, 0, snapshot.rows).is_none());
         assert!(
             highlights
-                .stale_row(0, Some(41), 1, snapshot.rows)
+                .stale_lookup(0, Some(41), 1, snapshot.rows)
                 .is_none()
         );
-        assert!(highlights.matches_snapshot(&snapshot));
+        assert!(highlights.matches_snapshot(&snapshot, palette));
         let mut shifted_snapshot = snapshot.clone();
         shifted_snapshot.display_offset = shifted_snapshot.display_offset.saturating_add(1);
-        assert!(!highlights.matches_snapshot(&shifted_snapshot));
+        assert!(!highlights.matches_snapshot(&shifted_snapshot, palette));
+        assert!(
+            !highlights.matches_snapshot(&snapshot, nyaterm_ui::theme_palette("github-light"),)
+        );
         assert!(highlights.rows.iter().skip(1).all(Option::is_none));
+    }
+
+    #[test]
+    fn precomputed_keyword_snapshot_marks_empty_rows_as_known() {
+        let mut snapshot = TerminalScreen::default().snapshot();
+        snapshot.lines[0] = "plain text".to_string();
+        snapshot.styled_lines[0] = vec![nyaterm_terminal::StyledSpan {
+            text: snapshot.lines[0].clone(),
+            style: nyaterm_terminal::CellStyle::default(),
+        }];
+        snapshot.line_signatures[0] = 41;
+        let rules = vec![ResolvedKeywordHighlightRule {
+            id: "error".to_string(),
+            name: "Error".to_string(),
+            patterns: vec!["ERROR".to_string()],
+            color: "#ff2244".to_string(),
+            enabled: true,
+        }];
+
+        let highlighter = compile_terminal_keyword_highlighter(&rules);
+        let highlights = precompute_terminal_keyword_highlights(
+            &snapshot,
+            &highlighter,
+            nyaterm_ui::theme_palette("github-dark"),
+            None,
+        );
+
+        let lookup = highlights.lookup(0, Some(41)).expect("row lookup");
+        assert!(lookup.is_known_empty());
+        assert!(lookup.spans().is_none());
     }
 
     #[test]
@@ -453,10 +546,66 @@ mod tests {
             &snapshot,
             &highlighter,
             nyaterm_ui::theme_palette("github-dark"),
+            None,
         );
 
-        assert!(highlights.row(0, Some(41)).is_some());
-        assert!(highlights.row(3, Some(41)).is_some());
+        assert!(
+            highlights
+                .lookup(0, Some(41))
+                .and_then(|row| row.spans())
+                .is_some()
+        );
+        assert!(
+            highlights
+                .lookup(3, Some(41))
+                .and_then(|row| row.spans())
+                .is_some()
+        );
+    }
+
+    #[test]
+    fn precomputed_keyword_snapshot_reuses_previous_rows_by_signature() {
+        let mut first_snapshot = TerminalScreen::default().snapshot();
+        first_snapshot.lines[0] = "prefix ERROR suffix".to_string();
+        first_snapshot.styled_lines[0] = vec![nyaterm_terminal::StyledSpan {
+            text: first_snapshot.lines[0].clone(),
+            style: nyaterm_terminal::CellStyle::default(),
+        }];
+        first_snapshot.line_signatures[0] = 41;
+        let mut second_snapshot = TerminalScreen::default().snapshot();
+        second_snapshot.lines[5] = first_snapshot.lines[0].clone();
+        second_snapshot.styled_lines[5] = first_snapshot.styled_lines[0].clone();
+        second_snapshot.line_signatures[5] = 41;
+        let rules = vec![ResolvedKeywordHighlightRule {
+            id: "error".to_string(),
+            name: "Error".to_string(),
+            patterns: vec!["ERROR".to_string()],
+            color: "#ff2244".to_string(),
+            enabled: true,
+        }];
+
+        let highlighter = compile_terminal_keyword_highlighter(&rules);
+        let palette = nyaterm_ui::theme_palette("github-dark");
+        let first_highlights =
+            precompute_terminal_keyword_highlights(&first_snapshot, &highlighter, palette, None);
+        let first_spans = first_highlights
+            .lookup(0, Some(41))
+            .and_then(|row| row.spans())
+            .expect("first spans")
+            .clone();
+
+        let second_highlights = precompute_terminal_keyword_highlights(
+            &second_snapshot,
+            &highlighter,
+            palette,
+            Some(&first_highlights),
+        );
+        let second_spans = second_highlights
+            .lookup(5, Some(41))
+            .and_then(|row| row.spans())
+            .expect("second spans");
+
+        assert!(Arc::ptr_eq(&first_spans, second_spans));
     }
 
     #[test]
