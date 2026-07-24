@@ -1171,13 +1171,7 @@ impl TerminalSurface {
         clear_if_empty: bool,
         cx: &mut Context<Self>,
     ) {
-        if self.keyword_rules.is_empty() {
-            self.cancel_pending_keyword_highlights();
-            if clear_if_empty {
-                self.keyword_highlighter_rules = None;
-                self.keyword_highlighter = None;
-                self.keyword_highlights = None;
-            }
+        if self.handle_empty_keyword_rules_for_highlights(clear_if_empty) {
             return;
         }
         let Some(snapshot) = self.snapshot.clone() else {
@@ -1231,6 +1225,19 @@ impl TerminalSurface {
                 cx.notify();
             });
         }));
+    }
+
+    fn handle_empty_keyword_rules_for_highlights(&mut self, clear_if_empty: bool) -> bool {
+        if !self.keyword_rules.is_empty() {
+            return false;
+        }
+        if clear_if_empty {
+            self.cancel_pending_keyword_highlights();
+            self.keyword_highlighter_rules = None;
+            self.keyword_highlighter = None;
+            self.keyword_highlights = None;
+        }
+        true
     }
 
     fn cached_keyword_highlighter_for_rules(
@@ -2543,6 +2550,63 @@ mod tests {
         );
         assert!(surface.keyword_highlighter_rules.is_some());
         assert!(surface.keyword_highlighter.is_some());
+    }
+
+    #[test]
+    fn transient_empty_keyword_rules_keep_pending_highlights() {
+        let mut surface = TerminalSurface::new("session");
+        let pending_key = TerminalKeywordHighlightRequestKey {
+            rules_key: 7,
+            display_offset: 0,
+            row_count: 1,
+            line_signatures_key: 9,
+        };
+        surface.keyword_rules = Arc::new(Vec::new());
+        surface.keyword_highlight_generation = 41;
+        surface.keyword_highlight_pending_key = Some(pending_key);
+        surface.keyword_highlighter_rules = Some(Arc::new(Vec::new()));
+        surface.keyword_highlighter = Some(Arc::new(compile_terminal_keyword_highlighter(&[])));
+        surface.keyword_highlights = Some(Arc::new(precompute_terminal_keyword_highlights(
+            &TerminalScreen::default().viewport_snapshot(0),
+            surface.keyword_highlighter.as_ref().unwrap().as_ref(),
+            nyaterm_ui::theme_palette("github-dark"),
+            None,
+        )));
+
+        assert!(surface.handle_empty_keyword_rules_for_highlights(false));
+        assert_eq!(surface.keyword_highlight_generation, 41);
+        assert_eq!(surface.keyword_highlight_pending_key, Some(pending_key));
+        assert!(surface.keyword_highlights.is_some());
+        assert!(surface.keyword_highlighter.is_some());
+    }
+
+    #[test]
+    fn configured_empty_keyword_rules_clear_pending_highlights() {
+        let mut surface = TerminalSurface::new("session");
+        let pending_key = TerminalKeywordHighlightRequestKey {
+            rules_key: 7,
+            display_offset: 0,
+            row_count: 1,
+            line_signatures_key: 9,
+        };
+        surface.keyword_rules = Arc::new(Vec::new());
+        surface.keyword_highlight_generation = 41;
+        surface.keyword_highlight_pending_key = Some(pending_key);
+        surface.keyword_highlighter_rules = Some(Arc::new(Vec::new()));
+        surface.keyword_highlighter = Some(Arc::new(compile_terminal_keyword_highlighter(&[])));
+        surface.keyword_highlights = Some(Arc::new(precompute_terminal_keyword_highlights(
+            &TerminalScreen::default().viewport_snapshot(0),
+            surface.keyword_highlighter.as_ref().unwrap().as_ref(),
+            nyaterm_ui::theme_palette("github-dark"),
+            None,
+        )));
+
+        assert!(surface.handle_empty_keyword_rules_for_highlights(true));
+        assert_eq!(surface.keyword_highlight_generation, 42);
+        assert!(surface.keyword_highlight_pending_key.is_none());
+        assert!(surface.keyword_highlights.is_none());
+        assert!(surface.keyword_highlighter.is_none());
+        assert!(surface.keyword_highlighter_rules.is_none());
     }
 
     #[test]
