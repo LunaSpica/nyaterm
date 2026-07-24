@@ -112,7 +112,8 @@ impl NyaTermApp {
     }
 
     fn drain_terminal_input_wake(&mut self, cx: &mut Context<Self>) {
-        let chrome_dirty = self.drain_session_events(cx) | self.drain_terminal_frame_events(cx);
+        let chrome_dirty = self.drain_session_events_for_input_wake(cx)
+            | self.drain_terminal_frame_events_for_input_wake(cx);
         if chrome_dirty {
             cx.notify();
             self.terminal_runtime.last_ui_notify_at = Some(Instant::now());

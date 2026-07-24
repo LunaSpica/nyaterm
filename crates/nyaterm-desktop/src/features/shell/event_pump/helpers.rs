@@ -6,6 +6,9 @@ pub(super) const SESSION_EVENT_DRAIN_BATCH: usize = 256;
 pub(super) const SESSION_EVENT_DRAIN_IDLE_OUTPUT_BUDGET: usize = 32 * 1024;
 pub(super) const SESSION_EVENT_DRAIN_PRESSURE_OUTPUT_BUDGET: usize = 8 * 1024;
 pub(super) const SESSION_EVENT_DRAIN_WALL_BUDGET: Duration = Duration::from_millis(8);
+pub(super) const SESSION_EVENT_INPUT_WAKE_DRAIN_BATCH: usize = 32;
+pub(super) const SESSION_EVENT_INPUT_WAKE_OUTPUT_BUDGET: usize = 4 * 1024;
+pub(super) const SESSION_EVENT_INPUT_WAKE_WALL_BUDGET: Duration = Duration::from_millis(1);
 pub(super) const RUNTIME_BACKGROUND_EVENT_DRAIN_WALL_BUDGET: Duration = Duration::from_millis(6);
 pub(super) const RUNTIME_BACKGROUND_EVENT_DRAIN_SLOW: Duration = Duration::from_millis(12);
 pub(super) const RUNTIME_IDLE_TICK_INTERVAL: Duration = Duration::from_millis(50);
@@ -253,6 +256,14 @@ pub(super) fn session_event_drain_budget(output_pressure: bool) -> SessionEventD
             SESSION_EVENT_DRAIN_IDLE_OUTPUT_BUDGET
         },
         wall_budget: SESSION_EVENT_DRAIN_WALL_BUDGET,
+    }
+}
+
+pub(super) fn session_event_input_wake_drain_budget() -> SessionEventDrainBudget {
+    SessionEventDrainBudget {
+        max_events: SESSION_EVENT_INPUT_WAKE_DRAIN_BATCH,
+        max_output_bytes: SESSION_EVENT_INPUT_WAKE_OUTPUT_BUDGET,
+        wall_budget: SESSION_EVENT_INPUT_WAKE_WALL_BUDGET,
     }
 }
 
@@ -681,6 +692,16 @@ mod tests {
         );
         assert!(pressure.max_output_bytes < idle.max_output_bytes);
         assert_eq!(pressure.wall_budget, SESSION_EVENT_DRAIN_WALL_BUDGET);
+    }
+
+    #[test]
+    fn session_event_input_wake_budget_prioritizes_ui_latency() {
+        let regular = session_event_drain_budget(false);
+        let input_wake = session_event_input_wake_drain_budget();
+
+        assert!(input_wake.max_events < regular.max_events);
+        assert!(input_wake.max_output_bytes < regular.max_output_bytes);
+        assert!(input_wake.wall_budget < regular.wall_budget);
     }
 
     #[test]

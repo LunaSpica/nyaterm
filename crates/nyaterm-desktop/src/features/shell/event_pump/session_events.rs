@@ -61,6 +61,31 @@ fn terminal_error_notice_output(output: &str) -> String {
 
 impl NyaTermApp {
     pub(in crate::features) fn drain_session_events(&mut self, cx: &mut Context<Self>) -> bool {
+        let settle =
+            connect_settle_active(self.terminal_runtime.connect_settle_until, Instant::now());
+        let mut drain_budget =
+            session_event_drain_budget(self.runtime_output_pressure_active() || settle);
+        if settle {
+            // First frames after connect: smaller wall budget leaves room for paint.
+            drain_budget.wall_budget = Duration::from_millis(4);
+            drain_budget.max_output_bytes = drain_budget.max_output_bytes.min(4 * 1024);
+        }
+        self.drain_session_events_with_budget(cx, drain_budget, true)
+    }
+
+    pub(in crate::features) fn drain_session_events_for_input_wake(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        self.drain_session_events_with_budget(cx, session_event_input_wake_drain_budget(), false)
+    }
+
+    fn drain_session_events_with_budget(
+        &mut self,
+        cx: &mut Context<Self>,
+        drain_budget: SessionEventDrainBudget,
+        drain_sideband_workers: bool,
+    ) -> bool {
         let drain_started_at = Instant::now();
         let mut dirty = false;
         // Common calm path: no local pending events, no bridge UI work, no file
@@ -68,8 +93,8 @@ impl NyaTermApp {
         // do not touch the session event pipeline at all.
         if self.pending_session_events.is_empty()
             && !self.session_event_bridge.has_pending_ui_work()
-            && self.zmodem_sessions.is_empty()
-            && self.trzsz_sessions.is_empty()
+            && (!drain_sideband_workers
+                || (self.zmodem_sessions.is_empty() && self.trzsz_sessions.is_empty()))
         {
             if self.terminal_runtime.session_event_queued_events != 0
                 || self.terminal_runtime.session_event_queued_output_bytes != 0
@@ -91,10 +116,12 @@ impl NyaTermApp {
         }
         // Bridge encoding/scrollback and per-session routing are updated on the
         // state transitions that need them, not on every runtime tick.
-        dirty |= self.drain_zmodem_worker_events(cx);
-        dirty |= self.drain_trzsz_download_worker_events(cx);
-        dirty |= self.drain_trzsz_upload_prepare_events(cx);
-        dirty |= self.drain_trzsz_upload_worker_events(cx);
+        if drain_sideband_workers {
+            dirty |= self.drain_zmodem_worker_events(cx);
+            dirty |= self.drain_trzsz_download_worker_events(cx);
+            dirty |= self.drain_trzsz_upload_prepare_events(cx);
+            dirty |= self.drain_trzsz_upload_worker_events(cx);
+        }
         let mut drained_events = 0usize;
         let mut output_event_count = 0usize;
         let mut drain_timings = SessionEventDrainTimings::default();
@@ -109,16 +136,6 @@ impl NyaTermApp {
         let mut bridge_drained_ui_events = 0usize;
         let mut bridge_drained_ui_output_bytes = 0usize;
         let mut pending_frame_outputs: Vec<(String, Vec<u8>)> = Vec::new();
-        let settle =
-            connect_settle_active(self.terminal_runtime.connect_settle_until, Instant::now());
-        let mut drain_budget =
-            session_event_drain_budget(self.runtime_output_pressure_active() || settle);
-        if settle {
-            // First frames after connect: smaller wall budget leaves room for paint.
-            drain_budget.wall_budget = Duration::from_millis(4);
-            drain_budget.max_output_bytes = drain_budget.max_output_bytes.min(4 * 1024);
-        }
-
         if self.pending_session_events.is_empty() {
             if self.session_event_bridge.has_pending_ui_work() {
                 let drain = self.session_event_bridge.drain_events_with_output_budget(

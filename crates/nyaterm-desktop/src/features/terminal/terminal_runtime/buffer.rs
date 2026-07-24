@@ -477,6 +477,30 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> bool {
+        self.drain_terminal_frame_events_with_budget(
+            cx,
+            TERMINAL_FRAME_EVENT_DRAIN_BATCH,
+            TERMINAL_FRAME_EVENT_DRAIN_WALL_BUDGET,
+        )
+    }
+
+    pub(in crate::features) fn drain_terminal_frame_events_for_input_wake(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        self.drain_terminal_frame_events_with_budget(
+            cx,
+            TERMINAL_FRAME_INPUT_WAKE_EVENT_DRAIN_BATCH,
+            TERMINAL_FRAME_INPUT_WAKE_EVENT_DRAIN_WALL_BUDGET,
+        )
+    }
+
+    fn drain_terminal_frame_events_with_budget(
+        &mut self,
+        cx: &mut Context<Self>,
+        max_events: usize,
+        wall_budget: Duration,
+    ) -> bool {
         let started_at = Instant::now();
         let mut dirty = false;
         let surface_paint_count_before = terminal_surface_paint_count();
@@ -493,11 +517,11 @@ impl NyaTermApp {
             .map(str::to_string)
             .collect::<Vec<_>>();
 
-        self.fill_pending_terminal_frame_events();
+        self.fill_pending_terminal_frame_events(max_events);
 
-        while drained_events < TERMINAL_FRAME_EVENT_DRAIN_BATCH {
+        while drained_events < max_events {
             if self.pending_terminal_frame_events.is_empty() {
-                if self.fill_pending_terminal_frame_events() == 0 {
+                if self.fill_pending_terminal_frame_events(max_events) == 0 {
                     break;
                 }
             }
@@ -536,15 +560,11 @@ impl NyaTermApp {
                 max_apply_duration = max_apply_duration.max(apply_started_at.elapsed());
                 drained_events += 1;
 
-                if drained_events >= TERMINAL_FRAME_EVENT_DRAIN_BATCH
-                    || started_at.elapsed() >= TERMINAL_FRAME_EVENT_DRAIN_WALL_BUDGET
-                {
+                if drained_events >= max_events || started_at.elapsed() >= wall_budget {
                     break;
                 }
             }
-            if drained_events >= TERMINAL_FRAME_EVENT_DRAIN_BATCH
-                || started_at.elapsed() >= TERMINAL_FRAME_EVENT_DRAIN_WALL_BUDGET
-            {
+            if drained_events >= max_events || started_at.elapsed() >= wall_budget {
                 break;
             }
         }
@@ -602,9 +622,8 @@ impl NyaTermApp {
         dirty
     }
 
-    fn fill_pending_terminal_frame_events(&mut self) -> usize {
-        let room = TERMINAL_FRAME_EVENT_DRAIN_BATCH
-            .saturating_sub(self.pending_terminal_frame_events.len());
+    fn fill_pending_terminal_frame_events(&mut self, max_events: usize) -> usize {
+        let room = max_events.saturating_sub(self.pending_terminal_frame_events.len());
         self.terminal_frame_pipeline
             .drain_events_into(&mut self.pending_terminal_frame_events, room)
     }
@@ -2147,6 +2166,8 @@ mod frame_event_queue_tests {
 
 const TERMINAL_FRAME_EVENT_DRAIN_BATCH: usize = 64;
 const TERMINAL_FRAME_EVENT_DRAIN_WALL_BUDGET: Duration = Duration::from_millis(4);
+const TERMINAL_FRAME_INPUT_WAKE_EVENT_DRAIN_BATCH: usize = 8;
+const TERMINAL_FRAME_INPUT_WAKE_EVENT_DRAIN_WALL_BUDGET: Duration = Duration::from_millis(1);
 const TERMINAL_FRAME_EVENT_DRAIN_SLOW_TOTAL: Duration = Duration::from_millis(12);
 const TERMINAL_FRAME_EVENT_APPLY_SLOW: Duration = Duration::from_millis(8);
 const TERMINAL_FRAME_APPLY_VISIBLE_TEXT_TAIL_CAP: usize = 16 * 1024;
@@ -2294,6 +2315,15 @@ mod tests {
             whole_word: false,
             limit: 1000,
         }
+    }
+
+    #[test]
+    fn terminal_frame_input_wake_budget_prioritizes_ui_latency() {
+        assert!(TERMINAL_FRAME_INPUT_WAKE_EVENT_DRAIN_BATCH < TERMINAL_FRAME_EVENT_DRAIN_BATCH);
+        assert!(
+            TERMINAL_FRAME_INPUT_WAKE_EVENT_DRAIN_WALL_BUDGET
+                < TERMINAL_FRAME_EVENT_DRAIN_WALL_BUDGET
+        );
     }
 
     #[test]
