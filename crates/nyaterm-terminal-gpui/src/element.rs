@@ -122,6 +122,7 @@ impl NyaTerminalLayoutCache {
         (Arc::clone(&row.line), did_shape, duration)
     }
 
+    #[cfg(test)]
     fn paint_row(
         &mut self,
         _row: usize,
@@ -133,9 +134,33 @@ impl NyaTerminalLayoutCache {
             Vec<TerminalRowBackgroundRange>,
         ),
     ) -> (Arc<CachedTerminalPaintRow>, bool, std::time::Duration) {
+        self.paint_row_reusing(_row, key, None, build)
+    }
+
+    /// `reuse_key` must describe paint output equivalent to `key`.
+    fn paint_row_reusing(
+        &mut self,
+        _row: usize,
+        key: u64,
+        reuse_key: Option<u64>,
+        build: impl FnOnce() -> (
+            Arc<ShapedLine>,
+            std::time::Duration,
+            usize,
+            Vec<TerminalRowBackgroundRange>,
+        ),
+    ) -> (Arc<CachedTerminalPaintRow>, bool, std::time::Duration) {
         if let Some(cached) = self.rows.get(&key) {
             self.hits = self.hits.saturating_add(1);
             return (Arc::clone(cached), false, std::time::Duration::ZERO);
+        }
+        if let Some(reuse_key) = reuse_key.filter(|reuse_key| *reuse_key != key)
+            && let Some(cached) = self.rows.remove(&reuse_key)
+        {
+            self.hits = self.hits.saturating_add(1);
+            self.rows.insert(key, Arc::clone(&cached));
+            self.row_order.push_back(key);
+            return (cached, false, std::time::Duration::ZERO);
         }
         self.misses = self.misses.saturating_add(1);
         if self.rows.len() >= TERMINAL_LAYOUT_CACHE_ROW_CAP {
@@ -547,6 +572,33 @@ mod layout_cache_tests {
         assert_eq!(cached.background_ranges[0].bg, 0xff00ff);
         assert_eq!(cached.background_ranges[0].start, 2);
         assert_eq!(cached.background_ranges[0].end, 4);
+    }
+
+    #[test]
+    fn paint_row_cache_promotes_equivalent_keyword_result() {
+        let mut cache = NyaTerminalLayoutCache::default();
+
+        let (pending, did_shape, _) = cache.paint_row(0, 41, || {
+            (
+                Arc::new(ShapedLine::default()),
+                std::time::Duration::ZERO,
+                1,
+                Vec::new(),
+            )
+        });
+        assert!(did_shape);
+
+        let (parsed, did_shape, _) = cache.paint_row_reusing(0, 42, Some(41), || {
+            panic!("equivalent parsed keyword result should reuse pending layout")
+        });
+
+        assert!(!did_shape);
+        assert!(Arc::ptr_eq(&pending, &parsed));
+        assert!(!cache.rows.contains_key(&41));
+        assert!(cache.rows.contains_key(&42));
+        assert_eq!(cache.misses, 1);
+        assert_eq!(cache.hits, 1);
+        assert_eq!(cache.shape_calls, 1);
     }
 
     #[test]
@@ -1053,19 +1105,14 @@ impl NyaTerminalElement {
         let effective_keyword_rules_key =
             terminal_effective_keyword_rules_key(keyword_rules_key, keyword_result_known_empty);
         let paint_style_key = self.paint_style_key(effective_keyword_rules_key);
-        let mut hasher = DefaultHasher::new();
-        if let Some(signature) = self.snapshot.line_signatures.get(row) {
-            signature.hash(&mut hasher);
-        } else {
-            // Synthetic callers without terminal row signatures retain the
-            // defensive content/style fallback.
-            display_line.hash(&mut hasher);
-            hash_styled_spans(ansi_spans, &mut hasher);
-        }
-        hash_stable_glyph_decorations(decorations, &mut hasher);
-        keyword_spans_present.hash(&mut hasher);
-        paint_style_key.hash(&mut hasher);
-        hasher.finish()
+        terminal_row_layout_key(
+            self.snapshot.line_signatures.get(row).copied(),
+            display_line,
+            ansi_spans,
+            decorations,
+            keyword_spans_present,
+            paint_style_key,
+        )
     }
 
     fn paint_style_key(&self, keyword_rules_key: u64) -> u64 {
@@ -1130,6 +1177,29 @@ fn terminal_cursor_cell_hidden(snapshot: &TerminalSnapshot) -> bool {
 
 fn terminal_glyph_decorations_needed(decorations: &TerminalLineDecorations) -> bool {
     !decorations.active_search_ranges.is_empty() || !decorations.link_ranges.is_empty()
+}
+
+fn terminal_row_layout_key(
+    line_signature: Option<u64>,
+    display_line: &str,
+    ansi_spans: Option<&[nyaterm_terminal::StyledSpan]>,
+    decorations: &TerminalLineDecorations,
+    keyword_spans_present: bool,
+    paint_style_key: u64,
+) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    if let Some(signature) = line_signature {
+        signature.hash(&mut hasher);
+    } else {
+        // Synthetic callers without terminal row signatures retain the
+        // defensive content/style fallback.
+        display_line.hash(&mut hasher);
+        hash_styled_spans(ansi_spans, &mut hasher);
+    }
+    hash_stable_glyph_decorations(decorations, &mut hasher);
+    keyword_spans_present.hash(&mut hasher);
+    paint_style_key.hash(&mut hasher);
+    hasher.finish()
 }
 
 fn terminal_plain_row_fast_path(
@@ -1440,17 +1510,24 @@ impl Element for NyaTerminalElement {
                 &mut plan.decoration_backgrounds,
             );
 
-            let mut row_key_hasher = DefaultHasher::new();
-            if let Some(signature) = self.snapshot.line_signatures.get(row) {
-                signature.hash(&mut row_key_hasher);
-            } else {
-                display_line.hash(&mut row_key_hasher);
-                hash_styled_spans(ansi, &mut row_key_hasher);
-            }
-            hash_stable_glyph_decorations(decorations, &mut row_key_hasher);
-            keyword_spans_present.hash(&mut row_key_hasher);
-            row_paint_style_key.hash(&mut row_key_hasher);
-            let row_key = row_key_hasher.finish();
+            let row_layout_key = |paint_style_key: u64, keyword_spans_present: bool| {
+                terminal_row_layout_key(
+                    line_signature,
+                    display_line,
+                    ansi,
+                    decorations,
+                    keyword_spans_present,
+                    paint_style_key,
+                )
+            };
+            let row_key = row_layout_key(row_paint_style_key, keyword_spans_present);
+            // Pending keyword rows are synchronously highlighted to keep paint stable.
+            // Once the background result arrives, its deterministic output is identical;
+            // promote that pending layout under the parsed key instead of shaping again.
+            let pending_keyword_row_key = keyword_lookup
+                .is_some()
+                .then(|| row_layout_key(keyword_paint_style_key, false))
+                .filter(|pending_key| *pending_key != row_key);
             let build_row = |window: &mut Window| {
                 let row_keyword_rules: &[ResolvedKeywordHighlightRule] =
                     if keyword_result_known_empty {
@@ -1596,21 +1673,22 @@ impl Element for NyaTerminalElement {
                     background_ranges,
                 )
             };
-            let (painted_row, did_shape, shape_duration) =
-                if let Some(cache) = layout_cache.as_deref_mut() {
-                    cache.paint_row(row, row_key, || build_row(window))
-                } else {
-                    let (line, duration, text_run_count, background_ranges) = build_row(window);
-                    (
-                        Arc::new(CachedTerminalPaintRow {
-                            line,
-                            background_ranges,
-                            text_run_count,
-                        }),
-                        true,
-                        duration,
-                    )
-                };
+            let (painted_row, did_shape, shape_duration) = if let Some(cache) =
+                layout_cache.as_deref_mut()
+            {
+                cache.paint_row_reusing(row, row_key, pending_keyword_row_key, || build_row(window))
+            } else {
+                let (line, duration, text_run_count, background_ranges) = build_row(window);
+                (
+                    Arc::new(CachedTerminalPaintRow {
+                        line,
+                        background_ranges,
+                        text_run_count,
+                    }),
+                    true,
+                    duration,
+                )
+            };
             push_terminal_background_ranges(
                 row,
                 &painted_row.background_ranges,
