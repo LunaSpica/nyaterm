@@ -8,6 +8,14 @@ fn terminal_input_selection() -> UTF16Selection {
     }
 }
 
+fn terminal_visible_surface_bounds(
+    bounds: Bounds<Pixels>,
+    content_mask: Bounds<Pixels>,
+) -> Option<Bounds<Pixels>> {
+    let visible = content_mask.intersect(&bounds);
+    (visible.size.width > px(0.) && visible.size.height > px(0.)).then_some(visible)
+}
+
 /// Invisible canvas child that records the terminal output bounds for selection hit-testing.
 pub(in crate::features) fn terminal_bounds_tracker(
     entity: gpui::Entity<NyaTermApp>,
@@ -19,6 +27,11 @@ pub(in crate::features) fn terminal_bounds_tracker(
     let tracked_session_id = session_id.clone();
     gpui::canvas(
         move |bounds, window, cx| {
+            let Some(bounds) =
+                terminal_visible_surface_bounds(bounds, window.content_mask().bounds)
+            else {
+                return;
+            };
             let scale_factor = window.scale_factor();
             let unchanged = bounds_entity
                 .read(cx)
@@ -619,6 +632,40 @@ mod tests {
 
         assert_eq!(selection.range, 0..0);
         assert!(!selection.reversed);
+    }
+
+    #[test]
+    fn terminal_surface_bounds_follow_the_visible_content_mask() {
+        let bounds = Bounds::new(
+            gpui::point(px(10.), px(20.)),
+            gpui::size(px(600.), px(4_000.)),
+        );
+        let content_mask = Bounds::new(
+            gpui::point(px(0.), px(0.)),
+            gpui::size(px(1_280.), px(800.)),
+        );
+
+        assert_eq!(
+            terminal_visible_surface_bounds(bounds, content_mask),
+            Some(Bounds::new(
+                gpui::point(px(10.), px(20.)),
+                gpui::size(px(600.), px(780.))
+            ))
+        );
+    }
+
+    #[test]
+    fn terminal_surface_bounds_skip_fully_clipped_surfaces() {
+        let bounds = Bounds::new(
+            gpui::point(px(10.), px(900.)),
+            gpui::size(px(600.), px(400.)),
+        );
+        let content_mask = Bounds::new(
+            gpui::point(px(0.), px(0.)),
+            gpui::size(px(1_280.), px(800.)),
+        );
+
+        assert_eq!(terminal_visible_surface_bounds(bounds, content_mask), None);
     }
 }
 
