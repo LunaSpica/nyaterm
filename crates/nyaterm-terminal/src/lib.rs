@@ -1052,11 +1052,7 @@ fn snapshot_window_from_term(
             row_cells[row].push(RenderCell {
                 text,
                 style: cell_style(cell),
-                width: if cell.flags.contains(Flags::WIDE_CHAR) {
-                    2
-                } else {
-                    1
-                },
+                width: render_cell_width(cell),
                 hyperlink: cell.hyperlink().map(|link| link.uri().to_string()),
             });
         }
@@ -1065,7 +1061,7 @@ fn snapshot_window_from_term(
     for row in &mut row_cells {
         while row.len() < cols {
             row.push(RenderCell {
-                text: " ".to_string(),
+                text: String::new(),
                 style: CellStyle::default(),
                 width: 1,
                 hyperlink: None,
@@ -1080,10 +1076,10 @@ fn snapshot_window_from_term(
     let mut styled_lines = Vec::with_capacity(rows);
     let mut hyperlink_lines = Vec::with_capacity(rows);
     for row in &row_cells {
-        let line = row
-            .iter()
-            .map(|cell| cell.text.as_str())
-            .collect::<String>();
+        let mut line = String::with_capacity(cols);
+        for cell in row {
+            push_render_cell_text(&mut line, cell);
+        }
         lines.push(line.trim_end().to_string());
         styled_lines.push(compress_render_row(row));
         hyperlink_lines.push(compress_render_hyperlinks(row));
@@ -1156,16 +1152,14 @@ fn line_signature(term: &Term<NyaTermEventProxy>, line: Line, cols: usize) -> u6
     let mut hasher = DefaultHasher::new();
     for col in 0..cols {
         let cell = &term.grid()[line][Column(col)];
-        cell_text(cell).hash(&mut hasher);
+        hash_cell_text(cell, &mut hasher);
         cell_style(cell).hash(&mut hasher);
-        if cell.flags.contains(Flags::WIDE_CHAR) {
-            2u8.hash(&mut hasher);
+        render_cell_width(cell).hash(&mut hasher);
+        if let Some(link) = cell.hyperlink() {
+            Some(link.uri()).hash(&mut hasher);
         } else {
-            1u8.hash(&mut hasher);
+            Option::<&str>::None.hash(&mut hasher);
         }
-        cell.hyperlink()
-            .map(|link| link.uri().to_string())
-            .hash(&mut hasher);
     }
     hasher.finish()
 }
@@ -1190,10 +1184,8 @@ fn unix_time_ms() -> u64 {
 }
 
 fn cell_text(cell: &Cell) -> String {
-    if cell.flags.contains(Flags::WIDE_CHAR_SPACER)
-        || cell.flags.contains(Flags::LEADING_WIDE_CHAR_SPACER)
-    {
-        return " ".to_string();
+    if cell_text_is_blank(cell) {
+        return String::new();
     }
     let mut text = String::new();
     text.push(cell.c);
@@ -1201,6 +1193,45 @@ fn cell_text(cell: &Cell) -> String {
         text.extend(zerowidth.iter().copied());
     }
     text
+}
+
+fn cell_text_is_blank(cell: &Cell) -> bool {
+    cell.flags.contains(Flags::WIDE_CHAR_SPACER)
+        || cell.flags.contains(Flags::LEADING_WIDE_CHAR_SPACER)
+        || (cell.c == ' ' && cell.zerowidth().is_none_or(|chars| chars.is_empty()))
+}
+
+fn render_cell_width(cell: &Cell) -> u8 {
+    if cell.flags.contains(Flags::WIDE_CHAR_SPACER)
+        || cell.flags.contains(Flags::LEADING_WIDE_CHAR_SPACER)
+    {
+        0
+    } else if cell.flags.contains(Flags::WIDE_CHAR) {
+        2
+    } else {
+        1
+    }
+}
+
+fn hash_cell_text<H: Hasher>(cell: &Cell, hasher: &mut H) {
+    if cell_text_is_blank(cell) {
+        "".hash(hasher);
+    } else if cell.zerowidth().is_none_or(|chars| chars.is_empty()) {
+        let mut encoded = [0; 4];
+        cell.c.encode_utf8(&mut encoded).hash(hasher);
+    } else {
+        cell_text(cell).hash(hasher);
+    }
+}
+
+fn push_render_cell_text(output: &mut String, cell: &RenderCell) {
+    if cell.text.is_empty() {
+        if cell.width != 0 {
+            output.push(' ');
+        }
+    } else {
+        output.push_str(&cell.text);
+    }
 }
 
 fn cell_style(cell: &Cell) -> CellStyle {
@@ -1365,7 +1396,7 @@ fn compress_render_row(row: &[RenderCell]) -> Vec<StyledSpan> {
         let mut text = String::new();
         let mut j = i;
         while j < row.len() && row[j].style == style {
-            text.push_str(&row[j].text);
+            push_render_cell_text(&mut text, &row[j]);
             j += 1;
         }
         spans.push(StyledSpan { text, style });
@@ -1847,6 +1878,39 @@ mod tests {
             .line_signatures
             .iter()
             .zip(snap.cells.chunks_exact(snap.cols))
+        {
+            assert_eq!(*signature, render_row_signature(cells));
+        }
+    }
+
+    #[test]
+    fn snapshot_keeps_blank_cell_storage_allocation_free() {
+        let screen = TerminalScreen::new(80, 24);
+        let snapshot = screen.viewport_snapshot(0);
+
+        assert!(snapshot.cells.iter().all(|cell| cell.text.is_empty()));
+        assert!(snapshot.lines.iter().all(String::is_empty));
+        assert!(snapshot.styled_lines.iter().all(|spans| {
+            spans
+                .iter()
+                .map(|span| span.text.as_str())
+                .collect::<String>()
+                == " ".repeat(snapshot.cols)
+        }));
+    }
+
+    #[test]
+    fn snapshot_blank_cell_storage_preserves_wide_text_and_signatures() {
+        let mut screen = TerminalScreen::new(8, 2);
+        screen.advance("界 a".as_bytes());
+        let snapshot = screen.viewport_snapshot(0);
+
+        assert_eq!(snapshot.lines[0], "界 a");
+        assert!(snapshot.cells[1].text.is_empty());
+        for (signature, cells) in snapshot
+            .line_signatures
+            .iter()
+            .zip(snapshot.cells.chunks_exact(snapshot.cols))
         {
             assert_eq!(*signature, render_row_signature(cells));
         }
