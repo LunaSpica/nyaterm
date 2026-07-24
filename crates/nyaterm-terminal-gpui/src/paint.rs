@@ -58,13 +58,6 @@ pub(super) fn terminal_run_font(
     };
     font
 }
-pub(super) fn line_underline_color(color: Hsla) -> UnderlineStyle {
-    UnderlineStyle {
-        color: Some(color),
-        thickness: px(1.0),
-        wavy: false,
-    }
-}
 pub(super) fn line_strike_color(color: Hsla) -> StrikethroughStyle {
     StrikethroughStyle {
         color: Some(color),
@@ -454,7 +447,7 @@ impl FlatTerminalCell {
     }
 }
 
-fn flatten_highlight_spans(spans: Vec<TerminalHighlightSpan>) -> Vec<FlatTerminalCell> {
+pub(super) fn flatten_highlight_spans(spans: Vec<TerminalHighlightSpan>) -> Vec<FlatTerminalCell> {
     let mut flat: Vec<FlatTerminalCell> = Vec::new();
     for span in spans {
         if span.text.is_empty() {

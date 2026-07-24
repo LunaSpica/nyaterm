@@ -33,12 +33,20 @@ pub struct TerminalLineDecorations {
 struct CachedTerminalPaintRow {
     line: Arc<ShapedLine>,
     background_ranges: Vec<TerminalRowBackgroundRange>,
+    underline_ranges: Vec<TerminalRowUnderlineRange>,
     text_run_count: usize,
 }
 
 #[derive(Debug, Clone)]
 struct TerminalRowBackgroundRange {
     bg: u32,
+    start: usize,
+    end: usize,
+}
+
+#[derive(Debug, Clone)]
+struct TerminalRowUnderlineRange {
+    color: u32,
     start: usize,
     end: usize,
 }
@@ -117,7 +125,7 @@ impl NyaTerminalLayoutCache {
     ) -> (Arc<ShapedLine>, bool, std::time::Duration) {
         let (row, did_shape, duration) = self.paint_row(_row, key, || {
             let (line, duration) = shape();
-            (line, duration, 0, Vec::new())
+            (line, duration, 0, Vec::new(), Vec::new())
         });
         (Arc::clone(&row.line), did_shape, duration)
     }
@@ -132,6 +140,7 @@ impl NyaTerminalLayoutCache {
             std::time::Duration,
             usize,
             Vec<TerminalRowBackgroundRange>,
+            Vec<TerminalRowUnderlineRange>,
         ),
     ) -> (Arc<CachedTerminalPaintRow>, bool, std::time::Duration) {
         self.paint_row_reusing(_row, key, None, build)
@@ -148,6 +157,7 @@ impl NyaTerminalLayoutCache {
             std::time::Duration,
             usize,
             Vec<TerminalRowBackgroundRange>,
+            Vec<TerminalRowUnderlineRange>,
         ),
     ) -> (Arc<CachedTerminalPaintRow>, bool, std::time::Duration) {
         if let Some(cached) = self.rows.get(&key) {
@@ -166,7 +176,7 @@ impl NyaTerminalLayoutCache {
         if self.rows.len() >= TERMINAL_LAYOUT_CACHE_ROW_CAP {
             self.evict_oldest_row();
         }
-        let (line, duration, text_run_count, background_ranges) = build();
+        let (line, duration, text_run_count, background_ranges, underline_ranges) = build();
         self.shape_calls = self.shape_calls.saturating_add(1);
         self.shape_duration_us = self
             .shape_duration_us
@@ -174,6 +184,7 @@ impl NyaTerminalLayoutCache {
         let row = Arc::new(CachedTerminalPaintRow {
             line: Arc::clone(&line),
             background_ranges,
+            underline_ranges,
             text_run_count,
         });
         self.rows.insert(key, Arc::clone(&row));
@@ -343,6 +354,7 @@ mod layout_cache_tests {
                     Arc::new(ShapedLine::default()),
                     std::time::Duration::ZERO,
                     1,
+                    Vec::new(),
                     Vec::new(),
                 )
             });
@@ -557,6 +569,11 @@ mod layout_cache_tests {
                     start: 2,
                     end: 4,
                 }],
+                vec![TerminalRowUnderlineRange {
+                    color: 0x00ffff,
+                    start: 1,
+                    end: 3,
+                }],
             )
         });
 
@@ -565,6 +582,7 @@ mod layout_cache_tests {
         assert_eq!(build_calls, 1);
         assert_eq!(row.text_run_count, 3);
         assert_eq!(row.background_ranges.len(), 1);
+        assert_eq!(row.underline_ranges.len(), 1);
 
         let (cached, did_shape, duration) = cache.paint_row(0, 42, || {
             panic!("cached row should not rebuild");
@@ -577,6 +595,9 @@ mod layout_cache_tests {
         assert_eq!(cached.background_ranges[0].bg, 0xff00ff);
         assert_eq!(cached.background_ranges[0].start, 2);
         assert_eq!(cached.background_ranges[0].end, 4);
+        assert_eq!(cached.underline_ranges[0].color, 0x00ffff);
+        assert_eq!(cached.underline_ranges[0].start, 1);
+        assert_eq!(cached.underline_ranges[0].end, 3);
     }
 
     #[test]
@@ -588,6 +609,7 @@ mod layout_cache_tests {
                 Arc::new(ShapedLine::default()),
                 std::time::Duration::ZERO,
                 1,
+                Vec::new(),
                 Vec::new(),
             )
         });
@@ -604,6 +626,100 @@ mod layout_cache_tests {
         assert_eq!(cache.misses, 1);
         assert_eq!(cache.hits, 1);
         assert_eq!(cache.shape_calls, 1);
+    }
+
+    fn underline_span(text: &str, color: Option<u32>) -> TerminalHighlightSpan {
+        TerminalHighlightSpan {
+            text: text.to_string(),
+            color,
+            bg: None,
+            keyword: false,
+            underline: true,
+            strikeout: false,
+            bold: false,
+            italic: false,
+        }
+    }
+
+    #[test]
+    fn underline_ranges_capture_ansi_underlines_without_text_run_underlines() {
+        let palette = nyaterm_ui::theme_palette("github-dark");
+        let span = underline_span("ERROR", Some(0xff2244));
+        let ranges = terminal_underline_ranges_for_spans(std::slice::from_ref(&span), palette);
+        let run = terminal_text_run_for_span(
+            &span,
+            span.text.len(),
+            font(SharedString::from("monospace")),
+            400.0,
+            700.0,
+            palette,
+        );
+
+        assert_eq!(ranges.len(), 1);
+        assert_eq!(ranges[0].start, 0);
+        assert_eq!(ranges[0].end, 5);
+        assert_eq!(ranges[0].color, 0xff2244);
+        assert!(run.underline.is_none());
+    }
+
+    #[test]
+    fn underline_ranges_clamp_action_links_to_actual_text() {
+        let palette = nyaterm_ui::theme_palette("github-dark");
+        let spans = apply_action_link_ranges(
+            vec![TerminalHighlightSpan {
+                text: "abc".to_string(),
+                color: None,
+                bg: None,
+                keyword: false,
+                underline: false,
+                strikeout: false,
+                bold: false,
+                italic: false,
+            }],
+            &[(1, 99)],
+            palette,
+        );
+        let ranges = terminal_underline_ranges_for_spans(&spans, palette);
+
+        assert_eq!(ranges.len(), 1);
+        assert_eq!(ranges[0].start, 1);
+        assert_eq!(ranges[0].end, 3);
+        assert_eq!(ranges[0].color, palette.accent);
+    }
+
+    #[test]
+    fn underline_ranges_count_wide_and_attached_marks_as_terminal_cells() {
+        let palette = nyaterm_ui::theme_palette("github-dark");
+        let wide =
+            terminal_underline_ranges_for_spans(&[underline_span("界x", Some(0xff2244))], palette);
+        let combining = terminal_underline_ranges_for_spans(
+            &[underline_span("e\u{301}x", Some(0xff2244))],
+            palette,
+        );
+        let variation = terminal_underline_ranges_for_spans(
+            &[underline_span("a\u{fe0f}x", Some(0xff2244))],
+            palette,
+        );
+
+        assert_eq!(wide[0].start, 0);
+        assert_eq!(wide[0].end, 3);
+        assert_eq!(combining[0].start, 0);
+        assert_eq!(combining[0].end, 2);
+        assert_eq!(variation[0].start, 0);
+        assert_eq!(variation[0].end, 2);
+    }
+
+    #[test]
+    fn underline_bounds_follow_visual_scroll_offset() {
+        let bounds = Bounds::new(point(px(10.0), px(20.0)), size(px(200.0), px(120.0)));
+
+        let base = terminal_underline_bounds(2, 1, 4, bounds, 0.0, 8.0, 16.0);
+        let shifted = terminal_underline_bounds(2, 1, 4, bounds, -8.0, 8.0, 16.0);
+
+        assert_eq!(f32::from(base.left()), 18.0);
+        assert_eq!(f32::from(base.top()), 66.0);
+        assert_eq!(f32::from(base.size.width), 24.0);
+        assert_eq!(f32::from(shifted.top()), 58.0);
     }
 
     #[test]
@@ -1063,6 +1179,8 @@ pub struct NyaTerminalPaintPlan {
     /// Active-search gutter + OSC 133 command marks (under glyphs).
     active_markers: Vec<PaintQuad>,
     rows: Vec<TerminalPaintRow>,
+    /// Terminal underline decorations painted with current scroll geometry.
+    underlines: Vec<PaintQuad>,
     /// Decoded graphics with Kitty z>0, painted above terminal text.
     images_above: Vec<TerminalImagePaint>,
     /// Accent placeholders for undecodable above-text images.
@@ -1385,6 +1503,41 @@ fn terminal_ansi_spans_are_plain(ansi_spans: Option<&[nyaterm_terminal::StyledSp
         .all(|span| span.text.is_empty() || span.style == default_style)
 }
 
+fn terminal_text_run_for_span(
+    span: &TerminalHighlightSpan,
+    len: usize,
+    base_font: Font,
+    normal_weight: f32,
+    bold_weight: f32,
+    palette: nyaterm_ui::ThemePalette,
+) -> TextRun {
+    TextRun {
+        len,
+        font: terminal_run_font(
+            base_font,
+            span.bold,
+            span.italic,
+            normal_weight,
+            bold_weight,
+        ),
+        color: span
+            .color
+            .map(rgb)
+            .unwrap_or_else(|| rgb(palette.terminal_fg))
+            .into(),
+        background_color: None,
+        underline: None,
+        strikethrough: span.strikeout.then(|| {
+            line_strike_color(
+                span.color
+                    .map(rgb)
+                    .unwrap_or_else(|| rgb(palette.terminal_fg))
+                    .into(),
+            )
+        }),
+    }
+}
+
 #[cfg(test)]
 fn terminal_effective_keyword_rules_key(keyword_rules_key: u64, known_empty: bool) -> u64 {
     if known_empty { 0 } else { keyword_rules_key }
@@ -1427,6 +1580,41 @@ fn terminal_background_ranges_for_spans(
     out
 }
 
+fn terminal_underline_ranges_for_spans(
+    spans: &[TerminalHighlightSpan],
+    palette: nyaterm_ui::ThemePalette,
+) -> Vec<TerminalRowUnderlineRange> {
+    let flat = flatten_highlight_spans(spans.to_vec());
+    let mut out = Vec::new();
+    let mut pending: Option<TerminalRowUnderlineRange> = None;
+    for (col, cell) in flat.iter().enumerate() {
+        if cell.underline {
+            let color = cell.color.unwrap_or(palette.accent);
+            match pending.as_mut() {
+                Some(current) if current.color == color && current.end == col => {
+                    current.end = col + 1;
+                }
+                _ => {
+                    if let Some(range) = pending.take() {
+                        out.push(range);
+                    }
+                    pending = Some(TerminalRowUnderlineRange {
+                        color,
+                        start: col,
+                        end: col + 1,
+                    });
+                }
+            }
+        } else if let Some(range) = pending.take() {
+            out.push(range);
+        }
+    }
+    if let Some(range) = pending.take() {
+        out.push(range);
+    }
+    out
+}
+
 fn push_terminal_background_ranges(
     row: usize,
     ranges: &[TerminalRowBackgroundRange],
@@ -1444,6 +1632,54 @@ fn push_terminal_background_ranges(
             cell_h,
             out,
         );
+    }
+}
+
+fn terminal_underline_bounds(
+    row: usize,
+    start: usize,
+    end: usize,
+    bounds: Bounds<Pixels>,
+    visual_y_offset: f32,
+    cell_w: f32,
+    cell_h: f32,
+) -> Bounds<Pixels> {
+    let left = (f32::from(bounds.left()) + start as f32 * cell_w).floor();
+    let right = (f32::from(bounds.left()) + end as f32 * cell_w).ceil();
+    let row_top = f32::from(bounds.top()) + visual_y_offset + row as f32 * cell_h;
+    let bottom = (row_top + cell_h).floor();
+    let top = (bottom - 2.0).max(row_top);
+    Bounds::new(
+        point(px(left), px(top)),
+        size(px((right - left).max(0.)), px(1.0)),
+    )
+}
+
+fn push_terminal_underline_ranges(
+    row: usize,
+    ranges: &[TerminalRowUnderlineRange],
+    bounds: Bounds<Pixels>,
+    visual_y_offset: f32,
+    cell_w: f32,
+    cell_h: f32,
+    out: &mut Vec<PaintQuad>,
+) {
+    for range in ranges {
+        if range.end <= range.start {
+            continue;
+        }
+        out.push(fill(
+            terminal_underline_bounds(
+                row,
+                range.start,
+                range.end,
+                bounds,
+                visual_y_offset,
+                cell_w,
+                cell_h,
+            ),
+            rgb(range.color),
+        ));
     }
 }
 
@@ -1737,7 +1973,13 @@ impl Element for NyaTerminalElement {
                         &text_runs,
                         Some(px(cell_w)),
                     ));
-                    return (line, line_started_at.elapsed(), text_runs.len(), Vec::new());
+                    return (
+                        line,
+                        line_started_at.elapsed(),
+                        text_runs.len(),
+                        Vec::new(),
+                        Vec::new(),
+                    );
                 }
 
                 // Base spans drive cell/keyword backgrounds only (under images).
@@ -1784,6 +2026,7 @@ impl Element for NyaTerminalElement {
                 }
                 let background_ranges =
                     terminal_background_ranges_for_spans(&background_spans, self.palette);
+                let underline_ranges = terminal_underline_ranges_for_spans(&spans, self.palette);
 
                 let mut text = String::new();
                 let mut text_runs = Vec::new();
@@ -1791,38 +2034,14 @@ impl Element for NyaTerminalElement {
                     let run_len = span.text.len();
                     text.push_str(&span.text);
                     if run_len > 0 {
-                        text_runs.push(TextRun {
-                            len: run_len,
-                            font: terminal_run_font(
-                                base_font.clone(),
-                                span.bold,
-                                span.italic,
-                                self.normal_weight,
-                                self.bold_weight,
-                            ),
-                            color: span
-                                .color
-                                .map(rgb)
-                                .unwrap_or_else(|| rgb(self.palette.terminal_fg))
-                                .into(),
-                            background_color: None,
-                            underline: span.underline.then(|| {
-                                line_underline_color(
-                                    span.color
-                                        .map(rgb)
-                                        .unwrap_or_else(|| rgb(self.palette.accent))
-                                        .into(),
-                                )
-                            }),
-                            strikethrough: span.strikeout.then(|| {
-                                line_strike_color(
-                                    span.color
-                                        .map(rgb)
-                                        .unwrap_or_else(|| rgb(self.palette.terminal_fg))
-                                        .into(),
-                                )
-                            }),
-                        });
+                        text_runs.push(terminal_text_run_for_span(
+                            &span,
+                            run_len,
+                            base_font.clone(),
+                            self.normal_weight,
+                            self.bold_weight,
+                            self.palette,
+                        ));
                     }
                 }
 
@@ -1855,6 +2074,7 @@ impl Element for NyaTerminalElement {
                     line_started_at.elapsed(),
                     text_runs.len(),
                     background_ranges,
+                    underline_ranges,
                 )
             };
             let (painted_row, did_shape, shape_duration) = if let Some(cache) =
@@ -1862,11 +2082,13 @@ impl Element for NyaTerminalElement {
             {
                 cache.paint_row_reusing(row, row_key, pending_keyword_row_key, || build_row(window))
             } else {
-                let (line, duration, text_run_count, background_ranges) = build_row(window);
+                let (line, duration, text_run_count, background_ranges, underline_ranges) =
+                    build_row(window);
                 (
                     Arc::new(CachedTerminalPaintRow {
                         line,
                         background_ranges,
+                        underline_ranges,
                         text_run_count,
                     }),
                     true,
@@ -1893,6 +2115,15 @@ impl Element for NyaTerminalElement {
                     y,
                     line: Arc::clone(&painted_row.line),
                 });
+                push_terminal_underline_ranges(
+                    row,
+                    &painted_row.underline_ranges,
+                    bounds,
+                    visual_y_offset,
+                    cell_w,
+                    cell_h,
+                    &mut plan.underlines,
+                );
             } else {
                 plan.prefetched_row_count = plan.prefetched_row_count.saturating_add(1);
             }
@@ -2059,6 +2290,7 @@ impl Element for NyaTerminalElement {
                 keyword_rules = self.keyword_rules.len(),
                 images = self.snapshot.images.len(),
                 backgrounds = plan.backgrounds.len(),
+                underlines = plan.underlines.len(),
                 decoration_backgrounds = plan.decoration_backgrounds.len(),
                 active_markers = plan.active_markers.len(),
                 shaped_rows = plan.rows.len(),
@@ -2100,6 +2332,7 @@ impl Element for NyaTerminalElement {
         let decoration_backgrounds = prepaint.decoration_backgrounds.len();
         let active_markers = prepaint.active_markers.len();
         let shaped_rows = prepaint.rows.len();
+        let underlines = prepaint.underlines.len();
         let images_above = prepaint.images_above.len();
         let placeholders_above = prepaint.placeholders_above.len();
         let cursor = prepaint.cursor_background.is_some();
@@ -2111,7 +2344,7 @@ impl Element for NyaTerminalElement {
             bounds: window.content_mask().bounds.intersect(&bounds),
         };
         window.with_content_mask(Some(viewport_mask), |window| {
-            // cell/keyword bg → under images → search/selection → marks → text → above images → cursor
+            // cell/keyword bg → under images → search/selection → marks → text → underlines → above images → cursor
             for quad in prepaint.backgrounds.drain(..) {
                 window.paint_quad(quad);
             }
@@ -2137,6 +2370,9 @@ impl Element for NyaTerminalElement {
                 let _ = row
                     .line
                     .paint(point(bounds.left(), row.y), px(cell_height), window, cx);
+            }
+            for quad in prepaint.underlines.drain(..) {
+                window.paint_quad(quad);
             }
             for image in prepaint.images_above.drain(..) {
                 let _ = window.paint_image(
@@ -2170,6 +2406,7 @@ impl Element for NyaTerminalElement {
                 decoration_backgrounds,
                 active_markers,
                 shaped_rows,
+                underlines,
                 images_under,
                 images_above,
                 placeholders_under,
