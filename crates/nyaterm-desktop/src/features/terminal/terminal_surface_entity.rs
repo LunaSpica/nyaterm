@@ -950,14 +950,7 @@ impl TerminalSurface {
             return None;
         }
 
-        let mut cells = Vec::with_capacity(viewport_rows.saturating_mul(cols));
-        let mut lines = Vec::with_capacity(viewport_rows);
-        let mut styled_lines = Vec::with_capacity(viewport_rows);
-        let mut line_signatures = Vec::with_capacity(viewport_rows);
-        let mut line_timestamps_ms = Vec::with_capacity(viewport_rows);
-        let mut line_wrapped = Vec::with_capacity(viewport_rows);
-        let mut hyperlink_lines = Vec::with_capacity(viewport_rows);
-        let mut command_marks = Vec::with_capacity(viewport_rows);
+        let mut rows = Vec::with_capacity(viewport_rows);
 
         for abs_row in desired_start..desired_end {
             let (snapshot, row) = sources
@@ -967,45 +960,22 @@ impl TerminalSurface {
                         .map(|row| (*snapshot, row))
                 })
                 .min_by_key(|(snapshot, _)| snapshot.display_offset.abs_diff(display_offset))?;
-            let cell_start = row.checked_mul(cols)?;
-            let cell_end = cell_start.checked_add(cols)?;
-            cells.extend_from_slice(snapshot.cells.get(cell_start..cell_end)?);
-            lines.push(snapshot.lines.get(row).cloned().unwrap_or_default());
-            styled_lines.push(snapshot.styled_lines.get(row).cloned().unwrap_or_default());
-            line_signatures.push(*snapshot.line_signatures.get(row).unwrap_or(&0));
-            line_timestamps_ms.push(*snapshot.line_timestamps_ms.get(row).unwrap_or(&None));
-            line_wrapped.push(*snapshot.line_wrapped.get(row).unwrap_or(&false));
-            hyperlink_lines.push(
-                snapshot
-                    .hyperlink_lines
-                    .get(row)
-                    .cloned()
-                    .unwrap_or_default(),
-            );
-            command_marks.push(*snapshot.command_marks.get(row).unwrap_or(&None));
+            rows.push(snapshot.rows().get(row)?.clone());
         }
 
-        Some(Arc::new(TerminalSnapshot {
-            cols,
-            viewport_rows,
-            rows: viewport_rows,
-            cells,
-            cursor: hidden_terminal_cursor_snapshot(),
-            selection: None,
-            lines,
-            styled_lines,
-            line_signatures,
-            line_timestamps_ms,
-            line_wrapped,
-            hyperlink_lines,
-            cursor_row: usize::MAX,
-            cursor_col: 0,
-            scrollback_len,
-            total_rows: real_total_rows,
-            display_offset,
-            images: Vec::new(),
-            command_marks,
-        }))
+        Some(Arc::new(TerminalSnapshot::from_rows(
+            nyaterm_terminal::TerminalSnapshotMeta {
+                cols,
+                viewport_rows,
+                cursor: hidden_terminal_cursor_snapshot(),
+                selection: None,
+                scrollback_len,
+                total_rows: real_total_rows,
+                display_offset,
+                images: Vec::new(),
+            },
+            rows,
+        )))
     }
 
     fn synthesize_snapshot_from_retained_rows(
@@ -1047,27 +1017,49 @@ impl TerminalSurface {
             command_marks.push(row.command_mark);
         }
 
-        Some(Arc::new(TerminalSnapshot {
-            cols,
-            viewport_rows,
-            rows,
-            cells,
-            cursor: hidden_terminal_cursor_snapshot(),
-            selection: None,
-            lines,
-            styled_lines,
-            line_signatures,
-            line_timestamps_ms,
-            line_wrapped,
-            hyperlink_lines,
-            cursor_row: usize::MAX,
-            cursor_col: 0,
-            scrollback_len,
-            total_rows: real_total_rows,
-            display_offset,
-            images: Vec::new(),
-            command_marks,
-        }))
+        let row_data = cells
+            .chunks_exact(cols)
+            .zip(lines)
+            .zip(styled_lines)
+            .zip(line_signatures)
+            .zip(line_timestamps_ms)
+            .zip(line_wrapped)
+            .zip(hyperlink_lines)
+            .zip(command_marks)
+            .map(
+                |(
+                    (
+                        (((((cells, text), styled_spans), signature), timestamp_ms), wrapped),
+                        hyperlinks,
+                    ),
+                    command_mark,
+                )| {
+                    Arc::new(nyaterm_terminal::TerminalSnapshotRow {
+                        cells: cells.to_vec().into_boxed_slice(),
+                        text,
+                        styled_spans: styled_spans.into_boxed_slice(),
+                        signature,
+                        timestamp_ms,
+                        wrapped,
+                        hyperlinks: hyperlinks.into_boxed_slice(),
+                        command_mark,
+                    })
+                },
+            )
+            .collect::<Vec<_>>();
+        Some(Arc::new(TerminalSnapshot::from_rows(
+            nyaterm_terminal::TerminalSnapshotMeta {
+                cols,
+                viewport_rows,
+                cursor: hidden_terminal_cursor_snapshot(),
+                selection: None,
+                scrollback_len,
+                total_rows: real_total_rows,
+                display_offset,
+                images: Vec::new(),
+            },
+            row_data,
+        )))
     }
 
     fn retained_rows_window_around(

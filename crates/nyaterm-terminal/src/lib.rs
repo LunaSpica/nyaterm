@@ -1,6 +1,6 @@
 use std::collections::{HashMap, hash_map::DefaultHasher};
 use std::hash::{Hash, Hasher};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, Weak};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use alacritty_terminal::event::{Event, EventListener};
@@ -110,12 +110,43 @@ pub struct SelectionSnapshot {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TerminalSnapshotRow {
+    pub cells: Box<[RenderCell]>,
+    pub text: String,
+    pub styled_spans: Box<[StyledSpan]>,
+    pub signature: u64,
+    pub timestamp_ms: Option<u64>,
+    pub wrapped: bool,
+    pub hyperlinks: Box<[HyperlinkSpan]>,
+    pub command_mark: Option<ShellCommandMark>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TerminalSnapshotMeta {
+    pub cols: usize,
+    pub viewport_rows: usize,
+    pub cursor: CursorSnapshot,
+    pub selection: Option<SelectionSnapshot>,
+    pub scrollback_len: usize,
+    pub total_rows: usize,
+    pub display_offset: usize,
+    pub images: Vec<GraphicsImageSnapshot>,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct TerminalSnapshotBuildStats {
+    pub reused_rows: usize,
+    pub rebuilt_rows: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TerminalSnapshot {
     pub cols: usize,
     /// Rows in the underlying terminal viewport. `rows` may be larger when a
     /// retained scroll window is attached for smooth painting.
     pub viewport_rows: usize,
     pub rows: usize,
+    pub row_data: Arc<[Arc<TerminalSnapshotRow>]>,
     pub cells: Vec<RenderCell>,
     pub cursor: CursorSnapshot,
     pub selection: Option<SelectionSnapshot>,
@@ -141,6 +172,68 @@ pub struct TerminalSnapshot {
     pub images: Vec<GraphicsImageSnapshot>,
     /// OSC 133 command marks for each viewport row (prompt / output / finished).
     pub command_marks: Vec<Option<ShellCommandMark>>,
+}
+
+impl TerminalSnapshot {
+    pub fn from_rows(
+        meta: TerminalSnapshotMeta,
+        rows: impl Into<Arc<[Arc<TerminalSnapshotRow>]>>,
+    ) -> Self {
+        let row_data = rows.into();
+        let cells = row_data
+            .iter()
+            .flat_map(|row| row.cells.iter().cloned())
+            .collect();
+        let lines = row_data.iter().map(|row| row.text.clone()).collect();
+        let styled_lines = row_data
+            .iter()
+            .map(|row| row.styled_spans.to_vec())
+            .collect();
+        let line_signatures = row_data.iter().map(|row| row.signature).collect();
+        let line_timestamps_ms = row_data.iter().map(|row| row.timestamp_ms).collect();
+        let line_wrapped = row_data.iter().map(|row| row.wrapped).collect();
+        let hyperlink_lines = row_data.iter().map(|row| row.hyperlinks.to_vec()).collect();
+        let command_marks = row_data.iter().map(|row| row.command_mark).collect();
+        let rows = row_data.len();
+        Self {
+            cols: meta.cols,
+            viewport_rows: meta.viewport_rows,
+            rows,
+            row_data,
+            cells,
+            cursor: meta.cursor,
+            selection: meta.selection,
+            lines,
+            styled_lines,
+            line_signatures,
+            line_timestamps_ms,
+            line_wrapped,
+            hyperlink_lines,
+            cursor_row: meta.cursor.row,
+            cursor_col: meta.cursor.col,
+            scrollback_len: meta.scrollback_len,
+            total_rows: meta.total_rows,
+            display_offset: meta.display_offset,
+            images: meta.images,
+            command_marks,
+        }
+    }
+
+    pub fn row_count(&self) -> usize {
+        self.row_data.len()
+    }
+
+    pub fn rows(&self) -> &[Arc<TerminalSnapshotRow>] {
+        &self.row_data
+    }
+
+    pub fn row(&self, row: usize) -> Option<&TerminalSnapshotRow> {
+        self.row_data.get(row).map(Arc::as_ref)
+    }
+
+    pub fn cell(&self, row: usize, col: usize) -> Option<&RenderCell> {
+        self.row(row)?.cells.get(col)
+    }
 }
 
 #[derive(Clone, Default)]
@@ -202,6 +295,58 @@ struct TermSize {
     rows: usize,
 }
 
+const TERMINAL_SNAPSHOT_ROW_CACHE_LIMIT: usize = 8_192;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct TerminalSnapshotRowCacheKey {
+    cols: usize,
+    signature: u64,
+    timestamp_ms: Option<u64>,
+    wrapped: bool,
+    command_mark: Option<ShellCommandMark>,
+}
+
+#[derive(Debug)]
+struct TerminalSnapshotRowCacheEntry {
+    row: Weak<TerminalSnapshotRow>,
+    last_used: u64,
+}
+
+#[derive(Debug, Default)]
+struct TerminalSnapshotRowCache {
+    entries: HashMap<TerminalSnapshotRowCacheKey, TerminalSnapshotRowCacheEntry>,
+    generation: u64,
+}
+
+impl TerminalSnapshotRowCache {
+    fn next_generation(&mut self) -> u64 {
+        self.generation = self.generation.saturating_add(1);
+        self.generation
+    }
+
+    fn prune(&mut self) {
+        if self.entries.len() <= TERMINAL_SNAPSHOT_ROW_CACHE_LIMIT {
+            return;
+        }
+        self.entries.retain(|_, entry| entry.row.strong_count() > 0);
+        if self.entries.len() <= TERMINAL_SNAPSHOT_ROW_CACHE_LIMIT {
+            return;
+        }
+        let mut oldest = self
+            .entries
+            .iter()
+            .map(|(key, entry)| (*key, entry.last_used))
+            .collect::<Vec<_>>();
+        oldest.sort_unstable_by_key(|(_, last_used)| *last_used);
+        let remove = oldest
+            .len()
+            .saturating_sub(TERMINAL_SNAPSHOT_ROW_CACHE_LIMIT);
+        for (key, _) in oldest.into_iter().take(remove) {
+            self.entries.remove(&key);
+        }
+    }
+}
+
 impl Dimensions for TermSize {
     fn total_lines(&self) -> usize {
         self.rows
@@ -225,6 +370,7 @@ pub struct TerminalCore {
     pending_effects: TerminalEffects,
     line_timestamps_ms: HashMap<i32, u64>,
     line_signatures: HashMap<i32, u64>,
+    snapshot_row_cache: Mutex<TerminalSnapshotRowCache>,
     signature_damage_lines: Vec<i32>,
     /// Absolute Alacritty line → OSC 133 shell mark.
     command_marks: HashMap<i32, ShellCommandMark>,
@@ -332,6 +478,7 @@ impl TerminalCore {
             pending_effects: TerminalEffects::default(),
             line_timestamps_ms: HashMap::new(),
             line_signatures: HashMap::new(),
+            snapshot_row_cache: Mutex::new(TerminalSnapshotRowCache::default()),
             signature_damage_lines: Vec::with_capacity(rows),
             command_marks: HashMap::new(),
             rows,
@@ -707,19 +854,27 @@ impl TerminalCore {
     }
 
     pub fn viewport_snapshot(&self, offset: usize) -> TerminalSnapshot {
+        self.viewport_snapshot_with_stats(offset).0
+    }
+
+    pub fn viewport_snapshot_with_stats(
+        &self,
+        offset: usize,
+    ) -> (TerminalSnapshot, TerminalSnapshotBuildStats) {
         let max_offset = self.scrollback_len();
         let offset = offset.min(max_offset);
-        let mut snapshot = snapshot_from_term(
+        let (mut snapshot, stats) = snapshot_from_term(
             &self.term,
             offset,
             &self.line_signatures,
             &self.line_timestamps_ms,
             &self.command_marks,
+            &self.snapshot_row_cache,
         );
         snapshot.images = self
             .graphics
             .viewport_images(offset, snapshot.rows, snapshot.cols);
-        snapshot
+        (snapshot, stats)
     }
 
     pub fn viewport_snapshot_with_window(
@@ -728,11 +883,21 @@ impl TerminalCore {
         older_rows: usize,
         newer_rows: usize,
     ) -> TerminalSnapshot {
+        self.viewport_snapshot_with_window_and_stats(offset, older_rows, newer_rows)
+            .0
+    }
+
+    pub fn viewport_snapshot_with_window_and_stats(
+        &self,
+        offset: usize,
+        older_rows: usize,
+        newer_rows: usize,
+    ) -> (TerminalSnapshot, TerminalSnapshotBuildStats) {
         let scrollback_len = self.scrollback_len();
         let offset = offset.min(scrollback_len);
         let older_rows = older_rows.min(scrollback_len.saturating_sub(offset));
         let newer_rows = newer_rows.min(offset);
-        let mut snapshot = snapshot_window_from_term(
+        let (mut snapshot, stats) = snapshot_window_from_term(
             &self.term,
             offset,
             older_rows,
@@ -740,6 +905,7 @@ impl TerminalCore {
             &self.line_signatures,
             &self.line_timestamps_ms,
             &self.command_marks,
+            &self.snapshot_row_cache,
         );
         snapshot.images = self
             .graphics
@@ -750,7 +916,7 @@ impl TerminalCore {
                 image
             })
             .collect();
-        snapshot
+        (snapshot, stats)
     }
 
     pub fn lines(&self) -> Vec<String> {
@@ -993,7 +1159,8 @@ fn snapshot_from_term(
     line_signatures_by_line: &HashMap<i32, u64>,
     line_timestamps_by_line: &HashMap<i32, u64>,
     command_marks_by_line: &HashMap<i32, ShellCommandMark>,
-) -> TerminalSnapshot {
+    row_cache: &Mutex<TerminalSnapshotRowCache>,
+) -> (TerminalSnapshot, TerminalSnapshotBuildStats) {
     snapshot_window_from_term(
         term,
         requested_offset,
@@ -1002,6 +1169,7 @@ fn snapshot_from_term(
         line_signatures_by_line,
         line_timestamps_by_line,
         command_marks_by_line,
+        row_cache,
     )
 }
 
@@ -1013,7 +1181,8 @@ fn snapshot_window_from_term(
     line_signatures_by_line: &HashMap<i32, u64>,
     line_timestamps_by_line: &HashMap<i32, u64>,
     command_marks_by_line: &HashMap<i32, ShellCommandMark>,
-) -> TerminalSnapshot {
+    row_cache: &Mutex<TerminalSnapshotRowCache>,
+) -> (TerminalSnapshot, TerminalSnapshotBuildStats) {
     let content = term.renderable_content();
     let cols = term.columns();
     let viewport_rows = term.screen_lines();
@@ -1021,62 +1190,79 @@ fn snapshot_window_from_term(
         .saturating_add(viewport_rows)
         .saturating_add(newer_rows);
     let display_offset = requested_offset;
-    let mut cells = Vec::<RenderCell>::with_capacity(rows.saturating_mul(cols));
-    let mut lines = Vec::with_capacity(rows);
-    let mut styled_lines = Vec::with_capacity(rows);
-    let mut hyperlink_lines = Vec::with_capacity(rows);
-    let mut line_signatures = vec![0; rows];
-    let mut line_timestamps_ms = vec![None; rows];
-    let mut line_wrapped = vec![false; rows];
-    let mut command_marks = vec![None; rows];
+    let mut row_data = Vec::with_capacity(rows);
+    let mut stats = TerminalSnapshotBuildStats::default();
+    let mut row_cache = row_cache
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
 
     let topmost = term.topmost_line();
     let bottommost = term.bottommost_line();
     for row in 0..rows {
         let line = Line(row as i32 - requested_offset as i32 - older_rows as i32);
-        if line >= topmost && line <= bottommost {
-            line_signatures[row] = line_signatures_by_line
-                .get(&line.0)
-                .copied()
-                .unwrap_or_else(|| line_signature(term, line, cols));
-            line_timestamps_ms[row] = line_timestamps_by_line.get(&line.0).copied();
-            command_marks[row] = command_marks_by_line.get(&line.0).copied();
+        let line_in_grid = (line >= topmost && line <= bottommost).then_some(line);
+        let signature = line_in_grid
+            .map(|line| {
+                line_signatures_by_line
+                    .get(&line.0)
+                    .copied()
+                    .unwrap_or_else(|| line_signature(term, line, cols))
+            })
+            .unwrap_or(0);
+        let timestamp_ms =
+            line_in_grid.and_then(|line| line_timestamps_by_line.get(&line.0).copied());
+        let command_mark =
+            line_in_grid.and_then(|line| command_marks_by_line.get(&line.0).copied());
+        let wrapped = line_in_grid.is_some_and(|line| {
             let previous_line = Line(line.0 - 1);
-            line_wrapped[row] = cols > 0
+            cols > 0
                 && previous_line >= topmost
                 && term.grid()[previous_line][Column(cols - 1)]
                     .flags
-                    .contains(Flags::WRAPLINE);
-            for col in 0..cols {
-                let cell = &term.grid()[line][Column(col)];
-                cells.push(RenderCell {
-                    text: cell_text(cell),
-                    style: cell_style(cell),
-                    width: render_cell_width(cell),
-                    hyperlink: cell.hyperlink().map(|link| link.uri().to_string()),
-                });
-            }
+                    .contains(Flags::WRAPLINE)
+        });
+        let key = TerminalSnapshotRowCacheKey {
+            cols,
+            signature,
+            timestamp_ms,
+            wrapped,
+            command_mark,
+        };
+        let generation = row_cache.next_generation();
+        let cached = row_cache.entries.get_mut(&key).and_then(|entry| {
+            let row = entry.row.upgrade()?;
+            snapshot_row_matches_term(row.as_ref(), term, line_in_grid, cols).then(|| {
+                entry.last_used = generation;
+                row
+            })
+        });
+        let snapshot_row = if let Some(cached) = cached {
+            stats.reused_rows = stats.reused_rows.saturating_add(1);
+            cached
         } else {
-            cells.extend((0..cols).map(|_| RenderCell {
-                text: String::new(),
-                style: CellStyle::default(),
-                width: 1,
-                hyperlink: None,
-            }));
-        }
-
-        let row_start = row.saturating_mul(cols);
-        let row_cells = &cells[row_start..row_start.saturating_add(cols)];
-        let mut line = String::with_capacity(cols);
-        for cell in row_cells {
-            push_render_cell_text(&mut line, cell);
-        }
-        let trimmed_len = line.trim_end().len();
-        line.truncate(trimmed_len);
-        lines.push(line);
-        styled_lines.push(compress_render_row(row_cells));
-        hyperlink_lines.push(compress_render_hyperlinks(row_cells));
+            stats.rebuilt_rows = stats.rebuilt_rows.saturating_add(1);
+            let rebuilt = Arc::new(snapshot_row_from_term(
+                term,
+                line_in_grid,
+                cols,
+                signature,
+                timestamp_ms,
+                wrapped,
+                command_mark,
+            ));
+            row_cache.entries.insert(
+                key,
+                TerminalSnapshotRowCacheEntry {
+                    row: Arc::downgrade(&rebuilt),
+                    last_used: generation,
+                },
+            );
+            rebuilt
+        };
+        row_data.push(snapshot_row);
     }
+    row_cache.prune();
+    drop(row_cache);
 
     let cursor_point = content.cursor.point;
     let cursor_row = if requested_offset == 0 {
@@ -1103,41 +1289,119 @@ fn snapshot_window_from_term(
         term.grid().history_size()
     };
 
-    TerminalSnapshot {
-        cols,
-        viewport_rows,
-        rows,
-        cells,
-        cursor: CursorSnapshot {
-            row: cursor_row,
-            col: cursor_col,
-            shape: cursor_shape,
-            visible: cursor_visible,
-            blinking: cursor_blinking,
+    let cursor = CursorSnapshot {
+        row: cursor_row,
+        col: cursor_col,
+        shape: cursor_shape,
+        visible: cursor_visible,
+        blinking: cursor_blinking,
+    };
+    let snapshot = TerminalSnapshot::from_rows(
+        TerminalSnapshotMeta {
+            cols,
+            viewport_rows,
+            cursor,
+            selection,
+            scrollback_len,
+            total_rows: scrollback_len
+                .saturating_add(viewport_rows)
+                .saturating_add(newer_rows),
+            display_offset,
+            images: Vec::new(),
         },
-        selection,
-        lines,
-        styled_lines,
-        line_signatures,
-        line_timestamps_ms: {
-            line_timestamps_ms.resize(rows, None);
-            line_timestamps_ms
-        },
-        line_wrapped,
-        hyperlink_lines,
-        cursor_row,
-        cursor_col,
-        scrollback_len,
-        total_rows: scrollback_len
-            .saturating_add(viewport_rows)
-            .saturating_add(newer_rows),
-        display_offset,
-        images: Vec::new(),
-        command_marks: {
-            command_marks.resize(rows, None);
-            command_marks
-        },
+        row_data,
+    );
+    (snapshot, stats)
+}
+
+fn snapshot_row_from_term(
+    term: &Term<NyaTermEventProxy>,
+    line: Option<Line>,
+    cols: usize,
+    signature: u64,
+    timestamp_ms: Option<u64>,
+    wrapped: bool,
+    command_mark: Option<ShellCommandMark>,
+) -> TerminalSnapshotRow {
+    let cells = if let Some(line) = line {
+        (0..cols)
+            .map(|col| {
+                let cell = &term.grid()[line][Column(col)];
+                RenderCell {
+                    text: cell_text(cell),
+                    style: cell_style(cell),
+                    width: render_cell_width(cell),
+                    hyperlink: cell.hyperlink().map(|link| link.uri().to_string()),
+                }
+            })
+            .collect::<Vec<_>>()
+    } else {
+        (0..cols)
+            .map(|_| RenderCell {
+                text: String::new(),
+                style: CellStyle::default(),
+                width: 1,
+                hyperlink: None,
+            })
+            .collect()
+    };
+    let mut text = String::with_capacity(cols);
+    for cell in &cells {
+        push_render_cell_text(&mut text, cell);
     }
+    text.truncate(text.trim_end().len());
+    TerminalSnapshotRow {
+        styled_spans: compress_render_row(&cells).into_boxed_slice(),
+        hyperlinks: compress_render_hyperlinks(&cells).into_boxed_slice(),
+        cells: cells.into_boxed_slice(),
+        text,
+        signature,
+        timestamp_ms,
+        wrapped,
+        command_mark,
+    }
+}
+
+fn snapshot_row_matches_term(
+    row: &TerminalSnapshotRow,
+    term: &Term<NyaTermEventProxy>,
+    line: Option<Line>,
+    cols: usize,
+) -> bool {
+    if row.cells.len() != cols {
+        return false;
+    }
+    let Some(line) = line else {
+        return row.cells.iter().all(|cell| {
+            cell.text.is_empty()
+                && cell.style == CellStyle::default()
+                && cell.width == 1
+                && cell.hyperlink.is_none()
+        });
+    };
+    row.cells.iter().enumerate().all(|(col, snapshot_cell)| {
+        let cell = &term.grid()[line][Column(col)];
+        snapshot_cell.style == cell_style(cell)
+            && snapshot_cell.width == render_cell_width(cell)
+            && cell_hyperlink_matches(cell, snapshot_cell.hyperlink.as_deref())
+            && cell_text_matches(cell, snapshot_cell.text.as_str())
+    })
+}
+
+fn cell_hyperlink_matches(cell: &Cell, expected: Option<&str>) -> bool {
+    match (cell.hyperlink(), expected) {
+        (Some(link), Some(expected)) => link.uri() == expected,
+        (None, None) => true,
+        _ => false,
+    }
+}
+
+fn cell_text_matches(cell: &Cell, text: &str) -> bool {
+    if cell_text_is_blank(cell) {
+        return text.is_empty();
+    }
+    text.chars()
+        .eq(std::iter::once(cell.c).chain(cell.zerowidth().into_iter().flatten().copied()))
 }
 
 fn line_signature(term: &Term<NyaTermEventProxy>, line: Line, cols: usize) -> u64 {
@@ -1873,6 +2137,122 @@ mod tests {
         {
             assert_eq!(*signature, render_row_signature(cells));
         }
+    }
+
+    #[test]
+    fn consecutive_snapshots_share_unchanged_rows() {
+        let mut screen = TerminalScreen::new(20, 4);
+        screen.advance(b"alpha\r\nbeta");
+
+        let (first, first_stats) = screen.viewport_snapshot_with_stats(0);
+        let (second, second_stats) = screen.viewport_snapshot_with_stats(0);
+
+        assert_eq!(first.row_count(), second.row_count());
+        assert_eq!(
+            first_stats.reused_rows + first_stats.rebuilt_rows,
+            first.row_count()
+        );
+        assert_eq!(second_stats.reused_rows, second.row_count());
+        assert_eq!(second_stats.rebuilt_rows, 0);
+        assert!(
+            first
+                .rows()
+                .iter()
+                .zip(second.rows())
+                .all(|(left, right)| Arc::ptr_eq(left, right))
+        );
+    }
+
+    #[test]
+    fn single_line_input_rebuilds_only_damaged_snapshot_row() {
+        let mut screen = TerminalScreen::new(20, 4);
+        screen.advance(b"alpha");
+        let first = screen.viewport_snapshot(0);
+
+        screen.advance(b"x");
+        let (second, stats) = screen.viewport_snapshot_with_stats(0);
+        let shared = first
+            .rows()
+            .iter()
+            .zip(second.rows())
+            .filter(|(left, right)| Arc::ptr_eq(left, right))
+            .count();
+
+        assert_eq!(stats.rebuilt_rows, 1);
+        assert!(shared >= second.row_count().saturating_sub(1));
+    }
+
+    #[test]
+    fn adjacent_snapshot_windows_share_overlapping_rows() {
+        let mut screen = TerminalScreen::new(20, 4);
+        for line in 0..20 {
+            screen.advance(format!("line-{line:02}\r\n").as_bytes());
+        }
+        let window = screen.viewport_snapshot_with_window(4, 4, 4);
+        let viewport = screen.viewport_snapshot(4);
+
+        assert!(
+            window.rows()[4..4 + viewport.row_count()]
+                .iter()
+                .zip(viewport.rows())
+                .all(|(left, right)| Arc::ptr_eq(left, right))
+        );
+    }
+
+    #[test]
+    fn snapshot_row_cache_rejects_signature_collision_with_different_cells() {
+        let mut screen = TerminalScreen::new(8, 1);
+        screen.advance(b"alpha");
+        let first = screen.viewport_snapshot(0);
+        let original = first.rows()[0].clone();
+        let mut conflicting = (*original).clone();
+        conflicting.cells[0].text = "z".to_string();
+        conflicting.text = "zlpha".to_string();
+        let conflicting = Arc::new(conflicting);
+        let key = TerminalSnapshotRowCacheKey {
+            cols: screen.cols(),
+            signature: original.signature,
+            timestamp_ms: original.timestamp_ms,
+            wrapped: original.wrapped,
+            command_mark: original.command_mark,
+        };
+        screen.snapshot_row_cache.lock().unwrap().entries.insert(
+            key,
+            TerminalSnapshotRowCacheEntry {
+                row: Arc::downgrade(&conflicting),
+                last_used: 0,
+            },
+        );
+
+        let (next, stats) = screen.viewport_snapshot_with_stats(0);
+
+        assert_eq!(next.row(0).map(|row| row.text.as_str()), Some("alpha"));
+        assert!(!Arc::ptr_eq(&next.rows()[0], &conflicting));
+        assert_eq!(stats.rebuilt_rows, 1);
+    }
+
+    #[test]
+    fn snapshot_row_cache_prunes_to_limit() {
+        let mut cache = TerminalSnapshotRowCache::default();
+        for signature in 0..=TERMINAL_SNAPSHOT_ROW_CACHE_LIMIT as u64 {
+            cache.entries.insert(
+                TerminalSnapshotRowCacheKey {
+                    cols: 1,
+                    signature,
+                    timestamp_ms: None,
+                    wrapped: false,
+                    command_mark: None,
+                },
+                TerminalSnapshotRowCacheEntry {
+                    row: Weak::new(),
+                    last_used: signature,
+                },
+            );
+        }
+
+        cache.prune();
+
+        assert!(cache.entries.len() <= TERMINAL_SNAPSHOT_ROW_CACHE_LIMIT);
     }
 
     #[test]
