@@ -223,6 +223,9 @@ impl NyaTermApp {
             .find(|(prompt_id, prompt)| {
                 prompt.session_id.as_deref() == Some(active_session_id)
                     && !self.transfer_external_sync_windows.contains_key(*prompt_id)
+                    && !self
+                        .transfer_external_sync_window_open_pending
+                        .contains(*prompt_id)
             })
             .map(|(prompt_id, prompt)| (prompt_id.clone(), prompt.clone()))
     }
@@ -238,6 +241,8 @@ impl NyaTermApp {
             return;
         };
         self.transfer_external_sync_windows.remove(prompt_id);
+        self.transfer_external_sync_window_open_pending
+            .remove(prompt_id);
         let watch_key = external_editor_watch_key(&prompt.remote_path, &prompt.local_path);
         if always {
             self.transfer_external_always_uploads.insert(watch_key);
@@ -258,6 +263,8 @@ impl NyaTermApp {
     ) {
         self.transfer_external_sync_prompts.remove(prompt_id);
         self.transfer_external_sync_windows.remove(prompt_id);
+        self.transfer_external_sync_window_open_pending
+            .remove(prompt_id);
         self.terminal_status = "external edit sync skipped".to_string();
         cx.notify();
     }

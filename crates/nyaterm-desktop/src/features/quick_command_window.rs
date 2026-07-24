@@ -1,6 +1,6 @@
 use gpui::{
-    AppContext, Bounds, Context, Entity, IntoElement, Render, Subscription, Window, WindowBounds,
-    WindowHandle, WindowKind, WindowOptions, div, prelude::*, px, rgb, size,
+    App, AppContext, Bounds, Context, Entity, IntoElement, Render, Subscription, Window,
+    WindowBounds, WindowHandle, WindowKind, WindowOptions, div, prelude::*, px, rgb, size,
 };
 
 use super::{NyaTermApp, child_window_header, child_window_titlebar};
@@ -25,6 +25,7 @@ impl Render for QuickCommandWindow {
         if self.app.read(cx).quick_command_editor.is_none() {
             self.app.update(cx, |app, cx| {
                 app.quick_command_window = None;
+                app.quick_command_window_open_pending = false;
                 cx.notify();
             });
             window.defer(cx, |window, _| window.remove_window());
@@ -91,15 +92,24 @@ impl NyaTermApp {
         let Some(handle) = self.quick_command_window else {
             return false;
         };
-        if handle
-            .update(cx, |_, window, _| window.activate_window())
-            .is_ok()
-        {
-            true
-        } else {
-            self.quick_command_window = None;
-            false
-        }
+        let app = cx.entity();
+        cx.defer(move |cx| {
+            if handle
+                .update(cx, |_, window, _| window.activate_window())
+                .is_err()
+            {
+                let _ = app.update(cx, |app, cx| {
+                    if app
+                        .quick_command_window
+                        .is_some_and(|current| current == handle)
+                    {
+                        app.quick_command_window = None;
+                        cx.notify();
+                    }
+                });
+            }
+        });
+        true
     }
 
     pub(in crate::features) fn open_quick_command_window(
@@ -109,49 +119,81 @@ impl NyaTermApp {
         if self.activate_quick_command_window(cx) {
             return true;
         }
-
-        let app = cx.entity();
-        let title = self.quick_command_editor_title().to_string();
-        let bounds = Bounds::centered(None, size(px(540.), px(640.)), cx);
-        let close_app = app.clone();
-        let view_app = app.clone();
-        let result: anyhow::Result<WindowHandle<QuickCommandWindow>> = cx.open_window(
-            WindowOptions {
-                titlebar: child_window_titlebar(title),
-                window_bounds: Some(WindowBounds::Windowed(bounds)),
-                window_min_size: Some(size(px(420.), px(480.))),
-                kind: WindowKind::Floating,
-                is_minimizable: false,
-                ..Default::default()
-            },
-            move |window, cx| {
-                window.on_window_should_close(cx, move |_, cx| {
-                    close_app.update(cx, |app, cx| {
-                        app.quick_command_editor = None;
-                        app.quick_command_window = None;
-                        app.terminal_status = "quick command editor closed".to_string();
-                        cx.notify();
-                    });
-                    true
-                });
-                let editor_focus = view_app.read(cx).quick_command_editor_focus.clone();
-                window.focus(&editor_focus);
-                cx.new(|cx| QuickCommandWindow::new(view_app, cx))
-            },
-        );
-
-        match result {
-            Ok(handle) => {
-                self.quick_command_window = Some(handle);
-                cx.notify();
-                true
-            }
-            Err(error) => {
-                self.quick_command_window = None;
-                self.terminal_status = format!("failed to open quick command window: {error}");
-                cx.notify();
-                false
-            }
+        if self.quick_command_window_open_pending {
+            return true;
         }
+
+        self.quick_command_window_open_pending = true;
+        cx.notify();
+        let app = cx.entity();
+        cx.defer(move |cx| {
+            let should_open = app.read(cx).quick_command_window_open_pending;
+            if should_open {
+                open_quick_command_window_now_from_app(app, cx);
+            }
+        });
+        true
     }
+}
+
+fn open_quick_command_window_now_from_app(app: Entity<NyaTermApp>, cx: &mut App) {
+    if app.read(cx).quick_command_window.is_some() {
+        let _ = app.update(cx, |app, cx| {
+            app.quick_command_window_open_pending = false;
+            app.activate_quick_command_window(cx);
+            cx.notify();
+        });
+        return;
+    }
+    if app.read(cx).quick_command_editor.is_none() {
+        let _ = app.update(cx, |app, cx| {
+            app.quick_command_window_open_pending = false;
+            cx.notify();
+        });
+        return;
+    }
+
+    let title = app.read(cx).quick_command_editor_title().to_string();
+    let bounds = Bounds::centered(None, size(px(540.), px(640.)), cx);
+    let close_app = app.clone();
+    let view_app = app.clone();
+    let result: anyhow::Result<WindowHandle<QuickCommandWindow>> = cx.open_window(
+        WindowOptions {
+            titlebar: child_window_titlebar(title),
+            window_bounds: Some(WindowBounds::Windowed(bounds)),
+            window_min_size: Some(size(px(420.), px(480.))),
+            kind: WindowKind::Floating,
+            is_minimizable: false,
+            ..Default::default()
+        },
+        move |window, cx| {
+            window.on_window_should_close(cx, move |_, cx| {
+                close_app.update(cx, |app, cx| {
+                    app.quick_command_editor = None;
+                    app.quick_command_window = None;
+                    app.quick_command_window_open_pending = false;
+                    app.terminal_status = "quick command editor closed".to_string();
+                    cx.notify();
+                });
+                true
+            });
+            let editor_focus = view_app.read(cx).quick_command_editor_focus.clone();
+            window.focus(&editor_focus);
+            cx.new(|cx| QuickCommandWindow::new(view_app, cx))
+        },
+    );
+
+    let _ = app.update(cx, |app, cx| match result {
+        Ok(handle) => {
+            app.quick_command_window = Some(handle);
+            app.quick_command_window_open_pending = false;
+            cx.notify();
+        }
+        Err(error) => {
+            app.quick_command_window = None;
+            app.quick_command_window_open_pending = false;
+            app.terminal_status = format!("failed to open quick command window: {error}");
+            cx.notify();
+        }
+    });
 }

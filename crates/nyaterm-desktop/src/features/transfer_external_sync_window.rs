@@ -1,6 +1,6 @@
 use gpui::{
-    AppContext, Bounds, Context, Entity, IntoElement, Render, Subscription, Window, WindowBounds,
-    WindowHandle, WindowKind, WindowOptions, div, prelude::*, px, rgb, size,
+    App, AppContext, Bounds, Context, Entity, IntoElement, Render, Subscription, Window,
+    WindowBounds, WindowHandle, WindowKind, WindowOptions, div, prelude::*, px, rgb, size,
 };
 
 use super::{NyaTermApp, child_window_header, child_window_titlebar};
@@ -34,6 +34,8 @@ impl Render for TransferExternalSyncWindow {
             let prompt_id = self.prompt_id.clone();
             self.app.update(cx, |app, cx| {
                 app.transfer_external_sync_windows.remove(&prompt_id);
+                app.transfer_external_sync_window_open_pending
+                    .remove(&prompt_id);
                 cx.notify();
             });
             window.defer(cx, |window, _| window.remove_window());
@@ -96,15 +98,19 @@ impl NyaTermApp {
         else {
             return false;
         };
-        if handle
-            .update(cx, |_, window, _| window.activate_window())
-            .is_ok()
-        {
-            true
-        } else {
-            self.transfer_external_sync_windows.remove(&prompt_id);
-            false
-        }
+        let app = cx.entity();
+        cx.defer(move |cx| {
+            if handle
+                .update(cx, |_, window, _| window.activate_window())
+                .is_err()
+            {
+                let _ = app.update(cx, |app, cx| {
+                    app.transfer_external_sync_windows.remove(&prompt_id);
+                    cx.notify();
+                });
+            }
+        });
+        true
     }
 
     pub(in crate::features) fn open_transfer_external_sync_window(
@@ -113,60 +119,121 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> bool {
         if let Some(handle) = self.transfer_external_sync_windows.get(&prompt_id).copied() {
-            if handle
-                .update(cx, |_, window, _| window.activate_window())
-                .is_ok()
-            {
-                return true;
-            }
-            self.transfer_external_sync_windows.remove(&prompt_id);
+            let app = cx.entity();
+            cx.defer(move |cx| {
+                if handle
+                    .update(cx, |_, window, _| window.activate_window())
+                    .is_err()
+                {
+                    let _ = app.update(cx, |app, cx| {
+                        app.transfer_external_sync_windows.remove(&prompt_id);
+                        cx.notify();
+                    });
+                }
+            });
+            return true;
+        }
+        if self
+            .transfer_external_sync_window_open_pending
+            .contains(&prompt_id)
+        {
+            return true;
         }
         if !self.transfer_external_sync_prompts.contains_key(&prompt_id) {
             return false;
         }
 
+        self.transfer_external_sync_window_open_pending
+            .insert(prompt_id.clone());
+        cx.notify();
         let app = cx.entity();
-        let title = self.tr("fileExplorer.fileModified").to_string();
-        let bounds = Bounds::centered(None, size(px(440.), px(240.)), cx);
-        let close_app = app.clone();
-        let close_prompt_id = prompt_id.clone();
-        let view_app = app.clone();
-        let view_prompt_id = prompt_id.clone();
-        let result: anyhow::Result<WindowHandle<TransferExternalSyncWindow>> = cx.open_window(
-            WindowOptions {
-                titlebar: child_window_titlebar(title),
-                window_bounds: Some(WindowBounds::Windowed(bounds)),
-                kind: WindowKind::Floating,
-                is_resizable: false,
-                is_minimizable: false,
-                ..Default::default()
-            },
-            move |window, cx| {
-                window.on_window_should_close(cx, move |_, cx| {
-                    close_app.update(cx, |app, cx| {
-                        app.ignore_external_editor_sync_prompt(&close_prompt_id, cx);
-                    });
-                    true
-                });
-                let prompt_focus = view_app.read(cx).transfer_external_sync_focus.clone();
-                window.focus(&prompt_focus);
-                cx.new(|cx| TransferExternalSyncWindow::new(view_app, view_prompt_id, cx))
-            },
-        );
-
-        match result {
-            Ok(handle) => {
-                self.transfer_external_sync_windows
-                    .insert(prompt_id, handle);
-                cx.notify();
-                true
+        cx.defer(move |cx| {
+            let should_open = app
+                .read(cx)
+                .transfer_external_sync_window_open_pending
+                .contains(&prompt_id);
+            if should_open {
+                open_transfer_external_sync_window_now_from_app(app, prompt_id, cx);
             }
-            Err(error) => {
-                self.transfer_external_sync_windows.remove(&prompt_id);
-                self.terminal_status = format!("failed to open auto-upload window: {error}");
-                cx.notify();
-                false
-            }
-        }
+        });
+        true
     }
+}
+
+fn open_transfer_external_sync_window_now_from_app(
+    app: Entity<NyaTermApp>,
+    prompt_id: String,
+    cx: &mut App,
+) {
+    if let Some(handle) = app
+        .read(cx)
+        .transfer_external_sync_windows
+        .get(&prompt_id)
+        .copied()
+    {
+        let _ = handle.update(cx, |_, window, _| window.activate_window());
+        let _ = app.update(cx, |app, cx| {
+            app.transfer_external_sync_window_open_pending
+                .remove(&prompt_id);
+            cx.notify();
+        });
+        return;
+    }
+    if !app
+        .read(cx)
+        .transfer_external_sync_prompts
+        .contains_key(&prompt_id)
+    {
+        let _ = app.update(cx, |app, cx| {
+            app.transfer_external_sync_window_open_pending
+                .remove(&prompt_id);
+            cx.notify();
+        });
+        return;
+    }
+
+    let title = app.read(cx).tr("fileExplorer.fileModified").to_string();
+    let bounds = Bounds::centered(None, size(px(440.), px(240.)), cx);
+    let close_app = app.clone();
+    let close_prompt_id = prompt_id.clone();
+    let view_app = app.clone();
+    let view_prompt_id = prompt_id.clone();
+    let result: anyhow::Result<WindowHandle<TransferExternalSyncWindow>> = cx.open_window(
+        WindowOptions {
+            titlebar: child_window_titlebar(title),
+            window_bounds: Some(WindowBounds::Windowed(bounds)),
+            kind: WindowKind::Floating,
+            is_resizable: false,
+            is_minimizable: false,
+            ..Default::default()
+        },
+        move |window, cx| {
+            window.on_window_should_close(cx, move |_, cx| {
+                close_app.update(cx, |app, cx| {
+                    app.ignore_external_editor_sync_prompt(&close_prompt_id, cx);
+                });
+                true
+            });
+            let prompt_focus = view_app.read(cx).transfer_external_sync_focus.clone();
+            window.focus(&prompt_focus);
+            cx.new(|cx| TransferExternalSyncWindow::new(view_app, view_prompt_id, cx))
+        },
+    );
+
+    let _ = app.update(cx, |app, cx| match result {
+        Ok(handle) => {
+            app.transfer_external_sync_windows
+                .insert(prompt_id.clone(), handle);
+            app.transfer_external_sync_window_open_pending
+                .remove(&prompt_id);
+            cx.notify();
+        }
+        Err(error) => {
+            app.transfer_external_sync_windows.remove(&prompt_id);
+            app.transfer_external_sync_window_open_pending
+                .remove(&prompt_id);
+            app.terminal_status = format!("failed to open auto-upload window: {error}");
+            cx.notify();
+        }
+    });
 }

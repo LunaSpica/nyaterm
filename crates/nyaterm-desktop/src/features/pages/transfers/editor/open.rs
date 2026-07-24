@@ -214,7 +214,7 @@ impl NyaTermApp {
             editor.close_after_save_all = false;
             let status = format!("remote text file already open: {}", entry.path);
             self.open_remote_file_editor_window(cx);
-            if self.remote_editor_window.is_none() {
+            if self.remote_editor_window.is_none() && !self.remote_editor_window_open_pending {
                 window.focus(&self.transfer_editor_focus);
             }
             self.transfer_browser_status = status.clone();
@@ -254,7 +254,7 @@ impl NyaTermApp {
         }
         self.terminal_status = format!("opening remote text file {}", entry.path);
         self.open_remote_file_editor_window(cx);
-        if self.remote_editor_window.is_none() {
+        if self.remote_editor_window.is_none() && !self.remote_editor_window_open_pending {
             window.focus(&self.transfer_editor_focus);
         }
         self.start_sftp_editor_load_job(session_id, entry.path, window, cx);

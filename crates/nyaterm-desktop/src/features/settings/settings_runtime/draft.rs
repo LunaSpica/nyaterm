@@ -464,6 +464,7 @@ impl NyaTermApp {
     fn finish_settings_page(&mut self, cx: &mut Context<Self>) {
         self.cancel_github_gist_auth(cx);
         self.settings_window = None;
+        self.settings_window_open_pending = false;
         if self.main_mode == MainMode::Page && self.selected_nav == NavItem::Settings {
             self.main_mode = MainMode::Workspace;
             self.left_sidebar_collapsed = self

@@ -43,6 +43,7 @@ impl NyaTermApp {
     pub(in crate::features) fn close_quick_command_editor(&mut self, cx: &mut Context<Self>) {
         self.quick_command_editor = None;
         self.quick_command_window = None;
+        self.quick_command_window_open_pending = false;
         self.terminal_status = "quick command editor closed".to_string();
         cx.notify();
     }

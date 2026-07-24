@@ -184,6 +184,7 @@ impl NyaTermApp {
                 self.quick_command_categories = config.categories;
                 self.quick_command_editor = None;
                 self.quick_command_window = None;
+                self.quick_command_window_open_pending = false;
                 self.store_status.message = format!("quick command '{}' saved", command.label);
                 self.store_status.ready = true;
                 self.terminal_status = self.store_status.message.clone();

@@ -1,6 +1,6 @@
 use gpui::{
-    AppContext, Bounds, Context, Entity, IntoElement, Render, Subscription, Window, WindowBounds,
-    WindowHandle, WindowKind, WindowOptions, div, prelude::*, px, rgb, size,
+    App, AppContext, Bounds, Context, Entity, IntoElement, Render, Subscription, Window,
+    WindowBounds, WindowHandle, WindowKind, WindowOptions, div, prelude::*, px, rgb, size,
 };
 
 use super::{NyaTermApp, child_window_header, child_window_titlebar};
@@ -25,6 +25,7 @@ impl Render for SettingsWindow {
         if self.app.read(cx).settings_draft_snapshot.is_none() {
             self.app.update(cx, |app, cx| {
                 app.settings_window = None;
+                app.settings_window_open_pending = false;
                 cx.notify();
             });
             window.defer(cx, |window, _| window.remove_window());
@@ -77,60 +78,104 @@ impl NyaTermApp {
         let Some(handle) = self.settings_window else {
             return false;
         };
-        if handle
-            .update(cx, |_, window, _| window.activate_window())
-            .is_ok()
-        {
-            true
-        } else {
-            self.settings_window = None;
-            false
-        }
+        let app = cx.entity();
+        cx.defer(move |cx| {
+            if handle
+                .update(cx, |_, window, _| window.activate_window())
+                .is_err()
+            {
+                let _ = app.update(cx, |app, cx| {
+                    if app.settings_window.is_some_and(|current| current == handle) {
+                        app.settings_window = None;
+                        cx.notify();
+                    }
+                });
+            }
+        });
+        true
     }
 
     pub(in crate::features) fn open_settings_window(&mut self, cx: &mut Context<Self>) -> bool {
         if self.activate_settings_window(cx) {
             return true;
         }
-
-        let app = cx.entity();
-        let title = self.tr("settings.title").to_string();
-        let bounds = Bounds::centered(None, size(px(800.), px(560.)), cx);
-        let close_app = app.clone();
-        let view_app = app.clone();
-        let result: anyhow::Result<WindowHandle<SettingsWindow>> = cx.open_window(
-            WindowOptions {
-                titlebar: child_window_titlebar(title),
-                window_bounds: Some(WindowBounds::Windowed(bounds)),
-                window_min_size: Some(size(px(640.), px(480.))),
-                kind: WindowKind::Floating,
-                is_minimizable: false,
-                ..Default::default()
-            },
-            move |window, cx| {
-                window.on_window_should_close(cx, move |_, cx| {
-                    close_app.update(cx, |app, cx| {
-                        app.cancel_settings(cx);
-                        app.settings_window = None;
-                    });
-                    true
-                });
-                cx.new(|cx| SettingsWindow::new(view_app, cx))
-            },
-        );
-
-        match result {
-            Ok(handle) => {
-                self.settings_window = Some(handle);
-                cx.notify();
-                true
-            }
-            Err(error) => {
-                self.settings_window = None;
-                self.terminal_status = format!("failed to open settings window: {error}");
-                cx.notify();
-                false
-            }
+        if self.settings_window_open_pending {
+            return true;
         }
+
+        self.settings_window_open_pending = true;
+        cx.notify();
+        let app = cx.entity();
+        cx.defer(move |cx| {
+            let should_open = app.read(cx).settings_window_open_pending;
+            if should_open {
+                open_settings_window_now_from_app(app, cx);
+            }
+        });
+        true
     }
+}
+
+fn open_settings_window_now_from_app(app: Entity<NyaTermApp>, cx: &mut App) {
+    if app.read(cx).settings_window.is_some() {
+        let _ = app.update(cx, |app, cx| {
+            app.settings_window_open_pending = false;
+            app.activate_settings_window(cx);
+            cx.notify();
+        });
+        return;
+    }
+    if app.read(cx).settings_draft_snapshot.is_none() {
+        let _ = app.update(cx, |app, cx| {
+            app.settings_window_open_pending = false;
+            cx.notify();
+        });
+        return;
+    }
+
+    let title = app.read(cx).tr("settings.title").to_string();
+    let bounds = Bounds::centered(None, size(px(800.), px(560.)), cx);
+    let close_app = app.clone();
+    let view_app = app.clone();
+    let result: anyhow::Result<WindowHandle<SettingsWindow>> = cx.open_window(
+        WindowOptions {
+            titlebar: child_window_titlebar(title),
+            window_bounds: Some(WindowBounds::Windowed(bounds)),
+            window_min_size: Some(size(px(640.), px(480.))),
+            kind: WindowKind::Floating,
+            is_minimizable: false,
+            ..Default::default()
+        },
+        move |window, cx| {
+            window.on_window_should_close(cx, move |_, cx| {
+                close_app.update(cx, |app, cx| {
+                    app.cancel_settings(cx);
+                    app.settings_window = None;
+                    app.settings_window_open_pending = false;
+                });
+                true
+            });
+            cx.new(|cx| SettingsWindow::new(view_app, cx))
+        },
+    );
+
+    let _ = app.update(cx, |app, cx| match result {
+        Ok(handle) => {
+            app.settings_window = Some(handle);
+            app.settings_window_open_pending = false;
+            app.settings_previous_left_collapsed = None;
+            app.settings_previous_right_collapsed = None;
+            cx.notify();
+        }
+        Err(error) => {
+            app.settings_window = None;
+            app.settings_window_open_pending = false;
+            app.main_mode = super::MainMode::Page;
+            app.selected_nav = super::NavItem::Settings;
+            app.left_sidebar_collapsed = true;
+            app.right_inspector_collapsed = true;
+            app.terminal_status = format!("failed to open settings window: {error}");
+            cx.notify();
+        }
+    });
 }

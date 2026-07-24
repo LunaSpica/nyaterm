@@ -102,6 +102,7 @@ impl NyaTermApp {
         self.connection_editor_menu = None;
         self.connection_editor = None;
         self.connection_editor_window = None;
+        self.connection_editor_window_open_pending = false;
         self.terminal_status = "connection editor closed".to_string();
         cx.notify();
     }
@@ -643,6 +644,7 @@ impl NyaTermApp {
                 self.connection_editor_menu = None;
                 self.connection_editor = None;
                 self.connection_editor_window = None;
+                self.connection_editor_window_open_pending = false;
                 self.selected_connection_ids.clear();
                 self.selected_connection_ids.insert(saved.id.clone());
                 if let Some(group_id) = saved.group_id.clone() {

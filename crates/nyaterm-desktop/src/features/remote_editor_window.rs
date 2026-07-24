@@ -1,8 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
 use gpui::{
-    AppContext, Bounds, Context, Entity, IntoElement, Render, Subscription, Window, WindowBounds,
-    WindowHandle, WindowOptions, div, prelude::*, px, rgb, size,
+    App, AppContext, Bounds, Context, Entity, IntoElement, Render, Subscription, Window,
+    WindowBounds, WindowHandle, WindowOptions, div, prelude::*, px, rgb, size,
 };
 
 use super::{NyaTermApp, RemoteTextEditor, child_window_header, child_window_titlebar};
@@ -31,6 +31,7 @@ impl Render for RemoteFileEditorWindow {
         if self.app.read(cx).transfer_editor.is_none() {
             self.app.update(cx, |app, cx| {
                 app.remote_editor_window = None;
+                app.remote_editor_window_open_pending = false;
                 cx.notify();
             });
             window.defer(cx, |window, _| window.remove_window());
@@ -126,51 +127,99 @@ impl Render for RemoteFileEditorWindow {
 impl NyaTermApp {
     pub(in crate::features) fn open_remote_file_editor_window(&mut self, cx: &mut Context<Self>) {
         if let Some(handle) = self.remote_editor_window {
-            if handle
-                .update(cx, |_, window, _| window.activate_window())
-                .is_ok()
-            {
-                return;
-            }
-            self.remote_editor_window = None;
-        }
-
-        let app = cx.entity();
-        let title = self.tr("fileEditor.title").to_string();
-        let bounds = Bounds::centered(None, size(px(980.), px(720.)), cx);
-        let close_app = app.clone();
-        let view_app = app.clone();
-        let result: anyhow::Result<WindowHandle<RemoteFileEditorWindow>> = cx.open_window(
-            WindowOptions {
-                titlebar: child_window_titlebar(title),
-                window_bounds: Some(WindowBounds::Windowed(bounds)),
-                window_min_size: Some(size(px(640.), px(480.))),
-                ..Default::default()
-            },
-            move |window, cx| {
-                window.on_window_should_close(cx, move |_, cx| {
-                    close_app.update(cx, |app, cx| {
-                        app.close_transfer_editor(cx);
-                        let should_close = app.transfer_editor.is_none();
-                        if should_close {
+            let app = cx.entity();
+            cx.defer(move |cx| {
+                if handle
+                    .update(cx, |_, window, _| window.activate_window())
+                    .is_err()
+                {
+                    let _ = app.update(cx, |app, cx| {
+                        if app
+                            .remote_editor_window
+                            .is_some_and(|current| current == handle)
+                        {
                             app.remote_editor_window = None;
+                            cx.notify();
                         }
-                        should_close
-                    })
-                });
-                cx.new(|cx| RemoteFileEditorWindow::new(view_app, cx))
-            },
-        );
-
-        match result {
-            Ok(handle) => {
-                self.remote_editor_window = Some(handle);
-            }
-            Err(error) => {
-                self.remote_editor_window = None;
-                self.terminal_status = format!("failed to open remote editor window: {error}");
-            }
+                    });
+                }
+            });
+            return;
         }
+        if self.remote_editor_window_open_pending {
+            return;
+        }
+
+        self.remote_editor_window_open_pending = true;
         cx.notify();
+        let app = cx.entity();
+        cx.defer(move |cx| {
+            let should_open = app.read(cx).remote_editor_window_open_pending;
+            if should_open {
+                open_remote_file_editor_window_now_from_app(app, cx);
+            }
+        });
     }
+}
+
+fn open_remote_file_editor_window_now_from_app(app: Entity<NyaTermApp>, cx: &mut App) {
+    if let Some(handle) = app.read(cx).remote_editor_window {
+        let activate_result = handle.update(cx, |_, window, _| window.activate_window());
+        let _ = app.update(cx, |app, cx| {
+            app.remote_editor_window_open_pending = false;
+            if activate_result.is_err() {
+                app.remote_editor_window = None;
+            }
+            cx.notify();
+        });
+        return;
+    }
+    if app.read(cx).transfer_editor.is_none() {
+        let _ = app.update(cx, |app, cx| {
+            app.remote_editor_window_open_pending = false;
+            cx.notify();
+        });
+        return;
+    }
+
+    let title = app.read(cx).tr("fileEditor.title").to_string();
+    let bounds = Bounds::centered(None, size(px(980.), px(720.)), cx);
+    let close_app = app.clone();
+    let view_app = app.clone();
+    let result: anyhow::Result<WindowHandle<RemoteFileEditorWindow>> = cx.open_window(
+        WindowOptions {
+            titlebar: child_window_titlebar(title),
+            window_bounds: Some(WindowBounds::Windowed(bounds)),
+            window_min_size: Some(size(px(640.), px(480.))),
+            ..Default::default()
+        },
+        move |window, cx| {
+            window.on_window_should_close(cx, move |_, cx| {
+                close_app.update(cx, |app, cx| {
+                    app.close_transfer_editor(cx);
+                    let should_close = app.transfer_editor.is_none();
+                    if should_close {
+                        app.remote_editor_window = None;
+                        app.remote_editor_window_open_pending = false;
+                    }
+                    should_close
+                })
+            });
+            cx.new(|cx| RemoteFileEditorWindow::new(view_app, cx))
+        },
+    );
+
+    let _ = app.update(cx, |app, cx| match result {
+        Ok(handle) => {
+            app.remote_editor_window = Some(handle);
+            app.remote_editor_window_open_pending = false;
+            cx.notify();
+        }
+        Err(error) => {
+            app.remote_editor_window = None;
+            app.remote_editor_window_open_pending = false;
+            app.terminal_status = format!("failed to open remote editor window: {error}");
+            cx.notify();
+        }
+    });
 }

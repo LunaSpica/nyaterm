@@ -261,6 +261,8 @@ impl NyaTermApp {
             .retain(|_, prompt| prompt.session_id.as_deref() != Some(session_id));
         self.transfer_external_sync_windows
             .retain(|prompt_id, _| self.transfer_external_sync_prompts.contains_key(prompt_id));
+        self.transfer_external_sync_window_open_pending
+            .retain(|prompt_id| self.transfer_external_sync_prompts.contains_key(prompt_id));
         if self
             .transfer_properties
             .as_ref()

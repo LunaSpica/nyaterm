@@ -34,6 +34,7 @@ pub struct NyaTermApp {
     pub(in crate::features) expanded_connection_groups: HashSet<String>,
     pub(in crate::features) connection_editor: Option<ConnectionEditorState>,
     pub(in crate::features) connection_editor_window: Option<WindowHandle<ConnectionEditorWindow>>,
+    pub(in crate::features) connection_editor_window_open_pending: bool,
     pub(in crate::features) connection_editor_focus: FocusHandle,
     pub(in crate::features) connection_icon_picker_open: bool,
     pub(in crate::features) connection_editor_menu: Option<ConnectionEditorMenu>,
@@ -84,6 +85,7 @@ pub struct NyaTermApp {
     pub(in crate::features) quick_command_category_menu: Option<QuickCommandCategoryMenuState>,
     pub(in crate::features) quick_command_editor: Option<QuickCommandEditorState>,
     pub(in crate::features) quick_command_window: Option<WindowHandle<QuickCommandWindow>>,
+    pub(in crate::features) quick_command_window_open_pending: bool,
     pub(in crate::features) quick_command_delete: Option<QuickCommandDeleteState>,
     pub(in crate::features) quick_command_details: Option<QuickCommandDetailsState>,
     pub(in crate::features) quick_command_category_delete: Option<QuickCommandCategoryDeleteState>,
@@ -383,11 +385,13 @@ pub struct NyaTermApp {
     pub(in crate::features) transfer_editor: Option<TransferEditorWorkspaceState>,
     pub(in crate::features) transfer_editor_tabs_menu_open: bool,
     pub(in crate::features) remote_editor_window: Option<WindowHandle<RemoteFileEditorWindow>>,
+    pub(in crate::features) remote_editor_window_open_pending: bool,
     pub(in crate::features) transfer_unknown_file: Option<TransferUnknownFileState>,
     pub(in crate::features) transfer_external_sync_prompts:
         HashMap<String, TransferExternalSyncPromptState>,
     pub(in crate::features) transfer_external_sync_windows:
         HashMap<String, WindowHandle<TransferExternalSyncWindow>>,
+    pub(in crate::features) transfer_external_sync_window_open_pending: HashSet<String>,
     pub(in crate::features) transfer_external_always_uploads: HashSet<String>,
     pub(in crate::features) recording_path_prompt: Option<RecordingPathPromptKind>,
     pub(in crate::features) config_path_prompt: Option<ConfigPathPromptKind>,
@@ -655,6 +659,7 @@ pub struct NyaTermApp {
     /// Committed values captured when the in-window settings page opens.
     pub(in crate::features) settings_draft_snapshot: Option<SettingsDraftSnapshot>,
     pub(in crate::features) settings_window: Option<WindowHandle<SettingsWindow>>,
+    pub(in crate::features) settings_window_open_pending: bool,
     /// Main workspace panel state to restore after leaving the in-window settings page.
     pub(in crate::features) settings_previous_left_collapsed: Option<bool>,
     pub(in crate::features) settings_previous_right_collapsed: Option<bool>,

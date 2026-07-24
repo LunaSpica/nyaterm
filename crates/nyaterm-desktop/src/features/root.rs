@@ -429,8 +429,9 @@ impl NyaTermApp {
             .transfer_properties
             .as_ref()
             .is_some_and(|state| state.session_id.as_deref() == self.active_session_id.as_deref());
-        let transfer_editor_open =
-            self.transfer_editor.is_some() && self.remote_editor_window.is_none();
+        let transfer_editor_open = self.transfer_editor.is_some()
+            && self.remote_editor_window.is_none()
+            && !self.remote_editor_window_open_pending;
         let transfer_external_sync_open = self.active_external_editor_sync_prompt().is_some();
 
         content
@@ -532,7 +533,9 @@ impl NyaTermApp {
                 this.child(self.sync_groups_overlay(cx))
             })
             .when(
-                self.connection_editor.is_some() && self.connection_editor_window.is_none(),
+                self.connection_editor.is_some()
+                    && self.connection_editor_window.is_none()
+                    && !self.connection_editor_window_open_pending,
                 |this| {
                     this.child(
                         self.connection_editor_panel(
@@ -545,7 +548,9 @@ impl NyaTermApp {
                 },
             )
             .when(
-                self.quick_command_editor.is_some() && self.quick_command_window.is_none(),
+                self.quick_command_editor.is_some()
+                    && self.quick_command_window.is_none()
+                    && !self.quick_command_window_open_pending,
                 |this| this.child(self.quick_command_editor_overlay(cx)),
             )
             .when(self.quick_command_delete.is_some(), |this| {
@@ -601,20 +606,32 @@ impl NyaTermApp {
 
     fn modal_child_window_open(&self) -> bool {
         self.settings_window.is_some()
+            || self.settings_window_open_pending
             || self.quick_command_window.is_some()
+            || self.quick_command_window_open_pending
             || self.connection_editor_window.is_some()
+            || self.connection_editor_window_open_pending
             || !self.transfer_external_sync_windows.is_empty()
+            || !self.transfer_external_sync_window_open_pending.is_empty()
     }
 
     fn activate_modal_child_window(&mut self, cx: &mut Context<Self>) -> bool {
         if self.settings_window.is_some() {
             self.activate_settings_window(cx)
+        } else if self.settings_window_open_pending {
+            true
         } else if self.quick_command_window.is_some() {
             self.activate_quick_command_window(cx)
+        } else if self.quick_command_window_open_pending {
+            true
         } else if self.connection_editor_window.is_some() {
             self.activate_connection_editor_window(cx)
-        } else {
+        } else if self.connection_editor_window_open_pending {
+            true
+        } else if !self.transfer_external_sync_windows.is_empty() {
             self.activate_transfer_external_sync_window(cx)
+        } else {
+            !self.transfer_external_sync_window_open_pending.is_empty()
         }
     }
 
