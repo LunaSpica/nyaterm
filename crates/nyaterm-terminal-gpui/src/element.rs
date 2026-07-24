@@ -181,6 +181,13 @@ impl NyaTerminalLayoutCache {
         (row, true, duration)
     }
 
+    fn contains_paint_row(&self, key: u64, reuse_key: Option<u64>) -> bool {
+        self.rows.contains_key(&key)
+            || reuse_key
+                .filter(|reuse_key| *reuse_key != key)
+                .is_some_and(|reuse_key| self.rows.contains_key(&reuse_key))
+    }
+
     fn cursor_glyph(
         &mut self,
         key: u64,
@@ -906,6 +913,24 @@ mod layout_cache_tests {
     }
 
     #[test]
+    fn layout_prefetch_waits_until_every_visible_row_is_cached() {
+        assert_eq!(terminal_layout_prefetch_row(2..4, 8, |row| row == 2), None);
+    }
+
+    #[test]
+    fn layout_prefetch_moves_outward_from_the_visible_viewport() {
+        assert_eq!(
+            terminal_layout_prefetch_row(2..4, 8, |row| matches!(row, 2 | 3)),
+            Some(1)
+        );
+        assert_eq!(
+            terminal_layout_prefetch_row(2..4, 8, |row| matches!(row, 1 | 2 | 3)),
+            Some(4)
+        );
+        assert_eq!(terminal_layout_prefetch_row(2..4, 4, |_| true), None);
+    }
+
+    #[test]
     fn layout_height_can_use_viewport_rows_instead_of_snapshot_window_rows() {
         assert_eq!(terminal_layout_height_px(16.0, 80, None), 1280.0);
         assert_eq!(terminal_layout_height_px(16.0, 80, Some(24)), 384.0);
@@ -982,6 +1007,7 @@ pub struct NyaTerminalPaintPlan {
     cursor_glyph: Option<TerminalCursorGlyphPaint>,
     shape_line_count: usize,
     shape_line_duration: std::time::Duration,
+    prefetched_row_count: usize,
     text_run_count: usize,
 }
 
@@ -1144,6 +1170,90 @@ impl NyaTerminalElement {
     fn keyword_rules_key(&self) -> u64 {
         terminal_keyword_rules_key(&self.keyword_rules)
     }
+
+    fn row_layout_cache_keys(
+        &self,
+        row: usize,
+        keyword_paint_style_key: u64,
+        empty_keyword_paint_style_key: u64,
+    ) -> (u64, Option<u64>) {
+        let line = self
+            .snapshot
+            .lines
+            .get(row)
+            .map(String::as_str)
+            .unwrap_or("");
+        let display_line = if line.is_empty() { " " } else { line };
+        let ansi = self.snapshot.styled_lines.get(row).map(Vec::as_slice);
+        let line_signature = self.snapshot.line_signatures.get(row).copied();
+        let keyword_lookup = self.keyword_highlights.as_ref().and_then(|highlights| {
+            highlights.lookup(row, line_signature).or_else(|| {
+                highlights.stale_lookup(
+                    row,
+                    line_signature,
+                    self.snapshot.display_offset,
+                    self.snapshot.rows,
+                )
+            })
+        });
+        let keyword_result_known_empty = keyword_lookup
+            .as_ref()
+            .is_some_and(|lookup| lookup.is_known_empty());
+        let keyword_spans_present = keyword_lookup
+            .as_ref()
+            .and_then(|lookup| lookup.spans())
+            .is_some();
+        let paint_style_key = if keyword_result_known_empty {
+            empty_keyword_paint_style_key
+        } else {
+            keyword_paint_style_key
+        };
+        let default_decorations;
+        let decorations = if let Some(decorations) = self.decorations.get(row) {
+            decorations
+        } else {
+            default_decorations = TerminalLineDecorations::default();
+            &default_decorations
+        };
+        let row_layout_key = |paint_style_key: u64, keyword_spans_present: bool| {
+            terminal_row_layout_key(
+                line_signature,
+                display_line,
+                ansi,
+                decorations,
+                keyword_spans_present,
+                paint_style_key,
+            )
+        };
+        let row_key = row_layout_key(paint_style_key, keyword_spans_present);
+        let pending_keyword_row_key = keyword_lookup
+            .is_some()
+            .then(|| row_layout_key(keyword_paint_style_key, false))
+            .filter(|pending_key| *pending_key != row_key);
+        (row_key, pending_keyword_row_key)
+    }
+}
+
+fn terminal_layout_prefetch_row(
+    visible_rows: std::ops::Range<usize>,
+    total_rows: usize,
+    mut row_is_cached: impl FnMut(usize) -> bool,
+) -> Option<usize> {
+    if visible_rows.clone().any(|row| !row_is_cached(row)) {
+        return None;
+    }
+    for distance in 1..=total_rows {
+        if let Some(row) = visible_rows.start.checked_sub(distance)
+            && !row_is_cached(row)
+        {
+            return Some(row);
+        }
+        let row = visible_rows.end.saturating_add(distance - 1);
+        if row < total_rows && !row_is_cached(row) {
+            return Some(row);
+        }
+    }
+    None
 }
 
 fn hash_stable_glyph_decorations<H: Hasher>(decorations: &TerminalLineDecorations, hasher: &mut H) {
@@ -1432,7 +1542,27 @@ impl Element for NyaTerminalElement {
         let visible_row_start = visible_rows.start;
         let visible_row_end = visible_rows.end;
         let visible_row_count = visible_rows.len();
-        for row in visible_rows {
+        // Follow the editor model: once the visible viewport is entirely hot,
+        // spend at most one subsequent frame shaping the nearest retained row.
+        // Any changed visible row suppresses this work, keeping input/output
+        // latency ahead of speculative scroll preparation.
+        let prefetch_row = layout_cache.as_deref().and_then(|cache| {
+            terminal_layout_prefetch_row(visible_rows.clone(), self.snapshot.rows, |row| {
+                let (key, reuse_key) = self.row_layout_cache_keys(
+                    row,
+                    keyword_paint_style_key,
+                    empty_keyword_paint_style_key,
+                );
+                cache.contains_paint_row(key, reuse_key)
+            })
+        });
+        let mut rows_to_prepare = Vec::with_capacity(visible_row_count.saturating_add(1));
+        rows_to_prepare.extend(visible_rows.clone());
+        if let Some(row) = prefetch_row {
+            rows_to_prepare.push(row);
+        }
+        for row in rows_to_prepare {
+            let row_is_visible = row >= visible_row_start && row < visible_row_end;
             let line = self
                 .snapshot
                 .lines
@@ -1471,44 +1601,46 @@ impl Element for NyaTerminalElement {
             };
             let y = px(f32::from(bounds.top()) + visual_y_offset + row as f32 * cell_h);
 
-            if !decorations.active_search_ranges.is_empty() {
-                plan.active_markers.push(fill(
-                    Bounds::new(point(bounds.left(), y), size(px(2.), px(cell_h))),
-                    rgb(self.palette.warning),
-                ));
-            }
-            // OSC 133 command marks: left gutter bar (under glyphs, with other marks).
-            if let Some(mark) = decorations.command_mark {
-                use nyaterm_terminal::ShellCommandMark;
-                let color = match mark {
-                    ShellCommandMark::Prompt => self.palette.accent,
-                    ShellCommandMark::Output => self.palette.text_muted,
-                    ShellCommandMark::Finished {
-                        exit_code: Some(code),
-                    } if code != 0 => self.palette.danger,
-                    ShellCommandMark::Finished { .. } => self.palette.success,
-                };
-                // Offset 1px when active-search mark is also present so both remain visible.
-                let x = if decorations.active_search_ranges.is_empty() {
-                    bounds.left()
-                } else {
-                    px(f32::from(bounds.left()) + 2.)
-                };
-                plan.active_markers.push(fill(
-                    Bounds::new(point(x, y), size(px(2.), px(cell_h))),
-                    rgb(color),
-                ));
-            }
+            if row_is_visible {
+                if !decorations.active_search_ranges.is_empty() {
+                    plan.active_markers.push(fill(
+                        Bounds::new(point(bounds.left(), y), size(px(2.), px(cell_h))),
+                        rgb(self.palette.warning),
+                    ));
+                }
+                // OSC 133 command marks: left gutter bar (under glyphs, with other marks).
+                if let Some(mark) = decorations.command_mark {
+                    use nyaterm_terminal::ShellCommandMark;
+                    let color = match mark {
+                        ShellCommandMark::Prompt => self.palette.accent,
+                        ShellCommandMark::Output => self.palette.text_muted,
+                        ShellCommandMark::Finished {
+                            exit_code: Some(code),
+                        } if code != 0 => self.palette.danger,
+                        ShellCommandMark::Finished { .. } => self.palette.success,
+                    };
+                    // Offset 1px when active-search mark is also present so both remain visible.
+                    let x = if decorations.active_search_ranges.is_empty() {
+                        bounds.left()
+                    } else {
+                        px(f32::from(bounds.left()) + 2.)
+                    };
+                    plan.active_markers.push(fill(
+                        Bounds::new(point(x, y), size(px(2.), px(cell_h))),
+                        rgb(color),
+                    ));
+                }
 
-            push_dynamic_decoration_backgrounds(
-                row,
-                decorations,
-                self.palette,
-                bounds,
-                cell_w,
-                cell_h,
-                &mut plan.decoration_backgrounds,
-            );
+                push_dynamic_decoration_backgrounds(
+                    row,
+                    decorations,
+                    self.palette,
+                    bounds,
+                    cell_w,
+                    cell_h,
+                    &mut plan.decoration_backgrounds,
+                );
+            }
 
             let row_layout_key = |paint_style_key: u64, keyword_spans_present: bool| {
                 terminal_row_layout_key(
@@ -1689,27 +1821,34 @@ impl Element for NyaTerminalElement {
                     duration,
                 )
             };
-            push_terminal_background_ranges(
-                row,
-                &painted_row.background_ranges,
-                bounds,
-                cell_w,
-                cell_h,
-                &mut plan.backgrounds,
-            );
-            plan.text_run_count = plan
-                .text_run_count
-                .saturating_add(painted_row.text_run_count);
             if did_shape {
                 plan.shape_line_count = plan.shape_line_count.saturating_add(1);
                 plan.shape_line_duration += shape_duration;
             }
-            plan.rows.push(TerminalPaintRow {
-                y,
-                line: Arc::clone(&painted_row.line),
-            });
+            if row_is_visible {
+                push_terminal_background_ranges(
+                    row,
+                    &painted_row.background_ranges,
+                    bounds,
+                    cell_w,
+                    cell_h,
+                    &mut plan.backgrounds,
+                );
+                plan.text_run_count = plan
+                    .text_run_count
+                    .saturating_add(painted_row.text_run_count);
+                plan.rows.push(TerminalPaintRow {
+                    y,
+                    line: Arc::clone(&painted_row.line),
+                });
+            } else {
+                plan.prefetched_row_count = plan.prefetched_row_count.saturating_add(1);
+            }
         }
         drop(layout_cache);
+        if prefetch_row.is_some() {
+            window.refresh();
+        }
 
         // Graphics protocol placements (Kitty / iTerm2 / Sixel).
         // Kitty z>0 places above text; everything else stays under the glyph layer.
@@ -1876,6 +2015,7 @@ impl Element for NyaTerminalElement {
                 decoration_backgrounds = plan.decoration_backgrounds.len(),
                 active_markers = plan.active_markers.len(),
                 shaped_rows = plan.rows.len(),
+                prefetched_rows = plan.prefetched_row_count,
                 shape_line_count = plan.shape_line_count,
                 shape_line_ms = plan.shape_line_duration.as_millis(),
                 text_run_count = plan.text_run_count,
