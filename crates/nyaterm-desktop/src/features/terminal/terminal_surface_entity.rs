@@ -20,6 +20,8 @@ pub(in crate::features) static TERMINAL_SURFACE_PAINT_COUNT: AtomicU64 = AtomicU
 pub(in crate::features) static FULL_SHELL_PAINT_COUNT: AtomicU64 = AtomicU64::new(0);
 const TERMINAL_SURFACE_RETAINED_SNAPSHOT_LIMIT: usize = 12;
 const TERMINAL_SURFACE_RETAINED_ROW_LIMIT: usize = 4096;
+const TERMINAL_SURFACE_SYNTHESIZED_WINDOW_MIN_EXTRA_ROWS: usize = 32;
+const TERMINAL_SURFACE_SYNTHESIZED_WINDOW_MAX_EXTRA_ROWS: usize = 192;
 const TERMINAL_SURFACE_SCROLL_PENDING_WARN_AFTER: Duration = Duration::from_millis(48);
 const TERMINAL_SURFACE_SCROLL_PENDING_WARN_INTERVAL: Duration = Duration::from_millis(500);
 const TERMINAL_SURFACE_LOCAL_SCROLL_SYNC_DELAY: Duration = Duration::from_millis(16);
@@ -734,19 +736,26 @@ impl TerminalSurface {
         }
     }
 
-    fn remember_retained_snapshot_rows(&mut self, snapshot: &TerminalSnapshot) {
+    fn remember_retained_snapshot_rows(&mut self, snapshot: &TerminalSnapshot) -> usize {
         let Some((start, _)) = terminal_snapshot_absolute_window(snapshot) else {
-            return;
+            return 0;
         };
+        let mut refreshed_rows = 0usize;
         for row in 0..snapshot.rows {
             let Some(abs_row) = start.checked_add(row) else {
                 continue;
             };
+            if self.retained_rows.get(&abs_row).is_some_and(|retained| {
+                terminal_surface_retained_row_matches_snapshot(retained, snapshot, row)
+            }) {
+                continue;
+            }
             let Some(retained_row) = terminal_surface_retained_row_from_snapshot(snapshot, row)
             else {
                 continue;
             };
             self.retained_rows.insert(abs_row, retained_row);
+            refreshed_rows = refreshed_rows.saturating_add(1);
         }
         while self.retained_rows.len() > TERMINAL_SURFACE_RETAINED_ROW_LIMIT {
             let Some(drop_key) = self.retained_rows.keys().next().copied() else {
@@ -754,6 +763,7 @@ impl TerminalSurface {
             };
             self.retained_rows.remove(&drop_key);
         }
+        refreshed_rows
     }
 
     fn promote_snapshot_covering_display_offset(
@@ -870,13 +880,21 @@ impl TerminalSurface {
         let real_total_rows = scrollback_len.saturating_add(viewport_rows);
         let desired_end = real_total_rows.checked_sub(display_offset)?;
         let desired_start = desired_end.checked_sub(viewport_rows)?;
-        if let Some(snapshot) = self.synthesize_snapshot_from_retained_rows(
-            display_offset,
-            viewport_rows,
-            scrollback_len,
+        let extra_rows = terminal_surface_synthesized_window_extra_rows(viewport_rows);
+        let retained_window = self.retained_rows_window_around(
             desired_start,
             desired_end,
-        ) {
+            real_total_rows,
+            extra_rows,
+        );
+        if let Some((window_start, window_end)) = retained_window
+            && let Some(snapshot) = self.synthesize_snapshot_from_retained_rows(
+                viewport_rows,
+                scrollback_len,
+                window_start,
+                window_end,
+            )
+        {
             return Some(snapshot);
         }
         let mut sources: Vec<&Arc<TerminalSnapshot>> = Vec::new();
@@ -960,28 +978,29 @@ impl TerminalSurface {
 
     fn synthesize_snapshot_from_retained_rows(
         &self,
-        display_offset: usize,
         viewport_rows: usize,
         scrollback_len: usize,
-        desired_start: usize,
-        desired_end: usize,
+        window_start: usize,
+        window_end: usize,
     ) -> Option<Arc<TerminalSnapshot>> {
-        let first_row = self.retained_rows.get(&desired_start)?;
+        let first_row = self.retained_rows.get(&window_start)?;
         let cols = first_row.cols;
-        if cols == 0 {
+        let rows = window_end.checked_sub(window_start)?;
+        if cols == 0 || rows < viewport_rows.max(1) {
             return None;
         }
         let real_total_rows = scrollback_len.saturating_add(viewport_rows);
-        let mut cells = Vec::with_capacity(viewport_rows.saturating_mul(cols));
-        let mut lines = Vec::with_capacity(viewport_rows);
-        let mut styled_lines = Vec::with_capacity(viewport_rows);
-        let mut line_signatures = Vec::with_capacity(viewport_rows);
-        let mut line_timestamps_ms = Vec::with_capacity(viewport_rows);
-        let mut line_wrapped = Vec::with_capacity(viewport_rows);
-        let mut hyperlink_lines = Vec::with_capacity(viewport_rows);
-        let mut command_marks = Vec::with_capacity(viewport_rows);
+        let display_offset = real_total_rows.checked_sub(window_end)?;
+        let mut cells = Vec::with_capacity(rows.saturating_mul(cols));
+        let mut lines = Vec::with_capacity(rows);
+        let mut styled_lines = Vec::with_capacity(rows);
+        let mut line_signatures = Vec::with_capacity(rows);
+        let mut line_timestamps_ms = Vec::with_capacity(rows);
+        let mut line_wrapped = Vec::with_capacity(rows);
+        let mut hyperlink_lines = Vec::with_capacity(rows);
+        let mut command_marks = Vec::with_capacity(rows);
 
-        for abs_row in desired_start..desired_end {
+        for abs_row in window_start..window_end {
             let row = self.retained_rows.get(&abs_row)?;
             if row.cols != cols || row.cells.len() != cols {
                 return None;
@@ -999,7 +1018,7 @@ impl TerminalSurface {
         Some(Arc::new(TerminalSnapshot {
             cols,
             viewport_rows,
-            rows: viewport_rows,
+            rows,
             cells,
             cursor: hidden_terminal_cursor_snapshot(),
             selection: None,
@@ -1017,6 +1036,42 @@ impl TerminalSurface {
             images: Vec::new(),
             command_marks,
         }))
+    }
+
+    fn retained_rows_window_around(
+        &self,
+        desired_start: usize,
+        desired_end: usize,
+        real_total_rows: usize,
+        extra_rows: usize,
+    ) -> Option<(usize, usize)> {
+        if !self.retained_rows_cover_absolute_range(desired_start, desired_end) {
+            return None;
+        }
+        let cols = self.retained_rows.get(&desired_start)?.cols;
+        let row_is_compatible = |absolute_row: usize| {
+            self.retained_rows
+                .get(&absolute_row)
+                .is_some_and(|row| row.cols == cols && row.cells.len() == cols)
+        };
+
+        let mut window_start = desired_start;
+        while desired_start.saturating_sub(window_start) < extra_rows && window_start > 0 {
+            let previous = window_start - 1;
+            if !row_is_compatible(previous) {
+                break;
+            }
+            window_start = previous;
+        }
+
+        let mut window_end = desired_end;
+        while window_end.saturating_sub(desired_end) < extra_rows
+            && window_end < real_total_rows
+            && row_is_compatible(window_end)
+        {
+            window_end = window_end.saturating_add(1);
+        }
+        Some((window_start, window_end))
     }
 
     pub(in crate::features) fn set_paint_chrome(
@@ -1974,6 +2029,41 @@ fn hidden_terminal_cursor_snapshot() -> nyaterm_terminal::CursorSnapshot {
     }
 }
 
+fn terminal_surface_synthesized_window_extra_rows(viewport_rows: usize) -> usize {
+    viewport_rows
+        .max(1)
+        .saturating_mul(2)
+        .max(TERMINAL_SURFACE_SYNTHESIZED_WINDOW_MIN_EXTRA_ROWS)
+        .min(TERMINAL_SURFACE_SYNTHESIZED_WINDOW_MAX_EXTRA_ROWS)
+}
+
+fn terminal_surface_retained_row_matches_snapshot(
+    retained: &TerminalSurfaceRetainedRow,
+    snapshot: &TerminalSnapshot,
+    row: usize,
+) -> bool {
+    retained.cols == snapshot.cols
+        && snapshot
+            .line_signatures
+            .get(row)
+            .is_some_and(|signature| retained.line_signature == *signature)
+        && snapshot
+            .lines
+            .get(row)
+            .is_some_and(|line| retained.line == *line)
+        && snapshot
+            .styled_lines
+            .get(row)
+            .is_some_and(|line| retained.styled_line == *line)
+        && retained.line_timestamp_ms == snapshot.line_timestamps_ms.get(row).copied().flatten()
+        && retained.line_wrapped == snapshot.line_wrapped.get(row).copied().unwrap_or(false)
+        && snapshot
+            .hyperlink_lines
+            .get(row)
+            .is_some_and(|line| retained.hyperlink_line == *line)
+        && retained.command_mark == snapshot.command_marks.get(row).copied().flatten()
+}
+
 fn terminal_surface_retained_row_from_snapshot(
     snapshot: &TerminalSnapshot,
     row: usize,
@@ -2425,6 +2515,34 @@ mod tests {
 
         snapshot.rows = snapshot.rows.saturating_add(retained_older_rows);
         (snapshot, viewport_rows)
+    }
+
+    #[test]
+    fn retained_row_cache_refreshes_only_changed_snapshot_rows() {
+        let mut screen = TerminalScreen::default();
+        screen.advance_decoded_text(&terminal_test_output_lines(80));
+        let snapshot = screen.viewport_snapshot(0);
+        let mut surface = TerminalSurface::new("session");
+
+        assert_eq!(
+            surface.remember_retained_snapshot_rows(&snapshot),
+            snapshot.rows
+        );
+        assert_eq!(surface.remember_retained_snapshot_rows(&snapshot), 0);
+
+        let mut metadata_changed = snapshot.clone();
+        metadata_changed.line_timestamps_ms[0] = Some(42);
+        assert_eq!(
+            surface.remember_retained_snapshot_rows(&metadata_changed),
+            1
+        );
+    }
+
+    #[test]
+    fn synthesized_scroll_window_uses_bounded_overscan() {
+        assert_eq!(terminal_surface_synthesized_window_extra_rows(8), 32);
+        assert_eq!(terminal_surface_synthesized_window_extra_rows(40), 80);
+        assert_eq!(terminal_surface_synthesized_window_extra_rows(200), 192);
     }
 
     #[test]
@@ -3918,10 +4036,23 @@ mod tests {
         let synthesized = surface
             .snapshot_covering_display_offset(target_offset, rows, scrollback_len)
             .expect("retained rows should synthesize the target viewport");
-        assert_eq!(synthesized.display_offset, target_offset);
+        assert!(synthesized.rows > rows);
+        assert!(synthesized.display_offset <= target_offset);
         assert!(terminal_snapshot_covers_display_offset(
             synthesized.as_ref(),
             target_offset,
+            rows,
+            scrollback_len
+        ));
+        assert!(terminal_snapshot_covers_display_offset(
+            synthesized.as_ref(),
+            target_offset.saturating_sub(1),
+            rows,
+            scrollback_len
+        ));
+        assert!(terminal_snapshot_covers_display_offset(
+            synthesized.as_ref(),
+            target_offset.saturating_add(1).min(scrollback_len),
             rows,
             scrollback_len
         ));
