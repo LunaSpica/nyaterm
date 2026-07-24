@@ -7,7 +7,7 @@ use alacritty_terminal::event::{Event, EventListener};
 use alacritty_terminal::grid::Dimensions;
 use alacritty_terminal::index::{Column, Line};
 use alacritty_terminal::term::cell::{Cell, Flags};
-use alacritty_terminal::term::{Config, Term, TermMode};
+use alacritty_terminal::term::{Config, Term, TermDamage, TermMode};
 use alacritty_terminal::vte::ansi;
 use alacritty_terminal::vte::ansi::{Color, NamedColor, Rgb};
 
@@ -225,6 +225,7 @@ pub struct TerminalCore {
     pending_effects: TerminalEffects,
     line_timestamps_ms: HashMap<i32, u64>,
     line_signatures: HashMap<i32, u64>,
+    signature_damage_lines: Vec<i32>,
     /// Absolute Alacritty line → OSC 133 shell mark.
     command_marks: HashMap<i32, ShellCommandMark>,
     rows: usize,
@@ -237,6 +238,8 @@ pub struct TerminalCore {
     graphics: TerminalGraphicsState,
     /// Charset for session I/O (UTF-8 / GBK / …). Graphics stay on raw bytes.
     session_encoding: SessionEncoding,
+    #[cfg(test)]
+    last_signature_scan_count: usize,
 }
 
 pub type TerminalScreen = TerminalCore;
@@ -329,6 +332,7 @@ impl TerminalCore {
             pending_effects: TerminalEffects::default(),
             line_timestamps_ms: HashMap::new(),
             line_signatures: HashMap::new(),
+            signature_damage_lines: Vec::with_capacity(rows),
             command_marks: HashMap::new(),
             rows,
             cols,
@@ -338,6 +342,8 @@ impl TerminalCore {
             graphics_ingress: GraphicsIngress::new(),
             graphics: TerminalGraphicsState::default(),
             session_encoding: SessionEncoding::default(),
+            #[cfg(test)]
+            last_signature_scan_count: 0,
         }
     }
 
@@ -375,6 +381,9 @@ impl TerminalCore {
     }
 
     pub fn set_scrollback_limit(&mut self, limit: usize) {
+        if self.scrollback_limit == limit {
+            return;
+        }
         self.drain_alacritty_events();
         self.scrollback_limit = limit;
         self.term_config.scrolling_history = limit;
@@ -703,6 +712,7 @@ impl TerminalCore {
         let mut snapshot = snapshot_from_term(
             &self.term,
             offset,
+            &self.line_signatures,
             &self.line_timestamps_ms,
             &self.command_marks,
         );
@@ -727,6 +737,7 @@ impl TerminalCore {
             offset,
             older_rows,
             newer_rows,
+            &self.line_signatures,
             &self.line_timestamps_ms,
             &self.command_marks,
         );
@@ -847,6 +858,17 @@ impl TerminalCore {
         let cols = self.term.columns();
         let topmost = self.term.topmost_line();
         let bottommost = self.term.bottommost_line();
+        let history_changed = after_history != before_history;
+        let mut damaged_lines = std::mem::take(&mut self.signature_damage_lines);
+        damaged_lines.clear();
+        let full_damage = match self.term.damage() {
+            TermDamage::Full => true,
+            TermDamage::Partial(lines) => {
+                damaged_lines.extend(lines.filter_map(|damage| i32::try_from(damage.line).ok()));
+                false
+            }
+        };
+        self.term.reset_damage();
         let scan_start = if after_history > before_history {
             let scrolled = i32::try_from(after_history - before_history).unwrap_or(i32::MAX);
             topmost.0.max(scrolled.saturating_neg())
@@ -856,21 +878,54 @@ impl TerminalCore {
         let scan_end = i32::try_from(self.term.screen_lines())
             .unwrap_or(i32::MAX)
             .saturating_sub(1);
-        for line_index in scan_start..=scan_end {
-            let line = Line(line_index);
-            if line < topmost || line > bottommost {
-                continue;
+        let full_scan = history_changed || full_damage;
+        #[cfg(test)]
+        let scanned = if full_scan {
+            (scan_start..=scan_end)
+                .filter(|line| *line >= topmost.0 && *line <= bottommost.0)
+                .count()
+        } else {
+            damaged_lines
+                .iter()
+                .filter(|line| **line >= topmost.0 && **line <= bottommost.0)
+                .count()
+        };
+        if full_scan {
+            for line_index in scan_start..=scan_end {
+                self.stamp_line_signature(line_index, cols, now_ms, topmost, bottommost);
             }
-            let signature = line_signature(&self.term, line, cols);
-            let key = line.0;
-            if self.line_signatures.get(&key).copied() != Some(signature)
-                || !self.line_timestamps_ms.contains_key(&key)
-            {
-                self.line_timestamps_ms.insert(key, now_ms);
+        } else {
+            for &line_index in &damaged_lines {
+                self.stamp_line_signature(line_index, cols, now_ms, topmost, bottommost);
             }
-            self.line_signatures.insert(key, signature);
         }
+        #[cfg(test)]
+        {
+            self.last_signature_scan_count = scanned;
+        }
+        self.signature_damage_lines = damaged_lines;
         self.retain_line_metadata_range(topmost, bottommost);
+    }
+
+    fn stamp_line_signature(
+        &mut self,
+        line_index: i32,
+        cols: usize,
+        now_ms: u64,
+        topmost: Line,
+        bottommost: Line,
+    ) {
+        let line = Line(line_index);
+        if line < topmost || line > bottommost {
+            return;
+        }
+        let signature = line_signature(&self.term, line, cols);
+        if self.line_signatures.get(&line_index).copied() != Some(signature)
+            || !self.line_timestamps_ms.contains_key(&line_index)
+        {
+            self.line_timestamps_ms.insert(line_index, now_ms);
+        }
+        self.line_signatures.insert(line_index, signature);
     }
 
     fn refresh_line_signatures(&mut self) {
@@ -935,6 +990,7 @@ impl TerminalCore {
 fn snapshot_from_term(
     term: &Term<NyaTermEventProxy>,
     requested_offset: usize,
+    line_signatures_by_line: &HashMap<i32, u64>,
     line_timestamps_by_line: &HashMap<i32, u64>,
     command_marks_by_line: &HashMap<i32, ShellCommandMark>,
 ) -> TerminalSnapshot {
@@ -943,6 +999,7 @@ fn snapshot_from_term(
         requested_offset,
         0,
         0,
+        line_signatures_by_line,
         line_timestamps_by_line,
         command_marks_by_line,
     )
@@ -953,6 +1010,7 @@ fn snapshot_window_from_term(
     requested_offset: usize,
     older_rows: usize,
     newer_rows: usize,
+    line_signatures_by_line: &HashMap<i32, u64>,
     line_timestamps_by_line: &HashMap<i32, u64>,
     command_marks_by_line: &HashMap<i32, ShellCommandMark>,
 ) -> TerminalSnapshot {
@@ -964,6 +1022,7 @@ fn snapshot_window_from_term(
         .saturating_add(newer_rows);
     let display_offset = requested_offset;
     let mut row_cells = vec![Vec::<RenderCell>::with_capacity(cols); rows];
+    let mut line_signatures = vec![0; rows];
     let mut line_timestamps_ms = vec![None; rows];
     let mut line_wrapped = vec![false; rows];
     let mut command_marks = vec![None; rows];
@@ -975,6 +1034,10 @@ fn snapshot_window_from_term(
         if line < topmost || line > bottommost {
             continue;
         }
+        line_signatures[row] = line_signatures_by_line
+            .get(&line.0)
+            .copied()
+            .unwrap_or_else(|| line_signature(term, line, cols));
         line_timestamps_ms[row] = line_timestamps_by_line.get(&line.0).copied();
         command_marks[row] = command_marks_by_line.get(&line.0).copied();
         let previous_line = Line(line.0 - 1);
@@ -1015,7 +1078,6 @@ fn snapshot_window_from_term(
 
     let mut lines = Vec::with_capacity(rows);
     let mut styled_lines = Vec::with_capacity(rows);
-    let mut line_signatures = Vec::with_capacity(rows);
     let mut hyperlink_lines = Vec::with_capacity(rows);
     for row in &row_cells {
         let line = row
@@ -1024,7 +1086,6 @@ fn snapshot_window_from_term(
             .collect::<String>();
         lines.push(line.trim_end().to_string());
         styled_lines.push(compress_render_row(row));
-        line_signatures.push(render_row_signature(row));
         hyperlink_lines.push(compress_render_hyperlinks(row));
     }
 
@@ -1097,6 +1158,11 @@ fn line_signature(term: &Term<NyaTermEventProxy>, line: Line, cols: usize) -> u6
         let cell = &term.grid()[line][Column(col)];
         cell_text(cell).hash(&mut hasher);
         cell_style(cell).hash(&mut hasher);
+        if cell.flags.contains(Flags::WIDE_CHAR) {
+            2u8.hash(&mut hasher);
+        } else {
+            1u8.hash(&mut hasher);
+        }
         cell.hyperlink()
             .map(|link| link.uri().to_string())
             .hash(&mut hasher);
@@ -1104,6 +1170,7 @@ fn line_signature(term: &Term<NyaTermEventProxy>, line: Line, cols: usize) -> u6
     hasher.finish()
 }
 
+#[cfg(test)]
 fn render_row_signature(row: &[RenderCell]) -> u64 {
     let mut hasher = DefaultHasher::new();
     for cell in row {
@@ -1776,6 +1843,13 @@ mod tests {
 
         assert_eq!(snap.line_signatures.len(), snap.rows);
         assert!(snap.line_signatures.iter().any(|signature| *signature != 0));
+        for (signature, cells) in snap
+            .line_signatures
+            .iter()
+            .zip(snap.cells.chunks_exact(snap.cols))
+        {
+            assert_eq!(*signature, render_row_signature(cells));
+        }
     }
 
     #[test]
@@ -1791,6 +1865,25 @@ mod tests {
         screen.advance(b"\x1b[31malpha");
         let styled_signature = screen.viewport_snapshot(0).line_signatures[0];
         assert_ne!(styled_signature, text_signature);
+    }
+
+    #[test]
+    fn consecutive_input_scans_only_alacritty_damaged_lines() {
+        let mut screen = TerminalScreen::new(80, 120);
+        screen.advance(b"a");
+
+        // Reapplying the worker's unchanged output configuration must not turn
+        // the next single-cell update into full terminal damage.
+        screen.set_scrollback_limit(5_000);
+        screen.advance(b"b");
+
+        assert!(screen.last_signature_scan_count > 0);
+        assert!(
+            screen.last_signature_scan_count < screen.rows(),
+            "single-line input scanned {} of {} rows",
+            screen.last_signature_scan_count,
+            screen.rows()
+        );
     }
 
     #[test]
