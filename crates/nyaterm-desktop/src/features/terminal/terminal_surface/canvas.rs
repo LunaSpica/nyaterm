@@ -487,10 +487,6 @@ impl NyaTermApp {
         let sync_status_label = if sync_is_paused { "Paused" } else { "Syncing" };
         let output_session_id = session_id.clone();
         let terminal_font_size = self.settings.terminal_font_size as f32;
-        let has_new_while_scrolled = self
-            .terminal_views
-            .get(&session_id)
-            .is_some_and(|view| view.has_new_while_scrolled);
         let performance_overlay = self
             .terminal_views
             .get(&session_id)
@@ -535,7 +531,6 @@ impl NyaTermApp {
                     })
                 })
                 .unwrap_or((0, 0, 0, 0));
-        let show_scroll_to_bottom = session_id.is_empty() && is_active && scroll_offset > 0;
         let show_visual_bell = is_active && self.terminal_runtime.visual_bell_ticks > 0;
         let file_drop_hover = self
             .terminal_file_drop_hover
@@ -944,7 +939,21 @@ impl NyaTermApp {
                                     .flex_row()
                                     .min_h_0()
                                     .relative()
-                                    .child(div().flex_1().min_w_0().min_h_0().child(output))
+                                    .child(
+                                        div()
+                                            .flex_1()
+                                            .min_w_0()
+                                            .min_h_0()
+                                            .relative()
+                                            .child(output)
+                                            .when(output_session_id.is_empty(), |this| {
+                                                this.child(terminal_bounds_tracker(
+                                                    cx.entity(),
+                                                    None,
+                                                    is_active,
+                                                ))
+                                            }),
+                                    )
                                     // Scrollbar is painted by TerminalSurface for live sessions.
                                     .when(session_id.is_empty(), |this| {
                                         this.child(self.terminal_scrollbar_element(
@@ -953,13 +962,7 @@ impl NyaTermApp {
                                             scroll_offset,
                                             cx,
                                         ))
-                                    })
-                                    .child(terminal_bounds_tracker(
-                                        cx.entity(),
-                                        (!output_session_id.is_empty())
-                                            .then_some(output_session_id.clone()),
-                                        is_active,
-                                    )),
+                                    }),
                             )
                             .when(show_visual_bell, |this| {
                                 this.child(
@@ -1180,50 +1183,6 @@ impl NyaTermApp {
                                                         .text_color(rgb(palette.text_dimmed))
                                                         .child(detail),
                                                 ),
-                                        ),
-                                )
-                            })
-                            .when(show_scroll_to_bottom, |this| {
-                                this.child(
-                                    div()
-                                        .id(SharedString::from(format!(
-                                            "terminal-scroll-bottom-{output_session_id}"
-                                        )))
-                                        .absolute()
-                                        .right(px(22.))
-                                        .bottom(px(14.))
-                                        .h(px(30.))
-                                        .px_3()
-                                        .rounded_md()
-                                        .border_1()
-                                        .border_color(rgb(palette.border))
-                                        .bg(rgb(palette.surface_elevated))
-                                        .shadow_md()
-                                        .flex()
-                                        .items_center()
-                                        .gap_1()
-                                        .cursor_pointer()
-                                        .hover(move |style| style.bg(rgb(palette.hover)))
-                                        .on_click(cx.listener(|this, _, _, cx| {
-                                            this.scroll_terminal_to_bottom(cx);
-                                            this.terminal_status =
-                                                "scrolled to live output".to_string();
-                                            cx.notify();
-                                        }))
-                                        .child(
-                                            div()
-                                                .text_xs()
-                                                .font_weight(FontWeight(700.))
-                                                .text_color(rgb(if has_new_while_scrolled {
-                                                    palette.warning
-                                                } else {
-                                                    palette.link
-                                                }))
-                                                .child(if has_new_while_scrolled {
-                                                    "↓ New"
-                                                } else {
-                                                    "↓ Live"
-                                                }),
                                         ),
                                 )
                             }),

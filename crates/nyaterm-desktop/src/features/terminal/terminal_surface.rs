@@ -1,5 +1,7 @@
 use super::*;
 
+pub(in crate::features) const TERMINAL_SCROLLBAR_COLUMN_WIDTH: f32 = 10.0;
+
 #[path = "terminal_surface/helpers.rs"]
 mod helpers;
 use helpers::*;

@@ -50,7 +50,7 @@ impl NyaTermApp {
             .id(SharedString::from(format!(
                 "terminal-scrollbar-{session_id}"
             )))
-            .w(px(10.))
+            .w(px(TERMINAL_SCROLLBAR_COLUMN_WIDTH))
             .flex_none()
             .h_full()
             .py(px(2.))

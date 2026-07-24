@@ -7,6 +7,7 @@ use crate::features::terminal_runtime::{
 use crate::features::terminal_selection_runtime::{
     terminal_gutter_metrics, terminal_line_number_digits,
 };
+use crate::features::terminal_surface::TERMINAL_SCROLLBAR_COLUMN_WIDTH;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeMap, BTreeSet};
 use std::hash::{Hash, Hasher};
@@ -1783,7 +1784,7 @@ impl TerminalSurface {
             .id(SharedString::from(format!(
                 "terminal-scrollbar-{session_id}"
             )))
-            .w(px(10.))
+            .w(px(TERMINAL_SCROLLBAR_COLUMN_WIDTH))
             .flex_none()
             .h_full()
             .py(px(2.))
@@ -1856,64 +1857,6 @@ impl TerminalSurface {
                                 .opacity(0.85),
                         )
                     }),
-            )
-    }
-
-    fn scroll_to_live_fab(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let palette = self.palette;
-        let session_id = self.session_id.clone();
-        let has_new = self.has_new_while_scrolled;
-        let app = self.app.clone();
-        div()
-            .id(SharedString::from(format!(
-                "terminal-scroll-bottom-{session_id}"
-            )))
-            .absolute()
-            .right(px(22.))
-            .bottom(px(14.))
-            .h(px(30.))
-            .px_3()
-            .rounded_md()
-            .border_1()
-            .border_color(rgb(palette.border))
-            .bg(rgb(palette.surface_elevated))
-            .shadow_md()
-            .flex()
-            .items_center()
-            .gap_1()
-            .cursor_pointer()
-            .hover(move |style| style.bg(rgb(palette.hover)))
-            .on_click(cx.listener(move |this, _, _, cx| {
-                let Some(app) = app.clone() else {
-                    return;
-                };
-                let repaint_session_id = app.update(cx, |this, cx| {
-                    let repaint_session_id = this.scroll_terminal_to_bottom_state_only();
-                    this.terminal_status = "scrolled to live output".to_string();
-                    // Status bar is shell chrome; user-triggered, not hot path.
-                    cx.notify();
-                    repaint_session_id
-                });
-                this.scroll_offset = 0;
-                this.scroll_residual_lines = 0.0;
-                this.display_offset = 0;
-                this.scroll_snapshot_pending = false;
-                this.scroll_snapshot_pending_since = None;
-                this.pending_scroll_snapshot_offsets.clear();
-                this.has_new_while_scrolled = false;
-                cx.notify();
-                Self::defer_surface_repaint(app, repaint_session_id, cx);
-            }))
-            .child(
-                div()
-                    .text_xs()
-                    .font_weight(FontWeight(700.))
-                    .text_color(rgb(if has_new {
-                        palette.warning
-                    } else {
-                        palette.link
-                    }))
-                    .child(if has_new { "↓ New" } else { "↓ Live" }),
             )
     }
 }
@@ -2233,10 +2176,12 @@ impl Render for TerminalSurface {
             cell_h,
         );
         let gutter_enabled = self.show_line_numbers || self.show_timestamps;
-        let show_scroll_fab = self.is_active && self.visual_scroll_active();
         let performance_overlay = self.performance_overlay;
         let skipped_output_chars = self.skipped_output_chars;
         let visual_bell = self.visual_bell && self.is_active;
+        let app = self.app.clone();
+        let session_id = self.session_id.clone();
+        let is_active = self.is_active;
         let mut grid = NyaTerminalElement::new(
             snapshot.clone(),
             empty_terminal_keyword_rules(),
@@ -2367,12 +2312,6 @@ impl Render for TerminalSurface {
                 .child(div().flex_1().min_w_0().min_h_0().child(grid))
         };
 
-        // Build interactive chrome one at a time to satisfy impl Trait borrow rules.
-        let fab = if show_scroll_fab {
-            Some(self.scroll_to_live_fab(cx).into_any_element())
-        } else {
-            None
-        };
         let scrollbar = self.scrollbar_element(cx).into_any_element();
 
         div()
@@ -2413,6 +2352,13 @@ impl Render for TerminalSurface {
                     .relative()
                     .overflow_hidden()
                     .child(body)
+                    .when_some(app, |this, app| {
+                        this.child(terminal_bounds_tracker(
+                            app,
+                            Some(session_id.clone()),
+                            is_active,
+                        ))
+                    })
                     .when_some(performance_overlay, |this, overlay| {
                         this.child(
                             div()
@@ -2436,8 +2382,7 @@ impl Render for TerminalSurface {
                                     }
                                 }),
                         )
-                    })
-                    .when_some(fab, |this, fab| this.child(fab)),
+                    }),
             )
             .child(scrollbar)
     }

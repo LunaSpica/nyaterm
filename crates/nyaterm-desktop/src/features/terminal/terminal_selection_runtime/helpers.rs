@@ -658,6 +658,29 @@ mod tests {
     }
 
     #[test]
+    fn terminal_surface_bounds_exclude_scrollbar_column() {
+        let outer_width = 610.;
+        let text_width =
+            outer_width - crate::features::terminal_surface::TERMINAL_SCROLLBAR_COLUMN_WIDTH;
+        let bounds = Bounds::new(
+            gpui::point(px(10.), px(20.)),
+            gpui::size(px(text_width), px(400.)),
+        );
+        let content_mask = Bounds::new(
+            gpui::point(px(0.), px(0.)),
+            gpui::size(px(1_280.), px(800.)),
+        );
+
+        assert_eq!(
+            terminal_visible_surface_bounds(bounds, content_mask),
+            Some(Bounds::new(
+                gpui::point(px(10.), px(20.)),
+                gpui::size(px(600.), px(400.))
+            ))
+        );
+    }
+
+    #[test]
     fn terminal_surface_bounds_skip_fully_clipped_surfaces() {
         let bounds = Bounds::new(
             gpui::point(px(10.), px(900.)),
