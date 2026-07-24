@@ -1095,6 +1095,7 @@ fn terminal_ansi_spans_are_plain(ansi_spans: Option<&[nyaterm_terminal::StyledSp
         .all(|span| span.text.is_empty() || span.style == default_style)
 }
 
+#[cfg(test)]
 fn terminal_effective_keyword_rules_key(keyword_rules_key: u64, known_empty: bool) -> u64 {
     if known_empty { 0 } else { keyword_rules_key }
 }
@@ -1286,6 +1287,12 @@ impl Element for NyaTerminalElement {
         } else {
             Arc::new(compile_keyword_rules(self.keyword_rules.as_slice()))
         };
+        let keyword_paint_style_key = self.paint_style_key(keyword_rules_key);
+        let empty_keyword_paint_style_key = if keyword_rules_key == 0 {
+            keyword_paint_style_key
+        } else {
+            self.paint_style_key(0)
+        };
 
         let visual_y_offset = self.visual_y_offset;
         let visible_rows = terminal_visible_rows_for_clipped_bounds(
@@ -1323,9 +1330,11 @@ impl Element for NyaTerminalElement {
                 .is_some_and(|lookup| lookup.is_known_empty());
             let keyword_spans = keyword_lookup.as_ref().and_then(|lookup| lookup.spans());
             let keyword_spans_present = keyword_spans.is_some();
-            let effective_keyword_rules_key =
-                terminal_effective_keyword_rules_key(keyword_rules_key, keyword_result_known_empty);
-            let row_paint_style_key = self.paint_style_key(effective_keyword_rules_key);
+            let row_paint_style_key = if keyword_result_known_empty {
+                empty_keyword_paint_style_key
+            } else {
+                keyword_paint_style_key
+            };
             let default_decorations;
             let decorations = if let Some(decorations) = self.decorations.get(row) {
                 decorations
