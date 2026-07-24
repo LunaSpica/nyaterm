@@ -11,6 +11,7 @@ const WALLPAPER_TILE_MIN_SIZE: f32 = 8.;
 impl NyaTermApp {
     pub(crate) fn start_after_window_open(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.refresh_window_render_inputs(window, cx);
+        self.start_terminal_frame_event_wake(cx);
         self.try_restore_open_tabs(window, cx);
         let should_pump = self.stores.startup_restore.update(cx, |store, _| {
             store.can_pump_queue(self.has_pending_session_start())

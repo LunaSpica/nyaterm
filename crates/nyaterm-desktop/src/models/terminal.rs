@@ -1,3 +1,4 @@
+use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};
 use nyaterm_core::{
     ActionLinksMatcherSettings, TerminalBackendResize, terminal_backend_resize_changed,
 };
@@ -7,7 +8,7 @@ use nyaterm_terminal::{
 };
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::hash::{Hash, Hasher};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicU8, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -1020,6 +1021,7 @@ impl KeywordHighlightEditorField {
 pub(crate) struct TerminalFramePipeline {
     command_tx: TerminalFrameCommandSender,
     event_queue: TerminalFrameEventQueue,
+    event_wake_rx: Arc<Mutex<Option<UnboundedReceiver<()>>>>,
 }
 
 pub(crate) struct TerminalFrameOutputSubmission {
@@ -1050,7 +1052,8 @@ fn terminal_frame_output_commands(
 impl TerminalFramePipeline {
     pub(crate) fn spawn(recording_writer: RecordingWriteHandle) -> Self {
         let (command_tx, command_rx) = terminal_frame_command_channel();
-        let event_queue = TerminalFrameEventQueue::new(TERMINAL_FRAME_EVENT_QUEUE_CAP);
+        let (event_queue, event_wake_rx) =
+            TerminalFrameEventQueue::new_with_wake(TERMINAL_FRAME_EVENT_QUEUE_CAP);
         let event_queue_for_worker = event_queue.clone();
         thread::Builder::new()
             .name("nyaterm-terminal-frame-processor".to_string())
@@ -1061,7 +1064,20 @@ impl TerminalFramePipeline {
         Self {
             command_tx,
             event_queue,
+            event_wake_rx: Arc::new(Mutex::new(Some(event_wake_rx))),
         }
+    }
+
+    pub(crate) fn arm_output_event_wake(&self) {
+        self.event_queue.arm_wake(TERMINAL_FRAME_EVENT_WAKE_OUTPUT);
+    }
+
+    pub(crate) fn take_event_wake_receiver(&self) -> Option<UnboundedReceiver<()>> {
+        self.event_wake_rx.lock().ok()?.take()
+    }
+
+    pub(crate) fn event_wake_count(&self) -> u64 {
+        self.event_queue.wake_count()
     }
 
     pub(crate) fn ensure_session(
@@ -1157,6 +1173,8 @@ impl TerminalFramePipeline {
         action_links_enabled: bool,
         action_link_matchers: ActionLinksMatcherSettings,
     ) {
+        self.event_queue
+            .arm_wake(TERMINAL_FRAME_EVENT_WAKE_SNAPSHOT);
         self.request_snapshot_with_priority(
             session_id,
             offset,
@@ -1309,17 +1327,48 @@ pub(crate) enum TerminalFrameEvent {
 struct TerminalFrameEventQueue {
     inner: Arc<Mutex<VecDeque<TerminalFrameEvent>>>,
     cap: usize,
+    wake_tx: Option<UnboundedSender<()>>,
+    wake_interests: Arc<AtomicU8>,
+    wake_count: Arc<AtomicU64>,
 }
 
+const TERMINAL_FRAME_EVENT_WAKE_OUTPUT: u8 = 1 << 0;
+const TERMINAL_FRAME_EVENT_WAKE_SNAPSHOT: u8 = 1 << 1;
+
 impl TerminalFrameEventQueue {
+    #[cfg(test)]
     fn new(cap: usize) -> Self {
         Self {
             inner: Arc::new(Mutex::new(VecDeque::with_capacity(cap.min(1024)))),
             cap,
+            wake_tx: None,
+            wake_interests: Arc::new(AtomicU8::new(0)),
+            wake_count: Arc::new(AtomicU64::new(0)),
+        }
+    }
+
+    fn new_with_wake(cap: usize) -> (Self, UnboundedReceiver<()>) {
+        let (wake_tx, wake_rx) = unbounded();
+        (
+            Self {
+                inner: Arc::new(Mutex::new(VecDeque::with_capacity(cap.min(1024)))),
+                cap,
+                wake_tx: Some(wake_tx),
+                wake_interests: Arc::new(AtomicU8::new(0)),
+                wake_count: Arc::new(AtomicU64::new(0)),
+            },
+            wake_rx,
+        )
+    }
+
+    fn arm_wake(&self, interest: u8) {
+        if self.wake_tx.is_some() && interest != 0 {
+            self.wake_interests.fetch_or(interest, Ordering::Release);
         }
     }
 
     fn push(&self, mut event: TerminalFrameEvent) {
+        let wake_interest = terminal_frame_event_wake_interest(&event);
         let Ok(mut queue) = self.inner.lock() else {
             return;
         };
@@ -1332,6 +1381,19 @@ impl TerminalFrameEventQueue {
             queue.remove(drop_index);
         }
         queue.push_back(event);
+        drop(queue);
+        if wake_interest != 0
+            && self
+                .wake_interests
+                .fetch_and(!wake_interest, Ordering::AcqRel)
+                & wake_interest
+                != 0
+            && let Some(wake_tx) = &self.wake_tx
+        {
+            if wake_tx.unbounded_send(()).is_ok() {
+                self.wake_count.fetch_add(1, Ordering::Relaxed);
+            }
+        }
     }
 
     #[cfg(test)]
@@ -1359,6 +1421,18 @@ impl TerminalFrameEventQueue {
 
     fn len(&self) -> usize {
         self.inner.lock().map(|queue| queue.len()).unwrap_or(0)
+    }
+
+    fn wake_count(&self) -> u64 {
+        self.wake_count.load(Ordering::Relaxed)
+    }
+}
+
+fn terminal_frame_event_wake_interest(event: &TerminalFrameEvent) -> u8 {
+    match event {
+        TerminalFrameEvent::Output(_) => TERMINAL_FRAME_EVENT_WAKE_OUTPUT,
+        TerminalFrameEvent::Snapshot(_) => TERMINAL_FRAME_EVENT_WAKE_SNAPSHOT,
+        TerminalFrameEvent::Search(_) | TerminalFrameEvent::BufferText(_) => 0,
     }
 }
 
@@ -3584,6 +3658,45 @@ mod tests {
                     && frame.accepted_bytes == 3
         ));
         assert!(queue.try_recv().is_none());
+    }
+
+    #[test]
+    fn terminal_frame_event_queue_wakes_once_after_interest_is_armed() {
+        let (queue, mut wake_rx) = TerminalFrameEventQueue::new_with_wake(8);
+
+        queue.push(TerminalFrameEvent::Output(output_frame_with_sizes(1, 0)));
+        assert!(wake_rx.try_recv().is_err());
+
+        queue.arm_wake(TERMINAL_FRAME_EVENT_WAKE_OUTPUT);
+        queue
+            .clone()
+            .push(TerminalFrameEvent::Output(output_frame_with_sizes(1, 0)));
+        assert!(matches!(wake_rx.try_recv(), Ok(())));
+        assert_eq!(queue.wake_count(), 1);
+
+        queue.push(TerminalFrameEvent::Output(output_frame_with_sizes(1, 0)));
+        assert!(wake_rx.try_recv().is_err());
+        assert_eq!(queue.wake_count(), 1);
+    }
+
+    #[test]
+    fn terminal_frame_event_queue_keeps_snapshot_wake_armed_across_output() {
+        let (queue, mut wake_rx) = TerminalFrameEventQueue::new_with_wake(8);
+        queue.arm_wake(TERMINAL_FRAME_EVENT_WAKE_SNAPSHOT);
+
+        queue.push(TerminalFrameEvent::Output(output_frame_with_sizes(1, 0)));
+        assert!(wake_rx.try_recv().is_err());
+
+        let screen = TerminalScreen::default();
+        queue.push(TerminalFrameEvent::Snapshot(TerminalFrameSnapshotEvent {
+            session_id: "s1".to_string(),
+            offset: 1,
+            snapshot: Arc::new(screen.snapshot()),
+            action_links: None,
+            revision: 1,
+            process_duration: Duration::ZERO,
+        }));
+        assert!(matches!(wake_rx.try_recv(), Ok(())));
     }
 
     #[test]

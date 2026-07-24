@@ -1,4 +1,5 @@
 use super::*;
+use futures::StreamExt;
 
 #[path = "event_pump/bridge.rs"]
 mod bridge;
@@ -24,6 +25,25 @@ const TERMINAL_INPUT_WAKE_INTERVALS: [Duration; 3] = [
 ];
 
 impl NyaTermApp {
+    pub(in crate::features) fn start_terminal_frame_event_wake(&mut self, cx: &mut Context<Self>) {
+        let Some(mut wake_rx) = self.terminal_frame_pipeline.take_event_wake_receiver() else {
+            return;
+        };
+        cx.spawn(async move |this, cx| {
+            while wake_rx.next().await.is_some() {
+                if this
+                    .update(cx, |this, cx| {
+                        this.drain_terminal_frame_event_wake(cx);
+                    })
+                    .is_err()
+                {
+                    break;
+                }
+            }
+        })
+        .detach();
+    }
+
     pub(in crate::features) fn refresh_window_render_inputs(
         &mut self,
         window: &mut Window,
@@ -114,6 +134,15 @@ impl NyaTermApp {
     fn drain_terminal_input_wake(&mut self, cx: &mut Context<Self>) {
         let chrome_dirty = self.drain_session_events_for_input_wake(cx)
             | self.drain_terminal_frame_events_for_input_wake(cx);
+        if chrome_dirty {
+            cx.notify();
+            self.terminal_runtime.last_ui_notify_at = Some(Instant::now());
+            self.terminal_runtime.pending_ui_notify = false;
+        }
+    }
+
+    fn drain_terminal_frame_event_wake(&mut self, cx: &mut Context<Self>) {
+        let chrome_dirty = self.drain_terminal_frame_events(cx);
         if chrome_dirty {
             cx.notify();
             self.terminal_runtime.last_ui_notify_at = Some(Instant::now());

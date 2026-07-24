@@ -4248,6 +4248,7 @@ dependencies = [
  "anyhow",
  "dirs 6.0.0",
  "encoding_rs",
+ "futures",
  "gpui",
  "hex",
  "image",

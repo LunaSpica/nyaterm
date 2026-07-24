@@ -753,6 +753,7 @@ impl NyaTermApp {
             terminal_wire_write_disposition(TerminalWireWriteKind::LogicalInput)
                 .allow_command_history
         );
+        self.terminal_frame_pipeline.arm_output_event_wake();
         // Primary + sync peers share write/record/history so recording and per-session
         // command history stay consistent. Resolve history once after all writes so a
         // pending Enter submission is applied to every successful peer.
@@ -878,6 +879,7 @@ impl NyaTermApp {
             terminal_wire_write_disposition(TerminalWireWriteKind::LogicalInput)
                 .allow_command_history
         );
+        self.terminal_frame_pipeline.arm_output_event_wake();
         let byte_count = primary_bytes.len();
         let peers = self.sync_peer_session_ids(&session_id);
         let mut ok_sessions = Vec::new();
@@ -1574,6 +1576,7 @@ impl NyaTermApp {
             }
             return false;
         }
+        self.terminal_frame_pipeline.arm_output_event_wake();
         let sent = match self.write_session_input_recorded(&session_id, &bytes) {
             Ok(()) => {
                 self.record_command_history_from_bytes(Some(&session_id), &bytes);
@@ -1612,6 +1615,7 @@ impl NyaTermApp {
             }
             return false;
         }
+        self.terminal_frame_pipeline.arm_output_event_wake();
         let sent = match self.write_session_raw_input_recorded(&session_id, &bytes) {
             Ok(()) => {
                 let terminal_status_changed =
