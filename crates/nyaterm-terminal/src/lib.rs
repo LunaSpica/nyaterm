@@ -1021,7 +1021,10 @@ fn snapshot_window_from_term(
         .saturating_add(viewport_rows)
         .saturating_add(newer_rows);
     let display_offset = requested_offset;
-    let mut row_cells = vec![Vec::<RenderCell>::with_capacity(cols); rows];
+    let mut cells = Vec::<RenderCell>::with_capacity(rows.saturating_mul(cols));
+    let mut lines = Vec::with_capacity(rows);
+    let mut styled_lines = Vec::with_capacity(rows);
+    let mut hyperlink_lines = Vec::with_capacity(rows);
     let mut line_signatures = vec![0; rows];
     let mut line_timestamps_ms = vec![None; rows];
     let mut line_wrapped = vec![false; rows];
@@ -1031,58 +1034,48 @@ fn snapshot_window_from_term(
     let bottommost = term.bottommost_line();
     for row in 0..rows {
         let line = Line(row as i32 - requested_offset as i32 - older_rows as i32);
-        if line < topmost || line > bottommost {
-            continue;
-        }
-        line_signatures[row] = line_signatures_by_line
-            .get(&line.0)
-            .copied()
-            .unwrap_or_else(|| line_signature(term, line, cols));
-        line_timestamps_ms[row] = line_timestamps_by_line.get(&line.0).copied();
-        command_marks[row] = command_marks_by_line.get(&line.0).copied();
-        let previous_line = Line(line.0 - 1);
-        line_wrapped[row] = cols > 0
-            && previous_line >= topmost
-            && term.grid()[previous_line][Column(cols - 1)]
-                .flags
-                .contains(Flags::WRAPLINE);
-        for col in 0..cols {
-            let cell = &term.grid()[line][Column(col)];
-            let text = cell_text(cell);
-            row_cells[row].push(RenderCell {
-                text,
-                style: cell_style(cell),
-                width: render_cell_width(cell),
-                hyperlink: cell.hyperlink().map(|link| link.uri().to_string()),
-            });
-        }
-    }
-
-    for row in &mut row_cells {
-        while row.len() < cols {
-            row.push(RenderCell {
+        if line >= topmost && line <= bottommost {
+            line_signatures[row] = line_signatures_by_line
+                .get(&line.0)
+                .copied()
+                .unwrap_or_else(|| line_signature(term, line, cols));
+            line_timestamps_ms[row] = line_timestamps_by_line.get(&line.0).copied();
+            command_marks[row] = command_marks_by_line.get(&line.0).copied();
+            let previous_line = Line(line.0 - 1);
+            line_wrapped[row] = cols > 0
+                && previous_line >= topmost
+                && term.grid()[previous_line][Column(cols - 1)]
+                    .flags
+                    .contains(Flags::WRAPLINE);
+            for col in 0..cols {
+                let cell = &term.grid()[line][Column(col)];
+                cells.push(RenderCell {
+                    text: cell_text(cell),
+                    style: cell_style(cell),
+                    width: render_cell_width(cell),
+                    hyperlink: cell.hyperlink().map(|link| link.uri().to_string()),
+                });
+            }
+        } else {
+            cells.extend((0..cols).map(|_| RenderCell {
                 text: String::new(),
                 style: CellStyle::default(),
                 width: 1,
                 hyperlink: None,
-            });
+            }));
         }
-        if row.len() > cols {
-            row.truncate(cols);
-        }
-    }
 
-    let mut lines = Vec::with_capacity(rows);
-    let mut styled_lines = Vec::with_capacity(rows);
-    let mut hyperlink_lines = Vec::with_capacity(rows);
-    for row in &row_cells {
+        let row_start = row.saturating_mul(cols);
+        let row_cells = &cells[row_start..row_start.saturating_add(cols)];
         let mut line = String::with_capacity(cols);
-        for cell in row {
+        for cell in row_cells {
             push_render_cell_text(&mut line, cell);
         }
-        lines.push(line.trim_end().to_string());
-        styled_lines.push(compress_render_row(row));
-        hyperlink_lines.push(compress_render_hyperlinks(row));
+        let trimmed_len = line.trim_end().len();
+        line.truncate(trimmed_len);
+        lines.push(line);
+        styled_lines.push(compress_render_row(row_cells));
+        hyperlink_lines.push(compress_render_hyperlinks(row_cells));
     }
 
     let cursor_point = content.cursor.point;
@@ -1104,7 +1097,6 @@ fn snapshot_window_from_term(
         .selection_to_string()
         .filter(|text| !text.is_empty())
         .map(|text| SelectionSnapshot { text });
-    let cells = row_cells.into_iter().flatten().collect::<Vec<_>>();
     let scrollback_len = if content.mode.contains(TermMode::ALT_SCREEN) {
         0
     } else {
