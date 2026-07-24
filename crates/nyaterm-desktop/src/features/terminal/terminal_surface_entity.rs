@@ -345,6 +345,28 @@ impl TerminalSurface {
         )
     }
 
+    pub(in crate::features) fn retain_prefetched_snapshot(
+        &mut self,
+        snapshot: Arc<TerminalSnapshot>,
+    ) -> bool {
+        if snapshot.rows == 0
+            || self.snapshot.as_ref().is_some_and(|current| {
+                current.cols != snapshot.cols
+                    || current.viewport_rows != snapshot.viewport_rows
+                    || snapshot.scrollback_len < self.scrollback_len
+            })
+            || self
+                .retained_snapshots
+                .iter()
+                .any(|retained| Arc::ptr_eq(retained, &snapshot))
+        {
+            return false;
+        }
+        self.remember_retained_snapshot(snapshot);
+        self.prune_pending_scroll_snapshot_offsets();
+        true
+    }
+
     pub(in crate::features) fn set_app(&mut self, app: Entity<NyaTermApp>) {
         self.app = Some(app);
     }
@@ -3976,6 +3998,63 @@ mod tests {
             surface.snapshot.as_ref().unwrap(),
             &first_snapshot
         ));
+    }
+
+    #[test]
+    fn prefetched_snapshot_is_retained_without_changing_current_paint() {
+        let mut screen = TerminalScreen::default();
+        screen.advance_decoded_text(&terminal_test_output_lines(160));
+        let live_snapshot = Arc::new(screen.viewport_snapshot(0));
+        let viewport_rows = live_snapshot.viewport_rows.max(1);
+        let scrollback_len = live_snapshot.scrollback_len;
+        let prefetch_offset = viewport_rows.saturating_mul(2).min(scrollback_len);
+        let prefetched_snapshot = Arc::new(screen.viewport_snapshot_with_window(
+            prefetch_offset,
+            viewport_rows.saturating_mul(2),
+            viewport_rows.saturating_mul(2),
+        ));
+        let mut surface = TerminalSurface::new("session");
+
+        surface.apply_frame_snapshot(
+            live_snapshot.clone(),
+            0,
+            0.0,
+            0,
+            scrollback_len,
+            viewport_rows,
+            false,
+            None,
+            0,
+            false,
+            true,
+            "block",
+        );
+        let revision = surface.revision;
+
+        assert!(surface.retain_prefetched_snapshot(prefetched_snapshot.clone()));
+        assert_eq!(surface.revision, revision);
+        assert_eq!(surface.display_offset, 0);
+        assert!(Arc::ptr_eq(
+            surface.snapshot.as_ref().unwrap(),
+            &live_snapshot
+        ));
+        assert!(surface.has_snapshot_covering_display_offset(
+            prefetch_offset,
+            viewport_rows,
+            scrollback_len
+        ));
+
+        let mut refreshed_prefetch = prefetched_snapshot.as_ref().clone();
+        refreshed_prefetch.lines[0] = "refreshed".to_string();
+        assert!(surface.retain_prefetched_snapshot(Arc::new(refreshed_prefetch)));
+        assert_eq!(
+            surface
+                .retained_snapshots
+                .last()
+                .and_then(|snapshot| snapshot.lines.first())
+                .map(String::as_str),
+            Some("refreshed")
+        );
     }
 
     #[test]

@@ -817,7 +817,7 @@ impl NyaTermApp {
     fn apply_terminal_snapshot_frame(
         &mut self,
         frame: TerminalFrameSnapshotEvent,
-        _cx: &mut Context<Self>,
+        cx: &mut Context<Self>,
     ) -> TerminalFrameApplyResult {
         let current_revision = {
             let Some(view) = self.terminal_views.get_mut(&frame.session_id) else {
@@ -903,6 +903,15 @@ impl NyaTermApp {
                         view.viewport_rows_for_ui(),
                     )
                 });
+        if !should_paint
+            && self.terminal_session_has_visible_surface(&frame.session_id)
+            && let Some(surface) = self.terminal_surfaces.get(&frame.session_id).cloned()
+        {
+            let snapshot = frame.snapshot.clone();
+            surface.update(cx, |surface, _cx| {
+                surface.retain_prefetched_snapshot(snapshot);
+            });
+        }
         let should_request_scroll_enrichment = should_paint
             && frame.offset > 0
             && current_action_link_matcher_key.is_some_and(|matcher_key| {
