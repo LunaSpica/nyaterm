@@ -56,20 +56,29 @@ struct TerminalSurfaceLocalScrollResult {
 struct TerminalKeywordHighlightRequestKey {
     rules_key: u64,
     display_offset: usize,
-    row_count: usize,
+    row_start: usize,
+    row_end: usize,
     line_signatures_key: u64,
 }
 
 fn terminal_keyword_highlight_request_key(
     snapshot: &TerminalSnapshot,
     rules_key: u64,
+    rows: Range<usize>,
 ) -> TerminalKeywordHighlightRequestKey {
+    let row_start = rows.start.min(snapshot.rows);
+    let row_end = rows.end.min(snapshot.rows).max(row_start);
     let mut hasher = DefaultHasher::new();
-    snapshot.line_signatures.hash(&mut hasher);
+    snapshot
+        .line_signatures
+        .get(row_start..row_end)
+        .unwrap_or_default()
+        .hash(&mut hasher);
     TerminalKeywordHighlightRequestKey {
         rules_key,
         display_offset: snapshot.display_offset,
-        row_count: snapshot.rows,
+        row_start,
+        row_end,
         line_signatures_key: hasher.finish(),
     }
 }
@@ -1232,15 +1241,29 @@ impl TerminalSurface {
         let Some(snapshot) = self.snapshot.clone() else {
             return;
         };
+        let requested_rows = terminal_keyword_highlight_visible_rows(
+            snapshot.as_ref(),
+            self.display_offset,
+            self.viewport_rows,
+            self.scrollback_len,
+        );
         let rules = self.keyword_rules.clone();
         let rules_key = terminal_keyword_rules_key(rules.as_slice());
-        let request_key = terminal_keyword_highlight_request_key(snapshot.as_ref(), rules_key);
+        let request_key = terminal_keyword_highlight_request_key(
+            snapshot.as_ref(),
+            rules_key,
+            requested_rows.clone(),
+        );
         if self.keyword_highlight_pending_key == Some(request_key) {
             return;
         }
         if self.keyword_highlights.as_ref().is_some_and(|highlights| {
             highlights.rules_key() == rules_key
-                && highlights.matches_snapshot(snapshot.as_ref(), self.palette)
+                && highlights.matches_snapshot_rows(
+                    snapshot.as_ref(),
+                    self.palette,
+                    requested_rows.clone(),
+                )
         }) {
             if self.keyword_highlight_task.is_none() {
                 self.keyword_highlight_pending_key = None;
@@ -1267,11 +1290,12 @@ impl TerminalSurface {
                     let highlighter = highlighter.unwrap_or_else(|| {
                         Arc::new(compile_terminal_keyword_highlighter(rules.as_ref()))
                     });
-                    let highlights = precompute_terminal_keyword_highlights(
+                    let highlights = precompute_terminal_keyword_highlights_for_rows(
                         snapshot.as_ref(),
                         highlighter.as_ref(),
                         palette,
                         previous_highlights.as_deref(),
+                        requested_rows,
                     );
                     (rules, highlighter, highlights)
                 })
@@ -2033,6 +2057,27 @@ pub(in crate::features) fn terminal_snapshot_anchor_row_for_display_offset(
         .unwrap_or(0)
 }
 
+fn terminal_keyword_highlight_visible_rows(
+    snapshot: &TerminalSnapshot,
+    display_offset: usize,
+    viewport_rows: usize,
+    scrollback_len: usize,
+) -> Range<usize> {
+    let anchor = terminal_snapshot_anchor_row_for_display_offset(
+        snapshot,
+        display_offset,
+        viewport_rows,
+        scrollback_len,
+    );
+    let start = anchor.saturating_sub(1).min(snapshot.rows);
+    let end = anchor
+        .saturating_add(viewport_rows.max(1))
+        .saturating_add(1)
+        .min(snapshot.rows)
+        .max(start);
+    start..end
+}
+
 fn hidden_terminal_cursor_snapshot() -> nyaterm_terminal::CursorSnapshot {
     nyaterm_terminal::CursorSnapshot {
         row: usize::MAX,
@@ -2614,29 +2659,86 @@ mod tests {
             enabled: true,
         }];
         let rules_key = terminal_keyword_rules_key(&rules);
-        let key = terminal_keyword_highlight_request_key(&snapshot, rules_key);
+        let rows = 0..snapshot.rows;
+        let key = terminal_keyword_highlight_request_key(&snapshot, rules_key, rows.clone());
 
         assert_eq!(
             key,
-            terminal_keyword_highlight_request_key(&snapshot, rules_key)
+            terminal_keyword_highlight_request_key(&snapshot, rules_key, rows.clone())
         );
         assert_ne!(
             key,
-            terminal_keyword_highlight_request_key(&snapshot, rules_key.saturating_add(1))
+            terminal_keyword_highlight_request_key(
+                &snapshot,
+                rules_key.saturating_add(1),
+                rows.clone(),
+            )
+        );
+        assert_ne!(
+            key,
+            terminal_keyword_highlight_request_key(&snapshot, rules_key, 1..snapshot.rows)
         );
 
         let mut scrolled_snapshot = snapshot.clone();
         scrolled_snapshot.display_offset = scrolled_snapshot.display_offset.saturating_add(1);
         assert_ne!(
             key,
-            terminal_keyword_highlight_request_key(&scrolled_snapshot, rules_key)
+            terminal_keyword_highlight_request_key(&scrolled_snapshot, rules_key, rows.clone())
         );
 
         let mut edited_snapshot = snapshot.clone();
         edited_snapshot.line_signatures[0] = edited_snapshot.line_signatures[0].wrapping_add(1);
         assert_ne!(
             key,
-            terminal_keyword_highlight_request_key(&edited_snapshot, rules_key)
+            terminal_keyword_highlight_request_key(&edited_snapshot, rules_key, rows)
+        );
+
+        let visible_rows = 0..1;
+        let visible_key =
+            terminal_keyword_highlight_request_key(&snapshot, rules_key, visible_rows.clone());
+        let mut edited_outside_visible_rows = snapshot.clone();
+        edited_outside_visible_rows.line_signatures[1] =
+            edited_outside_visible_rows.line_signatures[1].wrapping_add(1);
+        assert_eq!(
+            visible_key,
+            terminal_keyword_highlight_request_key(
+                &edited_outside_visible_rows,
+                rules_key,
+                visible_rows,
+            )
+        );
+    }
+
+    #[test]
+    fn keyword_highlight_visible_rows_bound_retained_scroll_work() {
+        let mut screen = TerminalScreen::new(80, 24);
+        screen.advance_decoded_text(&terminal_test_output_lines(240));
+        let snapshot = screen.viewport_snapshot_with_window(80, 64, 64);
+        let viewport_rows = snapshot.viewport_rows;
+        let rows = terminal_keyword_highlight_visible_rows(
+            &snapshot,
+            80,
+            viewport_rows,
+            snapshot.scrollback_len,
+        );
+        let anchor = terminal_snapshot_anchor_row_for_display_offset(
+            &snapshot,
+            80,
+            viewport_rows,
+            snapshot.scrollback_len,
+        );
+
+        assert!(rows.contains(&anchor));
+        assert!(rows.len() <= viewport_rows.saturating_add(2));
+        assert!(snapshot.rows > rows.len());
+        assert_ne!(
+            rows,
+            terminal_keyword_highlight_visible_rows(
+                &snapshot,
+                81,
+                viewport_rows,
+                snapshot.scrollback_len,
+            )
         );
     }
 
@@ -2660,8 +2762,11 @@ mod tests {
             nyaterm_ui::theme_palette("github-dark"),
             None,
         ));
-        let pending_key =
-            terminal_keyword_highlight_request_key(&snapshot, terminal_keyword_rules_key(&rules));
+        let pending_key = terminal_keyword_highlight_request_key(
+            &snapshot,
+            terminal_keyword_rules_key(&rules),
+            0..snapshot.rows,
+        );
         let mut surface = TerminalSurface::new("session");
         surface.keyword_highlight_generation = 41;
         surface.keyword_highlight_pending_key = Some(pending_key);
@@ -2690,7 +2795,8 @@ mod tests {
         let pending_key = TerminalKeywordHighlightRequestKey {
             rules_key: 7,
             display_offset: 0,
-            row_count: 1,
+            row_start: 0,
+            row_end: 1,
             line_signatures_key: 9,
         };
         surface.keyword_rules = Arc::new(Vec::new());
@@ -2718,7 +2824,8 @@ mod tests {
         let pending_key = TerminalKeywordHighlightRequestKey {
             rules_key: 7,
             display_offset: 0,
-            row_count: 1,
+            row_start: 0,
+            row_end: 1,
             line_signatures_key: 9,
         };
         surface.keyword_rules = Arc::new(Vec::new());

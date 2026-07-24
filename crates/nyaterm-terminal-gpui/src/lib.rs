@@ -43,6 +43,7 @@ pub use keywords::terminal_buffer_matches;
 pub use keywords::{
     TerminalKeywordHighlightSnapshot, TerminalKeywordHighlighter,
     compile_terminal_keyword_highlighter, precompute_terminal_keyword_highlights,
+    precompute_terminal_keyword_highlights_for_rows,
 };
 
 #[cfg(test)]

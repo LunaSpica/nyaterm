@@ -140,8 +140,8 @@ pub(super) use crate::terminal::{
     NyaTerminalElement, NyaTerminalLayoutCache, TerminalBufferMatch, TerminalKeyMode,
     TerminalKeywordHighlightSnapshot, TerminalKeywordHighlighter, TerminalLineDecorations,
     TerminalTextCell, compile_terminal_keyword_highlighter, initial_terminal_screen,
-    precompute_terminal_keyword_highlights, terminal_byte_index_for_cell_col,
-    terminal_is_zero_width_mark, terminal_key_bytes_with_mode,
+    precompute_terminal_keyword_highlights, precompute_terminal_keyword_highlights_for_rows,
+    terminal_byte_index_for_cell_col, terminal_is_zero_width_mark, terminal_key_bytes_with_mode,
     terminal_key_release_bytes_with_mode, terminal_keyword_rules_key, terminal_text_cell_slice,
     terminal_text_cells,
 };
