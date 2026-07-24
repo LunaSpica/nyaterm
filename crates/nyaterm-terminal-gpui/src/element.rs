@@ -689,6 +689,57 @@ mod layout_cache_tests {
     }
 
     #[test]
+    fn precomputed_keyword_match_does_not_reuse_plain_pending_row() {
+        let mut snapshot = TerminalScreen::default().snapshot();
+        snapshot.lines[0] = "ERROR".to_string();
+        snapshot.styled_lines[0] = vec![nyaterm_terminal::StyledSpan {
+            text: "ERROR".to_string(),
+            style: nyaterm_terminal::CellStyle::default(),
+        }];
+        snapshot.line_signatures[0] = 7;
+        let rules = vec![ResolvedKeywordHighlightRule {
+            id: "errors".to_string(),
+            name: "Errors".to_string(),
+            patterns: vec!["ERROR".to_string()],
+            color: "#ff0000".to_string(),
+            enabled: true,
+        }];
+        let highlighter = compile_terminal_keyword_highlighter(&rules);
+        let palette = nyaterm_ui::theme_palette("github-dark");
+        let highlights = Arc::new(precompute_terminal_keyword_highlights(
+            &snapshot,
+            &highlighter,
+            palette,
+            None,
+        ));
+        let element = NyaTerminalElement::new(
+            Arc::new(snapshot),
+            Arc::new(Vec::new()),
+            Vec::new(),
+            false,
+            "block",
+            8.0,
+            16.0,
+            palette,
+            "monospace".to_string(),
+            14.0,
+            400.0,
+            700.0,
+        )
+        .with_keyword_highlights(highlights.clone());
+        let keyword_paint_style_key = element.paint_style_key(highlights.rules_key());
+        let empty_keyword_paint_style_key = element.paint_style_key(0);
+
+        let (_, pending_key) = element.row_layout_cache_keys(
+            0,
+            keyword_paint_style_key,
+            empty_keyword_paint_style_key,
+        );
+
+        assert!(pending_key.is_none());
+    }
+
+    #[test]
     fn row_layout_key_ignores_keyword_rules_for_known_empty_keyword_rows() {
         let mut snapshot = TerminalScreen::default().snapshot();
         snapshot.lines[0] = "plain".to_string();
@@ -1226,8 +1277,9 @@ impl NyaTerminalElement {
             )
         };
         let row_key = row_layout_key(paint_style_key, keyword_spans_present);
-        let pending_keyword_row_key = keyword_lookup
-            .is_some()
+        let pending_keyword_row_is_equivalent = keyword_lookup.is_some()
+            && (keyword_result_known_empty || !self.keyword_rules.is_empty());
+        let pending_keyword_row_key = pending_keyword_row_is_equivalent
             .then(|| row_layout_key(keyword_paint_style_key, false))
             .filter(|pending_key| *pending_key != row_key);
         (row_key, pending_keyword_row_key)
@@ -1653,11 +1705,12 @@ impl Element for NyaTerminalElement {
                 )
             };
             let row_key = row_layout_key(row_paint_style_key, keyword_spans_present);
-            // Pending keyword rows are synchronously highlighted to keep paint stable.
-            // Once the background result arrives, its deterministic output is identical;
-            // promote that pending layout under the parsed key instead of shaping again.
-            let pending_keyword_row_key = keyword_lookup
-                .is_some()
+            // Reuse a pending row only when its paint is equivalent to the parsed result.
+            // TerminalSurface intentionally omits synchronous rules, so a matching result
+            // there must rebuild instead of promoting the cached plain row as highlighted.
+            let pending_keyword_row_is_equivalent = keyword_lookup.is_some()
+                && (keyword_result_known_empty || !self.keyword_rules.is_empty());
+            let pending_keyword_row_key = pending_keyword_row_is_equivalent
                 .then(|| row_layout_key(keyword_paint_style_key, false))
                 .filter(|pending_key| *pending_key != row_key);
             let build_row = |window: &mut Window| {
