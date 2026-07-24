@@ -2335,20 +2335,18 @@ impl Render for TerminalSurface {
             let line_number_digits = terminal_line_number_digits(snapshot.as_ref());
             let ts_w = gutter_metrics.timestamp_width;
             let ln_w = gutter_metrics.line_number_width;
+            let gutter_viewport_width = (gutter_metrics.total_width() - 10.0).max(1.0);
             let abs_start = snapshot
                 .total_rows
                 .saturating_sub(snapshot.display_offset)
                 .saturating_sub(snapshot.rows);
             let gutter_y_offset = visual_y_offset + visible_gutter_rows.start as f32 * cell_h;
-            let mut gutter = div()
-                .relative()
+            let mut gutter_rows = div()
+                .absolute()
+                .left_0()
                 .top(px(gutter_y_offset))
                 .flex()
-                .flex_col()
-                .flex_none()
-                .mr(px(10.))
-                .border_r_1()
-                .border_color(rgb(palette.border));
+                .flex_col();
             for line_index in visible_gutter_rows {
                 let is_wrapped = snapshot
                     .line_wrapped
@@ -2383,7 +2381,7 @@ impl Render for TerminalSurface {
                 } else {
                     String::new()
                 };
-                gutter = gutter.child(
+                gutter_rows = gutter_rows.child(
                     div()
                         .flex()
                         .flex_row()
@@ -2403,7 +2401,19 @@ impl Render for TerminalSurface {
                         }),
                 );
             }
-            Some(gutter)
+            Some(
+                div()
+                    .relative()
+                    .h_full()
+                    .min_h_0()
+                    .w(px(gutter_viewport_width))
+                    .flex_none()
+                    .mr(px(10.))
+                    .overflow_hidden()
+                    .border_r_1()
+                    .border_color(rgb(palette.border))
+                    .child(gutter_rows),
+            )
         } else {
             None
         };
