@@ -761,6 +761,38 @@ mod tests {
         );
     }
 
+    #[test]
+    fn collapsed_groups_omit_every_descendant_from_flat_rows() {
+        let groups = vec![
+            group("parent", "Parent", None, 0),
+            group("child", "Child", Some("parent"), 0),
+        ];
+        let connections = vec![
+            connection("parent-conn", "Parent Conn", Some("parent"), 0),
+            connection("child-conn", "Child Conn", Some("child"), 0),
+            connection("root-conn", "Root Conn", None, 0),
+        ];
+        let sections = connection_sections(
+            &connections,
+            &groups,
+            "",
+            crate::models::ConnectionSortMode::Default,
+        );
+        let rows = flatten_connection_rows(&sections, &HashSet::new());
+
+        assert_eq!(rows.len(), 3);
+        assert!(matches!(
+            rows.first(),
+            Some(ConnectionListRow::GroupHeader(section)) if section.label == "Parent"
+        ));
+        assert!(matches!(rows.get(1), Some(ConnectionListRow::Separator)));
+        assert!(matches!(
+            rows.get(2),
+            Some(ConnectionListRow::Connection { connection, depth: 0 })
+                if connection.id == "root-conn"
+        ));
+    }
+
     fn group(id: &str, name: &str, parent_id: Option<&str>, sort_order: i32) -> Group {
         Group {
             id: id.to_string(),

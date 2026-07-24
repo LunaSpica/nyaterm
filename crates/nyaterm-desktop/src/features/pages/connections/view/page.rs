@@ -1,4 +1,7 @@
 use super::*;
+use gpui::uniform_list;
+
+const CONNECTION_LIST_ROW_HEIGHT_PX: f32 = 34.;
 
 impl NyaTermApp {
     pub(in crate::features) fn connections_view(
@@ -23,7 +26,8 @@ impl NyaTermApp {
         let no_results_label = self.tr("savedConnections.noResults");
         let empty_group_label = self.tr("savedConnections.emptyGroup");
 
-        // Tauri renders the saved-connection tree in a real scroll container.
+        // Keep the flattened model cheap to rebuild, then let GPUI instantiate only
+        // the rows intersecting the scroll viewport.
         let flat_rows = flatten_connection_rows(&sections, &self.expanded_connection_groups);
         let palette = self.theme_palette();
 
@@ -31,7 +35,6 @@ impl NyaTermApp {
             .id(SharedString::from("connections-list-scroll"))
             .flex_1()
             .min_h_0()
-            .overflow_y_scroll()
             .p(px(6.))
             .flex()
             .flex_col()
@@ -88,33 +91,56 @@ impl NyaTermApp {
                     .child(no_results_label),
             );
         } else {
-            let mut rows = div().flex().flex_col();
-            for row in flat_rows {
-                match row {
-                    ConnectionListRow::Separator => {
-                        rows = rows.child(div().mx_2().my_1().h(px(1.)).bg(rgb(palette.border)));
-                    }
-                    ConnectionListRow::GroupHeader(section) => {
-                        rows = rows.child(self.connection_section(section, true, cx));
-                    }
-                    ConnectionListRow::EmptyGroup { depth } => {
-                        rows = rows.child(
-                            div()
-                                .px_2()
-                                .py_1()
-                                .pl(px(connection_tree_indent_px(depth)))
-                                .h(px(28.))
-                                .text_size(px(11.))
-                                .text_color(rgb(palette.text_dimmed))
-                                .child(empty_group_label),
-                        );
-                    }
-                    ConnectionListRow::Connection { connection, depth } => {
-                        rows = rows.child(self.saved_connection_row(connection, depth, cx));
-                    }
-                }
-            }
-            list = list.child(rows);
+            let row_count = flat_rows.len();
+            list = list.child(
+                uniform_list(
+                    "connections-list-rows",
+                    row_count,
+                    cx.processor(move |this, range: std::ops::Range<usize>, _, cx| {
+                        let mut items = Vec::with_capacity(range.len());
+                        for index in range {
+                            let Some(row) = flat_rows.get(index).cloned() else {
+                                continue;
+                            };
+                            let item = div()
+                                .h(px(CONNECTION_LIST_ROW_HEIGHT_PX))
+                                .w_full()
+                                .flex_none()
+                                .flex()
+                                .items_center();
+                            items.push(match row {
+                                ConnectionListRow::Separator => item
+                                    .child(div().mx_2().h(px(1.)).w_full().bg(rgb(palette.border))),
+                                ConnectionListRow::GroupHeader(section) => item.child(
+                                    div()
+                                        .w_full()
+                                        .child(this.connection_section(section, true, cx)),
+                                ),
+                                ConnectionListRow::EmptyGroup { depth } => item.child(
+                                    div()
+                                        .w_full()
+                                        .px_2()
+                                        .pl(px(connection_tree_indent_px(depth)))
+                                        .h(px(28.))
+                                        .flex()
+                                        .items_center()
+                                        .text_size(px(11.))
+                                        .text_color(rgb(palette.text_dimmed))
+                                        .child(empty_group_label),
+                                ),
+                                ConnectionListRow::Connection { connection, depth } => item.child(
+                                    div()
+                                        .w_full()
+                                        .child(this.saved_connection_row(connection, depth, cx)),
+                                ),
+                            });
+                        }
+                        items
+                    }),
+                )
+                .flex_1()
+                .min_h_0(),
+            );
         }
 
         // Tauri: PanelHeader (shared stack) + search/action strip + flat tree list.
