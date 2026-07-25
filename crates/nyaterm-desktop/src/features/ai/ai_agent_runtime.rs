@@ -1,5 +1,6 @@
 use super::*;
 
+use nyaterm_core::AgentCapturedOutput;
 use nyaterm_transport::run_local_command;
 
 impl NyaTermApp {

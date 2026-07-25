@@ -1,5 +1,7 @@
 use super::*;
 
+use nyaterm_core::{DiagnosticsExportOptions, DiagnosticsRuntimeSnapshot};
+
 impl NyaTermApp {
     pub(in crate::features) fn lock_app(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.is_locked = true;

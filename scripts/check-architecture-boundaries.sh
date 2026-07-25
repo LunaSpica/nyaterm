@@ -118,7 +118,7 @@ check_no_matches \
 
 check_no_matches \
   "low-frequency core helpers must stay out of features/prelude.rs" \
-  '(^|[,{[:space:]])(KeywordHighlightRule|SearchEngineConfig|TerminalMouseReportEligibility|TerminalResizeGeometry|TerminalViewportInsets|terminal_mouse_report_should_send|terminal_resize_geometry_for_size_with_insets|terminal_resize_geometry_for_size_with_insets_and_scale|terminal_snapped_cell_height)([},[:space:]]|$)' \
+  '(^|[,{[:space:]])(AgentApprovalDecision|AgentCapturedOutput|AiChatStreamDelta|CloudSyncResult|DiagnosticsExportOptions|DiagnosticsRuntimeSnapshot|KeywordHighlightRule|SearchEngineConfig|TerminalMouseReportEligibility|TerminalResizeGeometry|TerminalViewportInsets|terminal_mouse_report_should_send|terminal_resize_geometry_for_size_with_insets|terminal_resize_geometry_for_size_with_insets_and_scale|terminal_snapped_cell_height)([},[:space:]]|$)' \
   crates/nyaterm-desktop/src/features/prelude.rs
 
 # Keep the terminal GPUI crate root's public surface explicit. These modules

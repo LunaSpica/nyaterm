@@ -1,5 +1,7 @@
 use super::*;
 
+use nyaterm_core::{AgentApprovalDecision, AiChatStreamDelta};
+
 pub(in crate::features) fn is_agent_command_card(card: &AiCommandCard) -> bool {
     card.id.starts_with("agent-")
         || card

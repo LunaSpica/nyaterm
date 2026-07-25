@@ -1,5 +1,7 @@
 use super::*;
 
+use nyaterm_core::CloudSyncResult;
+
 pub(in crate::features) fn test_provider_connection(
     settings: &CloudSyncSettings,
 ) -> Result<(), CloudSyncError> {
