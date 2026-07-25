@@ -58,6 +58,8 @@ pub(crate) const TERMINAL_RENDER_DEGRADATION_RECOVERY_TICKS: u8 = 8;
 #[derive(Debug, Clone, Default)]
 pub(crate) struct TerminalFrameActionLinks {
     pub(crate) matcher_key: u64,
+    pub(crate) absolute_start_row: usize,
+    pub(crate) absolute_end_row: usize,
     pub(crate) matches_by_line: Vec<Vec<ActionLinkMatch>>,
     pub(crate) cell_ranges_by_line: Vec<Vec<(usize, usize)>>,
 }
@@ -335,9 +337,13 @@ fn prepare_terminal_frame_action_links(
     enabled: bool,
     matchers: &ActionLinksMatcherSettings,
 ) -> Option<TerminalFrameActionLinks> {
+    let absolute_end_row = snapshot.total_rows.saturating_sub(snapshot.display_offset);
+    let absolute_start_row = absolute_end_row.saturating_sub(snapshot.row_count());
     if !enabled {
         return Some(TerminalFrameActionLinks {
             matcher_key: terminal_action_link_matcher_key(false, matchers),
+            absolute_start_row,
+            absolute_end_row,
             matches_by_line: vec![Vec::new(); snapshot.row_count()],
             cell_ranges_by_line: vec![Vec::new(); snapshot.row_count()],
         });
@@ -373,6 +379,8 @@ fn prepare_terminal_frame_action_links(
         .collect();
     Some(TerminalFrameActionLinks {
         matcher_key: terminal_action_link_matcher_key(true, matchers),
+        absolute_start_row,
+        absolute_end_row,
         matches_by_line,
         cell_ranges_by_line,
     })
@@ -3162,6 +3170,8 @@ mod tests {
                 offset,
                 TerminalFrameActionLinks {
                     matcher_key: 0,
+                    absolute_start_row: 0,
+                    absolute_end_row: 0,
                     matches_by_line: Vec::new(),
                     cell_ranges_by_line: Vec::new(),
                 },
@@ -3911,7 +3921,11 @@ mod tests {
         let matchers = ActionLinksMatcherSettings::default();
 
         let links = prepare_terminal_frame_action_links(&snapshot, true, &matchers).unwrap();
+        let absolute_end_row = snapshot.total_rows.saturating_sub(snapshot.display_offset);
+        let absolute_start_row = absolute_end_row.saturating_sub(snapshot.row_count());
 
+        assert_eq!(links.absolute_start_row, absolute_start_row);
+        assert_eq!(links.absolute_end_row, absolute_end_row);
         assert_eq!(links.matches_by_line.len(), snapshot.row_count());
         assert_eq!(links.cell_ranges_by_line.len(), snapshot.row_count());
         assert!(

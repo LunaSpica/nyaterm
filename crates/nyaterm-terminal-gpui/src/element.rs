@@ -795,7 +795,49 @@ mod layout_cache_tests {
     }
 
     #[test]
-    fn row_layout_key_tracks_link_glyph_decorations() {
+    fn dynamic_link_underlines_follow_visual_offset_and_clamp_to_text() {
+        let palette = nyaterm_ui::theme_palette("github-dark");
+        let bounds = Bounds::new(point(px(10.0), px(20.0)), size(px(200.0), px(120.0)));
+        let decorations = TerminalLineDecorations {
+            link_ranges: vec![(1, 99)],
+            ..TerminalLineDecorations::default()
+        };
+        let mut out = Vec::new();
+
+        push_dynamic_link_underlines(
+            2,
+            "abc",
+            &decorations,
+            palette,
+            bounds,
+            -8.0,
+            8.0,
+            16.0,
+            &mut out,
+        );
+
+        assert_eq!(out.len(), 1);
+        assert_eq!(f32::from(out[0].bounds.left()), 18.0);
+        assert_eq!(f32::from(out[0].bounds.top()), 58.0);
+        assert_eq!(f32::from(out[0].bounds.size.width), 16.0);
+
+        out.clear();
+        push_dynamic_link_underlines(
+            0,
+            "",
+            &decorations,
+            palette,
+            bounds,
+            0.0,
+            8.0,
+            16.0,
+            &mut out,
+        );
+        assert!(out.is_empty());
+    }
+
+    #[test]
+    fn row_layout_key_ignores_dynamic_link_underlines() {
         let mut snapshot = TerminalScreen::default().snapshot();
         edit_snapshot_row(&mut snapshot, 0, |row| {
             row.text = "same".to_string();
@@ -821,7 +863,7 @@ mod layout_cache_tests {
             ..TerminalLineDecorations::default()
         };
 
-        assert_ne!(
+        assert_eq!(
             element.row_layout_key(0, "same", None, &base),
             element.row_layout_key(0, "same", None, &linked)
         );
@@ -1039,7 +1081,7 @@ mod layout_cache_tests {
         assert!(!terminal_glyph_decorations_needed(&decorations));
 
         decorations.link_ranges.push((1, 3));
-        assert!(terminal_glyph_decorations_needed(&decorations));
+        assert!(!terminal_glyph_decorations_needed(&decorations));
 
         decorations.link_ranges.clear();
         decorations.selection_cols = Some((0, 2));
@@ -1503,7 +1545,6 @@ fn terminal_layout_prefetch_row(
 
 fn hash_stable_glyph_decorations<H: Hasher>(decorations: &TerminalLineDecorations, hasher: &mut H) {
     decorations.active_search_ranges.hash(hasher);
-    decorations.link_ranges.hash(hasher);
 }
 
 fn hash_styled_spans<H: Hasher>(
@@ -1528,7 +1569,7 @@ fn terminal_cursor_cell_hidden(snapshot: &TerminalSnapshot) -> bool {
 }
 
 fn terminal_glyph_decorations_needed(decorations: &TerminalLineDecorations) -> bool {
-    !decorations.active_search_ranges.is_empty() || !decorations.link_ranges.is_empty()
+    !decorations.active_search_ranges.is_empty()
 }
 
 fn terminal_row_layout_key(
@@ -1749,6 +1790,37 @@ fn push_terminal_underline_ranges(
                 cell_h,
             ),
             rgb(range.color),
+        ));
+    }
+}
+
+fn push_dynamic_link_underlines(
+    row: usize,
+    line: &str,
+    decorations: &TerminalLineDecorations,
+    palette: nyaterm_ui::ThemePalette,
+    bounds: Bounds<Pixels>,
+    visual_y_offset: f32,
+    cell_w: f32,
+    cell_h: f32,
+    out: &mut Vec<PaintQuad>,
+) {
+    if decorations.link_ranges.is_empty() {
+        return;
+    }
+    let text_cells = terminal_cell_count(line);
+    if text_cells == 0 {
+        return;
+    }
+    for &(start, end) in &decorations.link_ranges {
+        let start = start.min(text_cells);
+        let end = end.min(text_cells);
+        if end <= start {
+            continue;
+        }
+        out.push(fill(
+            terminal_underline_bounds(row, start, end, bounds, visual_y_offset, cell_w, cell_h),
+            rgb(palette.accent),
         ));
     }
 }
@@ -1990,6 +2062,17 @@ impl Element for NyaTerminalElement {
                     cell_h,
                     &mut plan.decoration_backgrounds,
                 );
+                push_dynamic_link_underlines(
+                    row,
+                    line,
+                    decorations,
+                    self.palette,
+                    bounds,
+                    visual_y_offset,
+                    cell_w,
+                    cell_h,
+                    &mut plan.underlines,
+                );
             }
 
             let row_layout_key = |paint_style_key: u64, keyword_spans_present: bool| {
@@ -2083,9 +2166,6 @@ impl Element for NyaTerminalElement {
                 // Glyph spans intentionally exclude search/selection/cursor state so
                 // dynamic overlays do not invalidate shaped base rows.
                 let mut spans = background_spans.clone();
-                if !decorations.link_ranges.is_empty() {
-                    spans = apply_action_link_ranges(spans, &decorations.link_ranges, self.palette);
-                }
                 if !decorations.active_search_ranges.is_empty() {
                     spans = apply_search_ranges(
                         spans,

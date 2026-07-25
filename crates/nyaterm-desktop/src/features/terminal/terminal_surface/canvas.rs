@@ -102,21 +102,6 @@ impl NyaTermApp {
         let display_offset = self.terminal_display_offset_for_session(
             (!session_id.is_empty()).then_some(session_id.as_str()),
         );
-        let frame_action_links = if session_id.is_empty() {
-            self.terminal_views
-                .get(&session_id)
-                .and_then(|view| {
-                    if display_offset == 0 {
-                        view.frame_action_links.as_ref()
-                    } else {
-                        view.scrollback_action_links.get(&display_offset)
-                    }
-                })
-                .filter(|links| links.matcher_key == action_link_matcher_key)
-        } else {
-            // Live surfaces own action-link paint; shell only needs links for empty session.
-            None
-        };
         // Live sessions already paint the grid on TerminalSurface. Skip cloning /
         // building a shell-side viewport snapshot except when IME preedit needs
         // cursor placement, or when there is no session (empty bootstrap canvas).
@@ -180,6 +165,32 @@ impl NyaTermApp {
                 0usize,
             )
         } else {
+            let frame_action_links = if session_id.is_empty() {
+                self.terminal_views.get(&session_id).and_then(|view| {
+                    if display_offset == 0 {
+                        view.frame_action_links.as_ref().filter(|links| {
+                            links.matcher_key == action_link_matcher_key
+                                && terminal_action_links_cover_snapshot(&snapshot, links)
+                        })
+                    } else {
+                        view.scrollback_action_links
+                            .get(&display_offset)
+                            .filter(|links| {
+                                links.matcher_key == action_link_matcher_key
+                                    && terminal_action_links_cover_snapshot(&snapshot, links)
+                            })
+                            .or_else(|| {
+                                view.scrollback_action_links.values().find(|links| {
+                                    links.matcher_key == action_link_matcher_key
+                                        && terminal_action_links_cover_snapshot(&snapshot, links)
+                                })
+                            })
+                    }
+                })
+            } else {
+                // Live surfaces own action-link paint; shell only needs links for empty session.
+                None
+            };
             let search_stage_started_at = Instant::now();
             let search_matches = if render_profile.enhanced_decorations_enabled()
                 && is_active
@@ -239,10 +250,7 @@ impl NyaTermApp {
                 !search_ranges_by_line.is_empty() || !active_search_ranges_by_line.is_empty();
             let has_frame_action_links = action_links_enabled
                 && frame_action_links.is_some_and(|links| {
-                    links
-                        .cell_ranges_by_line
-                        .iter()
-                        .any(|ranges| !ranges.is_empty())
+                    terminal_action_links_have_ranges_for_snapshot(&snapshot, links)
                 });
             let has_hyperlinks = action_links_enabled
                 && snapshot.rows().iter().any(|row| !row.hyperlinks.is_empty());
@@ -1391,8 +1399,11 @@ mod tests {
         let snapshot = TerminalScreen::default().viewport_snapshot(0);
         let search = HashMap::new();
         let active = HashMap::new();
+        let (absolute_start_row, absolute_end_row) = terminal_snapshot_absolute_range(&snapshot);
         let mut links = TerminalFrameActionLinks {
             matcher_key: 42,
+            absolute_start_row,
+            absolute_end_row,
             matches_by_line: Vec::new(),
             cell_ranges_by_line: vec![vec![(1, 4)]],
         };

@@ -959,6 +959,7 @@ impl NyaTermApp {
             frame.offset,
             current_action_link_matcher_key,
             self.terminal_views.get(&frame.session_id),
+            Some(frame.snapshot.as_ref()),
         );
         if should_request_scroll_enrichment {
             let session_id = frame.session_id.clone();
@@ -1639,21 +1640,43 @@ fn terminal_action_links_current_for_offset(
         .is_some_and(|links| links.matcher_key == matcher_key)
 }
 
+fn terminal_action_links_current_for_snapshot(
+    scrollback_action_links: &HashMap<usize, TerminalFrameActionLinks>,
+    snapshot: &TerminalSnapshot,
+    matcher_key: u64,
+) -> bool {
+    scrollback_action_links.values().any(|links| {
+        links.matcher_key == matcher_key
+            && crate::features::terminal_surface::terminal_action_links_cover_snapshot(
+                snapshot, links,
+            )
+    })
+}
+
 pub(super) fn terminal_scroll_enrichment_should_request(
     should_paint: bool,
     offset: usize,
     matcher_key: Option<u64>,
     view: Option<&TerminalViewState>,
+    snapshot: Option<&TerminalSnapshot>,
 ) -> bool {
     should_paint
         && offset > 0
         && matcher_key.is_some_and(|matcher_key| {
             view.is_some_and(|view| {
-                !terminal_action_links_current_for_offset(
-                    &view.scrollback_action_links,
-                    offset,
-                    matcher_key,
-                )
+                if let Some(snapshot) = snapshot {
+                    !terminal_action_links_current_for_snapshot(
+                        &view.scrollback_action_links,
+                        snapshot,
+                        matcher_key,
+                    )
+                } else {
+                    !terminal_action_links_current_for_offset(
+                        &view.scrollback_action_links,
+                        offset,
+                        matcher_key,
+                    )
+                }
             })
         })
 }
@@ -1982,6 +2005,8 @@ mod frame_event_queue_tests {
             3,
             TerminalFrameActionLinks {
                 matcher_key: lightweight_key,
+                absolute_start_row: 0,
+                absolute_end_row: 0,
                 matches_by_line: Vec::new(),
                 cell_ranges_by_line: Vec::new(),
             },
@@ -1997,6 +2022,8 @@ mod frame_event_queue_tests {
             3,
             TerminalFrameActionLinks {
                 matcher_key: current_key,
+                absolute_start_row: 0,
+                absolute_end_row: 0,
                 matches_by_line: Vec::new(),
                 cell_ranges_by_line: Vec::new(),
             },
@@ -2028,21 +2055,27 @@ mod frame_event_queue_tests {
     fn terminal_scroll_enrichment_requests_visible_missing_action_links_immediately() {
         let matchers = ActionLinksMatcherSettings::default();
         let matcher_key = terminal_action_link_matcher_key(true, &matchers);
-        let mut view = TerminalViewState::new();
+        let mut view = terminal_view_with_scrollback(20);
+        let snapshot = view.screen.viewport_snapshot(4);
 
         assert!(terminal_scroll_enrichment_should_request(
             true,
             4,
             Some(matcher_key),
             Some(&view),
+            Some(&snapshot),
         ));
+        let (absolute_start_row, absolute_end_row) =
+            crate::features::terminal_surface::terminal_snapshot_absolute_range(&snapshot);
 
         view.scrollback_action_links.insert(
-            4,
+            99,
             TerminalFrameActionLinks {
                 matcher_key,
-                matches_by_line: Vec::new(),
-                cell_ranges_by_line: Vec::new(),
+                absolute_start_row,
+                absolute_end_row,
+                matches_by_line: vec![Vec::new(); snapshot.row_count()],
+                cell_ranges_by_line: vec![Vec::new(); snapshot.row_count()],
             },
         );
         assert!(!terminal_scroll_enrichment_should_request(
@@ -2050,24 +2083,28 @@ mod frame_event_queue_tests {
             4,
             Some(matcher_key),
             Some(&view),
+            Some(&snapshot),
         ));
         assert!(!terminal_scroll_enrichment_should_request(
             false,
             4,
             Some(matcher_key),
             Some(&view),
+            Some(&snapshot),
         ));
         assert!(!terminal_scroll_enrichment_should_request(
             true,
             0,
             Some(matcher_key),
             Some(&view),
+            Some(&snapshot),
         ));
         assert!(!terminal_scroll_enrichment_should_request(
             true,
             4,
             None,
             Some(&view),
+            Some(&snapshot),
         ));
     }
 

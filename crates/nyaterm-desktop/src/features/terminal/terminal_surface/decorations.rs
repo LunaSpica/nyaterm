@@ -40,7 +40,12 @@ pub(in crate::features) fn terminal_line_decorations_cache_key(
     if include_action_links {
         if let Some(links) = frame_action_links {
             links.matcher_key.hash(&mut hasher);
-            links.cell_ranges_by_line.hash(&mut hasher);
+            links.absolute_start_row.hash(&mut hasher);
+            links.absolute_end_row.hash(&mut hasher);
+            for line_index in 0..snapshot.row_count() {
+                terminal_action_link_ranges_for_snapshot_row(snapshot, line_index, links)
+                    .hash(&mut hasher);
+            }
         } else {
             0u64.hash(&mut hasher);
         }
@@ -63,6 +68,49 @@ pub(in crate::features) fn terminal_line_decorations_cache_key(
         }
     }
     hasher.finish()
+}
+
+fn terminal_action_link_ranges_for_snapshot_row<'a>(
+    snapshot: &nyaterm_terminal::TerminalSnapshot,
+    line_index: usize,
+    links: &'a TerminalFrameActionLinks,
+) -> &'a [(usize, usize)] {
+    let empty: &'a [(usize, usize)] = &[];
+    if line_index >= snapshot.row_count() {
+        return empty;
+    }
+    let (snapshot_start, snapshot_end) = terminal_snapshot_absolute_range(snapshot);
+    let Some(absolute_row) = snapshot_start.checked_add(line_index) else {
+        return empty;
+    };
+    if absolute_row >= snapshot_end
+        || absolute_row < links.absolute_start_row
+        || absolute_row >= links.absolute_end_row
+    {
+        return empty;
+    }
+    links
+        .cell_ranges_by_line
+        .get(absolute_row - links.absolute_start_row)
+        .map(Vec::as_slice)
+        .unwrap_or(empty)
+}
+
+pub(in crate::features) fn terminal_action_links_cover_snapshot(
+    snapshot: &nyaterm_terminal::TerminalSnapshot,
+    links: &TerminalFrameActionLinks,
+) -> bool {
+    let (snapshot_start, snapshot_end) = terminal_snapshot_absolute_range(snapshot);
+    links.absolute_start_row <= snapshot_start && snapshot_end <= links.absolute_end_row
+}
+
+pub(in crate::features) fn terminal_action_links_have_ranges_for_snapshot(
+    snapshot: &nyaterm_terminal::TerminalSnapshot,
+    links: &TerminalFrameActionLinks,
+) -> bool {
+    (0..snapshot.row_count()).any(|line_index| {
+        !terminal_action_link_ranges_for_snapshot_row(snapshot, line_index, links).is_empty()
+    })
 }
 
 fn hash_ranges_by_line<H: Hasher>(
@@ -104,8 +152,10 @@ pub(in crate::features) fn build_terminal_line_decorations(
             });
         let mut link_ranges: Vec<(usize, usize)> = if include_action_links {
             frame_action_links
-                .and_then(|links| links.cell_ranges_by_line.get(line_index))
-                .cloned()
+                .map(|links| {
+                    terminal_action_link_ranges_for_snapshot_row(snapshot, line_index, links)
+                        .to_vec()
+                })
                 .unwrap_or_default()
         } else {
             Vec::new()
@@ -196,8 +246,11 @@ mod tests {
         let mut screen = nyaterm_terminal::TerminalScreen::new(40, 3);
         screen.advance(b"\x1b]8;;https://example.com\x07click\x1b]8;;\x07 plain");
         let snapshot = screen.viewport_snapshot(0);
+        let (absolute_start_row, absolute_end_row) = terminal_snapshot_absolute_range(&snapshot);
         let mut links = TerminalFrameActionLinks {
             matcher_key: 7,
+            absolute_start_row,
+            absolute_end_row,
             matches_by_line: vec![Vec::new(); snapshot.row_count()],
             cell_ranges_by_line: vec![Vec::new(); snapshot.row_count()],
         };
@@ -216,6 +269,39 @@ mod tests {
         );
 
         assert_eq!(decorations[0].link_ranges, vec![(6, 11), (0, 5)]);
+    }
+
+    #[test]
+    fn action_link_decorations_map_from_absolute_link_window() {
+        let mut screen = nyaterm_terminal::TerminalScreen::new(40, 3);
+        screen.advance(b"first\nsecond\nthird");
+        let snapshot = screen.viewport_snapshot(0);
+        let (snapshot_start, snapshot_end) = terminal_snapshot_absolute_range(&snapshot);
+        let mut links = TerminalFrameActionLinks {
+            matcher_key: 7,
+            absolute_start_row: snapshot_start.saturating_sub(1),
+            absolute_end_row: snapshot_end.saturating_add(1),
+            matches_by_line: vec![Vec::new(); snapshot.row_count() + 2],
+            cell_ranges_by_line: vec![Vec::new(); snapshot.row_count() + 2],
+        };
+        let relative_row = snapshot_start + 1 - links.absolute_start_row;
+        links.cell_ranges_by_line[relative_row].push((2, 5));
+
+        let decorations = build_terminal_line_decorations(
+            &snapshot,
+            None,
+            0,
+            &HashMap::new(),
+            &HashMap::new(),
+            Some(&links),
+            true,
+            false,
+            false,
+        );
+
+        assert!(decorations[0].link_ranges.is_empty());
+        assert_eq!(decorations[1].link_ranges, vec![(2, 5)]);
+        assert!(decorations[2].link_ranges.is_empty());
     }
 
     #[test]

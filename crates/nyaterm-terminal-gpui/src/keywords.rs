@@ -52,6 +52,18 @@ impl TerminalKeywordHighlightSnapshot {
         self.rules_key
     }
 
+    pub fn known_row_count(&self) -> usize {
+        self.known_rows.iter().filter(|known| **known).count()
+    }
+
+    pub fn range_count(&self) -> usize {
+        self.rows
+            .iter()
+            .filter_map(|ranges| ranges.as_ref())
+            .map(|ranges| ranges.len())
+            .sum()
+    }
+
     pub fn matches_snapshot(
         &self,
         snapshot: &TerminalSnapshot,

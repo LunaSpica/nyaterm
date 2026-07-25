@@ -27,6 +27,7 @@ const TERMINAL_SURFACE_SCROLL_PENDING_WARN_AFTER: Duration = Duration::from_mill
 const TERMINAL_SURFACE_SCROLL_PENDING_WARN_INTERVAL: Duration = Duration::from_millis(500);
 const TERMINAL_SURFACE_LOCAL_SCROLL_SYNC_DELAY: Duration = Duration::from_millis(16);
 const TERMINAL_KEYWORD_HIGHLIGHT_PREFETCH_VIEWPORTS: usize = 2;
+const TERMINAL_KEYWORD_HIGHLIGHT_SLOW: Duration = Duration::from_millis(8);
 
 #[derive(Clone)]
 struct TerminalSurfacePendingScrollSync {
@@ -1232,8 +1233,10 @@ impl TerminalSurface {
             self.viewport_rows,
             self.scrollback_len,
         );
+        let requested_row_count = requested_rows.len();
         let requested_rows =
             terminal_keyword_highlight_expanded_rows(snapshot.as_ref(), requested_rows);
+        let expanded_requested_row_count = requested_rows.len();
         let request_key = terminal_keyword_highlight_request_key(
             snapshot.as_ref(),
             rules_key,
@@ -1257,11 +1260,12 @@ impl TerminalSurface {
         let palette = self.palette;
         let previous_highlights = self.keyword_highlights.clone();
         self.keyword_highlight_task = Some(cx.spawn(async move |this, cx| {
-            let (rules, highlighter, highlights) = cx
+            let (rules, highlighter, highlights, highlight_duration) = cx
                 .background_spawn(async move {
                     let highlighter = highlighter.unwrap_or_else(|| {
                         Arc::new(compile_terminal_keyword_highlighter(rules.as_ref()))
                     });
+                    let highlight_started_at = Instant::now();
                     let highlights = precompute_terminal_keyword_highlights_for_rows(
                         snapshot.as_ref(),
                         highlighter.as_ref(),
@@ -1269,7 +1273,8 @@ impl TerminalSurface {
                         previous_highlights.as_deref(),
                         requested_rows,
                     );
-                    (rules, highlighter, highlights)
+                    let highlight_duration = highlight_started_at.elapsed();
+                    (rules, highlighter, highlights, highlight_duration)
                 })
                 .await;
             let _ = this.update(cx, |this, cx| {
@@ -1280,6 +1285,19 @@ impl TerminalSurface {
                 this.keyword_highlight_pending_key = None;
                 let publish = terminal_keyword_rule_sets_equal(&this.keyword_rules, &rules);
                 if publish {
+                    if highlight_duration >= TERMINAL_KEYWORD_HIGHLIGHT_SLOW {
+                        tracing::warn!(
+                            diagnostic = "terminal_keyword_highlight_slow",
+                            session_id = %this.session_id,
+                            rules = rules.len(),
+                            requested_rows = requested_row_count,
+                            expanded_rows = expanded_requested_row_count,
+                            known_rows = highlights.known_row_count(),
+                            ranges = highlights.range_count(),
+                            duration_us = highlight_duration.as_micros(),
+                            "slow terminal keyword highlight precompute"
+                        );
+                    }
                     this.keyword_highlighter_rules = Some(rules);
                     this.keyword_highlighter = Some(highlighter);
                     this.keyword_highlights = Some(Arc::new(highlights));

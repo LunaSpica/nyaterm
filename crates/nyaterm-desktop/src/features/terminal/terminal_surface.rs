@@ -9,7 +9,8 @@ use helpers::*;
 #[path = "terminal_surface/decorations.rs"]
 mod decorations;
 pub(in crate::features) use decorations::{
-    build_terminal_line_decorations, terminal_line_decorations_cache_key,
+    build_terminal_line_decorations, terminal_action_links_cover_snapshot,
+    terminal_action_links_have_ranges_for_snapshot, terminal_line_decorations_cache_key,
     terminal_line_decorations_needed, terminal_snapshot_absolute_range,
 };
 
