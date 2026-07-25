@@ -7,8 +7,20 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> Self {
         nyaterm_core::warm_terminal_input_tracker();
-        let legacy = LegacyProject::new(LEGACY_ROOT);
-        let inventory = nyaterm_legacy::inventory(&legacy);
+        #[cfg(feature = "migration-dashboard")]
+        let inventory = {
+            let legacy = LegacyProject::new(LEGACY_ROOT);
+            nyaterm_legacy::inventory(&legacy)
+        };
+        #[cfg(not(feature = "migration-dashboard"))]
+        let inventory = MigrationInventory {
+            legacy_root: std::path::PathBuf::from(LEGACY_ROOT),
+            exists: false,
+            rust_files: 0,
+            frontend_files: 0,
+            command_modules: 0,
+            copied_vendor_roots: Vec::new(),
+        };
         let (session_start_tx, session_start_rx) = mpsc::channel();
         let (tunnel_tx, tunnel_rx) = mpsc::channel();
         let (process_tx, process_rx) = mpsc::channel();
@@ -267,27 +279,14 @@ impl NyaTermApp {
             inventory,
             connections,
             pending_saved_connection_queue: VecDeque::new(),
-            connection_search_draft: String::new(),
-            connection_search_focus: cx.focus_handle(),
-            connection_sort_mode: ConnectionSortMode::from_setting(
-                &settings.ui_saved_connections_sort_mode,
+            connection_list: ConnectionListFeatureState::new(
+                &settings,
+                &connection_groups,
+                cx.focus_handle(),
+                cx.focus_handle(),
+                cx.focus_handle(),
             ),
-            connections_more_menu_open: false,
-            connection_import_dialog_open: false,
-            connection_import_path_prompt: None,
-            connection_import_focus: cx.focus_handle(),
-            connections_clear_all_confirm_open: false,
-            connection_context_menu: None,
-            connection_group_context_menu: None,
-            hovered_connection_id: None,
-            connection_hover_pending: None,
-            connection_drop_target: None,
             ai_execution_menu_open: false,
-            hovered_connection_group_id: None,
-            expanded_connection_groups: connection_groups
-                .iter()
-                .map(|group| group.id.clone())
-                .collect(),
             connection_groups,
             connection_editor: None,
             connection_editor_window: None,
@@ -299,8 +298,6 @@ impl NyaTermApp {
             connection_group_editor_focus: cx.focus_handle(),
             connection_delete_confirm: None,
             connection_group_delete_confirm: None,
-            connection_group_open_confirm: None,
-            connection_group_open_confirm_focus: cx.focus_handle(),
             connection_ssh_keys,
             connection_otp_entries,
             connection_saved_passwords,
@@ -322,8 +319,6 @@ impl NyaTermApp {
             network_group_editor_focus: cx.focus_handle(),
             network_tunnel_editor_focus: cx.focus_handle(),
             network_proxy_editor_focus: cx.focus_handle(),
-            selected_connection_ids: HashSet::new(),
-            last_selected_connection_id: None,
             quick_commands: Arc::from(quick_commands),
             quick_command_categories,
             quick_command_search_draft: String::new(),

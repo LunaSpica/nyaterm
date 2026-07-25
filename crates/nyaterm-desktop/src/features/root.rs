@@ -62,7 +62,7 @@ impl NyaTermApp {
                         || !this.new_session_group_menu_path.is_empty()
                         || this.docker_tab_menu_open
                         || this.docker_header_menu_open
-                        || this.connections_more_menu_open;
+                        || this.connection_list.more_menu_open;
                     if changed {
                         this.title_menu_open = None;
                         this.title_menu_submenu = None;
@@ -72,7 +72,7 @@ impl NyaTermApp {
                         this.new_session_group_menu_path.clear();
                         this.docker_tab_menu_open = false;
                         this.docker_header_menu_open = false;
-                        this.connections_more_menu_open = false;
+                        this.connection_list.more_menu_open = false;
                         cx.notify();
                     }
                 }),
@@ -580,7 +580,7 @@ impl NyaTermApp {
             .when(self.quick_command_import_dialog_open, |this| {
                 this.child(self.quick_command_import_overlay(cx))
             })
-            .when(self.connection_import_dialog_open, |this| {
+            .when(self.connection_list.import_dialog_open, |this| {
                 this.child(self.connection_import_overlay(cx))
             })
             .when(overlay.quick_switch_open, |this| {

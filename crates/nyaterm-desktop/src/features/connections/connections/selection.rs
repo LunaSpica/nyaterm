@@ -1,4 +1,9 @@
-use super::*;
+use std::collections::HashSet;
+
+use gpui::Context;
+use nyaterm_core::{ConnectionStore, SavedConnection, uuid};
+
+use crate::features::NyaTermApp;
 
 impl NyaTermApp {
     pub(in crate::features) fn selected_connections(&self) -> Vec<SavedConnection> {
@@ -9,10 +14,11 @@ impl NyaTermApp {
             .collect::<HashSet<_>>();
         self.connections
             .iter()
-            .filter(|connection| self.selected_connection_ids.contains(&connection.id))
+            .filter(|connection| self.connection_list.selected_ids.contains(&connection.id))
             .cloned()
             .chain(
-                self.selected_connection_ids
+                self.connection_list
+                    .selected_ids
                     .iter()
                     .filter(|id| !visible_ids.contains(id.as_str()))
                     .filter_map(|id| {
@@ -37,11 +43,12 @@ impl NyaTermApp {
         let visible_ids = self.visible_connection_ids();
         if range {
             let anchor = self
-                .last_selected_connection_id
+                .connection_list
+                .last_selected_id
                 .clone()
                 .unwrap_or_else(|| connection_id.clone());
             let mut next = if additive {
-                self.selected_connection_ids.clone()
+                self.connection_list.selected_ids.clone()
             } else {
                 HashSet::new()
             };
@@ -60,19 +67,23 @@ impl NyaTermApp {
             } else {
                 next.insert(connection_id.clone());
             }
-            self.selected_connection_ids = next;
+            self.connection_list.selected_ids = next;
         } else if additive {
-            if self.selected_connection_ids.contains(&connection_id) {
-                self.selected_connection_ids.remove(&connection_id);
+            if self.connection_list.selected_ids.contains(&connection_id) {
+                self.connection_list.selected_ids.remove(&connection_id);
             } else {
-                self.selected_connection_ids.insert(connection_id.clone());
+                self.connection_list
+                    .selected_ids
+                    .insert(connection_id.clone());
             }
         } else {
-            self.selected_connection_ids.clear();
-            self.selected_connection_ids.insert(connection_id.clone());
+            self.connection_list.selected_ids.clear();
+            self.connection_list
+                .selected_ids
+                .insert(connection_id.clone());
         }
-        self.last_selected_connection_id = Some(connection_id);
-        let count = self.selected_connection_ids.len();
+        self.connection_list.last_selected_id = Some(connection_id);
+        let count = self.connection_list.selected_ids.len();
         self.terminal_status = if count == 0 {
             "connection selection cleared".to_string()
         } else {
@@ -82,7 +93,11 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn visible_connection_ids(&self) -> Vec<String> {
-        let query = self.connection_search_draft.trim().to_ascii_lowercase();
+        let query = self
+            .connection_list
+            .search_draft
+            .trim()
+            .to_ascii_lowercase();
         // Mirror `connection_sections` ordering for Shift-range selection.
         let mut by_group: std::collections::HashMap<Option<String>, Vec<&SavedConnection>> =
             std::collections::HashMap::new();
@@ -107,7 +122,7 @@ impl NyaTermApp {
                 .push(connection);
         }
         for list in by_group.values_mut() {
-            list.sort_by(|left, right| match self.connection_sort_mode {
+            list.sort_by(|left, right| match self.connection_list.sort_mode {
                 crate::models::ConnectionSortMode::Default => {
                     left.sort_order.cmp(&right.sort_order).then_with(|| {
                         left.name
@@ -180,21 +195,20 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn select_all_connections(&mut self, cx: &mut Context<Self>) {
-        self.selected_connection_ids = self
+        self.connection_list.selected_ids = self
             .connections
             .iter()
             .map(|connection| connection.id.clone())
             .collect();
         self.terminal_status = format!(
             "selected {} connection(s)",
-            self.selected_connection_ids.len()
+            self.connection_list.selected_ids.len()
         );
         cx.notify();
     }
 
     pub(in crate::features) fn clear_selected_connections(&mut self, cx: &mut Context<Self>) {
-        self.selected_connection_ids.clear();
-        self.last_selected_connection_id = None;
+        self.connection_list.clear_selection();
         self.terminal_status = "connection selection cleared".to_string();
         cx.notify();
     }
@@ -209,7 +223,7 @@ impl NyaTermApp {
 
         match self.copy_connections_to_store(&selected) {
             Ok(count) => {
-                self.selected_connection_ids.clear();
+                self.connection_list.selected_ids.clear();
                 self.terminal_status = format!("copied {count} saved connection(s)");
             }
             Err(error) => {

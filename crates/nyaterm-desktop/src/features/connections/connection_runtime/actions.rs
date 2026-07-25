@@ -5,8 +5,8 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        self.connections_more_menu_open = false;
-        self.connections_clear_all_confirm_open = true;
+        self.connection_list.more_menu_open = false;
+        self.connection_list.clear_all_confirm_open = true;
         self.terminal_status = "confirm clearing all saved connections".to_string();
         cx.notify();
     }
@@ -15,26 +15,25 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        self.connections_clear_all_confirm_open = false;
+        self.connection_list.clear_all_confirm_open = false;
         cx.notify();
     }
 
     pub(in crate::features) fn confirm_connections_clear_all(&mut self, cx: &mut Context<Self>) {
-        if !self.connections_clear_all_confirm_open {
+        if !self.connection_list.clear_all_confirm_open {
             return;
         }
         match self.with_connection_store(|store| store.replace_sessions(&SessionsConfig::default()))
         {
             Ok(()) => {
-                self.connections_clear_all_confirm_open = false;
-                self.selected_connection_ids.clear();
-                self.last_selected_connection_id = None;
-                self.expanded_connection_groups.clear();
+                self.connection_list.clear_all_confirm_open = false;
+                self.connection_list.clear_selection();
+                self.connection_list.expanded_group_ids.clear();
                 self.refresh_store_from_runtime();
                 self.terminal_status = self.tr("savedConnections.clearAllSuccess").to_string();
             }
             Err(error) => {
-                self.connections_clear_all_confirm_open = false;
+                self.connection_list.clear_all_confirm_open = false;
                 self.terminal_status = format!("clear saved connections failed: {error}");
                 self.store_status.message = self.terminal_status.clone();
                 self.store_status.ready = false;
@@ -76,7 +75,9 @@ impl NyaTermApp {
         };
         match self.with_connection_store(|store| store.delete_connection(&confirm.connection_id)) {
             Ok(()) => {
-                self.selected_connection_ids.remove(&confirm.connection_id);
+                self.connection_list
+                    .selected_ids
+                    .remove(&confirm.connection_id);
                 self.connection_delete_confirm = None;
                 self.refresh_store_from_runtime();
                 self.terminal_status = format!("deleted connection {}", confirm.label);
@@ -137,7 +138,9 @@ impl NyaTermApp {
         };
         match self.with_connection_store(|store| store.delete_group(&confirm.group_id)) {
             Ok(()) => {
-                self.expanded_connection_groups.remove(&confirm.group_id);
+                self.connection_list
+                    .expanded_group_ids
+                    .remove(&confirm.group_id);
                 self.connection_group_delete_confirm = None;
                 self.refresh_store_from_runtime();
                 self.terminal_status = format!("deleted connection group {}", confirm.label);
@@ -155,22 +158,22 @@ impl NyaTermApp {
         group_id: String,
         cx: &mut Context<Self>,
     ) {
-        if self.expanded_connection_groups.contains(&group_id) {
-            self.expanded_connection_groups.remove(&group_id);
+        if self.connection_list.expanded_group_ids.contains(&group_id) {
+            self.connection_list.expanded_group_ids.remove(&group_id);
         } else {
-            self.expanded_connection_groups.insert(group_id);
+            self.connection_list.expanded_group_ids.insert(group_id);
         }
         cx.notify();
     }
 
     pub(in crate::features) fn cycle_connection_sort_mode(&mut self, cx: &mut Context<Self>) {
-        self.connection_sort_mode = self.connection_sort_mode.next();
+        self.connection_list.sort_mode = self.connection_list.sort_mode.next();
         self.settings.ui_saved_connections_sort_mode =
-            self.connection_sort_mode.persistence_id().to_string();
+            self.connection_list.sort_mode.persistence_id().to_string();
         self.persist_ui_layout();
         self.terminal_status = format!(
             "connections sorted by {}",
-            self.connection_sort_mode.label()
+            self.connection_list.sort_mode.label()
         );
         cx.notify();
     }
@@ -187,12 +190,12 @@ impl NyaTermApp {
         }
         match keystroke.key.as_str() {
             "escape" => {
-                self.connection_search_draft.clear();
+                self.connection_list.search_draft.clear();
                 self.terminal_status = "connection search cleared".to_string();
                 cx.notify();
             }
             "backspace" if !keystroke.modifiers.platform && !keystroke.modifiers.control => {
-                self.connection_search_draft.pop();
+                self.connection_list.search_draft.pop();
                 cx.notify();
             }
             _ if !keystroke.modifiers.platform && !keystroke.modifiers.control => {
@@ -201,7 +204,7 @@ impl NyaTermApp {
                     .as_deref()
                     .filter(|input| !input.is_empty())
                 {
-                    self.connection_search_draft.push_str(input);
+                    self.connection_list.search_draft.push_str(input);
                     cx.notify();
                 }
             }
@@ -227,7 +230,7 @@ impl NyaTermApp {
             Ok(())
         }) {
             Ok(()) => {
-                self.selected_connection_ids.clear();
+                self.connection_list.selected_ids.clear();
                 self.refresh_store_from_runtime();
                 self.terminal_status = format!("deleted {} connection(s)", selected.len());
             }

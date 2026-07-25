@@ -1,5 +1,5 @@
-use super::*;
-use gpui::{FontWeight, MouseDownEvent, Render, Window, rgba};
+use gpui::prelude::*;
+use gpui::{Context, FontWeight, IntoElement, Render, Window, div, px, rgb, rgba};
 use nyaterm_core::truncate_preview;
 
 #[derive(Clone, Debug)]
@@ -79,9 +79,6 @@ impl Render for ConnectionDragPreview {
     }
 }
 
-#[path = "connections/dnd.rs"]
 mod dnd;
-#[path = "connections/menus.rs"]
 mod menus;
-#[path = "connections/selection.rs"]
 mod selection;

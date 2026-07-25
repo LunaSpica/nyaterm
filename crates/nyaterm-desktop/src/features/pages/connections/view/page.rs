@@ -8,12 +8,16 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let query = self.connection_search_draft.trim().to_ascii_lowercase();
+        let query = self
+            .connection_list
+            .search_draft
+            .trim()
+            .to_ascii_lowercase();
         let sections = connection_sections(
             &self.connections,
             &self.connection_groups,
             &query,
-            self.connection_sort_mode,
+            self.connection_list.sort_mode,
         );
         let visible_count = sections
             .iter()
@@ -28,7 +32,8 @@ impl NyaTermApp {
 
         // Keep the flattened model cheap to rebuild, then let GPUI instantiate only
         // the rows intersecting the scroll viewport.
-        let flat_rows = flatten_connection_rows(&sections, &self.expanded_connection_groups);
+        let flat_rows =
+            flatten_connection_rows(&sections, &self.connection_list.expanded_group_ids);
         let palette = self.theme_palette();
 
         let mut list = div()
@@ -42,13 +47,13 @@ impl NyaTermApp {
                 MouseButton::Left,
                 cx.listener(|this, _, _, cx| {
                     // Click empty background clears multi-select (Tauri list onMouseDown).
-                    if !this.selected_connection_ids.is_empty() {
+                    if !this.connection_list.selected_ids.is_empty() {
                         this.clear_selected_connections(cx);
                     }
                 }),
             )
             .on_drop(cx.listener(|this, payload: &ConnectionDragPayload, _, cx| {
-                this.connection_drop_target = None;
+                this.connection_list.drop_target = None;
                 match payload.kind {
                     ConnectionDragKind::Connection => {
                         this.move_connection_into_group(payload.id.clone(), None, cx);
@@ -168,16 +173,16 @@ impl NyaTermApp {
                 |this, confirm| this.child(self.connection_group_delete_confirm_panel(confirm, cx)),
             )
             .when_some(
-                self.connection_group_open_confirm.clone(),
+                self.connection_list.group_open_confirm.clone(),
                 |this, confirm| this.child(self.connection_group_open_confirm_panel(confirm, cx)),
             )
-            .when(self.connections_clear_all_confirm_open, |this| {
+            .when(self.connection_list.clear_all_confirm_open, |this| {
                 this.child(self.connections_clear_all_confirm_panel(cx))
             })
-            .when(self.connection_context_menu.is_some(), |this| {
+            .when(self.connection_list.context_menu.is_some(), |this| {
                 this.child(self.connection_context_menu_overlay(cx))
             })
-            .when(self.connection_group_context_menu.is_some(), |this| {
+            .when(self.connection_list.group_context_menu.is_some(), |this| {
                 this.child(self.connection_group_context_menu_overlay(cx))
             })
     }
@@ -188,18 +193,18 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let _ = visible_count;
-        let search_value = if self.connection_search_draft.is_empty() {
+        let search_value = if self.connection_list.search_draft.is_empty() {
             self.tr("savedConnections.filter").to_string()
         } else {
-            self.connection_search_draft.clone()
+            self.connection_list.search_draft.clone()
         };
         let sort_label = "icons/conn/sort.svg";
-        let sort_tooltip = self.tr(match self.connection_sort_mode {
+        let sort_tooltip = self.tr(match self.connection_list.sort_mode {
             ConnectionSortMode::Default => "savedConnections.sortDefault",
             ConnectionSortMode::NameAsc => "savedConnections.sortNameAsc",
             ConnectionSortMode::NameDesc => "savedConnections.sortNameDesc",
         });
-        let more_open = self.connections_more_menu_open;
+        let more_open = self.connection_list.more_menu_open;
         let can_clear_all = !self.connections.is_empty();
 
         // Tauri search strip: px-2 py-1.5, input h-7.
@@ -228,9 +233,9 @@ impl NyaTermApp {
                     .items_center()
                     .gap_2()
                     .cursor_pointer()
-                    .track_focus(&self.connection_search_focus)
+                    .track_focus(&self.connection_list.search_focus)
                     .on_click(cx.listener(|this, _, window, cx| {
-                        window.focus(&this.connection_search_focus);
+                        window.focus(&this.connection_list.search_focus);
                         cx.notify();
                     }))
                     .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
@@ -249,14 +254,14 @@ impl NyaTermApp {
                             .min_w_0()
                             .flex_1()
                             .text_size(px(12.))
-                            .text_color(if self.connection_search_draft.is_empty() {
+                            .text_color(if self.connection_list.search_draft.is_empty() {
                                 rgb(palette.text_dimmed)
                             } else {
                                 rgb(palette.text)
                             })
                             .child(search_value),
                     )
-                    .when(!self.connection_search_draft.is_empty(), |this| {
+                    .when(!self.connection_list.search_draft.is_empty(), |this| {
                         this.child(
                             div()
                                 .id(SharedString::from("connection-search-clear"))
@@ -273,8 +278,8 @@ impl NyaTermApp {
                                         .text_color(rgb(palette.text))
                                 })
                                 .on_click(cx.listener(|this, _, window, cx| {
-                                    this.connection_search_draft.clear();
-                                    window.focus(&this.connection_search_focus);
+                                    this.connection_list.search_draft.clear();
+                                    window.focus(&this.connection_list.search_focus);
                                     cx.notify();
                                 }))
                                 .child(svg().size(px(13.)).path("icons/window/close.svg")),
@@ -330,7 +335,8 @@ impl NyaTermApp {
                         "icons/conn/more.svg",
                         self.tr("common.more"),
                         cx.listener(|this, _, _, cx| {
-                            this.connections_more_menu_open = !this.connections_more_menu_open;
+                            this.connection_list.more_menu_open =
+                                !this.connection_list.more_menu_open;
                             cx.notify();
                         }),
                     ))
@@ -355,7 +361,7 @@ impl NyaTermApp {
                                     self.tr("settings.exportConfig"),
                                     false,
                                     cx.listener(|this, _, _, cx| {
-                                        this.connections_more_menu_open = false;
+                                        this.connection_list.more_menu_open = false;
                                         this.prompt_config_export(cx);
                                     }),
                                 ))
@@ -366,7 +372,7 @@ impl NyaTermApp {
                                     self.tr("settings.importConfig"),
                                     false,
                                     cx.listener(|this, _, window, cx| {
-                                        this.connections_more_menu_open = false;
+                                        this.connection_list.more_menu_open = false;
                                         this.open_connection_import_dialog(window, cx);
                                     }),
                                 ))

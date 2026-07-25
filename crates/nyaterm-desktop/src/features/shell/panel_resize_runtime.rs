@@ -145,7 +145,7 @@ impl NyaTermApp {
         self.settings.ui_left_panel_collapsed = self.left_sidebar_collapsed;
         self.settings.ui_right_panel_collapsed = self.right_inspector_collapsed;
         self.settings.ui_saved_connections_sort_mode =
-            self.connection_sort_mode.persistence_id().to_string();
+            self.connection_list.sort_mode.persistence_id().to_string();
         self.sync_activity_layout_to_settings();
         self.sync_panel_stack_to_settings();
         if let Ok(store) = ConnectionStore::open_with_portable_key_path(

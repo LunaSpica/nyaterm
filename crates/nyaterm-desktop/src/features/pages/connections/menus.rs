@@ -22,14 +22,15 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let state = self
-            .connection_context_menu
-            .clone()
-            .unwrap_or(ConnectionContextMenuState {
-                connection_id: String::new(),
-                x: px(24.),
-                y: px(24.),
-            });
+        let state =
+            self.connection_list
+                .context_menu
+                .clone()
+                .unwrap_or(ConnectionContextMenuState {
+                    connection_id: String::new(),
+                    x: px(24.),
+                    y: px(24.),
+                });
         let connection = self
             .connections
             .iter()
@@ -39,7 +40,7 @@ impl NyaTermApp {
         let connect_label = if selected_count > 1
             && connection
                 .as_ref()
-                .is_some_and(|conn| self.selected_connection_ids.contains(&conn.id))
+                .is_some_and(|conn| self.connection_list.selected_ids.contains(&conn.id))
         {
             format!(
                 "{} ({selected_count})",
@@ -187,14 +188,13 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let state =
-            self.connection_group_context_menu
-                .clone()
-                .unwrap_or(ConnectionGroupContextMenuState {
-                    group_id: String::new(),
-                    x: px(24.),
-                    y: px(24.),
-                });
+        let state = self.connection_list.group_context_menu.clone().unwrap_or(
+            ConnectionGroupContextMenuState {
+                group_id: String::new(),
+                x: px(24.),
+                y: px(24.),
+            },
+        );
         let group_id = state.group_id.clone();
         let group_id_new = group_id.clone();
         let group_id_folder = group_id.clone();

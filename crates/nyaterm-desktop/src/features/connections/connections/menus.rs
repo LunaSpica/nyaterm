@@ -1,4 +1,11 @@
-use super::*;
+use gpui::{Context, MouseDownEvent, Window};
+use nyaterm_core::SavedConnection;
+
+use crate::features::{NyaTermApp, PendingSavedConnectionStart, SavedConnectionStartOptions};
+use crate::models::{
+    ConnectionContextMenuState, ConnectionGroupContextMenuState, ConnectionGroupOpenConfirmState,
+    MainMode, NavItem,
+};
 
 impl NyaTermApp {
     pub(in crate::features) fn open_connection_context_menu(
@@ -7,14 +14,16 @@ impl NyaTermApp {
         event: &MouseDownEvent,
         cx: &mut Context<Self>,
     ) {
-        self.connections_more_menu_open = false;
-        self.connection_group_context_menu = None;
-        if !self.selected_connection_ids.contains(&connection_id) {
-            self.selected_connection_ids.clear();
-            self.selected_connection_ids.insert(connection_id.clone());
-            self.last_selected_connection_id = Some(connection_id.clone());
+        self.connection_list.more_menu_open = false;
+        self.connection_list.group_context_menu = None;
+        if !self.connection_list.selected_ids.contains(&connection_id) {
+            self.connection_list.selected_ids.clear();
+            self.connection_list
+                .selected_ids
+                .insert(connection_id.clone());
+            self.connection_list.last_selected_id = Some(connection_id.clone());
         }
-        self.connection_context_menu = Some(ConnectionContextMenuState {
+        self.connection_list.context_menu = Some(ConnectionContextMenuState {
             connection_id,
             x: event.position.x,
             y: event.position.y,
@@ -28,9 +37,9 @@ impl NyaTermApp {
         event: &MouseDownEvent,
         cx: &mut Context<Self>,
     ) {
-        self.connections_more_menu_open = false;
-        self.connection_context_menu = None;
-        self.connection_group_context_menu = Some(ConnectionGroupContextMenuState {
+        self.connection_list.more_menu_open = false;
+        self.connection_list.context_menu = None;
+        self.connection_list.group_context_menu = Some(ConnectionGroupContextMenuState {
             group_id,
             x: event.position.x,
             y: event.position.y,
@@ -39,8 +48,8 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn close_connection_context_menus(&mut self, cx: &mut Context<Self>) {
-        self.connection_context_menu = None;
-        self.connection_group_context_menu = None;
+        self.connection_list.context_menu = None;
+        self.connection_list.group_context_menu = None;
         cx.notify();
     }
 
@@ -122,12 +131,12 @@ impl NyaTermApp {
         if connection_count == 0 {
             return;
         }
-        self.connection_group_open_confirm = Some(ConnectionGroupOpenConfirmState {
+        self.connection_list.group_open_confirm = Some(ConnectionGroupOpenConfirmState {
             group_id,
             label: group.name.clone(),
             connection_count,
         });
-        window.focus(&self.connection_group_open_confirm_focus);
+        window.focus(&self.connection_list.group_open_confirm_focus);
         cx.notify();
     }
 
@@ -135,7 +144,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        self.connection_group_open_confirm = None;
+        self.connection_list.group_open_confirm = None;
         cx.notify();
     }
 
@@ -144,7 +153,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(confirm) = self.connection_group_open_confirm.take() else {
+        let Some(confirm) = self.connection_list.group_open_confirm.take() else {
             return;
         };
         self.start_group_connections(confirm.group_id, window, cx);

@@ -234,9 +234,9 @@ impl NyaTermApp {
             .flex()
             .flex_col()
             .gap_3()
-            .track_focus(&self.connection_group_open_confirm_focus)
+            .track_focus(&self.connection_list.group_open_confirm_focus)
             .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(&this.connection_group_open_confirm_focus);
+                window.focus(&this.connection_list.group_open_confirm_focus);
                 cx.notify();
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {

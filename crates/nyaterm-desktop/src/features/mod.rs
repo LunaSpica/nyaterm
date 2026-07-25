@@ -27,7 +27,6 @@ mod connection_editor_window;
 mod connection_import_runtime;
 #[path = "connections/connection_runtime.rs"]
 mod connection_runtime;
-#[path = "connections/connections.rs"]
 mod connections;
 #[path = "session/credential_autofill_runtime.rs"]
 mod credential_autofill_runtime;
@@ -172,7 +171,7 @@ pub(in crate::features) use connection_editor_window::ConnectionEditorWindow;
 pub(in crate::features) use connection_runtime::ConnectionEditorToggle;
 pub(in crate::features) use connections::{
     ConnectionDragKind, ConnectionDragPayload, ConnectionDragPreview, ConnectionDropPosition,
-    ConnectionDropTarget,
+    ConnectionDropTarget, ConnectionListFeatureState,
 };
 pub(in crate::features) use formatting::*;
 pub(in crate::features) use prompt_runtime::{

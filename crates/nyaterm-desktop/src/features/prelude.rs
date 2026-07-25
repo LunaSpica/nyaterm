@@ -36,7 +36,9 @@ pub(super) use nyaterm_core::{
     terminal_resize_geometry_for_size_with_insets_and_scale, terminal_snapped_cell_height,
     terminal_wire_write_disposition, truncate_preview, uuid,
 };
-pub(super) use nyaterm_legacy::{LegacyProject, MigrationInventory};
+#[cfg(feature = "migration-dashboard")]
+pub(super) use nyaterm_legacy::LegacyProject;
+pub(super) use nyaterm_legacy::MigrationInventory;
 pub(super) use nyaterm_terminal::{
     TerminalEffects, TerminalOutputDecoder, TerminalScreen, TerminalSnapshot,
 };
@@ -81,7 +83,7 @@ pub(super) use crate::models::{
     ConnectionEditorField, ConnectionEditorMenu, ConnectionEditorPasswordSource,
     ConnectionEditorState, ConnectionEditorTelnetTab, ConnectionGroupContextMenuState,
     ConnectionGroupDeleteConfirmState, ConnectionGroupEditorState, ConnectionGroupOpenConfirmState,
-    ConnectionImportSource, ConnectionKindTab, ConnectionSortMode, CredentialAutofillMatchEvent,
+    ConnectionKindTab, ConnectionSortMode, CredentialAutofillMatchEvent,
     CredentialAutofillMatchOutcome, CredentialAutofillMatchPipeline,
     CredentialAutofillMatchRequest, CredentialAutofillMatchRequestKey, CredentialSuggestionState,
     DiagnosticsPathPromptKind, DiagnosticsPathPromptResult, DockerConfirmAction,

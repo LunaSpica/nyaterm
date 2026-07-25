@@ -1,4 +1,11 @@
-use super::*;
+use gpui::{
+    App, ClickEvent, Context, FontWeight, IntoElement, KeyDownEvent, Window, div, prelude::*, px,
+    rgb, rgba, svg,
+};
+
+use crate::features::{NyaTermApp, modal_close_icon_button};
+use crate::models::ConnectionImportSource;
+use crate::theme::ThemePalette;
 
 impl NyaTermApp {
     pub(in crate::features) fn connection_import_overlay(
@@ -28,7 +35,7 @@ impl NyaTermApp {
             .items_center()
             .justify_center()
             .p_3()
-            .track_focus(&self.connection_import_focus)
+            .track_focus(&self.connection_list.import_focus)
             .on_click(cx.listener(|this, _, _, cx| {
                 this.close_connection_import_dialog(cx);
             }))
@@ -218,7 +225,7 @@ impl NyaTermApp {
 }
 
 fn connection_import_source_card(
-    palette: crate::theme::ThemePalette,
+    palette: ThemePalette,
     id: &'static str,
     icon: &'static str,
     label: &'static str,

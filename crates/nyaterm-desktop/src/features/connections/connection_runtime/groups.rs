@@ -119,7 +119,9 @@ impl NyaTermApp {
 
         match self.with_connection_store(|store| store.save_group(&group)) {
             Ok(()) => {
-                self.expanded_connection_groups.insert(group.id.clone());
+                self.connection_list
+                    .expanded_group_ids
+                    .insert(group.id.clone());
                 self.connection_group_editor = None;
                 self.refresh_store_from_runtime();
                 self.terminal_status = format!("saved connection group {}", group.name);

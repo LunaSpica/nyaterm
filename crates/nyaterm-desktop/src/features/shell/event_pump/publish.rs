@@ -10,6 +10,8 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
         include_sideband: bool,
     ) {
+        // Source of truth: NyaTermApp / FeatureState. Entity stores receive
+        // one-way read-model snapshots here; they do not drive app mutations.
         if !include_sideband && self.published_core_store_snapshots_are_current(cx) {
             return;
         }
@@ -110,12 +112,12 @@ impl NyaTermApp {
         let connections = crate::entities::ConnectionsSnapshot {
             connection_count: self.connections.len(),
             group_count: self.connection_groups.len(),
-            search_active: !self.connection_search_draft.trim().is_empty(),
+            search_active: !self.connection_list.search_draft.trim().is_empty(),
             editor_open: self.connection_editor.is_some(),
             group_editor_open: self.connection_group_editor.is_some(),
             delete_confirm_open: self.connection_delete_confirm.is_some()
                 || self.connection_group_delete_confirm.is_some(),
-            sort_mode: format!("{:?}", self.connection_sort_mode),
+            sort_mode: format!("{:?}", self.connection_list.sort_mode),
         };
         let active_job_count = self
             .transfer_jobs

@@ -645,10 +645,10 @@ impl NyaTermApp {
                 self.connection_editor = None;
                 self.connection_editor_window = None;
                 self.connection_editor_window_open_pending = false;
-                self.selected_connection_ids.clear();
-                self.selected_connection_ids.insert(saved.id.clone());
+                self.connection_list.selected_ids.clear();
+                self.connection_list.selected_ids.insert(saved.id.clone());
                 if let Some(group_id) = saved.group_id.clone() {
-                    self.expanded_connection_groups.insert(group_id);
+                    self.connection_list.expanded_group_ids.insert(group_id);
                 }
                 self.terminal_status = format!("saved connection {}", saved.name);
                 if connect_after_save {

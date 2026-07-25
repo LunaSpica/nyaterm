@@ -437,7 +437,7 @@ impl NyaTermApp {
             && !self.host_key_prompts.has_pending()
             && !self.credential_prompts.has_pending()
             && !self.duplicate_prompts.has_pending()
-            && self.connection_hover_pending.is_none()
+            && self.connection_list.hover_pending.is_none()
             && self.action_link_hover_pending.is_none()
             && self.pending_auto_recording_session.is_none()
             && self.pending_tunnels.is_empty()

@@ -1,4 +1,9 @@
 //! GPUI entity-state boundaries for the native shell.
+//!
+//! During the migration, `NyaTermApp` and its feature-state structs remain the
+//! authoritative UI state. These stores hold read-only snapshot projections
+//! published from the app; mutation helpers are retained for focused store tests
+//! until a specific domain explicitly migrates ownership to an Entity.
 
 mod domain;
 mod handles;
