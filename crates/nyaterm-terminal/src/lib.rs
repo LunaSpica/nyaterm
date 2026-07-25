@@ -2048,6 +2048,48 @@ mod tests {
     }
 
     #[test]
+    fn ubuntu_motd_links_survive_resize_without_row_overwrite() {
+        let mut screen = TerminalScreen::new(80, 24);
+        screen.advance(
+            concat!(
+                "Welcome to Ubuntu 24.04.4 LTS (GNU/Linux 6.8.0-107-generic x86_64)\r\n",
+                "\r\n",
+                " * Documentation:  \x1b]8;;https://help.ubuntu.com\x07https://help.ubuntu.com\x1b]8;;\x07\r\n",
+                " * Management:     \x1b]8;;https://landscape.canonical.com\x07https://landscape.canonical.com\x1b]8;;\x07\r\n",
+                " * Support:        \x1b]8;;https://ubuntu.com/pro\x07https://ubuntu.com/pro\x1b]8;;\x07\r\n",
+                "\r\n",
+                "System information as of Sat Jul 25 12:54:01 PM CST 2026\r\n",
+                "\r\n",
+                "  System load:           4.86\r\n",
+                "  Usage of /:            18.3% of 106.92GB\r\n",
+                "  Memory usage:          65%\r\n",
+                "  Swap usage:            100%\r\n",
+                "  Temperature:           45.0 C\r\n",
+                "  Processes:             500\r\n",
+                "  Users logged in:       0\r\n",
+            )
+            .as_bytes(),
+        );
+        screen.resize(120, 40);
+
+        let lines = screen.all_lines();
+        assert!(
+            lines
+                .iter()
+                .any(|line| line.contains("Management:     https://landscape.canonical.com")),
+            "lines={lines:#?}"
+        );
+        assert_eq!(
+            lines
+                .iter()
+                .filter(|line| line.contains("Users logged in:"))
+                .count(),
+            1,
+            "lines={lines:#?}"
+        );
+    }
+
+    #[test]
     fn osc_sets_window_title() {
         let mut screen = TerminalScreen::new(20, 5);
         screen.advance(b"\x1b]2;hello-host\x07");

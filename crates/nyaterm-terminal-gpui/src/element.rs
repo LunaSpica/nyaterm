@@ -453,6 +453,37 @@ mod layout_cache_tests {
     }
 
     #[test]
+    fn row_layout_key_tracks_display_text_even_with_signature() {
+        let mut snapshot = TerminalScreen::default().snapshot();
+        edit_snapshot_row(&mut snapshot, 0, |row| row.signature = 7);
+        let element = NyaTerminalElement::new(
+            Arc::new(snapshot),
+            Arc::new(Vec::new()),
+            Vec::new(),
+            false,
+            "block",
+            8.0,
+            16.0,
+            nyaterm_ui::theme_palette("github-dark"),
+            "monospace".to_string(),
+            14.0,
+            400.0,
+            700.0,
+        );
+        let decorations = TerminalLineDecorations::default();
+
+        assert_ne!(
+            element.row_layout_key(
+                0,
+                "Management: https://landscape.canonical.com",
+                None,
+                &decorations
+            ),
+            element.row_layout_key(0, "Users logged in:", None, &decorations),
+        );
+    }
+
+    #[test]
     fn row_layout_key_tracks_cell_width() {
         let mut snapshot = TerminalScreen::default().snapshot();
         edit_snapshot_row(&mut snapshot, 0, |row| {
@@ -1583,14 +1614,9 @@ fn terminal_row_layout_key(
     paint_style_key: u64,
 ) -> u64 {
     let mut hasher = DefaultHasher::new();
-    if let Some(signature) = line_signature {
-        signature.hash(&mut hasher);
-    } else {
-        // Synthetic callers without terminal row signatures retain the
-        // defensive content/style fallback.
-        display_line.hash(&mut hasher);
-        hash_styled_spans(ansi_spans, &mut hasher);
-    }
+    line_signature.hash(&mut hasher);
+    display_line.hash(&mut hasher);
+    hash_styled_spans(ansi_spans, &mut hasher);
     hash_stable_glyph_decorations(decorations, &mut hasher);
     keyword_spans_present.hash(&mut hasher);
     paint_style_key.hash(&mut hasher);
