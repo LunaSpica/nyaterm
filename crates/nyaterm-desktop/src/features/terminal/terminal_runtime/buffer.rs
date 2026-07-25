@@ -2024,6 +2024,7 @@ mod frame_event_queue_tests {
                 matcher_key: lightweight_key,
                 absolute_start_row: 0,
                 absolute_end_row: 0,
+                row_signatures: Vec::new(),
                 matches_by_line: Vec::new(),
                 cell_ranges_by_line: Vec::new(),
             },
@@ -2041,6 +2042,7 @@ mod frame_event_queue_tests {
                 matcher_key: current_key,
                 absolute_start_row: 0,
                 absolute_end_row: 0,
+                row_signatures: Vec::new(),
                 matches_by_line: Vec::new(),
                 cell_ranges_by_line: Vec::new(),
             },
@@ -2091,6 +2093,12 @@ mod frame_event_queue_tests {
                 matcher_key,
                 absolute_start_row,
                 absolute_end_row: absolute_start_row + 1,
+                row_signatures: snapshot
+                    .rows()
+                    .iter()
+                    .take(1)
+                    .map(|row| row.signature)
+                    .collect(),
                 matches_by_line: vec![Vec::new()],
                 cell_ranges_by_line: vec![Vec::new()],
             },
@@ -2109,6 +2117,7 @@ mod frame_event_queue_tests {
                 matcher_key,
                 absolute_start_row,
                 absolute_end_row,
+                row_signatures: snapshot.rows().iter().map(|row| row.signature).collect(),
                 matches_by_line: vec![Vec::new(); snapshot.row_count()],
                 cell_ranges_by_line: vec![Vec::new(); snapshot.row_count()],
             },

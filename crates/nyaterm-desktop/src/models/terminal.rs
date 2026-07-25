@@ -60,8 +60,46 @@ pub(crate) struct TerminalFrameActionLinks {
     pub(crate) matcher_key: u64,
     pub(crate) absolute_start_row: usize,
     pub(crate) absolute_end_row: usize,
+    pub(crate) row_signatures: Vec<u64>,
     pub(crate) matches_by_line: Vec<Vec<ActionLinkMatch>>,
     pub(crate) cell_ranges_by_line: Vec<Vec<(usize, usize)>>,
+}
+
+impl TerminalFrameActionLinks {
+    pub(crate) fn source_index_for_snapshot_row(
+        &self,
+        snapshot: &TerminalSnapshot,
+        line_index: usize,
+    ) -> Option<usize> {
+        let row = snapshot.row(line_index)?;
+        let absolute_end_row = snapshot.total_rows.saturating_sub(snapshot.display_offset);
+        let absolute_start_row = absolute_end_row.saturating_sub(snapshot.row_count());
+        let absolute_row = absolute_start_row.checked_add(line_index)?;
+        if absolute_row >= absolute_end_row
+            || absolute_row < self.absolute_start_row
+            || absolute_row >= self.absolute_end_row
+        {
+            return None;
+        }
+        let source_index = absolute_row - self.absolute_start_row;
+        if self.row_signatures.get(source_index).copied()? != row.signature {
+            return None;
+        }
+        Some(source_index)
+    }
+
+    pub(crate) fn overlaps_snapshot(&self, snapshot: &TerminalSnapshot) -> bool {
+        let absolute_end_row = snapshot.total_rows.saturating_sub(snapshot.display_offset);
+        let absolute_start_row = absolute_end_row.saturating_sub(snapshot.row_count());
+        self.absolute_start_row < absolute_end_row && absolute_start_row < self.absolute_end_row
+    }
+
+    pub(crate) fn covers_all_snapshot_rows(&self, snapshot: &TerminalSnapshot) -> bool {
+        (0..snapshot.row_count()).all(|line_index| {
+            self.source_index_for_snapshot_row(snapshot, line_index)
+                .is_some()
+        })
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -332,18 +370,24 @@ pub(crate) fn terminal_action_link_matcher_key(
     hasher.finish()
 }
 
-fn prepare_terminal_frame_action_links(
+pub(crate) fn prepare_terminal_frame_action_links(
     snapshot: &TerminalSnapshot,
     enabled: bool,
     matchers: &ActionLinksMatcherSettings,
 ) -> Option<TerminalFrameActionLinks> {
     let absolute_end_row = snapshot.total_rows.saturating_sub(snapshot.display_offset);
     let absolute_start_row = absolute_end_row.saturating_sub(snapshot.row_count());
+    let row_signatures = snapshot
+        .rows()
+        .iter()
+        .map(|row| row.signature)
+        .collect::<Vec<_>>();
     if !enabled {
         return Some(TerminalFrameActionLinks {
             matcher_key: terminal_action_link_matcher_key(false, matchers),
             absolute_start_row,
             absolute_end_row,
+            row_signatures,
             matches_by_line: vec![Vec::new(); snapshot.row_count()],
             cell_ranges_by_line: vec![Vec::new(); snapshot.row_count()],
         });
@@ -381,6 +425,7 @@ fn prepare_terminal_frame_action_links(
         matcher_key: terminal_action_link_matcher_key(true, matchers),
         absolute_start_row,
         absolute_end_row,
+        row_signatures,
         matches_by_line,
         cell_ranges_by_line,
     })
@@ -840,8 +885,13 @@ impl TerminalViewState {
         }
         let old_scrollback_len = self.scrollback_len_for_anchor();
         let new_scrollback_len = snapshot.scrollback_len;
+        let preserved_action_links = action_links.or_else(|| {
+            self.frame_action_links
+                .take()
+                .filter(|links| links.covers_all_snapshot_rows(snapshot.as_ref()))
+        });
         self.frame_snapshot = Some(snapshot);
-        self.frame_action_links = action_links;
+        self.frame_action_links = preserved_action_links;
         self.protocol_state = protocol_state;
         self.screen_revision = revision;
         self.grid_resize_pending = false;
@@ -863,8 +913,13 @@ impl TerminalViewState {
     ) {
         let old_scrollback_len = self.scrollback_len_for_anchor();
         let new_scrollback_len = snapshot.scrollback_len;
+        let preserved_action_links = action_links.or_else(|| {
+            self.frame_action_links
+                .take()
+                .filter(|links| links.covers_all_snapshot_rows(snapshot.as_ref()))
+        });
         self.frame_snapshot = Some(snapshot);
-        self.frame_action_links = action_links;
+        self.frame_action_links = preserved_action_links;
         self.grid_resize_pending = false;
         if revision > self.screen_revision {
             self.screen_revision = revision;
@@ -3172,6 +3227,7 @@ mod tests {
                     matcher_key: 0,
                     absolute_start_row: 0,
                     absolute_end_row: 0,
+                    row_signatures: Vec::new(),
                     matches_by_line: Vec::new(),
                     cell_ranges_by_line: Vec::new(),
                 },
@@ -3954,6 +4010,45 @@ mod tests {
         assert!(disabled.matches_by_line.iter().all(Vec::is_empty));
         assert!(disabled.cell_ranges_by_line.iter().all(Vec::is_empty));
         assert_ne!(links.matcher_key, disabled.matcher_key);
+    }
+
+    #[test]
+    fn live_output_frame_without_action_links_preserves_matching_links() {
+        let mut screen = TerminalScreen::new(40, 3);
+        screen.advance_decoded_text("visit http://example.com");
+        let snapshot = Arc::new(screen.viewport_snapshot(0));
+        let matchers = ActionLinksMatcherSettings::default();
+        let links = prepare_terminal_frame_action_links(&snapshot, true, &matchers).unwrap();
+        let mut view = TerminalViewState::new();
+
+        view.apply_terminal_live_snapshot_frame(snapshot.clone(), Some(links), 1);
+        view.apply_terminal_live_snapshot_frame(snapshot, None, 2);
+
+        assert!(view.frame_action_links.as_ref().is_some_and(|links| {
+            links
+                .matches_by_line
+                .iter()
+                .flatten()
+                .any(|item| item.value == "http://example.com")
+        }));
+    }
+
+    #[test]
+    fn live_output_frame_without_action_links_drops_signature_mismatch() {
+        let mut first_screen = TerminalScreen::new(40, 3);
+        first_screen.advance_decoded_text("visit http://example.com");
+        let first_snapshot = Arc::new(first_screen.viewport_snapshot(0));
+        let matchers = ActionLinksMatcherSettings::default();
+        let links = prepare_terminal_frame_action_links(&first_snapshot, true, &matchers).unwrap();
+        let mut second_screen = TerminalScreen::new(40, 3);
+        second_screen.advance_decoded_text("plain output");
+        let second_snapshot = Arc::new(second_screen.viewport_snapshot(0));
+        let mut view = TerminalViewState::new();
+
+        view.apply_terminal_live_snapshot_frame(first_snapshot, Some(links), 1);
+        view.apply_terminal_live_snapshot_frame(second_snapshot, None, 2);
+
+        assert!(view.frame_action_links.is_none());
     }
 
     #[test]

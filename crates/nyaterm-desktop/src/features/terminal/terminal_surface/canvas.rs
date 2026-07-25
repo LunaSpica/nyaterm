@@ -1395,6 +1395,7 @@ mod tests {
             matcher_key: 42,
             absolute_start_row,
             absolute_end_row,
+            row_signatures: snapshot.rows().iter().map(|row| row.signature).collect(),
             matches_by_line: Vec::new(),
             cell_ranges_by_line: vec![vec![(1, 4)]],
         };

@@ -197,15 +197,14 @@ impl NyaTermApp {
             let Some(view) = self.terminal_views.get(session_id) else {
                 return None;
             };
-            if offset == 0 {
-                view.frame_action_links.as_ref()
-            } else {
-                view.scrollback_action_links.get(&offset)
-            }
-            .filter(|links| links.matcher_key == action_link_matcher_key)
-            .cloned()
+            crate::features::terminal_surface::terminal_action_links_for_paint_snapshot(
+                Some(view),
+                offset,
+                snapshot.as_ref(),
+                action_link_matcher_key,
+            )
         } else {
-            None
+            Vec::new()
         };
         let snapshot_row = self.terminal_snapshot_row_for_session_viewport_row(
             session_id,
@@ -218,17 +217,22 @@ impl NyaTermApp {
             return None;
         }
         let byte_offset = terminal_byte_index_for_cell_col(line, cell.col);
-        let item = if let Some(links) = frame_action_links.as_ref() {
-            links
-                .matches_by_line
-                .get(snapshot_row)?
-                .iter()
-                .find(|item| byte_offset >= item.start && byte_offset < item.end)
-                .cloned()?
-        } else {
-            let matchers = &self.settings.terminal_action_links_matchers;
-            match_at_offset(line, byte_offset, matchers)?
-        };
+        let item = frame_action_links
+            .iter()
+            .find_map(|links| {
+                let source_index =
+                    links.source_index_for_snapshot_row(snapshot.as_ref(), snapshot_row)?;
+                links
+                    .matches_by_line
+                    .get(source_index)?
+                    .iter()
+                    .find(|item| byte_offset >= item.start && byte_offset < item.end)
+                    .cloned()
+            })
+            .or_else(|| {
+                let matchers = &self.settings.terminal_action_links_matchers;
+                match_at_offset(line, byte_offset, matchers)
+            })?;
         let actions = actions_for_match(&item);
         Some((item, actions))
     }

@@ -1724,6 +1724,38 @@ impl NyaTermApp {
         }
     }
 
+    fn ensure_terminal_live_action_links_for_snapshot(
+        &mut self,
+        session_id: &str,
+        display_offset: usize,
+        snapshot: &std::sync::Arc<TerminalSnapshot>,
+        action_links_enabled: bool,
+    ) {
+        if display_offset != 0 || !action_links_enabled {
+            return;
+        }
+        let Some(view) = self.terminal_views.get(session_id) else {
+            return;
+        };
+        let matcher_key =
+            terminal_action_link_matcher_key(true, &self.settings.terminal_action_links_matchers);
+        if view.frame_action_links.as_ref().is_some_and(|links| {
+            links.matcher_key == matcher_key && links.covers_all_snapshot_rows(snapshot.as_ref())
+        }) {
+            return;
+        }
+        let Some(action_links) = crate::models::prepare_terminal_frame_action_links(
+            snapshot.as_ref(),
+            true,
+            &self.settings.terminal_action_links_matchers,
+        ) else {
+            return;
+        };
+        if let Some(view) = self.terminal_views.get_mut(session_id) {
+            view.frame_action_links = Some(action_links);
+        }
+    }
+
     fn sync_terminal_scroll_text_first_surface_paint(
         &mut self,
         session_id: &str,
@@ -1761,6 +1793,17 @@ impl NyaTermApp {
         ) else {
             return false;
         };
+        let action_links_enabled =
+            self.settings.terminal_action_links_enabled && !self.settings.terminal_low_latency_mode;
+        self.ensure_terminal_live_action_links_for_snapshot(
+            session_id,
+            display_offset,
+            &snapshot,
+            action_links_enabled,
+        );
+        let Some(view) = self.terminal_views.get(session_id) else {
+            return false;
+        };
         let palette = self.terminal_theme_palette();
         let transparent_background = self.wallpaper_enabled();
         let font_family = self.gpui_terminal_font_family();
@@ -1791,8 +1834,6 @@ impl NyaTermApp {
         } else {
             Vec::new()
         };
-        let action_links_enabled =
-            self.settings.terminal_action_links_enabled && !self.settings.terminal_low_latency_mode;
         let action_link_matcher_key = terminal_action_link_matcher_key(
             action_links_enabled,
             &self.settings.terminal_action_links_matchers,
@@ -2005,6 +2046,17 @@ impl NyaTermApp {
             retained_surface_snapshot,
         );
         let snapshot_duration = snapshot_started_at.elapsed();
+        let action_links_enabled =
+            self.settings.terminal_action_links_enabled && !self.settings.terminal_low_latency_mode;
+        if let Some(snapshot) = snapshot.as_ref() {
+            self.ensure_terminal_live_action_links_for_snapshot(
+                session_id,
+                display_offset,
+                snapshot,
+                action_links_enabled,
+            );
+        }
+        let view = self.terminal_views.get(session_id);
         let palette = self.terminal_theme_palette();
         let transparent_background = self.wallpaper_enabled();
         let font_family = self.gpui_terminal_font_family();
@@ -2104,8 +2156,6 @@ impl NyaTermApp {
         };
 
         let search_mapping_started_at = Instant::now();
-        let action_links_enabled =
-            self.settings.terminal_action_links_enabled && !self.settings.terminal_low_latency_mode;
         let paint_policy = EffectiveTerminalPaintPolicy::resolve(
             is_active,
             render_degraded,
@@ -3402,6 +3452,7 @@ mod tests {
             matcher_key: 1,
             absolute_start_row,
             absolute_end_row,
+            row_signatures: snapshot.rows().iter().map(|row| row.signature).collect(),
             matches_by_line: vec![Vec::new(); snapshot.row_count()],
             cell_ranges_by_line: vec![Vec::new(); snapshot.row_count()],
         };
@@ -3432,10 +3483,12 @@ mod tests {
             matcher_key: 1,
             absolute_start_row: snapshot_start.saturating_sub(2),
             absolute_end_row: snapshot_end.saturating_add(2),
+            row_signatures: vec![0; snapshot.row_count() + 4],
             matches_by_line: vec![Vec::new(); snapshot.row_count() + 4],
             cell_ranges_by_line: vec![Vec::new(); snapshot.row_count() + 4],
         };
         let relative_row = snapshot_start + 1 - links.absolute_start_row;
+        links.row_signatures[relative_row] = snapshot.rows()[1].signature;
         links.cell_ranges_by_line[relative_row].push((3, 8));
 
         let decorations = terminal_scroll_text_first_decorations(
@@ -3462,6 +3515,7 @@ mod tests {
             matcher_key: 1,
             absolute_start_row: snapshot_start,
             absolute_end_row: snapshot_start + 1,
+            row_signatures: vec![snapshot.rows()[0].signature],
             matches_by_line: vec![Vec::new()],
             cell_ranges_by_line: vec![vec![(1, 4)]],
         };
@@ -3469,6 +3523,7 @@ mod tests {
             matcher_key: 1,
             absolute_start_row: snapshot_end - 1,
             absolute_end_row: snapshot_end,
+            row_signatures: vec![snapshot.rows()[snapshot.row_count() - 1].signature],
             matches_by_line: vec![Vec::new()],
             cell_ranges_by_line: vec![vec![(3, 8)]],
         };
