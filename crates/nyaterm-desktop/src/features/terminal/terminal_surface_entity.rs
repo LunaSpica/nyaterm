@@ -1146,9 +1146,10 @@ impl TerminalSurface {
         keyword_rules: Arc<Vec<nyaterm_core::ResolvedKeywordHighlightRule>>,
         show_cursor: bool,
         cursor_style: impl Into<String>,
+        allow_empty_stale: bool,
     ) -> bool {
         let decorations = decorations.into();
-        if decorations.is_empty() && !self.decorations.is_empty() {
+        if allow_empty_stale && decorations.is_empty() && !self.decorations.is_empty() {
             let show_cursor = show_cursor && !self.visual_scroll_active();
             let cursor_style = cursor_style.into();
             let changed = !terminal_keyword_rule_sets_equal(&self.keyword_rules, &keyword_rules)
@@ -2910,6 +2911,7 @@ mod tests {
             Arc::new(Vec::new()),
             true,
             "beam",
+            true,
         );
 
         assert_eq!(surface.decorations[0].search_ranges, vec![(2, 5)]);
@@ -2924,11 +2926,42 @@ mod tests {
             Arc::new(Vec::new()),
             true,
             "underline",
+            true,
         );
 
         assert!(surface.decorations[0].search_ranges.is_empty());
         assert_eq!(surface.decorations[0].active_search_ranges, vec![(6, 8)]);
         assert_eq!(surface.cursor_style, "underline");
+    }
+
+    #[test]
+    fn empty_decorations_clear_stale_links_when_preserve_not_allowed() {
+        let snapshot = Arc::new(TerminalScreen::default().viewport_snapshot(0));
+        let rows = snapshot.row_count();
+        let mut surface = TerminalSurface::new("session");
+
+        surface.apply_frame_snapshot(
+            snapshot, 0, 0.0, 0, 10, rows, false, None, 0, true, true, "block",
+        );
+        surface.set_decorations_and_keywords(
+            vec![TerminalLineDecorations {
+                link_ranges: vec![(1, 3)],
+                ..TerminalLineDecorations::default()
+            }],
+            Arc::new(Vec::new()),
+            true,
+            "block",
+        );
+
+        assert!(surface.set_decorations_and_keywords_preserving_stale(
+            Vec::new(),
+            Arc::new(Vec::new()),
+            true,
+            "block",
+            false,
+        ));
+
+        assert!(surface.decorations.is_empty());
     }
 
     #[test]

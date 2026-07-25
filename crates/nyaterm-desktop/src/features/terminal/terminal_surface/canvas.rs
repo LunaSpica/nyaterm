@@ -105,7 +105,6 @@ impl NyaTermApp {
         let frame_action_links = if session_id.is_empty() {
             self.terminal_views
                 .get(&session_id)
-                .filter(|_| expensive_interactions_enabled)
                 .and_then(|view| {
                     if display_offset == 0 {
                         view.frame_action_links.as_ref()
@@ -238,14 +237,14 @@ impl NyaTermApp {
             let has_selection = terminal_selection.is_some();
             let has_search_decorations =
                 !search_ranges_by_line.is_empty() || !active_search_ranges_by_line.is_empty();
-            let has_frame_action_links = expensive_interactions_enabled
+            let has_frame_action_links = action_links_enabled
                 && frame_action_links.is_some_and(|links| {
                     links
                         .cell_ranges_by_line
                         .iter()
                         .any(|ranges| !ranges.is_empty())
                 });
-            let has_hyperlinks = expensive_interactions_enabled
+            let has_hyperlinks = action_links_enabled
                 && snapshot.rows().iter().any(|row| !row.hyperlinks.is_empty());
             let include_command_marks = is_active
                 && render_profile.enhanced_decorations_enabled()
@@ -260,8 +259,8 @@ impl NyaTermApp {
                 has_command_marks,
             );
             let line_decorations = if needs_line_decorations {
-                let include_action_links = expensive_interactions_enabled;
-                let include_hyperlinks = expensive_interactions_enabled;
+                let include_action_links = action_links_enabled;
+                let include_hyperlinks = action_links_enabled;
                 let decoration_cache_key = terminal_line_decorations_cache_key(
                     &snapshot,
                     terminal_selection,

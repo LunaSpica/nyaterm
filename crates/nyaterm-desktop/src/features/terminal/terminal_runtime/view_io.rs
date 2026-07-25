@@ -356,44 +356,45 @@ fn terminal_snapshot_row_slice(
 fn terminal_scroll_text_first_decorations(
     snapshot: &TerminalSnapshot,
     search_matches: Option<&[TerminalBufferMatch]>,
+    frame_action_links: Option<&TerminalFrameActionLinks>,
+    include_action_links: bool,
+    include_hyperlinks: bool,
     include_command_marks: bool,
 ) -> Vec<TerminalLineDecorations> {
     let has_command_marks =
         include_command_marks && snapshot.rows().iter().any(|row| row.command_mark.is_some());
-    let Some(search_matches) = search_matches else {
-        if !has_command_marks {
-            return Vec::new();
-        }
-        return crate::features::terminal_surface::build_terminal_line_decorations(
-            snapshot,
-            None,
-            0,
-            &HashMap::new(),
-            &HashMap::new(),
-            None,
-            false,
-            false,
-            include_command_marks,
-        );
-    };
-    if search_matches.is_empty() && !has_command_marks {
-        return Vec::new();
-    }
-
-    let (abs_start, abs_end) =
-        crate::features::terminal_surface::terminal_snapshot_absolute_range(snapshot);
     let mut search_ranges_by_line: HashMap<usize, Vec<(usize, usize)>> = HashMap::new();
-    for search_match in search_matches {
-        let abs = search_match.line_index;
-        if abs < abs_start || abs >= abs_end {
-            continue;
+    if let Some(search_matches) = search_matches {
+        let (abs_start, abs_end) =
+            crate::features::terminal_surface::terminal_snapshot_absolute_range(snapshot);
+        for search_match in search_matches {
+            let abs = search_match.line_index;
+            if abs < abs_start || abs >= abs_end {
+                continue;
+            }
+            search_ranges_by_line
+                .entry(abs - abs_start)
+                .or_default()
+                .push((search_match.start_col, search_match.end_col));
         }
-        search_ranges_by_line
-            .entry(abs - abs_start)
-            .or_default()
-            .push((search_match.start_col, search_match.end_col));
     }
-    if search_ranges_by_line.is_empty() && !has_command_marks {
+    let has_search_decorations = !search_ranges_by_line.is_empty();
+    let has_frame_action_links = include_action_links
+        && frame_action_links.is_some_and(|links| {
+            links
+                .cell_ranges_by_line
+                .iter()
+                .any(|ranges| !ranges.is_empty())
+        });
+    let has_hyperlinks =
+        include_hyperlinks && snapshot.rows().iter().any(|row| !row.hyperlinks.is_empty());
+    if !crate::features::terminal_surface::terminal_line_decorations_needed(
+        false,
+        has_search_decorations,
+        has_frame_action_links,
+        has_hyperlinks,
+        has_command_marks,
+    ) {
         return Vec::new();
     }
 
@@ -403,9 +404,9 @@ fn terminal_scroll_text_first_decorations(
         0,
         &search_ranges_by_line,
         &HashMap::new(),
-        None,
-        false,
-        false,
+        frame_action_links,
+        include_action_links,
+        include_hyperlinks,
         include_command_marks,
     )
 }
@@ -1792,11 +1793,42 @@ impl NyaTermApp {
         } else {
             Vec::new()
         };
+        let action_links_enabled =
+            self.settings.terminal_action_links_enabled && !self.settings.terminal_low_latency_mode;
+        let action_link_matcher_key = terminal_action_link_matcher_key(
+            action_links_enabled,
+            &self.settings.terminal_action_links_matchers,
+        );
+        let frame_action_links = action_links_enabled
+            .then(|| {
+                if display_offset == 0 {
+                    view.frame_action_links.as_ref()
+                } else {
+                    view.scrollback_action_links.get(&display_offset)
+                }
+            })
+            .flatten()
+            .filter(|links| links.matcher_key == action_link_matcher_key);
+        let needs_scroll_enrichment = super::buffer::terminal_scroll_enrichment_should_request(
+            display_offset > 0,
+            display_offset,
+            action_links_enabled.then_some(action_link_matcher_key),
+            Some(view),
+        );
         let decorations = terminal_scroll_text_first_decorations(
             snapshot.as_ref(),
             (!search_matches.is_empty()).then_some(search_matches.as_slice()),
+            frame_action_links,
+            action_links_enabled,
+            action_links_enabled,
             is_active && !input_latency_active && !self.settings.terminal_low_latency_mode,
         );
+        let has_action_link_decorations = frame_action_links.is_some_and(|links| {
+            links
+                .cell_ranges_by_line
+                .iter()
+                .any(|ranges| !ranges.is_empty())
+        });
         let configured_keyword_rules = self.resolved_keyword_highlight_rules();
         let clear_keyword_highlights = configured_keyword_rules.is_empty();
         let keyword_rules = if terminal_keyword_highlight_updates_allowed(is_active) {
@@ -1804,6 +1836,10 @@ impl NyaTermApp {
         } else {
             std::sync::Arc::new(Vec::new())
         };
+        if needs_scroll_enrichment {
+            let _ = self
+                .request_terminal_frame_snapshot_for_scroll_enrichment(session_id, display_offset);
+        }
         self.remember_terminal_scroll_window_snapshot(session_id, display_offset, &snapshot);
         surface.update(cx, |surface, cx| {
             let mut changed = false;
@@ -1835,25 +1871,22 @@ impl NyaTermApp {
                 has_new,
                 performance_overlay,
                 skipped,
-                false,
+                has_action_link_decorations,
                 false,
                 "block",
             );
             let paint_details_changed = if frame_applied {
-                if render_degraded || user_scroll_active || input_latency_active {
-                    surface.set_decorations_and_keywords_preserving_stale(
-                        decorations,
-                        keyword_rules,
-                        false,
-                        "block",
-                    )
-                } else {
-                    surface.set_decorations_and_keywords(decorations, keyword_rules, false, "block")
-                }
+                surface.set_decorations_and_keywords(decorations, keyword_rules, false, "block")
             } else if !render_degraded && !user_scroll_active && !input_latency_active {
                 surface.set_decorations_and_keywords(decorations, keyword_rules, false, "block")
             } else {
-                false
+                surface.set_decorations_and_keywords_preserving_stale(
+                    decorations,
+                    keyword_rules,
+                    false,
+                    "block",
+                    true,
+                )
             };
             if frame_applied || paint_details_changed {
                 surface.schedule_keyword_highlights(clear_keyword_highlights, cx);
@@ -2088,15 +2121,19 @@ impl NyaTermApp {
             action_links_enabled,
         );
         let enhanced = paint_policy.enhanced_decorations;
-        let expensive_interactions = paint_policy.expensive_interactions;
         let action_link_matcher_key = terminal_action_link_matcher_key(
             action_links_enabled,
             &self.settings.terminal_action_links_matchers,
         );
         let frame_action_links = frame_action_links
             .as_ref()
-            .filter(|_| expensive_interactions)
             .filter(|links| links.matcher_key == action_link_matcher_key);
+        let needs_scroll_enrichment = super::buffer::terminal_scroll_enrichment_should_request(
+            display_offset > 0,
+            display_offset,
+            action_links_enabled.then_some(action_link_matcher_key),
+            view,
+        );
 
         let mut search_ranges_by_line: HashMap<usize, Vec<(usize, usize)>> = HashMap::new();
         let mut active_search_ranges_by_line: HashMap<usize, Vec<(usize, usize)>> = HashMap::new();
@@ -2151,7 +2188,7 @@ impl NyaTermApp {
         let has_selection = terminal_selection.is_some();
         let has_search_decorations =
             !search_ranges_by_line.is_empty() || !active_search_ranges_by_line.is_empty();
-        let has_frame_action_links = expensive_interactions
+        let has_frame_action_links = action_links_enabled
             && frame_action_links.is_some_and(|links| {
                 links
                     .cell_ranges_by_line
@@ -2159,7 +2196,7 @@ impl NyaTermApp {
                     .any(|ranges| !ranges.is_empty())
             });
         let has_hyperlinks =
-            expensive_interactions && snapshot.rows().iter().any(|row| !row.hyperlinks.is_empty());
+            action_links_enabled && snapshot.rows().iter().any(|row| !row.hyperlinks.is_empty());
         let include_command_marks = paint_policy.include_command_marks;
         let has_command_marks =
             include_command_marks && snapshot.rows().iter().any(|row| row.command_mark.is_some());
@@ -2171,8 +2208,8 @@ impl NyaTermApp {
             has_hyperlinks,
             has_command_marks,
         ) {
-            let include_action_links = expensive_interactions;
-            let include_hyperlinks = expensive_interactions;
+            let include_action_links = action_links_enabled;
+            let include_hyperlinks = action_links_enabled;
             let decoration_cache_key =
                 crate::features::terminal_surface::terminal_line_decorations_cache_key(
                     &snapshot,
@@ -2208,6 +2245,11 @@ impl NyaTermApp {
             std::sync::Arc::from(Vec::<TerminalLineDecorations>::new())
         };
         let decorations_duration = decorations_started_at.elapsed();
+
+        if needs_scroll_enrichment {
+            let _ = self
+                .request_terminal_frame_snapshot_for_scroll_enrichment(session_id, display_offset);
+        }
 
         let prep_duration = paint_started_at.elapsed();
         if display_offset > 0
@@ -2272,21 +2314,12 @@ impl NyaTermApp {
                 cursor_style.clone(),
             );
             let paint_details_changed = if frame_applied {
-                if render_degraded {
-                    surface.set_decorations_and_keywords_preserving_stale(
-                        decorations,
-                        keyword_rules,
-                        show_cursor,
-                        cursor_style,
-                    )
-                } else {
-                    surface.set_decorations_and_keywords(
-                        decorations,
-                        keyword_rules,
-                        show_cursor,
-                        cursor_style,
-                    )
-                }
+                surface.set_decorations_and_keywords(
+                    decorations,
+                    keyword_rules,
+                    show_cursor,
+                    cursor_style,
+                )
             } else if !render_degraded {
                 surface.set_decorations_and_keywords(
                     decorations,
@@ -2295,7 +2328,13 @@ impl NyaTermApp {
                     cursor_style,
                 )
             } else {
-                false
+                surface.set_decorations_and_keywords_preserving_stale(
+                    decorations,
+                    keyword_rules,
+                    show_cursor,
+                    cursor_style,
+                    true,
+                )
             };
             if frame_applied || paint_details_changed {
                 surface.schedule_keyword_highlights(clear_keyword_highlights, cx);
@@ -3322,7 +3361,7 @@ mod tests {
     }
 
     #[test]
-    fn terminal_scroll_text_first_decorations_keep_safe_search_overlay_only() {
+    fn terminal_scroll_text_first_decorations_keep_search_overlay_without_links() {
         let view = TerminalViewState::from_output(terminal_output_lines(80));
         let snapshot = view.screen.viewport_snapshot(6);
         let (abs_start, _) =
@@ -3333,13 +3372,46 @@ mod tests {
             end_col: 6,
         }];
 
-        let decorations =
-            terminal_scroll_text_first_decorations(&snapshot, Some(matches.as_slice()), false);
+        let decorations = terminal_scroll_text_first_decorations(
+            &snapshot,
+            Some(matches.as_slice()),
+            None,
+            true,
+            true,
+            false,
+        );
 
         assert_eq!(decorations.len(), snapshot.row_count());
         assert_eq!(decorations[1].search_ranges, vec![(2, 6)]);
         assert!(decorations[1].active_search_ranges.is_empty());
         assert!(decorations[1].link_ranges.is_empty());
+        assert!(decorations.iter().all(|line| line.selection_cols.is_none()));
+    }
+
+    #[test]
+    fn terminal_scroll_text_first_decorations_include_links_for_current_snapshot() {
+        let mut screen = TerminalScreen::new(40, 3);
+        screen.advance(b"\x1b]8;;https://example.com\x07click\x1b]8;;\x07 plain");
+        let snapshot = screen.viewport_snapshot(0);
+        let mut links = TerminalFrameActionLinks {
+            matcher_key: 1,
+            matches_by_line: vec![Vec::new(); snapshot.row_count()],
+            cell_ranges_by_line: vec![Vec::new(); snapshot.row_count()],
+        };
+        links.cell_ranges_by_line[0].push((6, 11));
+
+        let decorations = terminal_scroll_text_first_decorations(
+            &snapshot,
+            None,
+            Some(&links),
+            true,
+            true,
+            false,
+        );
+
+        assert_eq!(decorations.len(), snapshot.row_count());
+        assert_eq!(decorations[0].link_ranges, vec![(6, 11), (0, 5)]);
+        assert!(decorations[0].search_ranges.is_empty());
         assert!(decorations.iter().all(|line| line.selection_cols.is_none()));
     }
 

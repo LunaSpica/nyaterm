@@ -192,6 +192,33 @@ mod tests {
     }
 
     #[test]
+    fn link_decorations_merge_action_links_and_hyperlinks_when_included() {
+        let mut screen = nyaterm_terminal::TerminalScreen::new(40, 3);
+        screen.advance(b"\x1b]8;;https://example.com\x07click\x1b]8;;\x07 plain");
+        let snapshot = screen.viewport_snapshot(0);
+        let mut links = TerminalFrameActionLinks {
+            matcher_key: 7,
+            matches_by_line: vec![Vec::new(); snapshot.row_count()],
+            cell_ranges_by_line: vec![Vec::new(); snapshot.row_count()],
+        };
+        links.cell_ranges_by_line[0].push((6, 11));
+
+        let decorations = build_terminal_line_decorations(
+            &snapshot,
+            None,
+            0,
+            &HashMap::new(),
+            &HashMap::new(),
+            Some(&links),
+            true,
+            true,
+            false,
+        );
+
+        assert_eq!(decorations[0].link_ranges, vec![(6, 11), (0, 5)]);
+    }
+
+    #[test]
     fn decoration_cache_key_tracks_selection_viewport_anchor() {
         let snapshot = nyaterm_terminal::TerminalScreen::default().viewport_snapshot(0);
         let selection = TerminalSelection::new(TerminalCellPos::new(0, 2));

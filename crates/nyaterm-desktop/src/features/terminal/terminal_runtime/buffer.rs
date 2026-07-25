@@ -155,6 +155,14 @@ fn terminal_scroll_snapshot_request_should_enqueue(
         && view.pending_snapshot_offsets.insert(offset)
 }
 
+fn terminal_scroll_snapshot_request_action_links_enabled(
+    priority: bool,
+    action_links_enabled: bool,
+    low_latency_mode: bool,
+) -> bool {
+    priority && action_links_enabled && !low_latency_mode
+}
+
 impl NyaTermApp {
     pub(in crate::features) fn terminal_scrollback_line_limit(&self) -> usize {
         self.settings.terminal_scrollback_lines.clamp(100, 100_000) as usize
@@ -344,10 +352,15 @@ impl NyaTermApp {
             return false;
         }
         if priority {
+            let action_links_enabled = terminal_scroll_snapshot_request_action_links_enabled(
+                priority,
+                self.settings.terminal_action_links_enabled,
+                self.settings.terminal_low_latency_mode,
+            );
             self.terminal_frame_pipeline.request_priority_snapshot(
                 session_id.to_string(),
                 offset,
-                false,
+                action_links_enabled,
                 self.settings.terminal_action_links_matchers.clone(),
             );
         } else {
@@ -382,11 +395,13 @@ impl NyaTermApp {
             &view.scrollback_action_links,
             offset,
             matcher_key,
-        ) || !view.pending_snapshot_offsets.insert(offset)
+        ) || view.pending_snapshot_offsets.contains(&offset)
         {
             return false;
         }
-        self.terminal_frame_pipeline.request_snapshot(
+        view.pending_snapshot_offsets.insert(offset);
+        view.priority_pending_snapshot_offsets.insert(offset);
+        self.terminal_frame_pipeline.request_priority_snapshot(
             session_id.to_string(),
             offset,
             true,
@@ -908,7 +923,6 @@ impl NyaTermApp {
             "terminal frame snapshot row reuse"
         );
         // Snapshot applies only dirties the surface, not chrome.
-        let now = Instant::now();
         let current_action_link_matcher_key = (self.settings.terminal_action_links_enabled
             && !self.settings.terminal_low_latency_mode)
             .then(|| {
@@ -940,25 +954,12 @@ impl NyaTermApp {
                 surface.retain_prefetched_snapshot(snapshot);
             });
         }
-        let should_request_scroll_enrichment = should_paint
-            && frame.offset > 0
-            && current_action_link_matcher_key.is_some_and(|matcher_key| {
-                self.terminal_views
-                    .get(&frame.session_id)
-                    .is_some_and(|view| {
-                        !terminal_action_links_current_for_offset(
-                            &view.scrollback_action_links,
-                            frame.offset,
-                            matcher_key,
-                        )
-                    })
-            })
-            && !self
-                .terminal_runtime
-                .last_terminal_user_scroll_at
-                .is_some_and(|last| {
-                    now.saturating_duration_since(last) < TERMINAL_USER_SCROLL_ACTIVE_WINDOW
-                });
+        let should_request_scroll_enrichment = terminal_scroll_enrichment_should_request(
+            should_paint,
+            frame.offset,
+            current_action_link_matcher_key,
+            self.terminal_views.get(&frame.session_id),
+        );
         if should_request_scroll_enrichment {
             let session_id = frame.session_id.clone();
             let _ = self.request_terminal_frame_snapshot_for_scroll_enrichment(
@@ -1638,6 +1639,25 @@ fn terminal_action_links_current_for_offset(
         .is_some_and(|links| links.matcher_key == matcher_key)
 }
 
+pub(super) fn terminal_scroll_enrichment_should_request(
+    should_paint: bool,
+    offset: usize,
+    matcher_key: Option<u64>,
+    view: Option<&TerminalViewState>,
+) -> bool {
+    should_paint
+        && offset > 0
+        && matcher_key.is_some_and(|matcher_key| {
+            view.is_some_and(|view| {
+                !terminal_action_links_current_for_offset(
+                    &view.scrollback_action_links,
+                    offset,
+                    matcher_key,
+                )
+            })
+        })
+}
+
 fn terminal_frame_deferred_events_can_apply(
     session_event_backlog_active: bool,
     session_event_queued_output_bytes: usize,
@@ -1985,6 +2005,69 @@ mod frame_event_queue_tests {
             &links,
             3,
             current_key
+        ));
+    }
+
+    #[test]
+    fn terminal_scroll_snapshot_action_links_only_for_priority_user_requests() {
+        assert!(terminal_scroll_snapshot_request_action_links_enabled(
+            true, true, false
+        ));
+        assert!(!terminal_scroll_snapshot_request_action_links_enabled(
+            false, true, false
+        ));
+        assert!(!terminal_scroll_snapshot_request_action_links_enabled(
+            true, false, false
+        ));
+        assert!(!terminal_scroll_snapshot_request_action_links_enabled(
+            true, true, true
+        ));
+    }
+
+    #[test]
+    fn terminal_scroll_enrichment_requests_visible_missing_action_links_immediately() {
+        let matchers = ActionLinksMatcherSettings::default();
+        let matcher_key = terminal_action_link_matcher_key(true, &matchers);
+        let mut view = TerminalViewState::new();
+
+        assert!(terminal_scroll_enrichment_should_request(
+            true,
+            4,
+            Some(matcher_key),
+            Some(&view),
+        ));
+
+        view.scrollback_action_links.insert(
+            4,
+            TerminalFrameActionLinks {
+                matcher_key,
+                matches_by_line: Vec::new(),
+                cell_ranges_by_line: Vec::new(),
+            },
+        );
+        assert!(!terminal_scroll_enrichment_should_request(
+            true,
+            4,
+            Some(matcher_key),
+            Some(&view),
+        ));
+        assert!(!terminal_scroll_enrichment_should_request(
+            false,
+            4,
+            Some(matcher_key),
+            Some(&view),
+        ));
+        assert!(!terminal_scroll_enrichment_should_request(
+            true,
+            0,
+            Some(matcher_key),
+            Some(&view),
+        ));
+        assert!(!terminal_scroll_enrichment_should_request(
+            true,
+            4,
+            None,
+            Some(&view),
         ));
     }
 
