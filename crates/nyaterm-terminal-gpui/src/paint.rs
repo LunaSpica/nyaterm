@@ -359,6 +359,19 @@ pub(super) fn terminal_hyperlink_keyword_exclusion_ranges(
     .unwrap_or_default()
 }
 
+pub(super) fn terminal_keyword_exclusion_ranges(
+    row: Option<&nyaterm_terminal::TerminalSnapshotRow>,
+    link_ranges: &[(usize, usize)],
+) -> Vec<(usize, usize)> {
+    let mut ranges = terminal_hyperlink_keyword_exclusion_ranges(row);
+    ranges.extend(
+        link_ranges
+            .iter()
+            .filter_map(|&(start, end)| (end > start).then_some((start, end))),
+    );
+    ranges
+}
+
 fn apply_keyword_exclusion_ranges(
     flat: &mut [KeywordPermissionCell],
     keyword_excluded_ranges: &[(usize, usize)],
@@ -771,6 +784,91 @@ mod tests {
         assert_eq!(spans[1].text, " ERROR");
         assert!(!spans[1].keyword);
         assert_eq!(spans[1].color, None);
+    }
+
+    #[test]
+    fn action_link_range_skips_keyword_but_keeps_underline() {
+        let palette = nyaterm_ui::theme_palette("github-dark");
+        let compiled = vec![(regex::Regex::new("ERROR").unwrap(), 0xff2244)];
+        let link_ranges = [(6, 11)];
+        let keyword_excluded_ranges = terminal_keyword_exclusion_ranges(None, &link_ranges);
+        let spans = terminal_highlight_spans_compiled(
+            "ERROR ERROR",
+            None,
+            &compiled,
+            &[],
+            &[],
+            None,
+            &link_ranges,
+            &keyword_excluded_ranges,
+            palette,
+        );
+
+        let flat = flatten_highlight_spans(spans);
+
+        assert!(flat[0..5].iter().all(|cell| cell.keyword));
+        assert!(flat[0..5].iter().all(|cell| !cell.underline));
+        assert!(!flat[5].keyword);
+        assert!(!flat[5].underline);
+        assert!(flat[6..11].iter().all(|cell| !cell.keyword));
+        assert!(flat[6..11].iter().all(|cell| cell.underline));
+        assert!(
+            flat[6..11]
+                .iter()
+                .all(|cell| cell.color == Some(palette.accent))
+        );
+    }
+
+    #[test]
+    fn motd_action_link_urls_skip_keyword_but_version_stays_highlighted() {
+        let palette = nyaterm_ui::theme_palette("github-dark");
+        let line = "Welcome to Ubuntu 24.04.4 LTS\n * Documentation: https://help.ubuntu.com\n * Management: https://landscape.canonical.com\n * Support: https://ubuntu.com/pro";
+        let rules = nyaterm_core::get_builtin_keyword_rules(true);
+        let compiled = compile_keyword_rules(&rules);
+        let urls = [
+            "https://help.ubuntu.com",
+            "https://landscape.canonical.com",
+            "https://ubuntu.com/pro",
+        ];
+        let link_ranges = urls
+            .iter()
+            .map(|url| {
+                let start = line.find(url).expect("motd url present");
+                (start, start + url.len())
+            })
+            .collect::<Vec<_>>();
+        let keyword_excluded_ranges = terminal_keyword_exclusion_ranges(None, &link_ranges);
+        let spans = terminal_highlight_spans_compiled(
+            line,
+            None,
+            &compiled,
+            &[],
+            &[],
+            None,
+            &link_ranges,
+            &keyword_excluded_ranges,
+            palette,
+        );
+
+        let version = spans
+            .iter()
+            .find(|span| span.text == "24.04.4")
+            .expect("version keyword span");
+        assert!(version.keyword);
+        assert_eq!(version.color, Some(0xff9e64));
+
+        let flat = flatten_highlight_spans(spans);
+        for (idx, url) in urls.iter().enumerate() {
+            let (start, end) = link_ranges[idx];
+            assert!(
+                flat[start..end].iter().all(|cell| !cell.keyword),
+                "url should not contain keyword spans: {url}"
+            );
+            assert!(
+                flat[start..end].iter().all(|cell| cell.underline),
+                "url should stay underlined: {url}"
+            );
+        }
     }
 
     #[test]

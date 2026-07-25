@@ -415,8 +415,8 @@ mod layout_cache_tests {
         }];
 
         assert_ne!(
-            terminal_row_layout_key(None, "same", Some(&plain), &decorations, false, 0),
-            terminal_row_layout_key(None, "same", Some(&bold), &decorations, false, 0)
+            terminal_row_layout_key(None, "same", Some(&plain), &decorations, &[], false, 0),
+            terminal_row_layout_key(None, "same", Some(&bold), &decorations, &[], false, 0)
         );
     }
 
@@ -899,6 +899,57 @@ mod layout_cache_tests {
         assert_eq!(
             element.row_layout_key(0, "same", None, &base),
             element.row_layout_key(0, "same", None, &linked)
+        );
+    }
+
+    #[test]
+    fn row_layout_key_tracks_link_ranges_when_keyword_rules_can_paint() {
+        let mut snapshot = TerminalScreen::default().snapshot();
+        edit_snapshot_row(&mut snapshot, 0, |row| {
+            row.text = "https://help.ubuntu.com".to_string();
+            row.signature = 7;
+        });
+        let keyword_rule = ResolvedKeywordHighlightRule {
+            id: "url".to_string(),
+            name: "URL".to_string(),
+            patterns: vec![r"https://[^\s]+".to_string()],
+            color: "#8be9fd".to_string(),
+            enabled: true,
+        };
+        let keyword_rules = Arc::new(vec![keyword_rule]);
+        let make_element = |decorations: Vec<TerminalLineDecorations>| {
+            NyaTerminalElement::new(
+                Arc::new(snapshot.clone()),
+                keyword_rules.clone(),
+                decorations,
+                false,
+                "block",
+                8.0,
+                16.0,
+                nyaterm_ui::theme_palette("github-dark"),
+                "monospace".to_string(),
+                14.0,
+                400.0,
+                700.0,
+            )
+        };
+        let base = make_element(vec![TerminalLineDecorations::default()]);
+        let linked = make_element(vec![TerminalLineDecorations {
+            link_ranges: vec![(0, "https://help.ubuntu.com".len())],
+            ..TerminalLineDecorations::default()
+        }]);
+        let rules_key = terminal_keyword_rules_key(keyword_rules.as_ref());
+        let base_paint_key = base.paint_style_key(rules_key);
+        let base_empty_key = base.paint_style_key(0);
+        let linked_paint_key = linked.paint_style_key(rules_key);
+        let linked_empty_key = linked.paint_style_key(0);
+
+        assert_ne!(
+            base.row_layout_cache_keys(0, base_paint_key, base_empty_key)
+                .0,
+            linked
+                .row_layout_cache_keys(0, linked_paint_key, linked_empty_key)
+                .0
         );
     }
 
@@ -1465,6 +1516,7 @@ impl NyaTerminalElement {
             display_line,
             ansi_spans,
             decorations,
+            &[],
             keyword_spans_present,
             paint_style_key,
         )
@@ -1534,12 +1586,23 @@ impl NyaTerminalElement {
             default_decorations = TerminalLineDecorations::default();
             &default_decorations
         };
+        let keyword_excluded_ranges =
+            terminal_keyword_exclusion_ranges(snapshot_row, &decorations.link_ranges);
+        let keyword_exclusions_affect_glyphs = !keyword_result_known_empty
+            && (!self.keyword_rules.is_empty() || keyword_spans_present)
+            && !keyword_excluded_ranges.is_empty();
         let row_layout_key = |paint_style_key: u64, keyword_spans_present: bool| {
+            let keyword_excluded_ranges = if keyword_exclusions_affect_glyphs {
+                keyword_excluded_ranges.as_slice()
+            } else {
+                &[]
+            };
             terminal_row_layout_key(
                 line_signature,
                 display_line,
                 ansi,
                 decorations,
+                keyword_excluded_ranges,
                 keyword_spans_present,
                 paint_style_key,
             )
@@ -1610,6 +1673,7 @@ fn terminal_row_layout_key(
     display_line: &str,
     ansi_spans: Option<&[nyaterm_terminal::StyledSpan]>,
     decorations: &TerminalLineDecorations,
+    keyword_excluded_ranges: &[(usize, usize)],
     keyword_spans_present: bool,
     paint_style_key: u64,
 ) -> u64 {
@@ -1618,6 +1682,7 @@ fn terminal_row_layout_key(
     display_line.hash(&mut hasher);
     hash_styled_spans(ansi_spans, &mut hasher);
     hash_stable_glyph_decorations(decorations, &mut hasher);
+    keyword_excluded_ranges.hash(&mut hasher);
     keyword_spans_present.hash(&mut hasher);
     paint_style_key.hash(&mut hasher);
     hasher.finish()
@@ -2030,7 +2095,6 @@ impl Element for NyaTerminalElement {
             let line = snapshot_row.map(|row| row.text.as_str()).unwrap_or("");
             let display_line = if line.is_empty() { " " } else { line };
             let ansi = snapshot_row.map(|row| row.styled_spans.as_ref());
-            let keyword_excluded_ranges = terminal_hyperlink_keyword_exclusion_ranges(snapshot_row);
             let line_signature = snapshot_row.map(|row| row.signature);
             let keyword_lookup = self.keyword_highlights.as_ref().and_then(|highlights| {
                 highlights
@@ -2054,6 +2118,11 @@ impl Element for NyaTerminalElement {
                 default_decorations = TerminalLineDecorations::default();
                 &default_decorations
             };
+            let keyword_excluded_ranges =
+                terminal_keyword_exclusion_ranges(snapshot_row, &decorations.link_ranges);
+            let keyword_exclusions_affect_glyphs = !keyword_result_known_empty
+                && keyword_rules_key != 0
+                && !keyword_excluded_ranges.is_empty();
             let y = px(f32::from(bounds.top()) + visual_y_offset + row as f32 * cell_h);
 
             if row_is_visible {
@@ -2109,11 +2178,17 @@ impl Element for NyaTerminalElement {
             }
 
             let row_layout_key = |paint_style_key: u64, keyword_spans_present: bool| {
+                let keyword_excluded_ranges = if keyword_exclusions_affect_glyphs {
+                    keyword_excluded_ranges.as_slice()
+                } else {
+                    &[]
+                };
                 terminal_row_layout_key(
                     line_signature,
                     display_line,
                     ansi,
                     decorations,
+                    keyword_excluded_ranges,
                     keyword_spans_present,
                     paint_style_key,
                 )
