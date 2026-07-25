@@ -378,6 +378,7 @@ impl NyaTermApp {
         &mut self,
         session_id: &str,
         offset: usize,
+        snapshot: Option<&TerminalSnapshot>,
     ) -> bool {
         if session_id.is_empty()
             || offset == 0
@@ -391,12 +392,20 @@ impl NyaTermApp {
         let Some(view) = self.terminal_views.get_mut(session_id) else {
             return false;
         };
-        if terminal_action_links_current_for_offset(
-            &view.scrollback_action_links,
-            offset,
-            matcher_key,
-        ) || view.pending_snapshot_offsets.contains(&offset)
-        {
+        let action_links_current = if let Some(snapshot) = snapshot {
+            terminal_action_links_current_for_snapshot(
+                &view.scrollback_action_links,
+                snapshot,
+                matcher_key,
+            )
+        } else {
+            terminal_action_links_current_for_offset(
+                &view.scrollback_action_links,
+                offset,
+                matcher_key,
+            )
+        };
+        if action_links_current || view.pending_snapshot_offsets.contains(&offset) {
             return false;
         }
         view.pending_snapshot_offsets.insert(offset);
@@ -966,6 +975,7 @@ impl NyaTermApp {
             let _ = self.request_terminal_frame_snapshot_for_scroll_enrichment(
                 session_id.as_str(),
                 frame.offset,
+                Some(frame.snapshot.as_ref()),
             );
         }
         TerminalFrameApplyResult {
@@ -1645,12 +1655,19 @@ fn terminal_action_links_current_for_snapshot(
     snapshot: &TerminalSnapshot,
     matcher_key: u64,
 ) -> bool {
-    scrollback_action_links.values().any(|links| {
-        links.matcher_key == matcher_key
-            && crate::features::terminal_surface::terminal_action_links_cover_snapshot(
-                snapshot, links,
-            )
-    })
+    let links = scrollback_action_links
+        .values()
+        .filter(|links| {
+            links.matcher_key == matcher_key
+                && crate::features::terminal_surface::terminal_action_links_overlap_snapshot(
+                    snapshot, links,
+                )
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    crate::features::terminal_surface::terminal_action_links_cover_all_snapshot_rows(
+        snapshot, &links,
+    )
 }
 
 pub(super) fn terminal_scroll_enrichment_should_request(
@@ -2067,6 +2084,24 @@ mod frame_event_queue_tests {
         ));
         let (absolute_start_row, absolute_end_row) =
             crate::features::terminal_surface::terminal_snapshot_absolute_range(&snapshot);
+
+        view.scrollback_action_links.insert(
+            98,
+            TerminalFrameActionLinks {
+                matcher_key,
+                absolute_start_row,
+                absolute_end_row: absolute_start_row + 1,
+                matches_by_line: vec![Vec::new()],
+                cell_ranges_by_line: vec![Vec::new()],
+            },
+        );
+        assert!(terminal_scroll_enrichment_should_request(
+            true,
+            4,
+            Some(matcher_key),
+            Some(&view),
+            Some(&snapshot),
+        ));
 
         view.scrollback_action_links.insert(
             99,

@@ -820,6 +820,8 @@ mod layout_cache_tests {
         assert_eq!(f32::from(out[0].bounds.left()), 18.0);
         assert_eq!(f32::from(out[0].bounds.top()), 58.0);
         assert_eq!(f32::from(out[0].bounds.size.width), 16.0);
+        assert_eq!(terminal_link_underline_color(palette), palette.text_muted);
+        assert_ne!(terminal_link_underline_color(palette), palette.accent);
 
         out.clear();
         push_dynamic_link_underlines(
@@ -1820,9 +1822,13 @@ fn push_dynamic_link_underlines(
         }
         out.push(fill(
             terminal_underline_bounds(row, start, end, bounds, visual_y_offset, cell_w, cell_h),
-            rgb(palette.accent),
+            rgb(terminal_link_underline_color(palette)),
         ));
     }
+}
+
+fn terminal_link_underline_color(palette: nyaterm_ui::ThemePalette) -> u32 {
+    palette.text_muted
 }
 
 fn push_dynamic_decoration_backgrounds(

@@ -840,6 +840,7 @@ impl NyaTermApp {
                 let _ = self.request_terminal_frame_snapshot_for_scroll_enrichment(
                     session_id.as_str(),
                     offset,
+                    None,
                 );
                 self.notify_terminal_surface_only(Some(session_id.as_str()), cx);
             }

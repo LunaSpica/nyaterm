@@ -166,30 +166,15 @@ impl NyaTermApp {
             )
         } else {
             let frame_action_links = if session_id.is_empty() {
-                self.terminal_views.get(&session_id).and_then(|view| {
-                    if display_offset == 0 {
-                        view.frame_action_links.as_ref().filter(|links| {
-                            links.matcher_key == action_link_matcher_key
-                                && terminal_action_links_cover_snapshot(&snapshot, links)
-                        })
-                    } else {
-                        view.scrollback_action_links
-                            .get(&display_offset)
-                            .filter(|links| {
-                                links.matcher_key == action_link_matcher_key
-                                    && terminal_action_links_cover_snapshot(&snapshot, links)
-                            })
-                            .or_else(|| {
-                                view.scrollback_action_links.values().find(|links| {
-                                    links.matcher_key == action_link_matcher_key
-                                        && terminal_action_links_cover_snapshot(&snapshot, links)
-                                })
-                            })
-                    }
-                })
+                terminal_action_links_for_paint_snapshot(
+                    self.terminal_views.get(&session_id),
+                    display_offset,
+                    &snapshot,
+                    action_link_matcher_key,
+                )
             } else {
                 // Live surfaces own action-link paint; shell only needs links for empty session.
-                None
+                Vec::new()
             };
             let search_stage_started_at = Instant::now();
             let search_matches = if render_profile.enhanced_decorations_enabled()
@@ -249,9 +234,7 @@ impl NyaTermApp {
             let has_search_decorations =
                 !search_ranges_by_line.is_empty() || !active_search_ranges_by_line.is_empty();
             let has_frame_action_links = action_links_enabled
-                && frame_action_links.is_some_and(|links| {
-                    terminal_action_links_have_ranges_for_snapshot(&snapshot, links)
-                });
+                && terminal_action_links_have_ranges_for_snapshot(&snapshot, &frame_action_links);
             let has_hyperlinks = action_links_enabled
                 && snapshot.rows().iter().any(|row| !row.hyperlinks.is_empty());
             let include_command_marks = is_active
@@ -275,7 +258,7 @@ impl NyaTermApp {
                     selection_viewport_anchor_row,
                     &search_ranges_by_line,
                     &active_search_ranges_by_line,
-                    frame_action_links,
+                    &frame_action_links,
                     include_action_links,
                     include_hyperlinks,
                     include_command_marks,
@@ -288,7 +271,7 @@ impl NyaTermApp {
                         selection_viewport_anchor_row,
                         &search_ranges_by_line,
                         &active_search_ranges_by_line,
-                        frame_action_links,
+                        &frame_action_links,
                         include_action_links,
                         include_hyperlinks,
                         include_command_marks,
@@ -1372,7 +1355,15 @@ mod tests {
         let search = HashMap::new();
         let active = HashMap::new();
         let without_selection = terminal_line_decorations_cache_key(
-            &snapshot, None, 0, &search, &active, None, false, false, false,
+            &snapshot,
+            None,
+            0,
+            &search,
+            &active,
+            &[],
+            false,
+            false,
+            false,
         );
         let with_selection = terminal_line_decorations_cache_key(
             &snapshot,
@@ -1385,7 +1376,7 @@ mod tests {
             0,
             &search,
             &active,
-            None,
+            &[],
             false,
             false,
             false,
@@ -1413,7 +1404,7 @@ mod tests {
             0,
             &search,
             &active,
-            Some(&links),
+            std::slice::from_ref(&links),
             true,
             false,
             false,
@@ -1425,7 +1416,7 @@ mod tests {
             0,
             &search,
             &active,
-            Some(&links),
+            std::slice::from_ref(&links),
             true,
             false,
             false,
@@ -1440,10 +1431,26 @@ mod tests {
         let search = HashMap::new();
         let active = HashMap::new();
         let without_marks = terminal_line_decorations_cache_key(
-            &snapshot, None, 0, &search, &active, None, false, false, false,
+            &snapshot,
+            None,
+            0,
+            &search,
+            &active,
+            &[],
+            false,
+            false,
+            false,
         );
         let with_marks = terminal_line_decorations_cache_key(
-            &snapshot, None, 0, &search, &active, None, false, false, true,
+            &snapshot,
+            None,
+            0,
+            &search,
+            &active,
+            &[],
+            false,
+            false,
+            true,
         );
 
         assert_ne!(without_marks, with_marks);

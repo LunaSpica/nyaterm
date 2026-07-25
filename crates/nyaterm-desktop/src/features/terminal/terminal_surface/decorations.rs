@@ -1,5 +1,5 @@
 use super::*;
-use crate::models::{TerminalFrameActionLinks, TerminalSelection};
+use crate::models::{TerminalFrameActionLinks, TerminalSelection, TerminalViewState};
 use std::collections::HashMap;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -18,7 +18,7 @@ pub(in crate::features) fn terminal_line_decorations_cache_key(
     selection_viewport_anchor_row: usize,
     search_ranges_by_line: &HashMap<usize, Vec<(usize, usize)>>,
     active_search_ranges_by_line: &HashMap<usize, Vec<(usize, usize)>>,
-    frame_action_links: Option<&TerminalFrameActionLinks>,
+    frame_action_links: &[TerminalFrameActionLinks],
     include_action_links: bool,
     include_hyperlinks: bool,
     include_command_marks: bool,
@@ -38,16 +38,10 @@ pub(in crate::features) fn terminal_line_decorations_cache_key(
     hash_ranges_by_line(search_ranges_by_line, &mut hasher);
     hash_ranges_by_line(active_search_ranges_by_line, &mut hasher);
     if include_action_links {
-        if let Some(links) = frame_action_links {
-            links.matcher_key.hash(&mut hasher);
-            links.absolute_start_row.hash(&mut hasher);
-            links.absolute_end_row.hash(&mut hasher);
-            for line_index in 0..snapshot.row_count() {
-                terminal_action_link_ranges_for_snapshot_row(snapshot, line_index, links)
-                    .hash(&mut hasher);
-            }
-        } else {
-            0u64.hash(&mut hasher);
+        for line_index in 0..snapshot.row_count() {
+            terminal_action_link_ranges_for_snapshot_row(snapshot, line_index, frame_action_links)
+                .unwrap_or(&[])
+                .hash(&mut hasher);
         }
     }
     if include_hyperlinks {
@@ -70,46 +64,115 @@ pub(in crate::features) fn terminal_line_decorations_cache_key(
     hasher.finish()
 }
 
-fn terminal_action_link_ranges_for_snapshot_row<'a>(
+fn terminal_action_link_ranges_for_source_row<'a>(
     snapshot: &nyaterm_terminal::TerminalSnapshot,
     line_index: usize,
     links: &'a TerminalFrameActionLinks,
-) -> &'a [(usize, usize)] {
-    let empty: &'a [(usize, usize)] = &[];
+) -> Option<&'a [(usize, usize)]> {
     if line_index >= snapshot.row_count() {
-        return empty;
+        return None;
     }
     let (snapshot_start, snapshot_end) = terminal_snapshot_absolute_range(snapshot);
     let Some(absolute_row) = snapshot_start.checked_add(line_index) else {
-        return empty;
+        return None;
     };
     if absolute_row >= snapshot_end
         || absolute_row < links.absolute_start_row
         || absolute_row >= links.absolute_end_row
     {
-        return empty;
+        return None;
     }
-    links
-        .cell_ranges_by_line
-        .get(absolute_row - links.absolute_start_row)
-        .map(Vec::as_slice)
-        .unwrap_or(empty)
+    Some(
+        links
+            .cell_ranges_by_line
+            .get(absolute_row - links.absolute_start_row)
+            .map(Vec::as_slice)
+            .unwrap_or(&[]),
+    )
 }
 
-pub(in crate::features) fn terminal_action_links_cover_snapshot(
+pub(in crate::features) fn terminal_action_link_ranges_for_snapshot_row<'a>(
+    snapshot: &nyaterm_terminal::TerminalSnapshot,
+    line_index: usize,
+    links: &'a [TerminalFrameActionLinks],
+) -> Option<&'a [(usize, usize)]> {
+    links
+        .iter()
+        .find_map(|links| terminal_action_link_ranges_for_source_row(snapshot, line_index, links))
+}
+
+pub(in crate::features) fn terminal_action_links_overlap_snapshot(
     snapshot: &nyaterm_terminal::TerminalSnapshot,
     links: &TerminalFrameActionLinks,
 ) -> bool {
     let (snapshot_start, snapshot_end) = terminal_snapshot_absolute_range(snapshot);
-    links.absolute_start_row <= snapshot_start && snapshot_end <= links.absolute_end_row
+    links.absolute_start_row < snapshot_end && snapshot_start < links.absolute_end_row
+}
+
+pub(in crate::features) fn terminal_action_links_for_paint_snapshot(
+    view: Option<&TerminalViewState>,
+    display_offset: usize,
+    snapshot: &nyaterm_terminal::TerminalSnapshot,
+    matcher_key: u64,
+) -> Vec<TerminalFrameActionLinks> {
+    let mut out = Vec::new();
+    let Some(view) = view else {
+        return out;
+    };
+    let mut push_if_matching = |links: &TerminalFrameActionLinks| {
+        if links.matcher_key != matcher_key
+            || !terminal_action_links_overlap_snapshot(snapshot, links)
+        {
+            return;
+        }
+        let duplicate = out.iter().any(|existing: &TerminalFrameActionLinks| {
+            existing.matcher_key == links.matcher_key
+                && existing.absolute_start_row == links.absolute_start_row
+                && existing.absolute_end_row == links.absolute_end_row
+        });
+        if !duplicate {
+            out.push(links.clone());
+        }
+    };
+    if display_offset == 0 {
+        if let Some(links) = view.frame_action_links.as_ref() {
+            push_if_matching(links);
+        }
+        return out;
+    }
+    if let Some(links) = view.scrollback_action_links.get(&display_offset) {
+        push_if_matching(links);
+    }
+    let mut fallback_links = view.scrollback_action_links.values().collect::<Vec<_>>();
+    fallback_links.sort_unstable_by_key(|links| {
+        (
+            links.absolute_start_row,
+            links.absolute_end_row,
+            links.matcher_key,
+        )
+    });
+    for links in fallback_links {
+        push_if_matching(links);
+    }
+    out
 }
 
 pub(in crate::features) fn terminal_action_links_have_ranges_for_snapshot(
     snapshot: &nyaterm_terminal::TerminalSnapshot,
-    links: &TerminalFrameActionLinks,
+    links: &[TerminalFrameActionLinks],
 ) -> bool {
     (0..snapshot.row_count()).any(|line_index| {
-        !terminal_action_link_ranges_for_snapshot_row(snapshot, line_index, links).is_empty()
+        terminal_action_link_ranges_for_snapshot_row(snapshot, line_index, links)
+            .is_some_and(|ranges| !ranges.is_empty())
+    })
+}
+
+pub(in crate::features) fn terminal_action_links_cover_all_snapshot_rows(
+    snapshot: &nyaterm_terminal::TerminalSnapshot,
+    links: &[TerminalFrameActionLinks],
+) -> bool {
+    (0..snapshot.row_count()).all(|line_index| {
+        terminal_action_link_ranges_for_snapshot_row(snapshot, line_index, links).is_some()
     })
 }
 
@@ -136,7 +199,7 @@ pub(in crate::features) fn build_terminal_line_decorations(
     selection_viewport_anchor_row: usize,
     search_ranges_by_line: &HashMap<usize, Vec<(usize, usize)>>,
     active_search_ranges_by_line: &HashMap<usize, Vec<(usize, usize)>>,
-    frame_action_links: Option<&TerminalFrameActionLinks>,
+    frame_action_links: &[TerminalFrameActionLinks],
     include_action_links: bool,
     include_hyperlinks: bool,
     include_command_marks: bool,
@@ -151,11 +214,8 @@ pub(in crate::features) fn build_terminal_line_decorations(
                 selection.and_then(|selection| selection.cols_for_row(viewport_row))
             });
         let mut link_ranges: Vec<(usize, usize)> = if include_action_links {
-            frame_action_links
-                .map(|links| {
-                    terminal_action_link_ranges_for_snapshot_row(snapshot, line_index, links)
-                        .to_vec()
-                })
+            terminal_action_link_ranges_for_snapshot_row(snapshot, line_index, frame_action_links)
+                .map(<[_]>::to_vec)
                 .unwrap_or_default()
         } else {
             Vec::new()
@@ -228,7 +288,7 @@ mod tests {
             2,
             &HashMap::new(),
             &HashMap::new(),
-            None,
+            &[],
             false,
             false,
             false,
@@ -262,7 +322,7 @@ mod tests {
             0,
             &HashMap::new(),
             &HashMap::new(),
-            Some(&links),
+            std::slice::from_ref(&links),
             true,
             true,
             false,
@@ -293,7 +353,7 @@ mod tests {
             0,
             &HashMap::new(),
             &HashMap::new(),
-            Some(&links),
+            std::slice::from_ref(&links),
             true,
             false,
             false,
@@ -302,6 +362,45 @@ mod tests {
         assert!(decorations[0].link_ranges.is_empty());
         assert_eq!(decorations[1].link_ranges, vec![(2, 5)]);
         assert!(decorations[2].link_ranges.is_empty());
+    }
+
+    #[test]
+    fn action_link_decorations_keep_partially_covered_bottom_rows() {
+        let mut screen = nyaterm_terminal::TerminalScreen::new(40, 4);
+        screen.advance(b"first\nsecond\nthird\nfourth");
+        let snapshot = screen.viewport_snapshot(0);
+        let (snapshot_start, snapshot_end) = terminal_snapshot_absolute_range(&snapshot);
+        let top_links = TerminalFrameActionLinks {
+            matcher_key: 7,
+            absolute_start_row: snapshot_start,
+            absolute_end_row: snapshot_start + 2,
+            matches_by_line: vec![Vec::new(); 2],
+            cell_ranges_by_line: vec![vec![(1, 3)], Vec::new()],
+        };
+        let bottom_links = TerminalFrameActionLinks {
+            matcher_key: 7,
+            absolute_start_row: snapshot_end - 1,
+            absolute_end_row: snapshot_end,
+            matches_by_line: vec![Vec::new()],
+            cell_ranges_by_line: vec![vec![(2, 6)]],
+        };
+
+        let decorations = build_terminal_line_decorations(
+            &snapshot,
+            None,
+            0,
+            &HashMap::new(),
+            &HashMap::new(),
+            &[top_links, bottom_links],
+            true,
+            false,
+            false,
+        );
+
+        assert_eq!(decorations[0].link_ranges, vec![(1, 3)]);
+        assert!(decorations[1].link_ranges.is_empty());
+        assert!(decorations[2].link_ranges.is_empty());
+        assert_eq!(decorations[3].link_ranges, vec![(2, 6)]);
     }
 
     #[test]
@@ -315,7 +414,7 @@ mod tests {
             0,
             &HashMap::new(),
             &HashMap::new(),
-            None,
+            &[],
             false,
             false,
             false,
@@ -326,7 +425,7 @@ mod tests {
             1,
             &HashMap::new(),
             &HashMap::new(),
-            None,
+            &[],
             false,
             false,
             false,
