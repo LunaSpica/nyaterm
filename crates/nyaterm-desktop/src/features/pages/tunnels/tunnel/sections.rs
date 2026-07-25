@@ -1,5 +1,15 @@
-use super::*;
-use gpui::rgba;
+use std::collections::{HashMap, HashSet};
+
+use gpui::prelude::*;
+use gpui::{Context, FontWeight, IntoElement, div, px, rgb, rgba, svg};
+
+use super::super::common::network_item_overflow_menu;
+use super::row::tunnel_network_row;
+use crate::features::{NyaTermApp, tunnel_name};
+use crate::models::NetworkTab;
+use crate::widgets::{small_button, status_pill};
+use nyaterm_core::{TunnelConfig, TunnelGroup, truncate_preview};
+use nyaterm_transport::SshTunnelInfo;
 
 #[derive(Debug, Clone)]
 pub(in crate::features::pages::tunnels) struct TunnelSection {
@@ -65,7 +75,10 @@ pub(in crate::features::pages::tunnels) fn tunnel_section(
 ) -> impl IntoElement {
     let item_count = section.tunnels.len();
     let section_key = format!("tunnel:{}", section.id);
-    let collapsed = !app.network_expanded_sections.contains(&section_key);
+    let collapsed = !app
+        .connection_state
+        .network
+        .section_is_expanded(&section_key);
     let section_id_for_toggle = section.id.clone();
     let mut rows = div().flex().flex_col();
     if section.tunnels.is_empty() {
@@ -105,13 +118,13 @@ pub(in crate::features::pages::tunnels) fn tunnel_section(
             let tunnel_id_for_delete = tunnel.id.clone();
             let tunnel_label_for_delete = tunnel_name(&tunnel);
             let move_picker_open = app
-                .network_move_picker
-                .as_ref()
-                .is_some_and(|picker| picker.tab == NetworkTab::Tunnels && picker.id == tunnel.id);
+                .connection_state
+                .network
+                .move_picker_is_open(NetworkTab::Tunnels, &tunnel.id);
             let menu_open = app
-                .network_item_menu
-                .as_ref()
-                .is_some_and(|menu| menu.tab == NetworkTab::Tunnels && menu.id == tunnel.id);
+                .connection_state
+                .network
+                .item_menu_is_open(NetworkTab::Tunnels, &tunnel.id);
             let current_group_id = tunnel.group_id.clone();
             rows = rows.child(
                 div()
@@ -258,9 +271,9 @@ pub(in crate::features::pages::tunnels) fn tunnel_section(
                     let delete_label = group.name.clone();
                     let menu_id = format!("group:{}", group.id);
                     let menu_open = app
-                        .network_item_menu
-                        .as_ref()
-                        .is_some_and(|menu| menu.tab == NetworkTab::Tunnels && menu.id == menu_id);
+                        .connection_state
+                        .network
+                        .item_menu_is_open(NetworkTab::Tunnels, &menu_id);
                     this.child(network_item_overflow_menu(
                         palette,
                         app.shell_surface_color(palette.surface),

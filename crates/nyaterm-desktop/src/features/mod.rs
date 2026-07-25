@@ -23,10 +23,6 @@ mod command_runtime;
 #[path = "settings/config_runtime.rs"]
 mod config_runtime;
 mod connection_editor_window;
-#[path = "connections/connection_import_runtime.rs"]
-mod connection_import_runtime;
-#[path = "connections/connection_runtime.rs"]
-mod connection_runtime;
 mod connections;
 #[path = "session/credential_autofill_runtime.rs"]
 mod credential_autofill_runtime;
@@ -127,8 +123,7 @@ mod transfer_widgets;
 mod translation_runtime;
 #[path = "session/trzsz_runtime.rs"]
 mod trzsz_runtime;
-#[path = "tunnels/tunnel_runtime.rs"]
-mod tunnel_runtime;
+mod tunnels;
 #[path = "settings/update_runtime.rs"]
 mod update_runtime;
 mod view_widgets;
@@ -168,10 +163,9 @@ pub(in crate::features) use cloud_sync_provider::{
     pull_provider_snapshot, push_provider_snapshot, test_provider_connection,
 };
 pub(in crate::features) use connection_editor_window::ConnectionEditorWindow;
-pub(in crate::features) use connection_runtime::ConnectionEditorToggle;
 pub(in crate::features) use connections::{
     ConnectionDragKind, ConnectionDragPayload, ConnectionDragPreview, ConnectionDropPosition,
-    ConnectionDropTarget, ConnectionListFeatureState,
+    ConnectionDropTarget, ConnectionEditorToggle, ConnectionFeatureFocus, ConnectionFeatureState,
 };
 pub(in crate::features) use formatting::*;
 pub(in crate::features) use prompt_runtime::{

@@ -1,6 +1,15 @@
-use super::*;
+use gpui::prelude::*;
+use gpui::{
+    App, ClickEvent, Context, FontWeight, IntoElement, KeyDownEvent, Window, div, px, rgb, svg,
+};
 
-use crate::features::ChromeTooltip;
+use crate::features::{
+    ChromeTooltip, NyaTermApp, modal_dialog_footer_localized, modal_dialog_footer_localized_danger,
+    modal_dialog_shell, transfer_input,
+};
+use crate::models::{
+    NetworkDeleteConfirmState, NetworkGroupDeleteConfirmState, NetworkGroupEditorState, NetworkTab,
+};
 
 pub(super) fn network_tab_button(
     id: impl Into<String>,
@@ -249,7 +258,8 @@ pub(super) fn network_group_editor_panel(
             )
             .track_focus(focus)
             .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(&this.network_group_editor_focus);
+                let group_editor_focus = this.connection_state.network.group_editor_focus_handle();
+                window.focus(&group_editor_focus);
                 cx.notify();
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {

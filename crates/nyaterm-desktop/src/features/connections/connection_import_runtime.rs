@@ -39,23 +39,24 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.connection_list.import_path_prompt.is_some() || self.config_path_prompt.is_some() {
+        if self.connection_state.import.path_prompt_active() || self.config_path_prompt.is_some() {
             self.terminal_status = "connection import picker is already open".to_string();
             cx.notify();
             return;
         }
 
-        self.connection_list.import_dialog_open = true;
-        self.connection_list.more_menu_open = false;
+        self.connection_state.import.open_dialog();
+        self.connection_state.list.close_more_menu();
         self.title_menu_open = None;
         self.title_menu_submenu = None;
         self.terminal_status = "select a connection import source".to_string();
-        window.focus(&self.connection_list.import_focus);
+        let import_focus = self.connection_state.import.focus_handle();
+        window.focus(&import_focus);
         cx.notify();
     }
 
     pub(in crate::features) fn close_connection_import_dialog(&mut self, cx: &mut Context<Self>) {
-        self.connection_list.import_dialog_open = false;
+        self.connection_state.import.close_dialog();
         cx.notify();
     }
 
@@ -64,7 +65,7 @@ impl NyaTermApp {
         source: ConnectionImportSource,
         cx: &mut Context<Self>,
     ) {
-        self.connection_list.import_dialog_open = false;
+        self.connection_state.import.close_dialog();
         if source == ConnectionImportSource::NyatermBackup {
             self.prompt_portable_snapshot_import(cx);
             return;
@@ -77,7 +78,7 @@ impl NyaTermApp {
         source: ConnectionImportSource,
         cx: &mut Context<Self>,
     ) {
-        if self.connection_list.import_path_prompt.is_some() {
+        if self.connection_state.import.path_prompt_active() {
             self.terminal_status = "connection import picker is already open".to_string();
             cx.notify();
             return;
@@ -91,7 +92,7 @@ impl NyaTermApp {
         });
         let config_dir = self.runtime.config_dir().to_path_buf();
         let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
-        self.connection_list.import_path_prompt = Some(source);
+        self.connection_state.import.begin_path_prompt(source);
         self.terminal_status = source.selecting_status().to_string();
 
         cx.spawn(async move |this, cx| {
@@ -131,13 +132,13 @@ impl NyaTermApp {
         result: ConnectionImportResult,
         cx: &mut Context<Self>,
     ) {
-        self.connection_list.import_path_prompt = None;
+        self.connection_state.import.finish_path_prompt();
         match result {
             ConnectionImportResult::Imported(count) => {
                 self.refresh_store_from_runtime();
-                self.connection_list
-                    .expanded_group_ids
-                    .extend(self.connection_groups.iter().map(|group| group.id.clone()));
+                self.connection_state
+                    .list
+                    .expand_groups(self.connection_groups.iter().map(|group| group.id.clone()));
                 let message = self
                     .tr("savedConnections.importSuccess")
                     .replace("{{count}}", &count.to_string());

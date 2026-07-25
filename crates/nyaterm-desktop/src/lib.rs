@@ -16,4 +16,3 @@ pub mod theme;
 pub mod widgets;
 
 pub use app_shell::AppShell;
-pub use features::NyaTermApp;

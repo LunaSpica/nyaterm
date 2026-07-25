@@ -14,17 +14,21 @@ impl NyaTermApp {
             .collect::<HashSet<_>>();
         self.connections
             .iter()
-            .filter(|connection| self.connection_list.selected_ids.contains(&connection.id))
+            .filter(|connection| {
+                self.connection_state
+                    .list
+                    .contains_selected_id(&connection.id)
+            })
             .cloned()
             .chain(
-                self.connection_list
-                    .selected_ids
-                    .iter()
-                    .filter(|id| !visible_ids.contains(id.as_str()))
+                self.connection_state
+                    .list
+                    .selected_connection_ids()
+                    .filter(|id| !visible_ids.contains(*id))
                     .filter_map(|id| {
                         self.connections
                             .iter()
-                            .find(|connection| connection.id == *id)
+                            .find(|connection| connection.id == id)
                             .cloned()
                     }),
             )
@@ -41,49 +45,12 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let visible_ids = self.visible_connection_ids();
-        if range {
-            let anchor = self
-                .connection_list
-                .last_selected_id
-                .clone()
-                .unwrap_or_else(|| connection_id.clone());
-            let mut next = if additive {
-                self.connection_list.selected_ids.clone()
-            } else {
-                HashSet::new()
-            };
-            if let (Some(start), Some(end)) = (
-                visible_ids.iter().position(|id| id == &anchor),
-                visible_ids.iter().position(|id| id == &connection_id),
-            ) {
-                let (lo, hi) = if start <= end {
-                    (start, end)
-                } else {
-                    (end, start)
-                };
-                for id in &visible_ids[lo..=hi] {
-                    next.insert(id.clone());
-                }
-            } else {
-                next.insert(connection_id.clone());
-            }
-            self.connection_list.selected_ids = next;
-        } else if additive {
-            if self.connection_list.selected_ids.contains(&connection_id) {
-                self.connection_list.selected_ids.remove(&connection_id);
-            } else {
-                self.connection_list
-                    .selected_ids
-                    .insert(connection_id.clone());
-            }
-        } else {
-            self.connection_list.selected_ids.clear();
-            self.connection_list
-                .selected_ids
-                .insert(connection_id.clone());
-        }
-        self.connection_list.last_selected_id = Some(connection_id);
-        let count = self.connection_list.selected_ids.len();
+        let count = self.connection_state.list.select_connection(
+            connection_id,
+            &visible_ids,
+            additive,
+            range,
+        );
         self.terminal_status = if count == 0 {
             "connection selection cleared".to_string()
         } else {
@@ -93,11 +60,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn visible_connection_ids(&self) -> Vec<String> {
-        let query = self
-            .connection_list
-            .search_draft
-            .trim()
-            .to_ascii_lowercase();
+        let query = self.connection_state.list.search_query();
         // Mirror `connection_sections` ordering for Shift-range selection.
         let mut by_group: std::collections::HashMap<Option<String>, Vec<&SavedConnection>> =
             std::collections::HashMap::new();
@@ -122,7 +85,7 @@ impl NyaTermApp {
                 .push(connection);
         }
         for list in by_group.values_mut() {
-            list.sort_by(|left, right| match self.connection_list.sort_mode {
+            list.sort_by(|left, right| match self.connection_state.list.sort_mode() {
                 crate::models::ConnectionSortMode::Default => {
                     left.sort_order.cmp(&right.sort_order).then_with(|| {
                         left.name
@@ -194,21 +157,8 @@ impl NyaTermApp {
         ids
     }
 
-    pub(in crate::features) fn select_all_connections(&mut self, cx: &mut Context<Self>) {
-        self.connection_list.selected_ids = self
-            .connections
-            .iter()
-            .map(|connection| connection.id.clone())
-            .collect();
-        self.terminal_status = format!(
-            "selected {} connection(s)",
-            self.connection_list.selected_ids.len()
-        );
-        cx.notify();
-    }
-
     pub(in crate::features) fn clear_selected_connections(&mut self, cx: &mut Context<Self>) {
-        self.connection_list.clear_selection();
+        self.connection_state.list.clear_selection();
         self.terminal_status = "connection selection cleared".to_string();
         cx.notify();
     }
@@ -223,7 +173,7 @@ impl NyaTermApp {
 
         match self.copy_connections_to_store(&selected) {
             Ok(count) => {
-                self.connection_list.selected_ids.clear();
+                self.connection_state.list.clear_selection();
                 self.terminal_status = format!("copied {count} saved connection(s)");
             }
             Err(error) => {

@@ -151,7 +151,6 @@ fn session_store_mutates_active_order_and_removal() {
 fn overlay_store_notifies_only_for_changed_snapshots() {
     let mut store = OverlayStore::default();
     let snapshot = OverlaySnapshot {
-        quick_switch_open: true,
         tab_actions_open: false,
         rename_open: false,
         color_picker_open: false,
@@ -171,19 +170,13 @@ fn overlay_store_notifies_only_for_changed_snapshots() {
 
     assert!(store.replace_snapshot(snapshot.clone()));
     assert!(!store.replace_snapshot(snapshot));
-    assert!(
-        store
-            .snapshot()
-            .is_some_and(|snapshot| snapshot.quick_switch_open)
-    );
+    assert!(store.snapshot().is_some());
 }
 
 #[test]
 fn overlay_store_mutates_open_close_and_menu_exclusion() {
     let mut store = OverlayStore::default();
 
-    assert!(store.set_quick_switch_open(true));
-    assert!(!store.set_quick_switch_open(true));
     assert!(store.set_terminal_context_menu_open(true));
     assert!(store.set_action_link_menu_open(true));
     let snapshot = store.snapshot().expect("overlay snapshot");
@@ -191,6 +184,32 @@ fn overlay_store_mutates_open_close_and_menu_exclusion() {
     assert!(!snapshot.terminal_context_menu_open);
     assert!(store.set_locked(true));
     assert!(!store.set_locked(true));
+}
+
+#[test]
+fn overlay_store_owns_quick_switch_state() {
+    let mut store = OverlayStore::default();
+
+    assert!(!store.quick_switch().is_open());
+    assert!(store.open_quick_switch());
+    assert!(!store.open_quick_switch());
+    assert!(store.quick_switch().is_open());
+    assert!(store.push_quick_switch_query("ssh"));
+    assert_eq!(store.quick_switch().query(), "ssh");
+    assert!(!store.set_quick_switch_selected_index(0));
+    assert!(store.set_quick_switch_selected_index(3));
+    assert!(store.clamp_quick_switch_selected_index(2));
+    assert_eq!(store.quick_switch().selected_index(), 1);
+    assert!(store.set_quick_switch_marked_text("host"));
+    assert_eq!(store.quick_switch().marked_text(), "host");
+    assert!(store.replace_quick_switch_text("A"));
+    assert_eq!(store.quick_switch().query(), "sshA");
+    assert!(store.quick_switch().marked_text().is_empty());
+    assert!(store.close_quick_switch());
+    assert_eq!(
+        store.quick_switch(),
+        &crate::entities::QuickSwitchState::default()
+    );
 }
 
 #[test]

@@ -1,4 +1,15 @@
-use super::*;
+use gpui::{Context, KeyDownEvent, PathPromptOptions, SharedString, Window};
+use nyaterm_core::{Group, uuid};
+
+use super::helpers::{
+    ConnectionEditorToggle, build_saved_connection_from_editor, connection_editor_from_saved,
+};
+use crate::features::NyaTermApp;
+use crate::models::{
+    ConnectionEditorAdvancedTab, ConnectionEditorField, ConnectionEditorMenu,
+    ConnectionEditorPasswordSource, ConnectionEditorState, ConnectionEditorTelnetTab,
+    ConnectionKindTab,
+};
 
 impl NyaTermApp {
     pub(in crate::features) fn connection_editor_validation_error(
@@ -87,29 +98,23 @@ impl NyaTermApp {
             }
         };
 
-        self.connection_icon_picker_open = false;
-        self.connection_editor_menu = None;
-        self.connection_editor = Some(editor);
+        self.connection_state.editor.begin_edit(editor);
         self.terminal_status = "connection editor opened".to_string();
         if !self.open_connection_editor_window(cx) {
-            window.focus(&self.connection_editor_focus);
+            let editor_focus = self.connection_state.editor.focus_handle();
+            window.focus(&editor_focus);
         }
         cx.notify();
     }
 
     pub(in crate::features) fn close_connection_editor(&mut self, cx: &mut Context<Self>) {
-        self.connection_icon_picker_open = false;
-        self.connection_editor_menu = None;
-        self.connection_editor = None;
-        self.connection_editor_window = None;
-        self.connection_editor_window_open_pending = false;
+        self.connection_state.editor.close();
         self.terminal_status = "connection editor closed".to_string();
         cx.notify();
     }
 
     pub(in crate::features) fn toggle_connection_icon_picker(&mut self, cx: &mut Context<Self>) {
-        self.connection_editor_menu = None;
-        self.connection_icon_picker_open = !self.connection_icon_picker_open;
+        self.connection_state.editor.toggle_icon_picker();
         cx.notify();
     }
 
@@ -118,15 +123,7 @@ impl NyaTermApp {
         icon: Option<&str>,
         cx: &mut Context<Self>,
     ) {
-        self.connection_icon_picker_open = false;
-        self.connection_editor_menu = None;
-        if let Some(editor) = self.connection_editor.as_mut() {
-            editor.icon = icon
-                .map(str::trim)
-                .filter(|icon| !icon.is_empty())
-                .map(ToOwned::to_owned);
-            editor.error = None;
-        }
+        self.connection_state.editor.set_icon(icon);
         cx.notify();
     }
 
@@ -135,17 +132,7 @@ impl NyaTermApp {
         menu: ConnectionEditorMenu,
         cx: &mut Context<Self>,
     ) {
-        self.connection_icon_picker_open = false;
-        let opening = self.connection_editor_menu != Some(menu);
-        self.connection_editor_menu = opening.then_some(menu);
-        if !opening && menu == ConnectionEditorMenu::Group {
-            if let Some(editor) = self.connection_editor.as_mut() {
-                editor.new_group_name.clear();
-                if editor.focused_field == ConnectionEditorField::NewGroupName {
-                    editor.focused_field = ConnectionEditorField::Name;
-                }
-            }
-        }
+        self.connection_state.editor.toggle_menu(menu);
         cx.notify();
     }
 
@@ -155,63 +142,9 @@ impl NyaTermApp {
         value: Option<&str>,
         cx: &mut Context<Self>,
     ) {
-        let Some(editor) = self.connection_editor.as_mut() else {
-            return;
-        };
-        let value = value.map(ToOwned::to_owned);
-        match menu {
-            ConnectionEditorMenu::Authentication => {
-                editor.auth_mode = value.unwrap_or_else(|| "password".to_string());
-                if editor.auth_mode == "none" {
-                    editor.password_source = ConnectionEditorPasswordSource::Ask;
-                    editor.password_id = None;
-                    editor.password.clear();
-                    editor.existing_password = None;
-                    editor.key_id = None;
-                }
-            }
-            ConnectionEditorMenu::Group => {
-                editor.group_id = value;
-                editor.new_group_name.clear();
-                editor.pending_group_name = None;
-                editor.pending_group_parent_id = None;
-                editor.focused_field = ConnectionEditorField::Name;
-            }
-            ConnectionEditorMenu::SavedPassword => editor.password_id = value,
-            ConnectionEditorMenu::SshKey => editor.key_id = value,
-            ConnectionEditorMenu::Otp => {
-                editor.otp_id = value;
-                if editor.otp_id.is_none() {
-                    editor.auto_fill_otp = false;
-                }
-            }
-            ConnectionEditorMenu::Proxy => editor.proxy_id = value,
-            ConnectionEditorMenu::ProxyJump => editor.proxy_jump_id = value,
-            ConnectionEditorMenu::Backspace => {
-                editor.backspace_mode = value.unwrap_or_else(|| "del".to_string())
-            }
-            ConnectionEditorMenu::TelnetEnterMode => {
-                editor.telnet_enter_mode = value.unwrap_or_else(|| "cr".to_string())
-            }
-            ConnectionEditorMenu::Shell => {
-                editor.shell_path = value.unwrap_or_else(|| "powershell.exe".to_string())
-            }
-            ConnectionEditorMenu::SerialPort => editor.serial_port = value.unwrap_or_default(),
-            ConnectionEditorMenu::BaudRate => {
-                editor.baud_rate = value.unwrap_or_else(|| "115200".to_string())
-            }
-            ConnectionEditorMenu::DataBits => {
-                editor.data_bits = value.unwrap_or_else(|| "8".to_string())
-            }
-            ConnectionEditorMenu::Parity => {
-                editor.parity = value.unwrap_or_else(|| "none".to_string())
-            }
-            ConnectionEditorMenu::StopBits => {
-                editor.stop_bits = value.unwrap_or_else(|| "1".to_string())
-            }
-        }
-        editor.error = None;
-        self.connection_editor_menu = None;
+        self.connection_state
+            .editor
+            .set_menu_value(menu, value.map(ToOwned::to_owned));
         cx.notify();
     }
 
@@ -220,23 +153,7 @@ impl NyaTermApp {
         source: ConnectionEditorPasswordSource,
         cx: &mut Context<Self>,
     ) {
-        if let Some(editor) = self.connection_editor.as_mut() {
-            editor.password_source = source;
-            match source {
-                ConnectionEditorPasswordSource::Ask => {
-                    editor.password_id = None;
-                    editor.password.clear();
-                    editor.existing_password = None;
-                }
-                ConnectionEditorPasswordSource::Direct => editor.password_id = None,
-                ConnectionEditorPasswordSource::Saved => {
-                    editor.password.clear();
-                    editor.existing_password = None;
-                }
-            }
-            editor.error = None;
-        }
-        self.connection_editor_menu = None;
+        self.connection_state.editor.set_password_source(source);
         cx.notify();
     }
 
@@ -245,24 +162,7 @@ impl NyaTermApp {
         tab: ConnectionEditorAdvancedTab,
         cx: &mut Context<Self>,
     ) {
-        if let Some(editor) = self.connection_editor.as_mut() {
-            match tab {
-                ConnectionEditorAdvancedTab::Proxy
-                | ConnectionEditorAdvancedTab::JumpHost
-                | ConnectionEditorAdvancedTab::TwoFactor => editor.advanced_network_tab = tab,
-                ConnectionEditorAdvancedTab::PostLogin
-                | ConnectionEditorAdvancedTab::X11
-                | ConnectionEditorAdvancedTab::Backspace => editor.advanced_behavior_tab = tab,
-            }
-            if matches!(
-                editor.focused_field,
-                ConnectionEditorField::PostLoginCommand | ConnectionEditorField::PostLoginDelay
-            ) && tab != ConnectionEditorAdvancedTab::PostLogin
-            {
-                editor.focused_field = ConnectionEditorField::Name;
-            }
-        }
-        self.connection_editor_menu = None;
+        self.connection_state.editor.set_advanced_tab(tab);
         cx.notify();
     }
 
@@ -271,11 +171,7 @@ impl NyaTermApp {
         tab: ConnectionEditorTelnetTab,
         cx: &mut Context<Self>,
     ) {
-        if let Some(editor) = self.connection_editor.as_mut() {
-            editor.telnet_advanced_tab = tab;
-            editor.error = None;
-        }
-        self.connection_editor_menu = None;
+        self.connection_state.editor.set_telnet_tab(tab);
         cx.notify();
     }
 
@@ -285,13 +181,9 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.connection_icon_picker_open = false;
-        self.connection_editor_menu = None;
-        if let Some(editor) = self.connection_editor.as_mut() {
-            editor.focused_field = field;
-            editor.error = None;
-        }
-        window.focus(&self.connection_editor_focus);
+        self.connection_state.editor.focus_field(field);
+        let editor_focus = self.connection_state.editor.focus_handle();
+        window.focus(&editor_focus);
         cx.notify();
     }
 
@@ -300,11 +192,9 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some(editor) = self.connection_editor.as_mut() {
-            editor.focused_field = ConnectionEditorField::NewGroupName;
-            editor.error = None;
-        }
-        window.focus(&self.connection_editor_focus);
+        self.connection_state.editor.focus_new_group_field();
+        let editor_focus = self.connection_state.editor.focus_handle();
+        window.focus(&editor_focus);
         cx.notify();
     }
 
@@ -313,27 +203,13 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let required_message = self.tr("dialog.groupNameRequired").to_string();
-        let Some(editor) = self.connection_editor.as_mut() else {
-            return;
-        };
-        let name = editor.new_group_name.trim().to_string();
-        if name.is_empty() {
-            editor.error = Some(required_message);
+        if self
+            .connection_state
+            .editor
+            .commit_new_group(required_message)
+        {
             cx.notify();
-            return;
         }
-        editor.pending_group_parent_id = if editor.pending_group_name.is_some() {
-            editor.pending_group_parent_id.clone()
-        } else {
-            editor.group_id.clone()
-        };
-        editor.pending_group_name = Some(name);
-        editor.group_id = None;
-        editor.new_group_name.clear();
-        editor.focused_field = ConnectionEditorField::Name;
-        editor.error = None;
-        self.connection_editor_menu = None;
-        cx.notify();
     }
 
     pub(in crate::features) fn set_connection_editor_kind(
@@ -341,29 +217,7 @@ impl NyaTermApp {
         kind: ConnectionKindTab,
         cx: &mut Context<Self>,
     ) {
-        self.connection_icon_picker_open = false;
-        self.connection_editor_menu = None;
-        if let Some(editor) = self.connection_editor.as_mut() {
-            editor.kind = kind;
-            editor.focused_field = ConnectionEditorField::Name;
-            editor.port = match kind {
-                ConnectionKindTab::Ssh => {
-                    if editor.port.trim().is_empty() || editor.port == "23" {
-                        "22".to_string()
-                    } else {
-                        editor.port.clone()
-                    }
-                }
-                ConnectionKindTab::Telnet => {
-                    if editor.port.trim().is_empty() || editor.port == "22" {
-                        "23".to_string()
-                    } else {
-                        editor.port.clone()
-                    }
-                }
-                _ => editor.port.clone(),
-            };
-            editor.error = None;
+        if self.connection_state.editor.set_kind(kind) {
             self.terminal_status = format!("connection type set to {}", kind.label());
         }
         cx.notify();
@@ -388,11 +242,9 @@ impl NyaTermApp {
             };
             let _ = this.update(cx, |this, cx| {
                 if let Some(path) = selected {
-                    if let Some(editor) = this.connection_editor.as_mut() {
-                        editor.shell_path = path.display().to_string();
-                        editor.error = None;
-                    }
-                    this.terminal_status = format!("shell path: {}", path.display());
+                    let path = path.display().to_string();
+                    this.connection_state.editor.apply_shell_path(path.clone());
+                    this.terminal_status = format!("shell path: {path}");
                 } else {
                     this.terminal_status = "shell path selection cancelled".to_string();
                 }
@@ -422,11 +274,9 @@ impl NyaTermApp {
             };
             let _ = this.update(cx, |this, cx| {
                 if let Some(path) = selected {
-                    if let Some(editor) = this.connection_editor.as_mut() {
-                        editor.working_dir = path.display().to_string();
-                        editor.error = None;
-                    }
-                    this.terminal_status = format!("working dir: {}", path.display());
+                    let path = path.display().to_string();
+                    this.connection_state.editor.apply_working_dir(path.clone());
+                    this.terminal_status = format!("working dir: {path}");
                 } else {
                     this.terminal_status = "working directory selection cancelled".to_string();
                 }
@@ -442,54 +292,7 @@ impl NyaTermApp {
         flag: ConnectionEditorToggle,
         cx: &mut Context<Self>,
     ) {
-        if let Some(editor) = self.connection_editor.as_mut() {
-            match flag {
-                ConnectionEditorToggle::AutoFillOtp => {
-                    editor.auto_fill_otp = editor.otp_id.is_some() && !editor.auto_fill_otp
-                }
-                ConnectionEditorToggle::X11 => editor.x11_forwarding = !editor.x11_forwarding,
-                ConnectionEditorToggle::RawTcp => {
-                    editor.raw_tcp_cli = !editor.raw_tcp_cli;
-                    if editor.raw_tcp_cli {
-                        editor.telnet_enter_mode = "cr".to_string();
-                    }
-                }
-                ConnectionEditorToggle::LocalEcho => editor.local_echo = !editor.local_echo,
-                ConnectionEditorToggle::LocalLineEdit => {
-                    editor.local_line_edit = !editor.local_line_edit
-                }
-                ConnectionEditorToggle::ForceCharacterAtATime => {
-                    editor.force_character_at_a_time = !editor.force_character_at_a_time
-                }
-                ConnectionEditorToggle::SendNaws => {
-                    if !editor.raw_tcp_cli {
-                        editor.send_naws = !editor.send_naws;
-                    }
-                }
-                ConnectionEditorToggle::SendSga => {
-                    if !editor.raw_tcp_cli {
-                        editor.send_sga = !editor.send_sga;
-                    }
-                }
-                ConnectionEditorToggle::PostLogin => {
-                    editor.post_login_enabled = !editor.post_login_enabled
-                }
-                ConnectionEditorToggle::Advanced => {
-                    editor.advanced_open = !editor.advanced_open;
-                    if !editor.advanced_open
-                        && matches!(
-                            editor.focused_field,
-                            ConnectionEditorField::PostLoginCommand
-                                | ConnectionEditorField::PostLoginDelay
-                        )
-                    {
-                        editor.focused_field = ConnectionEditorField::Name;
-                    }
-                    self.connection_editor_menu = None;
-                }
-            }
-            editor.error = None;
-        }
+        self.connection_state.editor.toggle_flag(flag);
         cx.notify();
     }
 
@@ -507,18 +310,15 @@ impl NyaTermApp {
 
         match keystroke.key.as_str() {
             "escape" => {
-                if self.connection_icon_picker_open {
-                    self.connection_icon_picker_open = false;
+                if self.connection_state.editor.icon_picker_is_open() {
+                    self.connection_state.editor.close_popovers();
                     cx.notify();
                     return;
                 }
-                if self.connection_editor_menu.take().is_some() {
-                    if let Some(editor) = self.connection_editor.as_mut() {
-                        editor.new_group_name.clear();
-                        if editor.focused_field == ConnectionEditorField::NewGroupName {
-                            editor.focused_field = ConnectionEditorField::Name;
-                        }
-                    }
+                if self.connection_state.editor.menu_is_open() {
+                    self.connection_state
+                        .editor
+                        .close_popovers_and_cancel_group_draft();
                     cx.notify();
                     return;
                 }
@@ -528,21 +328,16 @@ impl NyaTermApp {
             "enter" => {
                 if !keystroke.modifiers.platform
                     && !keystroke.modifiers.control
-                    && self.connection_editor.as_ref().is_some_and(|editor| {
-                        editor.focused_field == ConnectionEditorField::Description
-                    })
+                    && self.connection_state.editor.description_is_focused()
                 {
-                    if let Some(editor) = self.connection_editor.as_mut() {
-                        editor.description.push('\n');
-                        editor.error = None;
-                    }
+                    self.connection_state.editor.insert_description_newline();
                     cx.notify();
                     return;
                 }
-                if self.connection_editor_menu == Some(ConnectionEditorMenu::Group)
-                    && self.connection_editor.as_ref().is_some_and(|editor| {
-                        editor.focused_field == ConnectionEditorField::NewGroupName
-                    })
+                if self
+                    .connection_state
+                    .editor
+                    .new_group_name_focused_in_group_menu()
                 {
                     self.commit_connection_editor_new_group(cx);
                     return;
@@ -551,60 +346,23 @@ impl NyaTermApp {
                 return;
             }
             "tab" if !keystroke.modifiers.platform && !keystroke.modifiers.control => {
-                if let Some(editor) = self.connection_editor.as_mut() {
-                    let password_field_visible = editor.auth_mode == "password"
-                        && editor.password_source == ConnectionEditorPasswordSource::Direct;
-                    let post_login_fields_visible = editor.advanced_open
-                        && editor.post_login_enabled
-                        && editor.advanced_behavior_tab == ConnectionEditorAdvancedTab::PostLogin;
-                    editor.focused_field = editor.focused_field.next(
-                        editor.kind,
-                        editor.auth_mode.as_str(),
-                        password_field_visible,
-                        post_login_fields_visible,
-                    );
-                    editor.error = None;
-                }
+                self.connection_state.editor.advance_focus();
                 cx.notify();
                 return;
             }
             _ => {}
         }
 
-        let Some(editor) = self.connection_editor.as_mut() else {
-            return;
-        };
         if keystroke.modifiers.platform || keystroke.modifiers.control {
             return;
         }
 
-        match keystroke.key.as_str() {
-            "backspace" => {
-                connection_editor_field_mut(editor).pop();
-                editor.error = None;
-                cx.notify();
-            }
-            _ => {
-                let Some(input) = keystroke
-                    .key_char
-                    .as_deref()
-                    .filter(|input| !input.is_empty())
-                else {
-                    return;
-                };
-                let field = editor.focused_field;
-                let target = connection_editor_field_mut(editor);
-                match field {
-                    ConnectionEditorField::Port
-                    | ConnectionEditorField::BaudRate
-                    | ConnectionEditorField::PostLoginDelay => {
-                        target.extend(input.chars().filter(|character| character.is_ascii_digit()));
-                    }
-                    _ => target.push_str(input),
-                }
-                editor.error = None;
-                cx.notify();
-            }
+        if self
+            .connection_state
+            .editor
+            .apply_text_key(keystroke.key.as_str(), keystroke.key_char.as_deref())
+        {
+            cx.notify();
         }
     }
 
@@ -613,7 +371,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(mut editor) = self.connection_editor.clone() else {
+        let Some(mut editor) = self.connection_state.editor.active_draft() else {
             return;
         };
 
@@ -640,16 +398,8 @@ impl NyaTermApp {
         match self.persist_saved_connection_with_group(built.clone(), pending_group.as_ref()) {
             Ok(saved) => {
                 let connect_after_save = editor.connect_after_save;
-                self.connection_icon_picker_open = false;
-                self.connection_editor_menu = None;
-                self.connection_editor = None;
-                self.connection_editor_window = None;
-                self.connection_editor_window_open_pending = false;
-                self.connection_list.selected_ids.clear();
-                self.connection_list.selected_ids.insert(saved.id.clone());
-                if let Some(group_id) = saved.group_id.clone() {
-                    self.connection_list.expanded_group_ids.insert(group_id);
-                }
+                self.connection_state
+                    .finish_editor_save(saved.id.clone(), saved.group_id.clone());
                 self.terminal_status = format!("saved connection {}", saved.name);
                 if connect_after_save {
                     self.start_saved_connection(saved, window, cx);

@@ -78,7 +78,7 @@ impl EntityInputHandler for NyaTermApp {
         range: Range<usize>,
         adjusted_range: &mut Option<Range<usize>>,
         window: &mut Window,
-        _cx: &mut Context<Self>,
+        cx: &mut Context<Self>,
     ) -> Option<String> {
         if self.multi_line_paste.is_some() && self.multi_line_paste_focus.is_focused(window) {
             let text = self.multi_line_paste_text();
@@ -105,13 +105,14 @@ impl EntityInputHandler for NyaTermApp {
             *adjusted_range = Some(start..end);
             return Some(marked.clone());
         }
-        if self.quick_switch_open && !self.quick_switch_marked_text.is_empty() {
-            let marked = &self.quick_switch_marked_text;
+        let quick_switch = self.quick_switch_state(cx);
+        if quick_switch.is_open() && !quick_switch.marked_text().is_empty() {
+            let marked = quick_switch.marked_text();
             let len = marked.encode_utf16().count();
             let start = range.start.min(len);
             let end = range.end.min(len).max(start);
             *adjusted_range = Some(start..end);
-            return Some(marked.clone());
+            return Some(marked.to_string());
         }
         if self.is_locked && !self.lock_password_marked_text.is_empty() {
             let marked = &self.lock_password_marked_text;
@@ -179,7 +180,7 @@ impl EntityInputHandler for NyaTermApp {
         &mut self,
         _ignore_disabled_input: bool,
         window: &mut Window,
-        _cx: &mut Context<Self>,
+        cx: &mut Context<Self>,
     ) -> Option<UTF16Selection> {
         if self.security_unlock_prompt_open {
             let cursor = self.security_unlock_draft.encode_utf16().count();
@@ -195,8 +196,9 @@ impl EntityInputHandler for NyaTermApp {
                 reversed: false,
             });
         }
-        if self.quick_switch_open {
-            let cursor = self.quick_switch_query.encode_utf16().count();
+        let quick_switch = self.quick_switch_state(cx);
+        if quick_switch.is_open() {
+            let cursor = quick_switch.query().encode_utf16().count();
             return Some(UTF16Selection {
                 range: cursor..cursor,
                 reversed: false,
@@ -260,14 +262,15 @@ impl EntityInputHandler for NyaTermApp {
     fn marked_text_range(
         &self,
         window: &mut Window,
-        _cx: &mut Context<Self>,
+        cx: &mut Context<Self>,
     ) -> Option<Range<usize>> {
         if self.security_unlock_prompt_open {
             let len = self.security_unlock_marked_text.encode_utf16().count();
             return (len > 0).then_some(0..len);
         }
-        if self.quick_switch_open {
-            let len = self.quick_switch_marked_text.encode_utf16().count();
+        let quick_switch = self.quick_switch_state(cx);
+        if quick_switch.is_open() {
+            let len = quick_switch.marked_text().encode_utf16().count();
             return (len > 0).then_some(0..len);
         }
         if self.is_locked {
@@ -304,13 +307,13 @@ impl EntityInputHandler for NyaTermApp {
         (len > 0).then_some(0..len)
     }
 
-    fn unmark_text(&mut self, window: &mut Window, _cx: &mut Context<Self>) {
+    fn unmark_text(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.security_unlock_prompt_open {
             self.security_unlock_marked_text.clear();
             return;
         }
-        if self.quick_switch_open {
-            self.quick_switch_marked_text.clear();
+        if self.quick_switch_open(cx) {
+            self.update_quick_switch_state(cx, |store| store.clear_quick_switch_marked_text());
             return;
         }
         if self.is_locked {
@@ -359,12 +362,8 @@ impl EntityInputHandler for NyaTermApp {
             cx.notify();
             return;
         }
-        if self.quick_switch_open {
-            self.quick_switch_marked_text.clear();
-            if !text.is_empty() {
-                self.quick_switch_query.push_str(text);
-                self.quick_switch_selected_index = 0;
-            }
+        if self.quick_switch_open(cx) {
+            self.update_quick_switch_state(cx, |store| store.replace_quick_switch_text(text));
             cx.notify();
             return;
         }
@@ -463,8 +462,10 @@ impl EntityInputHandler for NyaTermApp {
             cx.notify();
             return;
         }
-        if self.quick_switch_open {
-            self.quick_switch_marked_text = new_text.to_string();
+        if self.quick_switch_open(cx) {
+            self.update_quick_switch_state(cx, |store| {
+                store.set_quick_switch_marked_text(new_text)
+            });
             cx.notify();
             return;
         }
@@ -527,7 +528,7 @@ impl EntityInputHandler for NyaTermApp {
         _range_utf16: Range<usize>,
         element_bounds: Bounds<Pixels>,
         window: &mut Window,
-        _cx: &mut Context<Self>,
+        cx: &mut Context<Self>,
     ) -> Option<Bounds<Pixels>> {
         if self.security_unlock_prompt_open {
             return Some(gpui::bounds(
@@ -541,7 +542,7 @@ impl EntityInputHandler for NyaTermApp {
                 },
             ));
         }
-        if self.quick_switch_open
+        if self.quick_switch_open(cx)
             || self.is_locked
             || (self.sync_groups_open
                 && (self.sync_groups_search_focus.is_focused(window)
@@ -588,13 +589,14 @@ impl EntityInputHandler for NyaTermApp {
         &mut self,
         _point: Point<Pixels>,
         window: &mut Window,
-        _cx: &mut Context<Self>,
+        cx: &mut Context<Self>,
     ) -> Option<usize> {
         if self.security_unlock_prompt_open {
             return Some(self.security_unlock_draft.encode_utf16().count());
         }
-        if self.quick_switch_open {
-            return Some(self.quick_switch_query.encode_utf16().count());
+        let quick_switch = self.quick_switch_state(cx);
+        if quick_switch.is_open() {
+            return Some(quick_switch.query().encode_utf16().count());
         }
         if self.is_locked {
             return Some(self.lock_password_draft.encode_utf16().count());

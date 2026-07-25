@@ -1,4 +1,16 @@
-use super::*;
+use std::collections::HashMap;
+
+use gpui::{
+    App, AppContext as _, ClickEvent, Context, FontWeight, IntoElement, SharedString, Window, div,
+    prelude::{
+        FluentBuilder, InteractiveElement, ParentElement, StatefulInteractiveElement, Styled,
+    },
+    px, rgb, rgba, svg,
+};
+use nyaterm_core::{Group, ProxyConfig, SavedConnection, truncate_preview};
+
+use crate::features::{NyaTermApp, format_last_used_ms, transfer_input};
+use crate::models::{ConnectionEditorMenu, ConnectionSortMode};
 
 #[derive(Clone)]
 pub(super) enum ConnectionListRow {
@@ -710,7 +722,11 @@ pub(super) fn toggle_chip(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use std::collections::HashSet;
+
+    use nyaterm_core::{Group, SavedConnection};
+
+    use super::{ConnectionListRow, connection_sections, flatten_connection_rows};
 
     #[test]
     fn nested_groups_render_children_before_connections_and_root_last() {

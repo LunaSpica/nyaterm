@@ -1,4 +1,11 @@
-use super::*;
+use gpui::prelude::*;
+use gpui::{App, ClickEvent, FontWeight, Hsla, IntoElement, Window, div, px, rgb};
+
+use super::super::common::network_item_overflow_menu;
+use crate::features::{tunnel_endpoint, tunnel_mode, tunnel_name};
+use crate::widgets::status_pill;
+use nyaterm_core::{TunnelConfig, truncate_preview};
+use nyaterm_transport::SshTunnelInfo;
 
 pub(in crate::features::pages::tunnels) fn tunnel_network_row(
     palette: crate::theme::ThemePalette,

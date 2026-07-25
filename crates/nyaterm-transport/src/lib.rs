@@ -18,14 +18,25 @@ use russh::keys::{PrivateKeyWithHashAlg, PublicKeyBase64};
 use russh::{ChannelMsg, Disconnect, MethodKind, client};
 use russh_sftp::client::SftpSession;
 use serialport::{DataBits, FlowControl, Parity, SerialPort, StopBits};
-use thiserror::Error;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::sync::{mpsc as tokio_mpsc, oneshot};
 
 mod recording;
+mod session_types;
+mod sftp_transfer_types;
 mod trzsz;
 mod zmodem;
 
+pub use session_types::{
+    SessionDrain, SessionDrainStats, SessionError, SessionEvent, SessionInfo, SessionKind,
+    TerminalTransport,
+};
+pub use sftp_transfer_types::{
+    SFTP_TRANSFER_DEFAULT_BUFFER_SIZE, SFTP_TRANSFER_MAX_BUFFER_SIZE, SFTP_TRANSFER_MAX_RETRIES,
+    SFTP_TRANSFER_MIN_BUFFER_SIZE, SftpDuplicateDecision, SftpDuplicatePolicy,
+    SftpDuplicateRequest, SftpDuplicateResolver, SftpTransferDirection, SftpTransferOptions,
+    SftpTransferProgress, SftpTransferSummary,
+};
 pub use trzsz::{
     TrzszAction, TrzszConfig, TrzszDetectResult, TrzszDetector, TrzszDownloadEngine,
     TrzszDownloadError, TrzszDownloadEvent, TrzszDownloadStep, TrzszFilteredOutput, TrzszMode,
@@ -646,140 +657,6 @@ pub struct SftpRemoteTextFile {
 pub enum SftpWriteTextResult {
     Saved { modified_at: u64, size: u64 },
     Conflict { modified_at: u64, size: u64 },
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SftpTransferSummary {
-    pub remote_path: String,
-    pub local_path: PathBuf,
-    pub bytes: u64,
-    pub skipped: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SftpTransferProgress {
-    pub remote_path: String,
-    pub local_path: PathBuf,
-    pub bytes_transferred: u64,
-    pub total_bytes: Option<u64>,
-    pub item_count_completed: Option<u64>,
-    pub item_count_total: Option<u64>,
-}
-
-pub const SFTP_TRANSFER_DEFAULT_BUFFER_SIZE: usize = 64 * 1024;
-pub const SFTP_TRANSFER_MIN_BUFFER_SIZE: usize = 8 * 1024;
-pub const SFTP_TRANSFER_MAX_BUFFER_SIZE: usize = 256 * 1024;
-pub const SFTP_TRANSFER_MAX_RETRIES: u32 = 10;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SftpTransferOptions {
-    pub buffer_size: usize,
-    pub max_retries: u32,
-    pub preserve_timestamps: bool,
-    pub default_file_mode: Option<u32>,
-    pub resume_broken_transfer: bool,
-}
-
-impl Default for SftpTransferOptions {
-    fn default() -> Self {
-        Self {
-            buffer_size: SFTP_TRANSFER_DEFAULT_BUFFER_SIZE,
-            max_retries: 0,
-            preserve_timestamps: false,
-            default_file_mode: None,
-            resume_broken_transfer: false,
-        }
-    }
-}
-
-impl SftpTransferOptions {
-    pub fn with_buffer_size_bytes(mut self, buffer_size: usize) -> Self {
-        self.buffer_size =
-            buffer_size.clamp(SFTP_TRANSFER_MIN_BUFFER_SIZE, SFTP_TRANSFER_MAX_BUFFER_SIZE);
-        self
-    }
-
-    pub fn buffer_size_bytes(&self) -> usize {
-        self.buffer_size
-            .clamp(SFTP_TRANSFER_MIN_BUFFER_SIZE, SFTP_TRANSFER_MAX_BUFFER_SIZE)
-    }
-
-    pub fn with_max_retries(mut self, max_retries: u32) -> Self {
-        self.max_retries = max_retries.min(SFTP_TRANSFER_MAX_RETRIES);
-        self
-    }
-
-    pub fn max_retries(&self) -> u32 {
-        self.max_retries.min(SFTP_TRANSFER_MAX_RETRIES)
-    }
-
-    pub fn with_preserve_timestamps(mut self, preserve_timestamps: bool) -> Self {
-        self.preserve_timestamps = preserve_timestamps;
-        self
-    }
-
-    pub fn with_default_file_permissions(mut self, permissions: &str) -> Self {
-        self.default_file_mode = parse_sftp_file_mode(permissions);
-        self
-    }
-
-    pub fn with_resume_broken_transfer(mut self, resume_broken_transfer: bool) -> Self {
-        self.resume_broken_transfer = resume_broken_transfer;
-        self
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SftpDuplicatePolicy {
-    Overwrite,
-    Skip,
-    Rename,
-    Ask,
-}
-
-impl Default for SftpDuplicatePolicy {
-    fn default() -> Self {
-        Self::Overwrite
-    }
-}
-
-impl SftpDuplicatePolicy {
-    pub fn from_legacy_value(value: &str) -> Self {
-        match value {
-            "skip" => Self::Skip,
-            "rename" => Self::Rename,
-            "ask" => Self::Ask,
-            _ => Self::Overwrite,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum SftpTransferDirection {
-    Download,
-    Upload,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SftpDuplicateDecision {
-    Overwrite,
-    Skip,
-    Rename,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SftpDuplicateRequest {
-    pub direction: SftpTransferDirection,
-    pub source_path: String,
-    pub target_path: String,
-    pub is_directory: bool,
-}
-
-pub trait SftpDuplicateResolver: Send + Sync {
-    fn resolve_duplicate(
-        &self,
-        request: &SftpDuplicateRequest,
-    ) -> Result<SftpDuplicateDecision, String>;
 }
 
 #[derive(Debug, Clone, Default)]
@@ -2457,18 +2334,6 @@ fn last_sftp_retry_error(last_error: Option<anyhow::Error>) -> anyhow::Error {
     last_error.unwrap_or_else(|| anyhow::anyhow!("SFTP transfer failed before starting"))
 }
 
-fn parse_sftp_file_mode(permissions: &str) -> Option<u32> {
-    let trimmed = permissions.trim().trim_start_matches("0o");
-    if trimmed.is_empty()
-        || trimmed.len() > 4
-        || !trimmed.chars().all(|ch| ('0'..='7').contains(&ch))
-    {
-        return None;
-    }
-    let mode = u32::from_str_radix(trimmed, 8).ok()?;
-    (mode <= 0o777).then_some(mode)
-}
-
 async fn apply_remote_default_file_mode(sftp: &SftpSession, remote_path: &str, mode: Option<u32>) {
     let Some(mode) = mode else {
         return;
@@ -3106,110 +2971,6 @@ impl Default for LocalSessionConfig {
             pixel_height: 0,
         }
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SessionInfo {
-    pub id: String,
-    pub name: String,
-    pub kind: SessionKind,
-    pub working_dir: Option<PathBuf>,
-    pub cols: u16,
-    pub rows: u16,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SessionKind {
-    LocalPty,
-    Ssh,
-    Telnet,
-    RawTcp,
-    Serial,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SessionEvent {
-    Output { session_id: String, data: Vec<u8> },
-    OutputDropped { session_id: String, bytes: usize },
-    Exited { session_id: String, reason: String },
-    Error { session_id: String, message: String },
-}
-
-pub trait TerminalTransport: Send {
-    fn write(&mut self, data: &[u8]) -> anyhow::Result<()>;
-
-    fn resize(
-        &mut self,
-        cols: u16,
-        rows: u16,
-        pixel_width: u16,
-        pixel_height: u16,
-    ) -> anyhow::Result<()>;
-
-    fn close(&mut self) -> anyhow::Result<()>;
-}
-
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct SessionDrainStats {
-    pub drained_events: usize,
-    pub drained_output_bytes: usize,
-    pub queued_events: usize,
-    pub queued_output_bytes: usize,
-    pub dropped_output_bytes: usize,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct SessionDrain {
-    pub events: Vec<SessionEvent>,
-    pub stats: SessionDrainStats,
-}
-
-#[derive(Debug, Error)]
-pub enum SessionError {
-    #[error("session not found: {0}")]
-    NotFound(String),
-    #[error("failed to open PTY: {0}")]
-    OpenPty(#[source] anyhow::Error),
-    #[error("failed to clone PTY reader: {0}")]
-    CloneReader(#[source] anyhow::Error),
-    #[error("failed to take PTY writer: {0}")]
-    TakeWriter(#[source] anyhow::Error),
-    #[error("failed to spawn shell: {0}")]
-    Spawn(#[source] anyhow::Error),
-    #[error("failed to connect TCP session to {addr}: {source}")]
-    ConnectTcp {
-        addr: String,
-        source: std::io::Error,
-    },
-    #[error("failed to clone TCP stream for session {session_id}: {source}")]
-    CloneTcp {
-        session_id: String,
-        source: std::io::Error,
-    },
-    #[error("failed to open serial port {port_name}: {source}")]
-    OpenSerial {
-        port_name: String,
-        source: serialport::Error,
-    },
-    #[error("failed to clone serial port for session {session_id}: {source}")]
-    CloneSerial {
-        session_id: String,
-        source: serialport::Error,
-    },
-    #[error("failed to create SSH session for {addr}: {source}")]
-    CreateSsh { addr: String, source: anyhow::Error },
-    #[error("failed to write to session {session_id}: {source}")]
-    Write {
-        session_id: String,
-        source: anyhow::Error,
-    },
-    #[error("failed to resize session {session_id}: {source}")]
-    Resize {
-        session_id: String,
-        source: anyhow::Error,
-    },
-    #[error("session registry lock is poisoned")]
-    LockPoisoned,
 }
 
 pub struct SessionManager {
@@ -7278,75 +7039,6 @@ mod tests {
     }
 
     #[test]
-    fn sftp_transfer_options_clamp_execution_settings() {
-        assert_eq!(
-            SftpTransferOptions::default().buffer_size_bytes(),
-            SFTP_TRANSFER_DEFAULT_BUFFER_SIZE
-        );
-        assert_eq!(SftpTransferOptions::default().max_retries(), 0);
-        assert_eq!(
-            SftpTransferOptions::default()
-                .with_buffer_size_bytes(1024)
-                .buffer_size_bytes(),
-            SFTP_TRANSFER_MIN_BUFFER_SIZE
-        );
-        assert_eq!(
-            SftpTransferOptions::default()
-                .with_buffer_size_bytes(1024 * 1024)
-                .buffer_size_bytes(),
-            SFTP_TRANSFER_MAX_BUFFER_SIZE
-        );
-        assert_eq!(
-            SftpTransferOptions::default()
-                .with_buffer_size_bytes(128 * 1024)
-                .buffer_size_bytes(),
-            128 * 1024
-        );
-        assert_eq!(
-            SftpTransferOptions::default()
-                .with_max_retries(SFTP_TRANSFER_MAX_RETRIES + 20)
-                .max_retries(),
-            SFTP_TRANSFER_MAX_RETRIES
-        );
-        assert_eq!(
-            SftpTransferOptions::default()
-                .with_max_retries(3)
-                .max_retries(),
-            3
-        );
-        assert!(!SftpTransferOptions::default().preserve_timestamps);
-        assert!(
-            SftpTransferOptions::default()
-                .with_preserve_timestamps(true)
-                .preserve_timestamps
-        );
-        assert_eq!(
-            SftpTransferOptions::default()
-                .with_default_file_permissions("644")
-                .default_file_mode,
-            Some(0o644)
-        );
-        assert!(!SftpTransferOptions::default().resume_broken_transfer);
-        assert!(
-            SftpTransferOptions::default()
-                .with_resume_broken_transfer(true)
-                .resume_broken_transfer
-        );
-    }
-
-    #[test]
-    fn sftp_file_mode_parser_accepts_only_posix_octal_modes() {
-        assert_eq!(parse_sftp_file_mode("644"), Some(0o644));
-        assert_eq!(parse_sftp_file_mode("0644"), Some(0o644));
-        assert_eq!(parse_sftp_file_mode("0o600"), Some(0o600));
-        assert_eq!(parse_sftp_file_mode("777"), Some(0o777));
-        assert_eq!(parse_sftp_file_mode("1777"), None);
-        assert_eq!(parse_sftp_file_mode("888"), None);
-        assert_eq!(parse_sftp_file_mode("abc"), None);
-        assert_eq!(parse_sftp_file_mode(""), None);
-    }
-
-    #[test]
     fn sftp_transfer_retry_helpers_detect_cancelled_errors() {
         assert!(is_sftp_transfer_cancelled(&anyhow::anyhow!(
             SFTP_TRANSFER_CANCELLED
@@ -7792,26 +7484,6 @@ mod tests {
             assert_eq!(host, "example.com");
             assert_eq!(port, 443);
         });
-    }
-
-    #[test]
-    fn duplicate_policy_parses_legacy_values() {
-        assert_eq!(
-            SftpDuplicatePolicy::from_legacy_value("overwrite"),
-            SftpDuplicatePolicy::Overwrite
-        );
-        assert_eq!(
-            SftpDuplicatePolicy::from_legacy_value("ask"),
-            SftpDuplicatePolicy::Ask
-        );
-        assert_eq!(
-            SftpDuplicatePolicy::from_legacy_value("skip"),
-            SftpDuplicatePolicy::Skip
-        );
-        assert_eq!(
-            SftpDuplicatePolicy::from_legacy_value("rename"),
-            SftpDuplicatePolicy::Rename
-        );
     }
 
     #[test]

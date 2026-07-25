@@ -25,6 +25,18 @@ use crate::{
     now_rfc3339, translation_settings_has_secret, trim_ai_audit, trim_ai_history, uuid,
 };
 
+mod config_backup;
+mod keyword_highlights;
+
+pub use self::config_backup::ConfigBackupInfo;
+use self::config_backup::{
+    copy_config_database, ensure_not_same_existing_file, ensure_parent_dir,
+    validate_config_backup_source, write_portable_snapshot_file,
+};
+use self::keyword_highlights::{
+    merge_keyword_highlight_rules, normalize_keyword_highlight_rule, parse_keyword_highlight_import,
+};
+
 const DATABASE_FILE: &str = "nyaterm.redb";
 const GROUP_PREFIX: &str = "groups/";
 const CONNECTION_PREFIX: &str = "connections/";
@@ -53,15 +65,6 @@ const SETTINGS_CLOUD_SYNC: &str = "settings/doc/cloud-sync";
 const SETTINGS_QUICK_COMMANDS: &str = "settings/doc/quick-command";
 const SETTINGS_CLOUD_SYNC_STATE: &str = "settings/doc/cloud-sync-state";
 const LEGACY_TEXT_CLOUD_SYNC_STATE: &str = "cloud-sync-state";
-
-#[derive(Debug, Deserialize)]
-#[serde(untagged)]
-enum KeywordHighlightImportFile {
-    Config {
-        keyword_highlights: Vec<KeywordHighlightRule>,
-    },
-    Rules(Vec<KeywordHighlightRule>),
-}
 
 const META_TABLE: TableDefinition<&str, &str> = TableDefinition::new("meta");
 const TEXT_DOCS_TABLE: TableDefinition<&str, &str> = TableDefinition::new("text_docs");
@@ -143,14 +146,6 @@ pub struct ConnectionStore {
     db: Database,
     db_path: PathBuf,
     portable_key_path: Option<PathBuf>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ConfigBackupInfo {
-    pub database_path: PathBuf,
-    pub backup_path: PathBuf,
-    pub bytes: u64,
-    pub safety_backup_path: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -2559,11 +2554,7 @@ impl ConnectionStore {
         &self,
         raw: &str,
     ) -> Result<(KeywordHighlightConfig, KeywordHighlightImportResult), StorageError> {
-        let import_file: KeywordHighlightImportFile = serde_json::from_str(raw)?;
-        let imported = match import_file {
-            KeywordHighlightImportFile::Config { keyword_highlights } => keyword_highlights,
-            KeywordHighlightImportFile::Rules(rules) => rules,
-        };
+        let imported = parse_keyword_highlight_import(raw)?;
         let mut config = self.load_keyword_highlights()?;
         let result = merge_keyword_highlight_rules(&mut config.rules, imported);
         if result.imported_rules == 0 && result.updated_rules == 0 {
@@ -4756,71 +4747,6 @@ fn json_u64(value: &serde_json::Value, path: &[&str], fallback: u64) -> u64 {
     fallback
 }
 
-fn normalize_keyword_highlight_rule(
-    mut rule: KeywordHighlightRule,
-) -> Option<KeywordHighlightRule> {
-    rule.id = rule.id.trim().to_string();
-    rule.name = rule.name.trim().to_string();
-    // Keep blank pattern lines for editor drafts (Tauri joins patterns with newlines).
-    // Drop completely empty pattern lists only when name is also empty.
-    rule.patterns = rule
-        .patterns
-        .into_iter()
-        .map(|pattern| pattern.trim_end().to_string())
-        .collect();
-    let has_pattern = rule.patterns.iter().any(|p| !p.trim().is_empty());
-    if rule.name.is_empty() && !has_pattern {
-        return None;
-    }
-    if rule.name.is_empty() {
-        rule.name = "Untitled rule".to_string();
-    }
-    if rule.color_dark.trim().is_empty() {
-        rule.color_dark = "#79c0ff".to_string();
-    }
-    if rule.color_light.trim().is_empty() {
-        rule.color_light = "#0969da".to_string();
-    }
-    Some(rule)
-}
-
-fn merge_keyword_highlight_rules(
-    existing: &mut Vec<KeywordHighlightRule>,
-    imported: Vec<KeywordHighlightRule>,
-) -> KeywordHighlightImportResult {
-    let mut imported_rules = 0;
-    let mut updated_rules = 0;
-    let mut indexes = existing
-        .iter()
-        .enumerate()
-        .filter_map(|(index, rule)| (!rule.id.trim().is_empty()).then(|| (rule.id.clone(), index)))
-        .collect::<HashMap<_, _>>();
-
-    for mut rule in imported
-        .into_iter()
-        .filter_map(normalize_keyword_highlight_rule)
-    {
-        if rule.id.is_empty() {
-            rule.id = format!("highlight-{}", uuid());
-        }
-        if let Some(index) = indexes.get(&rule.id).copied() {
-            existing[index] = rule;
-            updated_rules += 1;
-        } else {
-            let id = rule.id.clone();
-            existing.push(rule);
-            indexes.insert(id, existing.len() - 1);
-            imported_rules += 1;
-        }
-    }
-
-    KeywordHighlightImportResult {
-        imported_rules,
-        updated_rules,
-        total_rules: existing.len(),
-    }
-}
-
 fn json_path<'a>(value: &'a serde_json::Value, path: &[&str]) -> Option<&'a serde_json::Value> {
     let mut current = value;
     for key in path {
@@ -5050,78 +4976,6 @@ fn stable_id(value: &str) -> String {
         output.push_str(&format!("{byte:02x}"));
     }
     output
-}
-
-fn ensure_parent_dir(path: &Path) -> Result<(), StorageError> {
-    let Some(parent) = path
-        .parent()
-        .filter(|parent| !parent.as_os_str().is_empty())
-    else {
-        return Ok(());
-    };
-    std::fs::create_dir_all(parent).map_err(|source| StorageError::CreateDir {
-        path: parent.to_path_buf(),
-        source,
-    })
-}
-
-fn write_portable_snapshot_file(
-    database_path: PathBuf,
-    output_path: impl AsRef<Path>,
-    bytes: &[u8],
-) -> Result<ConfigBackupInfo, StorageError> {
-    let backup_path = output_path.as_ref().to_path_buf();
-    ensure_parent_dir(&backup_path)?;
-    std::fs::write(&backup_path, bytes).map_err(|source| StorageError::ConfigBackupCopy {
-        from: database_path.clone(),
-        to: backup_path.clone(),
-        source,
-    })?;
-
-    Ok(ConfigBackupInfo {
-        database_path,
-        backup_path,
-        bytes: bytes.len().try_into().unwrap_or(u64::MAX),
-        safety_backup_path: None,
-    })
-}
-
-fn validate_config_backup_source(path: &Path) -> Result<(), StorageError> {
-    if !path.exists() {
-        return Err(StorageError::ConfigBackupMissing {
-            path: path.to_path_buf(),
-        });
-    }
-    if !path.is_file() {
-        return Err(StorageError::ConfigBackupNotFile {
-            path: path.to_path_buf(),
-        });
-    }
-    Ok(())
-}
-
-fn ensure_not_same_existing_file(left: &Path, right: &Path) -> Result<(), StorageError> {
-    if !left.exists() || !right.exists() {
-        return Ok(());
-    }
-    let left = left.canonicalize().ok();
-    let right = right.canonicalize().ok();
-    if let (Some(left), Some(right)) = (left, right)
-        && left == right
-    {
-        return Err(StorageError::ConfigBackupSamePath { path: left });
-    }
-    Ok(())
-}
-
-fn copy_config_database(from: &Path, to: &Path) -> Result<u64, StorageError> {
-    validate_config_backup_source(from)?;
-    ensure_parent_dir(to)?;
-    std::fs::copy(from, to).map_err(|source| StorageError::ConfigBackupCopy {
-        from: from.to_path_buf(),
-        to: to.to_path_buf(),
-        source,
-    })
 }
 
 fn validate_config_backup_file(

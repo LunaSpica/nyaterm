@@ -1,4 +1,13 @@
-use super::*;
+use gpui::{
+    Context, div,
+    prelude::{ParentElement, Styled},
+    px,
+};
+
+use crate::features::NyaTermApp;
+use crate::models::{ConnectionEditorField, ConnectionEditorMenu, ConnectionEditorState};
+
+use super::super::super::list::{ConnectionEditorChoice, connection_editor_select, editor_field};
 
 pub(super) fn connection_editor_serial_section(
     palette: crate::theme::ThemePalette,

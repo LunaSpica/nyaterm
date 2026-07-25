@@ -1,4 +1,14 @@
-use super::*;
+use gpui::Context;
+use nyaterm_core::{
+    AiExecutionProfile, ConnectionAuth, ConnectionNetwork, ConnectionPostLogin, ConnectionStore,
+    ConnectionType, Group, SavedConnection, StorageError, uuid,
+};
+
+use crate::features::NyaTermApp;
+use crate::models::{
+    ConnectionEditorAdvancedTab, ConnectionEditorField, ConnectionEditorPasswordSource,
+    ConnectionEditorState, ConnectionEditorTelnetTab, ConnectionKindTab,
+};
 
 pub(super) fn connection_editor_from_saved(
     connection: SavedConnection,
@@ -143,25 +153,6 @@ pub(super) fn connection_editor_from_saved(
         }
     }
     editor
-}
-
-pub(super) fn connection_editor_field_mut(editor: &mut ConnectionEditorState) -> &mut String {
-    match editor.focused_field {
-        ConnectionEditorField::Name => &mut editor.name,
-        ConnectionEditorField::NewGroupName => &mut editor.new_group_name,
-        ConnectionEditorField::Description => &mut editor.description,
-        ConnectionEditorField::Host => &mut editor.host,
-        ConnectionEditorField::Port => &mut editor.port,
-        ConnectionEditorField::Username => &mut editor.username,
-        ConnectionEditorField::Password => &mut editor.password,
-        ConnectionEditorField::ShellPath => &mut editor.shell_path,
-        ConnectionEditorField::ShellArgs => &mut editor.shell_args,
-        ConnectionEditorField::WorkingDir => &mut editor.working_dir,
-        ConnectionEditorField::SerialPort => &mut editor.serial_port,
-        ConnectionEditorField::BaudRate => &mut editor.baud_rate,
-        ConnectionEditorField::PostLoginCommand => &mut editor.post_login_command,
-        ConnectionEditorField::PostLoginDelay => &mut editor.post_login_delay_ms,
-    }
 }
 
 pub(super) fn build_saved_connection_from_editor(
@@ -409,7 +400,11 @@ pub(super) fn non_empty_or(value: String, fallback: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use nyaterm_core::{AiExecutionProfile, ConnectionAuth, ConnectionType, SavedConnection};
+
+    use crate::models::ConnectionEditorPasswordSource;
+
+    use super::{build_saved_connection_from_editor, connection_editor_from_saved};
 
     #[test]
     fn connection_editor_round_trip_preserves_icon() {
@@ -549,9 +544,7 @@ impl NyaTermApp {
         error: String,
         cx: &mut Context<Self>,
     ) {
-        if let Some(editor) = self.connection_editor.as_mut() {
-            editor.error = Some(error.clone());
-        }
+        self.connection_state.editor.set_error(error.clone());
         self.terminal_status = error;
         cx.notify();
     }

@@ -1,4 +1,8 @@
-use super::*;
+use gpui::{Context, KeyDownEvent};
+use nyaterm_core::{ConnectionStore, ProxyGroup, TunnelGroup, uuid};
+
+use crate::features::NyaTermApp;
+use crate::models::{NetworkGroupDeleteConfirmState, NetworkGroupEditorState, NetworkTab};
 
 impl NyaTermApp {
     pub(in crate::features) fn open_network_group_editor(
@@ -7,7 +11,6 @@ impl NyaTermApp {
         group_id: Option<String>,
         cx: &mut Context<Self>,
     ) {
-        self.network_item_menu = None;
         let name = match (tab, group_id.as_deref()) {
             (NetworkTab::Tunnels, Some(id)) => self
                 .tunnel_groups
@@ -27,18 +30,20 @@ impl NyaTermApp {
             return;
         };
 
-        self.network_group_editor = Some(NetworkGroupEditorState {
-            tab,
-            id: group_id,
-            name,
-            error: None,
-        });
+        self.connection_state
+            .network
+            .begin_group_edit(NetworkGroupEditorState {
+                tab,
+                id: group_id,
+                name,
+                error: None,
+            });
         self.terminal_status = "network group editor opened".to_string();
         cx.notify();
     }
 
     pub(in crate::features) fn close_network_group_editor(&mut self, cx: &mut Context<Self>) {
-        self.network_group_editor = None;
+        self.connection_state.network.close_group_editor();
         self.terminal_status = "network group editor closed".to_string();
         cx.notify();
     }
@@ -58,10 +63,9 @@ impl NyaTermApp {
             "escape" => self.close_network_group_editor(cx),
             "enter" => self.save_network_group_editor(cx),
             "backspace" if !keystroke.modifiers.platform && !keystroke.modifiers.control => {
-                if let Some(editor) = self.network_group_editor.as_mut() {
-                    editor.name.pop();
-                    editor.error = None;
-                }
+                self.connection_state
+                    .network
+                    .apply_group_editor_name_key("backspace", None);
                 cx.notify();
             }
             _ if !keystroke.modifiers.platform && !keystroke.modifiers.control => {
@@ -70,10 +74,9 @@ impl NyaTermApp {
                     .as_deref()
                     .filter(|input| !input.is_empty())
                 {
-                    if let Some(editor) = self.network_group_editor.as_mut() {
-                        editor.name.push_str(input);
-                        editor.error = None;
-                    }
+                    self.connection_state
+                        .network
+                        .apply_group_editor_name_key(keystroke.key.as_str(), Some(input));
                     cx.notify();
                 }
             }
@@ -82,16 +85,16 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn save_network_group_editor(&mut self, cx: &mut Context<Self>) {
-        let Some(editor) = self.network_group_editor.clone() else {
+        let Some(editor) = self.connection_state.network.active_group_editor() else {
             self.terminal_status = "no network group editor is active".to_string();
             cx.notify();
             return;
         };
         let name = editor.name.trim().to_string();
         if name.is_empty() {
-            if let Some(editor) = self.network_group_editor.as_mut() {
-                editor.error = Some("Group name is required".to_string());
-            }
+            self.connection_state
+                .network
+                .set_group_editor_error("Group name is required".to_string());
             cx.notify();
             return;
         }
@@ -132,7 +135,7 @@ impl NyaTermApp {
         {
             Ok(()) => {
                 self.tunnel_groups = groups;
-                self.network_group_editor = None;
+                self.connection_state.network.close_group_editor();
                 self.terminal_status = format!("tunnel group '{name}' saved");
                 self.store_status.message = self.terminal_status.clone();
                 self.store_status.ready = true;
@@ -176,7 +179,7 @@ impl NyaTermApp {
         {
             Ok(()) => {
                 self.proxy_groups = groups;
-                self.network_group_editor = None;
+                self.connection_state.network.close_group_editor();
                 self.terminal_status = format!("proxy group '{name}' saved");
                 self.store_status.message = self.terminal_status.clone();
                 self.store_status.ready = true;
@@ -198,25 +201,26 @@ impl NyaTermApp {
         item_count: usize,
         cx: &mut Context<Self>,
     ) {
-        self.network_item_menu = None;
-        self.network_group_delete_confirm = Some(NetworkGroupDeleteConfirmState {
-            tab,
-            id,
-            label,
-            item_count,
-        });
+        self.connection_state
+            .network
+            .open_group_delete_confirm(NetworkGroupDeleteConfirmState {
+                tab,
+                id,
+                label,
+                item_count,
+            });
         self.terminal_status = "network group delete confirmation opened".to_string();
         cx.notify();
     }
 
     pub(in crate::features) fn cancel_network_group_delete(&mut self, cx: &mut Context<Self>) {
-        self.network_group_delete_confirm = None;
+        self.connection_state.network.close_group_delete_confirm();
         self.terminal_status = "network group delete cancelled".to_string();
         cx.notify();
     }
 
     pub(in crate::features) fn confirm_network_group_delete(&mut self, cx: &mut Context<Self>) {
-        let Some(delete) = self.network_group_delete_confirm.clone() else {
+        let Some(delete) = self.connection_state.network.active_group_delete_confirm() else {
             self.terminal_status = "no network group delete is pending".to_string();
             cx.notify();
             return;
@@ -234,6 +238,12 @@ impl NyaTermApp {
         label: String,
         cx: &mut Context<Self>,
     ) {
+        let deleted_tunnel_ids = self
+            .tunnels
+            .iter()
+            .filter(|tunnel| tunnel.group_id.as_deref() == Some(group_id.as_str()))
+            .map(|tunnel| tunnel.id.clone())
+            .collect::<Vec<_>>();
         let groups = self
             .tunnel_groups
             .iter()
@@ -258,7 +268,11 @@ impl NyaTermApp {
             Ok(()) => {
                 self.tunnel_groups = groups;
                 self.tunnels = tunnels;
-                self.network_group_delete_confirm = None;
+                self.connection_state.network.remove_group_references(
+                    NetworkTab::Tunnels,
+                    &group_id,
+                    &deleted_tunnel_ids,
+                );
                 self.terminal_status = format!("tunnel group '{label}' deleted");
                 self.store_status.message = self.terminal_status.clone();
                 self.store_status.ready = true;
@@ -278,6 +292,12 @@ impl NyaTermApp {
         label: String,
         cx: &mut Context<Self>,
     ) {
+        let deleted_proxy_ids = self
+            .proxies
+            .iter()
+            .filter(|proxy| proxy.group_id.as_deref() == Some(group_id.as_str()))
+            .map(|proxy| proxy.id.clone())
+            .collect::<Vec<_>>();
         let groups = self
             .proxy_groups
             .iter()
@@ -302,7 +322,11 @@ impl NyaTermApp {
             Ok(()) => {
                 self.proxy_groups = groups;
                 self.proxies = proxies;
-                self.network_group_delete_confirm = None;
+                self.connection_state.network.remove_group_references(
+                    NetworkTab::Proxies,
+                    &group_id,
+                    &deleted_proxy_ids,
+                );
                 self.terminal_status = format!("proxy group '{label}' deleted");
                 self.store_status.message = self.terminal_status.clone();
                 self.store_status.ready = true;

@@ -622,6 +622,7 @@ impl NyaTermApp {
                     Ok(config) => {
                         self.connections = config.connections;
                         self.connection_groups = config.groups;
+                        self.retain_connection_list_references_from_loaded_store();
                         self.connection_ssh_keys = store.list_ssh_keys().unwrap_or_default();
                         self.connection_otp_entries = store.list_otp_entries().unwrap_or_default();
                         self.connection_saved_passwords =
@@ -730,5 +731,21 @@ impl NyaTermApp {
                 };
             }
         }
+    }
+
+    fn retain_connection_list_references_from_loaded_store(&mut self) {
+        let connection_ids = self
+            .connections
+            .iter()
+            .map(|connection| connection.id.clone())
+            .collect::<std::collections::HashSet<_>>();
+        let group_ids = self
+            .connection_groups
+            .iter()
+            .map(|group| group.id.clone())
+            .collect::<std::collections::HashSet<_>>();
+        self.connection_state
+            .list
+            .retain_loaded_references(&connection_ids, &group_ids);
     }
 }

@@ -62,7 +62,7 @@ impl NyaTermApp {
                         || !this.new_session_group_menu_path.is_empty()
                         || this.docker_tab_menu_open
                         || this.docker_header_menu_open
-                        || this.connection_list.more_menu_open;
+                        || this.connection_state.list.more_menu_is_open();
                     if changed {
                         this.title_menu_open = None;
                         this.title_menu_submenu = None;
@@ -72,7 +72,7 @@ impl NyaTermApp {
                         this.new_session_group_menu_path.clear();
                         this.docker_tab_menu_open = false;
                         this.docker_header_menu_open = false;
-                        this.connection_list.more_menu_open = false;
+                        this.connection_state.list.close_more_menu();
                         cx.notify();
                     }
                 }),
@@ -408,7 +408,6 @@ impl NyaTermApp {
             .overlays
             .read_with(cx, |store, _| store.snapshot().cloned())
             .unwrap_or_else(|| crate::entities::OverlaySnapshot {
-                quick_switch_open: self.quick_switch_open,
                 tab_actions_open: self.tab_actions_session_id.is_some(),
                 rename_open: self.rename_session_id.is_some(),
                 color_picker_open: self.color_picker_open,
@@ -425,6 +424,7 @@ impl NyaTermApp {
                 close_all_sessions_confirm_open: self.close_all_sessions_confirm_open,
                 locked: self.is_locked,
             });
+        let quick_switch_open = self.quick_switch_open(cx);
         let transfer_properties_open = self
             .transfer_properties
             .as_ref()
@@ -532,20 +532,9 @@ impl NyaTermApp {
             .when(self.sync_groups_open, |this| {
                 this.child(self.sync_groups_overlay(cx))
             })
-            .when(
-                self.connection_editor.is_some()
-                    && self.connection_editor_window.is_none()
-                    && !self.connection_editor_window_open_pending,
-                |this| {
-                    this.child(
-                        self.connection_editor_panel(
-                            self.connection_editor
-                                .clone()
-                                .expect("connection editor state checked above"),
-                            cx,
-                        ),
-                    )
-                },
+            .when_some(
+                self.connection_state.editor.inline_panel_draft(),
+                |this, editor| this.child(self.connection_editor_panel(editor, cx)),
             )
             .when(
                 self.quick_command_editor.is_some()
@@ -580,10 +569,10 @@ impl NyaTermApp {
             .when(self.quick_command_import_dialog_open, |this| {
                 this.child(self.quick_command_import_overlay(cx))
             })
-            .when(self.connection_list.import_dialog_open, |this| {
+            .when(self.connection_state.import.is_dialog_open(), |this| {
                 this.child(self.connection_import_overlay(cx))
             })
-            .when(overlay.quick_switch_open, |this| {
+            .when(quick_switch_open, |this| {
                 this.child(self.quick_switch_overlay(cx))
             })
             .when(self.activity_bar_context_menu.is_some(), |this| {
@@ -609,8 +598,7 @@ impl NyaTermApp {
             || self.settings_window_open_pending
             || self.quick_command_window.is_some()
             || self.quick_command_window_open_pending
-            || self.connection_editor_window.is_some()
-            || self.connection_editor_window_open_pending
+            || self.connection_state.editor.modal_window_open_or_pending()
             || !self.transfer_external_sync_windows.is_empty()
             || !self.transfer_external_sync_window_open_pending.is_empty()
     }
@@ -624,9 +612,9 @@ impl NyaTermApp {
             self.activate_quick_command_window(cx)
         } else if self.quick_command_window_open_pending {
             true
-        } else if self.connection_editor_window.is_some() {
+        } else if self.connection_state.editor.has_window() {
             self.activate_connection_editor_window(cx)
-        } else if self.connection_editor_window_open_pending {
+        } else if self.connection_state.editor.window_open_pending() {
             true
         } else if !self.transfer_external_sync_windows.is_empty() {
             self.activate_transfer_external_sync_window(cx)

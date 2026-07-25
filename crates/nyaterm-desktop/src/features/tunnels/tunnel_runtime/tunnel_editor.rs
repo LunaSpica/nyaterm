@@ -1,10 +1,13 @@
-use super::*;
+use gpui::{Context, KeyDownEvent, Window};
+use nyaterm_core::{ConnectionStore, ConnectionType, TunnelConfig, uuid};
+
+use super::helpers::{network_section_key, parse_port};
+use crate::features::NyaTermApp;
+use crate::models::{NetworkTab, NetworkTunnelEditorField, NetworkTunnelEditorState};
 
 impl NyaTermApp {
     pub(in crate::features) fn set_network_tab(&mut self, tab: NetworkTab, cx: &mut Context<Self>) {
-        self.network_tab = tab;
-        self.network_item_menu = None;
-        self.network_move_picker = None;
+        self.connection_state.network.set_tab(tab);
         self.terminal_status = format!("network tab set to {}", tab.label());
         cx.notify();
     }
@@ -15,14 +18,11 @@ impl NyaTermApp {
         section_id: String,
         cx: &mut Context<Self>,
     ) {
-        self.network_item_menu = None;
         let key = network_section_key(tab, &section_id);
-        if self.network_expanded_sections.remove(&key) {
-            self.network_move_picker = None;
-            self.terminal_status = format!("collapsed {} group", tab.label());
-        } else {
-            self.network_expanded_sections.insert(key);
+        if self.connection_state.network.toggle_section(key) {
             self.terminal_status = format!("expanded {} group", tab.label());
+        } else {
+            self.terminal_status = format!("collapsed {} group", tab.label());
         }
         cx.notify();
     }
@@ -43,45 +43,46 @@ impl NyaTermApp {
             return;
         };
 
-        self.network_tunnel_editor = Some(NetworkTunnelEditorState {
-            id: tunnel_id,
-            is_open: tunnel.is_open,
-            name: tunnel.name,
-            tunnel_type: match tunnel.tunnel_type.as_str() {
-                "remote" | "dynamic" => tunnel.tunnel_type,
-                _ => "local".to_string(),
-            },
-            connection_id: tunnel.connection_id,
-            listen_port: if tunnel.listen_port == 0 {
-                String::new()
-            } else {
-                tunnel.listen_port.to_string()
-            },
-            target_host: if tunnel.target_host.trim().is_empty() {
-                "127.0.0.1".to_string()
-            } else {
-                tunnel.target_host
-            },
-            target_port: if tunnel.target_port == 0 {
-                String::new()
-            } else {
-                tunnel.target_port.to_string()
-            },
-            auto_open: tunnel.auto_open,
-            bind_localhost: tunnel.bind_localhost,
-            group_id: tunnel.group_id,
-            focused_field: NetworkTunnelEditorField::Name,
-            error: None,
-        });
-        self.network_item_menu = None;
-        self.network_tab = NetworkTab::Tunnels;
+        self.connection_state
+            .network
+            .begin_tunnel_edit(NetworkTunnelEditorState {
+                id: tunnel_id,
+                is_open: tunnel.is_open,
+                name: tunnel.name,
+                tunnel_type: match tunnel.tunnel_type.as_str() {
+                    "remote" | "dynamic" => tunnel.tunnel_type,
+                    _ => "local".to_string(),
+                },
+                connection_id: tunnel.connection_id,
+                listen_port: if tunnel.listen_port == 0 {
+                    String::new()
+                } else {
+                    tunnel.listen_port.to_string()
+                },
+                target_host: if tunnel.target_host.trim().is_empty() {
+                    "127.0.0.1".to_string()
+                } else {
+                    tunnel.target_host
+                },
+                target_port: if tunnel.target_port == 0 {
+                    String::new()
+                } else {
+                    tunnel.target_port.to_string()
+                },
+                auto_open: tunnel.auto_open,
+                bind_localhost: tunnel.bind_localhost,
+                group_id: tunnel.group_id,
+                focused_field: NetworkTunnelEditorField::Name,
+                error: None,
+            });
         self.terminal_status = "tunnel editor opened".to_string();
-        window.focus(&self.network_tunnel_editor_focus);
+        let tunnel_editor_focus = self.connection_state.network.tunnel_editor_focus_handle();
+        window.focus(&tunnel_editor_focus);
         cx.notify();
     }
 
     pub(in crate::features) fn close_network_tunnel_editor(&mut self, cx: &mut Context<Self>) {
-        self.network_tunnel_editor = None;
+        self.connection_state.network.close_tunnel_editor();
         self.terminal_status = "tunnel editor closed".to_string();
         cx.notify();
     }
@@ -92,11 +93,11 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some(editor) = self.network_tunnel_editor.as_mut() {
-            editor.focused_field = field;
-            editor.error = None;
-        }
-        window.focus(&self.network_tunnel_editor_focus);
+        self.connection_state
+            .network
+            .focus_tunnel_editor_field(field);
+        let tunnel_editor_focus = self.connection_state.network.tunnel_editor_focus_handle();
+        window.focus(&tunnel_editor_focus);
         cx.notify();
     }
 
@@ -121,88 +122,34 @@ impl NyaTermApp {
                 return;
             }
             "tab" if !keystroke.modifiers.platform && !keystroke.modifiers.control => {
-                if let Some(editor) = self.network_tunnel_editor.as_mut() {
-                    editor.focused_field = editor.focused_field.next(editor.is_dynamic());
-                    editor.error = None;
+                if self.connection_state.network.advance_tunnel_editor_focus() {
+                    cx.notify();
                 }
-                cx.notify();
                 return;
             }
             _ => {}
         }
 
-        let Some(editor) = self.network_tunnel_editor.as_mut() else {
-            return;
-        };
         if keystroke.modifiers.platform || keystroke.modifiers.control {
             return;
         }
 
-        match keystroke.key.as_str() {
-            "backspace" => {
-                match editor.focused_field {
-                    NetworkTunnelEditorField::Name => {
-                        editor.name.pop();
-                    }
-                    NetworkTunnelEditorField::ListenPort => {
-                        editor.listen_port.pop();
-                    }
-                    NetworkTunnelEditorField::TargetHost => {
-                        editor.target_host.pop();
-                    }
-                    NetworkTunnelEditorField::TargetPort => {
-                        editor.target_port.pop();
-                    }
-                }
-                editor.error = None;
-                cx.notify();
-            }
-            _ => {
-                let Some(input) = keystroke
-                    .key_char
-                    .as_deref()
-                    .filter(|input| !input.is_empty())
-                else {
-                    return;
-                };
-                match editor.focused_field {
-                    NetworkTunnelEditorField::Name => editor.name.push_str(input),
-                    NetworkTunnelEditorField::ListenPort => {
-                        editor
-                            .listen_port
-                            .extend(input.chars().filter(|character| character.is_ascii_digit()));
-                    }
-                    NetworkTunnelEditorField::TargetHost => editor.target_host.push_str(input),
-                    NetworkTunnelEditorField::TargetPort => {
-                        editor
-                            .target_port
-                            .extend(input.chars().filter(|character| character.is_ascii_digit()));
-                    }
-                }
-                editor.error = None;
-                cx.notify();
-            }
+        let input = keystroke
+            .key_char
+            .as_deref()
+            .filter(|input| !input.is_empty());
+        if self
+            .connection_state
+            .network
+            .apply_tunnel_editor_key(keystroke.key.as_str(), input)
+        {
+            cx.notify();
         }
     }
 
     pub(in crate::features) fn cycle_network_tunnel_type(&mut self, cx: &mut Context<Self>) {
-        if let Some(editor) = self.network_tunnel_editor.as_mut() {
-            editor.tunnel_type = match editor.tunnel_type.as_str() {
-                "local" => "remote",
-                "remote" => "dynamic",
-                _ => "local",
-            }
-            .to_string();
-            if editor.is_dynamic() {
-                editor.focused_field = match editor.focused_field {
-                    NetworkTunnelEditorField::TargetHost | NetworkTunnelEditorField::TargetPort => {
-                        NetworkTunnelEditorField::ListenPort
-                    }
-                    field => field,
-                };
-            }
-            editor.error = None;
-            self.terminal_status = format!("tunnel type set to {}", editor.tunnel_type);
+        if let Some(tunnel_type) = self.connection_state.network.cycle_tunnel_type() {
+            self.terminal_status = format!("tunnel type set to {tunnel_type}");
         }
         cx.notify();
     }
@@ -214,23 +161,22 @@ impl NyaTermApp {
             .filter(|connection| matches!(&connection.config, ConnectionType::Ssh { .. }))
             .map(|connection| connection.id.as_str())
             .collect::<Vec<_>>();
-        let Some(editor) = self.network_tunnel_editor.as_mut() else {
-            return;
-        };
-        editor.connection_id =
-            next_network_group_id(editor.connection_id.as_deref(), connection_ids.into_iter());
-        editor.error = None;
-        self.terminal_status = "tunnel SSH connection changed".to_string();
-        cx.notify();
+        if self
+            .connection_state
+            .network
+            .cycle_tunnel_connection(connection_ids)
+        {
+            self.terminal_status = "tunnel SSH connection changed".to_string();
+            cx.notify();
+        }
     }
 
     pub(in crate::features) fn cycle_network_tunnel_group(&mut self, cx: &mut Context<Self>) {
-        if let Some(editor) = self.network_tunnel_editor.as_mut() {
-            editor.group_id = next_network_group_id(
-                editor.group_id.as_deref(),
-                self.tunnel_groups.iter().map(|group| group.id.as_str()),
-            );
-            editor.error = None;
+        if self
+            .connection_state
+            .network
+            .cycle_tunnel_group(self.tunnel_groups.iter().map(|group| group.id.as_str()))
+        {
             self.terminal_status = "tunnel group changed".to_string();
         }
         cx.notify();
@@ -241,18 +187,15 @@ impl NyaTermApp {
         bind_localhost: bool,
         cx: &mut Context<Self>,
     ) {
-        if let Some(editor) = self.network_tunnel_editor.as_mut() {
-            editor.bind_localhost = bind_localhost;
-            editor.error = None;
-        }
+        self.connection_state
+            .network
+            .set_tunnel_bind_localhost(bind_localhost);
         cx.notify();
     }
 
     pub(in crate::features) fn toggle_network_tunnel_auto_open(&mut self, cx: &mut Context<Self>) {
-        if let Some(editor) = self.network_tunnel_editor.as_mut() {
-            editor.auto_open = !editor.auto_open;
-            editor.error = None;
-            self.terminal_status = if editor.auto_open {
+        if let Some(auto_open) = self.connection_state.network.toggle_tunnel_auto_open() {
+            self.terminal_status = if auto_open {
                 "tunnel auto-open enabled"
             } else {
                 "tunnel auto-open disabled"
@@ -263,7 +206,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn save_network_tunnel_editor(&mut self, cx: &mut Context<Self>) {
-        let Some(editor) = self.network_tunnel_editor.clone() else {
+        let Some(editor) = self.connection_state.network.active_tunnel_editor() else {
             self.terminal_status = "no tunnel editor is active".to_string();
             cx.notify();
             return;
@@ -345,7 +288,7 @@ impl NyaTermApp {
         {
             Ok(()) => {
                 self.tunnels = next_tunnels;
-                self.network_tunnel_editor = None;
+                self.connection_state.network.close_tunnel_editor();
                 self.terminal_status = format!("tunnel '{name}' saved");
                 self.store_status.message = self.terminal_status.clone();
                 self.store_status.ready = true;
@@ -354,9 +297,9 @@ impl NyaTermApp {
                 self.terminal_status = format!("failed to save tunnel: {error}");
                 self.store_status.message = self.terminal_status.clone();
                 self.store_status.ready = false;
-                if let Some(editor) = self.network_tunnel_editor.as_mut() {
-                    editor.error = Some(self.terminal_status.clone());
-                }
+                self.connection_state
+                    .network
+                    .set_tunnel_editor_error(self.terminal_status.clone());
             }
         }
         cx.notify();
@@ -368,9 +311,9 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let error = error.into();
-        if let Some(editor) = self.network_tunnel_editor.as_mut() {
-            editor.error = Some(error.clone());
-        }
+        self.connection_state
+            .network
+            .set_tunnel_editor_error(error.clone());
         self.terminal_status = error;
         cx.notify();
     }

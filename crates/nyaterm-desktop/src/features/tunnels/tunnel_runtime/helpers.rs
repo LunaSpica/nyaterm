@@ -1,23 +1,6 @@
-use super::*;
+use nyaterm_core::{ProxyGroup, TunnelGroup};
 
-pub(super) fn next_network_group_id<'a>(
-    current_group_id: Option<&str>,
-    group_ids: impl Iterator<Item = &'a str>,
-) -> Option<String> {
-    let mut cycle = std::iter::once(None)
-        .chain(group_ids.map(Some))
-        .collect::<Vec<_>>();
-    if cycle.is_empty() {
-        return None;
-    }
-    let current_index = cycle
-        .iter()
-        .position(|group_id| *group_id == current_group_id)
-        .unwrap_or(0);
-    cycle
-        .remove((current_index + 1) % cycle.len())
-        .map(ToOwned::to_owned)
-}
+use crate::models::NetworkTab;
 
 pub(super) fn network_group_label<T>(group_id: Option<&str>, groups: &[T]) -> String
 where

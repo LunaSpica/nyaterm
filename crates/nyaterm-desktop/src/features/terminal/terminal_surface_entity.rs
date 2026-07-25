@@ -2419,6 +2419,7 @@ impl Render for TerminalSurface {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nyaterm_terminal_gpui::precompute_terminal_keyword_highlights;
 
     fn terminal_test_output_lines(count: usize) -> String {
         (0..count)

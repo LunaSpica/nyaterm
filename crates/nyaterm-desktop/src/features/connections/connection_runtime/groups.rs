@@ -1,4 +1,8 @@
-use super::*;
+use gpui::{Context, KeyDownEvent, Window};
+use nyaterm_core::{Group, uuid};
+
+use crate::features::NyaTermApp;
+use crate::models::ConnectionGroupEditorState;
 
 impl NyaTermApp {
     pub(in crate::features) fn open_connection_group_editor(
@@ -31,19 +35,22 @@ impl NyaTermApp {
             })
             .or(parent_id);
 
-        self.connection_group_editor = Some(ConnectionGroupEditorState {
-            id: group_id,
-            name,
-            parent_id,
-            error: None,
-        });
+        self.connection_state
+            .group_editor
+            .begin_edit(ConnectionGroupEditorState {
+                id: group_id,
+                name,
+                parent_id,
+                error: None,
+            });
         self.terminal_status = "connection group editor opened".to_string();
-        window.focus(&self.connection_group_editor_focus);
+        let group_editor_focus = self.connection_state.group_editor.focus_handle();
+        window.focus(&group_editor_focus);
         cx.notify();
     }
 
     pub(in crate::features) fn close_connection_group_editor(&mut self, cx: &mut Context<Self>) {
-        self.connection_group_editor = None;
+        self.connection_state.group_editor.close();
         self.terminal_status = "connection group editor closed".to_string();
         cx.notify();
     }
@@ -62,11 +69,13 @@ impl NyaTermApp {
             "escape" => self.close_connection_group_editor(cx),
             "enter" => self.save_connection_group_editor(cx),
             "backspace" if !keystroke.modifiers.platform && !keystroke.modifiers.control => {
-                if let Some(editor) = self.connection_group_editor.as_mut() {
-                    editor.name.pop();
-                    editor.error = None;
+                if self
+                    .connection_state
+                    .group_editor
+                    .apply_name_key("backspace", None)
+                {
+                    cx.notify();
                 }
-                cx.notify();
             }
             _ if !keystroke.modifiers.platform && !keystroke.modifiers.control => {
                 if let Some(input) = keystroke
@@ -74,11 +83,13 @@ impl NyaTermApp {
                     .as_deref()
                     .filter(|input| !input.is_empty())
                 {
-                    if let Some(editor) = self.connection_group_editor.as_mut() {
-                        editor.name.push_str(input);
-                        editor.error = None;
+                    if self
+                        .connection_state
+                        .group_editor
+                        .apply_name_key(keystroke.key.as_str(), Some(input))
+                    {
+                        cx.notify();
                     }
-                    cx.notify();
                 }
             }
             _ => {}
@@ -86,15 +97,13 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn save_connection_group_editor(&mut self, cx: &mut Context<Self>) {
-        let Some(editor) = self.connection_group_editor.clone() else {
+        let Some(editor) = self.connection_state.group_editor.active_draft() else {
             return;
         };
         let name = editor.name.trim().to_string();
         if name.is_empty() {
             let message = self.tr("savedConnections.folderNameRequired").to_string();
-            if let Some(state) = self.connection_group_editor.as_mut() {
-                state.error = Some(message);
-            }
+            self.connection_state.group_editor.set_error(message);
             cx.notify();
             return;
         }
@@ -119,17 +128,13 @@ impl NyaTermApp {
 
         match self.with_connection_store(|store| store.save_group(&group)) {
             Ok(()) => {
-                self.connection_list
-                    .expanded_group_ids
-                    .insert(group.id.clone());
-                self.connection_group_editor = None;
+                self.connection_state.list.expand_group(group.id.clone());
+                self.connection_state.group_editor.close();
                 self.refresh_store_from_runtime();
                 self.terminal_status = format!("saved connection group {}", group.name);
             }
             Err(error) => {
-                if let Some(state) = self.connection_group_editor.as_mut() {
-                    state.error = Some(error);
-                }
+                self.connection_state.group_editor.set_error(error);
             }
         }
         cx.notify();

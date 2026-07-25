@@ -10,7 +10,7 @@ impl NyaTermApp {
         target_id: String,
         cx: &mut Context<Self>,
     ) {
-        self.connection_list.drop_target = None;
+        self.connection_state.list.clear_drop_target();
         if source_id == target_id {
             return;
         }
@@ -58,7 +58,7 @@ impl NyaTermApp {
                 self.store_status.ready = false;
             }
         }
-        self.connection_list.drop_target = None;
+        self.connection_state.list.clear_drop_target();
         cx.notify();
     }
 
@@ -68,7 +68,7 @@ impl NyaTermApp {
         target_id: String,
         cx: &mut Context<Self>,
     ) {
-        self.connection_list.drop_target = None;
+        self.connection_state.list.clear_drop_target();
         if source_id == target_id {
             return;
         }
@@ -117,7 +117,7 @@ impl NyaTermApp {
                 self.store_status.ready = false;
             }
         }
-        self.connection_list.drop_target = None;
+        self.connection_state.list.clear_drop_target();
         cx.notify();
     }
 
@@ -127,7 +127,7 @@ impl NyaTermApp {
         group_id: Option<String>,
         cx: &mut Context<Self>,
     ) {
-        self.connection_list.drop_target = None;
+        self.connection_state.list.clear_drop_target();
         let Some(source) = self.connections.iter().find(|c| c.id == source_id).cloned() else {
             self.terminal_status = "drag source connection missing".to_string();
             cx.notify();
@@ -150,7 +150,7 @@ impl NyaTermApp {
         match self.persist_connection_order(&siblings) {
             Ok(()) => {
                 if let Some(gid) = group_id {
-                    self.connection_list.expanded_group_ids.insert(gid);
+                    self.connection_state.list.expand_group(gid);
                 }
                 self.refresh_store_from_runtime();
                 self.terminal_status = "connection moved".to_string();
@@ -170,7 +170,7 @@ impl NyaTermApp {
         target_id: String,
         cx: &mut Context<Self>,
     ) {
-        self.connection_list.drop_target = None;
+        self.connection_state.list.clear_drop_target();
         if source_id == target_id {
             return;
         }
@@ -224,7 +224,7 @@ impl NyaTermApp {
         parent_id: Option<String>,
         cx: &mut Context<Self>,
     ) {
-        self.connection_list.drop_target = None;
+        self.connection_state.list.clear_drop_target();
         if parent_id.as_deref() == Some(source_id.as_str()) {
             self.terminal_status = "cannot nest group into itself".to_string();
             cx.notify();

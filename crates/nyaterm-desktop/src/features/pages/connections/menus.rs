@@ -1,4 +1,15 @@
-use super::*;
+use gpui::{
+    Context, IntoElement, SharedString, div,
+    prelude::{
+        FluentBuilder, InteractiveElement, ParentElement, StatefulInteractiveElement, Styled,
+    },
+    px, rgb,
+};
+
+use crate::features::NyaTermApp;
+use crate::models::{ConnectionContextMenuState, ConnectionGroupContextMenuState};
+
+use super::list::{menu_item_with_icon, menu_separator};
 
 fn connection_menu_position(
     x: f32,
@@ -22,15 +33,13 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let state =
-            self.connection_list
-                .context_menu
-                .clone()
-                .unwrap_or(ConnectionContextMenuState {
-                    connection_id: String::new(),
-                    x: px(24.),
-                    y: px(24.),
-                });
+        let state = self.connection_state.list.active_context_menu().unwrap_or(
+            ConnectionContextMenuState {
+                connection_id: String::new(),
+                x: px(24.),
+                y: px(24.),
+            },
+        );
         let connection = self
             .connections
             .iter()
@@ -40,7 +49,7 @@ impl NyaTermApp {
         let connect_label = if selected_count > 1
             && connection
                 .as_ref()
-                .is_some_and(|conn| self.connection_list.selected_ids.contains(&conn.id))
+                .is_some_and(|conn| self.connection_state.list.contains_selected_id(&conn.id))
         {
             format!(
                 "{} ({selected_count})",
@@ -188,13 +197,15 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let state = self.connection_list.group_context_menu.clone().unwrap_or(
-            ConnectionGroupContextMenuState {
+        let state = self
+            .connection_state
+            .list
+            .active_group_context_menu()
+            .unwrap_or(ConnectionGroupContextMenuState {
                 group_id: String::new(),
                 x: px(24.),
                 y: px(24.),
-            },
-        );
+            });
         let group_id = state.group_id.clone();
         let group_id_new = group_id.clone();
         let group_id_folder = group_id.clone();

@@ -8,21 +8,18 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         let input_entity = cx.entity();
         let (viewport_w, viewport_h) = self.last_viewport_size;
-        let items = self.filtered_quick_switch_items();
-        if self.quick_switch_selected_index >= items.len() && !items.is_empty() {
-            self.quick_switch_selected_index = items.len() - 1;
-        }
-        let selected_index = self.quick_switch_selected_index;
-        let query_display =
-            if self.quick_switch_query.is_empty() && self.quick_switch_marked_text.is_empty() {
-                self.tr("sessionQuickSwitcher.searchPlaceholder")
-                    .to_string()
-            } else {
-                format!(
-                    "{}{}",
-                    self.quick_switch_query, self.quick_switch_marked_text
-                )
-            };
+        let items = self.filtered_quick_switch_items(cx);
+        self.update_quick_switch_state(cx, |store| {
+            store.clamp_quick_switch_selected_index(items.len())
+        });
+        let state = self.quick_switch_state(cx);
+        let selected_index = state.selected_index();
+        let query_display = if state.query().is_empty() && state.marked_text().is_empty() {
+            self.tr("sessionQuickSwitcher.searchPlaceholder")
+                .to_string()
+        } else {
+            format!("{}{}", state.query(), state.marked_text())
+        };
         let list_max_height = (self.last_viewport_size.1 * 0.55).clamp(160., 384.);
         let selected_row_bg = rgba((palette.primary << 8) | 0x26);
         let hover_row_bg = self.shell_surface_color(palette.hover);
@@ -131,7 +128,9 @@ impl NyaTermApp {
                         )
                         .child(badge)
                         .on_click(cx.listener(move |this, _, window, cx| {
-                            this.quick_switch_selected_index = index;
+                            this.update_quick_switch_state(cx, |store| {
+                                store.set_quick_switch_selected_index(index)
+                            });
                             this.select_quick_switch_item(item_for_click.clone(), window, cx);
                         })),
                 );
@@ -195,7 +194,7 @@ impl NyaTermApp {
                                     .min_w_0()
                                     .flex_1()
                                     .text_sm()
-                                    .text_color(if self.quick_switch_query.is_empty() {
+                                    .text_color(if state.query().is_empty() {
                                         rgb(palette.text_muted)
                                     } else {
                                         rgb(palette.text)
@@ -257,7 +256,9 @@ impl NyaTermApp {
                                         .hover(|this| this.bg(rgb(palette.primary_hover)))
                                         .child(self.tr("sessionQuickSwitcher.newSsh"))
                                         .on_click(cx.listener(|this, _, window, cx| {
-                                            this.quick_switch_open = false;
+                                            this.update_quick_switch_state(cx, |store| {
+                                                store.close_quick_switch()
+                                            });
                                             this.open_connection_editor(
                                                 None, None, true, window, cx,
                                             );

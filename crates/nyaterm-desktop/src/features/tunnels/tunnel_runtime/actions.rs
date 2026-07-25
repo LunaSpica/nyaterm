@@ -1,4 +1,10 @@
-use super::*;
+use gpui::{Context, Window};
+use nyaterm_core::{ConnectionStore, TunnelConfig};
+use nyaterm_transport::{SshTunnelConfig, SshTunnelMode};
+
+use super::helpers::network_group_label;
+use crate::features::{NyaTermApp, TunnelJobOutput, TunnelJobResult, tunnel_mode, tunnel_name};
+use crate::models::{NetworkDeleteConfirmState, NetworkTab};
 
 const TUNNEL_EVENT_DRAIN_LIMIT: usize = 32;
 
@@ -9,16 +15,7 @@ impl NyaTermApp {
         id: String,
         cx: &mut Context<Self>,
     ) {
-        if self
-            .network_item_menu
-            .as_ref()
-            .is_some_and(|menu| menu.tab == tab && menu.id == id)
-        {
-            self.network_item_menu = None;
-        } else {
-            self.network_item_menu = Some(NetworkItemMenuState { tab, id });
-            self.network_move_picker = None;
-        }
+        self.connection_state.network.toggle_item_menu(tab, id);
         cx.notify();
     }
 
@@ -28,17 +25,10 @@ impl NyaTermApp {
         id: String,
         cx: &mut Context<Self>,
     ) {
-        self.network_item_menu = None;
-        if self
-            .network_move_picker
-            .as_ref()
-            .is_some_and(|picker| picker.tab == tab && picker.id == id)
-        {
-            self.network_move_picker = None;
-            self.terminal_status = "network move menu closed".to_string();
-        } else {
-            self.network_move_picker = Some(NetworkMovePickerState { tab, id });
+        if self.connection_state.network.toggle_move_picker(tab, id) {
             self.terminal_status = format!("choose {} group", tab.label());
+        } else {
+            self.terminal_status = "network move menu closed".to_string();
         }
         cx.notify();
     }
@@ -84,7 +74,7 @@ impl NyaTermApp {
         {
             Ok(()) => {
                 self.tunnels = next_tunnels;
-                self.network_move_picker = None;
+                self.connection_state.network.close_move_picker();
                 self.terminal_status = format!("tunnel moved to {label}");
                 self.store_status.message = "tunnel group saved".to_string();
                 self.store_status.ready = true;
@@ -136,7 +126,7 @@ impl NyaTermApp {
         {
             Ok(()) => {
                 self.proxies = next_proxies;
-                self.network_move_picker = None;
+                self.connection_state.network.close_move_picker();
                 self.terminal_status = format!("proxy moved to {label}");
                 self.store_status.message = "proxy group saved".to_string();
                 self.store_status.ready = true;
@@ -157,20 +147,21 @@ impl NyaTermApp {
         label: String,
         cx: &mut Context<Self>,
     ) {
-        self.network_item_menu = None;
-        self.network_delete_confirm = Some(NetworkDeleteConfirmState { tab, id, label });
+        self.connection_state
+            .network
+            .open_delete_confirm(NetworkDeleteConfirmState { tab, id, label });
         self.terminal_status = "network delete confirmation opened".to_string();
         cx.notify();
     }
 
     pub(in crate::features) fn cancel_network_delete(&mut self, cx: &mut Context<Self>) {
-        self.network_delete_confirm = None;
+        self.connection_state.network.close_delete_confirm();
         self.terminal_status = "network delete cancelled".to_string();
         cx.notify();
     }
 
     pub(in crate::features) fn confirm_network_delete(&mut self, cx: &mut Context<Self>) {
-        let Some(delete) = self.network_delete_confirm.clone() else {
+        let Some(delete) = self.connection_state.network.active_delete_confirm() else {
             self.terminal_status = "no network delete is pending".to_string();
             cx.notify();
             return;
@@ -209,7 +200,9 @@ impl NyaTermApp {
                 let deleted = next_tunnels.len() != before;
                 self.tunnels = next_tunnels;
                 self.pending_tunnels.retain(|id| id != &tunnel_id);
-                self.network_delete_confirm = None;
+                self.connection_state
+                    .network
+                    .remove_item_references(NetworkTab::Tunnels, &tunnel_id);
                 self.terminal_status = if deleted {
                     format!("tunnel '{label}' deleted")
                 } else {
@@ -245,7 +238,9 @@ impl NyaTermApp {
             Ok(()) => {
                 let deleted = next_proxies.len() != before;
                 self.proxies = next_proxies;
-                self.network_delete_confirm = None;
+                self.connection_state
+                    .network
+                    .remove_item_references(NetworkTab::Proxies, &proxy_id);
                 self.terminal_status = if deleted {
                     format!("proxy '{label}' deleted")
                 } else {

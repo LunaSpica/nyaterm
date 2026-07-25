@@ -64,7 +64,6 @@ impl NyaTermApp {
         };
 
         let overlays = crate::entities::OverlaySnapshot {
-            quick_switch_open: self.quick_switch_open,
             tab_actions_open: self.tab_actions_session_id.is_some(),
             rename_open: self.rename_session_id.is_some(),
             color_picker_open: self.color_picker_open,
@@ -112,12 +111,11 @@ impl NyaTermApp {
         let connections = crate::entities::ConnectionsSnapshot {
             connection_count: self.connections.len(),
             group_count: self.connection_groups.len(),
-            search_active: !self.connection_list.search_draft.trim().is_empty(),
-            editor_open: self.connection_editor.is_some(),
-            group_editor_open: self.connection_group_editor.is_some(),
-            delete_confirm_open: self.connection_delete_confirm.is_some()
-                || self.connection_group_delete_confirm.is_some(),
-            sort_mode: format!("{:?}", self.connection_list.sort_mode),
+            search_active: self.connection_state.list.search_active(),
+            editor_open: self.connection_state.editor.has_draft(),
+            group_editor_open: self.connection_state.group_editor.is_open(),
+            delete_confirm_open: self.connection_state.confirmations.delete_confirm_is_open(),
+            sort_mode: format!("{:?}", self.connection_state.list.sort_mode()),
         };
         let active_job_count = self
             .transfer_jobs
@@ -272,8 +270,7 @@ impl NyaTermApp {
     }
 
     fn overlay_snapshot_is_current(&self, snapshot: &crate::entities::OverlaySnapshot) -> bool {
-        snapshot.quick_switch_open == self.quick_switch_open
-            && snapshot.tab_actions_open == self.tab_actions_session_id.is_some()
+        snapshot.tab_actions_open == self.tab_actions_session_id.is_some()
             && snapshot.rename_open == self.rename_session_id.is_some()
             && snapshot.color_picker_open == self.color_picker_open
             && snapshot.session_info_open == self.session_info_open

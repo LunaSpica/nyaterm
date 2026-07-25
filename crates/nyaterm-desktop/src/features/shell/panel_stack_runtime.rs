@@ -1,4 +1,5 @@
 use super::*;
+use crate::models::NetworkTab;
 
 const EXCLUSIVE_PANEL_IDS: &[&str] = &["aiAssistant"];
 const NON_PANEL_IDS: &[&str] = &["settings", "lock", "quickCmdBar", "serialSend"];
@@ -546,7 +547,7 @@ impl NyaTermApp {
             NavItem::ActiveSessions => SharedString::from(self.active_sessions_header_count()),
             // Tauri NetworkPanel header shows active tab profile count.
             NavItem::Tunnels => {
-                let count = match self.network_tab {
+                let count = match self.connection_state.network.active_tab() {
                     NetworkTab::Tunnels => self.tunnels.len(),
                     NetworkTab::Proxies => self.proxies.len(),
                 };

@@ -1,4 +1,10 @@
-use super::*;
+use gpui::prelude::*;
+use gpui::{App, ClickEvent, Context, FontWeight, IntoElement, KeyDownEvent, Window, div, px, rgb};
+
+use super::super::common::{network_dialog_footer, network_modal_shell};
+use crate::features::{NyaTermApp, transfer_input};
+use crate::models::{NetworkTunnelEditorField, NetworkTunnelEditorState};
+use nyaterm_core::truncate_preview;
 
 pub(in crate::features::pages::tunnels) fn network_tunnel_editor_panel(
     palette: crate::theme::ThemePalette,

@@ -22,10 +22,9 @@ impl ConnectionEditorWindow {
 
 impl Render for ConnectionEditorWindow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let Some(editor) = self.app.read(cx).connection_editor.clone() else {
+        let Some(editor) = self.app.read(cx).connection_state.editor.active_draft() else {
             self.app.update(cx, |app, cx| {
-                app.connection_editor_window = None;
-                app.connection_editor_window_open_pending = false;
+                app.connection_state.editor.clear_window();
                 cx.notify();
             });
             window.defer(cx, |window, _| window.remove_window());
@@ -73,11 +72,7 @@ impl Render for ConnectionEditorWindow {
 
 impl NyaTermApp {
     pub(in crate::features) fn connection_editor_title(&self) -> &'static str {
-        if self
-            .connection_editor
-            .as_ref()
-            .is_some_and(|editor| editor.id.is_some())
-        {
+        if self.connection_state.editor.is_editing_saved_connection() {
             self.tr("dialog.editConnection")
         } else {
             self.tr("dialog.newConnection")
@@ -88,7 +83,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> bool {
-        let Some(handle) = self.connection_editor_window else {
+        let Some(handle) = self.connection_state.editor.window_handle() else {
             return false;
         };
         let app = cx.entity();
@@ -98,11 +93,7 @@ impl NyaTermApp {
                 .is_err()
             {
                 let _ = app.update(cx, |app, cx| {
-                    if app
-                        .connection_editor_window
-                        .is_some_and(|current| current == handle)
-                    {
-                        app.connection_editor_window = None;
+                    if app.connection_state.editor.clear_window_if_current(handle) {
                         cx.notify();
                     }
                 });
@@ -118,15 +109,15 @@ impl NyaTermApp {
         if self.activate_connection_editor_window(cx) {
             return true;
         }
-        if self.connection_editor_window_open_pending {
+        if self.connection_state.editor.window_open_pending() {
             return true;
         }
 
-        self.connection_editor_window_open_pending = true;
+        self.connection_state.editor.mark_window_pending();
         cx.notify();
         let app = cx.entity();
         cx.defer(move |cx| {
-            let should_open = app.read(cx).connection_editor_window_open_pending;
+            let should_open = app.read(cx).connection_state.editor.window_open_pending();
             if should_open {
                 open_connection_editor_window_now_from_app(app, cx);
             }
@@ -136,17 +127,17 @@ impl NyaTermApp {
 }
 
 fn open_connection_editor_window_now_from_app(app: Entity<NyaTermApp>, cx: &mut App) {
-    if app.read(cx).connection_editor_window.is_some() {
+    if app.read(cx).connection_state.editor.has_window() {
         let _ = app.update(cx, |app, cx| {
-            app.connection_editor_window_open_pending = false;
+            app.connection_state.editor.clear_window_pending();
             app.activate_connection_editor_window(cx);
             cx.notify();
         });
         return;
     }
-    if app.read(cx).connection_editor.is_none() {
+    if !app.read(cx).connection_state.editor.has_draft() {
         let _ = app.update(cx, |app, cx| {
-            app.connection_editor_window_open_pending = false;
+            app.connection_state.editor.clear_window_pending();
             cx.notify();
         });
         return;
@@ -168,17 +159,13 @@ fn open_connection_editor_window_now_from_app(app: Entity<NyaTermApp>, cx: &mut 
         move |window, cx| {
             window.on_window_should_close(cx, move |_, cx| {
                 close_app.update(cx, |app, cx| {
-                    app.connection_icon_picker_open = false;
-                    app.connection_editor_menu = None;
-                    app.connection_editor = None;
-                    app.connection_editor_window = None;
-                    app.connection_editor_window_open_pending = false;
+                    app.connection_state.editor.close();
                     app.terminal_status = "connection editor closed".to_string();
                     cx.notify();
                 });
                 true
             });
-            let editor_focus = view_app.read(cx).connection_editor_focus.clone();
+            let editor_focus = view_app.read(cx).connection_state.editor.focus_handle();
             window.focus(&editor_focus);
             cx.new(|cx| ConnectionEditorWindow::new(view_app, cx))
         },
@@ -186,13 +173,11 @@ fn open_connection_editor_window_now_from_app(app: Entity<NyaTermApp>, cx: &mut 
 
     let _ = app.update(cx, |app, cx| match result {
         Ok(handle) => {
-            app.connection_editor_window = Some(handle);
-            app.connection_editor_window_open_pending = false;
+            app.connection_state.editor.attach_window(handle);
             cx.notify();
         }
         Err(error) => {
-            app.connection_editor_window = None;
-            app.connection_editor_window_open_pending = false;
+            app.connection_state.editor.clear_window();
             app.terminal_status = format!("failed to open connection editor window: {error}");
             cx.notify();
         }

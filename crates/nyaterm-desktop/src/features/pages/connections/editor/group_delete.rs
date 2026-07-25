@@ -1,4 +1,21 @@
-use super::*;
+use gpui::{
+    Context, FontWeight, IntoElement, KeyDownEvent, SharedString, div,
+    prelude::{
+        FluentBuilder, InteractiveElement, ParentElement, StatefulInteractiveElement, Styled,
+    },
+    px, rgb,
+};
+
+use crate::features::{
+    NyaTermApp, modal_dialog_footer_localized, modal_dialog_footer_localized_danger,
+    modal_dialog_shell,
+};
+use crate::models::{
+    ConnectionDeleteConfirmState, ConnectionGroupDeleteConfirmState, ConnectionGroupEditorState,
+    ConnectionGroupOpenConfirmState,
+};
+
+use super::super::list::editor_field;
 
 impl NyaTermApp {
     pub(in crate::features) fn connection_group_editor_panel(
@@ -18,9 +35,10 @@ impl NyaTermApp {
             .flex()
             .flex_col()
             .gap_3()
-            .track_focus(&self.connection_group_editor_focus)
+            .track_focus(&self.connection_state.group_editor.focus_handle())
             .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(&this.connection_group_editor_focus);
+                let group_editor_focus = this.connection_state.group_editor.focus_handle();
+                window.focus(&group_editor_focus);
                 cx.notify();
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
@@ -41,7 +59,8 @@ impl NyaTermApp {
                 editor.name.clone(),
                 true,
                 cx.listener(|this, _, window, cx| {
-                    window.focus(&this.connection_group_editor_focus);
+                    let group_editor_focus = this.connection_state.group_editor.focus_handle();
+                    window.focus(&group_editor_focus);
                     cx.notify();
                 }),
             ))
@@ -234,9 +253,18 @@ impl NyaTermApp {
             .flex()
             .flex_col()
             .gap_3()
-            .track_focus(&self.connection_list.group_open_confirm_focus)
+            .track_focus(
+                &self
+                    .connection_state
+                    .confirmations
+                    .group_open_focus_handle(),
+            )
             .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(&this.connection_list.group_open_confirm_focus);
+                let group_open_focus = this
+                    .connection_state
+                    .confirmations
+                    .group_open_focus_handle();
+                window.focus(&group_open_focus);
                 cx.notify();
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {

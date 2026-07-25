@@ -1,4 +1,17 @@
-use super::*;
+use gpui::{
+    Context, FontWeight, IntoElement, div,
+    prelude::{
+        FluentBuilder, InteractiveElement, ParentElement, StatefulInteractiveElement, Styled,
+    },
+    px, rgb, rgba, svg,
+};
+
+use crate::features::{ConnectionEditorToggle, NyaTermApp};
+use crate::models::{
+    ConnectionEditorField, ConnectionEditorMenu, ConnectionEditorState, ConnectionEditorTelnetTab,
+};
+
+use super::super::super::list::{ConnectionEditorChoice, connection_editor_select, editor_field};
 
 fn telnet_segment_tab(
     palette: crate::theme::ThemePalette,

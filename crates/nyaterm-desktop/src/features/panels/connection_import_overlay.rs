@@ -35,7 +35,7 @@ impl NyaTermApp {
             .items_center()
             .justify_center()
             .p_3()
-            .track_focus(&self.connection_list.import_focus)
+            .track_focus(&self.connection_state.import.focus_handle())
             .on_click(cx.listener(|this, _, _, cx| {
                 this.close_connection_import_dialog(cx);
             }))

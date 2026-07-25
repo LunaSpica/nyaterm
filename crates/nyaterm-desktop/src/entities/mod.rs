@@ -1,9 +1,9 @@
 //! GPUI entity-state boundaries for the native shell.
 //!
 //! During the migration, `NyaTermApp` and its feature-state structs remain the
-//! authoritative UI state. These stores hold read-only snapshot projections
-//! published from the app; mutation helpers are retained for focused store tests
-//! until a specific domain explicitly migrates ownership to an Entity.
+//! default authoritative UI state. These stores mostly hold read-only snapshot
+//! projections published from the app; explicitly migrated domains, such as the
+//! quick switch state in `OverlayStore`, are the exceptions.
 
 mod domain;
 mod handles;
@@ -23,7 +23,7 @@ pub use domain::{
     TransferStore,
 };
 pub use handles::UiStoreHandles;
-pub use overlay::{OverlaySnapshot, OverlayStore};
+pub use overlay::{OverlaySnapshot, OverlayStore, QuickSwitchState};
 pub use runtime::RuntimeStore;
 pub use session::{SessionSnapshot, SessionStore};
 pub use startup_restore::StartupRestoreStore;

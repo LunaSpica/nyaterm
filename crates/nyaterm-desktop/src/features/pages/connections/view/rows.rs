@@ -1,60 +1,48 @@
-use super::*;
+use std::time::{Duration, Instant};
+
+use gpui::{
+    AppContext as _, Context, FontWeight, IntoElement, MouseButton, MouseDownEvent, SharedString,
+    div,
+    prelude::{
+        FluentBuilder, InteractiveElement, ParentElement, StatefulInteractiveElement, Styled,
+    },
+    px, rgb, rgba, svg,
+};
+use nyaterm_core::{SavedConnection, truncate_preview};
+
+use crate::features::{
+    ConnectionDragKind, ConnectionDragPayload, ConnectionDragPreview, ConnectionDropPosition,
+    ConnectionDropTarget, NyaTermApp, connection_type_icon, format_last_used_ms,
+    resolve_connection_icon,
+};
+
+use super::super::list::{
+    ConnectionSection, connection_detail_rows, connection_tree_indent_px, icon_action_button,
+};
 
 const CONNECTION_HOVER_INTENT_DELAY: Duration = Duration::from_millis(350);
 
 impl NyaTermApp {
     pub(in crate::features) fn dismiss_connection_hover(&mut self, cx: &mut Context<Self>) {
-        let had_hovered = self.connection_list.hovered_connection_id.take().is_some();
-        let had_pending = self.connection_list.hover_pending.take().is_some();
-        let changed = had_hovered || had_pending;
-        if changed {
+        if self.connection_state.list.dismiss_hover() {
             cx.notify();
         }
     }
 
     pub(in crate::features) fn poll_connection_hover_delay(&mut self) -> bool {
-        let Some((connection_id, started_at)) = self.connection_list.hover_pending.clone() else {
-            return false;
-        };
-        if !connection_hover_intent_ready(started_at, Instant::now()) {
-            return false;
-        }
-        self.connection_list.hover_pending = None;
-        if self.connection_list.hovered_connection_id.as_deref() == Some(connection_id.as_str()) {
-            return false;
-        }
-        self.connection_list.hovered_connection_id = Some(connection_id);
-        true
+        self.connection_state
+            .list
+            .poll_hover_intent(Instant::now(), CONNECTION_HOVER_INTENT_DELAY)
     }
 
     fn begin_connection_hover_intent(&mut self, connection_id: String) {
-        if self.connection_list.hovered_connection_id.as_deref() == Some(connection_id.as_str())
-            || self
-                .connection_list
-                .hover_pending
-                .as_ref()
-                .is_some_and(|(pending_id, _)| pending_id == &connection_id)
-        {
-            return;
-        }
-        self.connection_list.hover_pending = Some((connection_id, Instant::now()));
+        self.connection_state
+            .list
+            .begin_hover_intent(connection_id, Instant::now());
     }
 
     fn clear_connection_hover_intent(&mut self, connection_id: &str) -> bool {
-        let mut changed = false;
-        if self
-            .connection_list
-            .hover_pending
-            .as_ref()
-            .is_some_and(|(pending_id, _)| pending_id == connection_id)
-        {
-            self.connection_list.hover_pending = None;
-        }
-        if self.connection_list.hovered_connection_id.as_deref() == Some(connection_id) {
-            self.connection_list.hovered_connection_id = None;
-            changed = true;
-        }
-        changed
+        self.connection_state.list.clear_hover_intent(connection_id)
     }
 
     pub(in crate::features) fn connection_section(
@@ -64,11 +52,10 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let expanded = section
-            .group_id
-            .as_ref()
-            .map(|id| self.connection_list.expanded_group_ids.contains(id))
-            .unwrap_or(true);
+        let expanded = self
+            .connection_state
+            .list
+            .group_is_expanded(section.group_id.as_deref());
         let group_id = section.group_id.clone();
         let group_label = section.label.clone();
         let empty_group_label = self.tr("savedConnections.emptyGroup");
@@ -118,48 +105,40 @@ impl NyaTermApp {
                     .rounded_sm()
                     .cursor_pointer()
                     .bg({
-                        let drop_inside =
-                            self.connection_list
-                                .drop_target
-                                .as_ref()
-                                .is_some_and(|target| {
-                                    target.kind == ConnectionDragKind::Group
-                                        && target.position == ConnectionDropPosition::Inside
-                                        && target.id.as_deref() == section.group_id.as_deref()
-                                });
+                        let drop_inside = self.connection_state.list.drop_position_for_kind_target(
+                            ConnectionDragKind::Group,
+                            section.group_id.as_deref(),
+                        ) == Some(ConnectionDropPosition::Inside);
                         if drop_inside {
                             rgb(palette.hover)
-                        } else if section.group_id.as_ref().is_some_and(|id| {
-                            self.connection_list.hovered_group_id.as_deref() == Some(id.as_str())
-                        }) {
+                        } else if self
+                            .connection_state
+                            .list
+                            .group_is_hovered(section.group_id.as_deref())
+                        {
                             rgb(palette.hover)
                         } else {
                             rgba(0x00000000)
                         }
                     })
                     .when(
-                        self.connection_list
-                            .drop_target
-                            .as_ref()
-                            .is_some_and(|target| {
-                                target.kind == ConnectionDragKind::Group
-                                    && target.position == ConnectionDropPosition::Inside
-                                    && target.id.as_deref() == section.group_id.as_deref()
-                            }),
+                        self.connection_state.list.drop_position_for_kind_target(
+                            ConnectionDragKind::Group,
+                            section.group_id.as_deref(),
+                        ) == Some(ConnectionDropPosition::Inside),
                         |this| this.border_1().border_color(rgb(self.theme_palette().link)),
                     )
                     .on_hover({
                         let hover_group = section.group_id.clone();
                         cx.listener(move |this, hovered: &bool, _, cx| {
                             if let Some(group_id) = hover_group.clone() {
-                                if *hovered {
-                                    this.connection_list.hovered_group_id = Some(group_id);
-                                } else if this.connection_list.hovered_group_id.as_deref()
-                                    == Some(group_id.as_str())
+                                if this
+                                    .connection_state
+                                    .list
+                                    .set_group_hover(group_id, *hovered)
                                 {
-                                    this.connection_list.hovered_group_id = None;
+                                    cx.notify();
                                 }
-                                cx.notify();
                             }
                         })
                     })
@@ -218,22 +197,19 @@ impl NyaTermApp {
                                         kind: ConnectionDragKind::Group,
                                         position,
                                     };
-                                    if this.connection_list.drop_target.as_ref() != Some(&next) {
-                                        this.connection_list.drop_target = Some(next);
+                                    if this.connection_state.list.set_drop_target_if_changed(next) {
                                         cx.notify();
                                     }
                                 }
                             }))
                             .on_drop(cx.listener(
                                 move |this, payload: &ConnectionDragPayload, _, cx| {
-                                    let position = this
-                                        .connection_list
-                                        .drop_target
-                                        .as_ref()
-                                        .filter(|t| t.id.as_deref() == Some(drop_group_id.as_str()))
-                                        .map(|t| t.position)
-                                        .unwrap_or(ConnectionDropPosition::Inside);
-                                    this.connection_list.drop_target = None;
+                                    let position =
+                                        this.connection_state.list.drop_position_for_target(
+                                            &drop_group_id,
+                                            ConnectionDropPosition::Inside,
+                                        );
+                                    this.connection_state.list.clear_drop_target();
                                     match payload.kind {
                                         ConnectionDragKind::Connection => {
                                             this.move_connection_into_group(
@@ -318,9 +294,14 @@ impl NyaTermApp {
         depth: usize,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let selected = self.connection_list.selected_ids.contains(&connection.id);
-        let hovered =
-            self.connection_list.hovered_connection_id.as_deref() == Some(connection.id.as_str());
+        let selected = self
+            .connection_state
+            .list
+            .contains_selected_id(&connection.id);
+        let hovered = self
+            .connection_state
+            .list
+            .connection_is_hovered(&connection.id);
         let connect_connection = connection.clone();
         let connect_connection_dbl = connection.clone();
         let edit_id = connection.id.clone();
@@ -334,13 +315,13 @@ impl NyaTermApp {
         let details_tooltip = self.connection_details_tooltip(connection.clone());
         let _endpoint = connection.endpoint();
         let _last_used = format_last_used_ms(connection.last_used_at_ms);
-        let drop_target = self.connection_list.drop_target.as_ref().filter(|target| {
-            target.kind == ConnectionDragKind::Connection
-                && target.id.as_deref() == Some(connection.id.as_str())
-        });
-        let show_before = drop_target.is_some_and(|t| t.position == ConnectionDropPosition::Before);
-        let show_after = drop_target.is_some_and(|t| t.position == ConnectionDropPosition::After);
-        let show_inside = drop_target.is_some_and(|t| t.position == ConnectionDropPosition::Inside);
+        let drop_position = self
+            .connection_state
+            .list
+            .drop_position_for_kind_target(ConnectionDragKind::Connection, Some(&connection.id));
+        let show_before = drop_position == Some(ConnectionDropPosition::Before);
+        let show_after = drop_position == Some(ConnectionDropPosition::After);
+        let show_inside = drop_position == Some(ConnectionDropPosition::Inside);
         let row_id = connection.id.clone();
 
         // Tauri ConnectionItem: py-1.5 single-line row (~34px) with hover actions.
@@ -406,8 +387,7 @@ impl NyaTermApp {
                         kind: ConnectionDragKind::Connection,
                         position,
                     };
-                    if this.connection_list.drop_target.as_ref() != Some(&next) {
-                        this.connection_list.drop_target = Some(next);
+                    if this.connection_state.list.set_drop_target_if_changed(next) {
                         cx.notify();
                     }
                 }
@@ -416,13 +396,10 @@ impl NyaTermApp {
                 let target_id = connection.id.clone();
                 cx.listener(move |this, payload: &ConnectionDragPayload, _, cx| {
                     let position = this
-                        .connection_list
-                        .drop_target
-                        .as_ref()
-                        .filter(|target| target.id.as_deref() == Some(target_id.as_str()))
-                        .map(|target| target.position)
-                        .unwrap_or(ConnectionDropPosition::Before);
-                    this.connection_list.drop_target = None;
+                        .connection_state
+                        .list
+                        .drop_position_for_target(&target_id, ConnectionDropPosition::Before);
+                    this.connection_state.list.clear_drop_target();
                     match payload.kind {
                         ConnectionDragKind::Connection => match position {
                             ConnectionDropPosition::After => {
@@ -640,28 +617,5 @@ impl NyaTermApp {
                     ),
             )
             .child(grid)
-    }
-}
-
-fn connection_hover_intent_ready(started_at: Instant, now: Instant) -> bool {
-    now.saturating_duration_since(started_at) >= CONNECTION_HOVER_INTENT_DELAY
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn connection_hover_intent_waits_for_delay() {
-        let started_at = Instant::now();
-
-        assert!(!connection_hover_intent_ready(
-            started_at,
-            started_at + CONNECTION_HOVER_INTENT_DELAY - Duration::from_millis(1)
-        ));
-        assert!(connection_hover_intent_ready(
-            started_at,
-            started_at + CONNECTION_HOVER_INTENT_DELAY
-        ));
     }
 }

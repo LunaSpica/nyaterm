@@ -1,25 +1,50 @@
 use super::*;
 
 impl NyaTermApp {
+    pub(in crate::features) fn quick_switch_state(
+        &self,
+        cx: &mut Context<Self>,
+    ) -> crate::entities::QuickSwitchState {
+        self.stores
+            .overlays
+            .read_with(cx, |store, _| store.quick_switch().clone())
+    }
+
+    pub(in crate::features) fn quick_switch_open(&self, cx: &mut Context<Self>) -> bool {
+        self.quick_switch_state(cx).is_open()
+    }
+
+    pub(in crate::features) fn update_quick_switch_state(
+        &mut self,
+        cx: &mut Context<Self>,
+        update: impl FnOnce(&mut crate::entities::OverlayStore) -> bool,
+    ) -> bool {
+        let changed = self.stores.overlays.update(cx, |store, cx| {
+            let changed = update(store);
+            if changed {
+                cx.notify();
+            }
+            changed
+        });
+        if changed {
+            cx.notify();
+        }
+        changed
+    }
+
     pub(in crate::features) fn open_quick_switch(
         &mut self,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.quick_switch_open = true;
-        self.quick_switch_query.clear();
-        self.quick_switch_marked_text.clear();
-        self.quick_switch_selected_index = 0;
+        self.update_quick_switch_state(cx, |store| store.open_quick_switch());
         self.terminal_status = "quick switch opened".to_string();
         window.focus(&self.quick_switch_focus);
         cx.notify();
     }
 
     pub(in crate::features) fn close_quick_switch(&mut self, cx: &mut Context<Self>) {
-        self.quick_switch_open = false;
-        self.quick_switch_query.clear();
-        self.quick_switch_marked_text.clear();
-        self.quick_switch_selected_index = 0;
+        self.update_quick_switch_state(cx, |store| store.close_quick_switch());
         self.terminal_status = "quick switch closed".to_string();
         cx.notify();
     }
@@ -154,9 +179,16 @@ impl NyaTermApp {
         items
     }
 
-    pub(in crate::features) fn filtered_quick_switch_items(&self) -> Vec<QuickSwitchItem> {
+    pub(in crate::features) fn filtered_quick_switch_items(
+        &self,
+        cx: &mut Context<Self>,
+    ) -> Vec<QuickSwitchItem> {
         let items = self.quick_switch_items();
-        let query = self.quick_switch_query.trim().to_ascii_lowercase();
+        let query = self
+            .quick_switch_state(cx)
+            .query()
+            .trim()
+            .to_ascii_lowercase();
         if query.is_empty() {
             return items;
         }
@@ -192,9 +224,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.quick_switch_open = false;
-        self.quick_switch_query.clear();
-        self.quick_switch_selected_index = 0;
+        self.update_quick_switch_state(cx, |store| store.reset_quick_switch_input_and_close());
         match item {
             QuickSwitchItem::Session { id, .. } => {
                 self.select_session(id, cx);
@@ -222,7 +252,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.mark_user_activity();
-        let items = self.filtered_quick_switch_items();
+        let items = self.filtered_quick_switch_items(cx);
         let keystroke = &event.keystroke;
         if keystroke.modifiers.platform || keystroke.modifiers.alt || keystroke.modifiers.control {
             return;
@@ -232,32 +262,35 @@ impl NyaTermApp {
             "escape" => self.close_quick_switch(cx),
             "up" => {
                 if !items.is_empty() {
-                    self.quick_switch_selected_index =
-                        (self.quick_switch_selected_index + items.len() - 1) % items.len();
+                    let selected_index = self.quick_switch_state(cx).selected_index();
+                    let next_index = (selected_index + items.len() - 1) % items.len();
+                    self.update_quick_switch_state(cx, |store| {
+                        store.set_quick_switch_selected_index(next_index)
+                    });
                 }
                 cx.notify();
             }
             "down" => {
                 if !items.is_empty() {
-                    self.quick_switch_selected_index =
-                        (self.quick_switch_selected_index + 1) % items.len();
+                    let selected_index = self.quick_switch_state(cx).selected_index();
+                    let next_index = (selected_index + 1) % items.len();
+                    self.update_quick_switch_state(cx, |store| {
+                        store.set_quick_switch_selected_index(next_index)
+                    });
                 }
                 cx.notify();
             }
             "enter" => {
+                let selected_index = self.quick_switch_state(cx).selected_index();
                 if let Some(item) = items
-                    .get(
-                        self.quick_switch_selected_index
-                            .min(items.len().saturating_sub(1)),
-                    )
+                    .get(selected_index.min(items.len().saturating_sub(1)))
                     .cloned()
                 {
                     self.select_quick_switch_item(item, window, cx);
                 }
             }
             "backspace" => {
-                self.quick_switch_query.pop();
-                self.quick_switch_selected_index = 0;
+                self.update_quick_switch_state(cx, |store| store.pop_quick_switch_query());
                 cx.notify();
             }
             _ => {
@@ -266,8 +299,9 @@ impl NyaTermApp {
                     .as_deref()
                     .filter(|input| !input.is_empty())
                 {
-                    self.quick_switch_query.push_str(input);
-                    self.quick_switch_selected_index = 0;
+                    self.update_quick_switch_state(cx, |store| {
+                        store.push_quick_switch_query(input)
+                    });
                     cx.notify();
                 }
             }

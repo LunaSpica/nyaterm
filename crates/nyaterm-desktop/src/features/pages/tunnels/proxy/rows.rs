@@ -1,4 +1,12 @@
-use super::*;
+use gpui::prelude::*;
+use gpui::{Context, FontWeight, IntoElement, div, px, rgb};
+
+use super::super::common::network_item_overflow_menu;
+use super::helpers::proxy_protocol_label;
+use crate::features::NyaTermApp;
+use crate::models::NetworkTab;
+use crate::widgets::{small_button, status_pill};
+use nyaterm_core::{ProxyConfig, ProxyGroup, truncate_preview};
 
 pub(in crate::features::pages::tunnels) fn proxy_network_row(
     proxy: &ProxyConfig,
@@ -24,9 +32,9 @@ pub(in crate::features::pages::tunnels) fn proxy_network_row(
     let proxy_id_for_delete = proxy.id.clone();
     let proxy_label_for_delete = proxy.name.clone();
     let menu_open = app
-        .network_item_menu
-        .as_ref()
-        .is_some_and(|menu| menu.tab == NetworkTab::Proxies && menu.id == proxy.id);
+        .connection_state
+        .network
+        .item_menu_is_open(NetworkTab::Proxies, &proxy.id);
 
     // Tauri ProxyRow: name, protocol, address; overflow actions on the right.
     div()

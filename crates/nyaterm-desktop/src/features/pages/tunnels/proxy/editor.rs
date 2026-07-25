@@ -1,4 +1,11 @@
-use super::*;
+use gpui::prelude::*;
+use gpui::{Context, FontWeight, IntoElement, KeyDownEvent, div, px, rgb};
+
+use super::super::common::{network_dialog_footer, network_modal_shell};
+use super::super::tunnel::tunnel_editor_selector;
+use super::helpers::proxy_protocol_label;
+use crate::features::{NyaTermApp, transfer_input};
+use crate::models::{NetworkProxyEditorField, NetworkProxyEditorState};
 
 pub(in crate::features::pages::tunnels) fn network_proxy_editor_panel(
     palette: crate::theme::ThemePalette,

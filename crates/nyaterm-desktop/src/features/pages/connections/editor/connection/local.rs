@@ -1,4 +1,13 @@
-use super::*;
+use gpui::{
+    Context, div,
+    prelude::{InteractiveElement, ParentElement, StatefulInteractiveElement, Styled},
+    px, rgb, svg,
+};
+
+use crate::features::{NyaTermApp, small_button};
+use crate::models::{ConnectionEditorField, ConnectionEditorMenu, ConnectionEditorState};
+
+use super::super::super::list::{ConnectionEditorChoice, connection_editor_select, editor_field};
 
 pub(super) fn connection_editor_local_section(
     palette: crate::theme::ThemePalette,

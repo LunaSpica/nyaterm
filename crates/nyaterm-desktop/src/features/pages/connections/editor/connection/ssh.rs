@@ -1,4 +1,22 @@
-use super::*;
+use gpui::{
+    Context, FontWeight, IntoElement, SharedString, div,
+    prelude::{
+        FluentBuilder, InteractiveElement, ParentElement, StatefulInteractiveElement, Styled,
+    },
+    px, rgb, rgba, svg,
+};
+
+use nyaterm_core::truncate_preview;
+
+use crate::features::{ConnectionEditorToggle, NyaTermApp};
+use crate::models::{
+    ConnectionEditorAdvancedTab, ConnectionEditorField, ConnectionEditorMenu,
+    ConnectionEditorPasswordSource, ConnectionEditorState,
+};
+
+use super::super::super::list::{
+    ConnectionEditorChoice, connection_editor_select, editor_field, toggle_chip,
+};
 
 fn ssh_segment_tab(
     palette: crate::theme::ThemePalette,
@@ -155,7 +173,7 @@ pub(super) fn connection_editor_ssh_section(
         );
     }
 
-    let network_tabs = div()
+    let advanced_tabs = div()
         .h(px(32.))
         .p_1()
         .flex()
@@ -443,7 +461,7 @@ pub(super) fn connection_editor_ssh_section(
                     .flex()
                     .flex_col()
                     .gap_3()
-                    .child(network_tabs)
+                    .child(advanced_tabs)
                     .when(
                         editor.advanced_network_tab == ConnectionEditorAdvancedTab::Proxy,
                         |this| {

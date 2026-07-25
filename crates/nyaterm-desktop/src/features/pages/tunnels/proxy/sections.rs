@@ -1,5 +1,13 @@
-use super::*;
-use gpui::rgba;
+use std::collections::{HashMap, HashSet};
+
+use gpui::prelude::*;
+use gpui::{Context, FontWeight, IntoElement, div, px, rgb, rgba, svg};
+
+use super::super::common::network_item_overflow_menu;
+use super::rows::{proxy_move_picker, proxy_network_row};
+use crate::features::NyaTermApp;
+use crate::models::NetworkTab;
+use nyaterm_core::{ProxyConfig, ProxyGroup, truncate_preview};
 
 #[derive(Debug, Clone)]
 pub(in crate::features::pages::tunnels) struct ProxySection {
@@ -64,7 +72,10 @@ pub(in crate::features::pages::tunnels) fn proxy_section(
 ) -> impl IntoElement {
     let item_count = section.proxies.len();
     let section_key = format!("proxy:{}", section.id);
-    let collapsed = !app.network_expanded_sections.contains(&section_key);
+    let collapsed = !app
+        .connection_state
+        .network
+        .section_is_expanded(&section_key);
     let section_id_for_toggle = section.id.clone();
     let mut rows = div().flex().flex_col();
     if section.proxies.is_empty() {
@@ -81,9 +92,9 @@ pub(in crate::features::pages::tunnels) fn proxy_section(
     } else {
         for (index, proxy) in section.proxies.into_iter().enumerate() {
             let move_picker_open = app
-                .network_move_picker
-                .as_ref()
-                .is_some_and(|picker| picker.tab == NetworkTab::Proxies && picker.id == proxy.id);
+                .connection_state
+                .network
+                .move_picker_is_open(NetworkTab::Proxies, &proxy.id);
             rows = rows.child(
                 div()
                     .flex()
@@ -179,9 +190,9 @@ pub(in crate::features::pages::tunnels) fn proxy_section(
                     let delete_label = group.name.clone();
                     let menu_id = format!("group:{}", group.id);
                     let menu_open = app
-                        .network_item_menu
-                        .as_ref()
-                        .is_some_and(|menu| menu.tab == NetworkTab::Proxies && menu.id == menu_id);
+                        .connection_state
+                        .network
+                        .item_menu_is_open(NetworkTab::Proxies, &menu_id);
                     this.child(network_item_overflow_menu(
                         palette,
                         app.shell_surface_color(palette.surface),

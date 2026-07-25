@@ -1,18 +1,33 @@
-use super::*;
-
-#[path = "connection/local.rs"]
 mod local;
-#[path = "connection/serial.rs"]
 mod serial;
-#[path = "connection/ssh.rs"]
 mod ssh;
-#[path = "connection/telnet.rs"]
 mod telnet;
 
-use local::*;
-use serial::*;
-use ssh::*;
-use telnet::*;
+use std::collections::{HashMap, HashSet};
+
+use gpui::{
+    AnyElement, Context, FontWeight, IntoElement, KeyDownEvent, SharedString, div,
+    prelude::{
+        FluentBuilder, InteractiveElement, ParentElement, StatefulInteractiveElement, Styled,
+    },
+    px, rgb, rgba, svg,
+};
+use nyaterm_core::{ConnectionType, Group, SavedConnection, truncate_preview};
+
+use self::local::connection_editor_local_section;
+use self::serial::connection_editor_serial_section;
+use self::ssh::connection_editor_ssh_section;
+use self::telnet::connection_editor_telnet_section;
+use super::super::list::{
+    ConnectionEditorChoice, ConnectionGroupChoice, connection_editor_group_select,
+    connection_kind_tab, editor_field,
+};
+use crate::features::{
+    CONNECTION_ICON_OPTIONS, NyaTermApp, modal_dialog_shell, resolve_connection_icon,
+};
+use crate::models::{
+    ConnectionEditorField, ConnectionEditorMenu, ConnectionEditorState, ConnectionKindTab,
+};
 impl NyaTermApp {
     pub(in crate::features) fn connection_editor_panel(
         &mut self,
@@ -365,7 +380,8 @@ impl NyaTermApp {
         };
         let icon_key = editor.icon.as_deref();
         let icon_def = resolve_connection_icon(icon_key, editor.kind.label());
-        let icon_picker_open = self.connection_icon_picker_open;
+        let icon_picker_open = self.connection_state.editor.icon_picker_is_open();
+        let active_menu = self.connection_state.editor.active_menu();
         let icon_picker_bg = if native_window {
             rgb(palette.surface)
         } else {
@@ -373,6 +389,7 @@ impl NyaTermApp {
         };
         let validation_error = self.connection_editor_validation_error(&editor);
         let save_enabled = validation_error.is_none();
+        let editor_focus = self.connection_state.editor.focus_handle();
         let mut icon_grid = div().grid().grid_cols(7).gap_1();
         for icon_key in CONNECTION_ICON_OPTIONS {
             let icon = resolve_connection_icon(Some(icon_key), editor.kind.label());
@@ -475,9 +492,10 @@ impl NyaTermApp {
             .flex_col()
             .gap_3()
             .overflow_hidden()
-            .track_focus(&self.connection_editor_focus)
+            .track_focus(&editor_focus)
             .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(&this.connection_editor_focus);
+                let editor_focus = this.connection_state.editor.focus_handle();
+                window.focus(&editor_focus);
                 cx.notify();
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
@@ -571,8 +589,7 @@ impl NyaTermApp {
                                     palette,
                                     group_title,
                                     group_label,
-                                    self.connection_editor_menu
-                                        == Some(ConnectionEditorMenu::Group),
+                                    active_menu == Some(ConnectionEditorMenu::Group),
                                     group_options,
                                     editor.new_group_name.clone(),
                                     editor.focused_field == ConnectionEditorField::NewGroupName,
@@ -599,7 +616,7 @@ impl NyaTermApp {
                             proxy_options,
                             jump_options,
                             backspace_options.clone(),
-                            self.connection_editor_menu,
+                            active_menu,
                             &language,
                             cx,
                         ))
@@ -610,7 +627,7 @@ impl NyaTermApp {
                             &editor,
                             shell_label,
                             shell_options,
-                            self.connection_editor_menu,
+                            active_menu,
                             &language,
                             cx,
                         ))
@@ -620,7 +637,7 @@ impl NyaTermApp {
                             palette,
                             &editor,
                             backspace_options.clone(),
-                            self.connection_editor_menu,
+                            active_menu,
                             &language,
                             cx,
                         ))
@@ -635,7 +652,7 @@ impl NyaTermApp {
                             parity_options,
                             stop_bits_options,
                             backspace_options,
-                            self.connection_editor_menu,
+                            active_menu,
                             &language,
                             cx,
                         ))
