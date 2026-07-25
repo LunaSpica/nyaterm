@@ -122,8 +122,6 @@ pub fn terminal_line_element(
         }
         if let Some(bg) = span.bg {
             child = child.bg(rgb(bg));
-        } else if span.keyword {
-            child = child.bg(rgb(palette.surface));
         }
         if span.underline {
             child = child.underline();

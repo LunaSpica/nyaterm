@@ -628,6 +628,78 @@ mod layout_cache_tests {
         assert_eq!(cache.shape_calls, 1);
     }
 
+    fn highlight_span(
+        text: &str,
+        color: Option<u32>,
+        bg: Option<u32>,
+        keyword: bool,
+    ) -> TerminalHighlightSpan {
+        TerminalHighlightSpan {
+            text: text.to_string(),
+            color,
+            bg,
+            keyword,
+            underline: false,
+            strikeout: false,
+            bold: false,
+            italic: false,
+        }
+    }
+
+    #[test]
+    fn keyword_spans_do_not_create_background_ranges() {
+        let palette = nyaterm_ui::theme_palette("github-dark");
+        let span = highlight_span("ERROR", Some(0xff2244), None, true);
+        let ranges = terminal_background_ranges_for_spans(std::slice::from_ref(&span));
+        let run = terminal_text_run_for_span(
+            &span,
+            span.text.len(),
+            font(SharedString::from("monospace")),
+            400.0,
+            700.0,
+            palette,
+        );
+
+        assert!(ranges.is_empty());
+        assert_eq!(run.color, rgb(0xff2244).into());
+    }
+
+    #[test]
+    fn explicit_background_ranges_survive_keyword_foreground() {
+        let span = highlight_span("WARN", Some(0xffcc00), Some(0x112233), true);
+        let ranges = terminal_background_ranges_for_spans(std::slice::from_ref(&span));
+
+        assert_eq!(ranges.len(), 1);
+        assert_eq!(ranges[0].bg, 0x112233);
+        assert_eq!(ranges[0].start, 0);
+        assert_eq!(ranges[0].end, 4);
+    }
+
+    #[test]
+    fn cached_keyword_rows_reuse_without_surface_background() {
+        let mut cache = NyaTerminalLayoutCache::default();
+        let span = highlight_span("ERROR", Some(0xff2244), None, true);
+        let background_ranges = terminal_background_ranges_for_spans(std::slice::from_ref(&span));
+
+        let (row, did_shape, _) = cache.paint_row(0, 42, || {
+            (
+                Arc::new(ShapedLine::default()),
+                std::time::Duration::ZERO,
+                1,
+                background_ranges,
+                Vec::new(),
+            )
+        });
+        assert!(did_shape);
+        assert!(row.background_ranges.is_empty());
+
+        let (cached, did_shape, _) = cache.paint_row(0, 42, || {
+            panic!("cached keyword row should reuse without rebuilding")
+        });
+        assert!(!did_shape);
+        assert!(cached.background_ranges.is_empty());
+    }
+
     fn underline_span(text: &str, color: Option<u32>) -> TerminalHighlightSpan {
         TerminalHighlightSpan {
             text: text.to_string(),
@@ -1168,7 +1240,7 @@ pub struct TerminalCursorGlyphPaint {
 
 #[derive(Default)]
 pub struct NyaTerminalPaintPlan {
-    /// Cell / keyword backgrounds (under protocol images).
+    /// Explicit terminal cell backgrounds (under protocol images).
     backgrounds: Vec<PaintQuad>,
     /// Decoded graphics protocol images painted under terminal text.
     images_under: Vec<TerminalImagePaint>,
@@ -1327,7 +1399,6 @@ impl NyaTerminalElement {
         let mut hasher = DefaultHasher::new();
         keyword_rules_key.hash(&mut hasher);
         self.palette.bg.hash(&mut hasher);
-        self.palette.surface.hash(&mut hasher);
         self.palette.accent.hash(&mut hasher);
         self.palette.warning.hash(&mut hasher);
         self.palette.terminal_fg.hash(&mut hasher);
@@ -1545,13 +1616,12 @@ fn terminal_effective_keyword_rules_key(keyword_rules_key: u64, known_empty: boo
 
 fn terminal_background_ranges_for_spans(
     spans: &[TerminalHighlightSpan],
-    palette: nyaterm_ui::ThemePalette,
 ) -> Vec<TerminalRowBackgroundRange> {
     let mut out = Vec::new();
     let mut col = 0usize;
     let mut pending_bg: Option<TerminalRowBackgroundRange> = None;
     for span in spans {
-        let bg = span.bg.or_else(|| span.keyword.then_some(palette.surface));
+        let bg = span.bg;
         let span_cols = terminal_cell_count(&span.text).max(1);
         if let Some(bg) = bg {
             match pending_bg.as_mut() {
@@ -1982,7 +2052,7 @@ impl Element for NyaTerminalElement {
                     );
                 }
 
-                // Base spans drive cell/keyword backgrounds only (under images).
+                // Base spans drive explicit terminal cell backgrounds only (under images).
                 let background_spans = keyword_ranges
                     .map(|ranges| {
                         terminal_highlight_spans_with_keyword_ranges(
@@ -2024,8 +2094,7 @@ impl Element for NyaTerminalElement {
                         self.palette,
                     );
                 }
-                let background_ranges =
-                    terminal_background_ranges_for_spans(&background_spans, self.palette);
+                let background_ranges = terminal_background_ranges_for_spans(&background_spans);
                 let underline_ranges = terminal_underline_ranges_for_spans(&spans, self.palette);
 
                 let mut text = String::new();
