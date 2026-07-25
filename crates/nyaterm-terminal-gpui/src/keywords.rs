@@ -257,6 +257,7 @@ struct TerminalKeywordByteCell {
     row: usize,
     start_col: usize,
     end_col: usize,
+    allow_keyword: bool,
 }
 
 fn terminal_keyword_wrapped_group_bounds(
@@ -334,6 +335,7 @@ fn terminal_keyword_ranges_for_wrapped_group(
                 row,
                 start_col,
                 end_col,
+                allow_keyword: cell.hyperlink.is_none(),
             }));
         }
     }
@@ -346,6 +348,9 @@ fn terminal_keyword_ranges_for_wrapped_group(
             continue;
         }
         for cell in &byte_cells[start..end] {
+            if !cell.allow_keyword {
+                continue;
+            }
             let row_idx = cell.row.saturating_sub(rows.start);
             if let Some(ranges) = row_ranges.get_mut(row_idx) {
                 if let Some(previous) = ranges.last_mut()
@@ -367,7 +372,7 @@ fn terminal_keyword_ranges_for_wrapped_group(
     row_ranges
 }
 
-fn keyword_matches_compiled(
+pub(super) fn keyword_matches_compiled(
     line: &str,
     compiled: &[(regex::Regex, u32)],
 ) -> Vec<(usize, usize, u32)> {
@@ -704,6 +709,26 @@ mod tests {
         Arc::make_mut(&mut rows[row]).wrapped = wrapped;
     }
 
+    fn set_snapshot_row_hyperlink(
+        snapshot: &mut TerminalSnapshot,
+        row: usize,
+        start_col: usize,
+        end_col: usize,
+        uri: &str,
+    ) {
+        let rows = Arc::make_mut(&mut snapshot.row_data);
+        let row = Arc::make_mut(&mut rows[row]);
+        row.hyperlinks = vec![nyaterm_terminal::HyperlinkSpan {
+            start_col,
+            end_col: end_col.saturating_sub(1),
+            uri: uri.to_string(),
+        }]
+        .into_boxed_slice();
+        for col in start_col..end_col.min(row.cells.len()) {
+            row.cells[col].hyperlink = Some(uri.to_string());
+        }
+    }
+
     fn test_render_cells(text: &str, cols: usize) -> Vec<nyaterm_terminal::RenderCell> {
         let mut cells: Vec<nyaterm_terminal::RenderCell> = Vec::new();
         for ch in text.chars() {
@@ -822,6 +847,71 @@ mod tests {
             !highlights.matches_snapshot(&snapshot, nyaterm_ui::theme_palette("github-light"),)
         );
         assert!(highlights.rows.iter().skip(1).all(Option::is_none));
+    }
+
+    #[test]
+    fn precomputed_keyword_snapshot_skips_hyperlinked_cells() {
+        let mut snapshot = TerminalScreen::default().snapshot();
+        set_snapshot_row(&mut snapshot, 0, "ERROR ERROR", 7);
+        set_snapshot_row_hyperlink(&mut snapshot, 0, 6, 11, "https://example.com");
+        let rules = vec![ResolvedKeywordHighlightRule {
+            id: "errors".to_string(),
+            name: "Errors".to_string(),
+            patterns: vec!["ERROR".to_string()],
+            color: "#ff2244".to_string(),
+            enabled: true,
+        }];
+
+        let highlighter = compile_terminal_keyword_highlighter(&rules);
+        let palette = nyaterm_ui::theme_palette("github-dark");
+        let highlights =
+            precompute_terminal_keyword_highlights(&snapshot, &highlighter, palette, None);
+        let ranges = highlights
+            .lookup(0, &snapshot)
+            .and_then(|row| row.ranges())
+            .expect("first ERROR should be highlighted");
+
+        assert_eq!(
+            ranges.as_slice(),
+            &[TerminalKeywordRange {
+                start_col: 0,
+                end_col: 5,
+                color: 0xff2244,
+            }]
+        );
+    }
+
+    #[test]
+    fn precomputed_keyword_snapshot_keeps_motd_version_but_skips_hyperlink_url() {
+        let mut snapshot = TerminalScreen::default().snapshot();
+        let line = "Ubuntu 24.04.4 https://help.ubuntu.com";
+        set_snapshot_row(&mut snapshot, 0, line, 7);
+        set_snapshot_row_hyperlink(
+            &mut snapshot,
+            0,
+            "Ubuntu 24.04.4 ".len(),
+            line.len(),
+            "https://help.ubuntu.com",
+        );
+        let rules = nyaterm_core::get_builtin_keyword_rules(true);
+
+        let highlighter = compile_terminal_keyword_highlighter(&rules);
+        let palette = nyaterm_ui::theme_palette("github-dark");
+        let highlights =
+            precompute_terminal_keyword_highlights(&snapshot, &highlighter, palette, None);
+        let ranges = highlights
+            .lookup(0, &snapshot)
+            .and_then(|row| row.ranges())
+            .expect("version should still be highlighted");
+
+        assert_eq!(
+            ranges.as_slice(),
+            &[TerminalKeywordRange {
+                start_col: "Ubuntu ".len(),
+                end_col: "Ubuntu 24.04.4".len(),
+                color: 0xff9e64,
+            }]
+        );
     }
 
     #[test]

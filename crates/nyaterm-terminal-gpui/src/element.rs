@@ -2030,6 +2030,7 @@ impl Element for NyaTerminalElement {
             let line = snapshot_row.map(|row| row.text.as_str()).unwrap_or("");
             let display_line = if line.is_empty() { " " } else { line };
             let ansi = snapshot_row.map(|row| row.styled_spans.as_ref());
+            let keyword_excluded_ranges = terminal_hyperlink_keyword_exclusion_ranges(snapshot_row);
             let line_signature = snapshot_row.map(|row| row.signature);
             let keyword_lookup = self.keyword_highlights.as_ref().and_then(|highlights| {
                 highlights
@@ -2174,6 +2175,7 @@ impl Element for NyaTerminalElement {
                             display_line,
                             ansi,
                             Some(ranges.as_ref()),
+                            &keyword_excluded_ranges,
                             self.palette,
                         )
                     })
@@ -2192,6 +2194,7 @@ impl Element for NyaTerminalElement {
                             &[],
                             None,
                             &[],
+                            &keyword_excluded_ranges,
                             self.palette,
                         )
                     });

@@ -88,6 +88,7 @@ pub fn terminal_line_element(
         active_search_ranges,
         selection_cols,
         link_ranges,
+        &[],
         palette,
     );
     if let Some(col) = cursor_col {
@@ -143,6 +144,7 @@ pub(super) fn terminal_highlight_spans(
     active_search_ranges: &[(usize, usize)],
     selection_cols: Option<(usize, usize)>,
     link_ranges: &[(usize, usize)],
+    keyword_excluded_ranges: &[(usize, usize)],
     palette: nyaterm_ui::ThemePalette,
 ) -> Vec<TerminalHighlightSpan> {
     let compiled = compile_keyword_rules(keyword_rules);
@@ -154,6 +156,7 @@ pub(super) fn terminal_highlight_spans(
         active_search_ranges,
         selection_cols,
         link_ranges,
+        keyword_excluded_ranges,
         palette,
     )
 }
@@ -167,16 +170,42 @@ pub(super) fn terminal_highlight_spans_compiled(
     active_search_ranges: &[(usize, usize)],
     selection_cols: Option<(usize, usize)>,
     link_ranges: &[(usize, usize)],
+    keyword_excluded_ranges: &[(usize, usize)],
     palette: nyaterm_ui::ThemePalette,
 ) -> Vec<TerminalHighlightSpan> {
-    let mut spans = if let Some(ansi) = ansi_spans {
-        if ansi.is_empty() || (ansi.len() == 1 && ansi[0].text.is_empty()) {
-            keyword_highlight_spans_compiled(line, compiled_keyword_rules)
-        } else {
-            ansi_to_highlight_spans_compiled(ansi, palette, compiled_keyword_rules)
-        }
+    let keyword_ranges = (!compiled_keyword_rules.is_empty() && !line.is_empty()).then(|| {
+        keyword_matches_compiled(line, compiled_keyword_rules)
+            .into_iter()
+            .map(|(start, end, color)| TerminalKeywordRange {
+                start_col: terminal_cell_col_for_byte_index(line, start),
+                end_col: terminal_cell_col_for_byte_index(line, end),
+                color,
+            })
+            .collect::<Vec<_>>()
+    });
+    let mut spans = if keyword_ranges
+        .as_ref()
+        .is_some_and(|ranges| !ranges.is_empty())
+    {
+        terminal_highlight_spans_with_keyword_ranges(
+            line,
+            ansi_spans,
+            keyword_ranges.as_deref(),
+            keyword_excluded_ranges,
+            palette,
+        )
+    } else if let Some(ansi) = ansi_spans
+        && !(ansi.is_empty() || (ansi.len() == 1 && ansi[0].text.is_empty()))
+    {
+        ansi_to_highlight_spans_compiled(ansi, palette, &[])
     } else {
-        keyword_highlight_spans_compiled(line, compiled_keyword_rules)
+        terminal_highlight_spans_with_keyword_ranges(
+            line,
+            ansi_spans,
+            None,
+            keyword_excluded_ranges,
+            palette,
+        )
     };
     if !link_ranges.is_empty() {
         spans = apply_action_link_ranges(spans, link_ranges, palette);
@@ -290,9 +319,11 @@ pub(super) fn terminal_highlight_spans_with_keyword_ranges(
     line: &str,
     ansi_spans: Option<&[nyaterm_terminal::StyledSpan]>,
     keyword_ranges: Option<&[TerminalKeywordRange]>,
+    keyword_excluded_ranges: &[(usize, usize)],
     palette: nyaterm_ui::ThemePalette,
 ) -> Vec<TerminalHighlightSpan> {
     let mut flat = flatten_base_cells_with_keyword_permissions(line, ansi_spans, palette);
+    apply_keyword_exclusion_ranges(&mut flat, keyword_excluded_ranges);
     if let Some(ranges) = keyword_ranges {
         for range in ranges {
             if range.start_col >= range.end_col {
@@ -310,6 +341,38 @@ pub(super) fn terminal_highlight_spans_with_keyword_ranges(
         }
     }
     compress_flat_cells(flat.into_iter().map(|cell| cell.cell).collect())
+}
+
+pub(super) fn terminal_hyperlink_keyword_exclusion_ranges(
+    row: Option<&nyaterm_terminal::TerminalSnapshotRow>,
+) -> Vec<(usize, usize)> {
+    row.map(|row| {
+        row.hyperlinks
+            .iter()
+            .filter_map(|span| {
+                let start = span.start_col;
+                let end = span.end_col.saturating_add(1);
+                (end > start).then_some((start, end))
+            })
+            .collect()
+    })
+    .unwrap_or_default()
+}
+
+fn apply_keyword_exclusion_ranges(
+    flat: &mut [KeywordPermissionCell],
+    keyword_excluded_ranges: &[(usize, usize)],
+) {
+    for &(start, end) in keyword_excluded_ranges {
+        if start >= end {
+            continue;
+        }
+        let end = end.min(flat.len());
+        let start = start.min(end);
+        for cell in &mut flat[start..end] {
+            cell.allow_keyword = false;
+        }
+    }
 }
 
 struct KeywordPermissionCell {
@@ -619,6 +682,7 @@ mod tests {
                 end_col: 7,
                 color: 0xff2244,
             }]),
+            &[],
             palette,
         );
 
@@ -645,6 +709,7 @@ mod tests {
                 end_col: 5,
                 color: 0xff2244,
             }]),
+            &[],
             palette,
         );
 
@@ -653,6 +718,59 @@ mod tests {
         assert!(spans[0].keyword);
         assert!(spans[0].underline);
         assert_eq!(spans[0].color, Some(0xff2244));
+    }
+
+    #[test]
+    fn keyword_ranges_skip_hyperlink_exclusion_ranges() {
+        let palette = nyaterm_ui::theme_palette("github-dark");
+        let spans = terminal_highlight_spans_with_keyword_ranges(
+            "ERROR ERROR",
+            None,
+            Some(&[
+                TerminalKeywordRange {
+                    start_col: 0,
+                    end_col: 5,
+                    color: 0xff2244,
+                },
+                TerminalKeywordRange {
+                    start_col: 6,
+                    end_col: 11,
+                    color: 0xff2244,
+                },
+            ]),
+            &[(6, 11)],
+            palette,
+        );
+
+        assert_eq!(spans.len(), 2);
+        assert_eq!(spans[0].text, "ERROR");
+        assert!(spans[0].keyword);
+        assert_eq!(spans[1].text, " ERROR");
+        assert!(!spans[1].keyword);
+        assert_eq!(spans[1].color, None);
+    }
+
+    #[test]
+    fn compiled_keyword_highlights_skip_hyperlink_exclusion_ranges() {
+        let palette = nyaterm_ui::theme_palette("github-dark");
+        let compiled = vec![(regex::Regex::new("ERROR").unwrap(), 0xff2244)];
+        let spans = terminal_highlight_spans_compiled(
+            "ERROR ERROR",
+            None,
+            &compiled,
+            &[],
+            &[],
+            None,
+            &[],
+            &[(6, 11)],
+            palette,
+        );
+
+        assert_eq!(spans.len(), 2);
+        assert!(spans[0].keyword);
+        assert_eq!(spans[1].text, " ERROR");
+        assert!(!spans[1].keyword);
+        assert_eq!(spans[1].color, None);
     }
 
     #[test]
@@ -670,6 +788,7 @@ mod tests {
                 end_col: 5,
                 color: 0xff2244,
             }]),
+            &[],
             palette,
         );
         assert_eq!(explicit_spans[0].color, Some(0x112233));
@@ -688,6 +807,7 @@ mod tests {
                 end_col: 6,
                 color: 0xff2244,
             }]),
+            &[],
             palette,
         );
         assert_eq!(hidden_spans[0].color, Some(0x445566));
