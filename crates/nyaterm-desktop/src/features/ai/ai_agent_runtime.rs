@@ -1,5 +1,7 @@
 use super::*;
 
+use nyaterm_transport::run_local_command;
+
 impl NyaTermApp {
     pub(in crate::features) fn upsert_ai_agent_step(
         &mut self,

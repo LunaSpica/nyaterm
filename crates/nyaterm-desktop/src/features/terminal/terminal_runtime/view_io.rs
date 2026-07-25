@@ -1,5 +1,7 @@
 use super::*;
 
+use nyaterm_core::{TerminalMouseReportEligibility, terminal_mouse_report_should_send};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum MouseReportWriteResult {
     NotHandled,

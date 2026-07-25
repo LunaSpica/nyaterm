@@ -108,6 +108,26 @@ check_no_matches \
   '^[[:space:]]*pub[[:space:]]+(open|query|marked_text|selected_index)[[:space:]]*:' \
   crates/nyaterm-desktop/src/entities/overlay.rs
 
+# These low-frequency transport helpers have explicit imports at their call
+# sites. Keep them out of the shared feature prelude so new modules do not
+# acquire unrelated transport dependencies implicitly.
+check_no_matches \
+  "low-frequency transport helpers must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(SFTP_TRANSFER_CANCELLED|SftpTransferDirection|RemoteStatsService|open_ssh_multiplex_handle|run_local_command)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
+  "low-frequency core helpers must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(KeywordHighlightRule|SearchEngineConfig|TerminalMouseReportEligibility|TerminalResizeGeometry|TerminalViewportInsets|terminal_mouse_report_should_send|terminal_resize_geometry_for_size_with_insets|terminal_resize_geometry_for_size_with_insets_and_scale|terminal_snapped_cell_height)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+# Keep the terminal GPUI crate root's public surface explicit. These modules
+# are implementation details; callers use the named facade exports below.
+check_no_matches \
+  "terminal-gpui must not re-export implementation modules with glob imports" \
+  '^pub[[:space:]]+use[[:space:]]+(images|keywords|paint)::\*;' \
+  crates/nyaterm-terminal-gpui/src/lib.rs
+
 # Keep migration-only local source paths contained. Default builds may carry an
 # inert inventory path, but new runtime dependencies on the local legacy tree
 # should not spread beyond the existing gated migration code.

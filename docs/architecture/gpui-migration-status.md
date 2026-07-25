@@ -13,7 +13,7 @@ Last updated from the working tree on 2026-07-25.
 | `impl NyaTermApp` blocks | 236 | Spread across 233 files under `crates/nyaterm-desktop/src`. |
 | `#[path = "..."]` declarations in desktop | 306 | Historical migration debt; do not add new occurrences. |
 | `use super::*` imports in desktop | 354 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
-| `features/prelude.rs` rough exported-token count | 445 | Still a broad shared prelude; needs staged reduction. |
+| `features/prelude.rs` rough exported-token count | 431 | Still a broad shared prelude; fourteen low-frequency transport/core exports are now explicit imports. |
 | Entity Store structs | 13 | Includes store handles/runtime stores and domain stores. |
 | Snapshot structs | 9 | Workspace, session, overlay, settings, connections, transfer, AI, cloud sync, remote ops. |
 | `replace_snapshot` methods | 9 | Entity stores are still primarily snapshot projections. |
@@ -206,6 +206,18 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   duplicate request/decision types, and their pure tests. `lib.rs` re-exports
   the same public names and keeps the actual SFTP transfer loops, retry
   execution, conflict resolution, and protocol operations in place.
+- Five low-frequency transport helpers were removed from
+  `features/prelude.rs` and imported explicitly at their call sites:
+  `SFTP_TRANSFER_CANCELLED`, `SftpTransferDirection`, `RemoteStatsService`,
+  `open_ssh_multiplex_handle`, and `run_local_command`. This narrows import
+  reach without changing runtime behavior.
+- Nine low-frequency core keyword-highlight, search-engine, mouse-report, and
+  terminal-resize exports were also moved out of `features/prelude.rs` and
+  imported explicitly by their owning modules. The terminal change is import
+  plumbing only; parser, snapshot, input, and resize behavior are unchanged.
+- `nyaterm-terminal-gpui` no longer publicly glob-re-exports its `images`,
+  `keywords`, and `paint` implementation modules. The existing named facade
+  exports remain public; sibling modules still use the helpers internally.
 - `nyaterm-core/src/storage/config_backup.rs` now owns the config backup info
   type and schema-neutral file validation/copy/write helpers. `storage.rs`
   re-exports `ConfigBackupInfo` and keeps redb validation, table definitions,

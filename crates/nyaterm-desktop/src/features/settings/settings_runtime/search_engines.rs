@@ -1,5 +1,7 @@
 use super::*;
 
+use nyaterm_core::SearchEngineConfig;
+
 impl NyaTermApp {
     pub(in crate::features) fn add_search_engine(&mut self, cx: &mut Context<Self>) {
         self.settings.search_custom_engines.insert(

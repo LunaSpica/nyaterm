@@ -27,9 +27,9 @@ mod paint;
 
 // Re-export helpers so sibling modules resolve them via `use super::*`.
 use ansi::*;
-pub use images::*;
-pub use keywords::*;
-pub use paint::*;
+use images::*;
+use keywords::*;
+use paint::*;
 
 pub use element::{
     NyaTerminalElement, NyaTerminalLayoutCache, TerminalBufferMatch, TerminalLineDecorations,
@@ -44,6 +44,7 @@ pub use keywords::{
     TerminalKeywordHighlightSnapshot, TerminalKeywordHighlighter,
     compile_terminal_keyword_highlighter, precompute_terminal_keyword_highlights,
     precompute_terminal_keyword_highlights_for_rows, terminal_keyword_highlight_expanded_rows,
+    terminal_keyword_rules_key,
 };
 
 #[cfg(test)]

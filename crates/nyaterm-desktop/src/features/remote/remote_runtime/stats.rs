@@ -1,5 +1,7 @@
 use super::*;
 
+use nyaterm_transport::RemoteStatsService;
+
 const STATS_EVENT_DRAIN_LIMIT: usize = 8;
 
 impl NyaTermApp {

@@ -1,5 +1,10 @@
 use super::*;
 
+use nyaterm_core::{
+    TerminalResizeGeometry, TerminalViewportInsets, terminal_resize_geometry_for_size_with_insets,
+    terminal_resize_geometry_for_size_with_insets_and_scale, terminal_snapped_cell_height,
+};
+
 pub(in crate::features) fn terminal_scroll_track_ratio(
     bounds: gpui::Bounds<gpui::Pixels>,
     pointer_y: gpui::Pixels,

@@ -1,5 +1,7 @@
 use super::*;
 
+use nyaterm_transport::open_ssh_multiplex_handle;
+
 const SESSION_START_EVENT_DRAIN_LIMIT: usize = 8;
 
 fn pending_session_start_display_name(pending: &PendingSessionStart) -> String {

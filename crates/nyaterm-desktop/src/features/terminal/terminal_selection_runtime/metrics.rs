@@ -1,5 +1,7 @@
 use super::*;
 
+use nyaterm_core::TerminalViewportInsets;
+
 impl NyaTermApp {
     pub(in crate::features) fn terminal_cell_size(&self) -> (f32, f32) {
         let (cell_w, cell_h) = self

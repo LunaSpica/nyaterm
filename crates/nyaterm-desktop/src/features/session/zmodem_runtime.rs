@@ -1,6 +1,7 @@
 use super::*;
 use nyaterm_transport::{
-    ZmodemAction, ZmodemDetectResult, ZmodemDetector, ZmodemDirection, ZmodemEvent, ZmodemTransfer,
+    SftpTransferDirection, ZmodemAction, ZmodemDetectResult, ZmodemDetector, ZmodemDirection,
+    ZmodemEvent, ZmodemTransfer,
 };
 use std::{path::PathBuf, sync::mpsc, thread};
 
