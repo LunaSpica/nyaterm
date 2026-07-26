@@ -1,9 +1,7 @@
 use super::*;
 use variables::parse_quick_command_variables;
 
-#[path = "quick_command_runtime/import.rs"]
 mod import;
-#[path = "quick_command_runtime/variables.rs"]
 mod variables;
 
 pub(in crate::features) const QUICK_COMMAND_COLOR_OPTIONS: [Option<&str>; 6] = [
@@ -48,15 +46,10 @@ pub(in crate::features) const QUICK_COMMAND_ICON_OPTIONS: [Option<&str>; 31] = [
     Some("gcp"),
 ];
 
-#[path = "quick_command_runtime/helpers.rs"]
 mod helpers;
 pub(in crate::features) use helpers::*;
 
-#[path = "quick_command_runtime/catalog.rs"]
 mod catalog;
-#[path = "quick_command_runtime/dialogs.rs"]
 mod dialogs;
-#[path = "quick_command_runtime/editor.rs"]
 mod editor;
-#[path = "quick_command_runtime/run.rs"]
 mod run;

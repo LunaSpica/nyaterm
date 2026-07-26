@@ -59,15 +59,10 @@ impl QuickCommandImportPathPromptKind {
     }
 }
 
-#[path = "import/dialog.rs"]
 mod dialog;
-#[path = "import/helpers.rs"]
 mod helpers;
-#[path = "import/json.rs"]
 mod json;
-#[path = "import/merge.rs"]
 mod merge;
-#[path = "import/sources.rs"]
 mod sources;
 
 use helpers::*;
@@ -76,5 +71,4 @@ use merge::*;
 use sources::*;
 
 #[cfg(test)]
-#[path = "import/tests.rs"]
 mod tests;

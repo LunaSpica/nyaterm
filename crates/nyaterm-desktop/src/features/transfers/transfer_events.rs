@@ -91,7 +91,7 @@ impl NyaTermApp {
         self.transfer_selected_remote_paths.clear();
     }
 
-    pub(super) fn drain_transfer_events(
+    pub(in crate::features) fn drain_transfer_events(
         &mut self,
         window: &mut Window,
         cx: &mut Context<Self>,

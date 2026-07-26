@@ -11,7 +11,7 @@ Last updated from the working tree on 2026-07-26.
 | --- | ---: | --- |
 | `NyaTermApp` fields | 585 | Counted from `features/app_state/mod.rs`; still transitional and too broad. |
 | `impl NyaTermApp` blocks | 236 | Spread across 233 files under `crates/nyaterm-desktop/src`. |
-| `#[path = "..."]` declarations in desktop | 247 | Historical migration debt; do not add new occurrences. |
+| `#[path = "..."]` declarations in desktop | 178 | Historical migration debt; do not add new occurrences. |
 | `use super::*` imports in desktop | 355 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
 | `features/prelude.rs` rough exported-token count | 230 | Still a broad shared prelude; two hundred fifteen low-frequency transport/core/http/model exports are now explicit imports. |
 | Entity Store structs | 13 | Includes store handles/runtime stores and domain stores. |
@@ -60,6 +60,13 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   rather than a top-level `crate::features::terminal_runtime`. Nesting also
   showed that nine prompt/terminal symbols no longer needed a `crate::features`
   level alias at all; those re-exports were removed.
+- `features/mod.rs` contains no `#[path]` declaration at all. The AI, commands,
+  settings, sync, transfers, remote and translation directories are real
+  modules, together with their `ai_runtime`, `command_runtime`,
+  `quick_command_runtime`, `security_runtime`, `settings_runtime`,
+  `cloud_sync_runtime`, `transfer_jobs` and `remote_runtime` subtrees. Ten more
+  `crate::features` level re-exports turned out to be unused once each consumer
+  sat inside the owning subtree, and were removed.
 - The connections UI state has started moving out of scattered `NyaTermApp`
   fields and into `ConnectionFeatureState`.
 - The current connections state split separates list UI, import UI, editor

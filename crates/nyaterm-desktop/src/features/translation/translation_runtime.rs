@@ -417,7 +417,7 @@ impl NyaTermApp {
             .into_any_element()
     }
 
-    pub(super) fn drain_translate_events(&mut self) -> bool {
+    pub(in crate::features) fn drain_translate_events(&mut self) -> bool {
         if !self.translate_pending {
             return false;
         }

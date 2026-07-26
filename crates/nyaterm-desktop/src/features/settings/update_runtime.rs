@@ -32,7 +32,7 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(super) fn drain_update_events(&mut self) -> bool {
+    pub(in crate::features) fn drain_update_events(&mut self) -> bool {
         if !self.update_pending {
             return false;
         }

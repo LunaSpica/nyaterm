@@ -474,6 +474,22 @@ check_max_count 'network proxy page #[path] debt' '#\[path\s*=' \
   crates/nyaterm-desktop/src/features/pages/tunnels/proxy/mod.rs 0
 check_max_count 'network tunnel page #[path] debt' '#\[path\s*=' \
   crates/nyaterm-desktop/src/features/pages/tunnels/tunnel/mod.rs 0
+check_no_matches 'ai feature #[path] debt' '#\[path\s*=' \
+  crates/nyaterm-desktop/src/features/ai
+check_no_matches 'commands feature #[path] debt' '#\[path\s*=' \
+  crates/nyaterm-desktop/src/features/commands
+check_no_matches 'remote feature #[path] debt' '#\[path\s*=' \
+  crates/nyaterm-desktop/src/features/remote
+check_no_matches 'settings feature #[path] debt' '#\[path\s*=' \
+  crates/nyaterm-desktop/src/features/settings
+check_no_matches 'sync feature #[path] debt' '#\[path\s*=' \
+  crates/nyaterm-desktop/src/features/sync
+check_no_matches 'transfers feature #[path] debt' '#\[path\s*=' \
+  crates/nyaterm-desktop/src/features/transfers
+check_no_matches 'translation feature #[path] debt' '#\[path\s*=' \
+  crates/nyaterm-desktop/src/features/translation
+check_no_matches 'features root #[path] debt' '#\[path\s*=' \
+  crates/nyaterm-desktop/src/features/mod.rs
 check_no_matches 'session feature #[path] debt' '#\[path\s*=' \
   crates/nyaterm-desktop/src/features/session
 check_no_matches 'shell feature #[path] debt' '#\[path\s*=' \

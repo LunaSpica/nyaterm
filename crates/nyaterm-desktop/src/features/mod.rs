@@ -1,64 +1,33 @@
 mod prelude;
 use prelude::*;
 
-#[path = "ai/ai_agent_runtime.rs"]
-mod ai_agent_runtime;
-#[path = "ai/ai_jobs.rs"]
-mod ai_jobs;
-#[path = "ai/ai_runtime.rs"]
-mod ai_runtime;
+mod ai;
 mod app_state;
-#[path = "sync/cloud_sync_provider.rs"]
-mod cloud_sync_provider;
-#[path = "sync/cloud_sync_runtime.rs"]
-mod cloud_sync_runtime;
-#[path = "commands/command_runtime.rs"]
-mod command_runtime;
-#[path = "settings/config_runtime.rs"]
-mod config_runtime;
+mod commands;
 mod connection_editor_window;
 mod connections;
 mod formatting;
 mod inspector;
 mod layout;
-#[path = "settings/lock_diagnostics_runtime.rs"]
-mod lock_diagnostics_runtime;
 mod pages;
 mod panels;
-#[path = "commands/quick_command_runtime.rs"]
-mod quick_command_runtime;
 mod quick_command_window;
+mod remote;
 mod remote_editor_window;
-#[path = "remote/remote_runtime.rs"]
-mod remote_runtime;
 mod remote_text_editor;
 mod root;
 mod runtime_jobs;
-#[path = "settings/security_runtime.rs"]
-mod security_runtime;
 mod session;
-#[path = "settings/settings_runtime.rs"]
-mod settings_runtime;
+mod settings;
 mod settings_window;
 mod shell;
+mod sync;
 mod sync_input;
 mod terminal;
-#[path = "transfers/transfer_events.rs"]
-mod transfer_events;
 mod transfer_external_sync_window;
-#[path = "transfers/transfer_jobs.rs"]
-mod transfer_jobs;
-#[path = "transfers/transfer_options.rs"]
-mod transfer_options;
-#[path = "transfers/transfer_paths.rs"]
-mod transfer_paths;
-#[path = "transfers/transfer_widgets.rs"]
-mod transfer_widgets;
-#[path = "translation/translation_runtime.rs"]
-mod translation_runtime;
+mod transfers;
+mod translation;
 mod tunnels;
-#[path = "settings/update_runtime.rs"]
-mod update_runtime;
 mod view_widgets;
 
 #[allow(unused_imports)]
@@ -67,17 +36,18 @@ pub(in crate::features) use crate::action_links::{
     match_at_offset,
 };
 pub(in crate::features) use crate::theme::ThemePalette;
-pub(in crate::features) use ai_jobs::{
-    ai_active_profile_drafts, ai_job_cancelled, ai_usage_counts, is_agent_command_card,
-    observation_summary, remote_command_observation, run_ai_ask_job,
+pub(in crate::features) use ai::{
+    ai_active_profile_drafts, ai_usage_counts, is_agent_command_card,
 };
 pub use app_state::NyaTermApp;
 pub(in crate::features) use app_state::{
     FailedSessionStart, PendingSavedConnectionStart, PendingSessionStart,
     SavedConnectionStartOptions, SessionPaneState,
 };
-pub(in crate::features) use cloud_sync_provider::{
-    pull_provider_snapshot, push_provider_snapshot, test_provider_connection,
+pub(in crate::features) use commands::{
+    QUICK_COMMAND_COLOR_OPTIONS, QUICK_COMMAND_ICON_OPTIONS, quick_command_category_label,
+    quick_command_sort_mode_from_setting, quick_command_view_mode_from_setting,
+    sorted_quick_commands,
 };
 pub(in crate::features) use connection_editor_window::ConnectionEditorWindow;
 pub(in crate::features) use connections::{
@@ -85,11 +55,6 @@ pub(in crate::features) use connections::{
     ConnectionDropTarget, ConnectionEditorToggle, ConnectionFeatureFocus, ConnectionFeatureState,
 };
 pub(in crate::features) use formatting::*;
-pub(in crate::features) use quick_command_runtime::{
-    QUICK_COMMAND_COLOR_OPTIONS, QUICK_COMMAND_ICON_OPTIONS, quick_command_category_label,
-    quick_command_sort_mode_from_setting, quick_command_view_mode_from_setting,
-    sorted_quick_commands,
-};
 pub(in crate::features) use quick_command_window::QuickCommandWindow;
 pub(in crate::features) use remote_editor_window::RemoteFileEditorWindow;
 pub(in crate::features) use remote_text_editor::RemoteTextEditor;
@@ -120,9 +85,9 @@ pub(in crate::features) use terminal::{
     FULL_SHELL_PAINT_COUNT, TerminalSurface, full_shell_paint_count, terminal_surface_paint_count,
 };
 pub(in crate::features) use transfer_external_sync_window::TransferExternalSyncWindow;
-pub(in crate::features) use transfer_widgets::{
+pub(in crate::features) use transfers::{
     compact_transfer_job_row, duplicate_decision_label, duplicate_policy_label, format_file_size,
-    format_transfer_progress, transfer_input, transfer_job_title, transfer_status_label,
+    transfer_input, transfer_job_title, transfer_status_label,
 };
 pub(in crate::features) use view_widgets::*;
 
