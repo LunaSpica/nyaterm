@@ -16,7 +16,7 @@ use crate::models::{
 
 use super::super::super::list::{
     ConnectionEditorChoice, ConnectionEditorFields, connection_editor_select, editor_field,
-    toggle_chip,
+    editor_stepper_field, required, toggle_chip,
 };
 
 fn ssh_segment_tab(
@@ -290,28 +290,30 @@ pub(super) fn connection_editor_ssh_section(
         .flex_col()
         .gap_3()
         .child(
+            // Tauri gives the host the room and pins the port at a fixed width,
+            // rather than splitting the row down the middle: a host is long and
+            // a port is never more than five digits.
             div()
-                .grid()
-                .grid_cols(2)
-                .gap_2()
-                .child(editor_field(
+                .flex()
+                .gap_3()
+                .child(div().min_w_0().flex_1().child(editor_field(
                     palette,
-                    tr("dialog.host"),
+                    required(tr("dialog.host")),
                     ConnectionEditorField::Host,
                     fields,
                     cx,
-                ))
-                .child(editor_field(
+                )))
+                .child(div().w(px(150.)).flex_none().child(editor_stepper_field(
                     palette,
-                    tr("dialog.port"),
+                    required(tr("dialog.port")),
                     ConnectionEditorField::Port,
                     fields,
                     cx,
-                )),
+                ))),
         )
         .child(editor_field(
             palette,
-            tr("dialog.username"),
+            required(tr("dialog.username")),
             ConnectionEditorField::Username,
             fields,
             cx,

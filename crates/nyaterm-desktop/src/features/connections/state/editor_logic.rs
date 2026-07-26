@@ -521,7 +521,12 @@ pub(super) fn editor_field_seeds(
             false,
             "New group...",
         ),
-        (ConnectionEditorField::Host, draft.host.clone(), false, ""),
+        (
+            ConnectionEditorField::Host,
+            draft.host.clone(),
+            false,
+            "192.168.1.100",
+        ),
         (ConnectionEditorField::Port, draft.port.clone(), false, ""),
         (
             ConnectionEditorField::Username,
@@ -545,13 +550,13 @@ pub(super) fn editor_field_seeds(
             ConnectionEditorField::ShellArgs,
             draft.shell_args.clone(),
             false,
-            "",
+            "e.g. --login -i or -NoLogo",
         ),
         (
             ConnectionEditorField::WorkingDir,
             draft.working_dir.clone(),
             false,
-            "",
+            r"e.g. C:\Projects or ~/workspace",
         ),
         (
             ConnectionEditorField::SerialPort,
@@ -563,13 +568,13 @@ pub(super) fn editor_field_seeds(
             ConnectionEditorField::BaudRate,
             draft.baud_rate.clone(),
             false,
-            "",
+            "e.g. 74880",
         ),
         (
             ConnectionEditorField::PostLoginCommand,
             draft.post_login_command.clone(),
             false,
-            "",
+            "cd /opt/app",
         ),
         (
             ConnectionEditorField::PostLoginDelay,

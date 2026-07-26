@@ -13,6 +13,7 @@ use crate::models::{
 
 use super::super::super::list::{
     ConnectionEditorChoice, ConnectionEditorFields, connection_editor_select, editor_field,
+    editor_stepper_field, required,
 };
 
 fn telnet_segment_tab(
@@ -192,23 +193,22 @@ pub(super) fn connection_editor_telnet_section(
         .gap_3()
         .child(
             div()
-                .grid()
-                .grid_cols(2)
-                .gap_2()
-                .child(editor_field(
+                .flex()
+                .gap_3()
+                .child(div().min_w_0().flex_1().child(editor_field(
                     palette,
-                    tr("dialog.host"),
+                    required(tr("dialog.host")),
                     ConnectionEditorField::Host,
                     fields,
                     cx,
-                ))
-                .child(editor_field(
+                )))
+                .child(div().w(px(150.)).flex_none().child(editor_stepper_field(
                     palette,
-                    tr("dialog.port"),
+                    required(tr("dialog.port")),
                     ConnectionEditorField::Port,
                     fields,
                     cx,
-                )),
+                ))),
         )
         .child(
             div()

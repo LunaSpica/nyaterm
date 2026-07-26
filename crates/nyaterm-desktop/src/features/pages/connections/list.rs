@@ -631,7 +631,7 @@ pub(super) fn connection_editor_group_select(
 pub(super) fn connection_editor_select(
     palette: crate::theme::ThemePalette,
     id: &'static str,
-    label: impl Into<SharedString>,
+    label: impl Into<FieldLabel>,
     value: impl Into<SharedString>,
     menu: ConnectionEditorMenu,
     open: bool,
@@ -714,12 +714,7 @@ pub(super) fn connection_editor_select(
         .flex_col()
         .gap_1()
         .when(show_label, |this| {
-            this.child(
-                div()
-                    .text_xs()
-                    .text_color(rgb(palette.text_muted))
-                    .child(label),
-            )
+            this.child(field_caption(palette, &label))
         })
         .child(
             div()
@@ -1108,27 +1103,112 @@ impl ConnectionEditorFields {
     }
 }
 
-/// A labelled row wrapping one editable field.
+/// A field's caption, and whether it carries the required marker.
+#[derive(Clone, Default)]
+pub(super) struct FieldLabel {
+    text: SharedString,
+    required: bool,
+}
+
+impl FieldLabel {
+    fn is_empty(&self) -> bool {
+        self.text.is_empty()
+    }
+}
+
+impl From<&'static str> for FieldLabel {
+    fn from(text: &'static str) -> Self {
+        Self {
+            text: SharedString::from(text),
+            required: false,
+        }
+    }
+}
+
+impl From<String> for FieldLabel {
+    fn from(text: String) -> Self {
+        Self {
+            text: SharedString::from(text),
+            required: false,
+        }
+    }
+}
+
+impl From<SharedString> for FieldLabel {
+    fn from(text: SharedString) -> Self {
+        Self {
+            text,
+            required: false,
+        }
+    }
+}
+
+/// Mark a caption as required, so it renders with the red asterisk.
+pub(super) fn required(label: impl Into<FieldLabel>) -> FieldLabel {
+    let mut label = label.into();
+    label.required = true;
+    label
+}
+
+/// The caption above an input or a select.
+pub(super) fn field_caption(
+    palette: crate::theme::ThemePalette,
+    label: &FieldLabel,
+) -> impl IntoElement {
+    div()
+        .flex()
+        .items_center()
+        .gap_0p5()
+        .text_xs()
+        .text_color(rgb(palette.text_muted))
+        .child(label.text.clone())
+        .when(label.required, |this| {
+            this.child(div().text_color(rgb(palette.danger)).child("*"))
+        })
+}
+
+/// The height every input, select and stepper in the editor shares.
+pub(super) const EDITOR_CONTROL_HEIGHT_PX: f32 = 30.;
+
+/// A caption above one editable field.
+///
+/// Tauri puts the caption above the box rather than inside it; a box that also
+/// holds its label has half the room for what is typed into it, which is what
+/// made long hosts and paths unreadable here.
 pub(super) fn editor_field(
     palette: crate::theme::ThemePalette,
-    label: &'static str,
+    label: impl Into<FieldLabel>,
     field: ConnectionEditorField,
     fields: &ConnectionEditorFields,
     cx: &App,
 ) -> impl IntoElement {
-    // The whole labelled row is the hit target: the field itself is only one
-    // text line tall, so clicking the label or the padding would otherwise miss.
+    let label = label.into();
+    div()
+        .flex()
+        .flex_col()
+        .gap_1()
+        .when(!label.is_empty(), |this| {
+            this.child(field_caption(palette, &label))
+        })
+        .child(editor_field_box(palette, field, fields, cx))
+}
+
+/// The bordered box holding one field, without a caption.
+pub(super) fn editor_field_box(
+    palette: crate::theme::ThemePalette,
+    field: ConnectionEditorField,
+    fields: &ConnectionEditorFields,
+    cx: &App,
+) -> impl IntoElement {
     let entity = fields.get(&field);
     let handle = entity.map(|field| field.read(cx).focus_handle());
     let focused = entity.is_some_and(|field| field.read(cx).has_focus());
-    let mut row = div()
-        .h(px(36.))
-        .px_3()
-        .py_1()
+    div()
+        .h(px(EDITOR_CONTROL_HEIGHT_PX))
+        .min_w_0()
+        .px_2()
         .flex()
-        .flex_col()
-        .justify_center()
-        .gap_0()
+        .items_center()
         .rounded_sm()
         .border_1()
         .border_color(rgb(if focused {
@@ -1136,28 +1216,89 @@ pub(super) fn editor_field(
         } else {
             palette.border
         }))
-        .bg(rgb(palette.input));
-    if !label.is_empty() {
-        row = row.child(
-            div()
-                .text_xs()
-                .text_color(rgb(palette.text_muted))
-                .child(label),
-        );
-    }
-    row.when_some(handle, |row, handle| {
-        row.on_mouse_down(gpui::MouseButton::Left, move |_, window, _| {
-            window.focus(&handle);
+        .bg(rgb(palette.input))
+        .cursor_text()
+        .when_some(handle, |row, handle| {
+            row.on_mouse_down(gpui::MouseButton::Left, move |_, window, _| {
+                window.focus(&handle);
+            })
         })
-    })
-    .children(fields.get(&field).map(|field| {
-        div()
-            .min_w_0()
-            .flex_1()
-            .text_xs()
-            .text_color(rgb(palette.text))
-            .child(field.clone())
-    }))
+        .children(entity.map(|field| {
+            div()
+                .min_w_0()
+                .flex_1()
+                .text_xs()
+                .text_color(rgb(palette.text))
+                .child(field.clone())
+        }))
+}
+
+/// A numeric field flanked by the two buttons that step it.
+///
+/// Tauri's port and delay inputs are spinners; typing still works, so the
+/// buttons are a shortcut rather than the only way in.
+pub(super) fn editor_stepper_field(
+    palette: crate::theme::ThemePalette,
+    label: impl Into<FieldLabel>,
+    field: ConnectionEditorField,
+    fields: &ConnectionEditorFields,
+    cx: &mut Context<NyaTermApp>,
+) -> impl IntoElement {
+    let label = label.into();
+    let box_element = editor_field_box(palette, field, fields, cx).into_any_element();
+    div()
+        .flex()
+        .flex_col()
+        .gap_1()
+        .when(!label.is_empty(), |this| {
+            this.child(field_caption(palette, &label))
+        })
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .gap_1()
+                .child(stepper_button(
+                    palette,
+                    field,
+                    "icons/conn/remove.svg",
+                    -1,
+                    cx,
+                ))
+                .child(div().min_w_0().flex_1().child(box_element))
+                .child(stepper_button(palette, field, "icons/conn/add.svg", 1, cx)),
+        )
+}
+
+fn stepper_button(
+    palette: crate::theme::ThemePalette,
+    field: ConnectionEditorField,
+    icon: &'static str,
+    delta: i64,
+    cx: &mut Context<NyaTermApp>,
+) -> impl IntoElement {
+    div()
+        .id(SharedString::from(format!("stepper-{delta}-{field:?}")))
+        .size(px(EDITOR_CONTROL_HEIGHT_PX))
+        .flex_none()
+        .flex()
+        .items_center()
+        .justify_center()
+        .rounded_sm()
+        .border_1()
+        .border_color(rgb(palette.border))
+        .bg(rgb(palette.input))
+        .cursor_pointer()
+        .hover(|this| this.bg(rgb(palette.hover)))
+        .child(
+            svg()
+                .size(px(14.))
+                .path(icon)
+                .text_color(rgb(palette.text_muted)),
+        )
+        .on_click(cx.listener(move |this, _, _, cx| {
+            this.step_connection_editor_number(field, delta, cx);
+        }))
 }
 
 pub(super) fn icon_action_button(

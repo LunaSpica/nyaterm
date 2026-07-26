@@ -307,6 +307,23 @@ impl ConnectionFeatureState {
         }
     }
 
+    /// Push every draft value back into its field.
+    ///
+    /// For the changes the runtime makes on the draft's behalf — switching the
+    /// connection kind rewrites the port — where the boxes would otherwise keep
+    /// showing what the draft no longer says. `set_content` is a no-op when the
+    /// text already matches, so this cannot disturb what is being typed.
+    pub fn sync_editor_fields_from_draft(&mut self, cx: &mut App) {
+        let Some(draft) = self.editor.draft.as_ref() else {
+            return;
+        };
+        for (field, value, _, _) in editor_field_seeds(draft) {
+            if let Some(entity) = self.editor.fields.get(&field) {
+                entity.update(cx, |entity, cx| entity.set_content(value, cx));
+            }
+        }
+    }
+
     pub fn set_editor_field_text(&mut self, field: ConnectionEditorField, text: String) {
         if let Some(draft) = self.editor.draft.as_mut() {
             set_connection_editor_field_text(draft, field, text);

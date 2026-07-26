@@ -9,6 +9,7 @@ use crate::models::{ConnectionEditorField, ConnectionEditorMenu, ConnectionEdito
 
 use super::super::super::list::{
     ConnectionEditorChoice, ConnectionEditorFields, connection_editor_select, editor_field,
+    required,
 };
 
 pub(super) fn connection_editor_serial_section(
@@ -49,7 +50,7 @@ pub(super) fn connection_editor_serial_section(
                 .child(div().min_w_0().flex_1().child(connection_editor_select(
                     palette,
                     "connection-editor-serial-port",
-                    tr("dialog.serialPort"),
+                    required(tr("dialog.serialPort")),
                     if editor.serial_port.is_empty() {
                         tr("dialog.selectSerialPort").to_string()
                     } else {
