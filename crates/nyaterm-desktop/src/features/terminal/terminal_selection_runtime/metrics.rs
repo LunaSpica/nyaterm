@@ -1,4 +1,5 @@
 use super::*;
+use crate::models::TerminalCellPos;
 
 use nyaterm_core::TerminalViewportInsets;
 

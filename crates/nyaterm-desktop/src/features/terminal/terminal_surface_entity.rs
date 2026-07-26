@@ -2420,6 +2420,7 @@ impl Render for TerminalSurface {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::TerminalCellPos;
     use nyaterm_terminal_gpui::precompute_terminal_keyword_highlights;
 
     fn terminal_test_output_lines(count: usize) -> String {
