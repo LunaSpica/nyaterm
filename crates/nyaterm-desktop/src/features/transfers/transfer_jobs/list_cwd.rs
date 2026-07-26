@@ -22,17 +22,19 @@ impl NyaTermApp {
             return;
         };
         let remote_path = self.normalized_transfer_remote_path();
-        self.transfer_browser_path = remote_path.clone();
-        self.transfer_browser_status = format!("Listing {remote_path}...");
-        self.transfer_browser_loading = true;
-        self.transfer_browser_error = None;
-        self.transfer_selected_remote_path = None;
-        self.transfer_selected_remote_paths.clear();
+        self.transfer.browser.path = remote_path.clone();
+        self.transfer.browser.status = format!("Listing {remote_path}...");
+        self.transfer.browser.loading = true;
+        self.transfer.browser.error = None;
+        self.transfer.browser.selected_remote_path = None;
+        self.transfer.browser.selected_remote_paths.clear();
         let id = self.next_transfer_id("sftp-list");
         let job_session_id = self.active_session_id.clone();
-        self.transfer_browser_navigation_jobs
+        self.transfer
+            .browser
+            .navigation_jobs
             .insert(job_session_id.clone().unwrap_or_default(), id.clone());
-        self.transfer_jobs.push(TransferJobState {
+        self.transfer.queue.jobs.push(TransferJobState {
             id: id.clone(),
             session_id: job_session_id,
             kind: TransferJobKind::ListDir {
@@ -47,7 +49,7 @@ impl NyaTermApp {
             control: None,
         });
         self.terminal_status = format!("SFTP list started for {remote_path}");
-        let transfer_tx = self.transfer_tx.clone();
+        let transfer_tx = self.transfer.queue.tx.clone();
         std::thread::spawn(move || {
             let result = SftpService::new(config)
                 .list_dir(&remote_path)
@@ -67,7 +69,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if self.transfer_sync_cwd_job_running() {
-            self.transfer_browser_status = "remote cwd sync already running".to_string();
+            self.transfer.browser.status = "remote cwd sync already running".to_string();
             cx.notify();
             return;
         }
@@ -77,12 +79,14 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        self.transfer_auto_sync_cwd_last_at = Some(Instant::now());
+        self.transfer.browser.auto_sync_cwd_last_at = Some(Instant::now());
         let id = self.next_transfer_id("sftp-sync-cwd");
         let job_session_id = self.active_session_id.clone();
-        self.transfer_browser_navigation_jobs
+        self.transfer
+            .browser
+            .navigation_jobs
             .insert(job_session_id.clone().unwrap_or_default(), id.clone());
-        self.transfer_jobs.push(TransferJobState {
+        self.transfer.queue.jobs.push(TransferJobState {
             id: id.clone(),
             session_id: job_session_id,
             kind: TransferJobKind::SyncCwd,
@@ -93,11 +97,11 @@ impl NyaTermApp {
             progress: None,
             control: None,
         });
-        self.transfer_browser_status = "Resolving remote cwd...".to_string();
-        self.transfer_browser_loading = true;
-        self.transfer_browser_error = None;
+        self.transfer.browser.status = "Resolving remote cwd...".to_string();
+        self.transfer.browser.loading = true;
+        self.transfer.browser.error = None;
         self.terminal_status = "SFTP cwd sync started".to_string();
-        let transfer_tx = self.transfer_tx.clone();
+        let transfer_tx = self.transfer.queue.tx.clone();
         std::thread::spawn(move || {
             let result = (|| {
                 let output = SshProcessService::new(config.clone())
@@ -137,7 +141,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn transfer_sync_cwd_job_running(&self) -> bool {
-        self.transfer_jobs.iter().any(|job| {
+        self.transfer.queue.jobs.iter().any(|job| {
             job.kind == TransferJobKind::SyncCwd
                 && matches!(
                     job.status,
@@ -152,17 +156,17 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        if self.transfer_browser_home_dir_pending || !self.transfer_browser_home_dir.is_empty() {
+        if self.transfer.browser.home_dir_pending || !self.transfer.browser.home_dir.is_empty() {
             return;
         }
         let Some(config) = self.active_ssh_config.clone() else {
-            self.transfer_browser_status = "remote home requires an SSH session".to_string();
+            self.transfer.browser.status = "remote home requires an SSH session".to_string();
             cx.notify();
             return;
         };
-        self.transfer_browser_home_dir_pending = true;
+        self.transfer.browser.home_dir_pending = true;
         let id = self.next_transfer_id("sftp-home");
-        self.transfer_jobs.push(TransferJobState {
+        self.transfer.queue.jobs.push(TransferJobState {
             id: id.clone(),
             session_id: self.active_session_id.clone(),
             kind: TransferJobKind::ResolveHome,
@@ -173,8 +177,8 @@ impl NyaTermApp {
             progress: None,
             control: None,
         });
-        self.transfer_browser_status = "Resolving remote home...".to_string();
-        let transfer_tx = self.transfer_tx.clone();
+        self.transfer.browser.status = "Resolving remote home...".to_string();
+        let transfer_tx = self.transfer.queue.tx.clone();
         std::thread::spawn(move || {
             let result = (|| {
                 let output = SshProcessService::new(config)

@@ -557,10 +557,10 @@ impl NyaTermApp {
                 SharedString::from(count.to_string())
             }
             NavItem::Transfers => {
-                if self.transfer_browser_entries.is_empty() {
+                if self.transfer.browser.entries.is_empty() {
                     SharedString::from("")
                 } else {
-                    SharedString::from(self.transfer_browser_entries.len().to_string())
+                    SharedString::from(self.transfer.browser.entries.len().to_string())
                 }
             }
             NavItem::Processes => {

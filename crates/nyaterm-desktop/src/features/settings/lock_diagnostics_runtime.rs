@@ -211,7 +211,7 @@ impl NyaTermApp {
         let mut paused_transfers = 0;
         let mut completed_transfers = 0;
         let mut failed_transfers = 0;
-        for job in &self.transfer_jobs {
+        for job in &self.transfer.queue.jobs {
             match job.status {
                 TransferJobStatus::Running | TransferJobStatus::Cancelling => {
                     running_transfers += 1

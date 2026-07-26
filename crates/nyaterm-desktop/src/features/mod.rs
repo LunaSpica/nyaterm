@@ -88,8 +88,9 @@ pub(in crate::features) use terminal::{
 };
 pub(in crate::features) use transfer_external_sync_window::TransferExternalSyncWindow;
 pub(in crate::features) use transfers::{
-    compact_transfer_job_row, duplicate_decision_label, duplicate_policy_label, format_file_size,
-    transfer_input, transfer_job_title, transfer_status_label,
+    TransferFeatureFocus, TransferFeatureState, compact_transfer_job_row, duplicate_decision_label,
+    duplicate_policy_label, format_file_size, transfer_input, transfer_job_title,
+    transfer_status_label,
 };
 pub(in crate::features) use view_widgets::*;
 

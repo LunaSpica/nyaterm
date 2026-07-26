@@ -6,24 +6,24 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let parent_path = if self.transfer_browser_path.trim().is_empty() {
+        let parent_path = if self.transfer.browser.path.trim().is_empty() {
             self.normalized_transfer_remote_path()
         } else {
-            self.transfer_browser_path.clone()
+            self.transfer.browser.path.clone()
         };
-        self.transfer_new_folder = Some(TransferNewFolderState {
+        self.transfer.file_ops.new_folder = Some(TransferNewFolderState {
             parent_path,
             value: String::new(),
             mode: 0o755,
             open_after_create: false,
         });
         self.terminal_status = "SFTP new folder opened".to_string();
-        window.focus(&self.transfer_new_folder_focus);
+        window.focus(&self.transfer.file_ops.new_folder_focus);
         cx.notify();
     }
 
     pub(in crate::features) fn close_transfer_new_folder_dialog(&mut self, cx: &mut Context<Self>) {
-        self.transfer_new_folder = None;
+        self.transfer.file_ops.new_folder = None;
         self.terminal_status = "SFTP new folder cancelled".to_string();
         cx.notify();
     }
@@ -33,7 +33,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.transfer_new_folder.clone() else {
+        let Some(state) = self.transfer.file_ops.new_folder.clone() else {
             self.terminal_status = "no SFTP new folder is active".to_string();
             cx.notify();
             return;
@@ -44,7 +44,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        self.transfer_new_folder = None;
+        self.transfer.file_ops.new_folder = None;
         let remote_path = remote_child_path(&state.parent_path, &name);
         self.start_sftp_mkdir_job(
             remote_path,
@@ -72,13 +72,13 @@ impl NyaTermApp {
             "escape" => self.close_transfer_new_folder_dialog(cx),
             "enter" => self.submit_transfer_new_folder(window, cx),
             "backspace" => {
-                if let Some(state) = self.transfer_new_folder.as_mut() {
+                if let Some(state) = self.transfer.file_ops.new_folder.as_mut() {
                     state.value.pop();
                     cx.notify();
                 }
             }
             _ => {
-                let Some(state) = self.transfer_new_folder.as_mut() else {
+                let Some(state) = self.transfer.file_ops.new_folder.as_mut() else {
                     return;
                 };
                 if state.value.chars().count() >= 255 {
@@ -113,7 +113,7 @@ impl NyaTermApp {
             return;
         };
         let id = self.next_transfer_id("sftp-mkdir");
-        self.transfer_jobs.push(TransferJobState {
+        self.transfer.queue.jobs.push(TransferJobState {
             id: id.clone(),
             session_id: self.active_session_id.clone(),
             kind: TransferJobKind::Mkdir {
@@ -128,7 +128,7 @@ impl NyaTermApp {
             control: None,
         });
         self.terminal_status = format!("SFTP create folder started: {remote_path}");
-        let transfer_tx = self.transfer_tx.clone();
+        let transfer_tx = self.transfer.queue.tx.clone();
         std::thread::spawn(move || {
             let service = SftpService::new(config);
             let list_path = if open_after_create {
@@ -159,24 +159,24 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let parent_path = if self.transfer_browser_path.trim().is_empty() {
+        let parent_path = if self.transfer.browser.path.trim().is_empty() {
             self.normalized_transfer_remote_path()
         } else {
-            self.transfer_browser_path.clone()
+            self.transfer.browser.path.clone()
         };
-        self.transfer_new_file = Some(TransferNewFileState {
+        self.transfer.file_ops.new_file = Some(TransferNewFileState {
             parent_path,
             value: String::new(),
             mode: 0o644,
             open_after_create: false,
         });
         self.terminal_status = "SFTP new file opened".to_string();
-        window.focus(&self.transfer_new_file_focus);
+        window.focus(&self.transfer.file_ops.new_file_focus);
         cx.notify();
     }
 
     pub(in crate::features) fn close_transfer_new_file_dialog(&mut self, cx: &mut Context<Self>) {
-        self.transfer_new_file = None;
+        self.transfer.file_ops.new_file = None;
         self.terminal_status = "SFTP new file cancelled".to_string();
         cx.notify();
     }
@@ -186,7 +186,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.transfer_new_file.clone() else {
+        let Some(state) = self.transfer.file_ops.new_file.clone() else {
             self.terminal_status = "no SFTP new file is active".to_string();
             cx.notify();
             return;
@@ -197,7 +197,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        self.transfer_new_file = None;
+        self.transfer.file_ops.new_file = None;
         let remote_path = remote_child_path(&state.parent_path, &name);
         self.start_sftp_create_file_job(
             remote_path,
@@ -225,13 +225,13 @@ impl NyaTermApp {
             "escape" => self.close_transfer_new_file_dialog(cx),
             "enter" => self.submit_transfer_new_file(window, cx),
             "backspace" => {
-                if let Some(state) = self.transfer_new_file.as_mut() {
+                if let Some(state) = self.transfer.file_ops.new_file.as_mut() {
                     state.value.pop();
                     cx.notify();
                 }
             }
             _ => {
-                let Some(state) = self.transfer_new_file.as_mut() else {
+                let Some(state) = self.transfer.file_ops.new_file.as_mut() else {
                     return;
                 };
                 if state.value.chars().count() >= 255 {
@@ -266,7 +266,7 @@ impl NyaTermApp {
             return;
         };
         let id = self.next_transfer_id("sftp-create-file");
-        self.transfer_jobs.push(TransferJobState {
+        self.transfer.queue.jobs.push(TransferJobState {
             id: id.clone(),
             session_id: self.active_session_id.clone(),
             kind: TransferJobKind::CreateFile {
@@ -281,7 +281,7 @@ impl NyaTermApp {
             control: None,
         });
         self.terminal_status = format!("SFTP create file started: {remote_path}");
-        let transfer_tx = self.transfer_tx.clone();
+        let transfer_tx = self.transfer.queue.tx.clone();
         std::thread::spawn(move || {
             let service = SftpService::new(config);
             let result = service

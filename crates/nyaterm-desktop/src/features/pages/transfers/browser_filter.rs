@@ -4,9 +4,11 @@ impl NyaTermApp {
     pub(in crate::features::pages::transfers) fn visible_transfer_browser_entries(
         &self,
     ) -> Vec<SftpFileEntry> {
-        let query = self.transfer_browser_search.trim().to_lowercase();
+        let query = self.transfer.browser.search.trim().to_lowercase();
         let mut entries = self
-            .transfer_browser_entries
+            .transfer
+            .browser
+            .entries
             .iter()
             .filter(|entry| query.is_empty() || entry.name.to_lowercase().contains(&query))
             .cloned()
@@ -15,8 +17,8 @@ impl NyaTermApp {
             compare_transfer_browser_entries(
                 left,
                 right,
-                self.transfer_browser_sort_column,
-                self.transfer_browser_sort_direction,
+                self.transfer.browser.sort_column,
+                self.transfer.browser.sort_direction,
             )
         });
         entries
@@ -27,17 +29,17 @@ impl NyaTermApp {
         column: TransferBrowserSortColumn,
         cx: &mut Context<Self>,
     ) {
-        if self.transfer_browser_sort_column == column {
-            self.transfer_browser_sort_direction = self.transfer_browser_sort_direction.toggled();
+        if self.transfer.browser.sort_column == column {
+            self.transfer.browser.sort_direction = self.transfer.browser.sort_direction.toggled();
         } else {
-            self.transfer_browser_sort_column = column;
-            self.transfer_browser_sort_direction = column.default_direction();
+            self.transfer.browser.sort_column = column;
+            self.transfer.browser.sort_direction = column.default_direction();
         }
-        self.transfer_browser_list_offset = 0;
-        self.transfer_browser_status = format!(
+        self.transfer.browser.list_offset = 0;
+        self.transfer.browser.status = format!(
             "sorted by {} {}",
-            self.transfer_browser_sort_column.label().to_lowercase(),
-            self.transfer_browser_sort_direction.marker()
+            self.transfer.browser.sort_column.label().to_lowercase(),
+            self.transfer.browser.sort_direction.marker()
         );
         cx.notify();
     }
@@ -55,23 +57,23 @@ impl NyaTermApp {
 
         match keystroke.key.as_str() {
             "backspace" => {
-                self.transfer_browser_search.pop();
-                self.transfer_browser_list_offset = 0;
-                self.transfer_browser_status = transfer_browser_search_status(
-                    self.transfer_browser_search.as_str(),
+                self.transfer.browser.search.pop();
+                self.transfer.browser.list_offset = 0;
+                self.transfer.browser.status = transfer_browser_search_status(
+                    self.transfer.browser.search.as_str(),
                     self.visible_transfer_browser_entries().len(),
-                    self.transfer_browser_entries.len(),
+                    self.transfer.browser.entries.len(),
                 );
                 cx.notify();
             }
             "escape" => {
-                if self.transfer_browser_search.is_empty() {
-                    self.transfer_browser_search_expanded = false;
-                    self.transfer_browser_status = "file search closed".to_string();
+                if self.transfer.browser.search.is_empty() {
+                    self.transfer.browser.search_expanded = false;
+                    self.transfer.browser.status = "file search closed".to_string();
                 } else {
-                    self.transfer_browser_search.clear();
-                    self.transfer_browser_list_offset = 0;
-                    self.transfer_browser_status = "file search cleared".to_string();
+                    self.transfer.browser.search.clear();
+                    self.transfer.browser.list_offset = 0;
+                    self.transfer.browser.status = "file search cleared".to_string();
                 }
                 cx.notify();
             }
@@ -81,12 +83,12 @@ impl NyaTermApp {
                     .as_deref()
                     .filter(|input| !input.is_empty())
                 {
-                    self.transfer_browser_search.push_str(input);
-                    self.transfer_browser_list_offset = 0;
-                    self.transfer_browser_status = transfer_browser_search_status(
-                        self.transfer_browser_search.as_str(),
+                    self.transfer.browser.search.push_str(input);
+                    self.transfer.browser.list_offset = 0;
+                    self.transfer.browser.status = transfer_browser_search_status(
+                        self.transfer.browser.search.as_str(),
                         self.visible_transfer_browser_entries().len(),
-                        self.transfer_browser_entries.len(),
+                        self.transfer.browser.entries.len(),
                     );
                     cx.notify();
                 }

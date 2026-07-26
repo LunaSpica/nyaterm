@@ -7,7 +7,9 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         let state =
-            self.transfer_browser_context_menu
+            self.transfer
+                .browser
+                .context_menu
                 .clone()
                 .unwrap_or(TransferBrowserContextMenuState {
                     path: String::new(),
@@ -58,7 +60,7 @@ impl NyaTermApp {
                 label,
                 cx.listener(move |this, _, window, cx| {
                     let Some(entry) = this.selected_transfer_entry() else {
-                        this.transfer_browser_status = "select a remote file first".to_string();
+                        this.transfer.browser.status = "select a remote file first".to_string();
                         this.close_transfer_browser_context_menu(cx);
                         return;
                     };
@@ -348,7 +350,8 @@ impl NyaTermApp {
                                     "transfer-context-move",
                                     self.tr("fileExplorer.cmMove"),
                                     cx.listener(|this, _, window, cx| {
-                                        let Some(path) = this.transfer_selected_remote_path.clone()
+                                        let Some(path) =
+                                            this.transfer.browser.selected_remote_path.clone()
                                         else {
                                             this.close_transfer_browser_context_menu(cx);
                                             return;

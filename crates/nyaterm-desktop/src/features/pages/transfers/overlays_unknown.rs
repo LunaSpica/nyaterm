@@ -6,21 +6,23 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let state = self
-            .transfer_unknown_file
-            .clone()
-            .unwrap_or(TransferUnknownFileState {
-                entry: SftpFileEntry {
-                    name: String::new(),
-                    path: String::new(),
-                    file_type: SftpFileType::File,
-                    size: None,
-                    permissions: None,
-                    owner: String::new(),
-                    group: String::new(),
-                    modified_at: None,
-                },
-            });
+        let state =
+            self.transfer
+                .file_ops
+                .unknown_file
+                .clone()
+                .unwrap_or(TransferUnknownFileState {
+                    entry: SftpFileEntry {
+                        name: String::new(),
+                        path: String::new(),
+                        file_type: SftpFileType::File,
+                        size: None,
+                        permissions: None,
+                        owner: String::new(),
+                        group: String::new(),
+                        modified_at: None,
+                    },
+                });
         let name = if state.entry.name.trim().is_empty() {
             remote_file_name(&state.entry.path)
         } else {
@@ -42,9 +44,9 @@ impl NyaTermApp {
             .flex()
             .items_center()
             .justify_center()
-            .track_focus(&self.transfer_unknown_file_focus)
+            .track_focus(&self.transfer.file_ops.unknown_file_focus)
             .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(&this.transfer_unknown_file_focus);
+                window.focus(&this.transfer.file_ops.unknown_file_focus);
                 cx.notify();
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {

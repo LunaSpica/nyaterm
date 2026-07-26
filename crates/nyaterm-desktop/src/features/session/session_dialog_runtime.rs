@@ -258,21 +258,29 @@ impl NyaTermApp {
             .remove_session(session_id.to_string());
         self.terminal_session_surface_bounds.remove(session_id);
         self.session_command_history.remove(session_id);
-        self.transfer_browser_session_cache.remove(session_id);
-        self.transfer_external_sync_prompts
+        self.transfer.browser.session_cache.remove(session_id);
+        self.transfer
+            .external_sync
+            .prompts
             .retain(|_, prompt| prompt.session_id.as_deref() != Some(session_id));
-        self.transfer_external_sync_windows
-            .retain(|prompt_id, _| self.transfer_external_sync_prompts.contains_key(prompt_id));
-        self.transfer_external_sync_window_open_pending
-            .retain(|prompt_id| self.transfer_external_sync_prompts.contains_key(prompt_id));
+        self.transfer
+            .external_sync
+            .windows
+            .retain(|prompt_id, _| self.transfer.external_sync.prompts.contains_key(prompt_id));
+        self.transfer
+            .external_sync
+            .window_open_pending
+            .retain(|prompt_id| self.transfer.external_sync.prompts.contains_key(prompt_id));
         if self
-            .transfer_properties
+            .transfer
+            .file_ops
+            .properties
             .as_ref()
             .is_some_and(|state| state.session_id.as_deref() == Some(session_id))
         {
-            self.transfer_properties = None;
+            self.transfer.file_ops.properties = None;
         }
-        if let Some(workspace) = self.transfer_editor.as_mut() {
+        if let Some(workspace) = self.transfer.editor.workspace.as_mut() {
             let active_removed = workspace
                 .active_tab()
                 .is_some_and(|tab| tab.session_id.as_deref() == Some(session_id));
@@ -287,7 +295,7 @@ impl NyaTermApp {
                     .unwrap_or_default();
             }
             if workspace.tabs.is_empty() {
-                self.transfer_editor = None;
+                self.transfer.editor.workspace = None;
             }
         }
         self.purge_session_from_sync_groups(session_id);

@@ -70,7 +70,7 @@ pub(in crate::features::pages::transfers) fn transfer_job_row(
         .on_click({
             let job_id = job.id.clone();
             cx.listener(move |this, _, window, cx| {
-                window.focus(&this.transfer_queue_focus);
+                window.focus(&this.transfer.queue.focus);
                 this.select_transfer_job(job_id.clone(), cx);
             })
         })

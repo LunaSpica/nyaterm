@@ -329,7 +329,7 @@ impl NyaTermApp {
 
     fn window_runtime_quiet_tick_has_due_work(&self, now: Instant) -> bool {
         if self.ai_chat_focus_pending
-            || self.transfer_rename_focus_pending
+            || self.transfer.file_ops.rename_focus_pending
             || self.credential_prompt_focus_pending
         {
             return true;
@@ -438,7 +438,7 @@ impl NyaTermApp {
             && self.action_link_hover_pending.is_none()
             && self.pending_auto_recording_session.is_none()
             && self.pending_tunnels.is_empty()
-            && self.transfer_jobs.is_empty()
+            && self.transfer.queue.jobs.is_empty()
             && self.command_persistence_pending == 0
             && !self.terminal_runtime.open_tabs_persist_dirty
             && !self.terminal_runtime.window_layout_persist_dirty
@@ -452,7 +452,7 @@ impl NyaTermApp {
             && !self.translate_pending
             && !self.update_pending
             && !self.ai_chat_focus_pending
-            && !self.transfer_rename_focus_pending
+            && !self.transfer.file_ops.rename_focus_pending
             && !self.credential_prompt_focus_pending
             && !((self.active_ssh_config.is_some()
                 && matches!(
@@ -544,11 +544,11 @@ impl NyaTermApp {
             && self.transfer_browser_auto_sync_cwd_enabled()
             && !self.transfer_sync_cwd_job_running()
             && remote_refresh_due(
-                self.transfer_auto_sync_cwd_last_at,
+                self.transfer.browser.auto_sync_cwd_last_at,
                 TRANSFER_AUTO_SYNC_CWD_INTERVAL_SECONDS,
             )
         {
-            self.transfer_auto_sync_cwd_last_at = Some(Instant::now());
+            self.transfer.browser.auto_sync_cwd_last_at = Some(Instant::now());
             self.start_transfer_sync_cwd_job(window, cx);
             dirty = true;
         }

@@ -7,12 +7,12 @@ impl NyaTermApp {
         event: &MouseDownEvent,
         cx: &mut Context<Self>,
     ) {
-        self.transfer_browser_column_resize = Some(TransferBrowserColumnResizeState {
+        self.transfer.browser.column_resize = Some(TransferBrowserColumnResizeState {
             column,
             start_x: event.position.x,
-            start_width: self.transfer_browser_column_widths.get(column),
+            start_width: self.transfer.browser.column_widths.get(column),
         });
-        self.transfer_browser_status = format!("resizing {} column", column.label().to_lowercase());
+        self.transfer.browser.status = format!("resizing {} column", column.label().to_lowercase());
         cx.notify();
     }
 
@@ -21,14 +21,16 @@ impl NyaTermApp {
         event: &MouseMoveEvent,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.transfer_browser_column_resize else {
+        let Some(state) = self.transfer.browser.column_resize else {
             return;
         };
         let next_width = state.start_width + (event.position.x - state.start_x);
-        self.transfer_browser_column_widths
+        self.transfer
+            .browser
+            .column_widths
             .set(state.column, next_width);
-        let width = f32::from(self.transfer_browser_column_widths.get(state.column)).round();
-        self.transfer_browser_status =
+        let width = f32::from(self.transfer.browser.column_widths.get(state.column)).round();
+        self.transfer.browser.status =
             format!("{} column: {width}px", state.column.label().to_lowercase());
         cx.notify();
     }
@@ -38,8 +40,8 @@ impl NyaTermApp {
         _event: &MouseUpEvent,
         cx: &mut Context<Self>,
     ) {
-        if self.transfer_browser_column_resize.take().is_some() {
-            self.transfer_browser_status = "file column width updated".to_string();
+        if self.transfer.browser.column_resize.take().is_some() {
+            self.transfer.browser.status = "file column width updated".to_string();
             cx.notify();
         }
     }

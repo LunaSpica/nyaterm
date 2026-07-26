@@ -8,22 +8,26 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let display_browser_path = display_transfer_browser_home_path(
             &current_browser_path,
-            &self.transfer_browser_home_dir,
+            &self.transfer.browser.home_dir,
         );
         let is_current_favorite = self
-            .transfer_browser_favorites
+            .transfer
+            .browser
+            .favorites
             .iter()
             .any(|path| path == &current_browser_path);
         let history_paths = self
-            .transfer_browser_visited_history
+            .transfer
+            .browser
+            .visited_history
             .iter()
             .cloned()
             .take(5)
             .collect::<Vec<_>>();
-        let path_draft_value = if self.transfer_browser_path_draft.is_empty() {
+        let path_draft_value = if self.transfer.browser.path_draft.is_empty() {
             self.tr("fileExplorer.editPath").to_string()
         } else {
-            format!("{}|", self.transfer_browser_path_draft)
+            format!("{}|", self.transfer.browser.path_draft)
         };
 
         // Tauri FileExplorerPathBar: minHeight ~26px, mono path, favorites on the right.
@@ -44,7 +48,7 @@ impl NyaTermApp {
                     .flex()
                     .items_center()
                     .gap_1()
-                    .when(self.transfer_browser_path_editing, |this| {
+                    .when(self.transfer.browser.path_editing, |this| {
                         this.child(
                             div()
                                 .id(SharedString::from("transfer-browser-path-input"))
@@ -57,14 +61,14 @@ impl NyaTermApp {
                                 .items_center()
                                 .font_family(crate::features::gpui_code_font_family())
                                 .text_size(px(10.))
-                                .text_color(if self.transfer_browser_path_draft.is_empty() {
+                                .text_color(if self.transfer.browser.path_draft.is_empty() {
                                     rgb(palette.text_muted)
                                 } else {
                                     rgb(palette.text)
                                 })
-                                .track_focus(&self.transfer_browser_path_focus)
+                                .track_focus(&self.transfer.browser.path_focus)
                                 .on_click(cx.listener(|this, _, window, cx| {
-                                    window.focus(&this.transfer_browser_path_focus);
+                                    window.focus(&this.transfer.browser.path_focus);
                                     cx.notify();
                                 }))
                                 .on_key_down(cx.listener(
@@ -78,7 +82,7 @@ impl NyaTermApp {
                                 .child(truncate_preview(&path_draft_value, 120)),
                         )
                     })
-                    .when(!self.transfer_browser_path_editing, |this| {
+                    .when(!self.transfer.browser.path_editing, |this| {
                         this.child(
                             div()
                                 .id(SharedString::from("transfer-browser-path-display"))
@@ -147,13 +151,13 @@ impl NyaTermApp {
                     ),
             )
             .when(
-                self.transfer_browser_path_editing && !history_paths.is_empty(),
+                self.transfer.browser.path_editing && !history_paths.is_empty(),
                 |this| {
                     this.child(transfer_browser_path_history_list(
                         palette,
                         self.shell_surface_color(palette.surface),
                         current_browser_path,
-                        self.transfer_browser_home_dir.clone(),
+                        self.transfer.browser.home_dir.clone(),
                         history_paths,
                         cx,
                     ))
@@ -162,10 +166,10 @@ impl NyaTermApp {
     }
 
     pub(super) fn copy_current_transfer_browser_path(&mut self, cx: &mut Context<Self>) {
-        let path = normalized_transfer_browser_path(&self.transfer_browser_path);
+        let path = normalized_transfer_browser_path(&self.transfer.browser.path);
         cx.write_to_clipboard(ClipboardItem::new_string(path.clone()));
         self.terminal_status = "copied current remote directory".to_string();
-        self.transfer_browser_status = truncate_preview(&path, 92);
+        self.transfer.browser.status = truncate_preview(&path, 92);
         cx.notify();
     }
 
@@ -178,10 +182,10 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        let path = normalized_transfer_browser_path(&self.transfer_browser_path);
+        let path = normalized_transfer_browser_path(&self.transfer.browser.path);
         if self.send_terminal_input(path.clone().into_bytes(), cx) {
             self.terminal_status = "sent current remote directory to terminal".to_string();
-            self.transfer_browser_status = truncate_preview(&path, 92);
+            self.transfer.browser.status = truncate_preview(&path, 92);
             cx.notify();
         }
     }
@@ -191,19 +195,19 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.transfer_browser_path_draft =
-            normalized_transfer_browser_path(&self.transfer_browser_path);
-        self.transfer_browser_path_editing = true;
-        self.transfer_browser_status = "editing remote directory path".to_string();
+        self.transfer.browser.path_draft =
+            normalized_transfer_browser_path(&self.transfer.browser.path);
+        self.transfer.browser.path_editing = true;
+        self.transfer.browser.status = "editing remote directory path".to_string();
         self.start_transfer_browser_home_dir_job(cx);
-        window.focus(&self.transfer_browser_path_focus);
+        window.focus(&self.transfer.browser.path_focus);
         cx.notify();
     }
 
     pub(super) fn cancel_transfer_browser_path_edit(&mut self, cx: &mut Context<Self>) {
-        self.transfer_browser_path_draft.clear();
-        self.transfer_browser_path_editing = false;
-        self.transfer_browser_status = "remote directory path edit cancelled".to_string();
+        self.transfer.browser.path_draft.clear();
+        self.transfer.browser.path_editing = false;
+        self.transfer.browser.status = "remote directory path edit cancelled".to_string();
         cx.notify();
     }
 
@@ -213,16 +217,16 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let path = expand_transfer_browser_home_path(
-            &self.transfer_browser_path_draft,
-            &self.transfer_browser_home_dir,
+            &self.transfer.browser.path_draft,
+            &self.transfer.browser.home_dir,
         );
         if path.is_empty() {
-            self.transfer_browser_status = "enter a remote directory path".to_string();
+            self.transfer.browser.status = "enter a remote directory path".to_string();
             cx.notify();
             return;
         }
         if path == "~" || path.starts_with("~/") {
-            self.transfer_browser_status = if self.transfer_browser_home_dir_pending {
+            self.transfer.browser.status = if self.transfer.browser.home_dir_pending {
                 "remote home is still resolving".to_string()
             } else {
                 "remote home is unavailable for this session".to_string()
@@ -230,8 +234,8 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        self.transfer_browser_path_draft.clear();
-        self.transfer_browser_path_editing = false;
+        self.transfer.browser.path_draft.clear();
+        self.transfer.browser.path_editing = false;
         self.open_transfer_browser_directory(path, window, cx);
     }
 
@@ -255,8 +259,8 @@ impl NyaTermApp {
                 self.cancel_transfer_browser_path_edit(cx);
             }
             "backspace" => {
-                self.transfer_browser_path_draft.pop();
-                self.transfer_browser_status = "editing remote directory path".to_string();
+                self.transfer.browser.path_draft.pop();
+                self.transfer.browser.status = "editing remote directory path".to_string();
                 cx.notify();
             }
             _ => {
@@ -265,8 +269,8 @@ impl NyaTermApp {
                     .as_deref()
                     .filter(|input| !input.is_empty())
                 {
-                    self.transfer_browser_path_draft.push_str(input);
-                    self.transfer_browser_status = "editing remote directory path".to_string();
+                    self.transfer.browser.path_draft.push_str(input);
+                    self.transfer.browser.status = "editing remote directory path".to_string();
                     cx.notify();
                 }
             }
@@ -320,7 +324,7 @@ fn transfer_browser_path_history_list(
                 .cursor_pointer()
                 .hover(|this| this.bg(rgb(palette.hover)))
                 .on_click(cx.listener(move |this, _, window, cx| {
-                    this.transfer_browser_path_editing = false;
+                    this.transfer.browser.path_editing = false;
                     this.open_transfer_browser_directory(open_path.clone(), window, cx);
                 }))
                 .child(truncate_preview(&display_path, 72)),

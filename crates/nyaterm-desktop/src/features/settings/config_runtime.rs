@@ -675,9 +675,10 @@ impl NyaTermApp {
                         self.cloud_sync_state = store
                             .load_cloud_sync_state()
                             .unwrap_or_else(|_| self.cloud_sync_state.clone());
-                        self.transfer_duplicate_policy = SftpDuplicatePolicy::from_legacy_value(
-                            &self.settings.transfer_duplicate_strategy,
-                        );
+                        self.transfer.paths.duplicate_policy =
+                            SftpDuplicatePolicy::from_legacy_value(
+                                &self.settings.transfer_duplicate_strategy,
+                            );
                         self.store_status = StoreStatus {
                             path,
                             message: "redb connection store online".to_string(),

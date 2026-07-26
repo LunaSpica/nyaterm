@@ -68,9 +68,9 @@ impl NyaTermApp {
                                 true,
                                 palette,
                             )
-                            .track_focus(&self.transfer_default_editor_focus)
+                            .track_focus(&self.transfer.editor.default_editor_focus)
                             .on_click(cx.listener(|this, _, window, cx| {
-                                window.focus(&this.transfer_default_editor_focus);
+                                window.focus(&this.transfer.editor.default_editor_focus);
                                 cx.notify();
                             }))
                             .on_key_down(cx.listener(

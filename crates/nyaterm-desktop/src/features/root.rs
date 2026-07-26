@@ -427,10 +427,12 @@ impl NyaTermApp {
             });
         let quick_switch_open = self.quick_switch_open(cx);
         let transfer_properties_open = self
-            .transfer_properties
+            .transfer
+            .file_ops
+            .properties
             .as_ref()
             .is_some_and(|state| state.session_id.as_deref() == self.active_session_id.as_deref());
-        let transfer_editor_open = self.transfer_editor.is_some()
+        let transfer_editor_open = self.transfer.editor.workspace.is_some()
             && self.remote_editor_window.is_none()
             && !self.remote_editor_window_open_pending;
         let transfer_external_sync_open = self.active_external_editor_sync_prompt().is_some();
@@ -460,25 +462,25 @@ impl NyaTermApp {
             .when(overlay.temporary_ssh_link_open, |this| {
                 this.child(self.temporary_ssh_link_overlay(cx))
             })
-            .when(self.transfer_move.is_some(), |this| {
+            .when(self.transfer.file_ops.move_to.is_some(), |this| {
                 this.child(self.transfer_move_overlay(cx))
             })
-            .when(self.transfer_delete.is_some(), |this| {
+            .when(self.transfer.file_ops.delete.is_some(), |this| {
                 this.child(self.transfer_delete_overlay(cx))
             })
-            .when(self.transfer_job_delete.is_some(), |this| {
+            .when(self.transfer.queue.job_delete.is_some(), |this| {
                 this.child(self.transfer_job_delete_overlay(cx))
             })
-            .when(self.transfer_job_menu.is_some(), |this| {
+            .when(self.transfer.queue.job_menu.is_some(), |this| {
                 this.child(self.transfer_job_menu_overlay(cx))
             })
-            .when(self.transfer_new_folder.is_some(), |this| {
+            .when(self.transfer.file_ops.new_folder.is_some(), |this| {
                 this.child(self.transfer_new_folder_overlay(cx))
             })
-            .when(self.transfer_new_file.is_some(), |this| {
+            .when(self.transfer.file_ops.new_file.is_some(), |this| {
                 this.child(self.transfer_new_file_overlay(cx))
             })
-            .when(self.transfer_new_symlink.is_some(), |this| {
+            .when(self.transfer.file_ops.new_symlink.is_some(), |this| {
                 this.child(self.transfer_new_symlink_overlay(cx))
             })
             .when(transfer_properties_open, |this| {
@@ -487,19 +489,19 @@ impl NyaTermApp {
             .when(transfer_editor_open, |this| {
                 this.child(self.transfer_editor_overlay(cx))
             })
-            .when(self.transfer_unknown_file.is_some(), |this| {
+            .when(self.transfer.file_ops.unknown_file.is_some(), |this| {
                 this.child(self.transfer_unknown_file_overlay(cx))
             })
             .when(transfer_external_sync_open, |this| {
                 this.child(self.transfer_external_sync_prompt_overlay(cx))
             })
-            .when(self.transfer_browser_context_menu.is_some(), |this| {
+            .when(self.transfer.browser.context_menu.is_some(), |this| {
                 this.child(self.transfer_browser_context_menu_overlay(cx))
             })
-            .when(self.transfer_browser_favorites_menu.is_some(), |this| {
+            .when(self.transfer.browser.favorites_menu.is_some(), |this| {
                 this.child(self.transfer_browser_favorites_menu_overlay(cx))
             })
-            .when(self.transfer_browser_upload_menu.is_some(), |this| {
+            .when(self.transfer.browser.upload_menu.is_some(), |this| {
                 this.child(self.transfer_browser_upload_menu_overlay(cx))
             })
             .when(overlay.multi_line_paste_open, |this| {
@@ -604,8 +606,8 @@ impl NyaTermApp {
             || self.quick_command_state.editor.window.is_some()
             || self.quick_command_state.editor.window_open_pending
             || self.connection_state.editor.modal_window_open_or_pending()
-            || !self.transfer_external_sync_windows.is_empty()
-            || !self.transfer_external_sync_window_open_pending.is_empty()
+            || !self.transfer.external_sync.windows.is_empty()
+            || !self.transfer.external_sync.window_open_pending.is_empty()
     }
 
     fn activate_modal_child_window(&mut self, cx: &mut Context<Self>) -> bool {
@@ -621,10 +623,10 @@ impl NyaTermApp {
             self.activate_connection_editor_window(cx)
         } else if self.connection_state.editor.window_open_pending() {
             true
-        } else if !self.transfer_external_sync_windows.is_empty() {
+        } else if !self.transfer.external_sync.windows.is_empty() {
             self.activate_transfer_external_sync_window(cx)
         } else {
-            !self.transfer_external_sync_window_open_pending.is_empty()
+            !self.transfer.external_sync.window_open_pending.is_empty()
         }
     }
 

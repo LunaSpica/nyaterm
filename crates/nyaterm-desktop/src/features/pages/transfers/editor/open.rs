@@ -30,7 +30,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if entry.file_type == SftpFileType::Directory {
-            self.transfer_browser_status = "AI file actions require a file".to_string();
+            self.transfer.browser.status = "AI file actions require a file".to_string();
             self.terminal_status = "directories cannot be sent to file AI actions".to_string();
             cx.notify();
             return;
@@ -39,13 +39,13 @@ impl NyaTermApp {
             .size
             .is_some_and(|size| size > self.ai_settings.max_ai_file_size_bytes)
         {
-            self.transfer_browser_status = "file exceeds AI file size limit".to_string();
+            self.transfer.browser.status = "file exceeds AI file size limit".to_string();
             self.terminal_status = format!("{} is too large for AI file actions", entry.path);
             cx.notify();
             return;
         }
         if !self.ai_settings.enabled {
-            self.transfer_browser_status = "AI assistant is disabled".to_string();
+            self.transfer.browser.status = "AI assistant is disabled".to_string();
             self.terminal_status = "AI assistant is disabled".to_string();
             cx.notify();
             return;
@@ -56,8 +56,8 @@ impl NyaTermApp {
             return;
         };
 
-        self.transfer_selected_remote_path = Some(entry.path.clone());
-        self.transfer_remote_path = entry.path.clone();
+        self.transfer.browser.selected_remote_path = Some(entry.path.clone());
+        self.transfer.paths.remote = entry.path.clone();
 
         let remote_path = entry.path.clone();
         let action_id = action.id.clone();
@@ -65,7 +65,7 @@ impl NyaTermApp {
         let prompt = action.prompt.clone();
         let max_bytes = self.ai_settings.max_ai_file_size_bytes;
         let id = self.next_transfer_id("sftp-ai-file");
-        self.transfer_jobs.push(TransferJobState {
+        self.transfer.queue.jobs.push(TransferJobState {
             id: id.clone(),
             session_id: self.active_session_id.clone(),
             kind: TransferJobKind::AiFileAction {
@@ -80,9 +80,9 @@ impl NyaTermApp {
             progress: None,
             control: None,
         });
-        self.transfer_browser_status = format!("loading {remote_path} for AI");
+        self.transfer.browser.status = format!("loading {remote_path} for AI");
         self.terminal_status = format!("SFTP AI file action started: {remote_path}");
-        let transfer_tx = self.transfer_tx.clone();
+        let transfer_tx = self.transfer.queue.tx.clone();
         std::thread::spawn(move || {
             let result = SftpService::new(config)
                 .read_text_file(&remote_path, max_bytes)
@@ -180,13 +180,13 @@ impl NyaTermApp {
         match remote_file_text_kind(&entry.name) {
             RemoteFileTextKind::Text => self.open_transfer_editor_direct(entry, window, cx),
             RemoteFileTextKind::Binary => {
-                self.transfer_browser_status = "known binary file opened externally".to_string();
+                self.transfer.browser.status = "known binary file opened externally".to_string();
                 self.open_transfer_external(entry, window, cx);
             }
             RemoteFileTextKind::Unknown => {
-                self.transfer_unknown_file = Some(TransferUnknownFileState { entry });
+                self.transfer.file_ops.unknown_file = Some(TransferUnknownFileState { entry });
                 self.terminal_status = "confirm how to open unknown remote file".to_string();
-                window.focus(&self.transfer_unknown_file_focus);
+                window.focus(&self.transfer.file_ops.unknown_file_focus);
                 cx.notify();
             }
         }
@@ -205,7 +205,7 @@ impl NyaTermApp {
         }
         let session_id = self.active_session_id.clone();
         let tab_id = TransferEditorState::tab_id(session_id.as_deref(), &entry.path);
-        if let Some(editor) = self.transfer_editor.as_mut()
+        if let Some(editor) = self.transfer.editor.workspace.as_mut()
             && editor.tabs.iter().any(|tab| tab.id == tab_id)
         {
             editor.active_tab_id = tab_id;
@@ -215,15 +215,15 @@ impl NyaTermApp {
             let status = format!("remote text file already open: {}", entry.path);
             self.open_remote_file_editor_window(cx);
             if self.remote_editor_window.is_none() && !self.remote_editor_window_open_pending {
-                window.focus(&self.transfer_editor_focus);
+                window.focus(&self.transfer.editor.focus);
             }
-            self.transfer_browser_status = status.clone();
+            self.transfer.browser.status = status.clone();
             self.terminal_status = status;
             cx.notify();
             return;
         }
-        self.transfer_selected_remote_path = Some(entry.path.clone());
-        self.transfer_remote_path = entry.path.clone();
+        self.transfer.browser.selected_remote_path = Some(entry.path.clone());
+        self.transfer.paths.remote = entry.path.clone();
         let tab = TransferEditorState {
             id: tab_id.clone(),
             session_id: session_id.clone(),
@@ -243,26 +243,26 @@ impl NyaTermApp {
             error: None,
             focused_field: TransferEditorField::Content,
         };
-        if let Some(editor) = self.transfer_editor.as_mut() {
+        if let Some(editor) = self.transfer.editor.workspace.as_mut() {
             editor.tabs.push(tab);
             editor.active_tab_id = tab_id;
             editor.close_confirm = false;
             editor.pending_close_tab_id = None;
             editor.close_after_save_all = false;
         } else {
-            self.transfer_editor = Some(TransferEditorWorkspaceState::new(tab));
+            self.transfer.editor.workspace = Some(TransferEditorWorkspaceState::new(tab));
         }
         self.terminal_status = format!("opening remote text file {}", entry.path);
         self.open_remote_file_editor_window(cx);
         if self.remote_editor_window.is_none() && !self.remote_editor_window_open_pending {
-            window.focus(&self.transfer_editor_focus);
+            window.focus(&self.transfer.editor.focus);
         }
         self.start_sftp_editor_load_job(session_id, entry.path, window, cx);
         cx.notify();
     }
 
     pub(in crate::features) fn cancel_transfer_unknown_file(&mut self, cx: &mut Context<Self>) {
-        self.transfer_unknown_file = None;
+        self.transfer.file_ops.unknown_file = None;
         self.terminal_status = "unknown file open cancelled".to_string();
         cx.notify();
     }
@@ -272,7 +272,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.transfer_unknown_file.take() else {
+        let Some(state) = self.transfer.file_ops.unknown_file.take() else {
             cx.notify();
             return;
         };
@@ -284,7 +284,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.transfer_unknown_file.take() else {
+        let Some(state) = self.transfer.file_ops.unknown_file.take() else {
             cx.notify();
             return;
         };
@@ -348,15 +348,15 @@ impl NyaTermApp {
         config: SshSessionConfig,
         cx: &mut Context<Self>,
     ) {
-        self.transfer_selected_remote_path = Some(entry.path.clone());
-        self.transfer_remote_path = entry.path.clone();
+        self.transfer.browser.selected_remote_path = Some(entry.path.clone());
+        self.transfer.paths.remote = entry.path.clone();
         let remote_path = entry.path.clone();
         let local_path = self.transfer_external_open_path(&entry, session_id.as_deref());
         let default_editor = self.settings.transfer_default_editor.clone();
         let transfer_options = self.sftp_transfer_options();
         let id = self.next_transfer_id("sftp-open-external");
         let control = SftpTransferControl::new();
-        self.transfer_jobs.push(TransferJobState {
+        self.transfer.queue.jobs.push(TransferJobState {
             id: id.clone(),
             session_id,
             kind: TransferJobKind::OpenExternal {
@@ -372,8 +372,8 @@ impl NyaTermApp {
         });
         self.terminal_status = format!("downloading {remote_path} for external open");
 
-        let progress_tx = self.transfer_tx.clone();
-        let finished_tx = self.transfer_tx.clone();
+        let progress_tx = self.transfer.queue.tx.clone();
+        let finished_tx = self.transfer.queue.tx.clone();
         std::thread::spawn(move || {
             let progress_id = id.clone();
             let result = SftpService::new(config)

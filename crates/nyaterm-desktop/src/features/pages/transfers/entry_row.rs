@@ -225,7 +225,7 @@ pub(super) fn transfer_browser_entry_row(
                             .track_focus(&rename_focus)
                             .on_click(cx.listener(|this, _: &ClickEvent, window, cx| {
                                 cx.stop_propagation();
-                                window.focus(&this.transfer_rename_focus);
+                                window.focus(&this.transfer.file_ops.rename_focus);
                                 cx.notify();
                             }))
                             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {

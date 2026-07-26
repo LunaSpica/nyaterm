@@ -264,7 +264,7 @@ impl RemoteTextEditor {
         let tab_id = self.tab_id.clone();
         let content = self.content.clone();
         self.app.update(cx, move |app, cx| {
-            let Some(workspace) = app.transfer_editor.as_mut() else {
+            let Some(workspace) = app.transfer.editor.workspace.as_mut() else {
                 return;
             };
             workspace.close_confirm = false;
@@ -522,7 +522,7 @@ impl RemoteTextEditor {
                         if let Some(tab) = app.active_transfer_editor_tab_mut() {
                             tab.focused_field = TransferEditorField::Search;
                         }
-                        window.focus(&app.transfer_editor_focus);
+                        window.focus(&app.transfer.editor.focus);
                         cx.notify();
                     });
                     true

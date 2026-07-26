@@ -14,9 +14,9 @@ impl NyaTermApp {
             return;
         }
 
-        let value = match self.transfer_focused_field {
-            TransferInputField::Remote => &mut self.transfer_remote_path,
-            TransferInputField::Local => &mut self.transfer_local_path,
+        let value = match self.transfer.panel.focused_field {
+            TransferInputField::Remote => &mut self.transfer.paths.remote,
+            TransferInputField::Local => &mut self.transfer.paths.local,
         };
         match keystroke.key.as_str() {
             "backspace" => {

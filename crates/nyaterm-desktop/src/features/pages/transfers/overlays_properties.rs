@@ -7,7 +7,9 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         let state = self
-            .transfer_properties
+            .transfer
+            .file_ops
+            .properties
             .clone()
             .unwrap_or_else(|| TransferPropertiesState {
                 session_id: None,
@@ -77,9 +79,9 @@ impl NyaTermApp {
             .flex()
             .items_center()
             .justify_center()
-            .track_focus(&self.transfer_properties_focus)
+            .track_focus(&self.transfer.file_ops.properties_focus)
             .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(&this.transfer_properties_focus);
+                window.focus(&this.transfer.file_ops.properties_focus);
                 cx.notify();
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
@@ -202,12 +204,14 @@ impl NyaTermApp {
                                             loading || state.saving,
                                             cx.listener(|this, _, window, cx| {
                                                 if let Some(state) =
-                                                    this.transfer_properties.as_mut()
+                                                    this.transfer.file_ops.properties.as_mut()
                                                 {
                                                     state.focused_field =
                                                         TransferPropertiesField::Owner;
                                                 }
-                                                window.focus(&this.transfer_properties_focus);
+                                                window.focus(
+                                                    &this.transfer.file_ops.properties_focus,
+                                                );
                                                 cx.notify();
                                             }),
                                         ))
@@ -220,12 +224,14 @@ impl NyaTermApp {
                                             loading || state.saving,
                                             cx.listener(|this, _, window, cx| {
                                                 if let Some(state) =
-                                                    this.transfer_properties.as_mut()
+                                                    this.transfer.file_ops.properties.as_mut()
                                                 {
                                                     state.focused_field =
                                                         TransferPropertiesField::Group;
                                                 }
-                                                window.focus(&this.transfer_properties_focus);
+                                                window.focus(
+                                                    &this.transfer.file_ops.properties_focus,
+                                                );
                                                 cx.notify();
                                             }),
                                         ))
@@ -255,12 +261,14 @@ impl NyaTermApp {
                                             loading || state.saving,
                                             cx.listener(|this, _, window, cx| {
                                                 if let Some(state) =
-                                                    this.transfer_properties.as_mut()
+                                                    this.transfer.file_ops.properties.as_mut()
                                                 {
                                                     state.focused_field =
                                                         TransferPropertiesField::Mode;
                                                 }
-                                                window.focus(&this.transfer_properties_focus);
+                                                window.focus(
+                                                    &this.transfer.file_ops.properties_focus,
+                                                );
                                                 cx.notify();
                                             }),
                                         ))
@@ -284,8 +292,11 @@ impl NyaTermApp {
                                                             self.tr("fileExplorer.off")
                                                         },
                                                         cx.listener(|this, _, _, cx| {
-                                                            if let Some(state) =
-                                                                this.transfer_properties.as_mut()
+                                                            if let Some(state) = this
+                                                                .transfer
+                                                                .file_ops
+                                                                .properties
+                                                                .as_mut()
                                                             {
                                                                 state.recursive = !state.recursive;
                                                             }

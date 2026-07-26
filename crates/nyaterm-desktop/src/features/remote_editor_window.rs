@@ -28,7 +28,7 @@ impl RemoteFileEditorWindow {
 
 impl Render for RemoteFileEditorWindow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        if self.app.read(cx).transfer_editor.is_none() {
+        if self.app.read(cx).transfer.editor.workspace.is_none() {
             self.app.update(cx, |app, cx| {
                 app.remote_editor_window = None;
                 app.remote_editor_window_open_pending = false;
@@ -40,7 +40,12 @@ impl Render for RemoteFileEditorWindow {
 
         let (palette, font_family, font_size, title, active_tab, tab_ids) =
             self.app.read_with(cx, |app, _| {
-                let workspace = app.transfer_editor.as_ref().expect("editor checked above");
+                let workspace = app
+                    .transfer
+                    .editor
+                    .workspace
+                    .as_ref()
+                    .expect("editor checked above");
                 let editor = workspace
                     .active_tab()
                     .expect("open editor workspace has an active tab");
@@ -112,7 +117,7 @@ impl Render for RemoteFileEditorWindow {
                 move |_, window, cx| {
                     let should_close = close_app.update(cx, |app, cx| {
                         app.close_transfer_editor(cx);
-                        app.transfer_editor.is_none()
+                        app.transfer.editor.workspace.is_none()
                     });
                     if should_close {
                         window.remove_window();
@@ -174,7 +179,7 @@ fn open_remote_file_editor_window_now_from_app(app: Entity<NyaTermApp>, cx: &mut
         });
         return;
     }
-    if app.read(cx).transfer_editor.is_none() {
+    if app.read(cx).transfer.editor.workspace.is_none() {
         let _ = app.update(cx, |app, cx| {
             app.remote_editor_window_open_pending = false;
             cx.notify();
@@ -197,7 +202,7 @@ fn open_remote_file_editor_window_now_from_app(app: Entity<NyaTermApp>, cx: &mut
             window.on_window_should_close(cx, move |_, cx| {
                 close_app.update(cx, |app, cx| {
                     app.close_transfer_editor(cx);
-                    let should_close = app.transfer_editor.is_none();
+                    let should_close = app.transfer.editor.workspace.is_none();
                     if should_close {
                         app.remote_editor_window = None;
                         app.remote_editor_window_open_pending = false;

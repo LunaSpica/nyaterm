@@ -19,7 +19,7 @@ impl NyaTermApp {
 
     fn drive_pending_focus(&mut self, window: &mut Window) -> bool {
         if !self.ai_chat_focus_pending
-            && !self.transfer_rename_focus_pending
+            && !self.transfer.file_ops.rename_focus_pending
             && !self.credential_prompt_focus_pending
         {
             return false;
@@ -30,9 +30,9 @@ impl NyaTermApp {
             self.ai_chat_focus_pending = false;
             dirty = true;
         }
-        if self.transfer_rename_focus_pending && self.transfer_rename.is_some() {
-            window.focus(&self.transfer_rename_focus);
-            self.transfer_rename_focus_pending = false;
+        if self.transfer.file_ops.rename_focus_pending && self.transfer.file_ops.rename.is_some() {
+            window.focus(&self.transfer.file_ops.rename_focus);
+            self.transfer.file_ops.rename_focus_pending = false;
             dirty = true;
         }
         if self.credential_prompt_focus_pending
@@ -156,7 +156,7 @@ impl NyaTermApp {
             || self.current_left_panel() == Some(NavItem::Transfers);
         if calm_tick
             && !remote_panels_need_poll
-            && self.transfer_jobs.is_empty()
+            && self.transfer.queue.jobs.is_empty()
             && self.pending_tunnels.is_empty()
             && self.pending_auto_recording_session.is_none()
             && !self.terminal_runtime.open_tabs_persist_dirty

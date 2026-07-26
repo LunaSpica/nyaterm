@@ -5,7 +5,9 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         let active_session_id = self.active_session_id.as_deref();
         let visible_jobs = self
-            .transfer_jobs
+            .transfer
+            .queue
+            .jobs
             .iter()
             .filter(|job| job.is_visible_for_session(active_session_id))
             .cloned()
@@ -35,10 +37,10 @@ impl NyaTermApp {
                     | TransferJobStatus::Cancelling
             )
         });
-        let download_path = if self.transfer_local_path.trim().is_empty() {
+        let download_path = if self.transfer.paths.local.trim().is_empty() {
             format!("{}: -", self.tr("fileTransfer.downloadPath"))
         } else {
-            truncate_preview(&self.transfer_local_path, 48)
+            truncate_preview(&self.transfer.paths.local, 48)
         };
 
         let mut list = div().flex().flex_col();
@@ -83,8 +85,8 @@ impl NyaTermApp {
                     palette,
                     job,
                     directory_progress,
-                    self.transfer_selected_remote_path.clone(),
-                    self.transfer_selected_job_id.clone(),
+                    self.transfer.browser.selected_remote_path.clone(),
+                    self.transfer.queue.selected_job_id.clone(),
                     cx,
                 ));
             }
@@ -96,9 +98,9 @@ impl NyaTermApp {
             .flex_col()
             .overflow_hidden()
             .bg(self.shell_transparent_color(palette.surface))
-            .track_focus(&self.transfer_queue_focus)
+            .track_focus(&self.transfer.queue.focus)
             .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(&this.transfer_queue_focus);
+                window.focus(&this.transfer.queue.focus);
                 cx.notify();
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {

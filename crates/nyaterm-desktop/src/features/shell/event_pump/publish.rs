@@ -120,7 +120,9 @@ impl NyaTermApp {
             sort_mode: format!("{:?}", self.connection_state.list.sort_mode()),
         };
         let active_job_count = self
-            .transfer_jobs
+            .transfer
+            .queue
+            .jobs
             .iter()
             .filter(|job| {
                 !matches!(
@@ -132,12 +134,12 @@ impl NyaTermApp {
             })
             .count();
         let transfers = crate::entities::TransferSnapshot {
-            job_count: self.transfer_jobs.len(),
+            job_count: self.transfer.queue.jobs.len(),
             active_job_count,
-            browser_path: self.transfer_browser_path.clone(),
-            selected_count: self.transfer_selected_remote_paths.len(),
-            browser_busy: self.transfer_browser_home_dir_pending
-                || self.transfer_path_prompt.is_some(),
+            browser_path: self.transfer.browser.path.clone(),
+            selected_count: self.transfer.browser.selected_remote_paths.len(),
+            browser_busy: self.transfer.browser.home_dir_pending
+                || self.transfer.paths.prompt.is_some(),
         };
         let ai = crate::entities::AiSnapshot {
             chat_pending: self.ai_chat_pending,

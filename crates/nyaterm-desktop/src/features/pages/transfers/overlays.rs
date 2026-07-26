@@ -9,7 +9,9 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         let state = self
-            .transfer_job_delete
+            .transfer
+            .queue
+            .job_delete
             .clone()
             .unwrap_or(TransferJobDeleteState {
                 job_id: String::new(),
@@ -31,9 +33,9 @@ impl NyaTermApp {
             .flex()
             .items_center()
             .justify_center()
-            .track_focus(&self.transfer_job_delete_focus)
+            .track_focus(&self.transfer.queue.job_delete_focus)
             .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(&this.transfer_job_delete_focus);
+                window.focus(&this.transfer.queue.job_delete_focus);
                 cx.notify();
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
@@ -101,7 +103,9 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         let state = self
-            .transfer_job_menu
+            .transfer
+            .queue
+            .job_menu
             .clone()
             .unwrap_or(TransferJobMenuState {
                 job_id: String::new(),
@@ -109,7 +113,9 @@ impl NyaTermApp {
                 y: px(24.),
             });
         let job = self
-            .transfer_jobs
+            .transfer
+            .queue
+            .jobs
             .iter()
             .find(|job| job.id == state.job_id)
             .cloned();
@@ -179,7 +185,7 @@ impl NyaTermApp {
                         self.tr("fileTransfer.pause"),
                         can_pause,
                         cx.listener(move |this, _, _, cx| {
-                            this.transfer_job_menu = None;
+                            this.transfer.queue.job_menu = None;
                             this.pause_transfer_job(&pause_id, cx);
                         }),
                     ))
@@ -189,7 +195,7 @@ impl NyaTermApp {
                         self.tr("fileTransfer.resume"),
                         can_resume,
                         cx.listener(move |this, _, _, cx| {
-                            this.transfer_job_menu = None;
+                            this.transfer.queue.job_menu = None;
                             this.resume_transfer_job(&resume_id, cx);
                         }),
                     ))
@@ -199,7 +205,7 @@ impl NyaTermApp {
                         self.tr("fileTransfer.retry"),
                         can_retry,
                         cx.listener(move |this, _, window, cx| {
-                            this.transfer_job_menu = None;
+                            this.transfer.queue.job_menu = None;
                             this.retry_transfer_job(retry_id.clone(), window, cx);
                         }),
                     ))
@@ -209,7 +215,7 @@ impl NyaTermApp {
                         self.tr("fileTransfer.cancel"),
                         can_cancel,
                         cx.listener(move |this, _, _, cx| {
-                            this.transfer_job_menu = None;
+                            this.transfer.queue.job_menu = None;
                             this.cancel_transfer_job(&cancel_id, cx);
                         }),
                     ))
@@ -220,7 +226,7 @@ impl NyaTermApp {
                         self.tr("fileTransfer.openTargetDirectory"),
                         can_open_target,
                         cx.listener(move |this, _, _, cx| {
-                            this.transfer_job_menu = None;
+                            this.transfer.queue.job_menu = None;
                             this.reveal_transfer_job_target_directory(open_id.clone(), cx);
                         }),
                     ))
@@ -231,7 +237,7 @@ impl NyaTermApp {
                         self.tr("fileTransfer.delete"),
                         can_delete,
                         cx.listener(move |this, _, _, cx| {
-                            this.transfer_job_menu = None;
+                            this.transfer.queue.job_menu = None;
                             this.request_delete_transfer_job(delete_id.clone(), cx);
                         }),
                     )),

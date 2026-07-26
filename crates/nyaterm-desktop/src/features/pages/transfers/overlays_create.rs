@@ -8,7 +8,9 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         let dialog_width = transfer_dialog_width(self.last_viewport_size.0, 500.);
         let state = self
-            .transfer_new_folder
+            .transfer
+            .file_ops
+            .new_folder
             .clone()
             .unwrap_or(TransferNewFolderState {
                 parent_path: String::new(),
@@ -35,9 +37,9 @@ impl NyaTermApp {
             .flex()
             .items_center()
             .justify_center()
-            .track_focus(&self.transfer_new_folder_focus)
+            .track_focus(&self.transfer.file_ops.new_folder_focus)
             .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(&this.transfer_new_folder_focus);
+                window.focus(&this.transfer.file_ops.new_folder_focus);
                 cx.notify();
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
@@ -154,7 +156,9 @@ impl NyaTermApp {
                                     .gap_2()
                                     .cursor_pointer()
                                     .on_click(cx.listener(|this, _, _, cx| {
-                                        if let Some(state) = this.transfer_new_folder.as_mut() {
+                                        if let Some(state) =
+                                            this.transfer.file_ops.new_folder.as_mut()
+                                        {
                                             state.open_after_create = !state.open_after_create;
                                         }
                                         cx.notify();
@@ -229,7 +233,9 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         let dialog_width = transfer_dialog_width(self.last_viewport_size.0, 500.);
         let state = self
-            .transfer_new_file
+            .transfer
+            .file_ops
+            .new_file
             .clone()
             .unwrap_or(TransferNewFileState {
                 parent_path: String::new(),
@@ -256,9 +262,9 @@ impl NyaTermApp {
             .flex()
             .items_center()
             .justify_center()
-            .track_focus(&self.transfer_new_file_focus)
+            .track_focus(&self.transfer.file_ops.new_file_focus)
             .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(&this.transfer_new_file_focus);
+                window.focus(&this.transfer.file_ops.new_file_focus);
                 cx.notify();
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
@@ -375,7 +381,9 @@ impl NyaTermApp {
                                     .gap_2()
                                     .cursor_pointer()
                                     .on_click(cx.listener(|this, _, _, cx| {
-                                        if let Some(state) = this.transfer_new_file.as_mut() {
+                                        if let Some(state) =
+                                            this.transfer.file_ops.new_file.as_mut()
+                                        {
                                             state.open_after_create = !state.open_after_create;
                                         }
                                         cx.notify();
@@ -450,7 +458,9 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         let dialog_width = transfer_dialog_width(self.last_viewport_size.0, 480.);
         let state = self
-            .transfer_new_symlink
+            .transfer
+            .file_ops
+            .new_symlink
             .clone()
             .unwrap_or(TransferNewSymlinkState {
                 parent_path: String::new(),
@@ -474,9 +484,9 @@ impl NyaTermApp {
             .flex()
             .items_center()
             .justify_center()
-            .track_focus(&self.transfer_new_symlink_focus)
+            .track_focus(&self.transfer.file_ops.new_symlink_focus)
             .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(&this.transfer_new_symlink_focus);
+                window.focus(&this.transfer.file_ops.new_symlink_focus);
                 cx.notify();
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
@@ -526,10 +536,11 @@ impl NyaTermApp {
                                 state.focused_field == TransferSymlinkField::Name,
                                 name_invalid,
                                 cx.listener(|this, _, window, cx| {
-                                    if let Some(state) = this.transfer_new_symlink.as_mut() {
+                                    if let Some(state) = this.transfer.file_ops.new_symlink.as_mut()
+                                    {
                                         state.focused_field = TransferSymlinkField::Name;
                                     }
-                                    window.focus(&this.transfer_new_symlink_focus);
+                                    window.focus(&this.transfer.file_ops.new_symlink_focus);
                                     cx.notify();
                                 }),
                             ))
@@ -545,10 +556,11 @@ impl NyaTermApp {
                                 state.focused_field == TransferSymlinkField::Target,
                                 false,
                                 cx.listener(|this, _, window, cx| {
-                                    if let Some(state) = this.transfer_new_symlink.as_mut() {
+                                    if let Some(state) = this.transfer.file_ops.new_symlink.as_mut()
+                                    {
                                         state.focused_field = TransferSymlinkField::Target;
                                     }
-                                    window.focus(&this.transfer_new_symlink_focus);
+                                    window.focus(&this.transfer.file_ops.new_symlink_focus);
                                     cx.notify();
                                 }),
                             )),
@@ -713,17 +725,17 @@ impl NyaTermApp {
     ) {
         match target {
             TransferPermissionTarget::NewFolder => {
-                if let Some(state) = self.transfer_new_folder.as_mut() {
+                if let Some(state) = self.transfer.file_ops.new_folder.as_mut() {
                     state.mode ^= bit;
                 }
             }
             TransferPermissionTarget::NewFile => {
-                if let Some(state) = self.transfer_new_file.as_mut() {
+                if let Some(state) = self.transfer.file_ops.new_file.as_mut() {
                     state.mode ^= bit;
                 }
             }
             TransferPermissionTarget::Properties => {
-                if let Some(state) = self.transfer_properties.as_mut() {
+                if let Some(state) = self.transfer.file_ops.properties.as_mut() {
                     let current = parse_transfer_mode(&state.mode_value)
                         .or(state.entry.permissions)
                         .unwrap_or(0o644);

@@ -727,7 +727,7 @@ impl NyaTermApp {
         directory_mode: bool,
         cx: &mut Context<Self>,
     ) -> bool {
-        if self.transfer_path_prompt.is_some() {
+        if self.transfer.paths.prompt.is_some() {
             self.terminal_status = "native path picker is already open".to_string();
             cx.notify();
             return false;
@@ -744,7 +744,7 @@ impl NyaTermApp {
             })),
         };
         let receiver = cx.prompt_for_paths(options);
-        self.transfer_path_prompt = Some(if directory_mode {
+        self.transfer.paths.prompt = Some(if directory_mode {
             TransferPathPromptKind::UploadDirectory
         } else {
             TransferPathPromptKind::UploadFile
@@ -791,7 +791,7 @@ impl NyaTermApp {
         result: TransferPathPromptResult,
         cx: &mut Context<Self>,
     ) {
-        self.transfer_path_prompt = None;
+        self.transfer.paths.prompt = None;
         match result {
             TransferPathPromptResult::Selected(paths) => {
                 self.accept_trzsz_upload_paths(
@@ -1214,7 +1214,7 @@ impl NyaTermApp {
             item_count_completed: None,
             item_count_total: None,
         };
-        if let Some(job) = self.transfer_jobs.iter_mut().find(|job| {
+        if let Some(job) = self.transfer.queue.jobs.iter_mut().find(|job| {
             matches!(
                 &job.kind,
                 TransferJobKind::TrzszDownload {
@@ -1267,7 +1267,7 @@ impl NyaTermApp {
                     format!("Downloading {}", update.file_name)
                 }
             });
-        self.transfer_jobs.push(TransferJobState {
+        self.transfer.queue.jobs.push(TransferJobState {
             id,
             session_id: Some(session_id.to_string()),
             kind: TransferJobKind::TrzszDownload {
@@ -1299,7 +1299,7 @@ impl NyaTermApp {
             item_count_completed: None,
             item_count_total: None,
         };
-        if let Some(job) = self.transfer_jobs.iter_mut().find(|job| {
+        if let Some(job) = self.transfer.queue.jobs.iter_mut().find(|job| {
             matches!(
                 &job.kind,
                 TransferJobKind::TrzszUpload {
@@ -1352,7 +1352,7 @@ impl NyaTermApp {
                     format!("Uploading {}", update.file_name)
                 }
             });
-        self.transfer_jobs.push(TransferJobState {
+        self.transfer.queue.jobs.push(TransferJobState {
             id,
             session_id: Some(session_id.to_string()),
             kind: TransferJobKind::TrzszUpload {
@@ -1376,7 +1376,7 @@ impl NyaTermApp {
         fail_reason: Option<&str>,
         cx: &mut Context<Self>,
     ) {
-        for job in &mut self.transfer_jobs {
+        for job in &mut self.transfer.queue.jobs {
             let is_trzsz = matches!(
                 &job.kind,
                 TransferJobKind::TrzszDownload {
@@ -1412,7 +1412,7 @@ impl NyaTermApp {
         fail_reason: Option<&str>,
         cx: &mut Context<Self>,
     ) {
-        for job in &mut self.transfer_jobs {
+        for job in &mut self.transfer.queue.jobs {
             let is_trzsz = matches!(
                 &job.kind,
                 TransferJobKind::TrzszUpload {

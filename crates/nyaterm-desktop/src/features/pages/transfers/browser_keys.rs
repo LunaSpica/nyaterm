@@ -56,7 +56,7 @@ impl NyaTermApp {
             &self.settings.keybindings,
         ) && self.selected_transfer_entries().len() == 1
             && self.active_ssh_config.is_some()
-            && self.transfer_rename.is_none()
+            && self.transfer.file_ops.rename.is_none()
         {
             cx.stop_propagation();
             self.open_transfer_rename_dialog(window, cx);
@@ -66,7 +66,7 @@ impl NyaTermApp {
         if keystroke.key == "delete"
             && unmodified
             && !self.selected_transfer_entries().is_empty()
-            && self.transfer_delete.is_none()
+            && self.transfer.file_ops.delete.is_none()
         {
             cx.stop_propagation();
             self.open_selected_transfer_delete_dialog(window, cx);

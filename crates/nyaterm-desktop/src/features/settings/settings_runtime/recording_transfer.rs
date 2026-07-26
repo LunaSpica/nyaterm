@@ -96,7 +96,7 @@ impl NyaTermApp {
         policy: SftpDuplicatePolicy,
         cx: &mut Context<Self>,
     ) {
-        self.transfer_duplicate_policy = policy;
+        self.transfer.paths.duplicate_policy = policy;
         self.settings.transfer_duplicate_strategy = duplicate_policy_label(policy).to_string();
         self.save_transfer_settings("transfer duplicate policy saved", cx);
     }
@@ -198,7 +198,7 @@ impl NyaTermApp {
         {
             Ok(settings) => {
                 self.apply_gpui_settings(settings);
-                self.transfer_duplicate_policy = SftpDuplicatePolicy::from_legacy_value(
+                self.transfer.paths.duplicate_policy = SftpDuplicatePolicy::from_legacy_value(
                     &self.settings.transfer_duplicate_strategy,
                 );
                 self.store_status.message = "transfer settings saved".to_string();

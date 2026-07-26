@@ -104,9 +104,9 @@ impl NyaTermApp {
             .flex()
             .items_center()
             .justify_center()
-            .track_focus(&self.transfer_external_sync_focus)
+            .track_focus(&self.transfer.external_sync.focus)
             .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(&this.transfer_external_sync_focus);
+                window.focus(&this.transfer.external_sync.focus);
                 cx.notify();
             }))
             .on_key_down(cx.listener(move |this, event: &KeyDownEvent, _, cx| {
@@ -266,7 +266,7 @@ impl NyaTermApp {
         let encoding_label = self.tr("fileEditor.encodingUtf8");
         let line_ending_label = self.tr("fileEditor.lineEndingLf");
         let plain_text_label = self.tr("fileEditor.plainText");
-        let workspace = self.transfer_editor.clone();
+        let workspace = self.transfer.editor.workspace.clone();
         let state = workspace
             .as_ref()
             .and_then(TransferEditorWorkspaceState::active_tab)
@@ -345,7 +345,7 @@ impl NyaTermApp {
         };
         let active_tab_id = state.id.clone();
         let has_native_editor = native_editor.is_some();
-        let tabs_menu_open = self.transfer_editor_tabs_menu_open && tabs.len() > 1;
+        let tabs_menu_open = self.transfer.editor.tabs_menu_open && tabs.len() > 1;
         let mut tab_list = div()
             .id("transfer-editor-tab-list")
             .h_full()
@@ -567,8 +567,8 @@ impl NyaTermApp {
                         .hover(|this| this.bg(rgb(palette.hover)))
                         .on_click(cx.listener(|this, _, _, cx| {
                             cx.stop_propagation();
-                            this.transfer_editor_tabs_menu_open =
-                                !this.transfer_editor_tabs_menu_open;
+                            this.transfer.editor.tabs_menu_open =
+                                !this.transfer.editor.tabs_menu_open;
                             cx.notify();
                         }))
                         .child(svg().size(px(15.)).path("icons/chevron-down.svg")),
@@ -590,14 +590,14 @@ impl NyaTermApp {
             .flex()
             .items_center()
             .justify_center()
-            .track_focus(&self.transfer_editor_focus)
+            .track_focus(&self.transfer.editor.focus)
             .on_click(cx.listener(|this, _, window, cx| {
-                this.transfer_editor_tabs_menu_open = false;
-                window.focus(&this.transfer_editor_focus);
+                this.transfer.editor.tabs_menu_open = false;
+                window.focus(&this.transfer.editor.focus);
                 cx.notify();
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
-                if this.transfer_editor_focus.is_focused(window) {
+                if this.transfer.editor.focus.is_focused(window) {
                     cx.stop_propagation();
                     this.handle_transfer_editor_key_down(event, window, cx);
                 }
@@ -776,7 +776,7 @@ impl NyaTermApp {
                                             {
                                                 state.focused_field = TransferEditorField::Search;
                                             }
-                                            window.focus(&this.transfer_editor_focus);
+                                            window.focus(&this.transfer.editor.focus);
                                             cx.notify();
                                         }))
                                         .child(truncate_preview(&search_label, 96)),

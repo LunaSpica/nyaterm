@@ -262,15 +262,15 @@ impl NyaTermApp {
 
         self.active_session_id = Some(session_id.to_string());
         if switching_sessions {
-            self.transfer_selected_job_id = None;
-            self.transfer_job_menu = None;
-            self.transfer_job_delete = None;
+            self.transfer.queue.selected_job_id = None;
+            self.transfer.queue.job_menu = None;
+            self.transfer.queue.job_delete = None;
             self.reset_remote_runtime_for_session_switch();
         }
         self.session_tab_scroll_into_view_pending = true;
         // Keep workspace_split mirrored to the active tab's per-tab pane root.
         self.sync_workspace_split_from_active_tab();
-        self.transfer_auto_sync_cwd_last_at = None;
+        self.transfer.browser.auto_sync_cwd_last_at = None;
         if let Some(metadata) = self.session_metadata.get(session_id).cloned() {
             self.active_ssh_config = metadata.ssh_config;
             self.active_ai_execution_profile = metadata.ai_execution_profile;
@@ -285,8 +285,8 @@ impl NyaTermApp {
             || self.active_right_panel == Some(NavItem::Transfers)
             || self.selected_nav == NavItem::Transfers;
         if transfers_panel_visible
-            || self.transfer_browser_session_cache.contains_key(session_id)
-            || !self.transfer_browser_entries.is_empty()
+            || self.transfer.browser.session_cache.contains_key(session_id)
+            || !self.transfer.browser.entries.is_empty()
         {
             self.sync_transfer_browser_favorites_for_active_session();
             if !self.restore_transfer_browser_session_cache(session_id) {

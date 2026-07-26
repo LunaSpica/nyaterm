@@ -11,7 +11,7 @@ impl NyaTermApp {
         } else {
             truncate_preview(&self.settings.transfer_download_path, 34)
         };
-        let policy = self.transfer_duplicate_policy;
+        let policy = self.transfer.paths.duplicate_policy;
 
         div()
             .flex()
@@ -43,9 +43,9 @@ impl NyaTermApp {
                                     true,
                                     palette,
                                 )
-                                .track_focus(&self.transfer_download_path_focus)
+                                .track_focus(&self.transfer.paths.download_focus)
                                 .on_click(cx.listener(|this, _, window, cx| {
-                                    window.focus(&this.transfer_download_path_focus);
+                                    window.focus(&this.transfer.paths.download_focus);
                                     cx.notify();
                                 }))
                                 .on_key_down(cx.listener(

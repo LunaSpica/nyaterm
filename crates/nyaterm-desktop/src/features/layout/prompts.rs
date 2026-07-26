@@ -36,9 +36,9 @@ impl NyaTermApp {
             .items_center()
             .justify_center()
             .p_3()
-            .track_focus(&self.transfer_focus)
+            .track_focus(&self.transfer.panel.focus)
             .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(&this.transfer_focus);
+                window.focus(&this.transfer.panel.focus);
                 cx.notify();
             }))
             .on_key_down(cx.listener(move |this, event: &KeyDownEvent, _, cx| {

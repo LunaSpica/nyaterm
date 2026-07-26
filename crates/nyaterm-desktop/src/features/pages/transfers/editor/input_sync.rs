@@ -11,7 +11,7 @@ impl NyaTermApp {
         let keystroke = &event.keystroke;
         let primary = keystroke.modifiers.platform || keystroke.modifiers.control;
         if primary && !keystroke.modifiers.alt && keystroke.key.as_str() == "f" {
-            if let Some(workspace) = self.transfer_editor.as_mut() {
+            if let Some(workspace) = self.transfer.editor.workspace.as_mut() {
                 workspace.close_confirm = false;
                 workspace.pending_close_tab_id = None;
                 workspace.close_after_save_all = false;
@@ -44,14 +44,16 @@ impl NyaTermApp {
         }
         if keystroke.key.as_str() == "escape"
             && self
-                .transfer_editor
+                .transfer
+                .editor
+                .workspace
                 .as_ref()
                 .is_some_and(|workspace| workspace.close_confirm)
         {
             self.cancel_transfer_editor_close_confirm(cx);
             return;
         }
-        if let Some(workspace) = self.transfer_editor.as_mut() {
+        if let Some(workspace) = self.transfer.editor.workspace.as_mut() {
             workspace.close_confirm = false;
             workspace.pending_close_tab_id = None;
             workspace.close_after_save_all = false;
@@ -200,7 +202,7 @@ impl NyaTermApp {
             self.terminal_status = "start an SSH session before syncing external edits".to_string();
             return;
         };
-        let transfer_tx = self.transfer_tx.clone();
+        let transfer_tx = self.transfer.queue.tx.clone();
         let transfer_options = self.sftp_transfer_options();
         std::thread::spawn(move || {
             upload_external_editor_file(
@@ -218,13 +220,17 @@ impl NyaTermApp {
         &self,
     ) -> Option<(String, TransferExternalSyncPromptState)> {
         let active_session_id = self.active_session_id.as_deref()?;
-        self.transfer_external_sync_prompts
+        self.transfer
+            .external_sync
+            .prompts
             .iter()
             .find(|(prompt_id, prompt)| {
                 prompt.session_id.as_deref() == Some(active_session_id)
-                    && !self.transfer_external_sync_windows.contains_key(*prompt_id)
+                    && !self.transfer.external_sync.windows.contains_key(*prompt_id)
                     && !self
-                        .transfer_external_sync_window_open_pending
+                        .transfer
+                        .external_sync
+                        .window_open_pending
                         .contains(*prompt_id)
             })
             .map(|(prompt_id, prompt)| (prompt_id.clone(), prompt.clone()))
@@ -236,16 +242,18 @@ impl NyaTermApp {
         always: bool,
         cx: &mut Context<Self>,
     ) {
-        let Some(prompt) = self.transfer_external_sync_prompts.remove(prompt_id) else {
+        let Some(prompt) = self.transfer.external_sync.prompts.remove(prompt_id) else {
             cx.notify();
             return;
         };
-        self.transfer_external_sync_windows.remove(prompt_id);
-        self.transfer_external_sync_window_open_pending
+        self.transfer.external_sync.windows.remove(prompt_id);
+        self.transfer
+            .external_sync
+            .window_open_pending
             .remove(prompt_id);
         let watch_key = external_editor_watch_key(&prompt.remote_path, &prompt.local_path);
         if always {
-            self.transfer_external_always_uploads.insert(watch_key);
+            self.transfer.external_sync.always_uploads.insert(watch_key);
         }
         self.upload_external_editor_sync(
             prompt.session_id,
@@ -261,9 +269,11 @@ impl NyaTermApp {
         prompt_id: &str,
         cx: &mut Context<Self>,
     ) {
-        self.transfer_external_sync_prompts.remove(prompt_id);
-        self.transfer_external_sync_windows.remove(prompt_id);
-        self.transfer_external_sync_window_open_pending
+        self.transfer.external_sync.prompts.remove(prompt_id);
+        self.transfer.external_sync.windows.remove(prompt_id);
+        self.transfer
+            .external_sync
+            .window_open_pending
             .remove(prompt_id);
         self.terminal_status = "external edit sync skipped".to_string();
         cx.notify();

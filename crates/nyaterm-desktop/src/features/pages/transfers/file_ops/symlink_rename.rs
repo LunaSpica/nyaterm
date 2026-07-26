@@ -6,19 +6,19 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let parent_path = if self.transfer_browser_path.trim().is_empty() {
+        let parent_path = if self.transfer.browser.path.trim().is_empty() {
             self.normalized_transfer_remote_path()
         } else {
-            self.transfer_browser_path.clone()
+            self.transfer.browser.path.clone()
         };
-        self.transfer_new_symlink = Some(TransferNewSymlinkState {
+        self.transfer.file_ops.new_symlink = Some(TransferNewSymlinkState {
             parent_path,
             name: "new-link".to_string(),
             target: String::new(),
             focused_field: TransferSymlinkField::Name,
         });
         self.terminal_status = "SFTP new symlink opened".to_string();
-        window.focus(&self.transfer_new_symlink_focus);
+        window.focus(&self.transfer.file_ops.new_symlink_focus);
         cx.notify();
     }
 
@@ -26,7 +26,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        self.transfer_new_symlink = None;
+        self.transfer.file_ops.new_symlink = None;
         self.terminal_status = "SFTP new symlink cancelled".to_string();
         cx.notify();
     }
@@ -36,7 +36,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.transfer_new_symlink.clone() else {
+        let Some(state) = self.transfer.file_ops.new_symlink.clone() else {
             self.terminal_status = "no SFTP new symlink is active".to_string();
             cx.notify();
             return;
@@ -53,7 +53,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        self.transfer_new_symlink = None;
+        self.transfer.file_ops.new_symlink = None;
         let link_path = remote_child_path(&state.parent_path, &name);
         self.start_sftp_symlink_job(link_path, target_path, state.parent_path, window, cx);
     }
@@ -74,7 +74,7 @@ impl NyaTermApp {
             "escape" => self.close_transfer_new_symlink_dialog(cx),
             "enter" => self.submit_transfer_new_symlink(window, cx),
             "tab" => {
-                if let Some(state) = self.transfer_new_symlink.as_mut() {
+                if let Some(state) = self.transfer.file_ops.new_symlink.as_mut() {
                     state.focused_field = match state.focused_field {
                         TransferSymlinkField::Name => TransferSymlinkField::Target,
                         TransferSymlinkField::Target => TransferSymlinkField::Name,
@@ -83,7 +83,7 @@ impl NyaTermApp {
                 }
             }
             "backspace" => {
-                if let Some(state) = self.transfer_new_symlink.as_mut() {
+                if let Some(state) = self.transfer.file_ops.new_symlink.as_mut() {
                     match state.focused_field {
                         TransferSymlinkField::Name => {
                             state.name.pop();
@@ -96,7 +96,7 @@ impl NyaTermApp {
                 }
             }
             _ => {
-                let Some(state) = self.transfer_new_symlink.as_mut() else {
+                let Some(state) = self.transfer.file_ops.new_symlink.as_mut() else {
                     return;
                 };
                 if let Some(input) = keystroke
@@ -136,7 +136,7 @@ impl NyaTermApp {
             return;
         };
         let id = self.next_transfer_id("sftp-symlink");
-        self.transfer_jobs.push(TransferJobState {
+        self.transfer.queue.jobs.push(TransferJobState {
             id: id.clone(),
             session_id: self.active_session_id.clone(),
             kind: TransferJobKind::Symlink {
@@ -152,7 +152,7 @@ impl NyaTermApp {
             control: None,
         });
         self.terminal_status = format!("SFTP symlink started: {link_path}");
-        let transfer_tx = self.transfer_tx.clone();
+        let transfer_tx = self.transfer.queue.tx.clone();
         std::thread::spawn(move || {
             let service = SftpService::new(config);
             let result = service
@@ -179,7 +179,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.ensure_panel_open(crate::models::NavItem::Transfers);
-        let Some(old_path) = self.transfer_selected_remote_path.clone() else {
+        let Some(old_path) = self.transfer.browser.selected_remote_path.clone() else {
             self.terminal_status = "select an SFTP list entry before renaming".to_string();
             cx.notify();
             return;
@@ -187,7 +187,7 @@ impl NyaTermApp {
         if !self.open_transfer_rename_for_path(old_path, cx) {
             return;
         }
-        window.focus(&self.transfer_rename_focus);
+        window.focus(&self.transfer.file_ops.rename_focus);
         cx.notify();
     }
 
@@ -197,7 +197,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if self.open_transfer_rename_for_path(old_path, cx) {
-            self.transfer_rename_focus_pending = true;
+            self.transfer.file_ops.rename_focus_pending = true;
             cx.notify();
         }
     }
@@ -213,7 +213,7 @@ impl NyaTermApp {
             cx.notify();
             return false;
         }
-        self.transfer_rename = Some(TransferRenameState {
+        self.transfer.file_ops.rename = Some(TransferRenameState {
             old_path,
             value: initial_name.clone(),
             initial_name,
@@ -223,8 +223,8 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn close_transfer_rename_dialog(&mut self, cx: &mut Context<Self>) {
-        self.transfer_rename = None;
-        self.transfer_rename_focus_pending = false;
+        self.transfer.file_ops.rename = None;
+        self.transfer.file_ops.rename_focus_pending = false;
         self.terminal_status = "SFTP rename cancelled".to_string();
         cx.notify();
     }
@@ -234,7 +234,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.transfer_rename.clone() else {
+        let Some(state) = self.transfer.file_ops.rename.clone() else {
             self.terminal_status = "no SFTP rename is active".to_string();
             cx.notify();
             return;
@@ -252,13 +252,13 @@ impl NyaTermApp {
             return;
         }
         if new_name == state.initial_name {
-            self.transfer_rename = None;
+            self.transfer.file_ops.rename = None;
             self.terminal_status = "SFTP rename unchanged".to_string();
             cx.notify();
             return;
         }
         let new_path = remote_sibling_path(&state.old_path, &new_name);
-        self.transfer_rename = None;
+        self.transfer.file_ops.rename = None;
         self.start_sftp_rename_job(state.old_path, new_path, window, cx);
     }
 
@@ -278,13 +278,13 @@ impl NyaTermApp {
             "escape" => self.close_transfer_rename_dialog(cx),
             "enter" => self.submit_transfer_rename(window, cx),
             "backspace" => {
-                if let Some(state) = self.transfer_rename.as_mut() {
+                if let Some(state) = self.transfer.file_ops.rename.as_mut() {
                     state.value.pop();
                     cx.notify();
                 }
             }
             _ => {
-                let Some(state) = self.transfer_rename.as_mut() else {
+                let Some(state) = self.transfer.file_ops.rename.as_mut() else {
                     return;
                 };
                 if state.value.chars().count() >= 255 {
@@ -318,7 +318,7 @@ impl NyaTermApp {
         };
         let parent_path = remote_parent_path(&old_path);
         let id = self.next_transfer_id("sftp-rename");
-        self.transfer_jobs.push(TransferJobState {
+        self.transfer.queue.jobs.push(TransferJobState {
             id: id.clone(),
             session_id: self.active_session_id.clone(),
             kind: TransferJobKind::Rename {
@@ -334,7 +334,7 @@ impl NyaTermApp {
             control: None,
         });
         self.terminal_status = format!("SFTP rename started: {old_path} -> {new_path}");
-        let transfer_tx = self.transfer_tx.clone();
+        let transfer_tx = self.transfer.queue.tx.clone();
         std::thread::spawn(move || {
             let service = SftpService::new(config);
             let result = service

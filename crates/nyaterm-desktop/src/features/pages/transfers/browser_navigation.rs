@@ -11,35 +11,37 @@ impl NyaTermApp {
             return;
         }
 
-        let current_path = normalized_transfer_browser_path(&self.transfer_browser_path);
+        let current_path = normalized_transfer_browser_path(&self.transfer.browser.path);
         if current_path.is_empty() {
             return;
         }
 
-        let mut history = self.transfer_browser_history.clone();
+        let mut history = self.transfer.browser.history.clone();
         if history.is_empty() {
             history.push_back(current_path.clone());
         }
         let history_index = self
-            .transfer_browser_history_index
+            .transfer
+            .browser
+            .history_index
             .min(history.len().saturating_sub(1));
 
-        let home_dir = normalized_transfer_browser_path(&self.transfer_browser_home_dir);
+        let home_dir = normalized_transfer_browser_path(&self.transfer.browser.home_dir);
         let home_dir = if home_dir == "." {
             current_path.clone()
         } else {
             home_dir
         };
 
-        self.transfer_browser_session_cache.insert(
+        self.transfer.browser.session_cache.insert(
             session_id.to_string(),
             TransferBrowserSessionCacheState {
-                entries: self.transfer_browser_entries.clone(),
+                entries: self.transfer.browser.entries.clone(),
                 current_path,
                 home_dir,
                 history,
                 history_index,
-                visited_history: self.transfer_browser_visited_history.clone(),
+                visited_history: self.transfer.browser.visited_history.clone(),
             },
         );
     }
@@ -48,62 +50,62 @@ impl NyaTermApp {
         &mut self,
         session_id: &str,
     ) -> bool {
-        let Some(cache) = self.transfer_browser_session_cache.get(session_id).cloned() else {
+        let Some(cache) = self.transfer.browser.session_cache.get(session_id).cloned() else {
             return false;
         };
-        self.transfer_remote_path = cache.current_path.clone();
-        self.transfer_browser_path = cache.current_path;
-        self.transfer_browser_home_dir = cache.home_dir;
-        self.transfer_browser_home_dir_pending = false;
-        self.transfer_browser_path_draft.clear();
-        self.transfer_browser_path_editing = false;
-        self.transfer_browser_entries = cache.entries;
-        self.transfer_browser_loading = false;
-        self.transfer_browser_error = None;
-        self.transfer_browser_status = format!(
+        self.transfer.paths.remote = cache.current_path.clone();
+        self.transfer.browser.path = cache.current_path;
+        self.transfer.browser.home_dir = cache.home_dir;
+        self.transfer.browser.home_dir_pending = false;
+        self.transfer.browser.path_draft.clear();
+        self.transfer.browser.path_editing = false;
+        self.transfer.browser.entries = cache.entries;
+        self.transfer.browser.loading = false;
+        self.transfer.browser.error = None;
+        self.transfer.browser.status = format!(
             "restored cached directory · {} item(s)",
-            self.transfer_browser_entries.len()
+            self.transfer.browser.entries.len()
         );
-        self.transfer_browser_history = cache.history;
-        self.transfer_browser_history_index = cache
+        self.transfer.browser.history = cache.history;
+        self.transfer.browser.history_index = cache
             .history_index
-            .min(self.transfer_browser_history.len().saturating_sub(1));
-        self.transfer_browser_visited_history = cache.visited_history;
-        self.transfer_selected_remote_path = None;
-        self.transfer_selected_remote_paths.clear();
-        self.transfer_browser_drag_selection = None;
+            .min(self.transfer.browser.history.len().saturating_sub(1));
+        self.transfer.browser.visited_history = cache.visited_history;
+        self.transfer.browser.selected_remote_path = None;
+        self.transfer.browser.selected_remote_paths.clear();
+        self.transfer.browser.drag_selection = None;
         self.cancel_transfer_browser_pending_rename_without_notify();
-        self.transfer_browser_context_menu = None;
-        self.transfer_browser_favorites_menu = None;
-        self.transfer_browser_upload_menu = None;
+        self.transfer.browser.context_menu = None;
+        self.transfer.browser.favorites_menu = None;
+        self.transfer.browser.upload_menu = None;
         true
     }
 
     pub(in crate::features) fn reset_transfer_browser_for_active_session(&mut self) {
-        self.transfer_remote_path = ".".to_string();
-        self.transfer_browser_path = ".".to_string();
-        self.transfer_browser_home_dir.clear();
-        self.transfer_browser_home_dir_pending = false;
-        self.transfer_browser_path_draft.clear();
-        self.transfer_browser_path_editing = false;
-        self.transfer_browser_entries.clear();
-        self.transfer_browser_loading = false;
-        self.transfer_browser_error = None;
-        self.transfer_browser_status = if self.active_ssh_config.is_some() {
+        self.transfer.paths.remote = ".".to_string();
+        self.transfer.browser.path = ".".to_string();
+        self.transfer.browser.home_dir.clear();
+        self.transfer.browser.home_dir_pending = false;
+        self.transfer.browser.path_draft.clear();
+        self.transfer.browser.path_editing = false;
+        self.transfer.browser.entries.clear();
+        self.transfer.browser.loading = false;
+        self.transfer.browser.error = None;
+        self.transfer.browser.status = if self.active_ssh_config.is_some() {
             "List a remote directory to browse files.".to_string()
         } else {
             "Start an SSH session to browse remote files.".to_string()
         };
-        self.transfer_browser_history.clear();
-        self.transfer_browser_history_index = 0;
-        self.transfer_browser_visited_history.clear();
-        self.transfer_selected_remote_path = None;
-        self.transfer_selected_remote_paths.clear();
-        self.transfer_browser_drag_selection = None;
+        self.transfer.browser.history.clear();
+        self.transfer.browser.history_index = 0;
+        self.transfer.browser.visited_history.clear();
+        self.transfer.browser.selected_remote_path = None;
+        self.transfer.browser.selected_remote_paths.clear();
+        self.transfer.browser.drag_selection = None;
         self.cancel_transfer_browser_pending_rename_without_notify();
-        self.transfer_browser_context_menu = None;
-        self.transfer_browser_favorites_menu = None;
-        self.transfer_browser_upload_menu = None;
+        self.transfer.browser.context_menu = None;
+        self.transfer.browser.favorites_menu = None;
+        self.transfer.browser.upload_menu = None;
     }
 
     pub(in crate::features::pages::transfers) fn open_transfer_browser_directory(
@@ -122,20 +124,20 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.transfer_browser_list_offset = 0;
-        self.transfer_remote_path = path.clone();
-        self.transfer_browser_path = path.clone();
-        self.transfer_browser_path_draft.clear();
-        self.transfer_browser_path_editing = false;
-        self.transfer_selected_remote_path = None;
+        self.transfer.browser.list_offset = 0;
+        self.transfer.paths.remote = path.clone();
+        self.transfer.browser.path = path.clone();
+        self.transfer.browser.path_draft.clear();
+        self.transfer.browser.path_editing = false;
+        self.transfer.browser.selected_remote_path = None;
         if record_history {
             self.record_transfer_browser_history(path);
         } else {
             self.record_transfer_browser_visited_history(path);
         }
-        self.transfer_browser_status = "Loading remote directory...".to_string();
-        self.transfer_browser_loading = true;
-        self.transfer_browser_error = None;
+        self.transfer.browser.status = "Loading remote directory...".to_string();
+        self.transfer.browser.loading = true;
+        self.transfer.browser.error = None;
         self.start_sftp_list_job(window, cx);
     }
 
@@ -154,15 +156,15 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.transfer_browser_history.is_empty() {
-            self.transfer_browser_status = "directory history is empty".to_string();
+        if self.transfer.browser.history.is_empty() {
+            self.transfer.browser.status = "directory history is empty".to_string();
             cx.notify();
             return;
         }
-        let current = self.transfer_browser_history_index as isize;
+        let current = self.transfer.browser.history_index as isize;
         let next = current + delta;
-        if next < 0 || next as usize >= self.transfer_browser_history.len() {
-            self.transfer_browser_status = if delta > 0 {
+        if next < 0 || next as usize >= self.transfer.browser.history.len() {
+            self.transfer.browser.status = if delta > 0 {
                 "no older directory history".to_string()
             } else {
                 "no newer directory history".to_string()
@@ -170,13 +172,15 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        self.transfer_browser_history_index = next as usize;
+        self.transfer.browser.history_index = next as usize;
         let Some(path) = self
-            .transfer_browser_history
-            .get(self.transfer_browser_history_index)
+            .transfer
+            .browser
+            .history
+            .get(self.transfer.browser.history_index)
             .cloned()
         else {
-            self.transfer_browser_status = "directory history entry is unavailable".to_string();
+            self.transfer.browser.status = "directory history entry is unavailable".to_string();
             cx.notify();
             return;
         };
@@ -191,11 +195,13 @@ impl NyaTermApp {
         if path.is_empty() {
             return;
         }
-        self.transfer_browser_history
+        self.transfer
+            .browser
+            .history
             .retain(|existing| existing != &path);
-        self.transfer_browser_history.push_front(path.clone());
-        self.transfer_browser_history.truncate(12);
-        self.transfer_browser_history_index = 0;
+        self.transfer.browser.history.push_front(path.clone());
+        self.transfer.browser.history.truncate(12);
+        self.transfer.browser.history_index = 0;
         self.record_transfer_browser_visited_history(path);
     }
 
@@ -207,17 +213,19 @@ impl NyaTermApp {
         if path.is_empty() {
             return;
         }
-        self.transfer_browser_visited_history
+        self.transfer
+            .browser
+            .visited_history
             .retain(|existing| existing != &path);
-        self.transfer_browser_visited_history.push_front(path);
-        self.transfer_browser_visited_history.truncate(30);
+        self.transfer.browser.visited_history.push_front(path);
+        self.transfer.browser.visited_history.truncate(30);
     }
 
     pub(in crate::features::pages::transfers) fn add_current_transfer_browser_favorite(
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        let path = normalized_transfer_browser_path(&self.transfer_browser_path);
+        let path = normalized_transfer_browser_path(&self.transfer.browser.path);
         self.add_transfer_browser_favorite_path(path, cx);
     }
 
@@ -228,20 +236,24 @@ impl NyaTermApp {
     ) {
         let path = normalized_transfer_browser_path(&path);
         if path.is_empty() {
-            self.transfer_browser_status =
+            self.transfer.browser.status =
                 "open or select a remote directory before adding a favorite".to_string();
             cx.notify();
             return;
         }
         let existed = self
-            .transfer_browser_favorites
+            .transfer
+            .browser
+            .favorites
             .iter()
             .any(|existing| existing == &path);
-        self.transfer_browser_favorites
+        self.transfer
+            .browser
+            .favorites
             .retain(|existing| existing != &path);
-        self.transfer_browser_favorites.push_front(path.clone());
-        self.transfer_browser_favorites.truncate(12);
-        self.transfer_browser_status = if existed {
+        self.transfer.browser.favorites.push_front(path.clone());
+        self.transfer.browser.favorites.truncate(12);
+        self.transfer.browser.status = if existed {
             format!("favorite directory moved to front: {path}")
         } else {
             format!("favorite directory added: {path}")
@@ -254,7 +266,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        let path = normalized_transfer_browser_path(&self.transfer_browser_path);
+        let path = normalized_transfer_browser_path(&self.transfer.browser.path);
         self.remove_transfer_browser_favorite_path(path, cx);
     }
 
@@ -265,19 +277,21 @@ impl NyaTermApp {
     ) {
         let path = normalized_transfer_browser_path(&path);
         if path.is_empty() {
-            self.transfer_browser_status = "favorite directory path is empty".to_string();
+            self.transfer.browser.status = "favorite directory path is empty".to_string();
             cx.notify();
             return;
         }
-        let previous_len = self.transfer_browser_favorites.len();
-        self.transfer_browser_favorites
+        let previous_len = self.transfer.browser.favorites.len();
+        self.transfer
+            .browser
+            .favorites
             .retain(|existing| existing != &path);
-        self.transfer_browser_status = if self.transfer_browser_favorites.len() < previous_len {
+        self.transfer.browser.status = if self.transfer.browser.favorites.len() < previous_len {
             format!("favorite directory removed: {path}")
         } else {
             format!("favorite directory not found: {path}")
         };
-        if self.transfer_browser_favorites.len() < previous_len {
+        if self.transfer.browser.favorites.len() < previous_len {
             self.persist_transfer_browser_favorites(cx);
         }
         cx.notify();
@@ -287,9 +301,11 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        let path = normalized_transfer_browser_path(&self.transfer_browser_path);
+        let path = normalized_transfer_browser_path(&self.transfer.browser.path);
         if self
-            .transfer_browser_favorites
+            .transfer
+            .browser
+            .favorites
             .iter()
             .any(|entry| entry == &path)
         {
@@ -305,7 +321,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(connection_id) = self.active_transfer_browser_connection_id() else {
-            self.transfer_browser_status = "Auto CWD requires a saved SSH connection".to_string();
+            self.transfer.browser.status = "Auto CWD requires a saved SSH connection".to_string();
             cx.notify();
             return;
         };
@@ -318,8 +334,8 @@ impl NyaTermApp {
             self.settings
                 .ui_file_explorer_auto_sync_cwd_connection_ids
                 .retain(|id| id != &connection_id);
-            self.transfer_browser_status = "Auto CWD disabled for this connection".to_string();
-            self.transfer_auto_sync_cwd_last_at = None;
+            self.transfer.browser.status = "Auto CWD disabled for this connection".to_string();
+            self.transfer.browser.auto_sync_cwd_last_at = None;
         } else {
             self.settings
                 .ui_file_explorer_auto_sync_cwd_connection_ids
@@ -327,8 +343,8 @@ impl NyaTermApp {
             self.settings
                 .ui_file_explorer_auto_sync_cwd_connection_ids
                 .push(connection_id);
-            self.transfer_browser_status = "Auto CWD enabled for this connection".to_string();
-            self.transfer_auto_sync_cwd_last_at = None;
+            self.transfer.browser.status = "Auto CWD enabled for this connection".to_string();
+            self.transfer.browser.auto_sync_cwd_last_at = None;
         }
         self.persist_transfer_browser_ui_settings();
         if !enabled {
@@ -350,10 +366,10 @@ impl NyaTermApp {
 
     pub(in crate::features) fn sync_transfer_browser_favorites_for_active_session(&mut self) {
         let Some(connection_id) = self.active_transfer_browser_connection_id() else {
-            self.transfer_browser_favorites.clear();
+            self.transfer.browser.favorites.clear();
             return;
         };
-        self.transfer_browser_favorites = self
+        self.transfer.browser.favorites = self
             .settings
             .ui_file_explorer_favorite_dirs_by_connection_id
             .get(&connection_id)
@@ -368,7 +384,7 @@ impl NyaTermApp {
                 }
                 paths
             });
-        self.transfer_browser_favorites.truncate(12);
+        self.transfer.browser.favorites.truncate(12);
     }
 
     pub(in crate::features::pages::transfers) fn persist_transfer_browser_favorites(
@@ -376,12 +392,14 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(connection_id) = self.active_transfer_browser_connection_id() else {
-            self.transfer_browser_status =
+            self.transfer.browser.status =
                 "favorite kept for this temporary session only".to_string();
             return;
         };
         let favorites = self
-            .transfer_browser_favorites
+            .transfer
+            .browser
+            .favorites
             .iter()
             .cloned()
             .collect::<Vec<_>>();
@@ -413,7 +431,7 @@ impl NyaTermApp {
             Err(error) => {
                 self.store_status.message = format!("file explorer favorites save failed: {error}");
                 self.store_status.ready = false;
-                self.transfer_browser_status = self.store_status.message.clone();
+                self.transfer.browser.status = self.store_status.message.clone();
             }
         }
     }
@@ -434,26 +452,26 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let current_path = normalized_transfer_browser_path(&self.transfer_browser_path);
+        let current_path = normalized_transfer_browser_path(&self.transfer.browser.path);
         if current_path == "/" || current_path == "." {
-            self.transfer_browser_status = "already at the top remote directory".to_string();
+            self.transfer.browser.status = "already at the top remote directory".to_string();
             cx.notify();
             return;
         }
         let parent = remote_parent_path(&current_path);
         if parent == current_path {
-            self.transfer_browser_status = "remote parent directory is unavailable".to_string();
+            self.transfer.browser.status = "remote parent directory is unavailable".to_string();
             cx.notify();
             return;
         }
-        self.transfer_remote_path = parent.clone();
-        self.transfer_browser_path = parent.clone();
-        self.transfer_selected_remote_path = None;
-        self.transfer_selected_remote_paths.clear();
+        self.transfer.paths.remote = parent.clone();
+        self.transfer.browser.path = parent.clone();
+        self.transfer.browser.selected_remote_path = None;
+        self.transfer.browser.selected_remote_paths.clear();
         self.record_transfer_browser_history(parent);
-        self.transfer_browser_status = "Loading parent directory...".to_string();
-        self.transfer_browser_loading = true;
-        self.transfer_browser_error = None;
+        self.transfer.browser.status = "Loading parent directory...".to_string();
+        self.transfer.browser.loading = true;
+        self.transfer.browser.error = None;
         self.start_sftp_list_job_with_select_after(Some(current_path), window, cx);
     }
 
@@ -462,10 +480,10 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let path = if self.transfer_browser_path.trim().is_empty() {
+        let path = if self.transfer.browser.path.trim().is_empty() {
             self.normalized_transfer_remote_path()
         } else {
-            self.transfer_browser_path.clone()
+            self.transfer.browser.path.clone()
         };
         self.open_transfer_browser_directory(path, window, cx);
     }

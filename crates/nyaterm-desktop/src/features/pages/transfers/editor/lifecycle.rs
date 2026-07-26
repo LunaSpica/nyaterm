@@ -2,7 +2,9 @@ use super::*;
 
 impl NyaTermApp {
     pub(in crate::features) fn active_transfer_editor_tab(&self) -> Option<&TransferEditorState> {
-        self.transfer_editor
+        self.transfer
+            .editor
+            .workspace
             .as_ref()
             .and_then(TransferEditorWorkspaceState::active_tab)
     }
@@ -10,7 +12,9 @@ impl NyaTermApp {
     pub(in crate::features) fn active_transfer_editor_tab_mut(
         &mut self,
     ) -> Option<&mut TransferEditorState> {
-        self.transfer_editor
+        self.transfer
+            .editor
+            .workspace
             .as_mut()
             .and_then(TransferEditorWorkspaceState::active_tab_mut)
     }
@@ -34,10 +38,10 @@ impl NyaTermApp {
         tab_id: &str,
         cx: &mut Context<Self>,
     ) {
-        let Some(workspace) = self.transfer_editor.as_mut() else {
+        let Some(workspace) = self.transfer.editor.workspace.as_mut() else {
             return;
         };
-        self.transfer_editor_tabs_menu_open = false;
+        self.transfer.editor.tabs_menu_open = false;
         if workspace.tabs.iter().any(|tab| tab.id == tab_id) && workspace.active_tab_id != tab_id {
             workspace.active_tab_id = tab_id.to_string();
             workspace.close_confirm = false;
@@ -52,10 +56,10 @@ impl NyaTermApp {
         tab_id: &str,
         cx: &mut Context<Self>,
     ) {
-        let Some(workspace) = self.transfer_editor.as_mut() else {
+        let Some(workspace) = self.transfer.editor.workspace.as_mut() else {
             return;
         };
-        self.transfer_editor_tabs_menu_open = false;
+        self.transfer.editor.tabs_menu_open = false;
         let Some(tab) = workspace.tabs.iter().find(|tab| tab.id == tab_id) else {
             return;
         };
@@ -70,7 +74,7 @@ impl NyaTermApp {
         }
         workspace.remove_tab(tab_id);
         if workspace.tabs.is_empty() {
-            self.transfer_editor = None;
+            self.transfer.editor.workspace = None;
             self.remote_editor_window_open_pending = false;
         }
         self.terminal_status = "remote editor tab closed".to_string();
@@ -78,7 +82,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn close_transfer_editor(&mut self, cx: &mut Context<Self>) {
-        let Some(workspace) = self.transfer_editor.as_mut() else {
+        let Some(workspace) = self.transfer.editor.workspace.as_mut() else {
             return;
         };
         if let Some(dirty_tab_id) = workspace
@@ -95,8 +99,8 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        self.transfer_editor = None;
-        self.transfer_editor_tabs_menu_open = false;
+        self.transfer.editor.workspace = None;
+        self.transfer.editor.tabs_menu_open = false;
         self.remote_editor_window_open_pending = false;
         self.terminal_status = "remote editor closed".to_string();
         cx.notify();
@@ -104,23 +108,25 @@ impl NyaTermApp {
 
     pub(in crate::features) fn discard_transfer_editor(&mut self, cx: &mut Context<Self>) {
         let pending_tab_id = self
-            .transfer_editor
+            .transfer
+            .editor
+            .workspace
             .as_ref()
             .and_then(|workspace| workspace.pending_close_tab_id.clone());
         if let Some(tab_id) = pending_tab_id {
-            if let Some(workspace) = self.transfer_editor.as_mut() {
+            if let Some(workspace) = self.transfer.editor.workspace.as_mut() {
                 workspace.remove_tab(&tab_id);
                 workspace.close_confirm = false;
                 workspace.pending_close_tab_id = None;
                 workspace.close_after_save_all = false;
                 if workspace.tabs.is_empty() {
-                    self.transfer_editor = None;
+                    self.transfer.editor.workspace = None;
                     self.remote_editor_window_open_pending = false;
                 }
             }
             self.terminal_status = "remote editor tab discarded".to_string();
         } else {
-            self.transfer_editor = None;
+            self.transfer.editor.workspace = None;
             self.remote_editor_window_open_pending = false;
             self.terminal_status = "remote editor discarded".to_string();
         }
@@ -131,7 +137,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        let Some(workspace) = self.transfer_editor.as_mut() else {
+        let Some(workspace) = self.transfer.editor.workspace.as_mut() else {
             cx.notify();
             return;
         };
@@ -150,7 +156,9 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(state) = self
-            .transfer_editor
+            .transfer
+            .editor
+            .workspace
             .as_mut()
             .and_then(TransferEditorWorkspaceState::active_tab_mut)
         else {
@@ -171,7 +179,9 @@ impl NyaTermApp {
 
     pub(in crate::features) fn cancel_transfer_editor_conflict(&mut self, cx: &mut Context<Self>) {
         let Some(state) = self
-            .transfer_editor
+            .transfer
+            .editor
+            .workspace
             .as_mut()
             .and_then(TransferEditorWorkspaceState::active_tab_mut)
         else {
@@ -193,7 +203,9 @@ impl NyaTermApp {
         let Some(config) = self.transfer_editor_ssh_config(session_id.as_deref()) else {
             let error = self.tr("fileEditor.sourceSessionUnavailable").to_string();
             if let Some(state) = self
-                .transfer_editor
+                .transfer
+                .editor
+                .workspace
                 .as_mut()
                 .and_then(|workspace| workspace.tab_mut(session_id.as_deref(), &remote_path))
             {
@@ -205,7 +217,7 @@ impl NyaTermApp {
             return;
         };
         let id = self.next_transfer_id("sftp-open-text");
-        self.transfer_jobs.push(TransferJobState {
+        self.transfer.queue.jobs.push(TransferJobState {
             id: id.clone(),
             session_id,
             kind: TransferJobKind::LoadEditor {
@@ -218,7 +230,7 @@ impl NyaTermApp {
             progress: None,
             control: None,
         });
-        let transfer_tx = self.transfer_tx.clone();
+        let transfer_tx = self.transfer.queue.tx.clone();
         std::thread::spawn(move || {
             let result = SftpService::new(config)
                 .read_text_file(&remote_path, NATIVE_EDITOR_MAX_BYTES)
@@ -239,7 +251,9 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let tab_id = self
-            .transfer_editor
+            .transfer
+            .editor
+            .workspace
             .as_ref()
             .and_then(TransferEditorWorkspaceState::active_tab)
             .map(|tab| tab.id.clone());
@@ -257,7 +271,9 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let tab_ids = self
-            .transfer_editor
+            .transfer
+            .editor
+            .workspace
             .as_ref()
             .map(|workspace| {
                 workspace
@@ -281,7 +297,9 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(snapshot) = self
-            .transfer_editor
+            .transfer
+            .editor
+            .workspace
             .as_ref()
             .and_then(|workspace| workspace.tabs.iter().find(|tab| tab.id == tab_id).cloned())
         else {
@@ -292,18 +310,30 @@ impl NyaTermApp {
         }
         let Some(config) = self.transfer_editor_ssh_config(snapshot.session_id.as_deref()) else {
             let error = self.tr("fileEditor.sourceSessionUnavailable").to_string();
-            if let Some(tab) = self.transfer_editor.as_mut().and_then(|workspace| {
-                workspace.tab_mut(snapshot.session_id.as_deref(), &snapshot.remote_path)
-            }) {
+            if let Some(tab) = self
+                .transfer
+                .editor
+                .workspace
+                .as_mut()
+                .and_then(|workspace| {
+                    workspace.tab_mut(snapshot.session_id.as_deref(), &snapshot.remote_path)
+                })
+            {
                 tab.error = Some(error.clone());
             }
             self.terminal_status = error;
             cx.notify();
             return;
         };
-        if let Some(tab) = self.transfer_editor.as_mut().and_then(|workspace| {
-            workspace.tab_mut(snapshot.session_id.as_deref(), &snapshot.remote_path)
-        }) {
+        if let Some(tab) = self
+            .transfer
+            .editor
+            .workspace
+            .as_mut()
+            .and_then(|workspace| {
+                workspace.tab_mut(snapshot.session_id.as_deref(), &snapshot.remote_path)
+            })
+        {
             tab.saving = true;
             tab.error = None;
             tab.conflict = false;
@@ -328,12 +358,16 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let pending_tab_id = self
-            .transfer_editor
+            .transfer
+            .editor
+            .workspace
             .as_ref()
             .and_then(|workspace| workspace.pending_close_tab_id.clone());
         if let Some(tab_id) = pending_tab_id {
             if let Some(tab) = self
-                .transfer_editor
+                .transfer
+                .editor
+                .workspace
                 .as_mut()
                 .and_then(|workspace| workspace.tabs.iter_mut().find(|tab| tab.id == tab_id))
             {
@@ -349,7 +383,7 @@ impl NyaTermApp {
             return;
         }
 
-        let Some(workspace) = self.transfer_editor.as_mut() else {
+        let Some(workspace) = self.transfer.editor.workspace.as_mut() else {
             self.terminal_status = "no remote editor is active".to_string();
             cx.notify();
             return;
@@ -373,7 +407,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let id = self.next_transfer_id("sftp-save-text");
-        self.transfer_jobs.push(TransferJobState {
+        self.transfer.queue.jobs.push(TransferJobState {
             id: id.clone(),
             session_id,
             kind: TransferJobKind::SaveEditor {
@@ -386,7 +420,7 @@ impl NyaTermApp {
             progress: None,
             control: None,
         });
-        let transfer_tx = self.transfer_tx.clone();
+        let transfer_tx = self.transfer.queue.tx.clone();
         std::thread::spawn(move || {
             let result = SftpService::new(config)
                 .write_text_file(

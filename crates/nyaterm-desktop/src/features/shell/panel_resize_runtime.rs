@@ -92,7 +92,7 @@ impl NyaTermApp {
     pub(in crate::features) fn apply_ui_layout_from_settings(&mut self) {
         self.left_panel_width = self.settings.ui_left_panel_width as f32;
         self.right_panel_width = self.settings.ui_right_panel_width as f32;
-        self.transfer_panel_height = self.settings.ui_transfer_height as f32;
+        self.transfer.panel.height = self.settings.ui_transfer_height as f32;
         self.quick_cmd_height = self.settings.ui_quick_cmd_height as f32;
         self.serial_send_height = self.settings.ui_serial_send_height as f32;
         self.apply_activity_layout_from_settings();
@@ -131,7 +131,7 @@ impl NyaTermApp {
         self.settings.ui_right_panel_width =
             self.right_panel_width.round().clamp(200., 720.) as u32;
         self.settings.ui_transfer_height =
-            self.transfer_panel_height.round().clamp(60., 600.) as u32;
+            self.transfer.panel.height.round().clamp(60., 600.) as u32;
         self.settings.ui_quick_cmd_height =
             self.quick_cmd_height
                 .round()
@@ -209,9 +209,9 @@ impl NyaTermApp {
         event: &MouseDownEvent,
         cx: &mut Context<Self>,
     ) {
-        self.transfer_height_resize = Some(TransferHeightResizeState {
+        self.transfer.panel.height_resize = Some(TransferHeightResizeState {
             start_y: event.position.y,
-            start_height: px(self.transfer_panel_height),
+            start_height: px(self.transfer.panel.height),
         });
         self.terminal_status = "resizing transfer queue".to_string();
         cx.notify();
@@ -222,7 +222,7 @@ impl NyaTermApp {
         event: &MouseMoveEvent,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.transfer_height_resize else {
+        let Some(state) = self.transfer.panel.height_resize else {
             return;
         };
         // Handle sits above the queue: drag down grows height (Tauri subtracts delta from height
@@ -235,10 +235,10 @@ impl NyaTermApp {
         // Vertical ResizeHandle delta = currentY - startY (positive down). Dragging handle down
         // shrinks FE / grows transfer? Handle is between FE and transfer; drag down => FE larger,
         // transfer smaller => height decreases with positive delta. So: start - delta.
-        self.transfer_panel_height = (start - delta).clamp(60., 600.);
+        self.transfer.panel.height = (start - delta).clamp(60., 600.);
         self.terminal_status = format!(
             "transfer queue: {:.0}px",
-            self.transfer_panel_height.round()
+            self.transfer.panel.height.round()
         );
         cx.notify();
     }
@@ -248,10 +248,10 @@ impl NyaTermApp {
         _event: &MouseUpEvent,
         cx: &mut Context<Self>,
     ) {
-        if self.transfer_height_resize.take().is_some() {
+        if self.transfer.panel.height_resize.take().is_some() {
             self.persist_ui_layout();
             self.terminal_status =
-                format!("transfer queue {:.0}px", self.transfer_panel_height.round());
+                format!("transfer queue {:.0}px", self.transfer.panel.height.round());
             cx.notify();
         }
     }

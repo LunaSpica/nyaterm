@@ -192,10 +192,10 @@ impl NyaTermApp {
             remote_dir
         };
 
-        let policy = self.transfer_duplicate_policy;
+        let policy = self.transfer.paths.duplicate_policy;
         let resolver = self.duplicate_prompts.clone();
         let id = self.next_transfer_id("zmodem-probe");
-        self.transfer_jobs.push(TransferJobState {
+        self.transfer.queue.jobs.push(TransferJobState {
             id: id.clone(),
             session_id: Some(session_id.clone()),
             kind: TransferJobKind::ZmodemConflictProbe {
@@ -216,7 +216,7 @@ impl NyaTermApp {
             "ZMODEM preparing upload ({} file(s)) — probing remote conflicts",
             files.len()
         );
-        let transfer_tx = self.transfer_tx.clone();
+        let transfer_tx = self.transfer.queue.tx.clone();
         let probe_session_id = session_id.clone();
         std::thread::spawn(move || {
             let result =
@@ -615,7 +615,7 @@ impl NyaTermApp {
             item_count_completed: None,
             item_count_total: None,
         };
-        if let Some(job) = self.transfer_jobs.iter_mut().find(|job| {
+        if let Some(job) = self.transfer.queue.jobs.iter_mut().find(|job| {
             matches!(
                 &job.kind,
                 TransferJobKind::ZmodemUpload {
@@ -669,7 +669,7 @@ impl NyaTermApp {
                     format!("Transferring {file_name}")
                 }
             });
-        self.transfer_jobs.push(TransferJobState {
+        self.transfer.queue.jobs.push(TransferJobState {
             id,
             session_id: Some(session_id.to_string()),
             kind,
@@ -690,7 +690,7 @@ impl NyaTermApp {
         fail_reason: Option<&str>,
         _cx: &mut Context<Self>,
     ) {
-        for job in &mut self.transfer_jobs {
+        for job in &mut self.transfer.queue.jobs {
             let is_zmodem = matches!(
                 &job.kind,
                 TransferJobKind::ZmodemUpload {

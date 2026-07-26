@@ -28,7 +28,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        let duplicate_policy = self.transfer_duplicate_policy;
+        let duplicate_policy = self.transfer.paths.duplicate_policy;
         let duplicate_resolver = (duplicate_policy == SftpDuplicatePolicy::Ask)
             .then(|| self.duplicate_prompts.clone() as Arc<dyn SftpDuplicateResolver>);
         let transfer_options = self.sftp_transfer_options();
@@ -57,7 +57,7 @@ impl NyaTermApp {
     ) {
         let id = self.next_transfer_id("sftp-download");
         let control = SftpTransferControl::new();
-        self.transfer_jobs.push(TransferJobState {
+        self.transfer.queue.jobs.push(TransferJobState {
             id: id.clone(),
             session_id,
             kind: TransferJobKind::Download {
@@ -72,8 +72,8 @@ impl NyaTermApp {
             control: Some(control.clone()),
         });
         self.terminal_status = format!("SFTP download started for {remote_path}");
-        let progress_tx = self.transfer_tx.clone();
-        let finished_tx = self.transfer_tx.clone();
+        let progress_tx = self.transfer.queue.tx.clone();
+        let finished_tx = self.transfer.queue.tx.clone();
         std::thread::spawn(move || {
             let mut progress_sender = TransferProgressEventSender::new(id.clone(), progress_tx);
             let result = SftpService::new(config)
@@ -120,7 +120,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        let duplicate_policy = self.transfer_duplicate_policy;
+        let duplicate_policy = self.transfer.paths.duplicate_policy;
         let duplicate_resolver = (duplicate_policy == SftpDuplicatePolicy::Ask)
             .then(|| self.duplicate_prompts.clone() as Arc<dyn SftpDuplicateResolver>);
         let transfer_options = self.sftp_transfer_options();
@@ -150,7 +150,7 @@ impl NyaTermApp {
     ) {
         let id = self.next_transfer_id("sftp-upload");
         let control = SftpTransferControl::new();
-        self.transfer_jobs.push(TransferJobState {
+        self.transfer.queue.jobs.push(TransferJobState {
             id: id.clone(),
             session_id,
             kind: TransferJobKind::Upload {
@@ -165,8 +165,8 @@ impl NyaTermApp {
             control: Some(control.clone()),
         });
         self.terminal_status = format!("SFTP upload started for {}", local_path.display());
-        let progress_tx = self.transfer_tx.clone();
-        let finished_tx = self.transfer_tx.clone();
+        let progress_tx = self.transfer.queue.tx.clone();
+        let finished_tx = self.transfer.queue.tx.clone();
         std::thread::spawn(move || {
             let mut progress_sender = TransferProgressEventSender::new(id.clone(), progress_tx);
             let service = SftpService::new(config);
@@ -211,7 +211,9 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(job) = self
-            .transfer_jobs
+            .transfer
+            .queue
+            .jobs
             .iter_mut()
             .find(|candidate| candidate.id == job_id)
         else {
@@ -258,7 +260,9 @@ impl NyaTermApp {
 
     pub(in crate::features) fn pause_transfer_job(&mut self, job_id: &str, cx: &mut Context<Self>) {
         let Some(job) = self
-            .transfer_jobs
+            .transfer
+            .queue
+            .jobs
             .iter_mut()
             .find(|candidate| candidate.id == job_id)
         else {
@@ -292,7 +296,9 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(job) = self
-            .transfer_jobs
+            .transfer
+            .queue
+            .jobs
             .iter_mut()
             .find(|candidate| candidate.id == job_id)
         else {
@@ -333,7 +339,9 @@ impl NyaTermApp {
             return;
         };
         let Some(index) = self
-            .transfer_jobs
+            .transfer
+            .queue
+            .jobs
             .iter()
             .position(|candidate| candidate.id == job_id)
         else {
@@ -341,9 +349,9 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        let kind = self.transfer_jobs[index].kind.clone();
+        let kind = self.transfer.queue.jobs[index].kind.clone();
         if !matches!(
-            self.transfer_jobs[index].status,
+            self.transfer.queue.jobs[index].status,
             TransferJobStatus::Failed | TransferJobStatus::Cancelled
         ) {
             self.terminal_status = format!("transfer {job_id} is not retryable");
@@ -356,12 +364,12 @@ impl NyaTermApp {
                 remote_path,
                 local_path,
             } => {
-                let duplicate_policy = self.transfer_duplicate_policy;
+                let duplicate_policy = self.transfer.paths.duplicate_policy;
                 let duplicate_resolver = (duplicate_policy == SftpDuplicatePolicy::Ask)
                     .then(|| self.duplicate_prompts.clone() as Arc<dyn SftpDuplicateResolver>);
                 let transfer_options = self.sftp_transfer_options();
                 let control = SftpTransferControl::new();
-                let job = &mut self.transfer_jobs[index];
+                let job = &mut self.transfer.queue.jobs[index];
                 job.status = TransferJobStatus::Running;
                 job.detail = format!("Retrying download {remote_path}");
                 job.entries.clear();
@@ -369,8 +377,8 @@ impl NyaTermApp {
                 job.progress = None;
                 job.control = Some(control.clone());
                 self.terminal_status = format!("retrying SFTP download for {remote_path}");
-                let progress_tx = self.transfer_tx.clone();
-                let finished_tx = self.transfer_tx.clone();
+                let progress_tx = self.transfer.queue.tx.clone();
+                let finished_tx = self.transfer.queue.tx.clone();
                 std::thread::spawn(move || {
                     let mut progress_sender =
                         TransferProgressEventSender::new(job_id.clone(), progress_tx);
@@ -398,12 +406,12 @@ impl NyaTermApp {
                 local_path,
                 remote_path,
             } => {
-                let duplicate_policy = self.transfer_duplicate_policy;
+                let duplicate_policy = self.transfer.paths.duplicate_policy;
                 let duplicate_resolver = (duplicate_policy == SftpDuplicatePolicy::Ask)
                     .then(|| self.duplicate_prompts.clone() as Arc<dyn SftpDuplicateResolver>);
                 let transfer_options = self.sftp_transfer_options();
                 let control = SftpTransferControl::new();
-                let job = &mut self.transfer_jobs[index];
+                let job = &mut self.transfer.queue.jobs[index];
                 job.status = TransferJobStatus::Running;
                 job.detail = format!("Retrying upload {}", local_path.display());
                 job.entries.clear();
@@ -411,8 +419,8 @@ impl NyaTermApp {
                 job.progress = None;
                 job.control = Some(control.clone());
                 self.terminal_status = format!("retrying SFTP upload for {}", local_path.display());
-                let progress_tx = self.transfer_tx.clone();
-                let finished_tx = self.transfer_tx.clone();
+                let progress_tx = self.transfer.queue.tx.clone();
+                let finished_tx = self.transfer.queue.tx.clone();
                 std::thread::spawn(move || {
                     let mut progress_sender =
                         TransferProgressEventSender::new(job_id.clone(), progress_tx);
@@ -463,7 +471,7 @@ impl NyaTermApp {
     pub(in crate::features) fn pause_all_transfer_jobs(&mut self, cx: &mut Context<Self>) {
         let active_session_id = self.active_session_id.clone();
         let mut changed = 0;
-        for job in &mut self.transfer_jobs {
+        for job in &mut self.transfer.queue.jobs {
             if job.is_visible_for_session(active_session_id.as_deref())
                 && job.status == TransferJobStatus::Running
                 && let Some(control) = job.control.as_ref()
@@ -485,7 +493,7 @@ impl NyaTermApp {
     pub(in crate::features) fn resume_all_transfer_jobs(&mut self, cx: &mut Context<Self>) {
         let active_session_id = self.active_session_id.clone();
         let mut changed = 0;
-        for job in &mut self.transfer_jobs {
+        for job in &mut self.transfer.queue.jobs {
             if job.is_visible_for_session(active_session_id.as_deref())
                 && job.status == TransferJobStatus::Paused
                 && let Some(control) = job.control.as_ref()
@@ -507,7 +515,7 @@ impl NyaTermApp {
     pub(in crate::features) fn cancel_all_transfer_jobs(&mut self, cx: &mut Context<Self>) {
         let active_session_id = self.active_session_id.clone();
         let mut changed = 0;
-        for job in &mut self.transfer_jobs {
+        for job in &mut self.transfer.queue.jobs {
             if job.is_visible_for_session(active_session_id.as_deref())
                 && matches!(
                     job.status,
@@ -531,12 +539,12 @@ impl NyaTermApp {
 
     pub(in crate::features) fn clear_completed_transfer_jobs(&mut self, cx: &mut Context<Self>) {
         let active_session_id = self.active_session_id.clone();
-        let before = self.transfer_jobs.len();
-        self.transfer_jobs.retain(|job| {
+        let before = self.transfer.queue.jobs.len();
+        self.transfer.queue.jobs.retain(|job| {
             !job.is_visible_for_session(active_session_id.as_deref())
                 || job.status != TransferJobStatus::Completed
         });
-        let removed = before.saturating_sub(self.transfer_jobs.len());
+        let removed = before.saturating_sub(self.transfer.queue.jobs.len());
         self.terminal_status = if removed == 0 {
             "no completed transfer jobs to clear".to_string()
         } else {
@@ -547,8 +555,8 @@ impl NyaTermApp {
 
     pub(in crate::features) fn clear_stopped_transfer_jobs(&mut self, cx: &mut Context<Self>) {
         let active_session_id = self.active_session_id.clone();
-        let before = self.transfer_jobs.len();
-        self.transfer_jobs.retain(|job| {
+        let before = self.transfer.queue.jobs.len();
+        self.transfer.queue.jobs.retain(|job| {
             !job.is_visible_for_session(active_session_id.as_deref())
                 || matches!(
                     job.status,
@@ -557,7 +565,7 @@ impl NyaTermApp {
                         | TransferJobStatus::Cancelling
                 )
         });
-        let removed = before.saturating_sub(self.transfer_jobs.len());
+        let removed = before.saturating_sub(self.transfer.queue.jobs.len());
         self.terminal_status = if removed == 0 {
             "no stopped transfer jobs to clear".to_string()
         } else {

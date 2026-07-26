@@ -167,13 +167,13 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         let mut jobs = div().flex().flex_col().gap_2();
-        if self.transfer_jobs.is_empty() {
+        if self.transfer.queue.jobs.is_empty() {
             jobs = jobs.child(empty_panel(
                 "No SFTP transfer jobs yet.",
                 self.theme_palette(),
             ));
         } else {
-            for job in self.transfer_jobs.iter().rev().take(5) {
+            for job in self.transfer.queue.jobs.iter().rev().take(5) {
                 jobs = jobs.child(compact_transfer_job_row(palette, job));
             }
         }
@@ -208,12 +208,12 @@ impl NyaTermApp {
                     .child(capability_line(
                         palette,
                         "Remote Path",
-                        truncate_preview(&self.transfer_remote_path, 28),
+                        truncate_preview(&self.transfer.paths.remote, 28),
                     ))
                     .child(capability_line(
                         palette,
                         "Duplicate Policy",
-                        duplicate_policy_label(self.transfer_duplicate_policy),
+                        duplicate_policy_label(self.transfer.paths.duplicate_policy),
                     ))
                     .child(
                         div()

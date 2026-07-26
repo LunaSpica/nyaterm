@@ -1056,10 +1056,10 @@ impl NyaTermApp {
             && self.transfer_browser_auto_sync_cwd_enabled()
             && !cwd.trim().is_empty()
         {
-            if self.transfer_browser_path != cwd {
-                self.transfer_browser_path = cwd.clone();
-                self.transfer_browser_path_draft = cwd.clone();
-                self.transfer_browser_status = format!("cwd synced: {cwd}");
+            if self.transfer.browser.path != cwd {
+                self.transfer.browser.path = cwd.clone();
+                self.transfer.browser.path_draft = cwd.clone();
+                self.transfer.browser.status = format!("cwd synced: {cwd}");
             }
         }
     }

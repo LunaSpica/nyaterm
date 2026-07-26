@@ -27,14 +27,18 @@ impl Render for TransferExternalSyncWindow {
         let Some(prompt) = self
             .app
             .read(cx)
-            .transfer_external_sync_prompts
+            .transfer
+            .external_sync
+            .prompts
             .get(&self.prompt_id)
             .cloned()
         else {
             let prompt_id = self.prompt_id.clone();
             self.app.update(cx, |app, cx| {
-                app.transfer_external_sync_windows.remove(&prompt_id);
-                app.transfer_external_sync_window_open_pending
+                app.transfer.external_sync.windows.remove(&prompt_id);
+                app.transfer
+                    .external_sync
+                    .window_open_pending
                     .remove(&prompt_id);
                 cx.notify();
             });
@@ -91,7 +95,9 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> bool {
         let Some((prompt_id, handle)) = self
-            .transfer_external_sync_windows
+            .transfer
+            .external_sync
+            .windows
             .iter()
             .next()
             .map(|(prompt_id, handle)| (prompt_id.clone(), *handle))
@@ -105,7 +111,7 @@ impl NyaTermApp {
                 .is_err()
             {
                 let _ = app.update(cx, |app, cx| {
-                    app.transfer_external_sync_windows.remove(&prompt_id);
+                    app.transfer.external_sync.windows.remove(&prompt_id);
                     cx.notify();
                 });
             }
@@ -118,7 +124,7 @@ impl NyaTermApp {
         prompt_id: String,
         cx: &mut Context<Self>,
     ) -> bool {
-        if let Some(handle) = self.transfer_external_sync_windows.get(&prompt_id).copied() {
+        if let Some(handle) = self.transfer.external_sync.windows.get(&prompt_id).copied() {
             let app = cx.entity();
             cx.defer(move |cx| {
                 if handle
@@ -126,7 +132,7 @@ impl NyaTermApp {
                     .is_err()
                 {
                     let _ = app.update(cx, |app, cx| {
-                        app.transfer_external_sync_windows.remove(&prompt_id);
+                        app.transfer.external_sync.windows.remove(&prompt_id);
                         cx.notify();
                     });
                 }
@@ -134,23 +140,29 @@ impl NyaTermApp {
             return true;
         }
         if self
-            .transfer_external_sync_window_open_pending
+            .transfer
+            .external_sync
+            .window_open_pending
             .contains(&prompt_id)
         {
             return true;
         }
-        if !self.transfer_external_sync_prompts.contains_key(&prompt_id) {
+        if !self.transfer.external_sync.prompts.contains_key(&prompt_id) {
             return false;
         }
 
-        self.transfer_external_sync_window_open_pending
+        self.transfer
+            .external_sync
+            .window_open_pending
             .insert(prompt_id.clone());
         cx.notify();
         let app = cx.entity();
         cx.defer(move |cx| {
             let should_open = app
                 .read(cx)
-                .transfer_external_sync_window_open_pending
+                .transfer
+                .external_sync
+                .window_open_pending
                 .contains(&prompt_id);
             if should_open {
                 open_transfer_external_sync_window_now_from_app(app, prompt_id, cx);
@@ -167,13 +179,17 @@ fn open_transfer_external_sync_window_now_from_app(
 ) {
     if let Some(handle) = app
         .read(cx)
-        .transfer_external_sync_windows
+        .transfer
+        .external_sync
+        .windows
         .get(&prompt_id)
         .copied()
     {
         let _ = handle.update(cx, |_, window, _| window.activate_window());
         let _ = app.update(cx, |app, cx| {
-            app.transfer_external_sync_window_open_pending
+            app.transfer
+                .external_sync
+                .window_open_pending
                 .remove(&prompt_id);
             cx.notify();
         });
@@ -181,11 +197,15 @@ fn open_transfer_external_sync_window_now_from_app(
     }
     if !app
         .read(cx)
-        .transfer_external_sync_prompts
+        .transfer
+        .external_sync
+        .prompts
         .contains_key(&prompt_id)
     {
         let _ = app.update(cx, |app, cx| {
-            app.transfer_external_sync_window_open_pending
+            app.transfer
+                .external_sync
+                .window_open_pending
                 .remove(&prompt_id);
             cx.notify();
         });
@@ -214,7 +234,7 @@ fn open_transfer_external_sync_window_now_from_app(
                 });
                 true
             });
-            let prompt_focus = view_app.read(cx).transfer_external_sync_focus.clone();
+            let prompt_focus = view_app.read(cx).transfer.external_sync.focus.clone();
             window.focus(&prompt_focus);
             cx.new(|cx| TransferExternalSyncWindow::new(view_app, view_prompt_id, cx))
         },
@@ -222,15 +242,21 @@ fn open_transfer_external_sync_window_now_from_app(
 
     let _ = app.update(cx, |app, cx| match result {
         Ok(handle) => {
-            app.transfer_external_sync_windows
+            app.transfer
+                .external_sync
+                .windows
                 .insert(prompt_id.clone(), handle);
-            app.transfer_external_sync_window_open_pending
+            app.transfer
+                .external_sync
+                .window_open_pending
                 .remove(&prompt_id);
             cx.notify();
         }
         Err(error) => {
-            app.transfer_external_sync_windows.remove(&prompt_id);
-            app.transfer_external_sync_window_open_pending
+            app.transfer.external_sync.windows.remove(&prompt_id);
+            app.transfer
+                .external_sync
+                .window_open_pending
                 .remove(&prompt_id);
             app.terminal_status = format!("failed to open auto-upload window: {error}");
             cx.notify();

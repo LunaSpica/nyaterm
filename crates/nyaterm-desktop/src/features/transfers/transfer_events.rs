@@ -26,69 +26,69 @@ struct TransferBrowserEventSnapshot {
 impl NyaTermApp {
     fn transfer_browser_event_snapshot(&self) -> TransferBrowserEventSnapshot {
         TransferBrowserEventSnapshot {
-            remote_path: self.transfer_remote_path.clone(),
-            browser_path: self.transfer_browser_path.clone(),
-            home_dir: self.transfer_browser_home_dir.clone(),
-            home_dir_pending: self.transfer_browser_home_dir_pending,
-            entries: self.transfer_browser_entries.clone(),
-            loading: self.transfer_browser_loading,
-            error: self.transfer_browser_error.clone(),
-            status: self.transfer_browser_status.clone(),
-            history: self.transfer_browser_history.clone(),
-            history_index: self.transfer_browser_history_index,
-            visited_history: self.transfer_browser_visited_history.clone(),
-            selected_path: self.transfer_selected_remote_path.clone(),
-            selected_paths: self.transfer_selected_remote_paths.clone(),
+            remote_path: self.transfer.paths.remote.clone(),
+            browser_path: self.transfer.browser.path.clone(),
+            home_dir: self.transfer.browser.home_dir.clone(),
+            home_dir_pending: self.transfer.browser.home_dir_pending,
+            entries: self.transfer.browser.entries.clone(),
+            loading: self.transfer.browser.loading,
+            error: self.transfer.browser.error.clone(),
+            status: self.transfer.browser.status.clone(),
+            history: self.transfer.browser.history.clone(),
+            history_index: self.transfer.browser.history_index,
+            visited_history: self.transfer.browser.visited_history.clone(),
+            selected_path: self.transfer.browser.selected_remote_path.clone(),
+            selected_paths: self.transfer.browser.selected_remote_paths.clone(),
         }
     }
 
     fn restore_transfer_browser_event_snapshot(&mut self, snapshot: TransferBrowserEventSnapshot) {
-        self.transfer_remote_path = snapshot.remote_path;
-        self.transfer_browser_path = snapshot.browser_path;
-        self.transfer_browser_home_dir = snapshot.home_dir;
-        self.transfer_browser_home_dir_pending = snapshot.home_dir_pending;
-        self.transfer_browser_entries = snapshot.entries;
-        self.transfer_browser_loading = snapshot.loading;
-        self.transfer_browser_error = snapshot.error;
-        self.transfer_browser_status = snapshot.status;
-        self.transfer_browser_history = snapshot.history;
-        self.transfer_browser_history_index = snapshot.history_index;
-        self.transfer_browser_visited_history = snapshot.visited_history;
-        self.transfer_selected_remote_path = snapshot.selected_path;
-        self.transfer_selected_remote_paths = snapshot.selected_paths;
+        self.transfer.paths.remote = snapshot.remote_path;
+        self.transfer.browser.path = snapshot.browser_path;
+        self.transfer.browser.home_dir = snapshot.home_dir;
+        self.transfer.browser.home_dir_pending = snapshot.home_dir_pending;
+        self.transfer.browser.entries = snapshot.entries;
+        self.transfer.browser.loading = snapshot.loading;
+        self.transfer.browser.error = snapshot.error;
+        self.transfer.browser.status = snapshot.status;
+        self.transfer.browser.history = snapshot.history;
+        self.transfer.browser.history_index = snapshot.history_index;
+        self.transfer.browser.visited_history = snapshot.visited_history;
+        self.transfer.browser.selected_remote_path = snapshot.selected_path;
+        self.transfer.browser.selected_remote_paths = snapshot.selected_paths;
     }
 
     fn load_transfer_browser_event_session(&mut self, session_id: &str) {
-        let Some(cache) = self.transfer_browser_session_cache.get(session_id).cloned() else {
-            self.transfer_remote_path = ".".to_string();
-            self.transfer_browser_path = ".".to_string();
-            self.transfer_browser_home_dir.clear();
-            self.transfer_browser_home_dir_pending = false;
-            self.transfer_browser_entries.clear();
-            self.transfer_browser_loading = false;
-            self.transfer_browser_error = None;
-            self.transfer_browser_status.clear();
-            self.transfer_browser_history.clear();
-            self.transfer_browser_history_index = 0;
-            self.transfer_browser_visited_history.clear();
-            self.transfer_selected_remote_path = None;
-            self.transfer_selected_remote_paths.clear();
+        let Some(cache) = self.transfer.browser.session_cache.get(session_id).cloned() else {
+            self.transfer.paths.remote = ".".to_string();
+            self.transfer.browser.path = ".".to_string();
+            self.transfer.browser.home_dir.clear();
+            self.transfer.browser.home_dir_pending = false;
+            self.transfer.browser.entries.clear();
+            self.transfer.browser.loading = false;
+            self.transfer.browser.error = None;
+            self.transfer.browser.status.clear();
+            self.transfer.browser.history.clear();
+            self.transfer.browser.history_index = 0;
+            self.transfer.browser.visited_history.clear();
+            self.transfer.browser.selected_remote_path = None;
+            self.transfer.browser.selected_remote_paths.clear();
             return;
         };
 
-        self.transfer_remote_path = cache.current_path.clone();
-        self.transfer_browser_path = cache.current_path;
-        self.transfer_browser_home_dir = cache.home_dir;
-        self.transfer_browser_home_dir_pending = false;
-        self.transfer_browser_entries = cache.entries;
-        self.transfer_browser_loading = false;
-        self.transfer_browser_error = None;
-        self.transfer_browser_status.clear();
-        self.transfer_browser_history = cache.history;
-        self.transfer_browser_history_index = cache.history_index;
-        self.transfer_browser_visited_history = cache.visited_history;
-        self.transfer_selected_remote_path = None;
-        self.transfer_selected_remote_paths.clear();
+        self.transfer.paths.remote = cache.current_path.clone();
+        self.transfer.browser.path = cache.current_path;
+        self.transfer.browser.home_dir = cache.home_dir;
+        self.transfer.browser.home_dir_pending = false;
+        self.transfer.browser.entries = cache.entries;
+        self.transfer.browser.loading = false;
+        self.transfer.browser.error = None;
+        self.transfer.browser.status.clear();
+        self.transfer.browser.history = cache.history;
+        self.transfer.browser.history_index = cache.history_index;
+        self.transfer.browser.visited_history = cache.visited_history;
+        self.transfer.browser.selected_remote_path = None;
+        self.transfer.browser.selected_remote_paths.clear();
     }
 
     pub(in crate::features) fn drain_transfer_events(
@@ -96,34 +96,36 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        if self.transfer_jobs.is_empty() {
+        if self.transfer.queue.jobs.is_empty() {
             return false;
         }
         let mut dirty = false;
         for _ in 0..TRANSFER_EVENT_DRAIN_LIMIT {
-            let Ok(event) = self.transfer_rx.try_recv() else {
+            let Ok(event) = self.transfer.queue.rx.try_recv() else {
                 break;
             };
             let Some(job_index) = self
-                .transfer_jobs
+                .transfer
+                .queue
+                .jobs
                 .iter()
                 .position(|candidate| candidate.id == event.id)
             else {
                 continue;
             };
             let event_id = event.id.clone();
-            let job_session_id = self.transfer_jobs[job_index].session_id.clone();
+            let job_session_id = self.transfer.queue.jobs[job_index].session_id.clone();
             let navigation_job_key = matches!(
-                &self.transfer_jobs[job_index].kind,
+                &self.transfer.queue.jobs[job_index].kind,
                 TransferJobKind::ListDir { .. } | TransferJobKind::SyncCwd
             )
             .then(|| job_session_id.clone().unwrap_or_default());
             if transfer_navigation_job_is_stale(
-                &self.transfer_browser_navigation_jobs,
+                &self.transfer.browser.navigation_jobs,
                 navigation_job_key.as_deref(),
                 &event_id,
             ) {
-                self.transfer_jobs.remove(job_index);
+                self.transfer.queue.jobs.remove(job_index);
                 continue;
             }
             dirty |= transfer_event_needs_ui_refresh(
@@ -140,7 +142,7 @@ impl NyaTermApp {
                     self.load_transfer_browser_event_session(session_id);
                     snapshot
                 });
-            let job = &mut self.transfer_jobs[job_index];
+            let job = &mut self.transfer.queue.jobs[job_index];
             let mut external_sync_to_start: Option<(Option<String>, String, String, PathBuf)> =
                 None;
             let mut external_sync_prompt_to_open: Option<String> = None;
@@ -165,7 +167,12 @@ impl NyaTermApp {
                 } => {
                     job.detail = format!("External edit changed {}", local_path.display());
                     let watch_key = format!("{remote_path}\n{}", local_path.display());
-                    if self.transfer_external_always_uploads.contains(&watch_key) {
+                    if self
+                        .transfer
+                        .external_sync
+                        .always_uploads
+                        .contains(&watch_key)
+                    {
                         external_sync_to_start = Some((
                             job_session_id.clone(),
                             job.id.clone(),
@@ -174,7 +181,7 @@ impl NyaTermApp {
                         ));
                     } else if let Some(session_id) = job_session_id.clone() {
                         let prompt_id = job.id.clone();
-                        self.transfer_external_sync_prompts.insert(
+                        self.transfer.external_sync.prompts.insert(
                             prompt_id.clone(),
                             TransferExternalSyncPromptState {
                                 session_id: Some(session_id),
@@ -200,25 +207,29 @@ impl NyaTermApp {
                             remote_path,
                             select_after,
                         } => (remote_path.clone(), select_after.clone()),
-                        _ => (self.transfer_browser_path.clone(), None),
+                        _ => (self.transfer.browser.path.clone(), None),
                     };
                     job.status = TransferJobStatus::Completed;
                     job.detail = format!("{} item(s)", entries.len());
-                    self.transfer_browser_path = listed_path;
-                    self.transfer_browser_entries = entries.clone();
-                    self.transfer_browser_loading = false;
-                    self.transfer_browser_error = None;
-                    self.transfer_browser_status = job.detail.clone();
-                    self.transfer_selected_remote_paths
+                    self.transfer.browser.path = listed_path;
+                    self.transfer.browser.entries = entries.clone();
+                    self.transfer.browser.loading = false;
+                    self.transfer.browser.error = None;
+                    self.transfer.browser.status = job.detail.clone();
+                    self.transfer
+                        .browser
+                        .selected_remote_paths
                         .retain(|path| entries.iter().any(|entry| &entry.path == path));
                     if let Some(select_after) = select_after
                         && entries.iter().any(|entry| entry.path == select_after)
                     {
-                        self.transfer_selected_remote_path = Some(select_after.clone());
-                        self.transfer_selected_remote_paths.clear();
-                        self.transfer_selected_remote_paths
+                        self.transfer.browser.selected_remote_path = Some(select_after.clone());
+                        self.transfer.browser.selected_remote_paths.clear();
+                        self.transfer
+                            .browser
+                            .selected_remote_paths
                             .insert(select_after.clone());
-                        self.transfer_remote_path = select_after;
+                        self.transfer.paths.remote = select_after;
                     }
                     job.entries = entries;
                     job.summary = None;
@@ -229,11 +240,11 @@ impl NyaTermApp {
                 TransferJobEvent::Finished(Ok(TransferJobOutput::HomeDir(home_dir))) => {
                     job.status = TransferJobStatus::Completed;
                     job.detail = format!("Home {home_dir}");
-                    self.transfer_browser_home_dir = home_dir.clone();
-                    self.transfer_browser_home_dir_pending = false;
-                    self.transfer_browser_loading = false;
-                    self.transfer_browser_error = None;
-                    self.transfer_browser_status =
+                    self.transfer.browser.home_dir = home_dir.clone();
+                    self.transfer.browser.home_dir_pending = false;
+                    self.transfer.browser.loading = false;
+                    self.transfer.browser.error = None;
+                    self.transfer.browser.status =
                         format!("remote home resolved: {}", truncate_preview(&home_dir, 72));
                     job.entries.clear();
                     job.summary = None;
@@ -247,15 +258,15 @@ impl NyaTermApp {
                 })) => {
                     job.status = TransferJobStatus::Completed;
                     job.detail = format!("Synced cwd {remote_path}");
-                    self.transfer_remote_path = remote_path.clone();
-                    self.transfer_browser_path = remote_path;
-                    self.transfer_browser_entries = entries.clone();
-                    self.transfer_browser_loading = false;
-                    self.transfer_browser_error = None;
-                    self.transfer_browser_status =
+                    self.transfer.paths.remote = remote_path.clone();
+                    self.transfer.browser.path = remote_path;
+                    self.transfer.browser.entries = entries.clone();
+                    self.transfer.browser.loading = false;
+                    self.transfer.browser.error = None;
+                    self.transfer.browser.status =
                         format!("remote exec cwd · {} item(s)", entries.len());
-                    self.transfer_selected_remote_path = None;
-                    self.transfer_selected_remote_paths.clear();
+                    self.transfer.browser.selected_remote_path = None;
+                    self.transfer.browser.selected_remote_paths.clear();
                     job.entries = entries;
                     job.summary = None;
                     job.progress = None;
@@ -270,17 +281,23 @@ impl NyaTermApp {
                 })) => {
                     job.status = TransferJobStatus::Completed;
                     job.detail = format!("Renamed {old_path} -> {new_path}");
-                    self.transfer_browser_path = parent_path.clone();
-                    self.transfer_browser_entries = entries.clone();
-                    self.transfer_browser_status = format!("{} item(s)", entries.len());
+                    self.transfer.browser.path = parent_path.clone();
+                    self.transfer.browser.entries = entries.clone();
+                    self.transfer.browser.status = format!("{} item(s)", entries.len());
                     job.entries = entries;
                     job.summary = None;
                     job.progress = None;
                     job.control = None;
-                    self.transfer_selected_remote_path = Some(new_path.clone());
-                    self.transfer_selected_remote_paths.remove(&old_path);
-                    self.transfer_selected_remote_paths.insert(new_path.clone());
-                    self.transfer_remote_path = new_path.clone();
+                    self.transfer.browser.selected_remote_path = Some(new_path.clone());
+                    self.transfer
+                        .browser
+                        .selected_remote_paths
+                        .remove(&old_path);
+                    self.transfer
+                        .browser
+                        .selected_remote_paths
+                        .insert(new_path.clone());
+                    self.transfer.paths.remote = new_path.clone();
                     self.terminal_status =
                         format!("SFTP rename completed in {parent_path}: {new_path}");
                 }
@@ -292,17 +309,23 @@ impl NyaTermApp {
                 })) => {
                     job.status = TransferJobStatus::Completed;
                     job.detail = format!("Moved {old_path} -> {new_path}");
-                    self.transfer_browser_path = parent_path.clone();
-                    self.transfer_browser_entries = entries.clone();
-                    self.transfer_browser_status = format!("{} item(s)", entries.len());
+                    self.transfer.browser.path = parent_path.clone();
+                    self.transfer.browser.entries = entries.clone();
+                    self.transfer.browser.status = format!("{} item(s)", entries.len());
                     job.entries = entries;
                     job.summary = None;
                     job.progress = None;
                     job.control = None;
-                    self.transfer_selected_remote_path = Some(new_path.clone());
-                    self.transfer_selected_remote_paths.remove(&old_path);
-                    self.transfer_selected_remote_paths.insert(new_path.clone());
-                    self.transfer_remote_path = new_path.clone();
+                    self.transfer.browser.selected_remote_path = Some(new_path.clone());
+                    self.transfer
+                        .browser
+                        .selected_remote_paths
+                        .remove(&old_path);
+                    self.transfer
+                        .browser
+                        .selected_remote_paths
+                        .insert(new_path.clone());
+                    self.transfer.paths.remote = new_path.clone();
                     self.terminal_status =
                         format!("SFTP move completed from {parent_path}: {new_path}");
                 }
@@ -313,17 +336,22 @@ impl NyaTermApp {
                 })) => {
                     job.status = TransferJobStatus::Completed;
                     job.detail = format!("Deleted {remote_path}");
-                    self.transfer_browser_path = parent_path.clone();
-                    self.transfer_browser_entries = entries.clone();
-                    self.transfer_browser_status = format!("{} item(s)", entries.len());
+                    self.transfer.browser.path = parent_path.clone();
+                    self.transfer.browser.entries = entries.clone();
+                    self.transfer.browser.status = format!("{} item(s)", entries.len());
                     job.entries = entries;
                     job.summary = None;
                     job.progress = None;
                     job.control = None;
-                    if self.transfer_selected_remote_path.as_deref() == Some(remote_path.as_str()) {
-                        self.transfer_selected_remote_path = None;
+                    if self.transfer.browser.selected_remote_path.as_deref()
+                        == Some(remote_path.as_str())
+                    {
+                        self.transfer.browser.selected_remote_path = None;
                     }
-                    self.transfer_selected_remote_paths.remove(&remote_path);
+                    self.transfer
+                        .browser
+                        .selected_remote_paths
+                        .remove(&remote_path);
                     self.terminal_status =
                         format!("SFTP delete completed in {parent_path}: {remote_path}");
                 }
@@ -335,22 +363,24 @@ impl NyaTermApp {
                 })) => {
                     job.status = TransferJobStatus::Completed;
                     job.detail = format!("Created {remote_path}");
-                    self.transfer_browser_path = if open_after_create {
+                    self.transfer.browser.path = if open_after_create {
                         remote_path.clone()
                     } else {
                         parent_path.clone()
                     };
-                    self.transfer_browser_entries = entries.clone();
-                    self.transfer_browser_status = format!("{} item(s)", entries.len());
+                    self.transfer.browser.entries = entries.clone();
+                    self.transfer.browser.status = format!("{} item(s)", entries.len());
                     job.entries = entries;
                     job.summary = None;
                     job.progress = None;
                     job.control = None;
-                    self.transfer_selected_remote_path = Some(remote_path.clone());
-                    self.transfer_selected_remote_paths.clear();
-                    self.transfer_selected_remote_paths
+                    self.transfer.browser.selected_remote_path = Some(remote_path.clone());
+                    self.transfer.browser.selected_remote_paths.clear();
+                    self.transfer
+                        .browser
+                        .selected_remote_paths
                         .insert(remote_path.clone());
-                    self.transfer_remote_path = remote_path.clone();
+                    self.transfer.paths.remote = remote_path.clone();
                     self.terminal_status =
                         format!("SFTP directory created in {parent_path}: {remote_path}");
                 }
@@ -362,18 +392,20 @@ impl NyaTermApp {
                 })) => {
                     job.status = TransferJobStatus::Completed;
                     job.detail = format!("Created {remote_path}");
-                    self.transfer_browser_path = parent_path.clone();
-                    self.transfer_browser_entries = entries.clone();
-                    self.transfer_browser_status = format!("{} item(s)", entries.len());
+                    self.transfer.browser.path = parent_path.clone();
+                    self.transfer.browser.entries = entries.clone();
+                    self.transfer.browser.status = format!("{} item(s)", entries.len());
                     job.entries = entries.clone();
                     job.summary = None;
                     job.progress = None;
                     job.control = None;
-                    self.transfer_selected_remote_path = Some(remote_path.clone());
-                    self.transfer_selected_remote_paths.clear();
-                    self.transfer_selected_remote_paths
+                    self.transfer.browser.selected_remote_path = Some(remote_path.clone());
+                    self.transfer.browser.selected_remote_paths.clear();
+                    self.transfer
+                        .browser
+                        .selected_remote_paths
                         .insert(remote_path.clone());
-                    self.transfer_remote_path = remote_path.clone();
+                    self.transfer.paths.remote = remote_path.clone();
                     self.terminal_status =
                         format!("SFTP file created in {parent_path}: {remote_path}");
                     if should_open && job_session_id == self.active_session_id {
@@ -407,18 +439,20 @@ impl NyaTermApp {
                 })) => {
                     job.status = TransferJobStatus::Completed;
                     job.detail = format!("Linked {link_path} -> {target_path}");
-                    self.transfer_browser_path = parent_path.clone();
-                    self.transfer_browser_entries = entries.clone();
-                    self.transfer_browser_status = format!("{} item(s)", entries.len());
+                    self.transfer.browser.path = parent_path.clone();
+                    self.transfer.browser.entries = entries.clone();
+                    self.transfer.browser.status = format!("{} item(s)", entries.len());
                     job.entries = entries;
                     job.summary = None;
                     job.progress = None;
                     job.control = None;
-                    self.transfer_selected_remote_path = Some(link_path.clone());
-                    self.transfer_selected_remote_paths.clear();
-                    self.transfer_selected_remote_paths
+                    self.transfer.browser.selected_remote_path = Some(link_path.clone());
+                    self.transfer.browser.selected_remote_paths.clear();
+                    self.transfer
+                        .browser
+                        .selected_remote_paths
                         .insert(link_path.clone());
-                    self.transfer_remote_path = link_path.clone();
+                    self.transfer.paths.remote = link_path.clone();
                     self.terminal_status =
                         format!("SFTP symlink created in {parent_path}: {link_path}");
                 }
@@ -431,7 +465,7 @@ impl NyaTermApp {
                     job.summary = None;
                     job.progress = None;
                     job.control = None;
-                    if let Some(state) = self.transfer_properties.as_mut()
+                    if let Some(state) = self.transfer.file_ops.properties.as_mut()
                         && state.session_id.as_deref() == job_session_id.as_deref()
                         && state.entry.path == remote_path
                     {
@@ -458,7 +492,7 @@ impl NyaTermApp {
                         state.properties = Some(properties);
                         state.error = None;
                     }
-                    self.transfer_browser_status = format!("properties loaded for {remote_path}");
+                    self.transfer.browser.status = format!("properties loaded for {remote_path}");
                     self.terminal_status = format!("SFTP properties loaded: {remote_path}");
                 }
                 TransferJobEvent::Finished(Ok(TransferJobOutput::PropertiesUpdated {
@@ -469,19 +503,21 @@ impl NyaTermApp {
                 })) => {
                     job.status = TransferJobStatus::Completed;
                     job.detail = format!("Updated properties for {remote_path}");
-                    self.transfer_browser_path = parent_path.clone();
-                    self.transfer_browser_entries = entries.clone();
-                    self.transfer_browser_status = format!("{} item(s)", entries.len());
+                    self.transfer.browser.path = parent_path.clone();
+                    self.transfer.browser.entries = entries.clone();
+                    self.transfer.browser.status = format!("{} item(s)", entries.len());
                     job.entries = entries;
                     job.summary = None;
                     job.progress = None;
                     job.control = None;
-                    self.transfer_selected_remote_path = Some(remote_path.clone());
-                    self.transfer_selected_remote_paths.clear();
-                    self.transfer_selected_remote_paths
+                    self.transfer.browser.selected_remote_path = Some(remote_path.clone());
+                    self.transfer.browser.selected_remote_paths.clear();
+                    self.transfer
+                        .browser
+                        .selected_remote_paths
                         .insert(remote_path.clone());
-                    self.transfer_remote_path = remote_path.clone();
-                    if let Some(state) = self.transfer_properties.as_mut()
+                    self.transfer.paths.remote = remote_path.clone();
+                    if let Some(state) = self.transfer.file_ops.properties.as_mut()
                         && state.session_id.as_deref() == job_session_id.as_deref()
                         && state.entry.path == remote_path
                     {
@@ -509,11 +545,17 @@ impl NyaTermApp {
                         state.saving = false;
                         state.error = None;
                     }
-                    if self.transfer_properties.as_ref().is_some_and(|state| {
-                        state.session_id.as_deref() == job_session_id.as_deref()
-                            && state.entry.path == remote_path
-                    }) {
-                        self.transfer_properties = None;
+                    if self
+                        .transfer
+                        .file_ops
+                        .properties
+                        .as_ref()
+                        .is_some_and(|state| {
+                            state.session_id.as_deref() == job_session_id.as_deref()
+                                && state.entry.path == remote_path
+                        })
+                    {
+                        self.transfer.file_ops.properties = None;
                     }
                     self.terminal_status =
                         format!("SFTP properties updated in {parent_path}: {remote_path}");
@@ -527,9 +569,15 @@ impl NyaTermApp {
                     job.summary = None;
                     job.progress = None;
                     job.control = None;
-                    if let Some(state) = self.transfer_editor.as_mut().and_then(|workspace| {
-                        workspace.tab_mut(job_session_id.as_deref(), &remote_path)
-                    }) {
+                    if let Some(state) =
+                        self.transfer
+                            .editor
+                            .workspace
+                            .as_mut()
+                            .and_then(|workspace| {
+                                workspace.tab_mut(job_session_id.as_deref(), &remote_path)
+                            })
+                    {
                         state.content = file.content;
                         state.base_size = Some(file.size);
                         state.base_modified_at = Some(file.modified_at);
@@ -541,7 +589,7 @@ impl NyaTermApp {
                         state.reload_confirm = false;
                         state.error = None;
                     }
-                    self.transfer_browser_status = format!("opened text file {remote_path}");
+                    self.transfer.browser.status = format!("opened text file {remote_path}");
                     self.terminal_status = format!("SFTP text file opened: {remote_path}");
                 }
                 TransferJobEvent::Finished(Ok(TransferJobOutput::AiFileActionLoaded {
@@ -575,7 +623,7 @@ impl NyaTermApp {
                             format!("AI file action ready: {action_name} ({action_id})");
                         self.ensure_panel_open(NavItem::AiAssistant);
                         self.ai_chat_focus_pending = true;
-                        self.transfer_browser_status = format!("AI action ready for {remote_path}");
+                        self.transfer.browser.status = format!("AI action ready for {remote_path}");
                         self.terminal_status =
                             format!("AI assistant opened for remote file: {remote_path}");
                     }
@@ -591,7 +639,7 @@ impl NyaTermApp {
                     job.control = None;
                     let mut remove_saved_tab_id = None;
                     let mut close_editor_workspace = false;
-                    if let Some(workspace) = self.transfer_editor.as_mut() {
+                    if let Some(workspace) = self.transfer.editor.workspace.as_mut() {
                         let mut save_conflicted = false;
                         if let Some(state) =
                             workspace.tab_mut(job_session_id.as_deref(), &remote_path)
@@ -655,9 +703,9 @@ impl NyaTermApp {
                         }
                     }
                     if close_editor_workspace {
-                        self.transfer_editor = None;
+                        self.transfer.editor.workspace = None;
                     }
-                    self.transfer_browser_status =
+                    self.transfer.browser.status =
                         format!("text editor save finished for {remote_path}");
                 }
                 TransferJobEvent::Finished(Ok(TransferJobOutput::ExternalOpened {
@@ -669,7 +717,7 @@ impl NyaTermApp {
                     job.summary = None;
                     job.progress = None;
                     job.control = None;
-                    self.transfer_browser_status = format!("opened external {remote_path}");
+                    self.transfer.browser.status = format!("opened external {remote_path}");
                     self.terminal_status =
                         format!("SFTP file opened externally: {}", local_path.display());
                 }
@@ -723,17 +771,20 @@ impl NyaTermApp {
                     job.summary = Some(summary.clone());
                     job.control = None;
 
-                    if transfer_event_paths_match(&self.transfer_browser_path, &parent_path) {
-                        self.transfer_browser_path = parent_path.clone();
-                        self.transfer_browser_entries = entries.clone();
-                        self.transfer_browser_status = format!("{} item(s)", entries.len());
-                        self.transfer_selected_remote_path = Some(summary.remote_path.clone());
-                        self.transfer_selected_remote_paths.clear();
-                        self.transfer_selected_remote_paths
+                    if transfer_event_paths_match(&self.transfer.browser.path, &parent_path) {
+                        self.transfer.browser.path = parent_path.clone();
+                        self.transfer.browser.entries = entries.clone();
+                        self.transfer.browser.status = format!("{} item(s)", entries.len());
+                        self.transfer.browser.selected_remote_path =
+                            Some(summary.remote_path.clone());
+                        self.transfer.browser.selected_remote_paths.clear();
+                        self.transfer
+                            .browser
+                            .selected_remote_paths
                             .insert(summary.remote_path.clone());
-                        self.transfer_remote_path = summary.remote_path.clone();
+                        self.transfer.paths.remote = summary.remote_path.clone();
                     } else {
-                        self.transfer_browser_status =
+                        self.transfer.browser.status =
                             format!("uploaded to {}", truncate_preview(&parent_path, 48));
                     }
 
@@ -792,14 +843,16 @@ impl NyaTermApp {
                         self.terminal_status = format!("SFTP transfer failed: {error}");
                     }
                     if browser_load_failed {
-                        self.transfer_browser_loading = false;
-                        self.transfer_browser_error = self
-                            .transfer_browser_entries
+                        self.transfer.browser.loading = false;
+                        self.transfer.browser.error = self
+                            .transfer
+                            .browser
+                            .entries
                             .is_empty()
                             .then_some(error.clone());
                     }
                     if let Some(remote_path) = property_remote_path.as_ref()
-                        && let Some(state) = self.transfer_properties.as_mut()
+                        && let Some(state) = self.transfer.file_ops.properties.as_mut()
                         && state.session_id.as_deref() == job_session_id.as_deref()
                         && state.entry.path == *remote_path
                     {
@@ -807,7 +860,7 @@ impl NyaTermApp {
                         state.error = Some(error.clone());
                     }
                     if let Some(remote_path) = property_remote_path.as_ref()
-                        && let Some(workspace) = self.transfer_editor.as_mut()
+                        && let Some(workspace) = self.transfer.editor.workspace.as_mut()
                         && let Some(state) =
                             workspace.tab_mut(job_session_id.as_deref(), remote_path)
                     {
@@ -842,14 +895,16 @@ impl NyaTermApp {
             if event_finished
                 && let Some(key) = navigation_job_key
                 && self
-                    .transfer_browser_navigation_jobs
+                    .transfer
+                    .browser
+                    .navigation_jobs
                     .get(&key)
                     .is_some_and(|latest_id| latest_id == &event_id)
             {
-                self.transfer_browser_navigation_jobs.remove(&key);
+                self.transfer.browser.navigation_jobs.remove(&key);
             }
             if let Some(job_id) = cleanup_internal_job_id {
-                self.transfer_jobs.retain(|job| job.id != job_id);
+                self.transfer.queue.jobs.retain(|job| job.id != job_id);
             }
             if let Some(prompt_id) = external_sync_prompt_to_open {
                 self.open_transfer_external_sync_window(prompt_id, cx);

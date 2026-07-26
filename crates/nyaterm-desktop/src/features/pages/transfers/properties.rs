@@ -6,7 +6,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let path = normalized_transfer_browser_path(&self.transfer_browser_path);
+        let path = normalized_transfer_browser_path(&self.transfer.browser.path);
         if path.trim().is_empty() {
             self.terminal_status = "open a remote directory first".to_string();
             cx.notify();
@@ -36,12 +36,12 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        self.transfer_properties = Some(transfer_properties_state_from_entry(
+        self.transfer.file_ops.properties = Some(transfer_properties_state_from_entry(
             entry.clone(),
             self.active_session_id.clone(),
         ));
         self.terminal_status = "remote properties opened".to_string();
-        window.focus(&self.transfer_properties_focus);
+        window.focus(&self.transfer.file_ops.properties_focus);
         self.start_sftp_properties_load_job(entry.path, window, cx);
         cx.notify();
     }
@@ -52,20 +52,20 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.transfer_selected_remote_path = Some(entry.path.clone());
-        self.transfer_remote_path = entry.path.clone();
-        self.transfer_properties = Some(transfer_properties_state_from_entry(
+        self.transfer.browser.selected_remote_path = Some(entry.path.clone());
+        self.transfer.paths.remote = entry.path.clone();
+        self.transfer.file_ops.properties = Some(transfer_properties_state_from_entry(
             entry.clone(),
             self.active_session_id.clone(),
         ));
         self.terminal_status = "remote properties opened".to_string();
-        window.focus(&self.transfer_properties_focus);
+        window.focus(&self.transfer.file_ops.properties_focus);
         self.start_sftp_properties_load_job(entry.path, window, cx);
         cx.notify();
     }
 
     pub(super) fn close_transfer_properties(&mut self, cx: &mut Context<Self>) {
-        self.transfer_properties = None;
+        self.transfer.file_ops.properties = None;
         self.terminal_status = "remote properties closed".to_string();
         cx.notify();
     }
@@ -85,7 +85,7 @@ impl NyaTermApp {
             "escape" => self.close_transfer_properties(cx),
             "enter" => self.submit_transfer_properties(window, cx),
             "tab" => {
-                if let Some(state) = self.transfer_properties.as_mut() {
+                if let Some(state) = self.transfer.file_ops.properties.as_mut() {
                     state.focused_field = match state.focused_field {
                         TransferPropertiesField::Mode => TransferPropertiesField::Owner,
                         TransferPropertiesField::Owner => TransferPropertiesField::Group,
@@ -95,7 +95,7 @@ impl NyaTermApp {
                 cx.notify();
             }
             "backspace" => {
-                if let Some(state) = self.transfer_properties.as_mut() {
+                if let Some(state) = self.transfer.file_ops.properties.as_mut() {
                     match state.focused_field {
                         TransferPropertiesField::Mode => {
                             state.mode_value.pop();
@@ -116,7 +116,7 @@ impl NyaTermApp {
                     .key_char
                     .as_deref()
                     .filter(|input| !input.is_empty())
-                    && let Some(state) = self.transfer_properties.as_mut()
+                    && let Some(state) = self.transfer.file_ops.properties.as_mut()
                 {
                     match state.focused_field {
                         TransferPropertiesField::Mode => {
@@ -148,7 +148,7 @@ impl NyaTermApp {
             return;
         };
         let id = self.next_transfer_id("sftp-properties");
-        self.transfer_jobs.push(TransferJobState {
+        self.transfer.queue.jobs.push(TransferJobState {
             id: id.clone(),
             session_id: self.active_session_id.clone(),
             kind: TransferJobKind::LoadProperties {
@@ -161,8 +161,8 @@ impl NyaTermApp {
             progress: None,
             control: None,
         });
-        self.transfer_browser_status = format!("Loading properties for {remote_path}");
-        let transfer_tx = self.transfer_tx.clone();
+        self.transfer.browser.status = format!("Loading properties for {remote_path}");
+        let transfer_tx = self.transfer.queue.tx.clone();
         std::thread::spawn(move || {
             let result = SftpService::new(config)
                 .file_properties(&remote_path)
@@ -184,7 +184,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.transfer_properties.clone() else {
+        let Some(state) = self.transfer.file_ops.properties.clone() else {
             self.terminal_status = "no remote properties dialog is active".to_string();
             cx.notify();
             return;
@@ -197,7 +197,7 @@ impl NyaTermApp {
         let mode = match parse_transfer_mode(&state.mode_value) {
             Some(mode) => mode,
             None => {
-                if let Some(state) = self.transfer_properties.as_mut() {
+                if let Some(state) = self.transfer.file_ops.properties.as_mut() {
                     state.error = Some("Mode must be a 3 or 4 digit octal value.".to_string());
                 }
                 cx.notify();
@@ -207,7 +207,7 @@ impl NyaTermApp {
         let owner = state.owner_value.trim().to_string();
         let group = state.group_value.trim().to_string();
         if owner.is_empty() || group.is_empty() {
-            if let Some(state) = self.transfer_properties.as_mut() {
+            if let Some(state) = self.transfer.file_ops.properties.as_mut() {
                 state.error = Some("Owner and group are required.".to_string());
             }
             cx.notify();
@@ -231,7 +231,7 @@ impl NyaTermApp {
             self.close_transfer_properties(cx);
             return;
         }
-        if let Some(state) = self.transfer_properties.as_mut() {
+        if let Some(state) = self.transfer.file_ops.properties.as_mut() {
             state.saving = true;
             state.error = None;
         }
@@ -258,7 +258,7 @@ impl NyaTermApp {
             return;
         };
         let id = self.next_transfer_id("sftp-update-properties");
-        self.transfer_jobs.push(TransferJobState {
+        self.transfer.queue.jobs.push(TransferJobState {
             id: id.clone(),
             session_id: self.active_session_id.clone(),
             kind: TransferJobKind::UpdateProperties {
@@ -272,8 +272,8 @@ impl NyaTermApp {
             progress: None,
             control: None,
         });
-        self.transfer_browser_status = format!("Updating properties for {remote_path}");
-        let transfer_tx = self.transfer_tx.clone();
+        self.transfer.browser.status = format!("Updating properties for {remote_path}");
+        let transfer_tx = self.transfer.queue.tx.clone();
         std::thread::spawn(move || {
             let result = (|| {
                 let service = SftpService::new(config);

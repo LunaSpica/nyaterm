@@ -6,11 +6,16 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let state = self.transfer_delete.clone().unwrap_or(TransferDeleteState {
-            remote_path: String::new(),
-            name: String::new(),
-            paths: Vec::new(),
-        });
+        let state = self
+            .transfer
+            .file_ops
+            .delete
+            .clone()
+            .unwrap_or(TransferDeleteState {
+                remote_path: String::new(),
+                name: String::new(),
+                paths: Vec::new(),
+            });
         let delete_count = state.paths.len().max(1);
         let delete_title = if delete_count == 1 {
             self.tr("fileExplorer.sureDelete")
@@ -39,9 +44,9 @@ impl NyaTermApp {
             .flex()
             .items_center()
             .justify_center()
-            .track_focus(&self.transfer_delete_focus)
+            .track_focus(&self.transfer.file_ops.delete_focus)
             .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(&this.transfer_delete_focus);
+                window.focus(&this.transfer.file_ops.delete_focus);
                 cx.notify();
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
@@ -136,11 +141,16 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let state = self.transfer_move.clone().unwrap_or(TransferMoveState {
-            old_path: String::new(),
-            name: String::new(),
-            value: String::new(),
-        });
+        let state = self
+            .transfer
+            .file_ops
+            .move_to
+            .clone()
+            .unwrap_or(TransferMoveState {
+                old_path: String::new(),
+                name: String::new(),
+                value: String::new(),
+            });
         let input_display = if state.value.is_empty() {
             self.tr("fileExplorer.location").to_string()
         } else {
@@ -159,9 +169,9 @@ impl NyaTermApp {
             .flex()
             .items_center()
             .justify_center()
-            .track_focus(&self.transfer_move_focus)
+            .track_focus(&self.transfer.file_ops.move_focus)
             .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(&this.transfer_move_focus);
+                window.focus(&this.transfer.file_ops.move_focus);
                 cx.notify();
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
