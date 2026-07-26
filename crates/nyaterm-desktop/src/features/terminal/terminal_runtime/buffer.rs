@@ -4,8 +4,8 @@ use std::fmt::Write as _;
 use super::*;
 use crate::models::{
     MainMode, TerminalFrameBufferTextEvent, TerminalFrameOutputEvent,
-    TerminalFrameOutputSubmission, TerminalFrameSearchEvent, TerminalSearchMode,
-    TerminalWindowNode, WorkspacePaneNode, append_terminal_ui_output_tail,
+    TerminalFrameOutputSubmission, TerminalFrameSearchEvent, TerminalFrameSnapshotEvent,
+    TerminalSearchMode, TerminalWindowNode, WorkspacePaneNode, append_terminal_ui_output_tail,
     terminal_frame_scroll_window_extra_rows,
 };
 
