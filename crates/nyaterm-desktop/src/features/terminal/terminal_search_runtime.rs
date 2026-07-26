@@ -2,6 +2,7 @@ use super::*;
 
 use crate::models::{
     RecordingHistorySearchKey, RecordingWriteEvent, TerminalFrameSearchKey, TerminalSearchMode,
+    terminal_frame_search_result_is_current,
 };
 
 impl NyaTermApp {
