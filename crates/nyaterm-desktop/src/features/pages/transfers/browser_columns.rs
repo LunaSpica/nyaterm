@@ -7,12 +7,9 @@ impl NyaTermApp {
         event: &MouseDownEvent,
         cx: &mut Context<Self>,
     ) {
-        self.transfer.browser.column_resize = Some(TransferBrowserColumnResizeState {
-            column,
-            start_x: event.position.x,
-            start_width: self.transfer.browser.column_widths.get(column),
-        });
-        self.transfer.browser.status = format!("resizing {} column", column.label().to_lowercase());
+        self.transfer
+            .browser
+            .start_column_resize(column, event.position.x);
         cx.notify();
     }
 
@@ -21,18 +18,9 @@ impl NyaTermApp {
         event: &MouseMoveEvent,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.transfer.browser.column_resize else {
-            return;
-        };
-        let next_width = state.start_width + (event.position.x - state.start_x);
-        self.transfer
-            .browser
-            .column_widths
-            .set(state.column, next_width);
-        let width = f32::from(self.transfer.browser.column_widths.get(state.column)).round();
-        self.transfer.browser.status =
-            format!("{} column: {width}px", state.column.label().to_lowercase());
-        cx.notify();
+        if self.transfer.browser.update_column_resize(event.position.x) {
+            cx.notify();
+        }
     }
 
     pub(in crate::features) fn finish_transfer_browser_column_resize(
@@ -40,8 +28,7 @@ impl NyaTermApp {
         _event: &MouseUpEvent,
         cx: &mut Context<Self>,
     ) {
-        if self.transfer.browser.column_resize.take().is_some() {
-            self.transfer.browser.status = "file column width updated".to_string();
+        if self.transfer.browser.finish_column_resize() {
             cx.notify();
         }
     }

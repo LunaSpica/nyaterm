@@ -14,7 +14,7 @@ use std::collections::{HashSet, VecDeque};
 use std::time::Duration;
 
 use crate::models::{
-    TransferBrowserColumnResizeState, TransferBrowserColumnWidths, TransferBrowserContextMenuState,
+    TransferBrowserColumnWidths, TransferBrowserContextMenuState,
     TransferBrowserDragSelectionState, TransferBrowserFavoritesMenuState,
     TransferBrowserPendingRenameState, TransferBrowserSessionCacheState, TransferBrowserSortColumn,
     TransferBrowserSortDirection, TransferBrowserUploadMenuState, TransferDeleteState,

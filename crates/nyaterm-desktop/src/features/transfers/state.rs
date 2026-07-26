@@ -9,7 +9,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::mpsc;
 use std::time::Instant;
 
-use gpui::{FocusHandle, WindowHandle};
+use gpui::{FocusHandle, Pixels, WindowHandle};
 use nyaterm_transport::{SftpDuplicatePolicy, SftpFileEntry};
 
 use crate::features::{TransferExternalSyncWindow, TransferJobResult};
@@ -266,5 +266,45 @@ impl TransferFeatureState {
                 height_resize: None,
             },
         }
+    }
+}
+
+/// Column resize is self-contained: it only reads and writes browser geometry.
+///
+/// Keeping it here rather than on `NyaTermApp` means a drag cannot reach any
+/// other app state; the page-level handlers are forwarders that own the redraw.
+impl TransferBrowserState {
+    pub(in crate::features) fn start_column_resize(
+        &mut self,
+        column: TransferBrowserSortColumn,
+        position_x: Pixels,
+    ) {
+        self.column_resize = Some(TransferBrowserColumnResizeState {
+            column,
+            start_x: position_x,
+            start_width: self.column_widths.get(column),
+        });
+        self.status = format!("resizing {} column", column.label().to_lowercase());
+    }
+
+    /// Returns false when no resize is in flight, so the caller can skip the redraw.
+    pub(in crate::features) fn update_column_resize(&mut self, position_x: Pixels) -> bool {
+        let Some(state) = self.column_resize else {
+            return false;
+        };
+        let next_width = state.start_width + (position_x - state.start_x);
+        self.column_widths.set(state.column, next_width);
+        let width = f32::from(self.column_widths.get(state.column)).round();
+        self.status = format!("{} column: {width}px", state.column.label().to_lowercase());
+        true
+    }
+
+    /// Returns false when no resize was in flight, so the caller can skip the redraw.
+    pub(in crate::features) fn finish_column_resize(&mut self) -> bool {
+        if self.column_resize.take().is_none() {
+            return false;
+        }
+        self.status = "file column width updated".to_string();
+        true
     }
 }
