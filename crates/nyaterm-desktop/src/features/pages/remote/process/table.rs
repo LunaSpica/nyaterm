@@ -295,11 +295,6 @@ pub(in crate::features::pages::remote) fn process_table_row(
 
 #[derive(Clone, Copy)]
 pub(in crate::features::pages::remote) struct ProcessTableLabels {
-    pub process: &'static str,
-    pub pid: &'static str,
-    pub cpu: &'static str,
-    pub memory: &'static str,
-    pub user: &'static str,
     pub more: &'static str,
     pub copy_pid: &'static str,
     pub copy_command: &'static str,

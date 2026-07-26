@@ -3,7 +3,6 @@
 pub(in crate::features) struct ConnectionIconDef {
     pub path: &'static str,
     pub color: u32,
-    pub glyph: &'static str,
 }
 
 /// Keys exposed by the Tauri connection icon picker, in its display order.
@@ -66,24 +65,20 @@ fn connection_icon_by_key(key: &str) -> Option<ConnectionIconDef> {
         return Some(ConnectionIconDef {
             path: "icons/conn/server.svg",
             color,
-            glyph: "☰",
         });
     }
     Some(match key.as_str() {
         "linux" => ConnectionIconDef {
             path: "icons/conn/linux.svg",
             color: 0xfcc624,
-            glyph: "🐧",
         },
         "ubuntu" => ConnectionIconDef {
             path: "icons/conn/ubuntu.svg",
             color: 0xe95420,
-            glyph: "U",
         },
         "debian" => ConnectionIconDef {
             path: "icons/conn/debian.svg",
             color: 0xa81d33,
-            glyph: "D",
         },
         "centos" | "fedora" | "arch" | "manjaro" | "opensuse" | "rocky" | "alma" | "alpine"
         | "kali" | "mint" | "nixos" | "gentoo" | "freebsd" | "raspberrypi" => ConnectionIconDef {
@@ -105,62 +100,50 @@ fn connection_icon_by_key(key: &str) -> Option<ConnectionIconDef> {
                 "raspberrypi" => 0xa22846,
                 _ => 0xfcc624,
             },
-            glyph: "🐧",
         },
         "apple" => ConnectionIconDef {
             path: "icons/conn/apple.svg",
             color: 0xa2aaad,
-            glyph: "",
         },
         "windows" => ConnectionIconDef {
             path: "icons/conn/windows.svg",
             color: 0x0078d4,
-            glyph: "▣",
         },
         "android" => ConnectionIconDef {
             path: "icons/conn/linux.svg",
             color: 0x3ddc84,
-            glyph: "A",
         },
         "docker" => ConnectionIconDef {
             path: "icons/conn/docker.svg",
             color: 0x2496ed,
-            glyph: "🐋",
         },
         "python" => ConnectionIconDef {
             path: "icons/conn/python.svg",
             color: 0x3776ab,
-            glyph: "Py",
         },
         "github" => ConnectionIconDef {
             path: "icons/conn/github.svg",
             color: 0xc9d1d9,
-            glyph: "GH",
         },
         "k8s" | "kubernetes" => ConnectionIconDef {
             path: "icons/conn/docker.svg",
             color: 0x326ce5,
-            glyph: "K",
         },
         "local" | "terminal" => ConnectionIconDef {
             path: "icons/conn/terminal.svg",
             color: 0x4ade80,
-            glyph: ">_",
         },
         "telnet" => ConnectionIconDef {
             path: "icons/conn/telnet.svg",
             color: 0xd29922,
-            glyph: "⇄",
         },
         "serial" => ConnectionIconDef {
             path: "icons/conn/serial.svg",
             color: 0xbc8cff,
-            glyph: "⌁",
         },
         "folder" | "group" => ConnectionIconDef {
             path: "icons/conn/folder.svg",
             color: 0xfbbf24,
-            glyph: "📁",
         },
         // Other QUICK_ICONS keys fall back to colored server glyph.
         "nginx" | "redis" | "postgres" | "mysql" | "mongodb" | "js" | "ts" | "rust" | "go"
@@ -183,7 +166,6 @@ fn connection_icon_by_key(key: &str) -> Option<ConnectionIconDef> {
                 "gitlab" => 0xfc6d26,
                 _ => 0x60a5fa,
             },
-            glyph: "☰",
         },
         _ => return None,
     })
@@ -194,22 +176,18 @@ fn default_connection_icon_for_kind(kind: &str) -> ConnectionIconDef {
         "Local" => ConnectionIconDef {
             path: "icons/conn/terminal.svg",
             color: 0x4ade80,
-            glyph: ">_",
         },
         "Telnet" => ConnectionIconDef {
             path: "icons/conn/telnet.svg",
             color: 0xd29922,
-            glyph: "⇄",
         },
         "Serial" => ConnectionIconDef {
             path: "icons/conn/serial.svg",
             color: 0xbc8cff,
-            glyph: "⌁",
         },
         _ => ConnectionIconDef {
             path: "icons/conn/server.svg",
             color: 0x60a5fa,
-            glyph: "☰",
         },
     }
 }

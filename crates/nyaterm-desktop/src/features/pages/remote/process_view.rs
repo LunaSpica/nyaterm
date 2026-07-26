@@ -36,11 +36,6 @@ impl NyaTermApp {
         let menu_bg = self.shell_surface_color(palette.surface);
         let dialog_bg = self.shell_surface_color(palette.bg);
         let table_labels = ProcessTableLabels {
-            process: self.tr("processManager.process"),
-            pid: self.tr("processManager.sortPid"),
-            cpu: self.tr("processManager.sortCpu"),
-            memory: self.tr("processManager.sortMemory"),
-            user: self.tr("processManager.user"),
             more: self.tr("common.more"),
             copy_pid: self.tr("processManager.copyPid"),
             copy_command: self.tr("processManager.copyCommand"),

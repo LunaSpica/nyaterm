@@ -423,7 +423,6 @@ impl NyaTermApp {
             command_persistence_rx,
             command_persistence_pending: 0,
             session_command_history: HashMap::new(),
-            command_search_draft: String::new(),
             command_search_focus: cx.focus_handle(),
             active_sessions_search_draft: String::new(),
             active_sessions_search_focus: cx.focus_handle(),

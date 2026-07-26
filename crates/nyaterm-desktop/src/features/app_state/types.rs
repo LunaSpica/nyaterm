@@ -74,8 +74,6 @@ pub(in crate::features) struct TerminalRuntimeUiState {
     pub pending_ui_notify: bool,
     /// Full NyaTermApp shell paints (chrome + workspace structure).
     pub full_shell_paint_count: u64,
-    /// TerminalSurface entity paints (grid only).
-    pub terminal_surface_paint_count: u64,
     /// Output frames that notified only a TerminalSurface.
     pub terminal_surface_frame_notify_count: u64,
     /// Output frames that also dirtied chrome (unread/effects).
@@ -193,7 +191,6 @@ impl Default for TerminalRuntimeUiState {
             last_ui_notify_at: None,
             pending_ui_notify: false,
             full_shell_paint_count: 0,
-            terminal_surface_paint_count: 0,
             terminal_surface_frame_notify_count: 0,
             terminal_chrome_frame_notify_count: 0,
             last_terminal_perf_heartbeat_at: None,
