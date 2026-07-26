@@ -1,12 +1,8 @@
 use super::*;
 
-#[path = "send_command_bar/controls.rs"]
 mod controls;
-#[path = "send_command_bar/editor.rs"]
 mod editor;
-#[path = "send_command_bar/header.rs"]
 mod header;
-#[path = "send_command_bar/state.rs"]
 mod state;
 
 impl NyaTermApp {

@@ -11,7 +11,7 @@ Last updated from the working tree on 2026-07-26.
 | --- | ---: | --- |
 | `NyaTermApp` fields | 585 | Counted from `features/app_state/mod.rs`; still transitional and too broad. |
 | `impl NyaTermApp` blocks | 236 | Spread across 233 files under `crates/nyaterm-desktop/src`. |
-| `#[path = "..."]` declarations in desktop | 178 | Historical migration debt; do not add new occurrences. |
+| `#[path = "..."]` declarations in desktop | 90 | Historical migration debt; do not add new occurrences. |
 | `use super::*` imports in desktop | 355 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
 | `features/prelude.rs` rough exported-token count | 230 | Still a broad shared prelude; two hundred fifteen low-frequency transport/core/http/model exports are now explicit imports. |
 | Entity Store structs | 13 | Includes store handles/runtime stores and domain stores. |
@@ -67,6 +67,11 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   `cloud_sync_runtime`, `transfer_jobs` and `remote_runtime` subtrees. Ten more
   `crate::features` level re-exports turned out to be unused once each consumer
   sat inside the owning subtree, and were removed.
+- The `layout`, `panels`, `inspector`, `formatting` and `view_widgets` view
+  areas are real module trees, including their nested `security_panel/panel`,
+  `workspace/surface`, `quick_commands_panel/panel`, `send_command_bar`,
+  `tab_actions_overlay` and `ai_widgets` subtrees. All five are guarded against
+  new `#[path]` declarations.
 - The connections UI state has started moving out of scattered `NyaTermApp`
   fields and into `ConnectionFeatureState`.
 - The current connections state split separates list UI, import UI, editor

@@ -19,25 +19,19 @@ use super::{
     parse_inline_markdown, parse_markdown_blocks, tunnel_endpoint, tunnel_mode_label, tunnel_name,
 };
 
-#[path = "view_widgets/chrome.rs"]
 mod chrome;
 pub(in crate::features) use chrome::*;
 
-#[path = "view_widgets/inspector_widgets.rs"]
 mod inspector_widgets;
 pub(in crate::features) use inspector_widgets::*;
 
-#[path = "view_widgets/stats.rs"]
 mod stats;
 pub(in crate::features) use stats::*;
-#[path = "view_widgets/rows.rs"]
 mod rows;
 pub(in crate::features) use rows::*;
 
-#[path = "view_widgets/icons.rs"]
 mod icons;
 pub(in crate::features) use icons::*;
 
-#[path = "view_widgets/markdown.rs"]
 mod markdown;
 pub(in crate::features) use markdown::*;

@@ -2,10 +2,8 @@ use super::*;
 use crate::models::{QuickCommandSortMode, QuickCommandViewMode};
 use gpui::uniform_list;
 
-#[path = "panel/rows.rs"]
 mod rows;
 use rows::quick_command_tile_column_count;
-#[path = "panel/sidebar.rs"]
 mod sidebar;
 impl NyaTermApp {
     pub(in crate::features) fn quick_commands_panel(

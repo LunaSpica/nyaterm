@@ -13,19 +13,15 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use super::{AiAgentStepStatus, NyaTermApp};
 
-#[path = "formatting/labels.rs"]
 mod labels;
 pub(in crate::features) use labels::*;
 
-#[path = "formatting/ai_history.rs"]
 mod ai_history;
 pub(in crate::features) use ai_history::*;
 
-#[path = "formatting/connection_icons.rs"]
 mod connection_icons;
 pub(in crate::features) use connection_icons::*;
 
-#[path = "formatting/markdown.rs"]
 mod markdown;
 pub(in crate::features) use markdown::*;
 

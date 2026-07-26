@@ -2,13 +2,9 @@ use super::*;
 
 use crate::models::{SecurityAuthTab, SecurityDeleteConfirmState};
 
-#[path = "panel/credentials.rs"]
 mod credentials;
-#[path = "panel/keys.rs"]
 mod keys;
-#[path = "panel/otp.rs"]
 mod otp;
-#[path = "panel/passwords.rs"]
 mod passwords;
 
 impl NyaTermApp {

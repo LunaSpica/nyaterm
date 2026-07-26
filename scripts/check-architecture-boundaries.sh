@@ -488,6 +488,16 @@ check_no_matches 'transfers feature #[path] debt' '#\[path\s*=' \
   crates/nyaterm-desktop/src/features/transfers
 check_no_matches 'translation feature #[path] debt' '#\[path\s*=' \
   crates/nyaterm-desktop/src/features/translation
+check_no_matches 'formatting feature #[path] debt' '#\[path\s*=' \
+  crates/nyaterm-desktop/src/features/formatting
+check_no_matches 'inspector feature #[path] debt' '#\[path\s*=' \
+  crates/nyaterm-desktop/src/features/inspector
+check_no_matches 'layout feature #[path] debt' '#\[path\s*=' \
+  crates/nyaterm-desktop/src/features/layout
+check_no_matches 'panels feature #[path] debt' '#\[path\s*=' \
+  crates/nyaterm-desktop/src/features/panels
+check_no_matches 'view_widgets feature #[path] debt' '#\[path\s*=' \
+  crates/nyaterm-desktop/src/features/view_widgets
 check_no_matches 'features root #[path] debt' '#\[path\s*=' \
   crates/nyaterm-desktop/src/features/mod.rs
 check_no_matches 'session feature #[path] debt' '#\[path\s*=' \
