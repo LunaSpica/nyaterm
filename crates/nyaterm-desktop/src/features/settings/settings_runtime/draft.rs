@@ -10,10 +10,10 @@ impl NyaTermApp {
         }
         self.settings_draft_snapshot = Some(SettingsDraftSnapshot {
             settings: self.settings.clone(),
-            ai_settings: self.ai_settings.clone(),
-            ai_model_draft: self.ai_model_draft.clone(),
-            ai_base_url_draft: self.ai_base_url_draft.clone(),
-            ai_secret_draft: self.ai_secret_draft.clone(),
+            ai_settings: self.ai.settings.config.clone(),
+            ai_model_draft: self.ai.settings.model_draft.clone(),
+            ai_base_url_draft: self.ai.settings.base_url_draft.clone(),
+            ai_secret_draft: self.ai.settings.secret_draft.clone(),
             cloud_sync_settings: self.cloud_sync_settings.clone(),
             cloud_sync_secret_draft: self.cloud_sync_secret_draft.clone(),
             translation_settings: self.translation_settings.clone(),
@@ -29,10 +29,10 @@ impl NyaTermApp {
             return false;
         };
         snapshot.settings != self.settings
-            || snapshot.ai_settings != self.ai_settings
-            || snapshot.ai_model_draft != self.ai_model_draft
-            || snapshot.ai_base_url_draft != self.ai_base_url_draft
-            || snapshot.ai_secret_draft != self.ai_secret_draft
+            || snapshot.ai_settings != self.ai.settings.config
+            || snapshot.ai_model_draft != self.ai.settings.model_draft
+            || snapshot.ai_base_url_draft != self.ai.settings.base_url_draft
+            || snapshot.ai_secret_draft != self.ai.settings.secret_draft
             || snapshot.cloud_sync_settings != self.cloud_sync_settings
             || snapshot.cloud_sync_secret_draft != self.cloud_sync_secret_draft
             || snapshot.translation_settings != self.translation_settings
@@ -321,13 +321,13 @@ impl NyaTermApp {
                 self.apply_gpui_settings(saved_settings);
                 self.settings_master_password_enabled = self.settings.has_master_password;
                 self.settings_master_password_draft.clear();
-                self.ai_settings = saved_ai_settings;
+                self.ai.settings.config = saved_ai_settings;
                 self.cloud_sync_settings = saved_cloud_sync_settings;
                 self.translation_settings = saved_translation_settings;
                 self.keyword_highlights = saved_keyword_highlights;
                 self.translation_secret_draft = TranslationSecretDraft::default();
                 self.cloud_sync_secret_draft = CloudSyncSecretDraft::default();
-                self.ai_secret_draft.clear();
+                self.ai.settings.secret_draft.clear();
                 self.sync_ai_drafts_from_active_profile();
                 self.translate_target_language = self.translation_settings.target_language.clone();
                 self.recording_manager
@@ -378,10 +378,10 @@ impl NyaTermApp {
     pub(in crate::features) fn cancel_settings(&mut self, cx: &mut Context<Self>) {
         if let Some(snapshot) = self.settings_draft_snapshot.take() {
             self.apply_gpui_settings(snapshot.settings);
-            self.ai_settings = snapshot.ai_settings;
-            self.ai_model_draft = snapshot.ai_model_draft;
-            self.ai_base_url_draft = snapshot.ai_base_url_draft;
-            self.ai_secret_draft = snapshot.ai_secret_draft;
+            self.ai.settings.config = snapshot.ai_settings;
+            self.ai.settings.model_draft = snapshot.ai_model_draft;
+            self.ai.settings.base_url_draft = snapshot.ai_base_url_draft;
+            self.ai.settings.secret_draft = snapshot.ai_secret_draft;
             self.cloud_sync_settings = snapshot.cloud_sync_settings;
             self.cloud_sync_secret_draft = snapshot.cloud_sync_secret_draft;
             self.translation_settings = snapshot.translation_settings;

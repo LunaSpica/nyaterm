@@ -9,25 +9,34 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let query = self.ai_settings_model_query.clone();
+        let query = self.ai.settings.model_query.clone();
         let query_placeholder = self.tr("ai.searchModels");
-        let has_enabled_custom_credential =
-            self.ai_settings
-                .provider_credentials
-                .iter()
-                .any(|credential| {
-                    credential.enabled
-                        && credential.provider_kind
-                            == nyaterm_core::AiProviderKind::OpenaiCompatible
-                });
+        let has_enabled_custom_credential = self
+            .ai
+            .settings
+            .config
+            .provider_credentials
+            .iter()
+            .any(|credential| {
+                credential.enabled
+                    && credential.provider_kind == nyaterm_core::AiProviderKind::OpenaiCompatible
+            });
         let enabled_credentials = self
-            .ai_settings
+            .ai
+            .settings
+            .config
             .provider_credentials
             .iter()
             .filter(|credential| credential.enabled)
             .count();
-        let has_enabled_model = self.ai_settings.models.iter().any(|model| model.enabled);
-        let refresh_label = if self.ai_discovery_pending {
+        let has_enabled_model = self
+            .ai
+            .settings
+            .config
+            .models
+            .iter()
+            .any(|model| model.enabled);
+        let refresh_label = if self.ai.discovery.pending {
             self.tr("common.loading")
         } else {
             self.tr("ai.refreshModels")
@@ -78,9 +87,9 @@ impl NyaTermApp {
                                     } else {
                                         query
                                     })
-                                    .track_focus(&self.ai_settings_model_search_focus)
+                                    .track_focus(&self.ai.settings.model_search_focus)
                                     .on_click(cx.listener(|this, _, window, cx| {
-                                        window.focus(&this.ai_settings_model_search_focus);
+                                        window.focus(&this.ai.settings.model_search_focus);
                                         cx.notify();
                                     }))
                                     .on_key_down(cx.listener(
@@ -95,7 +104,7 @@ impl NyaTermApp {
                                 div()
                                     .opacity(
                                         if has_enabled_custom_credential
-                                            && !self.ai_discovery_pending
+                                            && !self.ai.discovery.pending
                                         {
                                             1.0
                                         } else {
@@ -108,7 +117,7 @@ impl NyaTermApp {
                                         refresh_label,
                                         cx.listener(move |this, _, _, cx| {
                                             if has_enabled_custom_credential
-                                                && !this.ai_discovery_pending
+                                                && !this.ai.discovery.pending
                                             {
                                                 this.discover_ai_models(cx);
                                             }

@@ -8,7 +8,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let file_size_mb = (self.ai_settings.max_ai_file_size_bytes / (1024 * 1024)).max(1);
+        let file_size_mb = (self.ai.settings.config.max_ai_file_size_bytes / (1024 * 1024)).max(1);
         let terminal_actions = self.ai_action_editor(
             palette,
             AiActionListKind::Terminal,
@@ -58,10 +58,10 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let actions = match kind {
-            AiActionListKind::Terminal => self.ai_settings.terminal_ai_actions.clone(),
-            AiActionListKind::File => self.ai_settings.file_ai_actions.clone(),
+            AiActionListKind::Terminal => self.ai.settings.config.terminal_ai_actions.clone(),
+            AiActionListKind::File => self.ai.settings.config.file_ai_actions.clone(),
         };
-        let edit = self.ai_action_edit.clone();
+        let edit = self.ai.settings.action_edit.clone();
         let add_label = self.tr("common.add");
         let delete_label = self.tr("common.delete");
         let name_placeholder = self.tr("ai.actionName");
@@ -113,7 +113,7 @@ impl NyaTermApp {
                         .flex()
                         .flex_col()
                         .gap_3()
-                        .track_focus(&self.ai_action_focus)
+                        .track_focus(&self.ai.settings.action_focus)
                         .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
                             this.handle_ai_action_key_down(event, cx);
                         }))

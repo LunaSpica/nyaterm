@@ -40,7 +40,9 @@ impl NyaTermApp {
             || matches!(status, AiAgentStepStatus::Planning);
 
         if let Some(step) = self
-            .ai_agent_steps
+            .ai
+            .agent
+            .steps
             .iter_mut()
             .find(|step| step.step_index == step_index)
         {
@@ -74,7 +76,7 @@ impl NyaTermApp {
             } else {
                 None
             };
-            self.ai_agent_steps.push(AiAgentStepView {
+            self.ai.agent.steps.push(AiAgentStepView {
                 step_index,
                 status,
                 title,
@@ -84,18 +86,20 @@ impl NyaTermApp {
                 observation,
             });
         }
-        let overflow = self.ai_agent_steps.len().saturating_sub(16);
+        let overflow = self.ai.agent.steps.len().saturating_sub(16);
         if overflow > 0 {
             let removed: Vec<u16> = self
-                .ai_agent_steps
+                .ai
+                .agent
+                .steps
                 .iter()
                 .take(overflow)
                 .map(|step| step.step_index)
                 .collect();
-            self.ai_agent_steps.drain(..overflow);
+            self.ai.agent.steps.drain(..overflow);
             for idx in removed {
-                self.ai_agent_thought_expanded.remove(&idx);
-                self.ai_agent_output_expanded.remove(&idx);
+                self.ai.agent.thought_expanded.remove(&idx);
+                self.ai.agent.output_expanded.remove(&idx);
             }
         }
     }
@@ -105,10 +109,10 @@ impl NyaTermApp {
         step_index: u16,
         cx: &mut Context<Self>,
     ) {
-        if self.ai_agent_thought_expanded.contains(&step_index) {
-            self.ai_agent_thought_expanded.remove(&step_index);
+        if self.ai.agent.thought_expanded.contains(&step_index) {
+            self.ai.agent.thought_expanded.remove(&step_index);
         } else {
-            self.ai_agent_thought_expanded.insert(step_index);
+            self.ai.agent.thought_expanded.insert(step_index);
         }
         cx.notify();
     }
@@ -118,10 +122,10 @@ impl NyaTermApp {
         step_index: u16,
         cx: &mut Context<Self>,
     ) {
-        if self.ai_agent_output_expanded.contains(&step_index) {
-            self.ai_agent_output_expanded.remove(&step_index);
+        if self.ai.agent.output_expanded.contains(&step_index) {
+            self.ai.agent.output_expanded.remove(&step_index);
         } else {
-            self.ai_agent_output_expanded.insert(step_index);
+            self.ai.agent.output_expanded.insert(step_index);
         }
         cx.notify();
     }
@@ -135,7 +139,7 @@ impl NyaTermApp {
     ) {
         let config_dir = self.runtime.config_dir().to_path_buf();
         let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
-        let write_lock = Arc::clone(&self.ai_audit_write_lock);
+        let write_lock = Arc::clone(&self.ai.history.audit_write_lock);
         let request = AppendAiAuditRequest {
             connection_id: self.ai_effective_target_session_id(),
             action: if execute {
@@ -143,7 +147,7 @@ impl NyaTermApp {
             } else {
                 "ai.command_card_insert".to_string()
             },
-            user_input: Some(self.ai_response_preview.clone()),
+            user_input: Some(self.ai.chat.response_preview.clone()),
             generated_command: Some(card.command.clone()),
             risk_level: card.risk_level.clone(),
             inserted_to_terminal,
@@ -183,21 +187,25 @@ impl NyaTermApp {
             return Ok(None);
         };
         let task_prompt = self
-            .ai_agent_task_prompt
+            .ai
+            .agent
+            .task_prompt
             .clone()
-            .unwrap_or_else(|| self.ai_response_preview.clone());
-        let max_steps = self.ai_settings.max_agent_steps.unwrap_or(10).max(1);
-        let step_index = self.ai_agent_step_index;
+            .unwrap_or_else(|| self.ai.chat.response_preview.clone());
+        let max_steps = self.ai.settings.config.max_agent_steps.unwrap_or(10).max(1);
+        let step_index = self.ai.agent.step_index;
         if step_index.saturating_add(1) >= max_steps {
-            self.ai_agent_loop = None;
-            self.ai_status =
+            self.ai.agent.loop_state = None;
+            self.ai.panel.status =
                 format!("AI Agent reached max step limit ({max_steps}); review terminal output");
             return Ok(None);
         }
-        self.ai_agent_step_index = self.ai_agent_step_index.saturating_add(1);
+        self.ai.agent.step_index = self.ai.agent.step_index.saturating_add(1);
         let now = Instant::now();
         let timeout = self
-            .ai_settings
+            .ai
+            .settings
+            .config
             .agent_step_timeout_ms
             .map(Duration::from_millis)
             .unwrap_or(AI_AGENT_DEFAULT_STEP_TIMEOUT);
@@ -209,7 +217,7 @@ impl NyaTermApp {
         let (marker_id, wrapped_command) =
             match build_agent_capture_command(profile, &marker_id, command.trim()) {
                 Some(wrapped) => {
-                    self.ai_agent_capture.register(marker_id.clone());
+                    self.ai.agent.capture.register(marker_id.clone());
                     (Some(marker_id), Some(wrapped))
                 }
                 None => (None, None),
@@ -217,8 +225,8 @@ impl NyaTermApp {
         let output_start_len = self
             .terminal_buffer_text_for_session(&terminal_session_id)
             .len();
-        self.ai_agent_loop = Some(AiAgentLoopState {
-            ai_session_id: self.ai_chat_session_id.clone(),
+        self.ai.agent.loop_state = Some(AiAgentLoopState {
+            ai_session_id: self.ai.chat.session_id.clone(),
             terminal_session_id,
             task_prompt,
             command: command.trim().to_string(),
@@ -234,7 +242,7 @@ impl NyaTermApp {
             stable_since: now,
         });
         self.sync_session_event_bridge_policy();
-        self.ai_status = format!(
+        self.ai.panel.status = format!(
             "AI Agent observing command output for step {}/{}",
             step_index + 1,
             max_steps
@@ -293,21 +301,25 @@ impl NyaTermApp {
             }
         };
         let task_prompt = self
-            .ai_agent_task_prompt
+            .ai
+            .agent
+            .task_prompt
             .clone()
-            .unwrap_or_else(|| self.ai_response_preview.clone());
-        let max_steps = self.ai_settings.max_agent_steps.unwrap_or(10).max(1);
-        let step_index = self.ai_agent_step_index;
+            .unwrap_or_else(|| self.ai.chat.response_preview.clone());
+        let max_steps = self.ai.settings.config.max_agent_steps.unwrap_or(10).max(1);
+        let step_index = self.ai.agent.step_index;
         if step_index.saturating_add(1) >= max_steps {
-            self.ai_agent_loop = None;
+            self.ai.agent.loop_state = None;
             return Err(format!(
                 "AI Agent reached max step limit ({max_steps}); review terminal output"
             ));
         }
-        self.ai_agent_step_index = self.ai_agent_step_index.saturating_add(1);
+        self.ai.agent.step_index = self.ai.agent.step_index.saturating_add(1);
         let now = Instant::now();
         let timeout = self
-            .ai_settings
+            .ai
+            .settings
+            .config
             .agent_step_timeout_ms
             .map(Duration::from_millis)
             .unwrap_or(AI_AGENT_DEFAULT_STEP_TIMEOUT);
@@ -316,7 +328,7 @@ impl NyaTermApp {
             .terminal_buffer_text_for_session(&terminal_session_id)
             .len();
         let state = AiAgentLoopState {
-            ai_session_id: self.ai_chat_session_id.clone(),
+            ai_session_id: self.ai.chat.session_id.clone(),
             terminal_session_id,
             task_prompt,
             command: command.trim().to_string(),
@@ -331,8 +343,8 @@ impl NyaTermApp {
             last_seen_len: output_start_len,
             stable_since: now,
         };
-        self.ai_agent_loop = Some(state.clone());
-        self.ai_status = format!(
+        self.ai.agent.loop_state = Some(state.clone());
+        self.ai.panel.status = format!(
             "AI Agent running {target_label} background command for step {}/{}",
             step_index + 1,
             max_steps
@@ -343,7 +355,7 @@ impl NyaTermApp {
             format!("{target_label} background"),
             truncate_preview(command.trim(), 140),
         );
-        let tx = self.ai_chat_tx.clone();
+        let tx = self.ai.chat.tx.clone();
         let command = state.command.clone();
         std::thread::spawn(move || {
             let started = Instant::now();
@@ -375,10 +387,10 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn drive_ai_agent_loop(&mut self, cx: &mut Context<Self>) -> bool {
-        if self.ai_chat_pending {
+        if self.ai.chat.pending {
             return false;
         }
-        let Some(state) = self.ai_agent_loop.as_ref() else {
+        let Some(state) = self.ai.agent.loop_state.as_ref() else {
             return false;
         };
         if state.background_job_id.is_some() {
@@ -389,8 +401,9 @@ impl NyaTermApp {
             || self.is_session_disconnected(&terminal_session_id)
         {
             let step_index = state.step_index;
-            self.ai_agent_loop = None;
-            self.ai_status = "AI Agent loop stopped because the target session closed".to_string();
+            self.ai.agent.loop_state = None;
+            self.ai.panel.status =
+                "AI Agent loop stopped because the target session closed".to_string();
             self.upsert_ai_agent_step(
                 step_index,
                 AiAgentStepStatus::Failed,
@@ -401,7 +414,7 @@ impl NyaTermApp {
             return true;
         }
 
-        let Some(state) = self.ai_agent_loop.as_mut() else {
+        let Some(state) = self.ai.agent.loop_state.as_mut() else {
             return false;
         };
 
@@ -429,9 +442,9 @@ impl NyaTermApp {
                 .try_into()
                 .unwrap_or(u64::MAX);
             let command = state.command.clone();
-            self.ai_agent_capture.cancel(&marker_id);
+            self.ai.agent.capture.cancel(&marker_id);
             self.sync_session_event_bridge_policy();
-            let Some(state) = self.ai_agent_loop.take() else {
+            let Some(state) = self.ai.agent.loop_state.take() else {
                 return false;
             };
             let observation = CommandObservation {
@@ -440,7 +453,7 @@ impl NyaTermApp {
                 exit_code: None,
                 duration_ms: timeout_ms,
             };
-            self.ai_status = format!("AI Agent command capture timed out: {command}");
+            self.ai.panel.status = format!("AI Agent command capture timed out: {command}");
             self.upsert_ai_agent_step(
                 state.step_index,
                 AiAgentStepStatus::Failed,
@@ -457,7 +470,7 @@ impl NyaTermApp {
             return false;
         }
 
-        let Some(state) = self.ai_agent_loop.take() else {
+        let Some(state) = self.ai.agent.loop_state.take() else {
             return false;
         };
         let terminal_output = self.terminal_buffer_text_for_session(&state.terminal_session_id);
@@ -490,11 +503,11 @@ impl NyaTermApp {
         captured: AgentCapturedOutput,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.ai_agent_loop.take() else {
+        let Some(state) = self.ai.agent.loop_state.take() else {
             return;
         };
         if state.marker_id.as_deref() != Some(captured.marker_id.as_str()) {
-            self.ai_agent_loop = Some(state);
+            self.ai.agent.loop_state = Some(state);
             return;
         }
         let observation = CommandObservation {
@@ -502,7 +515,7 @@ impl NyaTermApp {
             exit_code: captured.exit_code,
             duration_ms: captured.duration_ms,
         };
-        self.ai_status = match observation.exit_code {
+        self.ai.panel.status = match observation.exit_code {
             Some(code) => format!("AI Agent captured command output with exit code {code}"),
             None => "AI Agent captured command output".to_string(),
         };
@@ -522,17 +535,19 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> bool {
         if !self
-            .ai_agent_loop
+            .ai
+            .agent
+            .loop_state
             .as_ref()
             .is_some_and(|state| state.terminal_session_id == session_id)
         {
             return false;
         }
-        let Some(state) = self.ai_agent_loop.take() else {
+        let Some(state) = self.ai.agent.loop_state.take() else {
             return false;
         };
         if let Some(marker_id) = state.marker_id.as_deref() {
-            self.ai_agent_capture.cancel(marker_id);
+            self.ai.agent.capture.cancel(marker_id);
             self.sync_session_event_bridge_policy();
         }
         let duration_ms = state
@@ -548,7 +563,7 @@ impl NyaTermApp {
             exit_code: None,
             duration_ms,
         };
-        self.ai_status =
+        self.ai.panel.status =
             "AI Agent command observation stopped because terminal output was dropped".to_string();
         self.upsert_ai_agent_step(
             state.step_index,
@@ -585,13 +600,13 @@ impl NyaTermApp {
         observation: CommandObservation,
         cx: &mut Context<Self>,
     ) {
-        if self.ai_chat_pending {
-            self.ai_agent_loop = Some(state);
+        if self.ai.chat.pending {
+            self.ai.agent.loop_state = Some(state);
             return;
         }
         let observation_message =
             build_observation_message(&observation, &state.command, &self.settings.language);
-        let settings = self.ai_settings.clone();
+        let settings = self.ai.settings.config.clone();
         let terminal_session_id = state.terminal_session_id.clone();
         let request = AiChatRequest {
             stream_id: None,
@@ -611,18 +626,18 @@ impl NyaTermApp {
         };
         let config_dir = self.runtime.config_dir().to_path_buf();
         let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
-        let tx = self.ai_chat_tx.clone();
+        let tx = self.ai.chat.tx.clone();
         let session_id = state.ai_session_id;
         let (job_id, cancel) = self.begin_ai_chat_job();
 
-        self.ai_chat_pending = true;
-        self.ai_response_preview = format!(
+        self.ai.chat.pending = true;
+        self.ai.chat.response_preview = format!(
             "Running AI Agent continuation step {}/{}...",
             state.step_index + 2,
             state.max_steps
         );
-        self.ai_command_cards.clear();
-        self.ai_status = self.ai_response_preview.clone();
+        self.ai.chat.command_cards.clear();
+        self.ai.panel.status = self.ai.chat.response_preview.clone();
         self.upsert_ai_agent_step(
             state.step_index.saturating_add(1),
             AiAgentStepStatus::Planning,

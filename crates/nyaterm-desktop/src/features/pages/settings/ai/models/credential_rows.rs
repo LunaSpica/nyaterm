@@ -8,17 +8,21 @@ impl NyaTermApp {
         palette: crate::theme::ThemePalette,
         cx: &mut Context<Self>,
     ) -> gpui::Div {
-        let credential_edit = self.ai_credential_edit.clone();
-        let credential_secret_drafts = self.ai_credential_secret_drafts.clone();
+        let credential_edit = self.ai.settings.credential_edit.clone();
+        let credential_secret_drafts = self.ai.settings.credential_secret_drafts.clone();
         let profile_name_label = self.tr("ai.profileName");
         let base_url_label = self.tr("ai.baseUrl");
         let api_key_label = self.tr("settings.apiKey");
         let delete_label = self.tr("common.delete");
         let save_label = self.tr("common.save");
 
-        self.ai_settings.provider_credentials.iter().cloned().fold(
-            div().flex().flex_col().gap_4(),
-            |rows, credential| {
+        self.ai
+            .settings
+            .config
+            .provider_credentials
+            .iter()
+            .cloned()
+            .fold(div().flex().flex_col().gap_4(), |rows, credential| {
                 let credential_id = credential.id.clone();
                 let credential_id_toggle = credential.id.clone();
                 let credential_id_delete = credential.id.clone();
@@ -69,7 +73,7 @@ impl NyaTermApp {
                         .flex()
                         .flex_col()
                         .gap_4()
-                        .track_focus(&self.ai_credential_focus)
+                        .track_focus(&self.ai.settings.credential_focus)
                         .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
                             cx.stop_propagation();
                             this.handle_ai_credential_key_down(event, cx);
@@ -198,7 +202,6 @@ impl NyaTermApp {
                             }),
                         ))),
                 )
-            },
-        )
+            })
     }
 }

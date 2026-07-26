@@ -4,8 +4,8 @@ use crate::models::{AiDetectedErrorState, AiPreparedRequest, SettingsTab};
 
 impl NyaTermApp {
     pub(in crate::features) fn dismiss_ai_detected_error(&mut self, cx: &mut Context<Self>) {
-        self.ai_detected_error = None;
-        self.ai_status = "terminal error notice dismissed".to_string();
+        self.ai.panel.detected_error = None;
+        self.ai.panel.status = "terminal error notice dismissed".to_string();
         cx.notify();
     }
 
@@ -14,30 +14,35 @@ impl NyaTermApp {
         detected: AiDetectedErrorState,
         cx: &mut Context<Self>,
     ) {
-        if self.ai_chat_pending || self.ai_agent_loop.is_some() {
-            self.ai_response_preview = "AI request already running".to_string();
-            self.ai_status = self.ai_response_preview.clone();
+        if self.ai.chat.pending || self.ai.agent.loop_state.is_some() {
+            self.ai.chat.response_preview = "AI request already running".to_string();
+            self.ai.panel.status = self.ai.chat.response_preview.clone();
             cx.notify();
             return;
         }
         let mut context = self.ai_terminal_context_for_session(Some(&detected.session_id));
         context.selected_text = detected.output.clone();
-        self.ai_prepared_request = Some(AiPreparedRequest {
+        self.ai.chat.prepared_request = Some(AiPreparedRequest {
             action: AiAction::AnalyzeError,
             context,
             source_label: "Detected terminal error".to_string(),
         });
         if !self
-            .ai_target_session_ids
+            .ai
+            .chat
+            .target_session_ids
             .iter()
             .any(|session_id| session_id == &detected.session_id)
         {
-            self.ai_target_session_ids.push(detected.session_id.clone());
+            self.ai
+                .chat
+                .target_session_ids
+                .push(detected.session_id.clone());
         }
-        self.ai_prompt_draft = "Analyze detected error".to_string();
-        self.ai_history_open = false;
-        self.ai_execution_menu_open = false;
-        self.ai_model_menu_open = false;
+        self.ai.chat.prompt_draft = "Analyze detected error".to_string();
+        self.ai.history.open = false;
+        self.ai.panel.execution_menu_open = false;
+        self.ai.discovery.menu_open = false;
         self.start_ai_ask(cx);
     }
 
@@ -106,15 +111,17 @@ impl NyaTermApp {
 
     pub(in crate::features) fn ai_ask_panel(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = self.theme_palette();
-        let agent_mode = self.ai_settings.default_mode == AiMode::Agent;
+        let agent_mode = self.ai.settings.config.default_mode == AiMode::Agent;
         let file_action_ready = self
-            .ai_prepared_request
+            .ai
+            .chat
+            .prepared_request
             .as_ref()
             .is_some_and(|request| request.action == AiAction::CustomFileAction);
-        let ai_running = self.ai_chat_pending || self.ai_agent_loop.is_some();
+        let ai_running = self.ai.chat.pending || self.ai.agent.loop_state.is_some();
         let command_rows = self.ai_command_card_list(cx);
         let mut agent_step_rows = div();
-        if agent_mode || !self.ai_agent_steps.is_empty() {
+        if agent_mode || !self.ai.agent.steps.is_empty() {
             agent_step_rows = agent_step_rows
                 .mt_2()
                 .border_t_1()
@@ -130,7 +137,7 @@ impl NyaTermApp {
                         .text_color(rgb(palette.text_muted))
                         .child(self.tr("ai.agentSteps")),
                 );
-            if self.ai_agent_steps.is_empty() {
+            if self.ai.agent.steps.is_empty() {
                 agent_step_rows = agent_step_rows.child(
                     div()
                         .text_xs()
@@ -138,7 +145,7 @@ impl NyaTermApp {
                         .child(self.tr("ai.agentNoSteps")),
                 );
             } else {
-                for step in self.ai_agent_steps.iter().cloned().rev().take(16).rev() {
+                for step in self.ai.agent.steps.iter().cloned().rev().take(16).rev() {
                     agent_step_rows = agent_step_rows.child(self.ai_agent_step_card(step, cx));
                 }
             }
@@ -152,15 +159,17 @@ impl NyaTermApp {
                 .cloned()
         });
         let model_choices = self.ai_filtered_model_choices();
-        if self.ai_model_index >= model_choices.len() && !model_choices.is_empty() {
-            self.ai_model_index = model_choices.len() - 1;
+        if self.ai.discovery.index >= model_choices.len() && !model_choices.is_empty() {
+            self.ai.discovery.index = model_choices.len() - 1;
         }
         let model_label = selected_model
             .as_ref()
             .map(|model| model.name.clone())
             .unwrap_or_else(|| self.tr("ai.notConfigured").to_string());
         let target_sessions = self
-            .ai_target_session_ids
+            .ai
+            .chat
+            .target_session_ids
             .iter()
             .filter_map(|session_id| {
                 self.session_info(session_id).map(|session| {
@@ -171,14 +180,16 @@ impl NyaTermApp {
                 })
             })
             .collect::<Vec<_>>();
-        let mention_candidates = if self.ai_mention_open {
+        let mention_candidates = if self.ai.chat.mention_open {
             self.ai_mention_candidates()
                 .into_iter()
                 .map(|session| {
                     let label = self.session_display_name_by_info(&session);
                     let kind = session_kind_label(session.kind).to_string();
                     let selected = self
-                        .ai_target_session_ids
+                        .ai
+                        .chat
+                        .target_session_ids
                         .iter()
                         .any(|session_id| session_id == &session.id);
                     (session, label, kind, selected)
@@ -187,14 +198,17 @@ impl NyaTermApp {
         } else {
             Vec::new()
         };
-        if self.ai_mention_index >= mention_candidates.len() && !mention_candidates.is_empty() {
-            self.ai_mention_index = mention_candidates.len() - 1;
+        if self.ai.chat.mention_index >= mention_candidates.len() && !mention_candidates.is_empty()
+        {
+            self.ai.chat.mention_index = mention_candidates.len() - 1;
         }
         let mode_label = if agent_mode { "Agent" } else { "Ask" };
-        let enabled = self.ai_settings.enabled;
+        let enabled = self.ai.settings.config.enabled;
         let composer_disabled = ai_running || !enabled;
         let send_disabled = !ai_running
-            && (!enabled || selected_model.is_none() || self.ai_prompt_draft.trim().is_empty());
+            && (!enabled
+                || selected_model.is_none()
+                || self.ai.chat.prompt_draft.trim().is_empty());
 
         div()
             .size_full()
@@ -203,16 +217,16 @@ impl NyaTermApp {
             .overflow_hidden()
             .bg(self.shell_transparent_color(palette.surface))
             .relative()
-            .when(self.ai_history_open, |this| {
+            .when(self.ai.history.open, |this| {
                 this.child(self.ai_history_popover(cx))
             })
-            .when(self.ai_execution_menu_open, |this| {
+            .when(self.ai.panel.execution_menu_open, |this| {
                 this.child(self.ai_execution_mode_menu(cx))
             })
-            .when(self.ai_message_menu.is_some(), |this| {
+            .when(self.ai.chat.message_menu.is_some(), |this| {
                 this.child(self.ai_message_context_menu_overlay(cx))
             })
-            .when_some(self.ai_detected_error.clone(), |this, detected| {
+            .when_some(self.ai.panel.detected_error.clone(), |this, detected| {
                 this.child(self.ai_detected_error_banner(detected, cx))
             })
             .child(
@@ -245,7 +259,7 @@ impl NyaTermApp {
                     .flex()
                     .flex_col()
                     .gap_2()
-                    .when_some(self.ai_quoted_text.clone(), |this, quoted_text| {
+                    .when_some(self.ai.chat.quoted_text.clone(), |this, quoted_text| {
                         let preview = truncate_preview(quoted_text.trim(), 140);
                         this.child(
                             div()
@@ -373,8 +387,8 @@ impl NyaTermApp {
                         }
                         this.child(target_row)
                     })
-                    .when(self.ai_mention_open, |this| {
-                        let selected_index = self.ai_mention_index;
+                    .when(self.ai.chat.mention_open, |this| {
+                        let selected_index = self.ai.chat.mention_index;
                         let mut popover = div()
                             .max_h(px(192.))
                             .overflow_hidden()
@@ -422,7 +436,7 @@ impl NyaTermApp {
                                         .cursor_pointer()
                                         .hover(|this| this.bg(rgb(palette.hover)))
                                         .on_click(cx.listener(move |this, _, _, cx| {
-                                            this.ai_mention_index = index;
+                                            this.ai.chat.mention_index = index;
                                             this.select_ai_mention_candidate(cx);
                                         }))
                                         .child(div().size(px(7.)).rounded_full().flex_none().bg(
@@ -464,21 +478,21 @@ impl NyaTermApp {
                             } else {
                                 "Ask about the terminal or generate a command…"
                             },
-                            self.ai_prompt_draft.clone(),
+                            self.ai.chat.prompt_draft.clone(),
                             !composer_disabled,
                             self.theme_palette(),
                         )
                         .h(px(64.))
                         .when(composer_disabled, |this| this.opacity(0.56))
-                        .track_focus(&self.ai_chat_focus)
+                        .track_focus(&self.ai.chat.focus)
                         .on_click(cx.listener(|this, _, window, cx| {
-                            if this.ai_chat_pending
-                                || this.ai_agent_loop.is_some()
-                                || !this.ai_settings.enabled
+                            if this.ai.chat.pending
+                                || this.ai.agent.loop_state.is_some()
+                                || !this.ai.settings.config.enabled
                             {
                                 return;
                             }
-                            window.focus(&this.ai_chat_focus);
+                            window.focus(&this.ai.chat.focus);
                             cx.notify();
                         }))
                         .on_key_down(cx.listener(
@@ -559,18 +573,18 @@ impl NyaTermApp {
                                                             .text_color(rgb(palette.text))
                                                     })
                                                     .on_click(cx.listener(|this, _, window, cx| {
-                                                        let opening = !this.ai_model_menu_open;
-                                                        this.ai_model_menu_open = opening;
+                                                        let opening = !this.ai.discovery.menu_open;
+                                                        this.ai.discovery.menu_open = opening;
                                                         if opening {
-                                                            this.ai_model_query.clear();
-                                                            this.ai_model_index =
+                                                            this.ai.discovery.query.clear();
+                                                            this.ai.discovery.index =
                                                                 this.ai_selected_model_index();
                                                             window.focus(
-                                                                &this.ai_model_search_focus,
+                                                                &this.ai.discovery.search_focus,
                                                             );
                                                         }
-                                                        this.ai_history_open = false;
-                                                        this.ai_execution_menu_open = false;
+                                                        this.ai.history.open = false;
+                                                        this.ai.panel.execution_menu_open = false;
                                                         cx.notify();
                                                     }))
                                                     .child(
@@ -590,9 +604,9 @@ impl NyaTermApp {
                                                             .text_color(rgb(palette.text_dimmed)),
                                                     ),
                                             )
-                                            .when(self.ai_model_menu_open, |this| {
+                                            .when(self.ai.discovery.menu_open, |this| {
                                                 let selected_id = selected_model_id.clone();
-                                                let focused_index = self.ai_model_index;
+                                                let focused_index = self.ai.discovery.index;
                                                 let mut menu = div()
                                                     .absolute()
                                                     .left_0()
@@ -639,7 +653,7 @@ impl NyaTermApp {
                                                                 })
                                                                 .on_click(cx.listener(
                                                                     |this, _, _, cx| {
-                                                                        this.ai_model_menu_open =
+                                                                        this.ai.discovery.menu_open =
                                                                             false;
                                                                         this.settings_active_tab =
                                                                             SettingsTab::AiModels;
@@ -656,17 +670,17 @@ impl NyaTermApp {
                                                         transfer_input(
                                                             "ai-model-search",
                                                             "Search models",
-                                                            self.ai_model_query.clone(),
+                                                            self.ai.discovery.query.clone(),
                                                             true,
                                                             self.theme_palette(),
                                                         )
                                                         .h(px(28.))
                                                         .mb_1()
-                                                        .track_focus(&self.ai_model_search_focus)
+                                                        .track_focus(&self.ai.discovery.search_focus)
                                                         .on_click(cx.listener(
                                                             |this, _, window, cx| {
                                                                 window.focus(
-                                                                    &this.ai_model_search_focus,
+                                                                    &this.ai.discovery.search_focus,
                                                                 );
                                                                 cx.notify();
                                                             },
@@ -740,13 +754,13 @@ impl NyaTermApp {
                                                                     })
                                                                     .on_click(cx.listener(
                                                                         move |this, _, _, cx| {
-                                                                            this.ai_model_index =
+                                                                            this.ai.discovery.index =
                                                                                 index;
-                                                                            this.ai_model_menu_open =
+                                                                            this.ai.discovery.menu_open =
                                                                                 false;
-                                                                            this.ai_model_query
+                                                                            this.ai.discovery.query
                                                                                 .clear();
-                                                                            this.ai_model_index = 0;
+                                                                            this.ai.discovery.index = 0;
                                                                             this.set_ai_default_model(
                                                                                 model_id.clone(),
                                                                                 cx,
@@ -826,10 +840,10 @@ impl NyaTermApp {
                         )
                     }),
             )
-            .when(self.ai_clear_history_confirm_open, |this| {
+            .when(self.ai.history.clear_confirm_open, |this| {
                 this.child(self.ai_clear_history_confirm_overlay(cx))
             })
-            .when(self.ai_auto_execution_confirm_open, |this| {
+            .when(self.ai.agent.auto_execution_confirm_open, |this| {
                 this.child(self.ai_auto_execution_confirm_overlay(cx))
             })
     }
@@ -867,7 +881,7 @@ fn ai_send_button(
         })
         .child(svg().size(px(16.)).flex_none().path(icon))
         .on_click(cx.listener(move |this, _, _, cx| {
-            if this.ai_chat_pending || this.ai_agent_loop.is_some() {
+            if this.ai.chat.pending || this.ai.agent.loop_state.is_some() {
                 this.cancel_ai_chat(cx);
             } else if !disabled {
                 this.start_ai_ask(cx);

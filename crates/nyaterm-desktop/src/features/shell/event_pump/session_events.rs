@@ -451,7 +451,7 @@ impl NyaTermApp {
             drain_timings.decode += stage_duration;
             chunk_timings.decode += stage_duration;
             let stage_started_at = Instant::now();
-            let result = self.ai_agent_capture.process(&text);
+            let result = self.ai.agent.capture.process(&text);
             let stage_duration = stage_started_at.elapsed();
             drain_timings.ai_capture += stage_duration;
             chunk_timings.ai_capture += stage_duration;
@@ -502,7 +502,9 @@ impl NyaTermApp {
         }
         let watched = self.active_session_id.as_deref() == Some(session_id)
             || self
-                .ai_target_session_ids
+                .ai
+                .chat
+                .target_session_ids
                 .iter()
                 .any(|target_id| target_id == session_id);
         if !watched {
@@ -516,19 +518,24 @@ impl NyaTermApp {
 
         let now = Instant::now();
         if self
-            .ai_error_notice_at
+            .ai
+            .panel
+            .error_notice_at
             .get(session_id)
             .is_some_and(|last| now.duration_since(*last) < Duration::from_secs(30))
         {
             return;
         }
 
-        self.ai_error_notice_at.insert(session_id.to_string(), now);
-        self.ai_detected_error = Some(AiDetectedErrorState {
+        self.ai
+            .panel
+            .error_notice_at
+            .insert(session_id.to_string(), now);
+        self.ai.panel.detected_error = Some(AiDetectedErrorState {
             session_id: session_id.to_string(),
             output: terminal_error_notice_output(&output),
         });
-        self.ai_status = "terminal error detected".to_string();
+        self.ai.panel.status = "terminal error detected".to_string();
         cx.notify();
     }
 
@@ -562,9 +569,11 @@ impl NyaTermApp {
     }
 
     pub(super) fn session_has_active_ai_capture(&self, session_id: &str) -> bool {
-        self.ai_agent_capture.has_active()
+        self.ai.agent.capture.has_active()
             && self
-                .ai_agent_loop
+                .ai
+                .agent
+                .loop_state
                 .as_ref()
                 .is_some_and(|state| state.terminal_session_id == session_id)
     }

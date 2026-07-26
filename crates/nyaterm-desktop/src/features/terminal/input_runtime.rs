@@ -54,19 +54,19 @@ impl NyaTermApp {
         match keystroke.key.as_str() {
             "backspace" => {
                 self.ai_input_value_mut().pop();
-                self.ai_status = "AI settings edited".to_string();
-                if self.ai_focused_field == AiInputField::RequestUserAgent {
+                self.ai.panel.status = "AI settings edited".to_string();
+                if self.ai.panel.focused_field == AiInputField::RequestUserAgent {
                     self.persist_ai_settings_now(cx);
                 } else {
                     cx.notify();
                 }
             }
             "escape" => {
-                self.ai_status = "AI input blurred".to_string();
+                self.ai.panel.status = "AI input blurred".to_string();
                 cx.notify();
             }
-            "enter" if self.ai_focused_field == AiInputField::RequestUserAgent => {
-                self.ai_status = "AI request user-agent updated".to_string();
+            "enter" if self.ai.panel.focused_field == AiInputField::RequestUserAgent => {
+                self.ai.panel.status = "AI request user-agent updated".to_string();
                 self.persist_ai_settings_now(cx);
             }
             _ => {
@@ -76,8 +76,8 @@ impl NyaTermApp {
                     .filter(|input| !input.is_empty())
                 {
                     self.ai_input_value_mut().push_str(input);
-                    self.ai_status = "AI settings edited".to_string();
-                    if self.ai_focused_field == AiInputField::RequestUserAgent {
+                    self.ai.panel.status = "AI settings edited".to_string();
+                    if self.ai.panel.focused_field == AiInputField::RequestUserAgent {
                         self.persist_ai_settings_now(cx);
                     } else {
                         cx.notify();
@@ -88,11 +88,11 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn ai_input_value_mut(&mut self) -> &mut String {
-        match self.ai_focused_field {
-            AiInputField::Model => &mut self.ai_model_draft,
-            AiInputField::BaseUrl => &mut self.ai_base_url_draft,
-            AiInputField::ApiKey => &mut self.ai_secret_draft,
-            AiInputField::RequestUserAgent => &mut self.ai_settings.request_user_agent,
+        match self.ai.panel.focused_field {
+            AiInputField::Model => &mut self.ai.settings.model_draft,
+            AiInputField::BaseUrl => &mut self.ai.settings.base_url_draft,
+            AiInputField::ApiKey => &mut self.ai.settings.secret_draft,
+            AiInputField::RequestUserAgent => &mut self.ai.settings.config.request_user_agent,
         }
     }
 }

@@ -19,13 +19,13 @@ impl NyaTermApp {
             } else {
                 value
             },
-            self.ai_focused_field == field,
+            self.ai.panel.focused_field == field,
             self.theme_palette(),
         )
-        .track_focus(&self.ai_focus)
+        .track_focus(&self.ai.panel.focus)
         .on_click(cx.listener(move |this, _, window, cx| {
-            this.ai_focused_field = field;
-            window.focus(&this.ai_focus);
+            this.ai.panel.focused_field = field;
+            window.focus(&this.ai.panel.focus);
             cx.notify();
         }))
         .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
@@ -42,7 +42,7 @@ impl NyaTermApp {
         let risk_menu_id = "ai-smart-risk";
         let risk_menu_open = self.appearance_menu_open.as_deref() == Some(risk_menu_id);
         let risk_label = self.tr(ai_risk_i18n_key(
-            &self.ai_settings.agent_smart_auto_execute_max_risk,
+            &self.ai.settings.config.agent_smart_auto_execute_max_risk,
         ));
         let risk_low = self.tr("ai.riskLow");
         let risk_medium = self.tr("ai.riskMedium");
@@ -68,7 +68,7 @@ impl NyaTermApp {
                         settings_switch(
                             palette,
                             "ai-enabled",
-                            self.ai_settings.enabled,
+                            self.ai.settings.config.enabled,
                             cx.listener(|this, _, _, cx| {
                                 this.toggle_ai_enabled(cx);
                             }),
@@ -81,7 +81,7 @@ impl NyaTermApp {
                         settings_switch(
                             palette,
                             "ai-redaction-toggle",
-                            self.ai_settings.redaction_enabled,
+                            self.ai.settings.config.redaction_enabled,
                             cx.listener(|this, _, _, cx| {
                                 this.toggle_ai_redaction(cx);
                             }),
@@ -94,7 +94,7 @@ impl NyaTermApp {
                         settings_switch(
                             palette,
                             "ai-save-command-toggle",
-                            self.ai_settings.allow_save_command,
+                            self.ai.settings.config.allow_save_command,
                             cx.listener(|this, _, _, cx| {
                                 this.toggle_ai_allow_save_command(cx);
                             }),
@@ -107,7 +107,7 @@ impl NyaTermApp {
                         settings_switch(
                             palette,
                             "ai-history-toggle",
-                            self.ai_settings.record_history,
+                            self.ai.settings.config.record_history,
                             cx.listener(|this, _, _, cx| {
                                 this.toggle_ai_record_history(cx);
                             }),
@@ -120,7 +120,7 @@ impl NyaTermApp {
                         div().w_full().max_w(px(300.)).child(self.ai_input(
                             "ai-request-user-agent",
                             self.tr("ai.requestUserAgent"),
-                            self.ai_settings.request_user_agent.clone(),
+                            self.ai.settings.config.request_user_agent.clone(),
                             AiInputField::RequestUserAgent,
                             cx,
                         )),
@@ -133,7 +133,7 @@ impl NyaTermApp {
                             palette,
                             "ai-context-minus",
                             "ai-context-plus",
-                            self.ai_settings.context_line_limit.to_string(),
+                            self.ai.settings.config.context_line_limit.to_string(),
                             cx.listener(|this, _, _, cx| {
                                 this.adjust_ai_context_line_limit(-50, cx);
                             }),
@@ -150,7 +150,7 @@ impl NyaTermApp {
                             palette,
                             "ai-timeout-minus",
                             "ai-timeout-plus",
-                            self.ai_settings.timeout_ms.to_string(),
+                            self.ai.settings.config.timeout_ms.to_string(),
                             cx.listener(|this, _, _, cx| {
                                 this.adjust_ai_timeout_ms(-1_000, cx);
                             }),
@@ -190,25 +190,25 @@ impl NyaTermApp {
                                 (
                                     risk_low,
                                     RiskLevel::Low,
-                                    self.ai_settings.agent_smart_auto_execute_max_risk
+                                    self.ai.settings.config.agent_smart_auto_execute_max_risk
                                         == RiskLevel::Low,
                                 ),
                                 (
                                     risk_medium,
                                     RiskLevel::Medium,
-                                    self.ai_settings.agent_smart_auto_execute_max_risk
+                                    self.ai.settings.config.agent_smart_auto_execute_max_risk
                                         == RiskLevel::Medium,
                                 ),
                                 (
                                     risk_high,
                                     RiskLevel::High,
-                                    self.ai_settings.agent_smart_auto_execute_max_risk
+                                    self.ai.settings.config.agent_smart_auto_execute_max_risk
                                         == RiskLevel::High,
                                 ),
                                 (
                                     risk_critical,
                                     RiskLevel::Critical,
-                                    self.ai_settings.agent_smart_auto_execute_max_risk
+                                    self.ai.settings.config.agent_smart_auto_execute_max_risk
                                         == RiskLevel::Critical,
                                 ),
                             ]
@@ -253,7 +253,12 @@ impl NyaTermApp {
                             palette,
                             "ai-agent-steps-minus",
                             "ai-agent-steps-plus",
-                            self.ai_settings.max_agent_steps.unwrap_or(10).to_string(),
+                            self.ai
+                                .settings
+                                .config
+                                .max_agent_steps
+                                .unwrap_or(10)
+                                .to_string(),
                             cx.listener(|this, _, _, cx| {
                                 this.adjust_ai_agent_steps(-1, cx);
                             }),
@@ -270,7 +275,9 @@ impl NyaTermApp {
                             palette,
                             "ai-agent-step-timeout-minus",
                             "ai-agent-step-timeout-plus",
-                            self.ai_settings
+                            self.ai
+                                .settings
+                                .config
                                 .agent_step_timeout_ms
                                 .unwrap_or(30_000)
                                 .to_string(),
@@ -290,7 +297,7 @@ impl NyaTermApp {
                             palette,
                             "ai-output-lines-minus",
                             "ai-output-lines-plus",
-                            self.ai_settings.terminal_output_lines.to_string(),
+                            self.ai.settings.config.terminal_output_lines.to_string(),
                             cx.listener(|this, _, _, cx| {
                                 this.adjust_ai_terminal_output_lines(-1, cx);
                             }),

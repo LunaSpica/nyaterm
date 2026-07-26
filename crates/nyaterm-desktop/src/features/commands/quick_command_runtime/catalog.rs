@@ -139,11 +139,11 @@ impl NyaTermApp {
 
         self.quick_command_state.ai.prompt_draft.clear();
         self.close_quick_command_toolbar_popovers();
-        self.ai_prompt_draft = format!("Generate a shell command for: {prompt}");
-        self.ai_response_preview = "Quick command generation ready".to_string();
-        self.ai_status = "quick command AI assist".to_string();
+        self.ai.chat.prompt_draft = format!("Generate a shell command for: {prompt}");
+        self.ai.chat.response_preview = "Quick command generation ready".to_string();
+        self.ai.panel.status = "quick command AI assist".to_string();
         self.ensure_panel_open(NavItem::AiAssistant);
-        window.focus(&self.ai_chat_focus);
+        window.focus(&self.ai.chat.focus);
         cx.notify();
     }
 

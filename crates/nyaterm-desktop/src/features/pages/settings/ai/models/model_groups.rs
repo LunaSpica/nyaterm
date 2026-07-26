@@ -7,13 +7,15 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let credentials: Vec<_> = self
-            .ai_settings
+            .ai
+            .settings
+            .config
             .provider_credentials
             .iter()
             .filter(|credential| credential.enabled)
             .cloned()
             .collect();
-        let query = self.ai_settings_model_query.trim().to_ascii_lowercase();
+        let query = self.ai.settings.model_query.trim().to_ascii_lowercase();
         let mut groups: Vec<(
             String,
             String,
@@ -32,7 +34,7 @@ impl NyaTermApp {
             .collect();
 
         for model in
-            self.ai_settings.models.iter().filter(|model| {
+            self.ai.settings.config.models.iter().filter(|model| {
                 query.is_empty() || model.name.to_ascii_lowercase().contains(&query)
             })
         {
@@ -61,9 +63,9 @@ impl NyaTermApp {
                 .sort_by_key(|model| (!model.enabled, model.name.to_ascii_lowercase()));
         }
 
-        let collapsed = self.ai_model_collapsed_groups.clone();
-        let manual_drafts = self.ai_manual_model_drafts.clone();
-        let manual_edit_group = self.ai_manual_model_edit_group.clone();
+        let collapsed = self.ai.settings.model_collapsed_groups.clone();
+        let manual_drafts = self.ai.settings.manual_model_drafts.clone();
+        let manual_edit_group = self.ai.settings.manual_model_edit_group.clone();
         let manual_placeholder = self.tr("ai.manualModelPlaceholder");
         let manual_badge = self.tr("ai.manualModelBadge");
         let custom_provider = self.tr("ai.customProvider");
@@ -189,13 +191,15 @@ impl NyaTermApp {
                                             } else {
                                                 draft.clone()
                                             })
-                                            .track_focus(&self.ai_manual_model_focus)
+                                            .track_focus(&self.ai.settings.manual_model_focus)
                                             .on_click(cx.listener({
                                                 let group = group_for_focus.clone();
                                                 move |this, _, window, cx| {
-                                                    this.ai_manual_model_edit_group =
+                                                    this.ai.settings.manual_model_edit_group =
                                                         Some(group.clone());
-                                                    window.focus(&this.ai_manual_model_focus);
+                                                    window.focus(
+                                                        &this.ai.settings.manual_model_focus,
+                                                    );
                                                     cx.notify();
                                                 }
                                             }))
@@ -224,7 +228,9 @@ impl NyaTermApp {
                                                     let group = group_for_add.clone();
                                                     move |this, _, _, cx| {
                                                         let name = this
-                                                            .ai_manual_model_drafts
+                                                            .ai
+                                                            .settings
+                                                            .manual_model_drafts
                                                             .get(&group)
                                                             .cloned()
                                                             .unwrap_or_default();
@@ -234,10 +240,13 @@ impl NyaTermApp {
                                                                 name,
                                                                 cx,
                                                             );
-                                                            this.ai_manual_model_drafts.insert(
-                                                                group.clone(),
-                                                                String::new(),
-                                                            );
+                                                            this.ai
+                                                                .settings
+                                                                .manual_model_drafts
+                                                                .insert(
+                                                                    group.clone(),
+                                                                    String::new(),
+                                                                );
                                                         }
                                                     }
                                                 }),

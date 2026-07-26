@@ -9,7 +9,7 @@ Last updated from the working tree on 2026-07-26.
 
 | Metric | Current value | Notes |
 | --- | ---: | --- |
-| `NyaTermApp` fields | 417 | Counted from `features/app_state/mod.rs`; still transitional and too broad. |
+| `NyaTermApp` fields | 348 | Counted from `features/app_state/mod.rs`; still transitional and too broad. |
 | `impl NyaTermApp` blocks | 236 | Spread across 233 files under `crates/nyaterm-desktop/src`. |
 | `#[path = "..."]` declarations in desktop | 0 | Cleared. Every directory is a real module; the boundary script fails on any new occurrence. |
 | `use super::*` imports in desktop | 355 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
@@ -101,6 +101,12 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   `editor`, and `external_sync` for handing a file to an outside editor, plus
   manual `paths` and `panel` chrome. Their lifetimes are unrelated, which the
   flat `transfer_*` prefix hid completely.
+- AI state is grouped into `AiFeatureState`: provider `settings`, the `chat`
+  composer and transcript, session `history`, model `discovery`, the agent
+  `loop`, and `panel` chrome. Note that `SettingsDraftSnapshot` deliberately
+  keeps its own `ai_settings` / `ai_model_draft` / `ai_base_url_draft` /
+  `ai_secret_draft` fields with the old names; it is a separate snapshot type,
+  and the rewrite was anchored on `self`/`this` so those were left alone.
 - The connections UI state has started moving out of scattered `NyaTermApp`
   fields and into `ConnectionFeatureState`.
 - The current connections state split separates list UI, import UI, editor

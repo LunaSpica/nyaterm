@@ -142,10 +142,10 @@ impl NyaTermApp {
                 || self.transfer.paths.prompt.is_some(),
         };
         let ai = crate::entities::AiSnapshot {
-            chat_pending: self.ai_chat_pending,
-            message_count: self.ai_chat_messages.len(),
-            session_id: self.ai_chat_session_id.clone(),
-            agent_active: self.ai_agent_loop.is_some(),
+            chat_pending: self.ai.chat.pending,
+            message_count: self.ai.chat.messages.len(),
+            session_id: self.ai.chat.session_id.clone(),
+            agent_active: self.ai.agent.loop_state.is_some(),
         };
         let cloud_sync = crate::entities::CloudSyncSnapshot {
             enabled: self.cloud_sync_settings.enabled,

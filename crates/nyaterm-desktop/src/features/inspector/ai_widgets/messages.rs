@@ -20,7 +20,7 @@ fn ai_message_menu_position(
 
 impl NyaTermApp {
     pub(in crate::features) fn close_ai_message_menu(&mut self, cx: &mut Context<Self>) {
-        self.ai_message_menu = None;
+        self.ai.chat.message_menu = None;
         cx.notify();
     }
 
@@ -31,12 +31,12 @@ impl NyaTermApp {
     ) {
         let value = text.trim().to_string();
         if value.is_empty() {
-            self.ai_status = "AI message is empty".to_string();
+            self.ai.panel.status = "AI message is empty".to_string();
         } else {
-            self.ai_quoted_text = Some(value);
-            self.ai_status = "AI message quoted".to_string();
+            self.ai.chat.quoted_text = Some(value);
+            self.ai.panel.status = "AI message quoted".to_string();
         }
-        self.ai_message_menu = None;
+        self.ai.chat.message_menu = None;
         cx.notify();
     }
 
@@ -47,18 +47,18 @@ impl NyaTermApp {
     ) {
         let value = text.trim().to_string();
         if value.is_empty() {
-            self.ai_status = "AI message is empty".to_string();
+            self.ai.panel.status = "AI message is empty".to_string();
         } else {
             cx.write_to_clipboard(ClipboardItem::new_string(value));
-            self.ai_status = "AI message copied".to_string();
+            self.ai.panel.status = "AI message copied".to_string();
         }
-        self.ai_message_menu = None;
+        self.ai.chat.message_menu = None;
         cx.notify();
     }
 
     pub(in crate::features) fn clear_ai_quote(&mut self, cx: &mut Context<Self>) {
-        self.ai_quoted_text = None;
-        self.ai_status = "AI quote cleared".to_string();
+        self.ai.chat.quoted_text = None;
+        self.ai.panel.status = "AI quote cleared".to_string();
         cx.notify();
     }
 
@@ -67,12 +67,17 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let state = self.ai_message_menu.clone().unwrap_or(AiMessageMenuState {
-            message_id: String::new(),
-            text: String::new(),
-            x: px(24.),
-            y: px(24.),
-        });
+        let state = self
+            .ai
+            .chat
+            .message_menu
+            .clone()
+            .unwrap_or(AiMessageMenuState {
+                message_id: String::new(),
+                text: String::new(),
+                x: px(24.),
+                y: px(24.),
+            });
         let quote_text = state.text.clone();
         let copy_text = state.text.clone();
         let (viewport_w, viewport_h) = self.last_viewport_size;
@@ -141,7 +146,9 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         let is_user = matches!(message.role, AiMessageRole::User);
         let streaming = self
-            .ai_streaming_assistant_id
+            .ai
+            .chat
+            .streaming_assistant_id
             .as_deref()
             .is_some_and(|id| id == message.id);
         let role_label = if is_user { "User" } else { "AI" };
@@ -195,15 +202,15 @@ impl NyaTermApp {
                 MouseButton::Right,
                 cx.listener(move |this, event: &MouseDownEvent, _, cx| {
                     cx.stop_propagation();
-                    this.ai_message_menu = Some(AiMessageMenuState {
+                    this.ai.chat.message_menu = Some(AiMessageMenuState {
                         message_id: menu_message_id.clone(),
                         text: menu_text.clone(),
                         x: event.position.x,
                         y: event.position.y,
                     });
-                    this.ai_history_open = false;
-                    this.ai_execution_menu_open = false;
-                    this.ai_model_menu_open = false;
+                    this.ai.history.open = false;
+                    this.ai.panel.execution_menu_open = false;
+                    this.ai.discovery.menu_open = false;
                     cx.notify();
                 }),
             )

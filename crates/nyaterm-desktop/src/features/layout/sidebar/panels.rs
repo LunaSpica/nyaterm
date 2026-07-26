@@ -285,7 +285,7 @@ impl NyaTermApp {
                     .child(capability_line(
                         palette,
                         "AI",
-                        if self.ai_settings.enabled {
+                        if self.ai.settings.config.enabled {
                             "enabled"
                         } else {
                             "disabled"

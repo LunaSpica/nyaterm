@@ -9,8 +9,8 @@ impl NyaTermApp {
         index: usize,
         cx: &mut Context<Self>,
     ) {
-        let Some(card) = self.ai_command_cards.get(index).cloned() else {
-            self.ai_status = "AI command card is no longer available".to_string();
+        let Some(card) = self.ai.chat.command_cards.get(index).cloned() else {
+            self.ai.panel.status = "AI command card is no longer available".to_string();
             cx.notify();
             return;
         };
@@ -23,7 +23,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(card) = self.find_ai_command_card(&card_id) else {
-            self.ai_status = "AI command card is no longer available".to_string();
+            self.ai.panel.status = "AI command card is no longer available".to_string();
             cx.notify();
             return;
         };
@@ -37,7 +37,7 @@ impl NyaTermApp {
     ) {
         let command_text = card.command.trim();
         if command_text.is_empty() {
-            self.ai_status = "AI command card has no command".to_string();
+            self.ai.panel.status = "AI command card has no command".to_string();
             cx.notify();
             return;
         }
@@ -100,7 +100,7 @@ impl NyaTermApp {
                 .append_ai_audit(AppendAiAuditRequest {
                     connection_id: self.active_session_id.clone(),
                     action: "ai.save_quick_command".to_string(),
-                    user_input: Some(self.ai_response_preview.clone()),
+                    user_input: Some(self.ai.chat.response_preview.clone()),
                     generated_command: Some(card.command.clone()),
                     risk_level: card.risk_level.clone(),
                     inserted_to_terminal: false,
@@ -114,13 +114,14 @@ impl NyaTermApp {
             Ok(label) => {
                 self.refresh_ai_usage_counts(cx);
                 self.refresh_quick_commands();
-                self.ai_status = format!("Saved AI command card '{}' to Quick Commands", label);
-                self.store_status.message = self.ai_status.clone();
+                self.ai.panel.status =
+                    format!("Saved AI command card '{}' to Quick Commands", label);
+                self.store_status.message = self.ai.panel.status.clone();
                 self.store_status.ready = true;
             }
             Err(error) => {
-                self.ai_status = format!("Quick command save failed: {error}");
-                self.store_status.message = self.ai_status.clone();
+                self.ai.panel.status = format!("Quick command save failed: {error}");
+                self.store_status.message = self.ai.panel.status.clone();
                 self.store_status.ready = false;
             }
         }

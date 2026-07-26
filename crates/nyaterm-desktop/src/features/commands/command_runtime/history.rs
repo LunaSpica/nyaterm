@@ -36,12 +36,16 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn find_ai_command_card(&self, card_id: &str) -> Option<AiCommandCard> {
-        self.ai_command_cards
+        self.ai
+            .chat
+            .command_cards
             .iter()
             .find(|card| card.id == card_id)
             .cloned()
             .or_else(|| {
-                self.ai_chat_messages
+                self.ai
+                    .chat
+                    .messages
                     .iter()
                     .flat_map(|message| message.command_cards.iter())
                     .find(|card| card.id == card_id)
@@ -175,8 +179,8 @@ impl NyaTermApp {
         execute: bool,
         cx: &mut Context<Self>,
     ) {
-        let Some(card) = self.ai_command_cards.get(index).cloned() else {
-            self.ai_status = "AI command card is no longer available".to_string();
+        let Some(card) = self.ai.chat.command_cards.get(index).cloned() else {
+            self.ai.panel.status = "AI command card is no longer available".to_string();
             cx.notify();
             return;
         };
@@ -190,7 +194,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(card) = self.find_ai_command_card(&card_id) else {
-            self.ai_status = "AI command card is no longer available".to_string();
+            self.ai.panel.status = "AI command card is no longer available".to_string();
             cx.notify();
             return;
         };
@@ -204,27 +208,30 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(target_session_id) = self.ai_effective_target_session_id() else {
-            self.ai_status = "Start a terminal session before using an AI command".to_string();
+            self.ai.panel.status =
+                "Start a terminal session before using an AI command".to_string();
             cx.notify();
             return;
         };
         let mut command = card.command.trim().to_string();
         if command.is_empty() {
-            self.ai_status = "AI command card has no command".to_string();
+            self.ai.panel.status = "AI command card has no command".to_string();
             cx.notify();
             return;
         }
         let should_continue_agent = execute && is_agent_command_card(&card);
-        if should_continue_agent && self.ai_settings.agent_background_execution_enabled {
+        if should_continue_agent && self.ai.settings.config.agent_background_execution_enabled {
             match self.begin_ai_agent_background_execution(&card.command, cx) {
                 Ok(()) => {
                     self.record_ai_command_card_audit(&card, true, false, cx);
                     cx.notify();
                 }
                 Err(error) => {
-                    self.ai_status = error;
+                    self.ai.panel.status = error;
                     let step_index = self
-                        .ai_agent_steps
+                        .ai
+                        .agent
+                        .steps
                         .last()
                         .map(|step| step.step_index)
                         .unwrap_or(0);
@@ -232,7 +239,7 @@ impl NyaTermApp {
                         step_index,
                         AiAgentStepStatus::Failed,
                         "Failed",
-                        self.ai_status.clone(),
+                        self.ai.panel.status.clone(),
                     );
                     cx.notify();
                 }
@@ -247,9 +254,11 @@ impl NyaTermApp {
                 Ok(Some(wrapped_command)) => wrapped_command.into_bytes(),
                 Ok(None) => command.clone().into_bytes(),
                 Err(error) => {
-                    self.ai_status = error;
+                    self.ai.panel.status = error;
                     let step_index = self
-                        .ai_agent_steps
+                        .ai
+                        .agent
+                        .steps
                         .last()
                         .map(|step| step.step_index)
                         .unwrap_or(0);
@@ -257,7 +266,7 @@ impl NyaTermApp {
                         step_index,
                         AiAgentStepStatus::Failed,
                         "Failed",
-                        self.ai_status.clone(),
+                        self.ai.panel.status.clone(),
                     );
                     cx.notify();
                     return;
@@ -270,8 +279,8 @@ impl NyaTermApp {
         self.record_ai_command_card_audit(&card, execute, true, cx);
 
         self.send_terminal_input_to_session(target_session_id, input_bytes, cx);
-        self.ai_status = if should_continue_agent {
-            if let Some(state) = self.ai_agent_loop.as_ref().cloned() {
+        self.ai.panel.status = if should_continue_agent {
+            if let Some(state) = self.ai.agent.loop_state.as_ref().cloned() {
                 self.upsert_ai_agent_step(
                     state.step_index,
                     AiAgentStepStatus::Running,

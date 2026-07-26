@@ -6,28 +6,28 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.ai_sessions.is_empty() {
+        if self.ai.history.sessions.is_empty() {
             return;
         }
-        self.ai_clear_history_confirm_open = true;
-        self.ai_message_menu = None;
-        self.ai_model_menu_open = false;
-        self.ai_execution_menu_open = false;
-        window.focus(&self.ai_clear_history_confirm_focus);
+        self.ai.history.clear_confirm_open = true;
+        self.ai.chat.message_menu = None;
+        self.ai.discovery.menu_open = false;
+        self.ai.panel.execution_menu_open = false;
+        window.focus(&self.ai.history.clear_confirm_focus);
         cx.notify();
     }
 
     pub(in crate::features) fn cancel_ai_clear_history_confirm(&mut self, cx: &mut Context<Self>) {
-        self.ai_clear_history_confirm_open = false;
+        self.ai.history.clear_confirm_open = false;
         cx.notify();
     }
 
     pub(in crate::features) fn confirm_ai_clear_history(&mut self, cx: &mut Context<Self>) {
-        if !self.ai_clear_history_confirm_open {
+        if !self.ai.history.clear_confirm_open {
             return;
         }
-        self.ai_clear_history_confirm_open = false;
-        self.ai_history_open = false;
+        self.ai.history.clear_confirm_open = false;
+        self.ai.history.open = false;
         self.clear_all_ai_history(cx);
     }
 
@@ -36,27 +36,27 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.ai_auto_execution_confirm_open = true;
-        self.ai_execution_menu_open = false;
-        self.ai_history_open = false;
-        self.ai_message_menu = None;
-        self.ai_model_menu_open = false;
-        window.focus(&self.ai_auto_execution_confirm_focus);
+        self.ai.agent.auto_execution_confirm_open = true;
+        self.ai.panel.execution_menu_open = false;
+        self.ai.history.open = false;
+        self.ai.chat.message_menu = None;
+        self.ai.discovery.menu_open = false;
+        window.focus(&self.ai.agent.auto_execution_confirm_focus);
         cx.notify();
     }
 
     pub(in crate::features) fn cancel_ai_auto_execution_confirm(&mut self, cx: &mut Context<Self>) {
-        self.ai_auto_execution_confirm_open = false;
+        self.ai.agent.auto_execution_confirm_open = false;
         cx.notify();
     }
 
     pub(in crate::features) fn confirm_ai_auto_execution(&mut self, cx: &mut Context<Self>) {
-        if !self.ai_auto_execution_confirm_open {
+        if !self.ai.agent.auto_execution_confirm_open {
             return;
         }
-        self.ai_auto_execution_confirm_open = false;
+        self.ai.agent.auto_execution_confirm_open = false;
         self.set_ai_command_mode(AgentCommandExecutionMode::Auto, cx);
-        self.ai_status = "Agent execution mode: auto".to_string();
+        self.ai.panel.status = "Agent execution mode: auto".to_string();
         cx.notify();
     }
 
@@ -78,9 +78,9 @@ impl NyaTermApp {
             .items_center()
             .justify_center()
             .p_3()
-            .track_focus(&self.ai_auto_execution_confirm_focus)
+            .track_focus(&self.ai.agent.auto_execution_confirm_focus)
             .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(&this.ai_auto_execution_confirm_focus);
+                window.focus(&this.ai.agent.auto_execution_confirm_focus);
                 cx.notify();
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
@@ -170,9 +170,9 @@ impl NyaTermApp {
             .items_center()
             .justify_center()
             .p_3()
-            .track_focus(&self.ai_clear_history_confirm_focus)
+            .track_focus(&self.ai.history.clear_confirm_focus)
             .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(&this.ai_clear_history_confirm_focus);
+                window.focus(&this.ai.history.clear_confirm_focus);
                 cx.notify();
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
@@ -249,7 +249,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let current = self.ai_settings.agent_command_execution_mode.clone();
+        let current = self.ai.settings.config.agent_command_execution_mode.clone();
         div()
             .id(SharedString::from("ai-execution-mode-menu"))
             .absolute()
@@ -316,7 +316,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let enabled = self.ai_settings.agent_background_execution_enabled;
+        let enabled = self.ai.settings.config.agent_background_execution_enabled;
         div()
             .id(SharedString::from("ai-exec-background"))
             .px_3()
@@ -398,15 +398,15 @@ impl NyaTermApp {
             .hover(|this| this.bg(rgb(palette.surface_elevated)))
             .on_click(cx.listener(move |this, _, window, cx| {
                 if mode == AgentCommandExecutionMode::Auto
-                    && this.ai_settings.agent_command_execution_mode
+                    && this.ai.settings.config.agent_command_execution_mode
                         != AgentCommandExecutionMode::Auto
                 {
                     this.open_ai_auto_execution_confirm(window, cx);
                     return;
                 }
                 this.set_ai_command_mode(mode.clone(), cx);
-                this.ai_execution_menu_open = false;
-                this.ai_status = format!(
+                this.ai.panel.execution_menu_open = false;
+                this.ai.panel.status = format!(
                     "Agent execution mode: {}",
                     match mode {
                         AgentCommandExecutionMode::ConfirmEach => "confirm each",
@@ -458,9 +458,11 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         // Tauri AIAssistantPanel history card: search + Clear All + date-grouped sessions.
-        let query = self.ai_history_query.trim().to_ascii_lowercase();
+        let query = self.ai.history.query.trim().to_ascii_lowercase();
         let filtered: Vec<_> = self
-            .ai_sessions
+            .ai
+            .history
+            .sessions
             .iter()
             .filter(|session| {
                 if query.is_empty() {
@@ -471,17 +473,17 @@ impl NyaTermApp {
             })
             .cloned()
             .collect();
-        let total_count = self.ai_sessions.len();
+        let total_count = self.ai.history.sessions.len();
         let filtered_count = filtered.len();
         let history_actions_disabled = total_count == 0
-            || self.ai_history_pending
-            || self.ai_chat_pending
-            || self.ai_agent_loop.is_some();
+            || self.ai.history.pending
+            || self.ai.chat.pending
+            || self.ai.agent.loop_state.is_some();
         let grouped = group_ai_sessions_by_date(&filtered);
-        let search_display = if self.ai_history_query.is_empty() {
+        let search_display = if self.ai.history.query.is_empty() {
             "Search history...".to_string()
         } else {
-            self.ai_history_query.clone()
+            self.ai.history.query.clone()
         };
 
         let mut rows = div().flex().flex_col().gap_1().p_2();
@@ -492,7 +494,7 @@ impl NyaTermApp {
                     .text_center()
                     .text_size(px(11.))
                     .text_color(rgb(palette.text_dimmed))
-                    .child(if self.ai_history_pending {
+                    .child(if self.ai.history.pending {
                         "Loading history..."
                     } else if total_count == 0 {
                         "No chat history yet"
@@ -517,7 +519,7 @@ impl NyaTermApp {
                 for session in sessions.into_iter().take(48) {
                     let session_id = session.id.clone();
                     let delete_id = session.id.clone();
-                    let active = self.ai_chat_session_id == session.id;
+                    let active = self.ai.chat.session_id == session.id;
                     rows = rows.child(
                         div()
                             .id(SharedString::from(format!("ai-session-{}", session.id)))
@@ -598,9 +600,9 @@ impl NyaTermApp {
                             .items_center()
                             .gap_2()
                             .cursor_pointer()
-                            .track_focus(&self.ai_history_search_focus)
+                            .track_focus(&self.ai.history.search_focus)
                             .on_click(cx.listener(|this, _, window, cx| {
-                                window.focus(&this.ai_history_search_focus);
+                                window.focus(&this.ai.history.search_focus);
                                 cx.notify();
                             }))
                             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
@@ -619,14 +621,14 @@ impl NyaTermApp {
                                     .min_w_0()
                                     .flex_1()
                                     .text_size(px(12.))
-                                    .text_color(if self.ai_history_query.is_empty() {
+                                    .text_color(if self.ai.history.query.is_empty() {
                                         rgb(palette.text_dimmed)
                                     } else {
                                         rgb(palette.text)
                                     })
                                     .child(search_display),
                             )
-                            .when(!self.ai_history_query.is_empty(), |this| {
+                            .when(!self.ai.history.query.is_empty(), |this| {
                                 this.child(
                                     div()
                                         .id(SharedString::from("ai-history-search-clear"))
@@ -643,8 +645,8 @@ impl NyaTermApp {
                                                 .text_color(rgb(palette.text))
                                         })
                                         .on_click(cx.listener(|this, _, window, cx| {
-                                            this.ai_history_query.clear();
-                                            window.focus(&this.ai_history_search_focus);
+                                            this.ai.history.query.clear();
+                                            window.focus(&this.ai.history.search_focus);
                                             cx.notify();
                                         }))
                                         .child(svg().size(px(13.)).path("icons/window/close.svg")),
@@ -689,9 +691,9 @@ impl NyaTermApp {
                                 })
                             })
                             .on_click(cx.listener(move |this, _, window, cx| {
-                                if this.ai_sessions.is_empty()
-                                    || this.ai_chat_pending
-                                    || this.ai_agent_loop.is_some()
+                                if this.ai.history.sessions.is_empty()
+                                    || this.ai.chat.pending
+                                    || this.ai.agent.loop_state.is_some()
                                 {
                                     return;
                                 }

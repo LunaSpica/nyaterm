@@ -665,10 +665,10 @@ impl NyaTermApp {
                             .load_cloud_sync_settings()
                             .unwrap_or_else(|_| self.cloud_sync_settings.clone());
                         self.cloud_sync_secret_draft = CloudSyncSecretDraft::default();
-                        self.ai_settings = store
+                        self.ai.settings.config = store
                             .load_ai_settings()
-                            .unwrap_or_else(|_| self.ai_settings.clone());
-                        self.ai_secret_draft.clear();
+                            .unwrap_or_else(|_| self.ai.settings.config.clone());
+                        self.ai.settings.secret_draft.clear();
                         self.sync_ai_drafts_from_active_profile();
                         self.settings_master_password_enabled = self.settings.has_master_password;
                         self.settings_master_password_draft.clear();

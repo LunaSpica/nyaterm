@@ -5,12 +5,12 @@ use nyaterm_core::{ai_model_id_for_credential, ai_model_id_for_provider};
 
 impl NyaTermApp {
     pub(in crate::features) fn pending_ai_settings(&self) -> AiSettings {
-        let mut next = self.ai_settings.clone();
+        let mut next = self.ai.settings.config.clone();
         let active_id = next.active_profile_id.clone();
         let mut active_kind = None;
         let mut active_name = active_id.clone();
-        let mut active_base_url = none_if_blank(&self.ai_base_url_draft);
-        let active_model = self.ai_model_draft.trim().to_string();
+        let mut active_base_url = none_if_blank(&self.ai.settings.base_url_draft);
+        let active_model = self.ai.settings.model_draft.trim().to_string();
 
         if let Some(profile) = next
             .provider_profiles
@@ -22,8 +22,8 @@ impl NyaTermApp {
                 profile.model = active_model.clone();
             }
             profile.base_url = active_base_url.clone();
-            if !self.ai_secret_draft.is_empty() {
-                profile.api_key = Some(self.ai_secret_draft.clone());
+            if !self.ai.settings.secret_draft.is_empty() {
+                profile.api_key = Some(self.ai.settings.secret_draft.clone());
             }
             active_kind = Some(profile.provider_kind.clone());
             active_name = profile.name.clone();
@@ -36,13 +36,13 @@ impl NyaTermApp {
                 name: active_name,
                 provider_kind: kind.clone(),
                 base_url: active_base_url.clone(),
-                api_key: if self.ai_secret_draft.is_empty() {
+                api_key: if self.ai.settings.secret_draft.is_empty() {
                     next.provider_credentials
                         .iter()
                         .find(|credential| credential.id == active_id)
                         .and_then(|credential| credential.api_key.clone())
                 } else {
-                    Some(self.ai_secret_draft.clone())
+                    Some(self.ai.settings.secret_draft.clone())
                 },
                 enabled: true,
             };
@@ -105,10 +105,10 @@ impl NyaTermApp {
 
     pub(in crate::features) fn persist_ai_settings_now(&mut self, cx: &mut Context<Self>) {
         if self.defer_settings_persistence(cx) {
-            self.ai_status = "AI settings staged".to_string();
+            self.ai.panel.status = "AI settings staged".to_string();
             return;
         }
-        let next = self.ai_settings.clone();
+        let next = self.ai.settings.config.clone();
         match ConnectionStore::open_with_portable_key_path(
             self.runtime.config_dir(),
             self.runtime.portable_key_path().map(ToOwned::to_owned),
@@ -116,17 +116,17 @@ impl NyaTermApp {
         .and_then(|store| store.save_ai_settings(next))
         {
             Ok(saved) => {
-                self.ai_settings = saved;
+                self.ai.settings.config = saved;
                 self.refresh_ai_usage_counts(cx);
-                if self.ai_status.trim().is_empty() {
-                    self.ai_status = "AI settings saved".to_string();
+                if self.ai.panel.status.trim().is_empty() {
+                    self.ai.panel.status = "AI settings saved".to_string();
                 }
-                self.store_status.message = self.ai_status.clone();
+                self.store_status.message = self.ai.panel.status.clone();
                 self.store_status.ready = true;
             }
             Err(error) => {
-                self.ai_status = format!("AI settings save failed: {error}");
-                self.store_status.message = self.ai_status.clone();
+                self.ai.panel.status = format!("AI settings save failed: {error}");
+                self.store_status.message = self.ai.panel.status.clone();
                 self.store_status.ready = false;
             }
         }
@@ -138,8 +138,8 @@ impl NyaTermApp {
         value: String,
         cx: &mut Context<Self>,
     ) {
-        self.ai_settings.request_user_agent = value;
-        self.ai_status = "AI request user-agent updated".to_string();
+        self.ai.settings.config.request_user_agent = value;
+        self.ai.panel.status = "AI request user-agent updated".to_string();
         self.persist_ai_settings_now(cx);
     }
 
@@ -151,8 +151,8 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.ai_action_edit = Some((kind, action_id, field));
-        window.focus(&self.ai_action_focus);
+        self.ai.settings.action_edit = Some((kind, action_id, field));
+        window.focus(&self.ai.settings.action_focus);
         cx.notify();
     }
 
@@ -164,7 +164,7 @@ impl NyaTermApp {
     ) {
         if let Some(action) = self.ai_action_mut(kind, &action_id) {
             action.enabled = !action.enabled;
-            self.ai_status = "AI action toggled".to_string();
+            self.ai.panel.status = "AI action toggled".to_string();
             self.persist_ai_settings_now(cx);
         }
     }
@@ -189,12 +189,12 @@ impl NyaTermApp {
             enabled: true,
         };
         match kind {
-            AiActionListKind::Terminal => self.ai_settings.terminal_ai_actions.push(action),
-            AiActionListKind::File => self.ai_settings.file_ai_actions.push(action),
+            AiActionListKind::Terminal => self.ai.settings.config.terminal_ai_actions.push(action),
+            AiActionListKind::File => self.ai.settings.config.file_ai_actions.push(action),
         }
-        self.ai_action_edit = Some((kind, id, AiActionEditorField::Name));
-        window.focus(&self.ai_action_focus);
-        self.ai_status = "AI action added".to_string();
+        self.ai.settings.action_edit = Some((kind, id, AiActionEditorField::Name));
+        window.focus(&self.ai.settings.action_focus);
+        self.ai.panel.status = "AI action added".to_string();
         self.persist_ai_settings_now(cx);
     }
 
@@ -206,24 +206,30 @@ impl NyaTermApp {
     ) {
         match kind {
             AiActionListKind::Terminal => {
-                self.ai_settings
+                self.ai
+                    .settings
+                    .config
                     .terminal_ai_actions
                     .retain(|action| action.id != action_id);
             }
             AiActionListKind::File => {
-                self.ai_settings
+                self.ai
+                    .settings
+                    .config
                     .file_ai_actions
                     .retain(|action| action.id != action_id);
             }
         }
         if self
-            .ai_action_edit
+            .ai
+            .settings
+            .action_edit
             .as_ref()
             .is_some_and(|(k, id, _)| *k == kind && id == &action_id)
         {
-            self.ai_action_edit = None;
+            self.ai.settings.action_edit = None;
         }
-        self.ai_status = "AI action removed".to_string();
+        self.ai.panel.status = "AI action removed".to_string();
         self.persist_ai_settings_now(cx);
     }
 
@@ -233,22 +239,22 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         cx.stop_propagation();
-        let Some((kind, action_id, field)) = self.ai_action_edit.clone() else {
+        let Some((kind, action_id, field)) = self.ai.settings.action_edit.clone() else {
             return;
         };
         match event.keystroke.key.as_str() {
             "escape" => {
-                self.ai_action_edit = None;
+                self.ai.settings.action_edit = None;
                 cx.notify();
                 return;
             }
             "tab" => {
-                self.ai_action_edit = Some((kind, action_id, field.next()));
+                self.ai.settings.action_edit = Some((kind, action_id, field.next()));
                 cx.notify();
                 return;
             }
             "enter" if field == AiActionEditorField::Name => {
-                self.ai_action_edit = Some((kind, action_id, AiActionEditorField::Prompt));
+                self.ai.settings.action_edit = Some((kind, action_id, AiActionEditorField::Prompt));
                 cx.notify();
                 return;
             }
@@ -298,12 +304,16 @@ impl NyaTermApp {
     ) -> Option<&mut nyaterm_core::AiCustomActionConfig> {
         match kind {
             AiActionListKind::Terminal => self
-                .ai_settings
+                .ai
+                .settings
+                .config
                 .terminal_ai_actions
                 .iter_mut()
                 .find(|action| action.id == action_id),
             AiActionListKind::File => self
-                .ai_settings
+                .ai
+                .settings
+                .config
                 .file_ai_actions
                 .iter_mut()
                 .find(|action| action.id == action_id),

@@ -66,8 +66,11 @@ impl NyaTermApp {
                 )
             })
             .collect();
-        let terminal_ai_actions: Vec<(String, String, String)> = if self.ai_settings.enabled {
-            self.ai_settings
+        let terminal_ai_actions: Vec<(String, String, String)> = if self.ai.settings.config.enabled
+        {
+            self.ai
+                .settings
+                .config
                 .terminal_ai_actions
                 .iter()
                 .filter(|action| action.enabled && !action.name.trim().is_empty())
@@ -452,9 +455,9 @@ impl NyaTermApp {
                                     } else {
                                         query.clone()
                                     };
-                                    this.ai_prompt_draft = format!("{prompt}\n\n{body}");
-                                    this.ai_status = format!("AI action loaded: {name}");
-                                    window.focus(&this.ai_chat_focus);
+                                    this.ai.chat.prompt_draft = format!("{prompt}\n\n{body}");
+                                    this.ai.panel.status = format!("AI action loaded: {name}");
+                                    window.focus(&this.ai.chat.focus);
                                     cx.notify();
                                 }),
                             )

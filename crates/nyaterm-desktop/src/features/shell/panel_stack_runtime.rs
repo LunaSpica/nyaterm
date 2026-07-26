@@ -538,7 +538,9 @@ impl NyaTermApp {
                 let label = self
                     .ai_selected_model_id()
                     .and_then(|model_id| {
-                        self.ai_settings
+                        self.ai
+                            .settings
+                            .config
                             .models
                             .iter()
                             .find(|model| model.id == model_id)
@@ -624,7 +626,7 @@ impl NyaTermApp {
             ),
             NavItem::AiAssistant => {
                 let palette = self.theme_palette();
-                let ai_running = self.ai_chat_pending || self.ai_agent_loop.is_some();
+                let ai_running = self.ai.chat.pending || self.ai.agent.loop_state.is_some();
                 Some(
                     div()
                         .flex()
@@ -633,7 +635,7 @@ impl NyaTermApp {
                         .child(header_svg_icon_button(
                             palette,
                             "ai-header-execution-mode-toggle",
-                            match self.ai_settings.agent_command_execution_mode {
+                            match self.ai.settings.config.agent_command_execution_mode {
                                 AgentCommandExecutionMode::Auto => "icons/ai/exec-auto.svg",
                                 AgentCommandExecutionMode::Smart => "icons/ai/exec-smart.svg",
                                 AgentCommandExecutionMode::ConfirmEach => {
@@ -643,9 +645,10 @@ impl NyaTermApp {
                             self.tr("ai.agentCommandExecutionMode"),
                             !ai_running,
                             cx.listener(|this, _, _, cx| {
-                                this.ai_history_open = false;
-                                this.ai_history_query.clear();
-                                this.ai_execution_menu_open = !this.ai_execution_menu_open;
+                                this.ai.history.open = false;
+                                this.ai.history.query.clear();
+                                this.ai.panel.execution_menu_open =
+                                    !this.ai.panel.execution_menu_open;
                                 cx.notify();
                             }),
                         ))
@@ -656,13 +659,13 @@ impl NyaTermApp {
                             self.tr("ai.history"),
                             true,
                             cx.listener(|this, _, window, cx| {
-                                this.ai_execution_menu_open = false;
-                                this.ai_history_open = !this.ai_history_open;
-                                if this.ai_history_open {
+                                this.ai.panel.execution_menu_open = false;
+                                this.ai.history.open = !this.ai.history.open;
+                                if this.ai.history.open {
                                     this.refresh_ai_session_list(cx);
-                                    window.focus(&this.ai_history_search_focus);
+                                    window.focus(&this.ai.history.search_focus);
                                 } else {
-                                    this.ai_history_query.clear();
+                                    this.ai.history.query.clear();
                                 }
                                 cx.notify();
                             }),
@@ -674,8 +677,8 @@ impl NyaTermApp {
                             self.tr("ai.settings"),
                             true,
                             cx.listener(|this, _, _, cx| {
-                                this.ai_history_open = false;
-                                this.ai_execution_menu_open = false;
+                                this.ai.history.open = false;
+                                this.ai.panel.execution_menu_open = false;
                                 this.settings_active_tab = SettingsTab::AiGeneral;
                                 this.open_page(NavItem::Settings, cx);
                             }),

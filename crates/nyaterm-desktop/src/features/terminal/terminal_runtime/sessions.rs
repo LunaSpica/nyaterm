@@ -72,8 +72,8 @@ impl NyaTermApp {
         }
         self.prune_workspace_split();
         if was_active {
-            self.ai_agent_loop = None;
-            self.ai_agent_capture = AgentOutputCaptureProcessor::new();
+            self.ai.agent.loop_state = None;
+            self.ai.agent.capture = AgentOutputCaptureProcessor::new();
             self.sync_session_event_bridge_policy();
             if let Some(next_session_id) = self.next_session_after(&session_id) {
                 self.activate_session_id(&next_session_id);
@@ -135,8 +135,8 @@ impl NyaTermApp {
             .is_some_and(|session_id| live_ids.contains(session_id));
 
         if !active_is_live {
-            self.ai_agent_loop = None;
-            self.ai_agent_capture = AgentOutputCaptureProcessor::new();
+            self.ai.agent.loop_state = None;
+            self.ai.agent.capture = AgentOutputCaptureProcessor::new();
             self.sync_session_event_bridge_policy();
             if let Some(next_session_id) = self
                 .session_order

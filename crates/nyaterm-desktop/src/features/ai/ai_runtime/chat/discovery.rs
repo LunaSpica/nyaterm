@@ -7,14 +7,16 @@ const AI_DISCOVERY_EVENT_DRAIN_LIMIT: usize = 8;
 
 impl NyaTermApp {
     pub(in crate::features) fn discover_ai_models(&mut self, cx: &mut Context<Self>) {
-        if self.ai_discovery_pending {
-            self.ai_status = "AI model discovery already running".to_string();
+        if self.ai.discovery.pending {
+            self.ai.panel.status = "AI model discovery already running".to_string();
             cx.notify();
             return;
         }
 
         let credentials: Vec<_> = self
-            .ai_settings
+            .ai
+            .settings
+            .config
             .provider_credentials
             .iter()
             .filter(|credential| {
@@ -28,15 +30,16 @@ impl NyaTermApp {
             .cloned()
             .collect();
         if credentials.is_empty() {
-            self.ai_status = "AI model discovery requires an enabled custom provider".to_string();
+            self.ai.panel.status =
+                "AI model discovery requires an enabled custom provider".to_string();
             cx.notify();
             return;
         }
 
-        let settings = self.ai_settings.clone();
-        let tx = self.ai_discovery_tx.clone();
-        self.ai_discovery_pending = true;
-        self.ai_status = "Discovering AI models...".to_string();
+        let settings = self.ai.settings.config.clone();
+        let tx = self.ai.discovery.tx.clone();
+        self.ai.discovery.pending = true;
+        self.ai.panel.status = "Discovering AI models...".to_string();
         std::thread::spawn(move || {
             let mut discoveries = Vec::new();
             let mut errors = Vec::new();
@@ -63,30 +66,30 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> bool {
-        if !self.ai_discovery_pending {
+        if !self.ai.discovery.pending {
             return false;
         }
         let mut dirty = false;
         for _ in 0..AI_DISCOVERY_EVENT_DRAIN_LIMIT {
-            let Ok(event) = self.ai_discovery_rx.try_recv() else {
+            let Ok(event) = self.ai.discovery.rx.try_recv() else {
                 break;
             };
             dirty = true;
-            self.ai_discovery_pending = false;
+            self.ai.discovery.pending = false;
             match event.result {
                 Ok(discoveries) if discoveries.is_empty() => {
-                    self.ai_status = "AI discovery returned no models".to_string();
+                    self.ai.panel.status = "AI discovery returned no models".to_string();
                 }
                 Ok(discoveries) => {
                     let count = self.apply_ai_model_discoveries(&event.profile_id, discoveries);
-                    self.ai_status = format!("Discovered {count} AI model(s)");
-                    self.store_status.message = self.ai_status.clone();
+                    self.ai.panel.status = format!("Discovered {count} AI model(s)");
+                    self.store_status.message = self.ai.panel.status.clone();
                     self.store_status.ready = true;
                     self.persist_ai_settings_now(cx);
                 }
                 Err(error) => {
-                    self.ai_status = format!("AI model discovery failed: {error}");
-                    self.store_status.message = self.ai_status.clone();
+                    self.ai.panel.status = format!("AI model discovery failed: {error}");
+                    self.store_status.message = self.ai.panel.status.clone();
                     self.store_status.ready = false;
                 }
             }
@@ -104,7 +107,9 @@ impl NyaTermApp {
 
         for discovery in &discoveries {
             if let Some(model) = self
-                .ai_settings
+                .ai
+                .settings
+                .config
                 .models
                 .iter_mut()
                 .find(|model| model.id == discovery.id)
@@ -115,7 +120,9 @@ impl NyaTermApp {
                 model.source = discovery.source.clone();
                 model.last_seen_at = last_seen_at.clone();
             } else {
-                self.ai_settings
+                self.ai
+                    .settings
+                    .config
                     .models
                     .push(nyaterm_core::AiModelConfigItem {
                         id: discovery.id.clone(),

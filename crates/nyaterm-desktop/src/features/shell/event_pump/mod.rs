@@ -328,7 +328,7 @@ impl NyaTermApp {
     }
 
     fn window_runtime_quiet_tick_has_due_work(&self, now: Instant) -> bool {
-        if self.ai_chat_focus_pending
+        if self.ai.chat.focus_pending
             || self.transfer.file_ops.rename_focus_pending
             || self.credential_prompt_focus_pending
         {
@@ -443,15 +443,15 @@ impl NyaTermApp {
             && !self.terminal_runtime.open_tabs_persist_dirty
             && !self.terminal_runtime.window_layout_persist_dirty
             && self.terminal_windows_restored
-            && !self.ai_chat_pending
-            && self.ai_agent_loop.is_none()
-            && !self.ai_discovery_pending
+            && !self.ai.chat.pending
+            && self.ai.agent.loop_state.is_none()
+            && !self.ai.discovery.pending
             && !self.remote_ops.stats.pending
             && !self.remote_ops.process.pending
             && !self.remote_ops.docker.pending
             && !self.translate_pending
             && !self.update_pending
-            && !self.ai_chat_focus_pending
+            && !self.ai.chat.focus_pending
             && !self.transfer.file_ops.rename_focus_pending
             && !self.credential_prompt_focus_pending
             && !((self.active_ssh_config.is_some()
