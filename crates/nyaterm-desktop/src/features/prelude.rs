@@ -54,12 +54,11 @@ pub(super) use crate::models::{
     CloudSyncInputField, CredentialAutofillMatchEvent, CredentialAutofillMatchOutcome,
     CredentialAutofillMatchPipeline, CredentialAutofillMatchRequest,
     CredentialAutofillMatchRequestKey, NavItem, PanelSide, SessionLaunchConfig,
-    TERMINAL_UI_OUTPUT_TAIL_CAP, TerminalFrameActionLinks, TerminalFrameEvent, TerminalViewState,
-    TransferJobEvent, TransferJobKind, TransferJobOutput, TransferJobResult, TransferJobState,
-    TransferJobStatus, is_multi_line_paste, normalize_paste_newlines,
-    panel_collapsed_from_persistence, terminal_action_link_matcher_key,
-    terminal_expensive_interactions_enabled, terminal_frame_search_result_is_current,
-    terminal_snapshot_matches_grid_geometry,
+    TerminalFrameActionLinks, TerminalFrameEvent, TerminalViewState, TransferJobEvent,
+    TransferJobKind, TransferJobOutput, TransferJobResult, TransferJobState, TransferJobStatus,
+    is_multi_line_paste, normalize_paste_newlines, panel_collapsed_from_persistence,
+    terminal_action_link_matcher_key, terminal_expensive_interactions_enabled,
+    terminal_frame_search_result_is_current, terminal_snapshot_matches_grid_geometry,
 };
 pub(super) use crate::send_command::{
     build_send_command_units_for, format_send_command_hex_display, parse_send_command_hex,
