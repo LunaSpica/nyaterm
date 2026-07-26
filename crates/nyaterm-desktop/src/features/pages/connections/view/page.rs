@@ -4,7 +4,7 @@ use gpui::{
     prelude::{
         FluentBuilder, InteractiveElement, ParentElement, StatefulInteractiveElement, Styled,
     },
-    px, relative, rgb, svg, uniform_list,
+    px, rgb, svg, uniform_list,
 };
 
 use crate::features::{ConnectionDragKind, ConnectionDragPayload, NyaTermApp};
@@ -260,22 +260,9 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         let search_empty = self.connection_state.list.search_is_empty();
-        let search_focus = self.connection_state.list.search_focus_handle();
+        let search_field = self.connection_state.list.search_field();
+        let search_focus = search_field.read(cx).focus_handle();
         let search_focused = search_focus.is_focused(window);
-        let search_value = if search_empty && !search_focused {
-            self.tr("savedConnections.filter").to_string()
-        } else {
-            // The app has no caret-drawing widget; the multi-line paste overlay
-            // marks the insertion point with a literal bar, so do the same here
-            // rather than leaving the field with no sign of where typing lands.
-            let mut display = self.connection_state.list.search_text().to_string();
-            if search_focused {
-                let cursor = self.connection_state.list.search_cursor();
-                display.insert(cursor, '|');
-            }
-            display
-        };
-        let input_entity = cx.entity();
         // Tauri swaps the glyph, flips it for Z-A and tints it while a name sort is
         // active, so the current mode is readable without hovering for the tooltip.
         let sort_mode = self.connection_state.list.sort_mode();
@@ -342,14 +329,14 @@ impl NyaTermApp {
                     .items_center()
                     .gap_2()
                     .cursor_text()
-                    .track_focus(&search_focus)
                     .on_click(cx.listener(|this, _, window, cx| {
-                        let search_focus = this.connection_state.list.search_focus_handle();
-                        window.focus(&search_focus);
+                        let field = this.connection_state.list.search_field();
+                        window.focus(&field.read(cx).focus_handle());
                         cx.notify();
                     }))
+                    // Result navigation stays here: the field leaves the arrows
+                    // and enter unconsumed precisely so the list can claim them.
                     .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
-                        cx.stop_propagation();
                         this.handle_connection_search_key_down(event, window, cx);
                     }))
                     .child(
@@ -364,31 +351,7 @@ impl NyaTermApp {
                             .min_w_0()
                             .flex_1()
                             .text_size(px(12.))
-                            .text_color(if search_empty {
-                                rgb(palette.text_dimmed)
-                            } else {
-                                rgb(palette.text)
-                            })
-                            .child(search_value),
-                    )
-                    .child(
-                        gpui::canvas(
-                            |_bounds, _window, _cx| {},
-                            move |bounds, _state, window, cx| {
-                                let focus = input_entity
-                                    .read(cx)
-                                    .connection_state
-                                    .list
-                                    .search_focus_handle();
-                                window.handle_input(
-                                    &focus,
-                                    gpui::ElementInputHandler::new(bounds, input_entity.clone()),
-                                    cx,
-                                );
-                            },
-                        )
-                        .absolute()
-                        .inset_0(),
+                            .child(search_field.clone()),
                     )
                     .when(!search_empty, |this| {
                         this.child(
@@ -407,11 +370,7 @@ impl NyaTermApp {
                                         .text_color(rgb(palette.text))
                                 })
                                 .on_click(cx.listener(|this, _, window, cx| {
-                                    this.connection_state.list.clear_search();
-                                    let search_focus =
-                                        this.connection_state.list.search_focus_handle();
-                                    window.focus(&search_focus);
-                                    cx.notify();
+                                    this.clear_connection_search(window, cx);
                                 }))
                                 .child(
                                     svg()

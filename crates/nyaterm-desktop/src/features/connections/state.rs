@@ -1,10 +1,13 @@
 use std::collections::HashSet;
 
-use gpui::{FocusHandle, Pixels, WindowHandle};
+use gpui::{
+    App, AppContext as _, Context, Entity, FocusHandle, Pixels, SharedString, Subscription,
+    WindowHandle,
+};
 use nyaterm_core::AppSettingsSummary;
 
 use super::connections::{ConnectionDragKind, ConnectionDropPosition, ConnectionDropTarget};
-use crate::features::{ConnectionEditorToggle, ConnectionEditorWindow};
+use crate::features::{ConnectionEditorToggle, ConnectionEditorWindow, NyaTermApp};
 use crate::models::{
     ConnectionContextMenuState, ConnectionDeleteConfirmState, ConnectionEditorAdvancedTab,
     ConnectionEditorField, ConnectionEditorMenu, ConnectionEditorPasswordSource,
@@ -15,6 +18,7 @@ use crate::models::{
     NetworkItemMenuState, NetworkMovePickerState, NetworkProxyEditorField, NetworkProxyEditorState,
     NetworkTab, NetworkTunnelEditorField, NetworkTunnelEditorState,
 };
+use nyaterm_ui::{TextField, TextFieldEvent};
 
 mod editor_logic;
 mod list_logic;
@@ -35,12 +39,11 @@ use self::editor_logic::{
     toggle_connection_editor_flag,
 };
 use self::list_logic::{
-    apply_connection_search_key, clear_connection_list_runtime_state, clear_connection_search,
-    clear_selected_connection_ids, close_connection_more_menu, connection_drop_position_for_target,
-    connection_search_selected_range, cycle_connection_sort_mode,
+    clear_connection_list_runtime_state, clear_selected_connection_ids, close_connection_more_menu,
+    connection_drop_position_for_target, cycle_connection_sort_mode,
     remove_connection_list_references, remove_group_list_references,
-    replace_connection_search_range, retain_loaded_connection_list_references,
-    select_connection_ids, set_connection_drop_target_if_changed, set_connection_group_hover,
+    retain_loaded_connection_list_references, select_connection_ids,
+    set_connection_drop_target_if_changed, set_connection_group_hover,
     sync_connection_search_expansion,
 };
 #[cfg(test)]
@@ -69,7 +72,9 @@ pub(in crate::features) struct ConnectionFeatureState {
 }
 
 pub(in crate::features) struct ConnectionFeatureFocus {
-    pub search: FocusHandle,
+    /// Placeholder for the filter box, resolved by the caller so this struct
+    /// stays free of the i18n lookup.
+    pub filter_placeholder: SharedString,
     pub import: FocusHandle,
     pub editor: FocusHandle,
     pub group_editor: FocusHandle,
@@ -80,15 +85,12 @@ pub(in crate::features) struct ConnectionFeatureFocus {
 }
 
 pub(in crate::features) struct ConnectionListState {
+    /// The editable field. It owns the caret, selection and composition; this
+    /// struct only caches what it last reported so filtering stays synchronous.
+    search_field: Entity<TextField>,
     search_draft: String,
-    /// Caret position as a byte offset into `search_draft`.
-    search_cursor: usize,
-    /// Other end of the selection while shift-extending; `None` means no selection.
-    search_anchor: Option<usize>,
-    /// In-flight IME composition and where it sits in `search_draft`.
-    search_marked_text: String,
-    search_marked_range: Option<std::ops::Range<usize>>,
-    search_focus: FocusHandle,
+    /// Kept alive for as long as the field is, so edits keep arriving.
+    _search_subscription: Subscription,
     sort_mode: ConnectionSortMode,
     more_menu_open: bool,
     context_menu: Option<ConnectionContextMenuState>,
@@ -154,15 +156,29 @@ pub(in crate::features) struct NetworkFeatureState {
 }
 
 impl ConnectionFeatureState {
-    pub fn new(settings: &AppSettingsSummary, focus: ConnectionFeatureFocus) -> Self {
+    pub fn new(
+        settings: &AppSettingsSummary,
+        focus: ConnectionFeatureFocus,
+        cx: &mut Context<NyaTermApp>,
+    ) -> Self {
+        let filter_placeholder = focus.filter_placeholder;
+        let search_field =
+            cx.new(|cx| TextField::new(cx, String::new()).placeholder(filter_placeholder));
+        // The field owns the text; the panel only needs to know when it changed.
+        let search_subscription = cx.subscribe(
+            &search_field,
+            |app: &mut NyaTermApp, _, event: &TextFieldEvent, cx| {
+                let TextFieldEvent::Changed(text) = event;
+                app.connection_state.list.set_search_text(text.clone());
+                app.sync_connection_keyboard_active(cx);
+                cx.notify();
+            },
+        );
         Self {
             list: ConnectionListState {
+                search_field,
                 search_draft: String::new(),
-                search_cursor: 0,
-                search_anchor: None,
-                search_marked_text: String::new(),
-                search_marked_range: None,
-                search_focus: focus.search,
+                _search_subscription: search_subscription,
                 sort_mode: ConnectionSortMode::from_setting(
                     &settings.ui_saved_connections_sort_mode,
                 ),
@@ -252,8 +268,18 @@ impl ConnectionListState {
         self.search_draft.is_empty()
     }
 
-    pub fn search_focus_handle(&self) -> FocusHandle {
-        self.search_focus.clone()
+    pub fn search_field(&self) -> Entity<TextField> {
+        self.search_field.clone()
+    }
+
+    pub fn search_focus_handle(&self, cx: &App) -> FocusHandle {
+        self.search_field.read(cx).focus_handle()
+    }
+
+    /// Cache what the field just reported. Filtering runs on every keystroke and
+    /// from paths without an `App`, so it reads this rather than the entity.
+    pub fn set_search_text(&mut self, text: String) {
+        self.search_draft = text;
     }
 
     pub fn sort_mode(&self) -> ConnectionSortMode {
@@ -352,81 +378,7 @@ impl ConnectionListState {
         close_connection_more_menu(&mut self.more_menu_open)
     }
 
-    pub fn apply_search_key(&mut self, key: &str, input: Option<&str>, shift: bool) -> bool {
-        apply_connection_search_key(
-            &mut self.search_draft,
-            &mut self.search_cursor,
-            &mut self.search_anchor,
-            key,
-            input,
-            shift,
-        )
-    }
-
-    pub fn clear_search(&mut self) -> bool {
-        self.search_marked_text.clear();
-        self.search_marked_range = None;
-        clear_connection_search(
-            &mut self.search_draft,
-            &mut self.search_cursor,
-            &mut self.search_anchor,
-        )
-    }
-
-    pub fn search_cursor(&self) -> usize {
-        self.search_cursor.min(self.search_draft.len())
-    }
-
-    pub fn search_selection_is_reversed(&self) -> bool {
-        self.search_anchor
-            .is_some_and(|anchor| anchor > self.search_cursor)
-    }
-
-    pub fn search_selected_byte_range(&self) -> std::ops::Range<usize> {
-        connection_search_selected_range(&self.search_draft, self.search_cursor, self.search_anchor)
-    }
-
-    pub fn search_marked_text(&self) -> &str {
-        &self.search_marked_text
-    }
-
-    pub fn search_marked_range(&self) -> Option<std::ops::Range<usize>> {
-        self.search_marked_range.clone()
-    }
-
-    pub fn clear_search_marked(&mut self) {
-        self.search_marked_text.clear();
-        self.search_marked_range = None;
-    }
-
-    pub fn replace_search_range(&mut self, range: std::ops::Range<usize>, text: &str) {
-        replace_connection_search_range(
-            &mut self.search_draft,
-            &mut self.search_cursor,
-            &mut self.search_anchor,
-            range,
-            text,
-        );
-        self.search_marked_text.clear();
-        self.search_marked_range = None;
-    }
-
     /// Record an in-flight IME composition and where its selection sits.
-    pub fn set_search_marked(
-        &mut self,
-        start: usize,
-        marked_text: &str,
-        selected: Option<std::ops::Range<usize>>,
-    ) {
-        self.search_marked_text = marked_text.to_string();
-        self.search_marked_range =
-            (!marked_text.is_empty()).then_some(start..start + marked_text.len());
-        if let Some(selected) = selected {
-            self.search_anchor = (selected.start != selected.end).then_some(start + selected.start);
-            self.search_cursor = start + selected.end;
-        }
-    }
-
     pub fn cycle_sort_mode(&mut self) -> ConnectionSortMode {
         cycle_connection_sort_mode(&mut self.sort_mode)
     }
@@ -1214,16 +1166,15 @@ mod tests {
         advance_network_proxy_editor_focus, advance_network_tunnel_editor_focus,
         apply_connection_editor_shell_path, apply_connection_editor_text_key,
         apply_connection_editor_working_dir, apply_connection_group_editor_name_key,
-        apply_connection_search_key, apply_network_group_editor_name_key,
-        apply_network_proxy_editor_key, apply_network_tunnel_editor_key,
-        clear_connection_editor_group_menu_draft, clear_connection_editor_runtime_state,
-        clear_connection_list_runtime_state, clear_connection_search, clear_network_proxy_editor,
-        clear_network_tunnel_editor, clear_selected_connection_ids, close_connection_more_menu,
-        commit_connection_editor_new_group, connection_drop_position_for_target,
-        connection_editor_inline_panel_draft, connection_editor_window_open_or_pending,
-        connection_search_selected_range, cycle_connection_sort_mode, cycle_network_proxy_group,
-        cycle_network_proxy_protocol, cycle_network_tunnel_connection, cycle_network_tunnel_group,
-        cycle_network_tunnel_type, finish_connection_editor_save_state,
+        apply_network_group_editor_name_key, apply_network_proxy_editor_key,
+        apply_network_tunnel_editor_key, clear_connection_editor_group_menu_draft,
+        clear_connection_editor_runtime_state, clear_connection_list_runtime_state,
+        clear_network_proxy_editor, clear_network_tunnel_editor, clear_selected_connection_ids,
+        close_connection_more_menu, commit_connection_editor_new_group,
+        connection_drop_position_for_target, connection_editor_inline_panel_draft,
+        connection_editor_window_open_or_pending, cycle_connection_sort_mode,
+        cycle_network_proxy_group, cycle_network_proxy_protocol, cycle_network_tunnel_connection,
+        cycle_network_tunnel_group, cycle_network_tunnel_type, finish_connection_editor_save_state,
         focus_connection_editor_field, focus_network_proxy_editor_field,
         focus_network_tunnel_editor_field, insert_connection_editor_description_newline,
         insert_network_proxy_command_newline, remove_connection_list_references,
@@ -1252,86 +1203,6 @@ mod tests {
         NetworkMovePickerState, NetworkProxyEditorField, NetworkProxyEditorState, NetworkTab,
         NetworkTunnelEditorField, NetworkTunnelEditorState,
     };
-
-    #[test]
-    fn search_editing_is_relative_to_the_caret_and_respects_char_boundaries() {
-        let mut draft = String::new();
-        let mut cursor = 0usize;
-        let mut anchor = None;
-
-        for input in ["南", "京", "a"] {
-            apply_connection_search_key(
-                &mut draft,
-                &mut cursor,
-                &mut anchor,
-                "",
-                Some(input),
-                false,
-            );
-        }
-        assert_eq!(draft, "南京a");
-        assert_eq!(cursor, draft.len());
-
-        // Backspace must drop a whole character, not one byte of a multi-byte one.
-        apply_connection_search_key(
-            &mut draft,
-            &mut cursor,
-            &mut anchor,
-            "backspace",
-            None,
-            false,
-        );
-        apply_connection_search_key(
-            &mut draft,
-            &mut cursor,
-            &mut anchor,
-            "backspace",
-            None,
-            false,
-        );
-        assert_eq!(draft, "南");
-
-        // Insert at the caret rather than always appending.
-        apply_connection_search_key(&mut draft, &mut cursor, &mut anchor, "home", None, false);
-        apply_connection_search_key(&mut draft, &mut cursor, &mut anchor, "", Some("x"), false);
-        assert_eq!(draft, "x南");
-        assert_eq!(cursor, 1);
-
-        // Delete removes forward.
-        apply_connection_search_key(&mut draft, &mut cursor, &mut anchor, "delete", None, false);
-        assert_eq!(draft, "x");
-    }
-
-    #[test]
-    fn shift_extends_a_selection_that_typing_then_replaces() {
-        let mut draft = "abc".to_string();
-        let mut cursor = 3usize;
-        let mut anchor = None;
-
-        apply_connection_search_key(&mut draft, &mut cursor, &mut anchor, "left", None, true);
-        apply_connection_search_key(&mut draft, &mut cursor, &mut anchor, "left", None, true);
-        assert_eq!(
-            connection_search_selected_range(&draft, cursor, anchor),
-            1..3
-        );
-
-        apply_connection_search_key(&mut draft, &mut cursor, &mut anchor, "", Some("Z"), false);
-        assert_eq!(draft, "aZ");
-        assert_eq!(anchor, None);
-    }
-
-    #[test]
-    fn caret_moves_without_shift_collapse_the_selection() {
-        let mut draft = "abc".to_string();
-        let mut cursor = 3usize;
-        let mut anchor = None;
-
-        apply_connection_search_key(&mut draft, &mut cursor, &mut anchor, "left", None, true);
-        assert!(anchor.is_some());
-        apply_connection_search_key(&mut draft, &mut cursor, &mut anchor, "left", None, false);
-        assert_eq!(anchor, None);
-        assert_eq!(cursor, 1);
-    }
 
     #[test]
     fn search_expansion_opens_matches_and_restores_the_prior_tree() {
@@ -1417,66 +1288,6 @@ mod tests {
         assert!(close_connection_more_menu(&mut more_menu_open));
         assert!(!more_menu_open);
         assert!(!close_connection_more_menu(&mut more_menu_open));
-    }
-
-    #[test]
-    fn apply_connection_search_key_handles_escape_backspace_and_text() {
-        let mut search_draft = "prod".to_string();
-        let mut cursor = search_draft.len();
-        let mut anchor = None;
-
-        assert!(apply_connection_search_key(
-            &mut search_draft,
-            &mut cursor,
-            &mut anchor,
-            "x",
-            Some("x"),
-            false
-        ));
-        assert_eq!(search_draft, "prodx");
-
-        assert!(apply_connection_search_key(
-            &mut search_draft,
-            &mut cursor,
-            &mut anchor,
-            "backspace",
-            None,
-            false
-        ));
-        assert_eq!(search_draft, "prod");
-
-        assert!(apply_connection_search_key(
-            &mut search_draft,
-            &mut cursor,
-            &mut anchor,
-            "escape",
-            None,
-            false
-        ));
-        assert!(search_draft.is_empty());
-        assert!(!apply_connection_search_key(
-            &mut search_draft,
-            &mut cursor,
-            &mut anchor,
-            "shift",
-            None,
-            false
-        ));
-    }
-
-    #[test]
-    fn clear_connection_search_is_idempotent_for_notify_callers() {
-        let mut search_draft = String::new();
-        let mut cursor = 0usize;
-        let mut anchor = None;
-
-        assert!(clear_connection_search(
-            &mut search_draft,
-            &mut cursor,
-            &mut anchor
-        ));
-        assert!(search_draft.is_empty());
-        assert_eq!(cursor, 0);
     }
 
     #[test]

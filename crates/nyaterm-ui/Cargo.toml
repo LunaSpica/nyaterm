@@ -8,4 +8,5 @@ repository.workspace = true
 
 [dependencies]
 gpui.workspace = true
+nyaterm-core.workspace = true
 nyaterm-terminal.workspace = true

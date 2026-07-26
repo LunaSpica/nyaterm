@@ -20,6 +20,7 @@ pub mod terminal_input_tracker;
 pub mod terminal_mouse;
 pub mod terminal_resize;
 pub mod terminal_wire_write;
+pub mod text_edit;
 pub mod translation;
 pub mod updater;
 
@@ -128,6 +129,7 @@ pub use terminal_resize::{
 pub use terminal_wire_write::{
     TerminalWireWriteDisposition, TerminalWireWriteKind, terminal_wire_write_disposition,
 };
+pub use text_edit::{CursorMotion, TextEdit};
 pub use translation::{
     AliSignature, TranslateResult, TranslationError, TranslationSettings, ali_content_sha256,
     ali_signature, ali_translate_body, ali_translate_lang, baidu_translate_lang,

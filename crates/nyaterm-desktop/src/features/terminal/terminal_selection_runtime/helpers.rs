@@ -80,17 +80,6 @@ impl EntityInputHandler for NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Option<String> {
-        if self
-            .connection_state
-            .list
-            .search_focus_handle()
-            .is_focused(window)
-        {
-            let text = self.connection_state.list.search_text().to_string();
-            let byte_range = byte_range_from_utf16(&text, &range);
-            *adjusted_range = Some(utf16_range_from_bytes(&text, &byte_range));
-            return Some(text[byte_range].to_string());
-        }
         if self.multi_line_paste.is_some() && self.multi_line_paste_focus.is_focused(window) {
             let text = self.multi_line_paste_text();
             let byte_range = byte_range_from_utf16(text, &range);
@@ -239,19 +228,6 @@ impl EntityInputHandler for NyaTermApp {
                 reversed: false,
             });
         }
-        if self
-            .connection_state
-            .list
-            .search_focus_handle()
-            .is_focused(window)
-        {
-            let text = self.connection_state.list.search_text().to_string();
-            let range = self.connection_state.list.search_selected_byte_range();
-            return Some(UTF16Selection {
-                range: utf16_range_from_bytes(&text, &range),
-                reversed: self.connection_state.list.search_selection_is_reversed(),
-            });
-        }
         if self.multi_line_paste_focus.is_focused(window) {
             let text = self.multi_line_paste_text();
             let range = self.multi_line_paste_selected_byte_range();
@@ -309,19 +285,6 @@ impl EntityInputHandler for NyaTermApp {
             let len = self.sync_groups_name_marked_text.encode_utf16().count();
             return (len > 0).then_some(0..len);
         }
-        if self
-            .connection_state
-            .list
-            .search_focus_handle()
-            .is_focused(window)
-        {
-            let text = self.connection_state.list.search_text().to_string();
-            return self
-                .connection_state
-                .list
-                .search_marked_range()
-                .map(|range| utf16_range_from_bytes(&text, &range));
-        }
         if self.multi_line_paste.is_some() && self.multi_line_paste_focus.is_focused(window) {
             return self
                 .multi_line_paste_marked_range
@@ -363,15 +326,6 @@ impl EntityInputHandler for NyaTermApp {
         }
         if self.sync_groups_open && self.sync_groups_name_focus.is_focused(window) {
             self.sync_groups_name_marked_text.clear();
-            return;
-        }
-        if self
-            .connection_state
-            .list
-            .search_focus_handle()
-            .is_focused(window)
-        {
-            self.connection_state.list.clear_search_marked();
             return;
         }
         if self.multi_line_paste.is_some() && self.multi_line_paste_focus.is_focused(window) {
@@ -440,22 +394,6 @@ impl EntityInputHandler for NyaTermApp {
                 name.push_str(text);
                 self.set_selected_sync_group_name(name, cx);
             }
-            return;
-        }
-        if self
-            .connection_state
-            .list
-            .search_focus_handle()
-            .is_focused(window)
-        {
-            let draft = self.connection_state.list.search_text().to_string();
-            let range = range
-                .as_ref()
-                .map(|range| byte_range_from_utf16(&draft, range))
-                .or_else(|| self.connection_state.list.search_marked_range())
-                .unwrap_or_else(|| self.connection_state.list.search_selected_byte_range());
-            self.connection_state.list.replace_search_range(range, text);
-            cx.notify();
             return;
         }
         if self.multi_line_paste.is_some() && self.multi_line_paste_focus.is_focused(window) {
@@ -543,32 +481,6 @@ impl EntityInputHandler for NyaTermApp {
         }
         if self.sync_groups_open && self.sync_groups_name_focus.is_focused(window) {
             self.sync_groups_name_marked_text = new_text.to_string();
-            cx.notify();
-            return;
-        }
-        if self
-            .connection_state
-            .list
-            .search_focus_handle()
-            .is_focused(window)
-        {
-            let draft = self.connection_state.list.search_text().to_string();
-            let range = range
-                .as_ref()
-                .map(|range| byte_range_from_utf16(&draft, range))
-                .or_else(|| self.connection_state.list.search_marked_range())
-                .unwrap_or_else(|| self.connection_state.list.search_selected_byte_range());
-            let start = range.start;
-            self.connection_state
-                .list
-                .replace_search_range(range, new_text);
-            self.connection_state.list.set_search_marked(
-                start,
-                new_text,
-                new_selected_range
-                    .as_ref()
-                    .map(|selected| byte_range_from_utf16(new_text, selected)),
-            );
             cx.notify();
             return;
         }
@@ -698,18 +610,6 @@ impl EntityInputHandler for NyaTermApp {
                     .map(|group| group.name.encode_utf16().count())
                     .unwrap_or_default(),
             );
-        }
-        if self
-            .connection_state
-            .list
-            .search_focus_handle()
-            .is_focused(window)
-        {
-            let text = self.connection_state.list.search_text().to_string();
-            return Some(utf16_offset_for_byte(
-                &text,
-                self.connection_state.list.search_cursor(),
-            ));
         }
         if self.multi_line_paste.is_some() && self.multi_line_paste_focus.is_focused(window) {
             return Some(utf16_offset_for_byte(

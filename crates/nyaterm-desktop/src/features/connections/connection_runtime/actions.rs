@@ -230,7 +230,7 @@ impl NyaTermApp {
     }
 
     /// Drop the keyboard-active row once the filter no longer shows it.
-    fn sync_connection_keyboard_active(&mut self, cx: &mut Context<Self>) {
+    pub(in crate::features) fn sync_connection_keyboard_active(&mut self, cx: &mut Context<Self>) {
         let Some(active) = self
             .connection_state
             .list
@@ -251,6 +251,10 @@ impl NyaTermApp {
         }
     }
 
+    /// Keys the filter field deliberately leaves alone.
+    ///
+    /// The field consumes its own editing keys, so anything arriving here is a
+    /// list gesture: walk the filtered results, open one, or clear the filter.
     pub(in crate::features) fn handle_connection_search_key_down(
         &mut self,
         event: &KeyDownEvent,
@@ -259,50 +263,45 @@ impl NyaTermApp {
     ) {
         self.mark_user_activity();
         let keystroke = &event.keystroke;
-        if keystroke.modifiers.alt || keystroke.modifiers.function {
+        if keystroke.modifiers.alt
+            || keystroke.modifiers.function
+            || keystroke.modifiers.platform
+            || keystroke.modifiers.control
+        {
             return;
         }
-        let key = keystroke.key.as_str();
 
-        // While a filter is active the box also drives the results: up/down walk
-        // them and enter opens the active one, as the old UI did.
-        if !self.connection_state.list.search_is_empty()
-            && matches!(key, "up" | "down" | "enter")
-            && !keystroke.modifiers.platform
-            && !keystroke.modifiers.control
-        {
-            match key {
-                "up" | "down" => {
-                    if self.step_connection_keyboard_active(key == "down", cx) {
-                        return;
-                    }
-                }
-                _ => {
-                    if self.open_connection_keyboard_active(window, cx) {
-                        return;
-                    }
+        match keystroke.key.as_str() {
+            "escape" => {
+                cx.stop_propagation();
+                self.clear_connection_search(window, cx);
+            }
+            "up" | "down" if !self.connection_state.list.search_is_empty() => {
+                if self.step_connection_keyboard_active(keystroke.key == "down", cx) {
+                    cx.stop_propagation();
                 }
             }
-        }
-
-        let changed = if key == "escape" {
-            self.connection_state.list.clear_search()
-        } else if !keystroke.modifiers.platform && !keystroke.modifiers.control {
-            self.connection_state.list.apply_search_key(
-                key,
-                keystroke.key_char.as_deref(),
-                keystroke.modifiers.shift,
-            )
-        } else {
-            false
-        };
-        if changed {
-            if key == "escape" {
-                self.terminal.view.status = "connection search cleared".to_string();
+            "enter" if !self.connection_state.list.search_is_empty() => {
+                if self.open_connection_keyboard_active(window, cx) {
+                    cx.stop_propagation();
+                }
             }
-            self.sync_connection_keyboard_active(cx);
-            cx.notify();
+            _ => {}
         }
+    }
+
+    pub(in crate::features) fn clear_connection_search(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let field = self.connection_state.list.search_field();
+        field.update(cx, |field, cx| field.set_content(String::new(), cx));
+        self.connection_state.list.set_search_text(String::new());
+        window.focus(&field.read(cx).focus_handle());
+        self.terminal.view.status = "connection search cleared".to_string();
+        self.sync_connection_keyboard_active(cx);
+        cx.notify();
     }
 
     pub(in crate::features) fn delete_selected_connections(&mut self, cx: &mut Context<Self>) {

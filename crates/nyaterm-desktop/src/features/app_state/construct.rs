@@ -274,6 +274,9 @@ impl NyaTermApp {
             settings.terminal_scrollback_lines.clamp(100, 100_000) as usize,
         );
 
+        let connections_filter_placeholder =
+            crate::i18n::text(&settings.language, "savedConnections.filter");
+
         Self {
             stores,
             runtime,
@@ -284,7 +287,7 @@ impl NyaTermApp {
             connection_state: ConnectionFeatureState::new(
                 &settings,
                 ConnectionFeatureFocus {
-                    search: cx.focus_handle(),
+                    filter_placeholder: connections_filter_placeholder.into(),
                     import: cx.focus_handle(),
                     editor: cx.focus_handle(),
                     group_editor: cx.focus_handle(),
@@ -293,6 +296,7 @@ impl NyaTermApp {
                     network_tunnel_editor: cx.focus_handle(),
                     network_proxy_editor: cx.focus_handle(),
                 },
+                cx,
             ),
             connection_groups,
             connection_ssh_keys,
