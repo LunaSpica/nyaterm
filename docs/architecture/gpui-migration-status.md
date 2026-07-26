@@ -847,24 +847,33 @@ while `features/mod.rs` still flattened every feature directory through
 still sit in the same crate-wide namespace, reachable from everywhere. Build the
 real module tree first, then the remaining steps actually enforce something.
 
+Items 1, 3 and 4 are done. What follows is the honest remaining list.
+
 1. Done. `#[path = "..."]` no longer appears in `nyaterm-desktop` or
    `nyaterm-terminal-gpui`, and a crate-wide guard keeps it that way.
 2. Drop the `use super::*` chain in favor of explicit imports, starting with the
    leaf files of a directory and working up to its `mod.rs`. Now that each
    directory is a real module, this is what actually narrows visibility; before
    the module tree existed it only moved names between two flat namespaces.
-3. Split `NyaTermApp` along the pattern already validated by
-   `ConnectionFeatureState`: grouped feature-state structs with private fields
-   and semantic methods, covered by GPUI-free pure state tests. This is the
-   highest-value remaining item; roughly 590 fields and 236 `impl NyaTermApp`
-   blocks are the reason most desktop modules can reach most desktop state.
+   Note this one does not batch: every file needs its own dependency set
+   resolved, so it is 355 small compiler-guided edits rather than one sweep.
+3. Largely done. `NyaTermApp` is down from 585 fields to 279, across eight
+   feature-state structs. What is left is a long tail — the biggest remaining
+   domain is eighteen fields, and much of the rest is genuinely app-level
+   (stores, runtime, services, persisted collections). Group by cohesion where
+   a cluster exists; do not force the count down for its own sake.
+   The 236 `impl NyaTermApp` blocks are the next structural question: grouping
+   fields did not move the methods, so most desktop modules can still reach
+   most desktop state through `self`.
 4. Done. No store is a projection any more; the four that remain own real
    state. If a future domain wants Entity ownership, migrate it authoritatively
    rather than reintroducing a published read model.
-5. Continue extracting schema-neutral internal modules from `core/storage.rs`
-   and schema/protocol-neutral modules from `nyaterm-transport/src/lib.rs`, by
-   domain rather than by individual type. Table definitions, serialized records,
-   encryption paths, backup formats, and legacy fallback behavior stay unchanged.
+5. Split `core/storage.rs` (7662 lines) and `nyaterm-transport/src/lib.rs`
+   (8418 lines) by domain rather than by individual type. Earlier rounds pulled
+   out a few pure type modules, which barely moved the line count; the useful
+   split separates protocol execution from schema and from transfer mechanics.
+   Table definitions, serialized records, encryption paths, backup formats, and
+   legacy fallback behavior are compatibility surface and stay unchanged.
 6. Reduce `features/prelude.rs` opportunistically while touching a module, not
    as standalone rounds. The remaining entries are genuinely shared types.
 7. Tighten one more low-risk crate-root export after confirming there are no
