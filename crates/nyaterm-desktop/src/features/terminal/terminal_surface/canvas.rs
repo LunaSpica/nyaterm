@@ -4,7 +4,7 @@ use crate::features::terminal_selection_runtime::{
 };
 use crate::models::{
     TerminalPerformanceMode, TerminalPerformanceOverlay, TerminalSearchMode,
-    terminal_expensive_interactions_enabled,
+    terminal_action_link_matcher_key, terminal_expensive_interactions_enabled,
 };
 
 fn terminal_shell_placeholder_snapshot() -> std::sync::Arc<TerminalSnapshot> {

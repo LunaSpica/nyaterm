@@ -6,8 +6,9 @@ use crate::models::{
     MainMode, TERMINAL_UI_OUTPUT_TAIL_CAP, TerminalFrameBufferTextEvent, TerminalFrameOutputEvent,
     TerminalFrameOutputSubmission, TerminalFrameSearchEvent, TerminalFrameSearchKey,
     TerminalFrameSnapshotEvent, TerminalSearchMode, TerminalWindowNode, WorkspacePaneNode,
-    append_terminal_ui_output_tail, terminal_frame_scroll_window_extra_rows,
-    terminal_frame_search_result_is_current, terminal_snapshot_matches_grid_geometry,
+    append_terminal_ui_output_tail, terminal_action_link_matcher_key,
+    terminal_frame_scroll_window_extra_rows, terminal_frame_search_result_is_current,
+    terminal_snapshot_matches_grid_geometry,
 };
 
 const MAX_OSC52_REPLY_CHARS: usize = 1_048_576;

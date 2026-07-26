@@ -2,7 +2,7 @@ use super::*;
 
 use crate::models::{
     EffectiveTerminalPaintPolicy, TerminalPerformanceMode, TerminalProtocolState,
-    TerminalSearchMode, terminal_snapshot_matches_grid_geometry,
+    TerminalSearchMode, terminal_action_link_matcher_key, terminal_snapshot_matches_grid_geometry,
 };
 use nyaterm_core::{TerminalMouseReportEligibility, terminal_mouse_report_should_send};
 
