@@ -69,12 +69,11 @@ impl NyaTermApp {
                                         .flex()
                                         .items_center()
                                         .gap_2()
-                                        .child(
-                                            div()
-                                                .text_size(px(14.))
-                                                .text_color(rgb(palette.link))
-                                                .child("⚡"),
-                                        )
+                                        .child(div().child(crate::features::mono_icon(
+                                            "icons/conn/flash.svg",
+                                            rgb(palette.link).into(),
+                                            14.,
+                                        )))
                                         .child(
                                             div()
                                                 .text_sm()

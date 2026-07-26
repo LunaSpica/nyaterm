@@ -120,7 +120,11 @@ impl Render for SessionTabTooltip {
                             .text_color(rgb(0x8f98aa))
                             .hover(|style| style.bg(rgb(0x334155)).text_color(rgb(0xe5edf7)))
                             .cursor_pointer()
-                            .child("⧉")
+                            .child(crate::features::mono_icon(
+                                "icons/copy.svg",
+                                rgb(0x8f98aa).into(),
+                                11.,
+                            ))
                             .on_click(cx.listener(move |_, _, _, cx| {
                                 cx.stop_propagation();
                                 cx.write_to_clipboard(ClipboardItem::new_string(

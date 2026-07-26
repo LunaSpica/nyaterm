@@ -426,6 +426,14 @@ pub struct SavedConnection {
     pub sort_order: i32,
     #[serde(default)]
     pub icon: Option<String>,
+    /// Whether `icon` may be replaced by one detected from the remote system.
+    ///
+    /// `None` means "not configured", which reads as enabled only while no icon
+    /// has been chosen — see [`SavedConnection::icon_auto_detect_enabled`]. Kept
+    /// as an `Option` and skipped when empty so files round-trip unchanged
+    /// through builds that predate the field.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub icon_auto_detect: Option<bool>,
     #[serde(default)]
     pub auth: Option<ConnectionAuth>,
     #[serde(default)]
@@ -441,6 +449,16 @@ pub struct SavedConnection {
 }
 
 impl SavedConnection {
+    /// Whether the icon may be replaced by one inferred from the remote system.
+    ///
+    /// An unset flag defaults to "yes, until the user picks something", which is
+    /// what keeps auto-detection from ever overwriting a deliberate choice made
+    /// before this field existed.
+    pub fn icon_auto_detect_enabled(&self) -> bool {
+        self.icon_auto_detect
+            .unwrap_or_else(|| self.icon.as_deref().is_none_or(str::is_empty))
+    }
+
     pub fn kind_label(&self) -> &'static str {
         match self.config {
             ConnectionType::Ssh { .. } => "SSH",
@@ -1452,6 +1470,7 @@ mod tests {
             description: None,
             sort_order: 0,
             icon: None,
+            icon_auto_detect: None,
             auth: None,
             network: None,
             post_login: None,
@@ -1461,5 +1480,49 @@ mod tests {
         };
 
         assert_eq!(connection.endpoint(), "zsh in /data");
+    }
+
+    #[test]
+    fn icon_auto_detect_defaults_to_filling_in_a_blank_only() {
+        let mut connection: SavedConnection = serde_json::from_str(
+            r#"{"id":"c1","name":"Box","type":"ssh","host":"h","port":22,"username":"root"}"#,
+        )
+        .expect("valid connection");
+
+        // Unset flag, no icon: detection may fill one in.
+        assert!(connection.icon_auto_detect_enabled());
+
+        // Unset flag but an icon chosen by an older build: leave it alone.
+        connection.icon = Some("ubuntu".to_string());
+        assert!(!connection.icon_auto_detect_enabled());
+
+        // An explicit flag always wins over the heuristic, either way.
+        connection.icon_auto_detect = Some(true);
+        assert!(connection.icon_auto_detect_enabled());
+        connection.icon = None;
+        connection.icon_auto_detect = Some(false);
+        assert!(!connection.icon_auto_detect_enabled());
+    }
+
+    #[test]
+    fn icon_auto_detect_round_trips_and_stays_absent_when_unset() {
+        let connection: SavedConnection = serde_json::from_str(
+            r#"{"id":"c1","name":"Box","type":"ssh","host":"h","port":22,"username":"root"}"#,
+        )
+        .expect("valid connection");
+
+        // Files written by builds predating the field must round-trip byte-for-
+        // byte, so an unset flag is never serialized.
+        let json = serde_json::to_string(&connection).expect("serializes");
+        assert!(!json.contains("icon_auto_detect"), "{json}");
+
+        let explicit = SavedConnection {
+            icon_auto_detect: Some(false),
+            ..connection
+        };
+        let reloaded: SavedConnection =
+            serde_json::from_str(&serde_json::to_string(&explicit).expect("serializes"))
+                .expect("reloads");
+        assert_eq!(reloaded.icon_auto_detect, Some(false));
     }
 }

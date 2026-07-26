@@ -101,7 +101,24 @@ pub(super) fn set_connection_editor_icon(
         .map(str::trim)
         .filter(|icon| !icon.is_empty())
         .map(ToOwned::to_owned);
+    // Choosing an icon by hand is an explicit decision, so stop letting the
+    // remote system overwrite it. Clearing the icon hands control back.
+    editor.icon_auto_detect = editor.icon.is_none();
     editor.error = None;
+    true
+}
+
+pub(super) fn set_connection_editor_icon_auto_detect(
+    draft: &mut Option<ConnectionEditorState>,
+    enabled: bool,
+) -> bool {
+    let Some(editor) = draft.as_mut() else {
+        return false;
+    };
+    if editor.icon_auto_detect == enabled {
+        return false;
+    }
+    editor.icon_auto_detect = enabled;
     true
 }
 

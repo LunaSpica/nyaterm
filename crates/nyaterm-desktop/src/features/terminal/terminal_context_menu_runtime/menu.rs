@@ -415,11 +415,13 @@ impl NyaTermApp {
                     panel =
                         panel.children(search_engines.into_iter().map(|(name, template, icon)| {
                             let query = selected.clone();
-                            let icon_prefix = search_engine_menu_icon_prefix(icon.as_deref());
-                            terminal_ctx_item(
+                            let icon_def =
+                                crate::features::search_engine_icon(icon.as_deref(), palette);
+                            terminal_ctx_item_with_icon(
                                 palette,
                                 format!("term-ctx-search-{name}"),
-                                format!("{icon_prefix}{name}"),
+                                name.clone(),
+                                Some(icon_def),
                                 None,
                                 cx.listener(move |this, _, _, cx| {
                                     this.close_terminal_context_menu(cx);

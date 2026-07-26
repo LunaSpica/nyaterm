@@ -127,23 +127,14 @@ pub(in crate::features::panels) fn quick_command_icon_mark(
     icon_tag: Option<&str>,
     color_tag: Option<&str>,
 ) -> impl IntoElement {
-    match icon_tag.and_then(|tag| quick_command_icon_def(palette, tag)) {
-        Some((label, color)) => div()
-            .size(px(18.))
-            .flex_none()
-            .rounded_sm()
-            .border_1()
-            .border_color(color)
-            .bg(rgb(palette.input))
-            .flex()
-            .items_center()
-            .justify_center()
-            .font_family(crate::features::gpui_code_font_family())
-            .text_size(px(8.))
-            .font_weight(FontWeight(800.))
-            .text_color(color)
-            .child(label)
-            .into_any_element(),
+    match icon_tag.and_then(quick_command_icon) {
+        Some(def) => crate::features::mono_icon(
+            def.path,
+            rgb(def.tint(palette).unwrap_or(palette.text)).into(),
+            16.,
+        )
+        .into_any_element(),
+        // No icon chosen: the command still gets its color, as a plain dot.
         None => div()
             .size(px(9.))
             .flex_none()
@@ -174,45 +165,6 @@ pub(in crate::features::panels) fn quick_command_color(
         "yellow" => rgb(palette.warning),
         "purple" => rgb(palette.link),
         _ => rgb(palette.text_muted),
-    }
-}
-
-fn quick_command_icon_def(
-    palette: crate::theme::ThemePalette,
-    icon_tag: &str,
-) -> Option<(&'static str, gpui::Rgba)> {
-    match icon_tag.trim().to_ascii_lowercase().as_str() {
-        "docker" => Some(("DK", rgb(0x2496ed))),
-        "k8s" => Some(("K8", rgb(0x326ce5))),
-        "linux" => Some(("LX", rgb(0xfcc624))),
-        "ubuntu" => Some(("UB", rgb(0xe95420))),
-        "debian" => Some(("DB", rgb(0xa81d33))),
-        "centos" => Some(("CE", rgb(0x7f3f98))),
-        "fedora" => Some(("FE", rgb(0x3c6eb4))),
-        "apple" => Some(("AP", rgb(0xa2aaad))),
-        "github" => Some(("GH", rgb(0xe5e7eb))),
-        "gitlab" => Some(("GL", rgb(0xfc6d26))),
-        "nginx" => Some(("NX", rgb(0x009639))),
-        "redis" => Some(("RD", rgb(0xdc382d))),
-        "postgres" => Some(("PG", rgb(0x4169e1))),
-        "mysql" => Some(("MY", rgb(0x4479a1))),
-        "mongodb" => Some(("MO", rgb(0x47a248))),
-        "python" => Some(("PY", rgb(0x3776ab))),
-        "js" => Some(("JS", rgb(0xf7df1e))),
-        "ts" => Some(("TS", rgb(0x3178c6))),
-        "rust" => Some(("RS", rgb(0xce412b))),
-        "go" => Some(("GO", rgb(0x00add8))),
-        "node" => Some(("ND", rgb(0x339933))),
-        "php" => Some(("PH", rgb(0x777bb4))),
-        "aws" => Some(("AWS", rgb(0xff9900))),
-        "gcp" => Some(("GC", rgb(0x4285f4))),
-        "terminal" => Some((">$", rgb(palette.success))),
-        "code" => Some(("</>", rgb(palette.link))),
-        "server" => Some(("SR", rgb(palette.link))),
-        "folder" => Some(("FD", rgb(palette.warning))),
-        "sparkles" => Some(("AI", rgb(palette.link))),
-        "bolt" => Some(("BT", rgb(palette.warning))),
-        _ => None,
     }
 }
 

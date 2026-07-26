@@ -21,7 +21,30 @@ pub(super) fn terminal_ctx_item(
     shortcut: Option<String>,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    terminal_ctx_item_with_icon(palette, id, label, None, shortcut, on_click)
+}
+
+pub(super) fn terminal_ctx_item_with_icon(
+    palette: crate::theme::ThemePalette,
+    id: impl Into<String>,
+    label: impl Into<String>,
+    icon: Option<crate::features::IconDef>,
+    shortcut: Option<String>,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
     let label = label.into();
+    let leading = div()
+        .flex()
+        .items_center()
+        .gap_2()
+        .when_some(icon, |this, def| {
+            this.child(crate::features::mono_icon(
+                def.path,
+                rgb(def.tint(palette).unwrap_or(palette.text)).into(),
+                14.,
+            ))
+        })
+        .child(label);
     let mut row = div()
         .id(SharedString::from(id.into()))
         .h(px(28.))
@@ -35,7 +58,7 @@ pub(super) fn terminal_ctx_item(
         .cursor_pointer()
         .hover(|this| this.bg(rgb(palette.hover)))
         .on_click(on_click)
-        .child(div().child(label));
+        .child(leading);
     if let Some(shortcut) = shortcut {
         row = row.child(
             div()
@@ -188,24 +211,4 @@ pub(super) fn selection_as_openable_url(selected: &str) -> Option<String> {
         }
     }
     None
-}
-
-pub(super) fn search_engine_menu_icon_prefix(icon: Option<&str>) -> String {
-    let label = match icon.unwrap_or("default") {
-        "google" => "G",
-        "bing" => "B",
-        "duckduckgo" => "D",
-        "github" => "GH",
-        "gitlab" => "GL",
-        "baidu" => "Bd",
-        "yahoo" => "Y!",
-        "youtube" => "YT",
-        "bilibili" => "Bi",
-        "zhihu" => "Zh",
-        "openai" => "AI",
-        "claude" => "Cl",
-        "gemini" => "Ge",
-        _ => "·",
-    };
-    format!("[{label}] ")
 }

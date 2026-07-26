@@ -47,6 +47,9 @@ impl NyaTermApp {
                 name: String::new(),
                 description: String::new(),
                 icon: None,
+                // A new connection has no icon yet, so let the first successful
+                // SSH session fill one in.
+                icon_auto_detect: true,
                 group_id: parent_group_id.filter(|value| !value.trim().is_empty()),
                 new_group_name: String::new(),
                 pending_group_name: None,
@@ -125,6 +128,16 @@ impl NyaTermApp {
     ) {
         self.connection_state.editor.set_icon(icon);
         cx.notify();
+    }
+
+    pub(in crate::features) fn set_connection_editor_icon_auto_detect(
+        &mut self,
+        enabled: bool,
+        cx: &mut Context<Self>,
+    ) {
+        if self.connection_state.editor.set_icon_auto_detect(enabled) {
+            cx.notify();
+        }
     }
 
     pub(in crate::features) fn toggle_connection_editor_menu(

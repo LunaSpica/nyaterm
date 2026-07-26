@@ -79,9 +79,11 @@ impl NyaTermApp {
                         .flex()
                         .items_center()
                         .justify_center()
-                        .text_size(px(22.))
-                        .text_color(rgb(palette.warning))
-                        .child("!"),
+                        .child(crate::features::mono_icon(
+                            "icons/warning.svg",
+                            rgb(palette.warning).into(),
+                            22.,
+                        )),
                 )
                 .child(
                     div()

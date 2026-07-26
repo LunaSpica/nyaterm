@@ -42,7 +42,7 @@ pub(super) fn transfer_browser_parent_entry_row(
                 .px_2()
                 .text_size(px(12.))
                 .text_color(rgb(palette.text))
-                .child(transfer_entry_icon(true, false, false))
+                .child(transfer_entry_icon(palette, "..", true, false, false))
                 .child(".."),
         )
         .child(transfer_browser_text_cell(
@@ -190,6 +190,8 @@ pub(super) fn transfer_browser_entry_row(
                     rgb(palette.text)
                 })
                 .child(transfer_entry_icon(
+                    palette,
+                    &entry.name,
                     is_directory,
                     entry.file_type == SftpFileType::Symlink,
                     is_marked_or_selected,

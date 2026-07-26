@@ -20,7 +20,7 @@ This is a Rust 2024 Cargo workspace.
 * `crates/nyaterm-store`: transitional persistence façade. The implementation currently remains in `nyaterm-core`; do not expand the re-export-only boundary without either moving the implementation or updating consumers to use this crate.
 * `crates/nyaterm-legacy`: migration and legacy-source compatibility only. Do not add new product features here.
 * `crates/nyaterm-otp`: bundled OTP implementation used for HOTP/TOTP compatibility.
-* `crates/nyaterm-app/assets`: application SVG assets.
+* `crates/nyaterm-app/assets`: bundled icon assets. `icons/**` is monochrome and painted with `svg()`; `color/**` is full color and painted with `img()`. The two are not interchangeable — see `docs/third-party-icons.md`. Assets are vendored by `scripts/sync-icons.sh` from `scripts/icons.manifest` and committed, so add or change icons through the manifest rather than by hand.
 * `vendor/`: modified or pinned third-party dependencies such as `russh`, `russh-sftp`, and `zmodem2`.
 
 ## Architectural Rules

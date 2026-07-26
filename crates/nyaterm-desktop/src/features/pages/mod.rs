@@ -1,7 +1,7 @@
 mod connections;
 mod migration;
 mod remote;
-mod settings;
+pub(in crate::features) mod settings;
 mod transfers;
 mod tunnels;
 mod workspace;

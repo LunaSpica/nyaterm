@@ -3,7 +3,7 @@ use gpui::{
     rgb, rgba, svg,
 };
 
-use crate::features::{NyaTermApp, modal_close_icon_button};
+use crate::features::{NyaTermApp, color_icon, modal_close_icon_button, mono_icon};
 use crate::models::ConnectionImportSource;
 use crate::theme::ThemePalette;
 
@@ -116,7 +116,7 @@ impl NyaTermApp {
                             .child(connection_import_source_card(
                                 palette,
                                 "connection-import-xshell",
-                                "icons/import/xshell.svg",
+                                "color/brand/xshell.png",
                                 "Xshell",
                                 ".xts",
                                 cx.listener(|this, _, _, cx| {
@@ -129,7 +129,7 @@ impl NyaTermApp {
                             .child(connection_import_source_card(
                                 palette,
                                 "connection-import-mobaxterm",
-                                "icons/import/mobaxterm.svg",
+                                "color/brand/mobaxterm.png",
                                 "MobaXterm",
                                 ".mxtsessions",
                                 cx.listener(|this, _, _, cx| {
@@ -142,7 +142,7 @@ impl NyaTermApp {
                             .child(connection_import_source_card(
                                 palette,
                                 "connection-import-windterm",
-                                "icons/import/windterm.svg",
+                                "color/brand/windterm.png",
                                 "WindTerm",
                                 ".sessions",
                                 cx.listener(|this, _, _, cx| {
@@ -250,7 +250,12 @@ fn connection_import_source_card(
         .cursor_pointer()
         .hover(move |this| this.border_color(rgb(palette.primary)).bg(hover))
         .on_click(on_click)
-        .child(svg().size(px(40.)).path(icon))
+        .child(if icon.starts_with("color/") {
+            // Vendor logos are full-color rasters; they cannot go through svg().
+            color_icon(icon, 40.).into_any_element()
+        } else {
+            mono_icon(icon, rgb(palette.text).into(), 40.).into_any_element()
+        })
         .child(
             div()
                 .max_w_full()

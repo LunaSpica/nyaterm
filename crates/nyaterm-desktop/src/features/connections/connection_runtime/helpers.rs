@@ -34,12 +34,14 @@ pub(super) fn connection_editor_from_saved(
     } else {
         ConnectionEditorPasswordSource::Ask
     };
+    let icon_auto_detect = connection.icon_auto_detect_enabled();
     let mut editor = ConnectionEditorState {
         id: Some(connection.id),
         kind: ConnectionKindTab::from_connection_type(&connection.config),
         name: connection.name,
         description: connection.description.unwrap_or_default(),
         icon: connection.icon,
+        icon_auto_detect,
         group_id: connection.group_id,
         new_group_name: String::new(),
         pending_group_name: None,
@@ -369,6 +371,11 @@ pub(super) fn build_saved_connection_from_editor(
         description: non_empty_optional(&editor.description),
         sort_order: 0,
         icon: editor.icon.clone().filter(|value| !value.trim().is_empty()),
+        // Only SSH sessions report a remote system, so nothing else can be
+        // auto-detected; persist the flag explicitly rather than relying on the
+        // "unset means enabled while blank" default, which would flip once the
+        // user chose an icon.
+        icon_auto_detect: Some(editor.kind == ConnectionKindTab::Ssh && editor.icon_auto_detect),
         auth,
         network,
         post_login,
@@ -421,6 +428,7 @@ mod tests {
             description: None,
             sort_order: 0,
             icon: Some("linux".to_string()),
+            icon_auto_detect: None,
             auth: None,
             network: None,
             post_login: None,
@@ -452,6 +460,7 @@ mod tests {
             description: None,
             sort_order: 0,
             icon: None,
+            icon_auto_detect: None,
             auth: Some(ConnectionAuth {
                 mode: "password".to_string(),
                 password_id: Some("password-1".to_string()),
@@ -500,6 +509,7 @@ mod tests {
             description: None,
             sort_order: 0,
             icon: None,
+            icon_auto_detect: None,
             auth: None,
             network: None,
             post_login: None,

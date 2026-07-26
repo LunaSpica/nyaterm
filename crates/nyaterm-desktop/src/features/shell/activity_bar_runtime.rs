@@ -12,6 +12,8 @@ pub(in crate::features) struct ActivityBarDragPayload {
     pub zone: ActivityBarZone,
     pub index: usize,
     pub label: String,
+    /// The dragged entry's own icon, so the preview reads as the thing being moved.
+    pub icon_path: &'static str,
 }
 
 pub(in crate::features) struct ActivityBarDragPreview {
@@ -46,13 +48,11 @@ impl Render for ActivityBarDragPreview {
                     .border_color(rgb(0x334155))
                     .bg(rgba(0x151b24dd))
                     .shadow_lg()
-                    .child(
-                        div()
-                            .text_size(px(10.))
-                            .font_weight(FontWeight(800.))
-                            .text_color(rgb(0x93c5fd))
-                            .child("ACT"),
-                    )
+                    .child(crate::features::mono_icon(
+                        self.payload.icon_path,
+                        rgb(0x93c5fd).into(),
+                        14.,
+                    ))
                     .child(
                         div()
                             .min_w_0()

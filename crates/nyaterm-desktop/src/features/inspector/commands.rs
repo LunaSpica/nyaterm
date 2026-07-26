@@ -37,12 +37,11 @@ impl NyaTermApp {
                                 this.run_history_command(run_index, cx);
                             }
                         }))
-                        .child(
-                            div()
-                                .text_size(px(10.))
-                                .text_color(rgb(palette.text_dimmed))
-                                .child("›"),
-                        )
+                        .child(div().child(crate::features::mono_icon(
+                            "icons/fe/forward.svg",
+                            rgb(palette.text_dimmed).into(),
+                            10.,
+                        )))
                         .child(
                             div()
                                 .min_w_0()

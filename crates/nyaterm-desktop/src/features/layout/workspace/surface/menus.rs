@@ -871,6 +871,7 @@ mod tests {
             description: None,
             sort_order,
             icon: None,
+            icon_auto_detect: None,
             auth: None,
             network: None,
             post_login: None,

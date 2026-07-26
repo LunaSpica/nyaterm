@@ -1,33 +1,47 @@
-use super::*;
+use gpui::{AnyElement, Hsla, Img, IntoElement, Svg, div, img, prelude::*, px, rgb, svg};
 
-/// Monochrome activity-bar SVG icon with glyph fallback.
+use crate::features::{IconDef, file_entry_icon};
+use crate::theme::ThemePalette;
+
+/// Paint a monochrome asset from `icons/**`.
+///
+/// GPUI rasterizes `svg()` into an alpha mask and keeps only the coverage
+/// channel, so whatever paints the file declares are discarded and `color` is the
+/// only thing that reaches the screen. That is what makes one glyph usable in
+/// seven tints, and it is also why a full-color logo cannot go through here.
+pub(in crate::features) fn mono_icon(path: &'static str, color: Hsla, size_px: f32) -> Svg {
+    debug_assert!(
+        path.starts_with("icons/"),
+        "monochrome icons live under icons/: {path}"
+    );
+    svg()
+        .size(px(size_px))
+        .flex_none()
+        .path(path)
+        .text_color(color)
+}
+
+/// Paint a full-color asset from `color/**`.
+///
+/// Unlike [`mono_icon`] this keeps the rasterized pixels, so the asset **cannot
+/// be tinted** — callers must express selection or hover with surrounding chrome
+/// instead. Decoding happens off the render thread, so the first frame after a
+/// cold start paints nothing; give the icon a reserved size to avoid a reflow.
+pub(in crate::features) fn color_icon(path: &'static str, size_px: f32) -> Img {
+    debug_assert!(
+        path.starts_with("color/"),
+        "full-color icons live under color/: {path}"
+    );
+    img(path).size(px(size_px)).flex_none()
+}
+
+/// Activity-bar icon.
 pub(in crate::features) fn activity_icon(
-    path: Option<&'static str>,
-    glyph: &'static str,
-    color: gpui::Hsla,
+    path: &'static str,
+    color: Hsla,
     size_px: f32,
-) -> gpui::AnyElement {
-    let size = px(size_px);
-    if let Some(path) = path {
-        svg()
-            .size(size)
-            .flex_none()
-            .path(path)
-            .text_color(color)
-            .into_any_element()
-    } else {
-        div()
-            .size(size)
-            .flex_none()
-            .flex()
-            .items_center()
-            .justify_center()
-            .text_size(px(size_px * 0.72))
-            .font_weight(FontWeight(700.))
-            .text_color(color)
-            .child(glyph)
-            .into_any_element()
-    }
+) -> AnyElement {
+    mono_icon(path, color, size_px).into_any_element()
 }
 
 /// Faded NyaTerm logo used by empty workspace (Tauri EmptyWorkspaceState).
@@ -36,61 +50,63 @@ pub(in crate::features) fn nyaterm_logo_mark(
     size_px: f32,
     opacity: f32,
 ) -> impl IntoElement {
-    let size = px(size_px);
     div()
-        .size(size)
+        .size(px(size_px))
         .flex_none()
         .opacity(opacity)
         .flex()
         .items_center()
         .justify_center()
-        .child(
-            svg()
-                .size(size)
-                .path("icons/logo.svg")
-                .text_color(rgb(palette.text_muted)),
-        )
+        .child(mono_icon(
+            "icons/logo.svg",
+            rgb(palette.text_muted).into(),
+            size_px,
+        ))
 }
 
-/// Colored connection/OS icon for saved connection rows (Tauri resolveConnectionIcon).
-pub(in crate::features) fn connection_type_icon(
+/// Paint a resolved [`IconDef`], honoring whichever element the asset needs.
+///
+/// `selected` only reaches monochrome icons: a full-color logo cannot be tinted,
+/// so selection has to be carried by the row's own background. That matches the
+/// pre-GPUI UI, where these were `<img>` tags and the configured color was inert.
+pub(in crate::features) fn themed_icon(
     palette: ThemePalette,
-    def: ConnectionIconDef,
+    def: IconDef,
     selected: bool,
     size_px: f32,
-) -> gpui::AnyElement {
-    let size = px(size_px);
-    let color = if selected {
-        rgb(palette.link)
-    } else {
-        rgb(def.color)
-    };
-    svg()
-        .size(size)
-        .flex_none()
-        .path(def.path)
-        .text_color(color)
-        .into_any_element()
+) -> AnyElement {
+    match def.tint(palette) {
+        Some(color) => {
+            let color = if selected { palette.link } else { color };
+            mono_icon(def.path, rgb(color).into(), size_px).into_any_element()
+        }
+        None => color_icon(def.path, size_px).into_any_element(),
+    }
 }
 
-/// Tauri file explorer entry icon (folder / symlink / file).
+/// Connection / OS icon for saved connection rows, tabs and the session header.
+pub(in crate::features) fn connection_type_icon(
+    palette: ThemePalette,
+    def: IconDef,
+    selected: bool,
+    size_px: f32,
+) -> AnyElement {
+    themed_icon(palette, def, selected, size_px)
+}
+
+/// File explorer entry icon, colored by kind and extension.
 pub(in crate::features) fn transfer_entry_icon(
+    palette: ThemePalette,
+    name: &str,
     is_directory: bool,
     is_symlink: bool,
     selected: bool,
-) -> gpui::AnyElement {
-    let (path, color) = if is_symlink {
-        ("icons/conn/symlink.svg", 0x67e8f9u32)
-    } else if is_directory {
-        ("icons/conn/folder.svg", 0xfbbf24u32)
+) -> AnyElement {
+    let def = file_entry_icon(name, is_directory, is_symlink, palette);
+    let color = if selected {
+        palette.link
     } else {
-        ("icons/conn/file.svg", 0x94a3b8u32)
+        def.tint(palette).unwrap_or(palette.text_muted)
     };
-    let color = if selected { 0x58a6ffu32 } else { color };
-    svg()
-        .size(px(16.))
-        .flex_none()
-        .path(path)
-        .text_color(rgb(color))
-        .into_any_element()
+    mono_icon(def.path, rgb(color).into(), 16.).into_any_element()
 }

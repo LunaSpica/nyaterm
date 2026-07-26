@@ -817,7 +817,7 @@ pub(super) fn settings_form_row(
 }
 
 /// Compact on/off switch control (Tauri SettingSwitch look).
-pub(super) fn settings_switch(
+pub(in crate::features::pages) fn settings_switch(
     palette: ThemePalette,
     id: impl Into<String>,
     checked: bool,

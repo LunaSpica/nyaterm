@@ -19,9 +19,6 @@ pub(in crate::features) use labels::*;
 mod ai_history;
 pub(in crate::features) use ai_history::*;
 
-mod connection_icons;
-pub(in crate::features) use connection_icons::*;
-
 mod markdown;
 pub(in crate::features) use markdown::*;
 

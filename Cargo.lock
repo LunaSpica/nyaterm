@@ -4212,9 +4212,11 @@ dependencies = [
  "gpui",
  "nyaterm-core",
  "nyaterm-desktop",
+ "rust-embed",
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
+ "usvg",
 ]
 
 [[package]]
@@ -4299,6 +4301,7 @@ dependencies = [
  "alacritty_terminal",
  "encoding_rs",
  "flate2",
+ "memchr",
  "unicode-width",
 ]
 

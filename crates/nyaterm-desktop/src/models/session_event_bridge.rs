@@ -15,6 +15,10 @@ use super::{TerminalFrameOutputSubmission, TerminalFramePipeline};
 const SESSION_EVENT_BRIDGE_DRAIN_BATCH: usize = 512;
 const SESSION_EVENT_BRIDGE_OUTPUT_BUDGET: usize = 128 * 1024;
 const SESSION_EVENT_BRIDGE_IDLE_SLEEP: Duration = Duration::from_millis(4);
+/// Upper bound on one park in the source drain. The queue wakes this thread as
+/// soon as a PTY read lands, so the timeout only bounds how long a fully idle
+/// bridge waits before re-checking its stop flag.
+const SESSION_EVENT_BRIDGE_WAIT_TIMEOUT: Duration = Duration::from_millis(50);
 const SESSION_EVENT_BRIDGE_BUSY_SLEEP: Duration = Duration::from_millis(1);
 const SESSION_EVENT_BRIDGE_UI_OUTPUT_LIMIT: usize = 1024 * 1024;
 const SESSION_EVENT_BRIDGE_UI_OUTPUT_EVENT_LIMIT: usize = 128 * 1024;
@@ -475,22 +479,20 @@ fn run_session_event_bridge(
             thread::sleep(SESSION_EVENT_BRIDGE_BUSY_SLEEP);
             continue;
         }
-        let Ok(drain) = session_manager.drain_events_with_output_budget(
+        // Park on the queue rather than polling it: a PTY read wakes this
+        // thread directly, so the first hop of the echo path no longer spends
+        // an arbitrary slice of the poll interval waiting to notice.
+        let Ok(drain) = session_manager.drain_events_blocking_with_output_budget(
             SESSION_EVENT_BRIDGE_DRAIN_BATCH,
             SESSION_EVENT_BRIDGE_OUTPUT_BUDGET,
+            SESSION_EVENT_BRIDGE_WAIT_TIMEOUT,
         ) else {
             thread::sleep(SESSION_EVENT_BRIDGE_IDLE_SLEEP);
             continue;
         };
         state.update_source_stats(&drain.stats);
         if drain.events.is_empty() {
-            thread::sleep(
-                if drain.stats.queued_events > 0 || drain.stats.queued_output_bytes > 0 {
-                    SESSION_EVENT_BRIDGE_BUSY_SLEEP
-                } else {
-                    SESSION_EVENT_BRIDGE_IDLE_SLEEP
-                },
-            );
+            // The park above already absorbed the idle wait.
             continue;
         }
         let mut pending_direct_outputs = Vec::new();

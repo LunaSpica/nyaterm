@@ -7,6 +7,7 @@ mod commands;
 mod connection_editor_window;
 mod connections;
 mod formatting;
+mod icons;
 mod inspector;
 mod layout;
 mod pages;
@@ -46,8 +47,8 @@ pub(in crate::features) use app_state::{
     SavedConnectionStartOptions, SessionPaneState,
 };
 pub(in crate::features) use commands::{
-    QUICK_COMMAND_COLOR_OPTIONS, QUICK_COMMAND_ICON_OPTIONS, QuickCommandFeatureFocus,
-    QuickCommandFeatureState, quick_command_category_label, quick_command_sort_mode_from_setting,
+    QUICK_COMMAND_COLOR_OPTIONS, QuickCommandFeatureFocus, QuickCommandFeatureState,
+    quick_command_category_label, quick_command_sort_mode_from_setting,
     quick_command_view_mode_from_setting,
 };
 pub(in crate::features) use connection_editor_window::ConnectionEditorWindow;
@@ -56,6 +57,11 @@ pub(in crate::features) use connections::{
     ConnectionDropTarget, ConnectionEditorToggle, ConnectionFeatureFocus, ConnectionFeatureState,
 };
 pub(in crate::features) use formatting::*;
+pub(in crate::features) use icons::{
+    CONNECTION_ICON_OPTIONS, DEFAULT_CONNECTION_ICON, IconDef, QUICK_COMMAND_ICON_OPTIONS,
+    SEARCH_ENGINE_ICON_IDS, file_entry_icon, infer_connection_icon_key_from_remote_system,
+    quick_command_icon, resolve_connection_icon, search_engine_icon,
+};
 pub(in crate::features) use panels::{SendCommandFeatureFocus, SendCommandFeatureState};
 pub(in crate::features) use quick_command_window::QuickCommandWindow;
 pub(in crate::features) use remote::{RemoteOpsFeatureFocus, RemoteOpsFeatureState};

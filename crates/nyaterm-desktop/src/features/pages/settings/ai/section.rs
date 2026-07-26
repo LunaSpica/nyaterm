@@ -233,7 +233,13 @@ impl NyaTermApp {
                                     .cursor_pointer()
                                     .hover(move |this| this.bg(rgb(hover)))
                                     .child(label)
-                                    .when(selected, |this| this.child("*"))
+                                    .when(selected, |this| {
+                                        this.child(crate::features::mono_icon(
+                                            "icons/check.svg",
+                                            rgb(palette.primary).into(),
+                                            12.,
+                                        ))
+                                    })
                                     .on_click(cx.listener(move |this, _, _, cx| {
                                         this.appearance_menu_open = None;
                                         this.update_ai_smart_auto_execute_max_risk(

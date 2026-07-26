@@ -11,9 +11,17 @@ anyhow.workspace = true
 gpui.workspace = true
 nyaterm-core.workspace = true
 nyaterm-desktop.workspace = true
+rust-embed.workspace = true
 tracing.workspace = true
 tracing-appender.workspace = true
 tracing-subscriber.workspace = true
+
+[dev-dependencies]
+usvg.workspace = true
+
+[lib]
+name = "nyaterm_app"
+path = "src/lib.rs"
 
 [[bin]]
 name = "nyaterm"

@@ -37,6 +37,26 @@ these as staged extraction candidates, not as formatting-only refactor targets.
 
 ## Completed
 
+- Icon assets are no longer hand-drawn approximations. The migration had redrawn
+  ~113 SVGs by hand in a thin-stroke style, while the pre-GPUI UI was
+  overwhelmingly Material Design (140 `react-icons/md` imports against 41 lucide,
+  and those 41 were shadcn internals) — which is why the two builds looked
+  nothing alike. Icons are now vendored from their upstream sets through
+  `scripts/icons.manifest` + `scripts/sync-icons.sh` and committed; see
+  `docs/third-party-icons.md`.
+- The monochrome/full-color split is explicit and enforced. `icons/**` goes
+  through `mono_icon()`/`svg()` as an alpha mask, `color/**` through
+  `color_icon()`/`img()` as a raster. This is what let the 33 official distro
+  logos come back: previously 14 distros shared one tinted Tux, Kubernetes wore
+  the Docker whale, and 14 services shared a tinted server rack, because `svg()`
+  cannot carry more than one color.
+- The icon lookup tables live in `features/icons/` (connection, quick-command,
+  search-engine, file-kind, alias normalization, remote-system inference), split
+  from the element construction in `features/view_widgets/icons.rs`. The
+  two-letter text badges (`"DK"`, `"K8"`, `"UB"`) and the letter search-engine
+  badges (`"G"`, `"GH"`) are gone, along with the duplicate badge table the
+  terminal context menu carried.
+
 - Workspace is already on resolver `3` for the Rust 2024 workspace.
 - `migration-dashboard` exists as an explicit desktop feature. Default desktop
   features are empty, so release/default builds do not enable the dashboard.

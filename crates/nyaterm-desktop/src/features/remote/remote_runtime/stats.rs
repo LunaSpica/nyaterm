@@ -93,6 +93,9 @@ impl NyaTermApp {
                         stats.load.load15
                     );
                     self.terminal.view.status = self.remote_ops.stats.status.clone();
+                    // The snapshot is the only place the remote OS is reported,
+                    // so this is where a connection's icon can be filled in.
+                    self.apply_auto_detected_connection_icon(&event.session_id, &stats.system);
                     self.remote_ops.stats.data = Some(stats);
                 }
                 Err(error) => {

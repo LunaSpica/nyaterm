@@ -45,9 +45,9 @@ impl ConnectionDragPreview {
 
 impl Render for ConnectionDragPreview {
     fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-        let (kind, accent) = match self.payload.kind {
-            ConnectionDragKind::Connection => ("⌂", rgb(0x3fb950)),
-            ConnectionDragKind::Group => ("▸", rgb(0x58a6ff)),
+        let (icon, accent) = match self.payload.kind {
+            ConnectionDragKind::Connection => ("icons/brand/server.svg", rgb(0x3fb950)),
+            ConnectionDragKind::Group => ("icons/conn/folder.svg", rgb(0x58a6ff)),
         };
         div()
             .pl(self.position.x - px(90.))
@@ -65,7 +65,7 @@ impl Render for ConnectionDragPreview {
                     .border_color(rgb(0x388bfd))
                     .bg(rgba(0x0d1117ee))
                     .shadow_lg()
-                    .child(div().text_size(px(13.)).text_color(accent).child(kind))
+                    .child(crate::features::mono_icon(icon, accent.into(), 13.))
                     .child(
                         div()
                             .min_w_0()

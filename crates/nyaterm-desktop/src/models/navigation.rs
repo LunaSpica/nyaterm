@@ -82,29 +82,9 @@ impl NavItem {
     }
 
     /// Compact monochrome glyph used as text fallback for the activity bar.
-    pub(crate) fn glyph(self) -> &'static str {
-        match self {
-            NavItem::Workspace => "▣",
-            NavItem::Connections => "⌂",
-            NavItem::Tunnels => "⇄",
-            NavItem::Stats => "◔",
-            NavItem::Processes => "☰",
-            NavItem::Docker => "🐋",
-            NavItem::Transfers => "📁",
-            NavItem::Settings => "⚙",
-            NavItem::Migration => "⇪",
-            NavItem::AiAssistant => "✦",
-            NavItem::ActiveSessions => "◉",
-            NavItem::CommandHistory => "⌛",
-            NavItem::SecurityAuth => "⛨",
-            NavItem::SyncBackupHistory => "☁",
-            NavItem::Recording => "●",
-        }
-    }
-
     /// Bundled SVG path for activity-bar / toolbar icons.
-    pub(crate) fn icon_path(self) -> Option<&'static str> {
-        Some(match self {
+    pub(crate) fn icon_path(self) -> &'static str {
+        match self {
             NavItem::Transfers => "icons/files.svg",
             NavItem::Tunnels => "icons/network.svg",
             NavItem::SecurityAuth => "icons/auth.svg",
@@ -119,8 +99,8 @@ impl NavItem {
             NavItem::Docker => "icons/docker.svg",
             NavItem::Recording => "icons/record.svg",
             NavItem::Migration => "icons/migration.svg",
-            NavItem::Workspace => return None,
-        })
+            NavItem::Workspace => "icons/workspace.svg",
+        }
     }
 
     pub(crate) fn is_left_panel(self) -> bool {
@@ -292,23 +272,13 @@ impl ActivityBarEntry {
         }
     }
 
-    pub(crate) fn glyph(self) -> &'static str {
-        match self {
-            Self::Panel(item) => item.glyph(),
-            Self::QuickCommands => "⚡",
-            Self::CommandSend => "⏎",
-            Self::Recording => "●",
-            Self::Lock => "🔒",
-        }
-    }
-
-    pub(crate) fn icon_path(self) -> Option<&'static str> {
+    pub(crate) fn icon_path(self) -> &'static str {
         match self {
             Self::Panel(item) => item.icon_path(),
-            Self::QuickCommands => Some("icons/commands.svg"),
-            Self::CommandSend => Some("icons/send.svg"),
-            Self::Recording => Some("icons/record.svg"),
-            Self::Lock => Some("icons/lock.svg"),
+            Self::QuickCommands => "icons/commands.svg",
+            Self::CommandSend => "icons/send.svg",
+            Self::Recording => "icons/record.svg",
+            Self::Lock => "icons/lock.svg",
         }
     }
 }
