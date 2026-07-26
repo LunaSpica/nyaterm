@@ -1286,6 +1286,7 @@ const TERMINAL_RENDER_SLOW_TOTAL: Duration = Duration::from_millis(25);
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::TerminalSelection;
 
     #[test]
     fn terminal_line_decorations_skip_plain_viewport() {

@@ -57,12 +57,11 @@ pub(super) use crate::models::{
     TERMINAL_UI_OUTPUT_TAIL_CAP, TerminalCellPos, TerminalFrameActionLinks,
     TerminalFrameBufferTextEvent, TerminalFrameEvent, TerminalFrameOutputEvent,
     TerminalFrameOutputSubmission, TerminalFramePipeline, TerminalFrameSearchEvent,
-    TerminalFrameSearchKey, TerminalFrameSnapshotEvent, TerminalSelection, TerminalViewState,
-    TransferJobEvent, TransferJobKind, TransferJobOutput, TransferJobResult, TransferJobState,
-    TransferJobStatus, is_multi_line_paste, normalize_paste_newlines,
-    panel_collapsed_from_persistence, terminal_action_link_matcher_key,
-    terminal_expensive_interactions_enabled, terminal_frame_search_result_is_current,
-    terminal_snapshot_matches_grid_geometry,
+    TerminalFrameSearchKey, TerminalFrameSnapshotEvent, TerminalViewState, TransferJobEvent,
+    TransferJobKind, TransferJobOutput, TransferJobResult, TransferJobState, TransferJobStatus,
+    is_multi_line_paste, normalize_paste_newlines, panel_collapsed_from_persistence,
+    terminal_action_link_matcher_key, terminal_expensive_interactions_enabled,
+    terminal_frame_search_result_is_current, terminal_snapshot_matches_grid_geometry,
 };
 pub(super) use crate::send_command::{
     build_send_command_units_for, format_send_command_hex_display, parse_send_command_hex,

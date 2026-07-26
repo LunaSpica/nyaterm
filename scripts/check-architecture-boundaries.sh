@@ -327,6 +327,11 @@ check_no_matches \
   crates/nyaterm-desktop/src/features/prelude.rs
 
 check_no_matches \
+  "low-frequency terminal selection model must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(TerminalSelection)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
   "low-frequency terminal search UI model must stay out of features/prelude.rs" \
   '(^|[,{[:space:]])(TerminalSearchMode)([},[:space:]]|$)' \
   crates/nyaterm-desktop/src/features/prelude.rs

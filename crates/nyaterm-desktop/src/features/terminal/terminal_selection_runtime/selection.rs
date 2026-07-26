@@ -1,4 +1,5 @@
 use super::*;
+use crate::models::TerminalSelection;
 
 const TERMINAL_SELECTION_DRAG_NOTIFY_DELAY: Duration = Duration::from_millis(8);
 
