@@ -17,6 +17,9 @@ impl NyaTermApp {
             mode: 0o755,
             open_after_create: false,
         });
+        // The box owns its text, so it has to be dropped for the next dialog to
+        // open empty.
+        self.forget_text_inputs("transfer.new-folder.");
         self.terminal.view.status = "SFTP new folder opened".to_string();
         window.focus(&self.transfer.file_ops.new_folder_focus);
         cx.notify();
@@ -24,6 +27,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn close_transfer_new_folder_dialog(&mut self, cx: &mut Context<Self>) {
         self.transfer.file_ops.new_folder = None;
+        self.forget_text_inputs("transfer.new-folder.");
         self.terminal.view.status = "SFTP new folder cancelled".to_string();
         cx.notify();
     }
@@ -68,33 +72,27 @@ impl NyaTermApp {
             return;
         }
 
+        // The box owns the text; the dialog owns the keys that close or submit
+        // it, which the box deliberately leaves unconsumed.
         match keystroke.key.as_str() {
             "escape" => self.close_transfer_new_folder_dialog(cx),
             "enter" => self.submit_transfer_new_folder(window, cx),
-            "backspace" => {
-                if let Some(state) = self.transfer.file_ops.new_folder.as_mut() {
-                    state.value.pop();
-                    cx.notify();
-                }
-            }
-            _ => {
-                let Some(state) = self.transfer.file_ops.new_folder.as_mut() else {
-                    return;
-                };
-                if state.value.chars().count() >= 255 {
-                    return;
-                }
-                if let Some(input) = keystroke
-                    .key_char
-                    .as_deref()
-                    .filter(|input| !input.is_empty())
-                {
-                    let remaining = 255usize.saturating_sub(state.value.chars().count());
-                    state.value.extend(input.chars().take(remaining));
-                    cx.notify();
-                }
-            }
+            _ => {}
         }
+    }
+
+    /// Apply an edit from the new-folder dialog's name box.
+    pub(in crate::features) fn apply_transfer_new_folder_name(
+        &mut self,
+        text: String,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(state) = self.transfer.file_ops.new_folder.as_mut() else {
+            return;
+        };
+        // A remote name has a length limit, and the box will happily take more.
+        state.value = text.chars().take(255).collect();
+        cx.notify();
     }
 
     pub(in crate::features) fn start_sftp_mkdir_job(

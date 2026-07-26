@@ -218,6 +218,8 @@ impl NyaTermApp {
             self.apply_network_proxy_editor_input(field, text, cx);
         } else if id.as_ref() == "network.group-editor.name" {
             self.apply_network_group_editor_name(text, cx);
+        } else if id.as_ref() == "transfer.new-folder.name" {
+            self.apply_transfer_new_folder_name(text, cx);
         }
     }
 

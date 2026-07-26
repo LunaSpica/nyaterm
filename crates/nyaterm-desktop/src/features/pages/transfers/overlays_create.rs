@@ -20,11 +20,14 @@ impl NyaTermApp {
             });
         let name = state.value.trim();
         let has_error = !name.is_empty() && !valid_remote_child_name(name);
-        let input_display = if state.value.is_empty() {
-            self.tr("fileExplorer.newFolderName").to_string()
-        } else {
-            state.value.clone()
-        };
+        let name_input = self
+            .text_input_box(
+                "transfer.new-folder.name",
+                &state.value,
+                TextInputSetup::placeholder(self.tr("fileExplorer.newFolderName")),
+                cx,
+            )
+            .into_any_element();
 
         div()
             .id(SharedString::from("transfer-new-folder-overlay"))
@@ -90,28 +93,7 @@ impl NyaTermApp {
                                             .text_color(rgb(palette.text_muted))
                                             .child(self.tr("fileExplorer.newFolderName")),
                                     )
-                                    .child(
-                                        div()
-                                            .id(SharedString::from("transfer-new-folder-input"))
-                                            .h(px(32.))
-                                            .flex_1()
-                                            .min_w_0()
-                                            .rounded_sm()
-                                            .border_1()
-                                            .border_color(rgb(palette.border))
-                                            .bg(rgb(palette.input))
-                                            .px_3()
-                                            .flex()
-                                            .items_center()
-                                            .font_family(crate::features::gpui_code_font_family())
-                                            .text_sm()
-                                            .text_color(if state.value.is_empty() {
-                                                rgb(palette.text_muted)
-                                            } else {
-                                                rgb(palette.text)
-                                            })
-                                            .child(truncate_preview(&input_display, 80)),
-                                    ),
+                                    .child(div().flex_1().min_w_0().child(name_input)),
                             )
                             .child(
                                 div()
