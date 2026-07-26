@@ -23,8 +23,8 @@ Large files currently over 4,000 lines:
 
 | File | Lines | Status |
 | --- | ---: | --- |
-| `crates/nyaterm-transport/src/lib.rs` | 8418 | Split candidate; session type/event and SFTP transfer type/option extractions are complete; avoid behavior changes while extracting further pure modules. |
-| `crates/nyaterm-core/src/storage.rs` | 7077 | Splitting by domain: config backup, keyword-highlight import, command history and known hosts are out. Schema compatibility is public contract. |
+| `crates/nyaterm-transport/src/lib.rs` | 4423 | Split by domain: SFTP, X11 forwarding, SSH tunnels and SSH authentication are out. What remains is the session manager, the four `TerminalTransport` impls and the SSH/serial/telnet session lifecycle. |
+| `crates/nyaterm-core/src/storage.rs` | 4020 | Split by domain: config backup, keyword highlights, command history, known hosts, AI history, the secret vault, portable snapshots, app settings and cloud sync are out. About 1,450 lines of that are code; the rest is the test module. Schema compatibility is public contract. |
 | `crates/nyaterm-desktop/src/models/terminal.rs` | 4995 | Split candidate; coordinate with terminal render/runtime ownership. |
 | `crates/nyaterm-desktop/src/features/terminal/terminal_surface_entity.rs` | 4524 | Split candidate; avoid hot-path regressions. |
 | `crates/nyaterm-core/src/ai.rs` | 4032 | Split candidate after storage/transport boundaries are clearer. |
@@ -113,12 +113,22 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   snapshots and the wire protocol are untouched and stay in `nyaterm-terminal`
   and `nyaterm-transport`. `OverlaySnapshot` keeps its own
   `terminal_actions_open` / `terminal_context_menu_open` projection fields.
-- `core/storage.rs` is being split by domain rather than by type.
-  `command_history` and `known_hosts` are out, taking their table constants,
-  record types, transaction helpers and prompt-stripping logic with them.
+- `core/storage.rs` is split by domain rather than by type: `command_history`,
+  `known_hosts`, `ai_history`, `vault` (SSH keys, OTP, passwords, credentials),
+  `portable` (snapshots and config backups), `app_settings` and `cloud_sync`,
+  on top of the earlier `config_backup` and `keyword_highlights`. Each took its
+  table constants, record types, transaction helpers and domain logic with it.
   `known_hosts` also took `storage.rs`'s only uses of `base64`, `hmac` and
-  `sha1`, which is the sign the seam was in the right place. Table names, key
-  layouts, record shapes and the hashed-host matching rules are unchanged.
+  `sha1`, and `app_settings` took twenty-nine `json_*` / `normalize_*` helpers
+  that had no caller left outside it — that is the sign a seam is in the right
+  place. Table names, key layouts, record shapes, document keys and the
+  hashed-host matching rules are unchanged.
+- `transport/lib.rs` is split the same way: `sftp`, `x11`, `tunnel` and
+  `ssh_auth`. Each carries its own domain types and unit tests, and each uses an
+  explicit import list rather than a `use super::*` glob, so the split narrows
+  visibility instead of just moving lines. The SFTP wire protocol, the X11
+  cookie rewrite rules, the SOCKS5 handshake and the SSH authentication method
+  order are unchanged.
 - Send-command bar state is grouped into `SendCommandFeatureState`, split into
   the three phases the bar actually has: `composer` (payload and caret),
   `options` (how it is interpreted and delivered, plus the menus that set
@@ -793,10 +803,12 @@ use the existing behavior.
   real, and the connection runtime, connection list interaction, and
   connections page trees are now governed, but adjacent connections
   feature/runtime files still need staged cleanup.
-- `core/storage.rs` and `transport/lib.rs` are still too broad to maintain
-  comfortably. The first transport session type/event and SFTP transfer
-  type/option extractions are complete, but further extraction must still
-  preserve public facade behavior and persistence/protocol compatibility.
+- `core/storage.rs` and `transport/lib.rs` are down from 7,662 and 8,418 lines
+  to 4,020 and 4,423. What is left in each is genuinely central: the store and
+  its shared transaction/JSON/crypto helpers on one side, the session manager
+  and session lifecycle on the other. Further extraction there would cut across
+  real coupling rather than along a seam, and must still preserve public facade
+  behavior and persistence/protocol compatibility.
 
 ## Forbidden To Add
 
@@ -874,16 +886,16 @@ Items 1, 3 and 4 are done. What follows is the honest remaining list.
 4. Done. No store is a projection any more; the four that remain own real
    state. If a future domain wants Entity ownership, migrate it authoritatively
    rather than reintroducing a published read model.
-5. In progress for `core/storage.rs`, not started for
-   `nyaterm-transport/src/lib.rs` (8418 lines). Split by domain rather than by
-   individual type: earlier rounds pulled out a few pure type modules, which
-   barely moved the line count, whereas `command_history` and `known_hosts` took
-   their table constants, record types, txn helpers and crate dependencies with
-   them. Remaining candidates in `storage.rs`, roughly by size: AI history and
-   audit, credentials and encryption, settings documents, and the portable
-   snapshot / legacy import paths. Table definitions, serialized records,
-   encryption paths, backup formats, and legacy fallback behavior are
-   compatibility surface and stay unchanged.
+5. Done for the two monoliths that motivated it. `core/storage.rs` and
+   `transport/lib.rs` are split by domain rather than by individual type, which
+   is what made the difference: pulling out a few pure type modules in earlier
+   rounds barely moved the line count, whereas each domain module took its
+   constants, record types, helpers, tests and crate dependencies with it.
+   Table definitions, serialized records, encryption paths, backup formats,
+   legacy fallback behavior, and the SSH/SFTP/X11 protocol paths are
+   compatibility surface and stay unchanged. `models/terminal.rs` (4,995) and
+   `terminal_surface_entity.rs` (4,524) are the next files of this size, but
+   they are render hot paths and need a different approach than a domain cut.
 6. Reduce `features/prelude.rs` opportunistically while touching a module, not
    as standalone rounds. The remaining entries are genuinely shared types.
 7. Tighten one more low-risk crate-root export after confirming there are no
