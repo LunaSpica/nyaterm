@@ -791,6 +791,20 @@ mod layout_cache_tests {
     }
 
     #[test]
+    fn pad_wide_cells_gives_every_column_a_glyph() {
+        assert_eq!(pad_wide_cells("ab"), "ab");
+        assert_eq!(pad_wide_cells("a\u{4f60}b"), "a\u{4f60} b");
+        assert_eq!(pad_wide_cells("\u{4f60}\u{597d}"), "\u{4f60} \u{597d} ");
+    }
+
+    #[test]
+    fn pad_wide_cells_leaves_attached_marks_alone() {
+        // A combining mark belongs to the cell before it and takes none of its
+        // own, so padding it would push the rest of the row sideways.
+        assert_eq!(pad_wide_cells("e\u{0301}"), "e\u{0301}");
+    }
+
+    #[test]
     fn underline_ranges_count_wide_and_attached_marks_as_terminal_cells() {
         let palette = nyaterm_ui::theme_palette("github-dark");
         let wide =
@@ -1708,6 +1722,31 @@ fn terminal_ansi_spans_are_plain(ansi_spans: Option<&[nyaterm_terminal::StyledSp
         .all(|span| span.text.is_empty() || span.style == default_style)
 }
 
+/// Follow every double-width character with a space, so one glyph is one cell.
+///
+/// A shaped terminal row is laid out with `force_width`, which puts glyph *n* at
+/// `n * cell_width` regardless of how wide the glyph is. A CJK character covers
+/// two terminal columns, so without a filler for its second column every
+/// character after it is pulled one cell to the left and the row collapses into
+/// itself. The filler is a space: it advances the glyph index without painting,
+/// and the cell's own background is drawn as a rect underneath either way.
+fn pad_wide_cells(text: &str) -> String {
+    if !text.chars().any(|ch| terminal_char_cell_width(ch) > 1) {
+        return text.to_string();
+    }
+    let mut padded = String::with_capacity(text.len() + 4);
+    for ch in text.chars() {
+        padded.push(ch);
+        if terminal_is_zero_width_mark(ch) {
+            continue;
+        }
+        for _ in 1..terminal_char_cell_width(ch) {
+            padded.push(' ');
+        }
+    }
+    padded
+}
+
 fn terminal_text_run_for_span(
     span: &TerminalHighlightSpan,
     len: usize,
@@ -2212,7 +2251,7 @@ impl Element for NyaTerminalElement {
                 if keyword_ranges.is_none()
                     && terminal_plain_row_fast_path(ansi, row_keyword_rules, decorations)
                 {
-                    let text = display_line.to_string();
+                    let text = pad_wide_cells(display_line);
                     let text_runs = vec![TextRun {
                         len: text.len().max(1),
                         font: terminal_run_font(
@@ -2290,8 +2329,9 @@ impl Element for NyaTerminalElement {
                 let mut text = String::new();
                 let mut text_runs = Vec::new();
                 for span in spans {
-                    let run_len = span.text.len();
-                    text.push_str(&span.text);
+                    let padded = pad_wide_cells(&span.text);
+                    let run_len = padded.len();
+                    text.push_str(&padded);
                     if run_len > 0 {
                         text_runs.push(terminal_text_run_for_span(
                             &span,
