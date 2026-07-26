@@ -78,18 +78,6 @@ pub(super) fn clear_connection_editor_group_menu_draft(draft: &mut Option<Connec
     }
 }
 
-pub(super) fn focus_connection_editor_field(
-    draft: &mut Option<ConnectionEditorState>,
-    field: ConnectionEditorField,
-) -> bool {
-    let Some(editor) = draft.as_mut() else {
-        return false;
-    };
-    editor.focused_field = field;
-    editor.error = None;
-    true
-}
-
 pub(super) fn set_connection_editor_icon(
     draft: &mut Option<ConnectionEditorState>,
     icon: Option<&str>,
@@ -515,14 +503,18 @@ pub(super) fn set_connection_group_editor_error(
 /// Which draft strings become editable fields, and which are secrets.
 ///
 /// Driven off the draft rather than a fixed list so a field that does not apply
-/// to the current kind is simply never built. The description is absent on
-/// purpose: it is a multi-line box, and the shared field widget is single-line,
-/// so it stays on the legacy key routing until that lands.
+/// to the current kind is simply never built.
 pub(super) fn editor_field_seeds(
     draft: &ConnectionEditorState,
 ) -> Vec<(ConnectionEditorField, String, bool, &'static str)> {
     vec![
         (ConnectionEditorField::Name, draft.name.clone(), false, ""),
+        (
+            ConnectionEditorField::Description,
+            draft.description.clone(),
+            false,
+            "e.g. Web server for project X",
+        ),
         (
             ConnectionEditorField::NewGroupName,
             draft.new_group_name.clone(),
@@ -588,12 +580,16 @@ pub(super) fn editor_field_seeds(
     ]
 }
 
-/// Write an edited field back into the draft.
+/// Write an edited field back into the draft, clearing any stale validation.
+///
+/// Previously the error was cleared when a field took focus; a field now takes
+/// focus on its own, so the edit itself is what says the message is out of date.
 pub(super) fn set_connection_editor_field_text(
     draft: &mut ConnectionEditorState,
     field: ConnectionEditorField,
     text: String,
 ) {
+    draft.error = None;
     match field {
         ConnectionEditorField::Name => draft.name = text,
         ConnectionEditorField::Description => draft.description = text,

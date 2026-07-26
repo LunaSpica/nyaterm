@@ -229,29 +229,6 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::features) fn focus_connection_editor_field(
-        &mut self,
-        field: ConnectionEditorField,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.connection_state.editor.focus_field(field);
-        let editor_focus = self.connection_state.editor.focus_handle();
-        window.focus(&editor_focus);
-        cx.notify();
-    }
-
-    pub(in crate::features) fn focus_connection_editor_new_group(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.connection_state.editor.focus_new_group_field();
-        let editor_focus = self.connection_state.editor.focus_handle();
-        window.focus(&editor_focus);
-        cx.notify();
-    }
-
     pub(in crate::features) fn commit_connection_editor_new_group(
         &mut self,
         cx: &mut Context<Self>,

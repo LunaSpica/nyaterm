@@ -6,7 +6,7 @@ mod telnet;
 use std::collections::{HashMap, HashSet};
 
 use gpui::{
-    AnyElement, Context, FontWeight, IntoElement, KeyDownEvent, SharedString, div,
+    AnyElement, App, Context, FontWeight, IntoElement, KeyDownEvent, SharedString, div,
     prelude::{
         FluentBuilder, InteractiveElement, ParentElement, StatefulInteractiveElement, Styled,
     },
@@ -19,8 +19,8 @@ use self::serial::connection_editor_serial_section;
 use self::ssh::connection_editor_ssh_section;
 use self::telnet::connection_editor_telnet_section;
 use super::super::list::{
-    ConnectionEditorChoice, ConnectionGroupChoice, connection_editor_group_select,
-    connection_kind_tab, editor_field,
+    ConnectionEditorChoice, ConnectionEditorFields, ConnectionGroupChoice,
+    connection_editor_group_select, connection_kind_tab, editor_field,
 };
 use crate::features::{
     CONNECTION_ICON_OPTIONS, DEFAULT_CONNECTION_ICON, NyaTermApp, modal_dialog_shell,
@@ -64,7 +64,6 @@ impl NyaTermApp {
         let serial_label = self.tr("dialog.serial");
         let name_label = self.tr("dialog.connectionName");
         let description_label = self.tr("dialog.description");
-        let description_placeholder = self.tr("dialog.descriptionPlaceholder");
         let group_title = self.tr("dialog.group");
         let cancel_label = self.tr("common.cancel");
         let save_label = self.tr("common.save");
@@ -690,16 +689,8 @@ impl NyaTermApp {
                     .child(connection_description_field(
                         palette,
                         description_label,
-                        description_placeholder,
-                        editor.description.clone(),
-                        editor.focused_field == ConnectionEditorField::Description,
-                        cx.listener(|this, _, window, cx| {
-                            this.focus_connection_editor_field(
-                                ConnectionEditorField::Description,
-                                window,
-                                cx,
-                            );
-                        }),
+                        &fields,
+                        cx,
                     ))
                     .when_some(editor.error.clone(), |this, error| {
                         this.child(
@@ -863,35 +854,12 @@ pub(in crate::features::pages::connections) fn ordered_connection_groups(
 fn connection_description_field(
     palette: crate::theme::ThemePalette,
     label: &'static str,
-    placeholder: &'static str,
-    value: String,
-    active: bool,
-    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+    fields: &ConnectionEditorFields,
+    cx: &App,
 ) -> impl IntoElement {
-    let empty = value.is_empty();
-    let mut content = div()
-        .min_w_0()
-        .flex()
-        .flex_col()
-        .text_xs()
-        .line_height(px(16.))
-        .text_color(if empty {
-            rgb(palette.text_dimmed)
-        } else {
-            rgb(palette.text)
-        });
-    if empty {
-        content = content.child(placeholder);
-    } else {
-        for line in value.split('\n') {
-            content = content.child(div().min_h(px(16.)).child(if line.is_empty() {
-                " ".to_string()
-            } else {
-                line.to_string()
-            }));
-        }
-    }
-
+    let entity = fields.get(&ConnectionEditorField::Description);
+    let handle = entity.map(|field| field.read(cx).focus_handle());
+    let focused = entity.is_some_and(|field| field.read(cx).has_focus());
     div()
         .flex()
         .flex_col()
@@ -905,12 +873,15 @@ fn connection_description_field(
         .child(
             div()
                 .id("connection-editor-description")
+                // Fixed: in a flex column the box would otherwise shrink to
+                // whatever space the form had left, cutting a row in half.
                 .h(px(72.))
+                .flex_none()
                 .min_w_0()
                 .overflow_hidden()
                 .rounded_sm()
                 .border_1()
-                .border_color(if active {
+                .border_color(if focused {
                     rgb(palette.primary)
                 } else {
                     rgb(palette.border)
@@ -919,8 +890,12 @@ fn connection_description_field(
                 .px_3()
                 .py_2()
                 .cursor_text()
-                .child(content)
-                .on_click(on_click),
+                .when_some(handle, |this, handle| {
+                    this.on_mouse_down(gpui::MouseButton::Left, move |_, window, _| {
+                        window.focus(&handle);
+                    })
+                })
+                .children(entity.cloned()),
         )
 }
 

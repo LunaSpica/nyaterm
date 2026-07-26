@@ -30,7 +30,7 @@ use self::editor_logic::{
     apply_connection_group_editor_name_key, clear_connection_editor_group_menu_draft,
     clear_connection_editor_runtime_state, commit_connection_editor_new_group,
     connection_editor_inline_panel_draft, connection_editor_window_open_or_pending,
-    editor_field_seeds, finish_connection_editor_save_state, focus_connection_editor_field,
+    editor_field_seeds, finish_connection_editor_save_state,
     insert_connection_editor_description_newline, set_connection_editor_advanced_tab,
     set_connection_editor_error, set_connection_editor_field_text, set_connection_editor_icon,
     set_connection_editor_icon_auto_detect, set_connection_editor_kind,
@@ -274,6 +274,8 @@ impl ConnectionFeatureState {
                 TextField::new(cx, value)
                     .masked(masked)
                     .placeholder(placeholder)
+                    // The description is the one box that takes newlines.
+                    .multi_line(field == ConnectionEditorField::Description)
             });
             let subscription = cx.subscribe(&entity, move |app: &mut NyaTermApp, _, event, cx| {
                 let TextFieldEvent::Changed(text) = event;
@@ -344,10 +346,6 @@ impl ConnectionFeatureState {
 }
 
 impl ConnectionListState {
-    pub fn search_text(&self) -> &str {
-        &self.search_draft
-    }
-
     pub fn search_query(&self) -> String {
         self.search_draft.trim().to_ascii_lowercase()
     }
@@ -358,10 +356,6 @@ impl ConnectionListState {
 
     pub fn search_field(&self) -> Entity<TextField> {
         self.search_field.clone()
-    }
-
-    pub fn search_focus_handle(&self, cx: &App) -> FocusHandle {
-        self.search_field.read(cx).focus_handle()
     }
 
     /// Cache what the field just reported. Filtering runs on every keystroke and
@@ -852,15 +846,6 @@ impl ConnectionEditorFeatureState {
         clear_connection_editor_group_menu_draft(&mut self.draft);
     }
 
-    pub fn focus_field(&mut self, field: ConnectionEditorField) -> bool {
-        self.close_popovers();
-        focus_connection_editor_field(&mut self.draft, field)
-    }
-
-    pub fn focus_new_group_field(&mut self) -> bool {
-        focus_connection_editor_field(&mut self.draft, ConnectionEditorField::NewGroupName)
-    }
-
     pub fn set_error(&mut self, error: String) -> bool {
         set_connection_editor_error(&mut self.draft, error)
     }
@@ -1263,14 +1248,14 @@ mod tests {
         connection_editor_window_open_or_pending, cycle_connection_sort_mode,
         cycle_network_proxy_group, cycle_network_proxy_protocol, cycle_network_tunnel_connection,
         cycle_network_tunnel_group, cycle_network_tunnel_type, finish_connection_editor_save_state,
-        focus_connection_editor_field, focus_network_proxy_editor_field,
-        focus_network_tunnel_editor_field, insert_connection_editor_description_newline,
-        insert_network_proxy_command_newline, remove_connection_list_references,
-        remove_group_list_references, remove_network_group_and_item_references,
-        remove_network_group_references, remove_network_item_references,
-        retain_loaded_connection_list_references, select_connection_ids,
-        set_connection_drop_target_if_changed, set_connection_editor_advanced_tab,
-        set_connection_editor_error, set_connection_editor_icon, set_connection_editor_kind,
+        focus_network_proxy_editor_field, focus_network_tunnel_editor_field,
+        insert_connection_editor_description_newline, insert_network_proxy_command_newline,
+        remove_connection_list_references, remove_group_list_references,
+        remove_network_group_and_item_references, remove_network_group_references,
+        remove_network_item_references, retain_loaded_connection_list_references,
+        select_connection_ids, set_connection_drop_target_if_changed,
+        set_connection_editor_advanced_tab, set_connection_editor_error,
+        set_connection_editor_field_text, set_connection_editor_icon, set_connection_editor_kind,
         set_connection_editor_menu_value, set_connection_editor_password_source,
         set_connection_editor_telnet_tab, set_connection_group_editor_error,
         set_connection_group_hover, set_network_group_editor_error, set_network_proxy_editor_error,
@@ -1781,20 +1766,20 @@ mod tests {
     }
 
     #[test]
-    fn focus_connection_editor_field_clears_existing_error() {
-        let mut draft = Some(ConnectionEditorState {
-            error: Some("stale validation".to_string()),
+    fn editing_a_field_clears_a_stale_validation_error() {
+        let mut draft = ConnectionEditorState {
+            error: Some("SSH host is required".to_string()),
             ..connection_editor_state_with_secret_draft()
-        });
+        };
 
-        assert!(focus_connection_editor_field(
+        set_connection_editor_field_text(
             &mut draft,
-            ConnectionEditorField::Host
-        ));
+            ConnectionEditorField::Host,
+            "10.0.0.5".to_string(),
+        );
 
-        let editor = draft.expect("editor remains open");
-        assert_eq!(editor.focused_field, ConnectionEditorField::Host);
-        assert_eq!(editor.error, None);
+        assert_eq!(draft.host, "10.0.0.5");
+        assert_eq!(draft.error, None);
     }
 
     #[test]

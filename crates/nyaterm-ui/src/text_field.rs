@@ -13,13 +13,14 @@
 //! [`TextFieldEvent`] rather than polling the string.
 
 use std::ops::Range;
+use std::rc::Rc;
 use std::time::Duration;
 
 use gpui::{
     App, Bounds, ClickEvent, Context, CursorStyle, Element, ElementId, ElementInputHandler, Entity,
     EntityInputHandler, EventEmitter, FocusHandle, Focusable, GlobalElementId, InspectorElementId,
     IntoElement, LayoutId, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels,
-    Point, Render, ShapedLine, SharedString, Style, TextRun, UTF16Selection, Window, div, fill,
+    Point, Render, SharedString, Style, TextRun, UTF16Selection, Window, WrappedLine, div, fill,
     point, prelude::*, px, relative, rgb, size,
 };
 use nyaterm_core::{CursorMotion, TextEdit};
@@ -51,8 +52,13 @@ pub struct TextField {
     masked: bool,
     /// In-flight IME composition, as a range into the buffer.
     marked: Option<Range<usize>>,
-    /// Horizontal scroll, so a caret past the right edge stays visible.
+    /// Wrap at the field's width and accept newlines, for a description box.
+    multi_line: bool,
+    /// Horizontal scroll, so a caret past the right edge stays visible. Only a
+    /// single-line field scrolls sideways; a wrapped one grows downward instead.
     scroll_x: Pixels,
+    /// Vertical scroll for the wrapped case.
+    scroll_y: Pixels,
     caret_visible: bool,
     /// Focus as of the last render, so owners can style their own chrome with
     /// only an `&App` — focus itself is a window-scoped question.
@@ -69,7 +75,9 @@ impl TextField {
             placeholder: SharedString::default(),
             masked: false,
             marked: None,
+            multi_line: false,
             scroll_x: px(0.),
+            scroll_y: px(0.),
             caret_visible: true,
             focused: false,
             blink: None,
@@ -84,6 +92,12 @@ impl TextField {
 
     pub fn masked(mut self, masked: bool) -> Self {
         self.masked = masked;
+        self
+    }
+
+    /// Wrap at the field's width, and let Enter insert a newline.
+    pub fn multi_line(mut self, multi_line: bool) -> Self {
+        self.multi_line = multi_line;
         self
     }
 
@@ -221,9 +235,22 @@ impl TextField {
                 }
                 return true;
             }
+            // A wrapped field owns the keys that move within it; a single-line
+            // one leaves them all to the dialog.
+            "enter" if self.multi_line && !accel => {
+                self.edit.insert("\n");
+                self.emit_changed(window, cx);
+                return true;
+            }
+            "up" | "down" if self.multi_line => {
+                self.move_cursor_by_line(keystroke.key == "down", shift);
+                self.restart_blink(window, cx);
+                cx.notify();
+                return true;
+            }
             // Navigation and dialog keys belong to the owner. Some of them do
-            // carry a `key_char` — Tab is "	" — so they have to be named, or
-            // they would be typed into the buffer instead.
+            // carry a `key_char` (Tab produces a tab character), so they have to
+            // be named, or they would be typed into the buffer instead.
             "tab" | "enter" | "escape" | "up" | "down" | "pageup" | "pagedown" => return false,
             _ => {
                 // Everything else is text, unless a modifier claims it or the
@@ -231,7 +258,15 @@ impl TextField {
                 if accel || keystroke.modifiers.function {
                     return false;
                 }
-                let Some(input) = keystroke.key_char.as_deref().filter(|s| !s.is_empty()) else {
+                // Space arrives with no `key_char` on some platforms, which is
+                // why the terminal's key encoder names it too.
+                let space = (keystroke.key == "space").then_some(" ");
+                let Some(input) = keystroke
+                    .key_char
+                    .as_deref()
+                    .filter(|s| !s.is_empty())
+                    .or(space)
+                else {
                     return false;
                 };
                 self.edit.insert(input);
@@ -251,6 +286,62 @@ fn motion(base: CursorMotion, word: bool) -> CursorMotion {
         (CursorMotion::Left, true) => CursorMotion::WordLeft,
         (CursorMotion::Right, true) => CursorMotion::WordRight,
         (base, _) => base,
+    }
+}
+
+impl TextField {
+    /// Move the caret one hard line up or down, keeping the column.
+    ///
+    /// Hard lines rather than visual rows: the wrapped layout only exists during
+    /// paint, and for a description box the two coincide often enough that
+    /// reaching for it would cost more than it buys.
+    fn move_cursor_by_line(&mut self, down: bool, extend: bool) {
+        let content = self.edit.content().to_string();
+        let cursor = self.edit.cursor();
+        let line_start = content[..cursor].rfind('\n').map(|i| i + 1).unwrap_or(0);
+        let column = cursor - line_start;
+
+        let target_start = if down {
+            match content[cursor..].find('\n') {
+                Some(offset) => cursor + offset + 1,
+                None => {
+                    self.edit.move_cursor(CursorMotion::End, extend);
+                    return;
+                }
+            }
+        } else {
+            if line_start == 0 {
+                self.edit.move_cursor(CursorMotion::Start, extend);
+                return;
+            }
+            content[..line_start - 1]
+                .rfind('\n')
+                .map(|i| i + 1)
+                .unwrap_or(0)
+        };
+
+        let target_end = content[target_start..]
+            .find('\n')
+            .map(|offset| target_start + offset)
+            .unwrap_or(content.len());
+        let target = (target_start + column).min(target_end);
+
+        if extend {
+            let anchor = if self.edit.has_selection() {
+                let selection = self.edit.selection();
+                if self.edit.selection_is_reversed() {
+                    selection.end
+                } else {
+                    selection.start
+                }
+            } else {
+                cursor
+            };
+            self.edit
+                .set_selection(anchor.min(target)..anchor.max(target), target < anchor);
+        } else {
+            self.edit.set_cursor(target);
+        }
     }
 }
 
@@ -451,14 +542,54 @@ struct TextFieldElement {
     focused: bool,
 }
 
+/// One hard line of the buffer, already soft-wrapped to the field's width.
+struct FieldLine {
+    line: WrappedLine,
+    /// Byte offset of this line's first character in the displayed text.
+    start: usize,
+    /// Visual rows this line occupies once wrapped.
+    rows: usize,
+}
+
 pub struct TextFieldLayout {
-    line: ShapedLine,
-    /// `None` while the placeholder is showing, so the caret is not drawn
+    lines: Vec<FieldLine>,
+    /// `false` while the placeholder is showing, so the caret is not drawn
     /// against text the buffer does not contain.
     content_line: bool,
-    scroll_x: Pixels,
+    scroll: Point<Pixels>,
     selection: Range<usize>,
     caret: usize,
+}
+
+impl TextFieldLayout {
+    /// Where a displayed offset sits, relative to the text origin.
+    fn position_for_offset(&self, offset: usize, line_height: Pixels) -> Point<Pixels> {
+        let mut y = px(0.);
+        for line in &self.lines {
+            let end = line.start + line.line.len();
+            if offset <= end {
+                let local = offset.saturating_sub(line.start);
+                if let Some(position) = line.line.position_for_index(local, line_height) {
+                    return point(position.x, y + position.y);
+                }
+            }
+            y += line_height * line.rows as f32;
+        }
+        point(px(0.), (y - line_height).max(px(0.)))
+    }
+
+    /// Byte ranges of each visual row of a wrapped line, in line-local offsets.
+    fn row_ranges(line: &WrappedLine) -> Vec<Range<usize>> {
+        let mut starts = vec![0usize];
+        for boundary in line.wrap_boundaries.iter() {
+            let run = &line.unwrapped_layout.runs[boundary.run_ix];
+            starts.push(run.glyphs[boundary.glyph_ix].index);
+        }
+        let len = line.len();
+        (0..starts.len())
+            .map(|index| starts[index]..starts.get(index + 1).copied().unwrap_or(len))
+            .collect()
+    }
 }
 
 impl IntoElement for TextFieldElement {
@@ -488,9 +619,16 @@ impl Element for TextFieldElement {
         window: &mut Window,
         cx: &mut App,
     ) -> (LayoutId, ()) {
+        let multi_line = self.field.read(cx).multi_line;
         let mut style = Style::default();
         style.size.width = relative(1.).into();
-        style.size.height = window.line_height().into();
+        // A wrapped field fills the box its owner sized; a single-line one is
+        // exactly one line tall wherever it is placed.
+        style.size.height = if multi_line {
+            relative(1.).into()
+        } else {
+            window.line_height().into()
+        };
         (window.request_layout(style, [], cx), ())
     }
 
@@ -504,8 +642,10 @@ impl Element for TextFieldElement {
         cx: &mut App,
     ) -> TextFieldLayout {
         let field = self.field.read(cx);
+        let multi_line = field.multi_line;
         let style = window.text_style();
         let font_size = style.font_size.to_pixels(window.rem_size());
+        let line_height = window.line_height();
 
         let content = display_text(&field.edit, field.masked);
         let showing_placeholder = content.is_empty() && !field.placeholder.is_empty();
@@ -527,37 +667,85 @@ impl Element for TextFieldElement {
             underline: None,
             strikethrough: None,
         };
-        let line = window
+        let wrap_width = multi_line.then_some(bounds.size.width);
+        let shaped = window
             .text_system()
-            .shape_line(text, font_size, &[run], None);
+            .shape_text(text.clone(), font_size, &[run], wrap_width, None)
+            .unwrap_or_default();
+
+        // `shape_text` splits on newlines, dropping the separator, so line
+        // starts have to account for the byte it consumed.
+        let mut lines = Vec::with_capacity(shaped.len());
+        let mut start = 0usize;
+        for line in shaped {
+            let rows = line.wrap_boundaries.len() + 1;
+            let len = line.len();
+            lines.push(FieldLine { line, start, rows });
+            start += len + 1;
+        }
+        if lines.is_empty() {
+            return TextFieldLayout {
+                lines,
+                content_line: false,
+                scroll: point(px(0.), px(0.)),
+                selection: 0..0,
+                caret: 0,
+            };
+        }
 
         let caret = display_offset(&field.edit, field.masked, field.edit.cursor());
         let selection = field.edit.selection();
         let selection = display_offset(&field.edit, field.masked, selection.start)
             ..display_offset(&field.edit, field.masked, selection.end);
 
-        // Keep the caret inside the viewport; the field never wraps.
-        let caret_x = line.x_for_index(caret);
-        let mut scroll_x = field.scroll_x;
-        if caret_x - scroll_x > bounds.size.width {
-            scroll_x = caret_x - bounds.size.width;
-        }
-        if caret_x < scroll_x {
-            scroll_x = caret_x;
-        }
-        let overflow = (line.width - bounds.size.width).max(px(0.));
-        scroll_x = scroll_x.clamp(px(0.), overflow);
-        if scroll_x != field.scroll_x {
-            self.field.update(cx, |field, _| field.scroll_x = scroll_x);
-        }
-
-        TextFieldLayout {
-            line,
+        let mut layout = TextFieldLayout {
+            lines,
             content_line: !showing_placeholder,
-            scroll_x,
+            scroll: point(field.scroll_x, field.scroll_y),
             selection,
             caret,
+        };
+
+        // Keep the caret inside the viewport: sideways when the field does not
+        // wrap, downward when it does.
+        let caret_position = layout.position_for_offset(caret, line_height);
+        let mut scroll_x = field.scroll_x;
+        let mut scroll_y = field.scroll_y;
+        if multi_line {
+            scroll_x = px(0.);
+            let rows: usize = layout.lines.iter().map(|line| line.rows).sum();
+            let content_height = line_height * rows as f32;
+            if caret_position.y + line_height - scroll_y > bounds.size.height {
+                scroll_y = caret_position.y + line_height - bounds.size.height;
+            }
+            if caret_position.y < scroll_y {
+                scroll_y = caret_position.y;
+            }
+            let overflow = (content_height - bounds.size.height).max(px(0.));
+            scroll_y = scroll_y.clamp(px(0.), overflow);
+        } else {
+            let width = layout
+                .lines
+                .first()
+                .map(|line| line.line.unwrapped_layout.width)
+                .unwrap_or_default();
+            if caret_position.x - scroll_x > bounds.size.width {
+                scroll_x = caret_position.x - bounds.size.width;
+            }
+            if caret_position.x < scroll_x {
+                scroll_x = caret_position.x;
+            }
+            let overflow = (width - bounds.size.width).max(px(0.));
+            scroll_x = scroll_x.clamp(px(0.), overflow);
         }
+        if scroll_x != field.scroll_x || scroll_y != field.scroll_y {
+            self.field.update(cx, |field, _| {
+                field.scroll_x = scroll_x;
+                field.scroll_y = scroll_y;
+            });
+        }
+        layout.scroll = point(scroll_x, scroll_y);
+        layout
     }
 
     fn paint(
@@ -575,30 +763,68 @@ impl Element for TextFieldElement {
             (field.caret_visible, field.focus.clone())
         };
         let selection_color = window.text_style().color.opacity(0.25);
+        let caret_color = window.text_style().color;
         let caret_visible = self.focused && blinking_on && layout.content_line;
         let line_height = window.line_height();
-        let origin = point(bounds.origin.x - layout.scroll_x, bounds.origin.y);
+        let origin = point(
+            bounds.origin.x - layout.scroll.x,
+            bounds.origin.y - layout.scroll.y,
+        );
 
         window.with_content_mask(Some(gpui::ContentMask { bounds }), |window| {
-            if !layout.selection.is_empty() {
-                let start = layout.line.x_for_index(layout.selection.start);
-                let end = layout.line.x_for_index(layout.selection.end);
-                window.paint_quad(fill(
-                    Bounds::new(
-                        point(origin.x + start, bounds.origin.y),
-                        size(end - start, line_height),
-                    ),
-                    selection_color,
-                ));
+            let mut y = px(0.);
+            for line in &layout.lines {
+                let line_origin = point(origin.x, origin.y + y);
+                if !layout.selection.is_empty() {
+                    // Paint the selection row by row: a wrapped line's highlight
+                    // is one quad per visual row, not one across the whole line.
+                    for (row, range) in TextFieldLayout::row_ranges(&line.line)
+                        .into_iter()
+                        .enumerate()
+                    {
+                        let row_start = line.start + range.start;
+                        let row_end = line.start + range.end;
+                        let start = layout.selection.start.max(row_start);
+                        let end = layout.selection.end.min(row_end);
+                        if start >= end {
+                            continue;
+                        }
+                        let row_left = line.line.unwrapped_layout.x_for_index(range.start);
+                        let x0 =
+                            line.line.unwrapped_layout.x_for_index(start - line.start) - row_left;
+                        let x1 =
+                            line.line.unwrapped_layout.x_for_index(end - line.start) - row_left;
+                        window.paint_quad(fill(
+                            Bounds::new(
+                                point(line_origin.x + x0, line_origin.y + line_height * row as f32),
+                                size(x1 - x0, line_height),
+                            ),
+                            selection_color,
+                        ));
+                    }
+                }
+
+                line.line
+                    .paint(
+                        line_origin,
+                        line_height,
+                        gpui::TextAlign::Left,
+                        None,
+                        window,
+                        cx,
+                    )
+                    .ok();
+                y += line_height * line.rows as f32;
             }
 
-            layout.line.paint(origin, line_height, window, cx).ok();
-
             if caret_visible {
-                let x = origin.x + layout.line.x_for_index(layout.caret);
+                let position = layout.position_for_offset(layout.caret, line_height);
                 window.paint_quad(fill(
-                    Bounds::new(point(x, bounds.origin.y), size(px(1.5), line_height)),
-                    window.text_style().color,
+                    Bounds::new(
+                        point(origin.x + position.x, origin.y + position.y),
+                        size(px(1.5), line_height),
+                    ),
+                    caret_color,
                 ));
             }
         });
@@ -614,9 +840,10 @@ impl Element for TextFieldElement {
 
         // Pointer positioning reuses the shaping above rather than re-measuring.
         let entity = self.field.clone();
-        let line = layout.line.clone();
-        let scroll_x = layout.scroll_x;
-        let left = bounds.origin.x;
+        let scroll = layout.scroll;
+        let text_origin = bounds.origin;
+        let hit = Rc::new(std::mem::take(&mut layout.lines));
+        let hit_lines = hit.clone();
         window.on_mouse_event(move |event: &MouseDownEvent, phase, window, cx| {
             if phase != gpui::DispatchPhase::Bubble
                 || event.button != MouseButton::Left
@@ -625,8 +852,9 @@ impl Element for TextFieldElement {
                 return;
             }
             entity.update(cx, |field, cx| {
-                let display = line.closest_index_for_x(event.position.x - left + scroll_x);
-                let offset = buffer_offset(&field.edit, field.masked, display);
+                let offset =
+                    offset_at(&hit_lines, event.position, text_origin, scroll, line_height);
+                let offset = buffer_offset(&field.edit, field.masked, offset);
                 if event.modifiers.shift {
                     let anchor = field.edit.selection();
                     let anchor = if offset < anchor.start {
@@ -647,7 +875,7 @@ impl Element for TextFieldElement {
         });
 
         let entity = self.field.clone();
-        let line = layout.line.clone();
+        let hit_lines = hit.clone();
         window.on_mouse_event(move |event: &MouseMoveEvent, phase, _, cx| {
             if phase != gpui::DispatchPhase::Bubble {
                 return;
@@ -656,8 +884,9 @@ impl Element for TextFieldElement {
                 return;
             }
             entity.update(cx, |field, cx| {
-                let display = line.closest_index_for_x(event.position.x - left + scroll_x);
-                let offset = buffer_offset(&field.edit, field.masked, display);
+                let offset =
+                    offset_at(&hit_lines, event.position, text_origin, scroll, line_height);
+                let offset = buffer_offset(&field.edit, field.masked, offset);
                 let anchor = field.edit.selection();
                 let anchor = if field.edit.selection_is_reversed() {
                     anchor.end
@@ -678,6 +907,37 @@ impl Element for TextFieldElement {
             }
         });
     }
+}
+
+/// Displayed offset under a window-space point.
+fn offset_at(
+    lines: &[FieldLine],
+    position: Point<Pixels>,
+    origin: Point<Pixels>,
+    scroll: Point<Pixels>,
+    line_height: Pixels,
+) -> usize {
+    let local = point(
+        position.x - origin.x + scroll.x,
+        position.y - origin.y + scroll.y,
+    );
+    let mut y = px(0.);
+    for (index, line) in lines.iter().enumerate() {
+        let height = line_height * line.rows as f32;
+        if local.y < y + height || index + 1 == lines.len() {
+            let in_line = point(local.x, (local.y - y).max(px(0.)));
+            let offset = line
+                .line
+                .closest_index_for_position(in_line, line_height)
+                .unwrap_or_else(|index| index);
+            return line.start + offset;
+        }
+        y += height;
+    }
+    lines
+        .last()
+        .map(|line| line.start + line.line.len())
+        .unwrap_or(0)
 }
 
 /// The chrome around a [`TextField`]: border, background, focus ring.
