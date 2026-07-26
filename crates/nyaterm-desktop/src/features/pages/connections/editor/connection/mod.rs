@@ -10,9 +10,9 @@ use gpui::{
     prelude::{
         FluentBuilder, InteractiveElement, ParentElement, StatefulInteractiveElement, Styled,
     },
-    px, rgb, rgba, svg,
+    px, rgb, rgba,
 };
-use nyaterm_core::{ConnectionType, Group, SavedConnection, truncate_preview};
+use nyaterm_core::{ConnectionType, Group, SavedConnection, natural_compare, truncate_preview};
 
 use self::local::connection_editor_local_section;
 use self::serial::connection_editor_serial_section;
@@ -23,7 +23,8 @@ use super::super::list::{
     connection_kind_tab, editor_field,
 };
 use crate::features::{
-    CONNECTION_ICON_OPTIONS, NyaTermApp, modal_dialog_shell, resolve_connection_icon,
+    CONNECTION_ICON_OPTIONS, DEFAULT_CONNECTION_ICON, NyaTermApp, modal_dialog_shell,
+    resolve_connection_icon, themed_icon,
 };
 use crate::models::{
     ConnectionEditorField, ConnectionEditorMenu, ConnectionEditorState, ConnectionKindTab,
@@ -68,6 +69,9 @@ impl NyaTermApp {
         let save_label = self.tr("common.save");
         let none_label = self.tr("dialog.none");
         let icon_label = self.tr("dialog.icon");
+        let icon_auto_detect_label = self.tr("dialog.iconAutoDetect");
+        let icon_auto_detect_hint = self.tr("dialog.iconAutoDetectTooltip");
+        let icon_auto_detect = editor.icon_auto_detect;
         let group_label = editor.pending_group_name.clone().unwrap_or_else(|| {
             editor
                 .group_id
@@ -391,9 +395,9 @@ impl NyaTermApp {
         let save_enabled = validation_error.is_none();
         let editor_focus = self.connection_state.editor.focus_handle();
         let mut icon_grid = div().grid().grid_cols(7).gap_1();
-        for icon_key in CONNECTION_ICON_OPTIONS {
+        for icon_key in CONNECTION_ICON_OPTIONS.iter().copied() {
             let icon = resolve_connection_icon(Some(icon_key), editor.kind.label());
-            let selected = editor.icon.as_deref().unwrap_or("server") == *icon_key;
+            let selected = editor.icon.as_deref().unwrap_or(DEFAULT_CONNECTION_ICON) == icon_key;
             icon_grid = icon_grid.child(
                 div()
                     .id(SharedString::from(format!("connection-icon-{icon_key}")))
@@ -415,12 +419,7 @@ impl NyaTermApp {
                         rgba(0x00000000)
                     })
                     .hover(|this| this.bg(rgb(palette.hover)))
-                    .child(
-                        svg()
-                            .size(px(16.))
-                            .path(icon.path)
-                            .text_color(rgb(icon.color)),
-                    )
+                    .child(themed_icon(palette, icon, false, 16.))
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.set_connection_editor_icon(Some(icon_key), cx);
                     })),
@@ -455,12 +454,7 @@ impl NyaTermApp {
                     .bg(rgb(palette.input))
                     .cursor_pointer()
                     .hover(|this| this.bg(rgb(palette.hover)))
-                    .child(
-                        svg()
-                            .size(px(17.))
-                            .path(icon_def.path)
-                            .text_color(rgb(icon_def.color)),
-                    )
+                    .child(themed_icon(palette, icon_def, false, 17.))
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.toggle_connection_icon_picker(cx);
                     })),
@@ -478,7 +472,59 @@ impl NyaTermApp {
                         .border_color(rgb(palette.border))
                         .bg(icon_picker_bg)
                         .shadow_lg()
-                        .child(icon_grid),
+                        .child(icon_grid)
+                        // Only SSH reports a remote system, so the toggle would be
+                        // inert on the other kinds.
+                        .when(editor.kind == ConnectionKindTab::Ssh, |this| {
+                            this.child(
+                                div()
+                                    .id("connection-editor-icon-auto-detect")
+                                    .mt_2()
+                                    .pt_2()
+                                    .border_t_1()
+                                    .border_color(rgb(palette.border))
+                                    .flex()
+                                    .items_center()
+                                    .justify_between()
+                                    .gap_2()
+                                    .cursor_pointer()
+                                    .child(
+                                        div()
+                                            .min_w_0()
+                                            .flex()
+                                            .flex_col()
+                                            .child(
+                                                div()
+                                                    .text_xs()
+                                                    .text_color(rgb(palette.text))
+                                                    .child(icon_auto_detect_label),
+                                            )
+                                            .child(
+                                                div()
+                                                    .text_size(px(10.))
+                                                    .text_color(rgb(palette.text_dimmed))
+                                                    .child(icon_auto_detect_hint),
+                                            ),
+                                    )
+                                    .child(crate::features::pages::settings::settings_switch(
+                                        palette,
+                                        "connection-editor-icon-auto-detect-switch",
+                                        icon_auto_detect,
+                                        cx.listener(move |this, _, _, cx| {
+                                            this.set_connection_editor_icon_auto_detect(
+                                                !icon_auto_detect,
+                                                cx,
+                                            );
+                                        }),
+                                    ))
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        this.set_connection_editor_icon_auto_detect(
+                                            !icon_auto_detect,
+                                            cx,
+                                        );
+                                    })),
+                            )
+                        }),
                 )
             });
 
@@ -762,7 +808,9 @@ fn connection_group_path_label(groups: &[Group], group_id: &str) -> Option<Strin
     Some(parts.join(" / "))
 }
 
-fn ordered_connection_groups(groups: &[Group]) -> Vec<(Group, usize)> {
+pub(in crate::features::pages::connections) fn ordered_connection_groups(
+    groups: &[Group],
+) -> Vec<(Group, usize)> {
     let group_ids = groups
         .iter()
         .map(|group| group.id.clone())
@@ -779,11 +827,8 @@ fn ordered_connection_groups(groups: &[Group]) -> Vec<(Group, usize)> {
         siblings.sort_by(|left, right| {
             left.sort_order
                 .cmp(&right.sort_order)
-                .then_with(|| {
-                    left.name
-                        .to_ascii_lowercase()
-                        .cmp(&right.name.to_ascii_lowercase())
-                })
+                // Same rule as the panel tree, so the dropdown and the list agree.
+                .then_with(|| natural_compare(&left.name, &right.name))
                 .then_with(|| left.id.cmp(&right.id))
         });
     }

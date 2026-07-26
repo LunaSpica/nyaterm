@@ -82,7 +82,12 @@ pub(super) fn connection_editor_local_section(
                                 .bg(rgb(palette.input))
                                 .cursor_pointer()
                                 .hover(|this| this.bg(rgb(palette.hover)))
-                                .child(svg().size(px(14.)).path("icons/conn/folder.svg"))
+                                .child(
+                                    svg()
+                                        .size(px(14.))
+                                        .path("icons/conn/folder.svg")
+                                        .text_color(rgb(palette.text_muted)),
+                                )
                                 .on_click(cx.listener(|this, _, _, cx| {
                                     this.prompt_connection_editor_shell_path(cx);
                                 })),

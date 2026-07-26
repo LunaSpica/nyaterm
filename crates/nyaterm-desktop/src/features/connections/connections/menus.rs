@@ -19,6 +19,17 @@ impl NyaTermApp {
         cx.notify();
     }
 
+    pub(in crate::features) fn open_connection_list_context_menu(
+        &mut self,
+        event: &MouseDownEvent,
+        cx: &mut Context<Self>,
+    ) {
+        self.connection_state
+            .list
+            .open_list_context_menu(event.position.x, event.position.y);
+        cx.notify();
+    }
+
     pub(in crate::features) fn open_connection_group_context_menu(
         &mut self,
         group_id: String,

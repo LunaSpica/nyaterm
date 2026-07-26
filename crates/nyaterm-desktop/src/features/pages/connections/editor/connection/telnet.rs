@@ -227,11 +227,16 @@ pub(super) fn connection_editor_telnet_section(
                 .on_click(cx.listener(|this, _, _, cx| {
                     this.toggle_connection_editor_flag(ConnectionEditorToggle::Advanced, cx);
                 }))
-                .child(svg().size(px(14.)).path(if editor.advanced_open {
-                    "icons/chevron-down.svg"
-                } else {
-                    "icons/fe/forward.svg"
-                }))
+                .child(
+                    svg()
+                        .size(px(14.))
+                        .path(if editor.advanced_open {
+                            "icons/chevron-down.svg"
+                        } else {
+                            "icons/fe/forward.svg"
+                        })
+                        .text_color(rgb(palette.text_muted)),
+                )
                 .child(tr("dialog.advancedConfig")),
         )
         .when(editor.advanced_open, |this| {

@@ -3,6 +3,36 @@ use nyaterm_core::{Group, SavedConnection};
 
 use crate::features::NyaTermApp;
 
+/// The target group's connections in their new order after a move.
+///
+/// Existing members keep their relative order and the moved connections are
+/// appended in list order — not in whatever order the selection happened to be
+/// built — so a multi-select move is not silently shuffled.
+fn connections_reordered_into_group(
+    connections: &[SavedConnection],
+    source_ids: &[String],
+    group_id: &Option<String>,
+) -> Vec<SavedConnection> {
+    let mut staying = connections
+        .iter()
+        .filter(|connection| {
+            &connection.group_id == group_id && !source_ids.contains(&connection.id)
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    staying.sort_by(|left, right| left.sort_order.cmp(&right.sort_order));
+
+    for connection in connections
+        .iter()
+        .filter(|connection| source_ids.contains(&connection.id))
+    {
+        let mut moved = connection.clone();
+        moved.group_id = group_id.clone();
+        staying.push(moved);
+    }
+    staying
+}
+
 impl NyaTermApp {
     pub(in crate::features) fn move_connection_before(
         &mut self,
@@ -164,6 +194,51 @@ impl NyaTermApp {
         cx.notify();
     }
 
+    /// Reparent several connections in one write.
+    ///
+    /// Looping [`Self::move_connection_into_group`] would re-read the list, persist
+    /// a fresh order and refresh the store once per connection; the old UI sent a
+    /// single reorder. One ordered write also means the list cannot be observed
+    /// half-moved.
+    pub(in crate::features) fn move_connections_into_group(
+        &mut self,
+        source_ids: Vec<String>,
+        group_id: Option<String>,
+        cx: &mut Context<Self>,
+    ) {
+        self.connection_state.list.clear_drop_target();
+        let moving = self
+            .connections
+            .iter()
+            .filter(|connection| source_ids.contains(&connection.id))
+            .cloned()
+            .collect::<Vec<_>>();
+        if moving.is_empty() {
+            self.terminal.view.status = "no connections to move".to_string();
+            cx.notify();
+            return;
+        }
+
+        let moved_count = moving.len();
+        let ordered = connections_reordered_into_group(&self.connections, &source_ids, &group_id);
+
+        match self.persist_connection_order(&ordered) {
+            Ok(()) => {
+                if let Some(group_id) = group_id {
+                    self.connection_state.list.expand_group(group_id);
+                }
+                self.refresh_store_from_runtime();
+                self.terminal.view.status = format!("moved {moved_count} connection(s)");
+            }
+            Err(error) => {
+                self.terminal.view.status = format!("move connections failed: {error}");
+                self.store_status.message = self.terminal.view.status.clone();
+                self.store_status.ready = false;
+            }
+        }
+        cx.notify();
+    }
+
     pub(in crate::features) fn move_group_before(
         &mut self,
         source_id: String,
@@ -318,5 +393,94 @@ impl NyaTermApp {
             }
             Ok(())
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use nyaterm_core::{AiExecutionProfile, ConnectionType, SavedConnection};
+
+    use super::connections_reordered_into_group;
+
+    fn connection(id: &str, group_id: Option<&str>, sort_order: i32) -> SavedConnection {
+        SavedConnection {
+            id: id.to_string(),
+            name: id.to_string(),
+            config: ConnectionType::LocalTerminal {
+                shell_path: String::new(),
+                shell_args: String::new(),
+                working_dir: None,
+                ai_execution_profile: AiExecutionProfile::Auto,
+            },
+            group_id: group_id.map(ToOwned::to_owned),
+            description: None,
+            sort_order,
+            icon: None,
+            icon_auto_detect: None,
+            auth: None,
+            network: None,
+            post_login: None,
+            created_at_ms: None,
+            updated_at_ms: None,
+            last_used_at_ms: None,
+        }
+    }
+
+    fn ids(connections: &[SavedConnection]) -> Vec<&str> {
+        connections.iter().map(|c| c.id.as_str()).collect()
+    }
+
+    #[test]
+    fn moved_connections_land_after_the_group_in_list_order() {
+        let connections = vec![
+            connection("a", None, 0),
+            connection("target-1", Some("target"), 1),
+            connection("b", None, 2),
+            connection("target-0", Some("target"), 0),
+        ];
+
+        let ordered = connections_reordered_into_group(
+            &connections,
+            // Deliberately reversed: the selection order must not leak through.
+            &["b".to_string(), "a".to_string()],
+            &Some("target".to_string()),
+        );
+
+        assert_eq!(ids(&ordered), vec!["target-0", "target-1", "a", "b"]);
+        assert!(
+            ordered
+                .iter()
+                .all(|c| c.group_id.as_deref() == Some("target"))
+        );
+    }
+
+    #[test]
+    fn moving_to_ungrouped_clears_the_group_and_skips_the_movers() {
+        let connections = vec![
+            connection("root", None, 0),
+            connection("grouped", Some("g"), 0),
+        ];
+
+        let ordered =
+            connections_reordered_into_group(&connections, &["grouped".to_string()], &None);
+
+        assert_eq!(ids(&ordered), vec!["root", "grouped"]);
+        assert!(ordered.iter().all(|c| c.group_id.is_none()));
+    }
+
+    #[test]
+    fn a_connection_already_in_the_target_is_not_duplicated() {
+        let connections = vec![
+            connection("stay", Some("g"), 0),
+            connection("move", Some("g"), 1),
+        ];
+
+        let ordered = connections_reordered_into_group(
+            &connections,
+            &["move".to_string()],
+            &Some("g".to_string()),
+        );
+
+        assert_eq!(ids(&ordered), vec!["stay", "move"]);
     }
 }

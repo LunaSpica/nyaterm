@@ -206,6 +206,8 @@ pub(crate) struct ConnectionEditorState {
     pub(crate) name: String,
     pub(crate) description: String,
     pub(crate) icon: Option<String>,
+    /// Mirrors `SavedConnection::icon_auto_detect_enabled` while editing.
+    pub(crate) icon_auto_detect: bool,
     pub(crate) group_id: Option<String>,
     pub(crate) new_group_name: String,
     pub(crate) pending_group_name: Option<String>,
@@ -269,6 +271,13 @@ pub(crate) struct ConnectionDeleteConfirmState {
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct ConnectionContextMenuState {
     pub(crate) connection_id: String,
+    pub(crate) x: Pixels,
+    pub(crate) y: Pixels,
+}
+
+/// Right-click on the list background rather than on a row.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct ConnectionListContextMenuState {
     pub(crate) x: Pixels,
     pub(crate) y: Pixels,
 }
