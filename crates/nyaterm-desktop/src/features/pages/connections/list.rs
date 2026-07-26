@@ -7,7 +7,7 @@ use gpui::{
     },
     px, rgb, rgba, svg,
 };
-use nyaterm_core::{Group, ProxyConfig, SavedConnection, truncate_preview};
+use nyaterm_core::{Group, ProxyConfig, SavedConnection, natural_compare, truncate_preview};
 
 use crate::features::{NyaTermApp, format_last_used_ms, transfer_input};
 use crate::models::{ConnectionEditorMenu, ConnectionSortMode};
@@ -145,7 +145,7 @@ pub(super) fn connection_sections(
         children_by_parent.entry(parent_id).or_default().push(group);
     }
     for children in children_by_parent.values_mut() {
-        sort_groups(children);
+        sort_groups(children, sort_mode);
     }
 
     let mut visited = std::collections::HashSet::new();
@@ -234,14 +234,22 @@ fn build_connection_group_sections(
     (sections, total_count)
 }
 
-fn sort_groups(groups: &mut [Group]) {
-    groups.sort_by(|left, right| {
-        left.sort_order.cmp(&right.sort_order).then_with(|| {
-            left.name
-                .to_ascii_lowercase()
-                .cmp(&right.name.to_ascii_lowercase())
-        })
-    });
+/// Folders obey the sort button too — sorting only the connections inside them
+/// leaves the tree looking unsorted, which is what the old UI never did.
+fn sort_groups(groups: &mut [Group], mode: ConnectionSortMode) {
+    match mode {
+        ConnectionSortMode::Default => groups.sort_by(|left, right| {
+            left.sort_order
+                .cmp(&right.sort_order)
+                .then_with(|| natural_compare(&left.name, &right.name))
+        }),
+        ConnectionSortMode::NameAsc => {
+            groups.sort_by(|left, right| natural_compare(&left.name, &right.name));
+        }
+        ConnectionSortMode::NameDesc => {
+            groups.sort_by(|left, right| natural_compare(&right.name, &left.name));
+        }
+    }
 }
 
 pub(super) fn connection_matches(connection: &SavedConnection, query: &str) -> bool {
@@ -263,23 +271,16 @@ pub(super) fn connection_matches(connection: &SavedConnection, query: &str) -> b
 pub(super) fn sort_connections(connections: &mut [SavedConnection], mode: ConnectionSortMode) {
     match mode {
         ConnectionSortMode::Default => connections.sort_by(|left, right| {
-            left.sort_order.cmp(&right.sort_order).then_with(|| {
-                left.name
-                    .to_ascii_lowercase()
-                    .cmp(&right.name.to_ascii_lowercase())
-            })
+            left.sort_order
+                .cmp(&right.sort_order)
+                .then_with(|| natural_compare(&left.name, &right.name))
         }),
-        ConnectionSortMode::NameAsc => connections.sort_by(|left, right| {
-            left.name
-                .to_ascii_lowercase()
-                .cmp(&right.name.to_ascii_lowercase())
-        }),
-        ConnectionSortMode::NameDesc => connections.sort_by(|left, right| {
-            right
-                .name
-                .to_ascii_lowercase()
-                .cmp(&left.name.to_ascii_lowercase())
-        }),
+        ConnectionSortMode::NameAsc => {
+            connections.sort_by(|left, right| natural_compare(&left.name, &right.name));
+        }
+        ConnectionSortMode::NameDesc => {
+            connections.sort_by(|left, right| natural_compare(&right.name, &left.name));
+        }
     }
 }
 
@@ -448,7 +449,8 @@ pub(super) fn connection_editor_group_select(
                             svg()
                                 .size(px(14.))
                                 .flex_none()
-                                .path("icons/chevron-down.svg"),
+                                .path("icons/chevron-down.svg")
+                                .text_color(rgb(palette.text_dimmed)),
                         ),
                 )
                 .on_click(cx.listener(|this, _, _, cx| {
@@ -534,7 +536,16 @@ pub(super) fn connection_editor_group_select(
                                                         this.commit_connection_editor_new_group(cx);
                                                     }))
                                             })
-                                            .child(svg().size(px(16.)).path("icons/conn/add.svg")),
+                                            .child(
+                                                svg()
+                                                    .size(px(16.))
+                                                    .path("icons/conn/add.svg")
+                                                    .text_color(rgb(if can_add {
+                                                        palette.text
+                                                    } else {
+                                                        palette.text_dimmed
+                                                    })),
+                                            ),
                                     ),
                             )
                             .child(
@@ -647,7 +658,8 @@ pub(super) fn connection_editor_select(
                             svg()
                                 .size(px(14.))
                                 .flex_none()
-                                .path("icons/chevron-down.svg"),
+                                .path("icons/chevron-down.svg")
+                                .text_color(rgb(palette.text_dimmed)),
                         ),
                 )
                 .on_click(cx.listener(move |this, _, _, cx| {
@@ -778,6 +790,65 @@ mod tests {
     }
 
     #[test]
+    fn sort_mode_reorders_folders_not_only_their_connections() {
+        let groups = vec![
+            group("beta", "Beta", None, 1),
+            group("alpha", "Alpha", None, 2),
+        ];
+        let connections = vec![
+            connection("b", "Beta Host", Some("beta"), 0),
+            connection("a", "Alpha Host", Some("alpha"), 0),
+        ];
+
+        let folder_order = |mode| {
+            connection_sections(&connections, &groups, "", mode)
+                .into_iter()
+                .filter(|section| !section.is_root)
+                .map(|section| section.label)
+                .collect::<Vec<_>>()
+        };
+
+        // Default keeps the manual order the user dragged into place.
+        assert_eq!(
+            folder_order(crate::models::ConnectionSortMode::Default),
+            vec!["Beta", "Alpha"]
+        );
+        assert_eq!(
+            folder_order(crate::models::ConnectionSortMode::NameAsc),
+            vec!["Alpha", "Beta"]
+        );
+        assert_eq!(
+            folder_order(crate::models::ConnectionSortMode::NameDesc),
+            vec!["Beta", "Alpha"]
+        );
+    }
+
+    #[test]
+    fn names_sort_by_number_value_so_host_lists_read_correctly() {
+        let connections = vec![
+            connection("c", "192.168.142.100", None, 0),
+            connection("a", "192.168.142.13", None, 0),
+            connection("b", "192.168.142.9", None, 0),
+        ];
+        let sections = connection_sections(
+            &connections,
+            &[],
+            "",
+            crate::models::ConnectionSortMode::NameAsc,
+        );
+
+        let names = sections[0]
+            .connections
+            .iter()
+            .map(|connection| connection.name.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            names,
+            vec!["192.168.142.9", "192.168.142.13", "192.168.142.100"]
+        );
+    }
+
+    #[test]
     fn collapsed_groups_omit_every_descendant_from_flat_rows() {
         let groups = vec![
             group("parent", "Parent", None, 0),
@@ -839,6 +910,7 @@ mod tests {
             description: None,
             sort_order,
             icon: None,
+            icon_auto_detect: None,
             auth: None,
             network: None,
             post_login: None,
@@ -867,22 +939,46 @@ pub(super) fn icon_action_button(
     tooltip: impl Into<String>,
     on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
 ) -> impl IntoElement {
+    icon_action_button_styled(palette, id, label, tooltip, None, false, on_click)
+}
+
+/// [`icon_action_button`] with the two knobs the sort control needs: a tint that
+/// marks the button as active, and a vertical flip that turns an ascending glyph
+/// into a descending one.
+pub(super) fn icon_action_button_styled(
+    palette: crate::theme::ThemePalette,
+    id: impl Into<String>,
+    label: &'static str,
+    tooltip: impl Into<String>,
+    tint: Option<u32>,
+    flip_vertical: bool,
+    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+) -> impl IntoElement {
     // label may be a glyph fallback or an icons/*.svg path.
     let is_svg = label.starts_with("icons/") && label.ends_with(".svg");
     let tooltip = tooltip.into();
+    let id = SharedString::from(id.into());
+    let base_color = tint.unwrap_or(palette.text_muted);
+    let hover_color = tint.unwrap_or(palette.text);
+    // `svg()` takes its tint from its *own* computed style — GPUI starts every
+    // element from `Style::default()`, so a glyph with no `text_color` of its own
+    // resolves to `None` and is skipped entirely at paint time. The parent's
+    // `text_color` only reaches real text. Hence the explicit color here, and the
+    // group so hover still brightens the icon rather than only the background.
     div()
-        .id(SharedString::from(id.into()))
+        .id(id.clone())
+        .group(id.clone())
         .size(px(24.))
         .flex()
         .items_center()
         .justify_center()
         .rounded_md()
         .text_size(px(11.))
-        .text_color(rgb(palette.text_muted))
+        .text_color(rgb(base_color))
         .cursor_pointer()
-        .hover(|this| {
+        .hover(move |this| {
             this.bg(rgb(palette.surface_elevated))
-                .text_color(rgb(palette.text))
+                .text_color(rgb(hover_color))
         })
         .on_click(on_click)
         .tooltip(move |_, cx| {
@@ -890,7 +986,16 @@ pub(super) fn icon_action_button(
                 .into()
         })
         .when(is_svg, |this| {
-            this.child(svg().size(px(14.)).flex_none().path(label))
+            let mut icon = svg()
+                .size(px(14.))
+                .flex_none()
+                .path(label)
+                .text_color(rgb(base_color))
+                .group_hover(id.clone(), move |this| this.text_color(rgb(hover_color)));
+            if flip_vertical {
+                icon = icon.with_transformation(gpui::Transformation::scale(gpui::size(1., -1.)));
+            }
+            this.child(icon)
         })
         .when(!is_svg, |this| this.child(label))
 }
@@ -935,6 +1040,45 @@ pub(super) fn menu_item_with_icon(
                 })),
         )
         .child(div().min_w_0().flex_1().child(label.into()))
+}
+
+/// A menu row that opens a flyout instead of acting, marked by a trailing chevron.
+pub(super) fn menu_item_submenu_trigger(
+    palette: crate::theme::ThemePalette,
+    id: impl Into<String>,
+    icon: &'static str,
+    label: impl Into<SharedString>,
+    open: bool,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    div()
+        .id(SharedString::from(id.into()))
+        .h(px(28.))
+        .px_3()
+        .flex()
+        .items_center()
+        .gap_2()
+        .text_size(px(12.))
+        .text_color(rgb(palette.text))
+        .cursor_pointer()
+        .when(open, |this| this.bg(rgb(palette.surface_elevated)))
+        .hover(|this| this.bg(rgb(palette.surface_elevated)))
+        .on_click(on_click)
+        .child(
+            svg()
+                .size(px(14.))
+                .flex_none()
+                .path(icon)
+                .text_color(rgb(palette.text_muted)),
+        )
+        .child(div().min_w_0().flex_1().child(label.into()))
+        .child(
+            svg()
+                .size(px(12.))
+                .flex_none()
+                .path("icons/fe/forward.svg")
+                .text_color(rgb(palette.text_muted)),
+        )
 }
 
 pub(super) fn connection_detail_rows(

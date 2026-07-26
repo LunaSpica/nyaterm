@@ -75,6 +75,7 @@ icons/conn/folder.svg	md:filled/folder.svg
 icons/conn/more.svg	md:filled/more_vert.svg
 icons/conn/serial.svg	md:filled/cell_tower.svg
 icons/conn/server.svg	md:filled/dns.svg
+icons/conn/sort-alpha.svg	md:filled/sort_by_alpha.svg
 icons/conn/sort.svg	md:filled/sort.svg
 icons/conn/symlink.svg	md:filled/link.svg
 icons/conn/telnet.svg	md:filled/dns.svg

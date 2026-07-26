@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use gpui::Context;
-use nyaterm_core::{ConnectionStore, SavedConnection, uuid};
+use nyaterm_core::{ConnectionStore, SavedConnection, natural_compare, uuid};
 
 use crate::features::NyaTermApp;
 
@@ -84,23 +84,21 @@ impl NyaTermApp {
                 .or_default()
                 .push(connection);
         }
+        // Must order exactly like the rendered tree, or Shift-range selection and
+        // keyboard navigation walk a different list than the one on screen.
+        let sort_mode = self.connection_state.list.sort_mode();
         for list in by_group.values_mut() {
-            list.sort_by(|left, right| match self.connection_state.list.sort_mode() {
-                crate::models::ConnectionSortMode::Default => {
-                    left.sort_order.cmp(&right.sort_order).then_with(|| {
-                        left.name
-                            .to_ascii_lowercase()
-                            .cmp(&right.name.to_ascii_lowercase())
-                    })
+            list.sort_by(|left, right| match sort_mode {
+                crate::models::ConnectionSortMode::Default => left
+                    .sort_order
+                    .cmp(&right.sort_order)
+                    .then_with(|| natural_compare(&left.name, &right.name)),
+                crate::models::ConnectionSortMode::NameAsc => {
+                    natural_compare(&left.name, &right.name)
                 }
-                crate::models::ConnectionSortMode::NameAsc => left
-                    .name
-                    .to_ascii_lowercase()
-                    .cmp(&right.name.to_ascii_lowercase()),
-                crate::models::ConnectionSortMode::NameDesc => right
-                    .name
-                    .to_ascii_lowercase()
-                    .cmp(&left.name.to_ascii_lowercase()),
+                crate::models::ConnectionSortMode::NameDesc => {
+                    natural_compare(&right.name, &left.name)
+                }
             });
         }
 
@@ -123,17 +121,23 @@ impl NyaTermApp {
             children_by_parent.entry(parent_id).or_default().push(group);
         }
         for groups in children_by_parent.values_mut() {
-            groups.sort_by(|left, right| {
-                left.sort_order.cmp(&right.sort_order).then_with(|| {
-                    left.name
-                        .to_ascii_lowercase()
-                        .cmp(&right.name.to_ascii_lowercase())
-                })
+            groups.sort_by(|left, right| match sort_mode {
+                crate::models::ConnectionSortMode::Default => left
+                    .sort_order
+                    .cmp(&right.sort_order)
+                    .then_with(|| natural_compare(&left.name, &right.name)),
+                crate::models::ConnectionSortMode::NameAsc => {
+                    natural_compare(&left.name, &right.name)
+                }
+                crate::models::ConnectionSortMode::NameDesc => {
+                    natural_compare(&right.name, &left.name)
+                }
             });
         }
 
         let mut ids = Vec::new();
         let mut visited = std::collections::HashSet::new();
+        let expanded = self.connection_state.list.expanded_group_ids().clone();
         // Groups first, ungrouped last (matches connection_sections / Tauri).
         for group in children_by_parent.get(&None).cloned().unwrap_or_default() {
             append_visible_connection_ids(
@@ -142,15 +146,11 @@ impl NyaTermApp {
                 &mut by_group,
                 &mut ids,
                 &mut visited,
+                &expanded,
             );
         }
         if let Some(root) = by_group.remove(&None) {
             for connection in root {
-                ids.push(connection.id.clone());
-            }
-        }
-        for list in by_group.into_values() {
-            for connection in list {
                 ids.push(connection.id.clone());
             }
         }
@@ -228,8 +228,15 @@ fn append_visible_connection_ids<'a>(
     by_group: &mut std::collections::HashMap<Option<String>, Vec<&'a SavedConnection>>,
     ids: &mut Vec<String>,
     visited: &mut std::collections::HashSet<String>,
+    expanded: &std::collections::HashSet<String>,
 ) {
     if !visited.insert(group.id.clone()) {
+        return;
+    }
+    // A collapsed folder's rows are not on screen, so they are not reachable by
+    // Shift-range or by the arrow keys either.
+    if !expanded.contains(&group.id) {
+        by_group.remove(&Some(group.id));
         return;
     }
     for child in children_by_parent
@@ -237,7 +244,7 @@ fn append_visible_connection_ids<'a>(
         .cloned()
         .unwrap_or_default()
     {
-        append_visible_connection_ids(child, children_by_parent, by_group, ids, visited);
+        append_visible_connection_ids(child, children_by_parent, by_group, ids, visited, expanded);
     }
     if let Some(list) = by_group.remove(&Some(group.id)) {
         for connection in list {

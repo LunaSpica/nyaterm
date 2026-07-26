@@ -8,6 +8,7 @@ pub mod credentials_crypto;
 pub mod diagnostics;
 pub mod keyword_highlight_presets;
 pub mod models;
+pub mod natural_order;
 pub mod portable_snapshot;
 pub mod runtime;
 pub mod services;
@@ -95,6 +96,7 @@ pub use keyword_highlight_presets::{
     merge_keyword_highlight_rules_for_paint,
 };
 pub use models::*;
+pub use natural_order::natural_compare;
 pub use portable_snapshot::{
     PortableSnapshotError, PortableSnapshotKind, PortableSnapshotMeta, RawPortableSnapshot,
     decode_encrypted_raw_portable_snapshot, decode_raw_portable_snapshot,
