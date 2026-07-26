@@ -2,7 +2,10 @@ use std::borrow::Cow;
 use std::fmt::Write as _;
 
 use super::*;
-use crate::models::{append_terminal_ui_output_tail, terminal_frame_scroll_window_extra_rows};
+use crate::models::{
+    MainMode, TerminalSearchMode, TerminalWindowNode, WorkspacePaneNode,
+    append_terminal_ui_output_tail, terminal_frame_scroll_window_extra_rows,
+};
 
 const MAX_OSC52_REPLY_CHARS: usize = 1_048_576;
 const TERMINAL_LIVE_PREFETCH_IDLE_DELAY: Duration = Duration::from_millis(80);
@@ -2536,6 +2539,7 @@ fn collect_terminal_window_node_visible_tab_ids<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::WorkspaceSplitDirection;
     use std::sync::Arc;
 
     fn search_key(query: &str) -> TerminalFrameSearchKey {

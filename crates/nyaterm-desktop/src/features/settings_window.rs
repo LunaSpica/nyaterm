@@ -3,6 +3,8 @@ use gpui::{
     WindowBounds, WindowHandle, WindowKind, WindowOptions, div, prelude::*, px, rgb, size,
 };
 
+use crate::models::MainMode;
+
 use super::{NyaTermApp, child_window_header, child_window_titlebar};
 
 pub(in crate::features) struct SettingsWindow {
@@ -170,7 +172,7 @@ fn open_settings_window_now_from_app(app: Entity<NyaTermApp>, cx: &mut App) {
         Err(error) => {
             app.settings_window = None;
             app.settings_window_open_pending = false;
-            app.main_mode = super::MainMode::Page;
+            app.main_mode = MainMode::Page;
             app.selected_nav = super::NavItem::Settings;
             app.left_sidebar_collapsed = true;
             app.right_inspector_collapsed = true;

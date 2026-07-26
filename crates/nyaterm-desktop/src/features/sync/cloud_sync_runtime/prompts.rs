@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::models::{CloudSyncConflictState, SnapshotPasswordPromptKind};
+
 impl NyaTermApp {
     pub(in crate::features) fn prompt_local_cloud_sync_push(&mut self, cx: &mut Context<Self>) {
         if self.block_cloud_sync_for_settings_draft(cx) {

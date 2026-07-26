@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::models::{SecurityAuthTab, SecurityDeleteConfirmState};
+
 #[path = "panel/credentials.rs"]
 mod credentials;
 #[path = "panel/keys.rs"]

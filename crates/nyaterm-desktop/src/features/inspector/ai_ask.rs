@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::models::{AiDetectedErrorState, AiPreparedRequest, SettingsTab};
+
 impl NyaTermApp {
     pub(in crate::features) fn dismiss_ai_detected_error(&mut self, cx: &mut Context<Self>) {
         self.ai_detected_error = None;

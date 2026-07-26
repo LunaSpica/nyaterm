@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::models::AiCredentialEditorField;
+
 impl NyaTermApp {
     pub(in crate::features) fn toggle_ai_credential_enabled(
         &mut self,

@@ -1,5 +1,10 @@
 use super::*;
 
+use crate::models::{
+    SecurityAuthTab, SecurityDeleteConfirmState, SecurityPasswordEditorField,
+    SecurityPasswordEditorState, SecurityUnlockAction,
+};
+
 impl NyaTermApp {
     pub(in crate::features) fn open_security_password_editor(
         &mut self,

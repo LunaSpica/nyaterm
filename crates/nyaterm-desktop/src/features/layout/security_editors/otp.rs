@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::models::{SecurityOtpEditorField, SecurityOtpEditorState};
+
 impl NyaTermApp {
     pub(in crate::features) fn security_otp_editor_view(
         &mut self,

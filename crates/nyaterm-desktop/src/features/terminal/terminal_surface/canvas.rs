@@ -2,7 +2,7 @@ use super::*;
 use crate::features::terminal_selection_runtime::{
     terminal_gutter_metrics, terminal_line_number_digits,
 };
-use crate::models::TerminalPerformanceMode;
+use crate::models::{TerminalPerformanceMode, TerminalPerformanceOverlay, TerminalSearchMode};
 
 fn terminal_shell_placeholder_snapshot() -> std::sync::Arc<TerminalSnapshot> {
     static SNAPSHOT: std::sync::OnceLock<std::sync::Arc<TerminalSnapshot>> =

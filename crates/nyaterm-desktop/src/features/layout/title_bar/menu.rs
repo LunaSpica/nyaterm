@@ -1,4 +1,5 @@
 use super::*;
+use crate::models::{SmartSplitMode, TitleMenu, TitleMenuSubmenu};
 
 impl NyaTermApp {
     pub(in crate::features) fn title_menu_dropdown(

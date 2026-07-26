@@ -1,5 +1,8 @@
 use super::*;
 
+use crate::http::ai::discover_openai_compatible_models;
+use nyaterm_core::{AiModelDiscovery, merge_model_discoveries};
+
 const AI_DISCOVERY_EVENT_DRAIN_LIMIT: usize = 8;
 
 impl NyaTermApp {

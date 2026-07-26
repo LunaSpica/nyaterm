@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::models::QuickCommandSortMode;
+
 pub(in crate::features::panels) struct QuickCommandCategoryOption {
     pub id: String,
     pub label: String,

@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::models::{AiInputField, TransferInputField};
+
 impl NyaTermApp {
     pub(in crate::features) fn handle_transfer_key_down(
         &mut self,

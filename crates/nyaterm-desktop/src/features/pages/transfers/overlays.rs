@@ -1,5 +1,5 @@
 use super::*;
-use crate::features::TransferJobDeleteState;
+use crate::models::{TransferJobDeleteState, TransferJobMenuState};
 use gpui::rgba;
 
 impl NyaTermApp {

@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::send_command::{SendCommandDataType, SendCommandLineEnding, SendCommandMode};
+
 pub(super) struct SendCommandBarViewState {
     pub(super) palette: crate::theme::ThemePalette,
     pub(super) group_targets: Vec<(String, String, usize)>,

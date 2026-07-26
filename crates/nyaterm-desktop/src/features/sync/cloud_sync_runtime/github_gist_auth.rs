@@ -1,5 +1,8 @@
 use super::*;
 
+use crate::http::cloud_sync::run_github_gist_device_flow;
+use crate::models::{GithubGistAuthEvent, GithubGistAuthState};
+
 const GITHUB_GIST_AUTH_EVENT_DRAIN_LIMIT: usize = 8;
 
 impl NyaTermApp {

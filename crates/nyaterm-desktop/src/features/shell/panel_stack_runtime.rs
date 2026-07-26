@@ -1,5 +1,8 @@
 use super::*;
-use crate::models::NetworkTab;
+use crate::models::{
+    ActivityBarZone, MainMode, NetworkTab, PanelStackResizeState, RightFocus, SecurityAuthTab,
+    SettingsTab,
+};
 
 const EXCLUSIVE_PANEL_IDS: &[&str] = &["aiAssistant"];
 const NON_PANEL_IDS: &[&str] = &["settings", "lock", "quickCmdBar", "serialSend"];

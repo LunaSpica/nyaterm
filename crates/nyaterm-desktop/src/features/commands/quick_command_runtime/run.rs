@@ -1,5 +1,8 @@
 use super::*;
 
+use crate::models::QuickCommandVariablePromptState;
+use nyaterm_core::AppendAiAuditRequest;
+
 impl NyaTermApp {
     pub(in crate::features) fn save_ai_command_card(
         &mut self,

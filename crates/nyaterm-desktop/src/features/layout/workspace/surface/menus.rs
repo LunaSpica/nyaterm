@@ -901,7 +901,7 @@ mod tests {
                 .iter()
                 .map(|group| group.id.as_str())
                 .collect::<Vec<_>>(),
-            vec!["orphan", "root-a", "root-b"]
+            vec!["orphan", "root-a"]
         );
         let children = new_session_groups_for_parent(&groups, &visible, Some("root-a"));
         assert_eq!(

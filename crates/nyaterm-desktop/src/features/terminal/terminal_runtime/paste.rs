@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::models::MultiLinePasteDraft;
+
 impl NyaTermApp {
     pub(in crate::features) fn paste_from_clipboard(
         &mut self,

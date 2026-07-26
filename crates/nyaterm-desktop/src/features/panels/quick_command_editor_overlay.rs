@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::models::{QuickCommandEditorField, QuickCommandEditorState};
+
 impl NyaTermApp {
     pub(in crate::features) fn quick_command_editor_overlay(
         &mut self,

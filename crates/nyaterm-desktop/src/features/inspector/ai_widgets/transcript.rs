@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::models::SettingsTab;
+
 impl NyaTermApp {
     pub(in crate::features) fn ai_transcript_body(
         &self,

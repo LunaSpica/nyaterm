@@ -1,6 +1,14 @@
 use super::*;
 
-use nyaterm_core::CloudSyncResult;
+use crate::http::cloud_sync::{
+    NativeAliyunDriveRemote, NativeGoogleDriveRemote, NativeOneDriveRemote, NativeS3Remote,
+    NativeSnippetHttpClient, NativeWebdavRemote,
+};
+use nyaterm_core::{
+    CloudSyncResult, GiteeSnippetHttpBackend, GithubGistHttpBackend, LocalCloudSyncOptions,
+    SnippetRemote, pull_local_snapshot, pull_snapshot_with_remote, push_local_snapshot,
+    push_snapshot_with_remote,
+};
 
 pub(in crate::features) fn test_provider_connection(
     settings: &CloudSyncSettings,

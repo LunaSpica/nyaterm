@@ -1406,9 +1406,9 @@ mod tests {
     #[test]
     fn editor_matches_nested_brackets_from_either_side() {
         let content = "fn main() { call([1, 2]); }";
-        assert_eq!(matching_bracket_ranges(content, 10), Some((10..11, 27..28)));
-        assert_eq!(matching_bracket_ranges(content, 28), Some((10..11, 27..28)));
-        assert_eq!(matching_bracket_ranges(content, 18), Some((18..19, 23..24)));
+        assert_eq!(matching_bracket_ranges(content, 10), Some((10..11, 26..27)));
+        assert_eq!(matching_bracket_ranges(content, 28), Some((10..11, 26..27)));
+        assert_eq!(matching_bracket_ranges(content, 18), Some((17..18, 22..23)));
     }
 
     #[test]

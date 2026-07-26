@@ -1,4 +1,5 @@
 use super::*;
+use crate::models::{QuickCommandSortMode, QuickCommandViewMode};
 use gpui::uniform_list;
 
 #[path = "panel/rows.rs"]

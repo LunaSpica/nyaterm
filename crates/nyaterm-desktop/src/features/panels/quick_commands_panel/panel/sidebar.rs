@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::models::QuickCommandCategoryMenuState;
+
 impl NyaTermApp {
     pub(super) fn quick_command_category_sidebar(
         &mut self,

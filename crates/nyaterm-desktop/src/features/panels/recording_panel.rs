@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::models::RecordingPathPromptKind;
+
 impl NyaTermApp {
     fn recording_session_matches_query(session: &SessionInfo, query: &str) -> bool {
         query.is_empty()

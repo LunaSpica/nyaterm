@@ -1,5 +1,6 @@
 use super::*;
 use crate::features::terminal_runtime::TERMINAL_INPUT_LATENCY_WINDOW;
+use crate::models::{CommandSuggestionItem, CommandSuggestionState};
 use gpui::{Bounds, Pixels};
 
 const COMMAND_SUGGESTION_INPUT_SLOW_THRESHOLD: Duration = Duration::from_millis(4);

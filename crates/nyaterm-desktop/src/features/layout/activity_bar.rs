@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::models::{ActivityBarEntry, ActivityBarZone, BottomPanelMode, RightFocus};
+
 impl NyaTermApp {
     pub(in crate::features) fn activity_bar_context_menu_overlay(
         &mut self,

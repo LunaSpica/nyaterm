@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::models::BottomPanelMode;
+
 impl NyaTermApp {
     pub(in crate::features) fn empty_workspace_state(
         &mut self,

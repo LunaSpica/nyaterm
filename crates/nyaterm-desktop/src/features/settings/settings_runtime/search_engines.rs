@@ -1,5 +1,6 @@
 use super::*;
 
+use crate::models::SearchEngineEditorField;
 use nyaterm_core::SearchEngineConfig;
 
 impl NyaTermApp {

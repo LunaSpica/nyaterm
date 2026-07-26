@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::models::{QuickCommandSortMode, QuickCommandViewMode};
+
 pub(super) fn unix_millis_now() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)

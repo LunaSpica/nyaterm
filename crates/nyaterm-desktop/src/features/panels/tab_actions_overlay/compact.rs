@@ -1,4 +1,5 @@
 use super::*;
+use crate::models::{StartupCommandAction, TabActionsSubmenu, WorkspaceSplitDirection};
 
 impl NyaTermApp {
     pub(in crate::features) fn compact_tab_actions_menu(

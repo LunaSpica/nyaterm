@@ -1,6 +1,8 @@
 use super::state::SendCommandBarViewState;
 use super::*;
 
+use crate::send_command::SendCommandDataType;
+
 impl NyaTermApp {
     pub(super) fn send_command_bar_editor(
         &mut self,

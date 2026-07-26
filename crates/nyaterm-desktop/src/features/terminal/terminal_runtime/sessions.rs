@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::models::StartupCommandRequest;
+
 impl NyaTermApp {
     pub(in crate::features) fn schedule_startup_command(
         &mut self,

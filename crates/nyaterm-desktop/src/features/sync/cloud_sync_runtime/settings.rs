@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::models::SettingsTab;
+
 impl NyaTermApp {
     pub(in crate::features) fn update_cloud_sync_provider(
         &mut self,

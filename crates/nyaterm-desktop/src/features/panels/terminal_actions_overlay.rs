@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::models::{BottomPanelMode, RightFocus};
+
 impl NyaTermApp {
     pub(in crate::features) fn terminal_actions_overlay(
         &mut self,

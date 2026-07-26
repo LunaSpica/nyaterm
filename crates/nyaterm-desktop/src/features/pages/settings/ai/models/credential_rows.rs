@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::models::AiCredentialEditorField;
+
 impl NyaTermApp {
     pub(super) fn ai_credential_rows(
         &mut self,

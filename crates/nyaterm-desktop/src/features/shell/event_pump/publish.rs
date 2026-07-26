@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::models::MainMode;
+
 impl NyaTermApp {
     pub(in crate::features) fn publish_store_snapshots(&mut self, cx: &mut Context<Self>) {
         self.publish_store_snapshots_with_scope(cx, true);

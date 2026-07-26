@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::models::{TerminalContextMenuState, TerminalContextSubmenu, TerminalSearchMode};
+
 impl NyaTermApp {
     pub(in crate::features) fn open_terminal_context_menu(
         &mut self,

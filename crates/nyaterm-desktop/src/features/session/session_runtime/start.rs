@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::models::{MainMode, StartupCommandRequest};
+
 #[derive(Clone)]
 pub(in crate::features) struct SshSessionConfigBuildContext {
     pub(in crate::features) config_dir: PathBuf,

@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::models::{SecurityAuthTab, SecurityUnlockAction, SettingsTab};
+
 impl NyaTermApp {
     pub(in crate::features) fn security_secrets_locked(&self) -> bool {
         self.settings.has_master_password && !self.security_secrets_unlocked

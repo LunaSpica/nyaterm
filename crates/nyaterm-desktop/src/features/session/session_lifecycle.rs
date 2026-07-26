@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::models::{MainMode, StartupCommandRequest};
+
 impl NyaTermApp {
     pub(in crate::features) fn duplicate_active_session(
         &mut self,

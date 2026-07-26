@@ -1,4 +1,8 @@
 use super::*;
+use crate::models::{
+    ActivityBarContextMenuState, ActivityBarEntry, ActivityBarLayoutState, ActivityBarZone,
+    BottomPanelMode, MainMode,
+};
 use gpui::{FontWeight, Render, Window, rgba};
 use nyaterm_core::truncate_preview;
 

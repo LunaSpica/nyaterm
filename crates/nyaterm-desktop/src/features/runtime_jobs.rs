@@ -1,5 +1,7 @@
 use super::*;
 
+use nyaterm_core::{AiModelDiscovery, TranslateResult};
+
 pub(in crate::features) struct SessionStartResult {
     pub(in crate::features) request_id: String,
     pub(in crate::features) connection_name: String,

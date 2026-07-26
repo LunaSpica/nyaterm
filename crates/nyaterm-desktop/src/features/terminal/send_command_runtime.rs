@@ -1,5 +1,10 @@
 use super::*;
 
+use crate::send_command::{
+    SendCommandControlFocus, SendCommandDataType, SendCommandLineEnding, SendCommandMode,
+    SendCommandTarget,
+};
+
 impl NyaTermApp {
     fn send_command_count_label(&self) -> String {
         self.send_command_count

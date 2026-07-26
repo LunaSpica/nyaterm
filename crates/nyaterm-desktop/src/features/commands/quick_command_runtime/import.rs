@@ -1,4 +1,5 @@
 use super::*;
+use crate::models::QuickCommandImportPathPromptKind;
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::io::Read;

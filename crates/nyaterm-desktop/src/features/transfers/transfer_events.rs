@@ -1,6 +1,7 @@
 use super::*;
 use std::collections::{HashSet, VecDeque};
 
+use crate::models::{AiPreparedRequest, TransferExternalSyncPromptState};
 use nyaterm_transport::{SFTP_TRANSFER_CANCELLED, SftpFileType};
 
 const TRANSFER_EVENT_DRAIN_LIMIT: usize = 256;

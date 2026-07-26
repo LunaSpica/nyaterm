@@ -1,5 +1,8 @@
 use super::*;
 
+use crate::models::TranslationSecretDraft;
+use nyaterm_core::TranslationSettings;
+
 #[derive(Debug, Clone)]
 pub(in crate::features) struct SettingsDraftSnapshot {
     pub settings: AppSettingsSummary,

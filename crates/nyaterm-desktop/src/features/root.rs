@@ -1,4 +1,5 @@
 use super::*;
+use crate::models::{MainMode, PanelResizeSide};
 use gpui::{
     AnyElement, Context, Div, ImageSource, IntoElement, KeyDownEvent, MouseButton, MouseMoveEvent,
     MouseUpEvent, NavigationDirection, ObjectFit, Render, SharedString, Stateful, Window, div, img,

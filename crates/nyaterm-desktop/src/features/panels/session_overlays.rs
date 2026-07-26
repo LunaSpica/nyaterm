@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::models::StartupCommandAction;
+
 impl NyaTermApp {
     pub(in crate::features) fn rename_session_overlay(
         &mut self,

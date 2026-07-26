@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::models::{SecurityPasswordEditorField, SecurityPasswordEditorState};
+
 impl NyaTermApp {
     pub(in crate::features) fn security_password_editor_view(
         &mut self,

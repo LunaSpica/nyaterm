@@ -1,6 +1,11 @@
 use super::state::SendCommandBarViewState;
 use super::*;
 
+use crate::send_command::{
+    SendCommandControlFocus, SendCommandDataType, SendCommandLineEnding, SendCommandMode,
+    SendCommandTarget,
+};
+
 impl NyaTermApp {
     pub(super) fn send_command_bar_controls(
         &mut self,

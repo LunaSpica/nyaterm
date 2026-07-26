@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::models::StartupCommandRequest;
+
 pub(in crate::features) struct PendingSessionStartRegistration {
     pub(in crate::features) connection_name: String,
     pub(in crate::features) launch_config: Option<SessionLaunchConfig>,

@@ -1,5 +1,8 @@
 use super::*;
 
+use crate::models::{
+    KeywordHighlightEditorField, KeywordHighlightPathPromptKind, KeywordHighlightPathPromptResult,
+};
 use nyaterm_core::KeywordHighlightRule;
 
 const MAX_KEYWORD_HIGHLIGHT_IMPORT_BYTES: u64 = 4 * 1024 * 1024;

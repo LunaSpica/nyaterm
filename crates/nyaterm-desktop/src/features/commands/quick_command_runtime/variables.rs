@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::models::{QuickCommandVariableDef, QuickCommandVariablePromptState};
+
 impl NyaTermApp {
     pub(in crate::features) fn cancel_quick_command_variable_prompt(
         &mut self,

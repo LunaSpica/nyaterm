@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::models::SecurityAuthTab;
+
 impl NyaTermApp {
     pub(in crate::features) fn security_secret_footer(
         &self,

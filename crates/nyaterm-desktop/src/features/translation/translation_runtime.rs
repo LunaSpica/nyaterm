@@ -1,6 +1,7 @@
 use super::*;
 
 use crate::http::translation::translate_text;
+use crate::models::{TranslateInputField, TranslationDialogState, TranslationSecretDraft};
 
 const TRANSLATE_EVENT_DRAIN_LIMIT: usize = 8;
 

@@ -6,10 +6,8 @@ use nyaterm_core::{CloudSyncSettings, RiskLevel};
 use nyaterm_transport::SftpDuplicatePolicy;
 
 use crate::models::{
-    AiActionEditorField, AiActionListKind, AiCredentialEditorField, AiInputField,
-    CloudSyncConflictState, CloudSyncInputField, KeywordHighlightEditorField,
-    SearchEngineEditorField, SettingsTab, SnapshotPasswordPromptKind, SnapshotPasswordPromptState,
-    TranslateInputField,
+    CloudSyncConflictState, CloudSyncInputField, SearchEngineEditorField, SettingsTab,
+    SnapshotPasswordPromptKind, SnapshotPasswordPromptState, TranslateInputField,
 };
 use crate::theme::ThemePalette;
 use crate::widgets::{small_button, status_pill};

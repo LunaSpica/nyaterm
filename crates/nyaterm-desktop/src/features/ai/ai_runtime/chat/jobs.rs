@@ -1,5 +1,7 @@
 use super::*;
 
+use nyaterm_core::AiContext;
+
 const AI_CHAT_EVENT_DRAIN_LIMIT: usize = 256;
 
 impl NyaTermApp {

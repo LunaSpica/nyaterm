@@ -1,5 +1,10 @@
 use super::*;
 
+use crate::models::{
+    DockerConfirmAction, DockerConfirmState, DockerTab, RemoteProcessSignalConfirmState,
+    RemoteProcessSortDirection, RemoteProcessSortKey,
+};
+
 #[path = "remote_runtime/helpers.rs"]
 mod helpers;
 use helpers::*;

@@ -1,4 +1,5 @@
 use super::*;
+use crate::models::QuickSwitchItem;
 
 impl NyaTermApp {
     pub(in crate::features) fn quick_switch_state(

@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::models::AiDetectedErrorState;
+
 #[derive(Clone, Copy)]
 enum SessionOutputDrainStep {
     SidebandOnly { chunk_duration: Duration },

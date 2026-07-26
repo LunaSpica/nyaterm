@@ -1,5 +1,9 @@
 use super::*;
 
+use crate::models::{
+    SecurityAuthTab, SecurityDeleteConfirmState, SecurityKeyEditorField, SecurityKeyEditorState,
+};
+
 impl NyaTermApp {
     pub(in crate::features) fn open_security_key_editor(
         &mut self,

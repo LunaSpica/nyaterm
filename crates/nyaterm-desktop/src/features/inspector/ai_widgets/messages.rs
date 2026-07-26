@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::models::AiMessageMenuState;
+
 fn ai_message_menu_position(
     x: f32,
     y: f32,

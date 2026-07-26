@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::models::{BottomPanelMode, StartupCommandAction};
+
 impl NyaTermApp {
     pub(in crate::features) fn handle_global_shortcut(
         &mut self,

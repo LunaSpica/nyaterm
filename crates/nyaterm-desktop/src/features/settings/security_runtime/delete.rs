@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::models::SecurityAuthTab;
+
 impl NyaTermApp {
     pub(in crate::features) fn cancel_security_delete(&mut self, cx: &mut Context<Self>) {
         self.security_delete_confirm = None;

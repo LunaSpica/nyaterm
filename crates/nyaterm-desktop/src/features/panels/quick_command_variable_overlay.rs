@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::models::QuickCommandVariablePromptState;
+
 impl NyaTermApp {
     pub(in crate::features) fn quick_command_variable_prompt_overlay(
         &mut self,

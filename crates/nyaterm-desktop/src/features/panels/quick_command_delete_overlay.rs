@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::models::QuickCommandDeleteState;
+
 impl NyaTermApp {
     pub(in crate::features) fn quick_command_delete_overlay(
         &mut self,

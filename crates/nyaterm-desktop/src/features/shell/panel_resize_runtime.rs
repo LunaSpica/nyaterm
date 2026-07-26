@@ -1,4 +1,8 @@
 use super::*;
+use crate::models::{
+    BottomPanelMode, BottomPanelResizeState, PanelResizeSide, PanelResizeState,
+    TransferHeightResizeState,
+};
 use gpui::{MouseDownEvent, MouseMoveEvent, MouseUpEvent};
 
 const LEFT_PANEL_MIN: f32 = 160.;

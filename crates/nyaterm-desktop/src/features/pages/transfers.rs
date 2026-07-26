@@ -20,11 +20,10 @@ use crate::models::{
     TransferBrowserSortDirection, TransferBrowserUploadMenuState, TransferDeleteState,
     TransferEditorField, TransferEditorState, TransferEditorWorkspaceState,
     TransferExternalSyncPromptState, TransferInputField, TransferJobEvent, TransferJobKind,
-    TransferJobMenuState, TransferJobOutput, TransferJobResult, TransferJobState,
-    TransferJobStatus, TransferMoveState, TransferNewFileState, TransferNewFolderState,
-    TransferNewSymlinkState, TransferPathPromptKind, TransferPermissionTarget,
-    TransferPropertiesField, TransferPropertiesState, TransferRenameState, TransferSymlinkField,
-    TransferUnknownFileState,
+    TransferJobOutput, TransferJobResult, TransferJobState, TransferJobStatus, TransferMoveState,
+    TransferNewFileState, TransferNewFolderState, TransferNewSymlinkState, TransferPathPromptKind,
+    TransferPermissionTarget, TransferPropertiesField, TransferPropertiesState,
+    TransferRenameState, TransferSymlinkField, TransferUnknownFileState,
 };
 use crate::widgets::{small_button, status_pill};
 use nyaterm_core::{AiCustomActionConfig, ConnectionStore};

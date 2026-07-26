@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::models::ActiveSessionMenuState;
+
 impl NyaTermApp {
     pub(in crate::features) fn sorted_active_sessions(&self) -> Vec<SessionInfo> {
         let mut sessions = self.ordered_sessions();

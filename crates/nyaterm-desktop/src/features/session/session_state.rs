@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::models::MainMode;
+
 impl NyaTermApp {
     pub(in crate::features) fn session_display_name_by_info(
         &self,

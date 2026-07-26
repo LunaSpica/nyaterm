@@ -1,5 +1,11 @@
 use super::*;
 
+use crate::models::{
+    CloudSyncSecretDraft, ConfigPathPromptKind, ConfigPathPromptResult, SnapshotPasswordPromptKind,
+    SnapshotPasswordPromptState, StoreStatus, TranslationSecretDraft,
+};
+use nyaterm_core::TranslationSettings;
+
 impl NyaTermApp {
     pub(in crate::features) fn prompt_config_export(&mut self, cx: &mut Context<Self>) {
         if self.config_path_prompt.is_some() {

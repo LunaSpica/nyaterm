@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::models::{TransferJobDeleteState, TransferJobMenuState};
+
 impl NyaTermApp {
     pub(in crate::features) fn select_transfer_job(
         &mut self,

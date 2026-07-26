@@ -1,6 +1,8 @@
 use super::*;
 use futures::StreamExt;
 
+use crate::models::TerminalSearchMode;
+
 #[path = "event_pump/bridge.rs"]
 mod bridge;
 #[path = "event_pump/helpers.rs"]

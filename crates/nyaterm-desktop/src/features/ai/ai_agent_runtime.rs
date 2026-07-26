@@ -1,6 +1,9 @@
 use super::*;
 
-use nyaterm_core::AgentCapturedOutput;
+use nyaterm_core::{
+    AgentCapturedOutput, AppendAiAuditRequest, build_agent_capture_command,
+    build_observation_message,
+};
 use nyaterm_transport::run_local_command;
 
 impl NyaTermApp {

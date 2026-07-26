@@ -1,4 +1,5 @@
 use super::*;
+use crate::models::{TransferPathPromptKind, TransferPathPromptResult};
 use nyaterm_transport::{
     TrzszAction, TrzszDetector, TrzszDownloadEngine, TrzszDownloadEvent, TrzszMode,
     TrzszOutputEvent, TrzszProtocolFrame, TrzszProtocolStream, TrzszTransferEvent,

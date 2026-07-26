@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::models::{CredentialSuggestionState, PendingCredentialAutofill};
+
 const CREDENTIAL_AUTOFILL_INPUT_TAIL_LIMIT: usize = 4096;
 const RECENT_PROMPT_TTL_MS: u64 = 30_000;
 const PENDING_PASSWORD_TTL_MS: u64 = 60_000;

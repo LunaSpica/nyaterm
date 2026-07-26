@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::models::{QuickCommandRowMenuState, QuickCommandViewMode};
+
 impl NyaTermApp {
     pub(super) fn quick_command_items(
         &mut self,

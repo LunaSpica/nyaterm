@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::models::{QuickCommandCategoryDeleteState, QuickCommandCategoryRenameState};
+
 impl NyaTermApp {
     pub(in crate::features) fn quick_command_category_delete_overlay(
         &mut self,

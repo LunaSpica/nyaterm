@@ -5,6 +5,8 @@ use nyaterm_core::{
     terminal_resize_geometry_for_size_with_insets_and_scale, terminal_snapped_cell_height,
 };
 
+use crate::models::TerminalPerformanceOverlay;
+
 pub(in crate::features) fn terminal_scroll_track_ratio(
     bounds: gpui::Bounds<gpui::Pixels>,
     pointer_y: gpui::Pixels,

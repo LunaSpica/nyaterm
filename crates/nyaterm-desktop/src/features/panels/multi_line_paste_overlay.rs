@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::models::MultiLinePasteDraft;
+
 impl NyaTermApp {
     pub(in crate::features) fn multi_line_paste_overlay(
         &mut self,

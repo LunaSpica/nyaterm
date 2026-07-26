@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::models::SessionRuntimeMetadata;
+
 impl NyaTermApp {
     pub(in crate::features) fn register_session(
         &mut self,

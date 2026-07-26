@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::models::SyncInputGroup;
+
 impl NyaTermApp {
     pub(in crate::features) fn open_sync_groups(
         &mut self,

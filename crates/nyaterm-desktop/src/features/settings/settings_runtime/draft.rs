@@ -1,5 +1,7 @@
 use super::*;
 use crate::features::app_state::SettingsDraftSnapshot;
+use crate::models::{CloudSyncSecretDraft, MainMode, TranslationSecretDraft};
+use nyaterm_core::TranslationSettings;
 
 impl NyaTermApp {
     pub(in crate::features) fn begin_settings_draft(&mut self) {

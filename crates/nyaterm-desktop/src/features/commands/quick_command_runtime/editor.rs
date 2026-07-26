@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::models::QuickCommandEditorField;
+
 impl NyaTermApp {
     pub(in crate::features) fn focus_quick_command_editor_field(
         &mut self,

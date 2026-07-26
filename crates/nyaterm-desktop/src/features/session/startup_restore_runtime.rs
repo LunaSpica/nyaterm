@@ -1,4 +1,5 @@
 use super::*;
+use crate::models::{MainMode, WorkspacePaneNode, WorkspaceSplitDirection};
 use nyaterm_core::{RestorableOpenTab, RestorablePaneNode, RestorableWorkspacePaneNode};
 
 impl NyaTermApp {

@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::models::{AiActionEditorField, AiActionListKind};
+
 impl NyaTermApp {
     pub(in crate::features) fn ai_rules_settings_section(
         &mut self,

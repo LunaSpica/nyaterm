@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::models::QuickCommandImportPathPromptKind;
+
 pub(super) const MAX_QUICK_COMMAND_IMPORT_BYTES: u64 = 4 * 1024 * 1024;
 
 pub(super) fn import_quick_commands_from_path(

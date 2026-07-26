@@ -1,5 +1,10 @@
 use super::*;
 
+use nyaterm_core::{
+    CLOUD_SYNC_HISTORY_LIMIT, LocalCloudSyncOptions, append_cloud_sync_history,
+    pull_local_snapshot, push_local_snapshot, read_cloud_sync_history,
+};
+
 impl NyaTermApp {
     pub(in crate::features) fn run_provider_cloud_sync_test(&mut self, cx: &mut Context<Self>) {
         if self.block_cloud_sync_for_settings_draft(cx) {

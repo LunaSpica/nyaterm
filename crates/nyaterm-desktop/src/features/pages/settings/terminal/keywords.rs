@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::models::KeywordHighlightEditorField;
+
 impl NyaTermApp {
     pub(in crate::features) fn keyword_highlights_settings_section(
         &mut self,

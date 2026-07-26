@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::models::{QuickCommandSortMode, QuickCommandViewMode};
+
 impl NyaTermApp {
     pub(in crate::features) fn close_quick_command_toolbar_popovers(&mut self) {
         self.quick_command_sort_menu_open = false;

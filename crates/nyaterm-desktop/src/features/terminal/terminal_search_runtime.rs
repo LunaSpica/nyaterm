@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::models::{RecordingHistorySearchKey, RecordingWriteEvent, TerminalSearchMode};
+
 impl NyaTermApp {
     pub(in crate::features) fn open_terminal_search(
         &mut self,

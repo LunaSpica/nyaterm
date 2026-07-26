@@ -1,4 +1,5 @@
 use super::*;
+use crate::models::{TransferInputField, TransferPathPromptKind, TransferPathPromptResult};
 
 impl NyaTermApp {
     pub(in crate::features) fn prompt_transfer_download_path_setting(

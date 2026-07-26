@@ -8,6 +8,7 @@ use crate::features::terminal_selection_runtime::{
     terminal_gutter_metrics, terminal_line_number_digits,
 };
 use crate::features::terminal_surface::TERMINAL_SCROLLBAR_COLUMN_WIDTH;
+use crate::models::TerminalPerformanceOverlay;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeMap, BTreeSet};
 use std::hash::{Hash, Hasher};

@@ -1,5 +1,6 @@
 use super::*;
 
+use crate::models::{DiagnosticsPathPromptKind, DiagnosticsPathPromptResult};
 use nyaterm_core::{DiagnosticsExportOptions, DiagnosticsRuntimeSnapshot};
 
 impl NyaTermApp {

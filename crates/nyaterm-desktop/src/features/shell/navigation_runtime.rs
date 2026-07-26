@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::models::{MainMode, RightFocus};
+
 impl NyaTermApp {
     pub(in crate::features) fn select(&mut self, item: NavItem, cx: &mut Context<Self>) {
         self.open_panel(item, cx);

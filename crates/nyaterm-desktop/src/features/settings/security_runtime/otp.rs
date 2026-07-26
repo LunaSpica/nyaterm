@@ -1,5 +1,9 @@
 use super::*;
 
+use crate::models::{
+    SecurityAuthTab, SecurityDeleteConfirmState, SecurityOtpEditorField, SecurityOtpEditorState,
+};
+
 impl NyaTermApp {
     pub(in crate::features) fn import_security_otp_from_qr(&mut self, cx: &mut Context<Self>) {
         if self.security_otp_qr_importing || self.security_otp_editor.is_some() {

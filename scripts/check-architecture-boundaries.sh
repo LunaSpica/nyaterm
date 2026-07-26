@@ -118,7 +118,242 @@ check_no_matches \
 
 check_no_matches \
   "low-frequency core helpers must stay out of features/prelude.rs" \
-  '(^|[,{[:space:]])(AgentApprovalDecision|AgentCapturedOutput|AiChatStreamDelta|CloudSyncResult|DiagnosticsExportOptions|DiagnosticsRuntimeSnapshot|KeywordHighlightRule|SearchEngineConfig|TerminalMouseReportEligibility|TerminalResizeGeometry|TerminalViewportInsets|terminal_mouse_report_should_send|terminal_resize_geometry_for_size_with_insets|terminal_resize_geometry_for_size_with_insets_and_scale|terminal_snapped_cell_height)([},[:space:]]|$)' \
+  '(^|[,{[:space:]])(AgentApprovalDecision|AgentCapturedOutput|AiChatStreamDelta|AiContext|AiModelDiscovery|AiSession|AppendAiAuditRequest|CLOUD_SYNC_HISTORY_LIMIT|CloudSyncResult|DiagnosticsExportOptions|DiagnosticsRuntimeSnapshot|GiteeSnippetHttpBackend|GithubGistHttpBackend|KeywordHighlightRule|LocalCloudSyncOptions|SearchEngineConfig|SnippetRemote|TerminalMouseReportEligibility|TerminalResizeGeometry|TerminalViewportInsets|TranslateResult|TranslationSettings|agent_response_action|ai_model_id_for_credential|ai_model_id_for_provider|append_cloud_sync_history|assess_agent_command_risk|build_agent_capture_command|build_observation_message|decide_agent_command_execution|merge_model_discoveries|parse_agent_model_output|parse_agent_tool_call|parse_model_output|pull_local_snapshot|pull_snapshot_with_remote|push_local_snapshot|push_snapshot_with_remote|read_cloud_sync_history|redact_context|redact_sensitive_text|terminal_mouse_report_should_send|terminal_resize_geometry_for_size_with_insets|terminal_resize_geometry_for_size_with_insets_and_scale|terminal_snapped_cell_height)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
+  "cloud sync HTTP backend helpers must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(NativeAliyunDriveRemote|NativeGoogleDriveRemote|NativeOneDriveRemote|NativeS3Remote|NativeSnippetHttpClient|NativeWebdavRemote|run_github_gist_device_flow)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
+  "AI HTTP facade helpers must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(complete_native_chat|discover_openai_compatible_models|stream_native_chat)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
+  "low-frequency sync UI models must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(GithubGistAuthEvent|GithubGistAuthJobEvent|GithubGistAuthState)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
+  "low-frequency cloud sync prompt UI models must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(CloudSyncConflictState|CloudSyncSecretDraft)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
+  "low-frequency translation UI models must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(TranslateInputField|TranslationDialogState|TranslationSecretDraft)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
+  "low-frequency settings UI models must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(SearchEngineEditorField|SettingsTab)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
+  "low-frequency chrome UI models must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(ActiveSessionMenuState|ActivityBarContextMenuState|ActivityBarEntry|ActivityBarLayoutState|ActivityBarZone|BottomPanelMode|MainMode|RightFocus)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
+  "low-frequency terminal action-link UI models must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(ActionLinkMenuAction|ActionLinkMenuState|ActionLinkTooltipState)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
+  "low-frequency diagnostics prompt UI models must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(DiagnosticsPathPromptKind|DiagnosticsPathPromptResult)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
+  "low-frequency remote Docker UI models must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(DockerConfirmAction|DockerConfirmState|DockerTab)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
+  "low-frequency remote process UI models must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(RemoteProcessSignalConfirmState|RemoteProcessSortDirection|RemoteProcessSortKey)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
+  "low-frequency layout resize UI models must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(BottomPanelResizeState|PanelResizeSide|PanelResizeState|PanelStackResizeState|TransferHeightResizeState|WorkspaceSplitResizeState)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
+  "low-frequency chrome menu UI models must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(TabActionsSubmenu|TitleMenu|TitleMenuSubmenu)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
+  "low-frequency quick switch UI model must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(QuickSwitchItem)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
+  "low-frequency keyword-highlight UI models must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(KeywordHighlightEditorField|KeywordHighlightPathPromptKind|KeywordHighlightPathPromptResult)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
+  "low-frequency recording path prompt UI models must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(RecordingPathPromptKind|RecordingPathPromptResult)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
+  "low-frequency quick-command import prompt UI models must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(QuickCommandImportPathPromptKind|QuickCommandImportPathPromptResult)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
+  "low-frequency recording pipeline UI models must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(RecordingHistorySearchEvent|RecordingHistorySearchKey|RecordingWriteEvent|RecordingWritePipeline)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
+  "low-frequency quick-command menu dialog UI models must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(QuickCommandCategoryDeleteState|QuickCommandCategoryMenuState|QuickCommandCategoryRenameState|QuickCommandDeleteState|QuickCommandDetailsState|QuickCommandRowMenuState)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
+  "low-frequency quick-command view/sort UI modes must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(QuickCommandSortMode|QuickCommandViewMode)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
+  "low-frequency transfer path prompt UI models must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(TransferPathPromptKind|TransferPathPromptResult)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
+  "low-frequency transfer browser UI models must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(TransferBrowserColumnResizeState|TransferBrowserColumnWidths|TransferBrowserContextMenuState|TransferBrowserDragSelectionState|TransferBrowserFavoritesMenuState|TransferBrowserPendingRenameState|TransferBrowserSessionCacheState|TransferBrowserUploadMenuState)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
+  "low-frequency transfer file-operation UI models must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(TransferNewFileState|TransferNewFolderState|TransferNewSymlinkState|TransferPropertiesState|TransferRenameState|TransferUnknownFileState)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
+  "low-frequency transfer operation UI models must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(TransferDeleteState|TransferExternalSyncPromptState|TransferJobDeleteState|TransferJobMenuState|TransferMoveState)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
+  "low-frequency transfer editor workspace UI model must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(TransferEditorWorkspaceState)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
+  "low-frequency transfer input focus UI model must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(TransferInputField)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
+  "low-frequency transfer browser sort UI models must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(TransferBrowserSortColumn|TransferBrowserSortDirection)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
+  "low-frequency snapshot password/store status UI models must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(SnapshotPasswordPromptKind|SnapshotPasswordPromptState|StoreStatus)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
+  "low-frequency sync input and paste draft UI models must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(MultiLinePasteDraft|SyncInputGroup)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
+  "low-frequency config path prompt UI models must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(ConfigPathPromptKind|ConfigPathPromptResult)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
+  "low-frequency AI prepared request/menu UI models must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(AiMessageMenuState|AiPreparedRequest)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
+  "low-frequency AI settings UI models must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(AiActionEditorField|AiActionListKind|AiCredentialEditorField|AiInputField)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
+  "low-frequency command suggestion UI models must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(CommandSuggestionItem|CommandSuggestionState)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
+  "low-frequency AI detected-error UI model must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(AiDetectedErrorState)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
+  "low-frequency quick-command editor UI models must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(QuickCommandEditorField|QuickCommandEditorState|QuickCommandVariableDef|QuickCommandVariablePromptState)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
+  "low-frequency security UI models must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(SecurityAuthTab|SecurityCredentialEditorField|SecurityCredentialEditorState|SecurityDeleteConfirmState|SecurityKeyEditorField|SecurityKeyEditorState|SecurityOtpEditorField|SecurityOtpEditorState|SecurityPasswordEditorField|SecurityPasswordEditorState|SecurityUnlockAction)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
+  "low-frequency credential autofill UI models must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(CredentialSuggestionState|PendingCredentialAutofill)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
+  "low-frequency terminal context menu UI models must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(TerminalContextMenuState|TerminalContextSubmenu)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
+  "low-frequency terminal paint policy UI model must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(EffectiveTerminalPaintPolicy)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
+  "low-frequency terminal performance overlay UI model must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(TerminalPerformanceOverlay)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
+  "low-frequency terminal search UI model must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(TerminalSearchMode)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
+  "low-frequency session runtime models must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(SessionEventBridge|SessionRuntimeMetadata)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
+  "low-frequency startup command request model must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(StartupCommandAction|StartupCommandRequest)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
+  "low-frequency workspace smart split UI model must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(SmartSplitMode)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
+  "low-frequency workspace tab split UI model must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(SplitEdge|TabDockZone|TerminalWindowNode|WorkspacePaneNode|WorkspaceSplitDirection)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
+  "low-frequency workspace split compatibility alias must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(WorkspaceSplitState)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
+  "low-frequency send-command UI models must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(SendCommandControlFocus|SendCommandDataType|SendCommandLineEnding|SendCommandMode|SendCommandTarget)([},[:space:]]|$)' \
   crates/nyaterm-desktop/src/features/prelude.rs
 
 # Keep the terminal GPUI crate root's public surface explicit. These modules

@@ -1,5 +1,8 @@
 use super::*;
 
+use crate::models::{AiActionEditorField, AiActionListKind};
+use nyaterm_core::{ai_model_id_for_credential, ai_model_id_for_provider};
+
 impl NyaTermApp {
     pub(in crate::features) fn pending_ai_settings(&self) -> AiSettings {
         let mut next = self.ai_settings.clone();

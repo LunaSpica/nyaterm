@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::models::AiInputField;
+
 impl NyaTermApp {
     pub(in crate::features) fn ai_input(
         &mut self,

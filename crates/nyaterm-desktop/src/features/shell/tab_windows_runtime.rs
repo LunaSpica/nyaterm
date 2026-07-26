@@ -1,5 +1,9 @@
 use super::*;
 
+use crate::models::{
+    MainMode, SmartSplitMode, SplitEdge, TabDockZone, TerminalWindowNode, WorkspaceSplitDirection,
+};
+
 impl NyaTermApp {
     /// Ensure every live session appears in the multi-leaf layout once it is enabled.
     pub(in crate::features) fn reconcile_terminal_windows(&mut self) {

@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::models::{SnapshotPasswordPromptKind, SnapshotPasswordPromptState};
+
 impl NyaTermApp {
     pub(in crate::features) fn duplicate_prompt_banner(
         &mut self,

@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::models::QuickCommandImportPathPromptKind;
+
 impl NyaTermApp {
     pub(in crate::features) fn quick_command_import_overlay(
         &mut self,

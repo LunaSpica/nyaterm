@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::models::{RecordingPathPromptKind, RecordingPathPromptResult};
+
 impl NyaTermApp {
     pub(in crate::features) fn prompt_recording_path(
         &mut self,

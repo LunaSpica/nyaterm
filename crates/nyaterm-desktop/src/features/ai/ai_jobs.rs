@@ -1,6 +1,11 @@
 use super::*;
 
-use nyaterm_core::{AgentApprovalDecision, AiChatStreamDelta};
+use crate::http::ai::{complete_native_chat, stream_native_chat};
+use nyaterm_core::{
+    AgentApprovalDecision, AiChatStreamDelta, agent_response_action, assess_agent_command_risk,
+    decide_agent_command_execution, parse_agent_model_output, parse_agent_tool_call,
+    parse_model_output, redact_context, redact_sensitive_text,
+};
 
 pub(in crate::features) fn is_agent_command_card(card: &AiCommandCard) -> bool {
     card.id.starts_with("agent-")

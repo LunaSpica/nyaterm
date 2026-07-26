@@ -3,7 +3,7 @@
 This document records the current GPUI migration boundaries and debt in
 `nyaterm-desktop`. Keep dynamic counts here instead of in `AGENTS.md`.
 
-Last updated from the working tree on 2026-07-25.
+Last updated from the working tree on 2026-07-26.
 
 ## Current Metrics
 
@@ -13,7 +13,7 @@ Last updated from the working tree on 2026-07-25.
 | `impl NyaTermApp` blocks | 236 | Spread across 233 files under `crates/nyaterm-desktop/src`. |
 | `#[path = "..."]` declarations in desktop | 306 | Historical migration debt; do not add new occurrences. |
 | `use super::*` imports in desktop | 354 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
-| `features/prelude.rs` rough exported-token count | 425 | Still a broad shared prelude; twenty low-frequency transport/core exports are now explicit imports. |
+| `features/prelude.rs` rough exported-token count | 247 | Still a broad shared prelude; one hundred ninety-eight low-frequency transport/core/http/model exports are now explicit imports. |
 | Entity Store structs | 13 | Includes store handles/runtime stores and domain stores. |
 | Snapshot structs | 9 | Workspace, session, overlay, settings, connections, transfer, AI, cloud sync, remote ops. |
 | `replace_snapshot` methods | 9 | Entity stores are still primarily snapshot projections. |
@@ -219,6 +219,309 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   moved out of `features/prelude.rs` and imported by their owning modules. This
   keeps background job and diagnostics dependencies explicit without changing
   job execution or data formats.
+- Ten low-frequency AI redaction, model-output parsing, and agent command
+  helpers were moved out of `features/prelude.rs` and imported explicitly by
+  the AI runtime/job modules. This is import plumbing only; AI job execution,
+  audit persistence, terminal command capture semantics, and model-output
+  parsing behavior are unchanged.
+- Nineteen low-frequency cloud-sync local snapshot/history helpers,
+  snippet backends, and native HTTP remote adapters were moved out of
+  `features/prelude.rs` and imported explicitly by the sync/app-state modules.
+  This is import plumbing only; cloud sync execution, backup compatibility,
+  serialized fields, history format, and remote protocol behavior are
+  unchanged.
+- Six low-frequency AI model discovery/chat HTTP facade helpers and model ID
+  helpers were moved out of `features/prelude.rs` and imported explicitly by
+  the AI runtime/job modules. This is import plumbing only; AI request
+  execution, model discovery behavior, saved AI settings fields, and chat
+  history persistence are unchanged.
+- Four additional AI context, session-history, audit-request, and model
+  discovery merge symbols were moved out of `features/prelude.rs` and imported
+  explicitly by the AI/app-state/quick-command modules. This is import plumbing
+  only; AI context construction, audit writes, session history loading, and
+  model discovery merge behavior are unchanged.
+- Three low-frequency GitHub Gist auth UI model types were moved out of
+  `features/prelude.rs` and imported explicitly by app-state and cloud sync auth
+  runtime modules. This is import plumbing only; GitHub Gist auth event
+  handling, token draft updates, and sync provider behavior are unchanged.
+- Two low-frequency cloud sync prompt UI model types were moved out of
+  `features/prelude.rs` and imported explicitly by app-state, settings draft,
+  config runtime, and cloud sync prompt modules. This is import plumbing only;
+  secret-draft masking/clearing, conflict prompt behavior, cloud sync execution,
+  serialized fields, encryption, and backup compatibility are unchanged.
+- Five low-frequency translation settings/result/UI draft symbols were moved
+  out of `features/prelude.rs` and imported explicitly by app-state, settings,
+  runtime-job, and translation modules. This is import plumbing only;
+  translation settings persistence fields, secret-draft handling, and
+  translation job execution are unchanged.
+- The low-frequency search-engine editor field UI model was moved out of
+  `features/prelude.rs` and imported explicitly by app-state and settings
+  runtime modules. This is import plumbing only; terminal search-engine
+  settings persistence and editor behavior are unchanged.
+- The low-frequency settings-tab UI model was moved out of
+  `features/prelude.rs` and imported explicitly by app-state, settings page,
+  security unlock, cloud sync, AI inspector, and panel-stack modules. This is
+  import plumbing only; active settings tab selection, settings navigation, and
+  settings persistence behavior are unchanged.
+- Five low-frequency activity-bar and active-session menu UI model types were
+  moved out of `features/prelude.rs` and imported explicitly by app-state,
+  shell, sidebar, and activity-bar modules. This is import plumbing only;
+  persisted activity-bar setting fields and chrome interaction behavior are
+  unchanged.
+- The low-frequency right-panel focus UI model was moved out of
+  `features/prelude.rs` and imported explicitly by app-state, shell navigation,
+  panel stack, activity bar, and terminal actions overlay modules. This is
+  import plumbing only; right-panel selection, recording focus, and chrome
+  interaction behavior are unchanged.
+- Three low-frequency terminal action-link tooltip/menu UI model types were
+  moved out of `features/prelude.rs` and imported explicitly by app-state and
+  terminal selection runtime modules. This is import plumbing only; terminal
+  parser, snapshot, protocol, selection matching, and action-link interaction
+  behavior are unchanged.
+- Two low-frequency diagnostics path prompt UI model types were moved out of
+  `features/prelude.rs` and imported explicitly by app-state and diagnostics
+  runtime modules. This is import plumbing only; diagnostics archive export
+  options, path prompt behavior, and archive contents are unchanged.
+- Three low-frequency remote Docker UI model types were moved out of
+  `features/prelude.rs` and imported explicitly by app-state, remote runtime,
+  and remote page modules. This is import plumbing only; Docker command
+  execution, SSH transport, and Docker overview/action behavior are unchanged.
+- Three low-frequency remote process UI model types were moved out of
+  `features/prelude.rs` and imported explicitly by app-state, remote runtime,
+  and remote page modules. This is import plumbing only; remote process polling,
+  signal dispatch, sorting behavior, and SSH transport behavior are unchanged.
+- Six low-frequency layout resize UI model types were moved out of
+  `features/prelude.rs` and imported explicitly by app-state, root layout, and
+  shell resize runtime modules. This is import plumbing only; panel sizing,
+  bottom-panel/transfer resize, workspace split resize, layout persistence, and
+  drag interaction behavior are unchanged.
+- The low-frequency bottom-panel mode UI model was moved out of
+  `features/prelude.rs` and imported explicitly by app-state, layout, panel,
+  and shell runtime modules. This is import plumbing only; quick-command and
+  command-send visibility, panel height persistence, and shortcut behavior are
+  unchanged.
+- The low-frequency main-mode UI model was moved out of `features/prelude.rs`
+  and imported explicitly by app-state, settings-window, root, session,
+  terminal UI routing, and shell navigation modules. This is import plumbing
+  only; workspace/page switching, snapshot labels, session focus routing, and
+  settings-window behavior are unchanged.
+- Three low-frequency chrome menu UI model types were moved out of
+  `features/prelude.rs` and imported explicitly by app-state, title-bar menu,
+  and tab-actions overlay modules. This is import plumbing only; title menu
+  opening, submenu positioning, tab action menus, and session action behavior
+  are unchanged.
+- The low-frequency quick switch item UI model was moved out of
+  `features/prelude.rs` and imported explicitly by the quick switch runtime and
+  overlay modules. This is import plumbing only; `OverlayStore` quick switch
+  ownership, item filtering, selected-index clamping, and launch behavior are
+  unchanged.
+- Three low-frequency keyword-highlight settings/import UI model types were
+  moved out of `features/prelude.rs` and imported explicitly by app-state,
+  settings, and keybinding runtime modules. This is import plumbing only;
+  keyword-highlight settings persistence fields, import path-prompt handling,
+  and rule import/merge behavior are unchanged.
+- Two low-frequency recording path-prompt UI model types were moved out of
+  `features/prelude.rs` and imported explicitly by app-state, recording runtime,
+  and recording panel modules. This is import plumbing only; recording manager
+  start/stop behavior, transcript save behavior, and selected path handling are
+  unchanged.
+- Two low-frequency quick-command import path-prompt UI model types were moved
+  out of `features/prelude.rs` and imported explicitly by app-state,
+  quick-command import runtime, and quick-command import overlay modules. This
+  is import plumbing only; quick-command import parsing, merge behavior, saved
+  quick-command fields, and persistence calls are unchanged.
+- Four low-frequency recording pipeline and terminal-history search UI model
+  types were moved out of `features/prelude.rs` and imported explicitly by
+  app-state and terminal search runtime modules. This is import plumbing only;
+  recording writer lifecycle, history-search request polling, and terminal
+  search result handling are unchanged.
+- Six low-frequency quick-command menu/dialog UI state types were moved out of
+  `features/prelude.rs` and imported explicitly by app-state, quick-command
+  dialog runtime, and quick-command panel/overlay modules. This is import
+  plumbing only; quick-command editor opening, delete confirmations, details
+  placement, category rename/delete state, and row/category menu behavior are
+  unchanged.
+- Two low-frequency quick-command view/sort UI mode types were moved out of
+  `features/prelude.rs` and imported explicitly by app-state, quick-command
+  runtime helpers/catalog, and quick-command panel modules. This is import
+  plumbing only; persisted quick-command UI setting strings, sort ordering, view
+  layout selection, and settings save behavior are unchanged.
+- Two low-frequency transfer path prompt UI model types were moved out of
+  `features/prelude.rs` and imported explicitly by app-state, transfer path
+  runtime, and trzsz runtime modules. This is import plumbing only; native path
+  picker options, prompt status strings, selected-path handling, and upload and
+  download dispatch behavior are unchanged.
+- Eight low-frequency transfer browser transient UI state types were moved out
+  of `features/prelude.rs` and imported explicitly by app-state and the transfer
+  page modules. This is import plumbing only; browser column width defaults,
+  drag selection, context/favorites/upload menus, pending rename, per-session
+  cache, and transfer browser interaction behavior are unchanged.
+- Six low-frequency transfer file-operation UI state types were moved out of
+  `features/prelude.rs` and imported explicitly by app-state and the transfer
+  page modules. This is import plumbing only; new file/folder/symlink dialogs,
+  rename state, properties editing draft, unknown-file prompts, and transfer
+  file-operation behavior are unchanged.
+- Five low-frequency transfer operation UI state types were moved out of
+  `features/prelude.rs` and imported explicitly by app-state, transfer runtime,
+  and transfer page modules. This is import plumbing only; transfer delete/move
+  confirmations, job menu/delete prompts, external-sync prompts, and transfer
+  operation behavior are unchanged.
+- The low-frequency transfer editor workspace UI state type was moved out of
+  `features/prelude.rs` and imported explicitly by app-state and the transfer
+  page module. This is import plumbing only; editor tab tracking, active-tab
+  selection, and remote editor lifecycle behavior are unchanged.
+- The low-frequency transfer input focus UI model was moved out of
+  `features/prelude.rs` and imported explicitly by app-state, transfer path
+  runtime, terminal input adapter, and the transfer page module. This is import
+  plumbing only; transfer path focus selection and text-entry behavior are
+  unchanged.
+- Two low-frequency transfer browser sort UI models were moved out of
+  `features/prelude.rs` and imported explicitly by app-state and the transfer
+  page module. This is import plumbing only; browser sort column selection,
+  default direction, and entry ordering behavior are unchanged.
+- Three low-frequency snapshot password prompt/store status UI models were
+  moved out of `features/prelude.rs` and imported explicitly by app-state,
+  settings, sync prompt, layout prompt, and settings page modules. This is
+  import plumbing only; .nya snapshot prompt flow, store status strings, and
+  config/cloud-sync execution behavior are unchanged.
+- Two low-frequency sync-input and multi-line-paste UI draft models were moved
+  out of `features/prelude.rs` and imported explicitly by app-state,
+  sync-input, terminal paste, and paste overlay modules. This is import
+  plumbing only; sync group membership behavior, paste normalization, and
+  multi-line paste confirmation behavior are unchanged.
+- Two low-frequency config path prompt UI models were moved out of
+  `features/prelude.rs` and imported explicitly by app-state and settings
+  config runtime modules. This is import plumbing only; config backup/import
+  path prompt state, selected-path handling, and backup/import execution
+  behavior are unchanged.
+- Two low-frequency AI prepared-request/message-menu UI models were moved out
+  of `features/prelude.rs` and imported explicitly by app-state, AI ask,
+  transfer event, and AI message-menu modules. This is import plumbing only; AI
+  request preparation, file-action handoff, and message context-menu behavior
+  are unchanged.
+- Four low-frequency AI settings/action editor UI models were moved out of
+  `features/prelude.rs` and imported explicitly by app-state, AI settings
+  runtime, terminal input, and AI settings view modules. This is import
+  plumbing only; AI profile fields, action editing, credential editing, and
+  request user-agent input behavior are unchanged.
+- Two low-frequency command suggestion UI state models were moved out of
+  `features/prelude.rs` and imported explicitly by app-state and command
+  suggestion runtime modules. This is import plumbing only; command suggestion
+  matching, rendering state, and terminal input tracking behavior are
+  unchanged.
+- The low-frequency AI detected-error UI state model was moved out of
+  `features/prelude.rs` and imported explicitly by app-state, AI ask, and
+  session event-pump modules. This is import plumbing only; terminal error
+  detection, AI analysis request preparation, and notice dismissal behavior are
+  unchanged.
+- Four low-frequency quick-command editor and variable-prompt UI models were
+  moved out of `features/prelude.rs` and imported explicitly by app-state,
+  quick-command runtime, and quick-command overlay modules. This is import
+  plumbing only; quick-command editing, variable parsing, prompt submission,
+  and command execution behavior are unchanged.
+- Eleven low-frequency security panel/editor UI models were moved out of
+  `features/prelude.rs` and imported explicitly by app-state, security runtime,
+  security panel, editor view, and panel-stack modules. This is import plumbing
+  only; credential, SSH key, OTP, password storage formats, secret handling,
+  unlock flow, and delete/save execution behavior are unchanged.
+- Two low-frequency credential-autofill suggestion/pending UI state models were
+  moved out of `features/prelude.rs` and imported explicitly by app-state and
+  credential-autofill runtime modules. This is import plumbing only; prompt
+  detection, match selection, saved credential storage, and autofill dispatch
+  behavior are unchanged.
+- Two low-frequency terminal context-menu UI state models were moved out of
+  `features/prelude.rs` and imported explicitly by app-state and terminal
+  context-menu runtime modules. This is import plumbing only; menu placement,
+  submenu selection, terminal selection text handling, and terminal parser or
+  protocol behavior are unchanged.
+- The low-frequency terminal paint policy UI model was moved out of
+  `features/prelude.rs` and imported explicitly by terminal view I/O runtime.
+  This is import plumbing only; terminal parsing, snapshots, protocol logic,
+  and paint policy resolution behavior are unchanged.
+- The low-frequency terminal performance overlay UI model was moved out of
+  `features/prelude.rs` and imported explicitly by terminal surface rendering
+  and scroll helpers. This is import plumbing only; overlay state propagation,
+  render-degradation notices, terminal parsing, snapshots, and protocol logic
+  are unchanged.
+- Two low-frequency session runtime model types were moved out of
+  `features/prelude.rs` and imported explicitly by app-state and session
+  runtime modules. This is import plumbing only; session event draining,
+  metadata registration, frame pipeline routing, and session ordering behavior
+  are unchanged.
+- The low-frequency startup command request model was moved out of
+  `features/prelude.rs` and imported explicitly by app-state, session runtime,
+  session lifecycle/dialog, and terminal startup-command modules. This is
+  import plumbing only; startup command validation, scheduling delay,
+  duplicated-session launch, and terminal input dispatch behavior are
+  unchanged.
+- The low-frequency startup command action UI model was moved out of
+  `features/prelude.rs` and imported explicitly by app-state, session dialog,
+  global shortcut, and tab/session overlay modules. This is import plumbing
+  only; duplicate/multiplex action selection, dialog labels, startup-command
+  validation, and dispatch behavior are unchanged.
+- The low-frequency workspace smart-split UI model was moved out of
+  `features/prelude.rs` and imported explicitly by the title menu and
+  tab-window runtime. This is import plumbing only; smart split mode selection,
+  tab tiling, active-tab preservation, and workspace layout persistence are
+  unchanged.
+- The low-frequency workspace tab split edge UI model was moved out of
+  `features/prelude.rs` and imported explicitly by the tab-window runtime. This
+  is import plumbing only; tab split layout mutation, workspace pane
+  persistence, and terminal window layout persistence are unchanged.
+- The low-frequency workspace tab dock-zone UI model was moved out of
+  `features/prelude.rs` and imported explicitly by app-state, workspace page,
+  and tab-window runtime modules. This is import plumbing only; drag/drop zone
+  detection, tab docking, split layout mutation, and terminal window layout
+  persistence are unchanged.
+- The low-frequency terminal search-mode UI model was moved out of
+  `features/prelude.rs` and imported explicitly by app-state, event-pump,
+  terminal search, context-menu, surface, and view I/O modules. This is import
+  plumbing only; search-mode selection, result routing, search refresh, and
+  terminal paint behavior are unchanged.
+- The low-frequency terminal window tree UI model was moved out of
+  `features/prelude.rs` and imported explicitly by app-state, workspace page,
+  tab-window runtime, action-link routing, and terminal buffer modules. This is
+  import plumbing only; terminal-window layout persistence, split-tab routing,
+  active-tab selection, and terminal buffer behavior are unchanged.
+- The low-frequency workspace split-direction UI model was moved out of
+  `features/prelude.rs` and imported explicitly by app-state, startup restore,
+  tab actions, workspace runtime, tab-window runtime, and terminal buffer
+  modules. This is import plumbing only; workspace split persistence, startup
+  restore, split-tab commands, and terminal buffer behavior are unchanged.
+- The low-frequency workspace pane tree UI model was moved out of
+  `features/prelude.rs` and imported explicitly by app-state, startup restore,
+  workspace runtime, workspace page, and terminal buffer modules. This is
+  import plumbing only; workspace pane ownership, layout persistence, startup
+  restore, and terminal buffer behavior are unchanged.
+- The low-frequency workspace split compatibility alias was moved out of
+  `features/prelude.rs` and imported explicitly by app-state. This is import
+  plumbing only; workspace pane ownership, split layout persistence, and split
+  mutation behavior are unchanged.
+- The low-frequency send-command control-focus UI model was moved out of
+  `features/prelude.rs` and imported explicitly by app-state, send-command
+  runtime, and send-command bar controls. This is import plumbing only; control
+  focus selection, count/interval input syncing, and send-command dispatch
+  behavior are unchanged.
+- The low-frequency send-command target UI model was moved out of
+  `features/prelude.rs` and imported explicitly by app-state, send-command
+  runtime, and send-command bar controls. This is import plumbing only; target
+  selection, group-target labeling, compatible-session filtering, and command
+  dispatch behavior are unchanged.
+- The low-frequency send-command line-ending UI model was moved out of
+  `features/prelude.rs` and imported explicitly by app-state, send-command
+  runtime, and send-command bar state/controls. This is import plumbing only;
+  line-ending selection, preview labeling, command-unit construction, and
+  dispatch behavior are unchanged.
+- The low-frequency send-command mode UI model was moved out of
+  `features/prelude.rs` and imported explicitly by app-state, send-command
+  runtime, and send-command bar state/controls. This is import plumbing only;
+  mode selection, data-type coercion, count/interval defaults, and command-unit
+  construction behavior are unchanged.
+- The low-frequency send-command data-type UI model was moved out of
+  `features/prelude.rs` and imported explicitly by app-state, send-command
+  runtime, and send-command bar editor/state/controls. This is import plumbing
+  only; text/hex selection, preview formatting, parsing, and command-unit
+  construction behavior are unchanged.
 - `nyaterm-terminal-gpui` no longer publicly glob-re-exports its `images`,
   `keywords`, and `paint` implementation modules. The existing named facade
   exports remain public; sibling modules still use the helpers internally.
