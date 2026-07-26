@@ -129,3 +129,13 @@ impl QuickCommandFeatureState {
         }
     }
 }
+
+impl QuickCommandFeatureState {
+    /// Closes every toolbar popover at once; they are mutually exclusive.
+    pub(in crate::features) fn close_toolbar_popovers(&mut self) {
+        self.list.sort_menu_open = false;
+        self.list.view_menu_open = false;
+        self.list.category_menu = None;
+        self.ai.popover_open = false;
+    }
+}

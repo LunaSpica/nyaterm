@@ -41,7 +41,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn close_transfer_job_menu(&mut self, cx: &mut Context<Self>) {
-        self.transfer.queue.job_menu = None;
+        self.transfer.queue.close_job_menu();
         cx.notify();
     }
 

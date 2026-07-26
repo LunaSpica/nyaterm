@@ -23,41 +23,48 @@ struct TransferBrowserEventSnapshot {
     selected_paths: HashSet<String>,
 }
 
-impl NyaTermApp {
-    fn transfer_browser_event_snapshot(&self) -> TransferBrowserEventSnapshot {
+/// Save/restore of everything a browser event may rewind.
+///
+/// Taking `&TransferFeatureState` rather than `&NyaTermApp` means a snapshot
+/// can only capture and replay transfer state, which is what the callers
+/// intend. The captured fields are unchanged.
+impl TransferFeatureState {
+    fn browser_event_snapshot(&self) -> TransferBrowserEventSnapshot {
         TransferBrowserEventSnapshot {
-            remote_path: self.transfer.paths.remote.clone(),
-            browser_path: self.transfer.browser.path.clone(),
-            home_dir: self.transfer.browser.home_dir.clone(),
-            home_dir_pending: self.transfer.browser.home_dir_pending,
-            entries: self.transfer.browser.entries.clone(),
-            loading: self.transfer.browser.loading,
-            error: self.transfer.browser.error.clone(),
-            status: self.transfer.browser.status.clone(),
-            history: self.transfer.browser.history.clone(),
-            history_index: self.transfer.browser.history_index,
-            visited_history: self.transfer.browser.visited_history.clone(),
-            selected_path: self.transfer.browser.selected_remote_path.clone(),
-            selected_paths: self.transfer.browser.selected_remote_paths.clone(),
+            remote_path: self.paths.remote.clone(),
+            browser_path: self.browser.path.clone(),
+            home_dir: self.browser.home_dir.clone(),
+            home_dir_pending: self.browser.home_dir_pending,
+            entries: self.browser.entries.clone(),
+            loading: self.browser.loading,
+            error: self.browser.error.clone(),
+            status: self.browser.status.clone(),
+            history: self.browser.history.clone(),
+            history_index: self.browser.history_index,
+            visited_history: self.browser.visited_history.clone(),
+            selected_path: self.browser.selected_remote_path.clone(),
+            selected_paths: self.browser.selected_remote_paths.clone(),
         }
     }
 
-    fn restore_transfer_browser_event_snapshot(&mut self, snapshot: TransferBrowserEventSnapshot) {
-        self.transfer.paths.remote = snapshot.remote_path;
-        self.transfer.browser.path = snapshot.browser_path;
-        self.transfer.browser.home_dir = snapshot.home_dir;
-        self.transfer.browser.home_dir_pending = snapshot.home_dir_pending;
-        self.transfer.browser.entries = snapshot.entries;
-        self.transfer.browser.loading = snapshot.loading;
-        self.transfer.browser.error = snapshot.error;
-        self.transfer.browser.status = snapshot.status;
-        self.transfer.browser.history = snapshot.history;
-        self.transfer.browser.history_index = snapshot.history_index;
-        self.transfer.browser.visited_history = snapshot.visited_history;
-        self.transfer.browser.selected_remote_path = snapshot.selected_path;
-        self.transfer.browser.selected_remote_paths = snapshot.selected_paths;
+    fn restore_browser_event_snapshot(&mut self, snapshot: TransferBrowserEventSnapshot) {
+        self.paths.remote = snapshot.remote_path;
+        self.browser.path = snapshot.browser_path;
+        self.browser.home_dir = snapshot.home_dir;
+        self.browser.home_dir_pending = snapshot.home_dir_pending;
+        self.browser.entries = snapshot.entries;
+        self.browser.loading = snapshot.loading;
+        self.browser.error = snapshot.error;
+        self.browser.status = snapshot.status;
+        self.browser.history = snapshot.history;
+        self.browser.history_index = snapshot.history_index;
+        self.browser.visited_history = snapshot.visited_history;
+        self.browser.selected_remote_path = snapshot.selected_path;
+        self.browser.selected_remote_paths = snapshot.selected_paths;
     }
+}
 
+impl NyaTermApp {
     fn load_transfer_browser_event_session(&mut self, session_id: &str) {
         let Some(cache) = self.transfer.browser.session_cache.get(session_id).cloned() else {
             self.transfer.paths.remote = ".".to_string();
@@ -138,7 +145,7 @@ impl NyaTermApp {
                 .filter(|session_id| self.active_session_id.as_deref() != Some(*session_id))
                 .filter(|_| transfer_event_needs_browser_context(&event.event))
                 .map(|session_id| {
-                    let snapshot = self.transfer_browser_event_snapshot();
+                    let snapshot = self.transfer.browser_event_snapshot();
                     self.load_transfer_browser_event_session(session_id);
                     snapshot
                 });
@@ -890,7 +897,7 @@ impl NyaTermApp {
                 if let Some(session_id) = job_session_id.as_deref() {
                     self.cache_transfer_browser_session(session_id);
                 }
-                self.restore_transfer_browser_event_snapshot(snapshot);
+                self.transfer.restore_browser_event_snapshot(snapshot);
             }
             if event_finished
                 && let Some(key) = navigation_job_key

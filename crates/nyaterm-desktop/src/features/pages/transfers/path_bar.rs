@@ -205,9 +205,7 @@ impl NyaTermApp {
     }
 
     pub(super) fn cancel_transfer_browser_path_edit(&mut self, cx: &mut Context<Self>) {
-        self.transfer.browser.path_draft.clear();
-        self.transfer.browser.path_editing = false;
-        self.transfer.browser.status = "remote directory path edit cancelled".to_string();
+        self.transfer.browser.cancel_path_edit();
         cx.notify();
     }
 

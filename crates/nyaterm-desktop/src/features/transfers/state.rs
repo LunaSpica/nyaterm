@@ -274,6 +274,12 @@ impl TransferFeatureState {
 /// Keeping it here rather than on `NyaTermApp` means a drag cannot reach any
 /// other app state; the page-level handlers are forwarders that own the redraw.
 impl TransferBrowserState {
+    pub(in crate::features) fn cancel_path_edit(&mut self) {
+        self.path_draft.clear();
+        self.path_editing = false;
+        self.status = "remote directory path edit cancelled".to_string();
+    }
+
     pub(in crate::features) fn start_column_resize(
         &mut self,
         column: TransferBrowserSortColumn,
@@ -306,5 +312,11 @@ impl TransferBrowserState {
         }
         self.status = "file column width updated".to_string();
         true
+    }
+}
+
+impl TransferQueueState {
+    pub(in crate::features) fn close_job_menu(&mut self) {
+        self.job_menu = None;
     }
 }

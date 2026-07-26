@@ -4,10 +4,7 @@ use crate::models::{QuickCommandSortMode, QuickCommandViewMode};
 
 impl NyaTermApp {
     pub(in crate::features) fn close_quick_command_toolbar_popovers(&mut self) {
-        self.quick_command_state.list.sort_menu_open = false;
-        self.quick_command_state.list.view_menu_open = false;
-        self.quick_command_state.ai.popover_open = false;
-        self.quick_command_state.list.category_menu = None;
+        self.quick_command_state.close_toolbar_popovers();
     }
 
     pub(in crate::features) fn refresh_quick_commands(&mut self) {
