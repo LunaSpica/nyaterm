@@ -2,11 +2,8 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use base64::{Engine, engine::general_purpose::STANDARD as B64};
-use hmac::{Hmac, Mac, digest::KeyInit as HmacKeyInit};
 use redb::{Database, ReadableDatabase, ReadableTable, TableDefinition};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
-use sha1::Sha1;
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 
@@ -25,9 +22,12 @@ use crate::{
     now_rfc3339, translation_settings_has_secret, trim_ai_audit, trim_ai_history, uuid,
 };
 
+mod command_history;
 mod config_backup;
 mod keyword_highlights;
+mod known_hosts;
 
+use self::command_history::replace_command_history_in_txn;
 pub use self::config_backup::ConfigBackupInfo;
 use self::config_backup::{
     copy_config_database, ensure_not_same_existing_file, ensure_parent_dir,
@@ -36,6 +36,8 @@ use self::config_backup::{
 use self::keyword_highlights::{
     merge_keyword_highlight_rules, normalize_keyword_highlight_rule, parse_keyword_highlight_import,
 };
+pub use self::known_hosts::KnownHostCheck;
+use self::known_hosts::replace_known_hosts_text_in_txn;
 
 const DATABASE_FILE: &str = "nyaterm.redb";
 const GROUP_PREFIX: &str = "groups/";
@@ -156,39 +158,6 @@ struct ConnectionPasswordRecord {
     created_at_ms: u64,
     updated_at_ms: u64,
 }
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum KnownHostCheck {
-    Match,
-    HostSeen,
-    UnknownHost,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-struct KnownHostRecord {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    marker: Option<String>,
-    host_identifier: String,
-    #[serde(default)]
-    host_patterns: Vec<String>,
-    key_type: String,
-    key_base64: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    comment: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    raw_line: Option<String>,
-    created_at_ms: u64,
-    updated_at_ms: u64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-struct KnownHostRawRecord {
-    line: String,
-    created_at_ms: u64,
-    updated_at_ms: u64,
-}
-
-type HmacSha1 = Hmac<Sha1>;
 
 impl ConnectionStore {
     pub fn open(config_dir: impl AsRef<Path>) -> Result<Self, StorageError> {
@@ -1126,83 +1095,6 @@ impl ConnectionStore {
         write_json_in_txn(&txn, CONNECTIONS_TABLE, &key, &connection)?;
         remove_connection_index_entries(&txn, connection_id)?;
         insert_connection_indexes(&txn, &connection)?;
-        txn.commit()?;
-        Ok(())
-    }
-
-    pub fn check_known_host(
-        &self,
-        host_identifier: &str,
-        key_type: &str,
-        key_base64: &str,
-    ) -> Result<KnownHostCheck, StorageError> {
-        let mut host_seen = false;
-        let records = self.list_raw_by_prefix(KNOWN_HOSTS_TABLE, KNOWN_HOST_PREFIX)?;
-        for (key, value) in records {
-            if key.starts_with(KNOWN_HOST_RAW_PREFIX) {
-                continue;
-            }
-            let record: KnownHostRecord = deserialize_json(&value)?;
-            if known_host_record_matches(&record, host_identifier) {
-                host_seen = true;
-                if record.key_type == key_type && record.key_base64 == key_base64 {
-                    return Ok(KnownHostCheck::Match);
-                }
-            }
-        }
-        if host_seen {
-            Ok(KnownHostCheck::HostSeen)
-        } else {
-            Ok(KnownHostCheck::UnknownHost)
-        }
-    }
-
-    pub fn upsert_known_host(&self, line: &str) -> Result<(), StorageError> {
-        let txn = self.db.begin_write()?;
-        save_known_hosts_line_in_txn(&txn, line)?;
-        txn.commit()?;
-        Ok(())
-    }
-
-    pub fn replace_known_host_for_host(
-        &self,
-        host_identifier: &str,
-        line: &str,
-    ) -> Result<(), StorageError> {
-        let txn = self.db.begin_write()?;
-        remove_known_hosts_for_host_in_txn(&txn, host_identifier)?;
-        save_known_hosts_line_in_txn(&txn, line)?;
-        txn.commit()?;
-        Ok(())
-    }
-
-    pub fn render_known_hosts_export(&self) -> Result<String, StorageError> {
-        let mut records = self.list_raw_by_prefix(KNOWN_HOSTS_TABLE, KNOWN_HOST_PREFIX)?;
-        records.sort_by(|left, right| left.0.cmp(&right.0));
-        let mut lines = Vec::new();
-        for (key, value) in records {
-            if key.starts_with(KNOWN_HOST_RAW_PREFIX) {
-                let raw: KnownHostRawRecord = deserialize_json(&value)?;
-                lines.push(raw.line);
-            } else {
-                let host: KnownHostRecord = deserialize_json(&value)?;
-                lines.push(
-                    host.raw_line
-                        .clone()
-                        .unwrap_or_else(|| render_known_host_record(&host)),
-                );
-            }
-        }
-        if lines.is_empty() {
-            Ok(String::new())
-        } else {
-            Ok(format!("{}\n", lines.join("\n")))
-        }
-    }
-
-    pub fn replace_known_hosts_export(&self, content: &str) -> Result<(), StorageError> {
-        let txn = self.db.begin_write()?;
-        replace_known_hosts_text_in_txn(&txn, content)?;
         txn.commit()?;
         Ok(())
     }
@@ -2670,75 +2562,6 @@ impl ConnectionStore {
         Ok(())
     }
 
-    pub fn append_command_history(&self, command: &str) -> Result<(), StorageError> {
-        let Some(command) = sanitize_history_command(command) else {
-            return Ok(());
-        };
-        let mut entry = self
-            .list_command_history(usize::MAX)?
-            .into_iter()
-            .find(|entry| entry.command == command)
-            .unwrap_or(CommandHistoryEntry {
-                command,
-                last_used_at_ms: 0,
-                use_count: 0,
-            });
-        entry.last_used_at_ms = current_time_ms();
-        entry.use_count = if entry.use_count == 0 {
-            1
-        } else {
-            entry.use_count.saturating_add(1)
-        };
-        self.save_command_history_entry(&entry)
-    }
-
-    pub fn list_command_history(
-        &self,
-        limit: usize,
-    ) -> Result<Vec<CommandHistoryEntry>, StorageError> {
-        let mut entries: Vec<(String, CommandHistoryEntry)> =
-            self.list_keyed_json_by_prefix(COMMAND_HISTORY_TABLE, COMMAND_HISTORY_PREFIX)?;
-        entries.sort_by(|left, right| right.0.cmp(&left.0));
-        let mut history = Vec::new();
-        for (_, entry) in entries.into_iter().take(limit) {
-            if let Some(command) = sanitize_history_command(&entry.command) {
-                history.push(CommandHistoryEntry {
-                    command,
-                    last_used_at_ms: entry.last_used_at_ms,
-                    use_count: entry.use_count.max(1),
-                });
-            }
-        }
-        Ok(history)
-    }
-
-    pub fn delete_command_history(&self, command: &str) -> Result<(), StorageError> {
-        let Some(command) = sanitize_history_command(command) else {
-            return Ok(());
-        };
-        let txn = self.db.begin_write()?;
-        remove_command_history_id_in_txn(&txn, &command_history_id(&command))?;
-        txn.commit()?;
-        Ok(())
-    }
-
-    pub fn replace_command_history(
-        &self,
-        entries: &[CommandHistoryEntry],
-    ) -> Result<(), StorageError> {
-        let txn = self.db.begin_write()?;
-        replace_command_history_in_txn(&txn, entries)?;
-        txn.commit()?;
-        Ok(())
-    }
-
-    fn save_command_history_entry(&self, entry: &CommandHistoryEntry) -> Result<(), StorageError> {
-        let txn = self.db.begin_write()?;
-        save_command_history_entry_in_txn(&txn, entry)?;
-        txn.commit()?;
-        Ok(())
-    }
-
     pub fn load_ai_settings(&self) -> Result<AiSettings, StorageError> {
         let value = self.load_settings_value()?;
         let mut settings = value
@@ -3429,23 +3252,6 @@ impl ConnectionStore {
         self.read_string_table(TEXT_DOCS_TABLE, LEGACY_TEXT_MASTER_KEY)
     }
 
-    fn import_legacy_known_hosts_if_needed(&self) -> Result<(), StorageError> {
-        let has_native = !self
-            .list_raw_by_prefix(KNOWN_HOSTS_TABLE, KNOWN_HOST_PREFIX)?
-            .is_empty();
-        if has_native {
-            return Ok(());
-        }
-        let Some(content) = self.read_string_table(TEXT_DOCS_TABLE, LEGACY_TEXT_KNOWN_HOSTS)?
-        else {
-            return Ok(());
-        };
-        let txn = self.db.begin_write()?;
-        replace_known_hosts_text_in_txn(&txn, &content)?;
-        txn.commit()?;
-        Ok(())
-    }
-
     fn read_string_table(
         &self,
         definition: TableDefinition<&str, &str>,
@@ -3532,113 +3338,6 @@ fn portable_settings_doc_array(
     serde_json::to_string(&values).map_err(StorageError::from)
 }
 
-fn replace_command_history_in_txn(
-    txn: &redb::WriteTransaction,
-    entries: &[CommandHistoryEntry],
-) -> Result<(), StorageError> {
-    clear_prefix_in_txn(txn, COMMAND_HISTORY_TABLE, COMMAND_HISTORY_PREFIX)?;
-    let mut normalized = Vec::new();
-    for entry in entries {
-        let Some(command) = sanitize_history_command(&entry.command) else {
-            continue;
-        };
-        merge_command_history_entry(
-            &mut normalized,
-            CommandHistoryEntry {
-                command,
-                last_used_at_ms: entry.last_used_at_ms,
-                use_count: entry.use_count.max(1),
-            },
-        );
-    }
-    normalized.sort_by_key(|entry| entry.last_used_at_ms);
-    trim_command_history(&mut normalized);
-    for entry in normalized {
-        save_command_history_entry_in_txn(txn, &entry)?;
-    }
-    Ok(())
-}
-
-fn save_command_history_entry_in_txn(
-    txn: &redb::WriteTransaction,
-    entry: &CommandHistoryEntry,
-) -> Result<(), StorageError> {
-    let Some(command) = sanitize_history_command(&entry.command) else {
-        return Ok(());
-    };
-    let normalized = CommandHistoryEntry {
-        command,
-        last_used_at_ms: entry.last_used_at_ms,
-        use_count: entry.use_count.max(1),
-    };
-    let id = command_history_id(&normalized.command);
-    remove_command_history_id_in_txn(txn, &id)?;
-    write_json_in_txn(
-        txn,
-        COMMAND_HISTORY_TABLE,
-        &command_history_key(&normalized, &id),
-        &normalized,
-    )
-}
-
-fn remove_command_history_id_in_txn(
-    txn: &redb::WriteTransaction,
-    id: &str,
-) -> Result<(), StorageError> {
-    let table = txn.open_table(COMMAND_HISTORY_TABLE)?;
-    let suffix = format!("|{id}");
-    let mut keys = Vec::new();
-    for entry in table.iter()? {
-        let (key, _) = entry?;
-        if key.value().ends_with(&suffix) {
-            keys.push(key.value().to_string());
-        }
-    }
-    drop(table);
-    let mut table = txn.open_table(COMMAND_HISTORY_TABLE)?;
-    for key in keys {
-        table.remove(key.as_str())?;
-    }
-    Ok(())
-}
-
-fn merge_command_history_entry(
-    entries: &mut Vec<CommandHistoryEntry>,
-    incoming: CommandHistoryEntry,
-) {
-    if let Some(index) = entries
-        .iter()
-        .position(|entry| entry.command == incoming.command)
-    {
-        let mut existing = entries.remove(index);
-        existing.last_used_at_ms = existing.last_used_at_ms.max(incoming.last_used_at_ms);
-        existing.use_count = existing.use_count.saturating_add(incoming.use_count.max(1));
-        entries.push(existing);
-    } else {
-        entries.push(incoming);
-    }
-}
-
-fn trim_command_history(entries: &mut Vec<CommandHistoryEntry>) {
-    const MAX_HISTORY: usize = 5000;
-    if entries.len() > MAX_HISTORY {
-        let overflow = entries.len() - MAX_HISTORY;
-        entries.drain(..overflow);
-    }
-}
-
-fn command_history_key(entry: &CommandHistoryEntry, id: &str) -> String {
-    format!(
-        "{}{:020}|{}",
-        COMMAND_HISTORY_PREFIX, entry.last_used_at_ms, id
-    )
-}
-
-fn command_history_id(command: &str) -> String {
-    let digest = Sha256::digest(command.as_bytes());
-    lower_hex(&digest[..16])
-}
-
 fn lower_hex(bytes: &[u8]) -> String {
     const HEX: &[u8; 16] = b"0123456789abcdef";
     let mut encoded = String::with_capacity(bytes.len() * 2);
@@ -3647,94 +3346,6 @@ fn lower_hex(bytes: &[u8]) -> String {
         encoded.push(HEX[(byte & 0x0f) as usize] as char);
     }
     encoded
-}
-
-fn sanitize_history_command(input: &str) -> Option<String> {
-    let trimmed = input.trim();
-    if trimmed.is_empty() {
-        return None;
-    }
-
-    let without_prompt = strip_known_prompt_prefix(strip_leading_env_prefixes(trimmed))
-        .unwrap_or(trimmed)
-        .trim();
-    if without_prompt.is_empty() {
-        None
-    } else {
-        Some(without_prompt.to_string())
-    }
-}
-
-fn strip_leading_env_prefixes(mut input: &str) -> &str {
-    loop {
-        let Some(rest) = input.strip_prefix('(') else {
-            return input;
-        };
-        let Some(close_idx) = rest.find(')') else {
-            return input;
-        };
-        let after_close = &rest[close_idx + 1..];
-        input = after_close.trim_start_matches([' ', '\t']);
-    }
-}
-
-fn strip_known_prompt_prefix(input: &str) -> Option<&str> {
-    strip_bracket_prompt(input)
-        .or_else(|| strip_posix_prompt(input))
-        .or_else(|| strip_powershell_prompt(input))
-        .or_else(|| strip_windows_prompt(input))
-}
-
-fn strip_bracket_prompt(input: &str) -> Option<&str> {
-    let rest = input.strip_prefix('[')?;
-    let close_idx = rest.find(']')?;
-    let after_bracket = rest[close_idx + 1..].trim_start_matches([' ', '\t']);
-    let after_marker = after_bracket
-        .strip_prefix('#')
-        .or_else(|| after_bracket.strip_prefix('$'))?;
-    Some(after_marker.trim_start_matches([' ', '\t']))
-}
-
-fn strip_posix_prompt(input: &str) -> Option<&str> {
-    let prompt_end = input.find(['#', '$'])?;
-    let prompt = &input[..prompt_end];
-    let after_marker = &input[prompt_end + 1..];
-    let at_idx = prompt.find('@')?;
-    let colon_rel = prompt[at_idx + 1..].find(':')?;
-    let colon_idx = at_idx + 1 + colon_rel;
-    let user = &prompt[..at_idx];
-    let host = &prompt[at_idx + 1..colon_idx];
-    if user.is_empty()
-        || host.is_empty()
-        || user.chars().any(char::is_whitespace)
-        || host.chars().any(char::is_whitespace)
-    {
-        return None;
-    }
-    Some(after_marker.trim_start_matches([' ', '\t']))
-}
-
-fn strip_powershell_prompt(input: &str) -> Option<&str> {
-    let rest = input
-        .strip_prefix("PS ")
-        .or_else(|| input.strip_prefix("PS\t"))?;
-    let marker_idx = rest.find('>')?;
-    if rest[..marker_idx].trim().is_empty() {
-        return None;
-    }
-    Some(rest[marker_idx + 1..].trim_start_matches([' ', '\t']))
-}
-
-fn strip_windows_prompt(input: &str) -> Option<&str> {
-    let bytes = input.as_bytes();
-    if bytes.len() < 3 || !bytes[0].is_ascii_alphabetic() || bytes[1] != b':' {
-        return None;
-    }
-    let marker_idx = input.find('>')?;
-    if input[..marker_idx].contains(['\r', '\n']) {
-        return None;
-    }
-    Some(input[marker_idx + 1..].trim_start_matches([' ', '\t']))
 }
 
 fn read_snapshot_entity<T>(
@@ -4058,108 +3669,6 @@ fn clear_string_table(
     Ok(())
 }
 
-fn replace_known_hosts_text_in_txn(
-    txn: &redb::WriteTransaction,
-    content: &str,
-) -> Result<(), StorageError> {
-    clear_prefix_in_txn(txn, KNOWN_HOSTS_TABLE, KNOWN_HOST_PREFIX)?;
-    for line in content.lines() {
-        save_known_hosts_line_in_txn(txn, line)?;
-    }
-    Ok(())
-}
-
-fn save_known_hosts_line_in_txn(
-    txn: &redb::WriteTransaction,
-    line: &str,
-) -> Result<(), StorageError> {
-    let trimmed = line.trim();
-    if trimmed.is_empty() {
-        return Ok(());
-    }
-    let now = current_time_ms();
-    if let Some(record) = parse_known_host_line(trimmed, now) {
-        write_json_in_txn(txn, KNOWN_HOSTS_TABLE, &known_host_key(&record), &record)?;
-    } else {
-        let record = KnownHostRawRecord {
-            line: trimmed.to_string(),
-            created_at_ms: now,
-            updated_at_ms: now,
-        };
-        write_json_in_txn(
-            txn,
-            KNOWN_HOSTS_TABLE,
-            &format!("{}{}", KNOWN_HOST_RAW_PREFIX, stable_id(trimmed)),
-            &record,
-        )?;
-    }
-    Ok(())
-}
-
-fn remove_known_hosts_for_host_in_txn(
-    txn: &redb::WriteTransaction,
-    host_identifier: &str,
-) -> Result<(), StorageError> {
-    let table = txn.open_table(KNOWN_HOSTS_TABLE)?;
-    let mut keys = Vec::new();
-    for entry in table.iter()? {
-        let (key, value) = entry?;
-        if key.value().starts_with(KNOWN_HOST_RAW_PREFIX) {
-            continue;
-        }
-        let record: KnownHostRecord = deserialize_json(value.value())?;
-        if known_host_record_matches(&record, host_identifier) {
-            keys.push(key.value().to_string());
-        }
-    }
-    drop(table);
-
-    let mut table = txn.open_table(KNOWN_HOSTS_TABLE)?;
-    for key in keys {
-        table.remove(key.as_str())?;
-    }
-    Ok(())
-}
-
-fn parse_known_host_line(line: &str, now: u64) -> Option<KnownHostRecord> {
-    if line.starts_with('#') {
-        return None;
-    }
-    let mut parts = line.split_whitespace();
-    let first = parts.next()?;
-    let (marker, host_list) = if first.starts_with('@') {
-        (Some(first.to_string()), parts.next()?)
-    } else {
-        (None, first)
-    };
-    let key_type = parts.next()?;
-    let key_base64 = parts.next()?;
-    let comment = {
-        let rest = parts.collect::<Vec<_>>().join(" ");
-        if rest.is_empty() { None } else { Some(rest) }
-    };
-    let host_patterns = host_list
-        .split(',')
-        .filter(|pattern| !pattern.is_empty())
-        .map(ToString::to_string)
-        .collect::<Vec<_>>();
-    if host_patterns.is_empty() {
-        return None;
-    }
-
-    Some(KnownHostRecord {
-        marker,
-        host_identifier: host_patterns[0].clone(),
-        host_patterns,
-        key_type: key_type.to_string(),
-        key_base64: key_base64.to_string(),
-        comment,
-        raw_line: Some(line.to_string()),
-        created_at_ms: now,
-        updated_at_ms: now,
-    })
-}
-
 fn apply_ssh_key_status_flags(key: &mut SshKey) {
     key.has_key_data = key.key.is_some();
     key.has_cert_data = key.cert.is_some();
@@ -4342,100 +3851,6 @@ fn ai_session_title(user_input: &str) -> String {
     } else {
         title.to_string()
     }
-}
-
-fn known_host_record_matches(record: &KnownHostRecord, host_identifier: &str) -> bool {
-    let patterns = if record.host_patterns.is_empty() {
-        std::slice::from_ref(&record.host_identifier)
-    } else {
-        record.host_patterns.as_slice()
-    };
-    let mut matched = false;
-    for pattern in patterns {
-        let (negated, pattern) = pattern
-            .strip_prefix('!')
-            .map_or((false, pattern.as_str()), |pattern| (true, pattern));
-        if known_host_pattern_matches(pattern, host_identifier) {
-            if negated {
-                return false;
-            }
-            matched = true;
-        }
-    }
-    matched
-}
-
-fn known_host_pattern_matches(pattern: &str, host_identifier: &str) -> bool {
-    if pattern == host_identifier {
-        return true;
-    }
-    if pattern.starts_with("|1|") {
-        return hashed_known_host_matches(pattern, host_identifier);
-    }
-    false
-}
-
-fn hashed_known_host_matches(pattern: &str, host_identifier: &str) -> bool {
-    let mut parts = pattern.split('|');
-    if parts.next() != Some("") || parts.next() != Some("1") {
-        return false;
-    }
-    let Some(salt_b64) = parts.next() else {
-        return false;
-    };
-    let Some(hash_b64) = parts.next() else {
-        return false;
-    };
-    if parts.next().is_some() {
-        return false;
-    }
-    let Ok(salt) = B64.decode(salt_b64) else {
-        return false;
-    };
-    let Ok(expected) = B64.decode(hash_b64) else {
-        return false;
-    };
-    let Ok(mut mac) = HmacSha1::new_from_slice(&salt) else {
-        return false;
-    };
-    mac.update(host_identifier.as_bytes());
-    let actual = mac.finalize().into_bytes();
-    expected.as_slice() == actual.as_slice()
-}
-
-fn known_host_key(record: &KnownHostRecord) -> String {
-    let digest_input = format!(
-        "{}|{}|{}",
-        record.marker.as_deref().unwrap_or_default(),
-        record.host_patterns.join(","),
-        record.key_type
-    );
-    format!("{KNOWN_HOST_PREFIX}{}", stable_id(&digest_input))
-}
-
-fn render_known_host_record(record: &KnownHostRecord) -> String {
-    let host_list = if record.host_patterns.is_empty() {
-        record.host_identifier.clone()
-    } else {
-        record.host_patterns.join(",")
-    };
-    let mut line = String::new();
-    if let Some(marker) = &record.marker {
-        line.push_str(marker);
-        line.push(' ');
-    }
-    line.push_str(&host_list);
-    line.push(' ');
-    line.push_str(&record.key_type);
-    line.push(' ');
-    line.push_str(&record.key_base64);
-    if let Some(comment) = &record.comment {
-        if !comment.is_empty() {
-            line.push(' ');
-            line.push_str(comment);
-        }
-    }
-    line
 }
 
 fn write_json_in_txn<T>(
