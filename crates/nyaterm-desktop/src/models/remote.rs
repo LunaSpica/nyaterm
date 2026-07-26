@@ -159,24 +159,6 @@ impl SettingsTab {
         }
     }
 
-    pub(crate) fn label(self) -> &'static str {
-        match self {
-            Self::General => "General",
-            Self::Appearance => "Appearance",
-            Self::Interaction => "Interaction",
-            Self::Keybindings => "Keybindings",
-            Self::TerminalGeneral => "General",
-            Self::Search => "Search",
-            Self::Translation => "Translation",
-            Self::AiGeneral => "General",
-            Self::AiModels => "Models",
-            Self::AiRules => "Rules",
-            Self::Transfer => "Transfer",
-            Self::Security => "Security",
-            Self::SyncBackup => "Sync Backup",
-        }
-    }
-
     pub(crate) fn icon_path(self) -> &'static str {
         match self {
             Self::General => "icons/settings.svg",

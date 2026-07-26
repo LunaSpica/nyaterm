@@ -5,7 +5,6 @@
 //! projections published from the app; explicitly migrated domains, such as the
 //! quick switch state in `OverlayStore`, are the exceptions.
 
-mod domain;
 mod handles;
 mod overlay;
 mod runtime;
@@ -17,11 +16,6 @@ mod workspace;
 #[cfg(test)]
 mod tests;
 
-pub use domain::{
-    AiSnapshot, AiStore, CloudSyncSnapshot, CloudSyncStore, ConnectionsSnapshot, ConnectionsStore,
-    RemoteOpsSnapshot, RemoteOpsStore, SettingsSnapshot, SettingsStore, TransferSnapshot,
-    TransferStore,
-};
 pub use handles::UiStoreHandles;
 pub use overlay::{OverlaySnapshot, OverlayStore, QuickSwitchState};
 pub use runtime::RuntimeStore;

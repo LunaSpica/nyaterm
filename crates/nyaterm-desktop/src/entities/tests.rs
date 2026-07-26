@@ -1,8 +1,6 @@
 use super::{
-    AiSnapshot, AiStore, CloudSyncSnapshot, CloudSyncStore, ConnectionsSnapshot, ConnectionsStore,
-    OverlaySnapshot, OverlayStore, RemoteOpsSnapshot, RemoteOpsStore, SessionSnapshot,
-    SessionStore, SettingsSnapshot, SettingsStore, StartupRestoreStore, TransferSnapshot,
-    TransferStore, WindowRuntimeStore, WorkspaceSnapshot, WorkspaceStore,
+    OverlaySnapshot, OverlayStore, SessionSnapshot, SessionStore, StartupRestoreStore,
+    WindowRuntimeStore, WorkspaceSnapshot, WorkspaceStore,
 };
 
 #[test]
@@ -209,68 +207,5 @@ fn overlay_store_owns_quick_switch_state() {
     assert_eq!(
         store.quick_switch(),
         &crate::entities::QuickSwitchState::default()
-    );
-}
-
-#[test]
-fn settings_store_notifies_only_for_changed_snapshots() {
-    let mut store = SettingsStore::default();
-    let snapshot = SettingsSnapshot {
-        active_tab: "Security".into(),
-        has_master_password: true,
-        security_unlocked: false,
-        cloud_sync_enabled: true,
-        startup_restore: true,
-    };
-    assert!(store.replace_snapshot(snapshot.clone()));
-    assert!(!store.replace_snapshot(snapshot));
-}
-
-#[test]
-fn connections_store_notifies_only_for_changed_snapshots() {
-    let mut store = ConnectionsStore::default();
-    let snapshot = ConnectionsSnapshot {
-        connection_count: 3,
-        group_count: 1,
-        search_active: true,
-        editor_open: false,
-        group_editor_open: false,
-        delete_confirm_open: false,
-        sort_mode: "Name".into(),
-    };
-    assert!(store.replace_snapshot(snapshot.clone()));
-    assert!(!store.replace_snapshot(snapshot));
-}
-
-#[test]
-fn transfer_ai_sync_remote_stores_replace_snapshots() {
-    assert!(TransferStore::default().replace_snapshot(TransferSnapshot {
-        job_count: 1,
-        active_job_count: 1,
-        browser_path: "/tmp".into(),
-        selected_count: 0,
-        browser_busy: true,
-    }));
-    assert!(AiStore::default().replace_snapshot(AiSnapshot {
-        chat_pending: true,
-        message_count: 2,
-        session_id: "s".into(),
-        agent_active: false,
-    }));
-    assert!(
-        CloudSyncStore::default().replace_snapshot(CloudSyncSnapshot {
-            enabled: true,
-            provider: "local".into(),
-            conflict_active: false,
-            last_status: "ok".into(),
-        })
-    );
-    assert!(
-        RemoteOpsStore::default().replace_snapshot(RemoteOpsSnapshot {
-            process_count: 4,
-            docker_tab: "Containers".into(),
-            stats_ready: true,
-            confirm_open: false,
-        })
     );
 }

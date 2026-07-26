@@ -8,8 +8,7 @@ use nyaterm_core::AppRuntime;
 
 use crate::{
     entities::{
-        AiStore, CloudSyncStore, ConnectionsStore, OverlayStore, RemoteOpsStore, RuntimeStore,
-        SessionStore, SettingsStore, StartupRestoreStore, TransferStore, UiStoreHandles,
+        OverlayStore, RuntimeStore, SessionStore, StartupRestoreStore, UiStoreHandles,
         WindowRuntimeStore, WorkspaceStore,
     },
     features::NyaTermApp,
@@ -23,12 +22,6 @@ pub struct AppShell {
     startup_restore: Entity<StartupRestoreStore>,
     workspace: Entity<WorkspaceStore>,
     sessions: Entity<SessionStore>,
-    settings: Entity<SettingsStore>,
-    connections: Entity<ConnectionsStore>,
-    transfers: Entity<TransferStore>,
-    ai: Entity<AiStore>,
-    cloud_sync: Entity<CloudSyncStore>,
-    remote_ops: Entity<RemoteOpsStore>,
     overlays: Entity<OverlayStore>,
     _subscriptions: Vec<Subscription>,
 }
@@ -40,23 +33,11 @@ impl AppShell {
         let workspace = cx.new(|_| WorkspaceStore::default());
         let sessions = cx.new(|_| SessionStore::default());
         let overlays = cx.new(|_| OverlayStore::default());
-        let settings = cx.new(|_| SettingsStore::default());
-        let connections = cx.new(|_| ConnectionsStore::default());
-        let transfers = cx.new(|_| TransferStore::default());
-        let ai = cx.new(|_| AiStore::default());
-        let cloud_sync = cx.new(|_| CloudSyncStore::default());
-        let remote_ops = cx.new(|_| RemoteOpsStore::default());
         let stores = UiStoreHandles {
             startup_restore: startup_restore.clone(),
             workspace: workspace.clone(),
             sessions: sessions.clone(),
             overlays: overlays.clone(),
-            settings: settings.clone(),
-            connections: connections.clone(),
-            transfers: transfers.clone(),
-            ai: ai.clone(),
-            cloud_sync: cloud_sync.clone(),
-            remote_ops: remote_ops.clone(),
         };
         let app = cx.new(|cx| NyaTermApp::new(runtime, stores, cx));
         // Do not observe UI stores for parent notify: AppShell only hosts the
@@ -72,12 +53,6 @@ impl AppShell {
             startup_restore,
             workspace,
             sessions,
-            settings,
-            connections,
-            transfers,
-            ai,
-            cloud_sync,
-            remote_ops,
             overlays,
             _subscriptions: subscriptions,
         }

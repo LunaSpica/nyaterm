@@ -14,10 +14,10 @@ Last updated from the working tree on 2026-07-26.
 | `#[path = "..."]` declarations in desktop | 0 | Cleared. Every directory is a real module; the boundary script fails on any new occurrence. |
 | `use super::*` imports in desktop | 355 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
 | `features/prelude.rs` rough exported-token count | 230 | Still a broad shared prelude; two hundred fifteen low-frequency transport/core/http/model exports are now explicit imports. |
-| Entity Store structs | 13 | Includes store handles/runtime stores and domain stores. |
-| Snapshot structs | 9 | Workspace, session, overlay, settings, connections, transfer, AI, cloud sync, remote ops. |
-| `replace_snapshot` methods | 9 | Entity stores are still primarily snapshot projections. |
-| Store snapshot publish calls | 9 | Published from `features/shell/event_pump/publish.rs`. |
+| Entity Store structs | 7 | `Runtime`, `WindowRuntime`, `StartupRestore` own real state; `Overlay` owns quick switch and is read for rendering; `Workspace` and `Session` remain projections. |
+| Snapshot structs | 3 | Workspace, session, overlay. |
+| `replace_snapshot` methods | 3 | Down from nine; the six write-only domain projections are gone. |
+| Store snapshot publish calls | 3 | Published from `features/shell/event_pump/publish.rs`. |
 
 Large files currently over 4,000 lines:
 
@@ -117,6 +117,20 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   the three phases the bar actually has: `composer` (payload and caret),
   `options` (how it is interpreted and delivered, plus the menus that set
   those), and `progress` (in-flight send, cancellation, counters).
+- The projection-only Entity Stores are gone. Tracing consumers showed the six
+  domain stores (`Ai`, `CloudSync`, `Connections`, `RemoteOps`, `Settings`,
+  `Transfer`) were write-only: published on every qualifying tick and read by
+  nothing outside `entities/`, so they cost a snapshot build plus a `cx.notify`
+  and returned nothing. They and their snapshots are deleted, along with six
+  accessors and one `SettingsTab::label` that existed only to feed them.
+  What remains has a reason to exist: `RuntimeStore`, `WindowRuntimeStore` and
+  `StartupRestoreStore` own real state, and `OverlayStore` both owns quick
+  switch authoritatively and is read by `root.rs` for overlay rendering.
+  `WorkspaceStore` and `SessionStore` are still projections, and are the honest
+  remaining question — their snapshots are read only by
+  `published_core_store_snapshots_are_current`, which decides whether to
+  republish them. That loop is self-referential, but it also gates the overlay
+  publish, so untangling it is a separate change.
 - The connections UI state has started moving out of scattered `NyaTermApp`
   fields and into `ConnectionFeatureState`.
 - The current connections state split separates list UI, import UI, editor
@@ -833,10 +847,9 @@ real module tree first, then the remaining steps actually enforce something.
    and semantic methods, covered by GPUI-free pure state tests. This is the
    highest-value remaining item; roughly 590 fields and 236 `impl NyaTermApp`
    blocks are the reason most desktop modules can reach most desktop state.
-4. Decide the Entity Store question instead of leaving it half-migrated. Either
-   move one or two more domains to authoritative Entity ownership, or delete the
-   projection-only stores. Maintaining both a `NyaTermApp` field and a snapshot
-   copy of the same state is the most expensive of the three options.
+4. Done for the write-only stores. What is left is `WorkspaceStore` and
+   `SessionStore`: decide whether the publish/skip loop earns its keep, or
+   collapse it so the skip check reads app state directly.
 5. Continue extracting schema-neutral internal modules from `core/storage.rs`
    and schema/protocol-neutral modules from `nyaterm-transport/src/lib.rs`, by
    domain rather than by individual type. Table definitions, serialized records,

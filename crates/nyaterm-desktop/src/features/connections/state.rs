@@ -234,10 +234,6 @@ impl ConnectionListState {
         self.search_draft.is_empty()
     }
 
-    pub fn search_active(&self) -> bool {
-        !self.search_draft.trim().is_empty()
-    }
-
     pub fn search_focus_handle(&self) -> FocusHandle {
         self.search_focus.clone()
     }
@@ -771,10 +767,6 @@ impl ConnectionGroupEditorFeatureState {
         self.draft.clone()
     }
 
-    pub fn is_open(&self) -> bool {
-        self.draft.is_some()
-    }
-
     pub fn focus_handle(&self) -> FocusHandle {
         self.focus.clone()
     }
@@ -860,17 +852,6 @@ impl ConnectionConfirmationState {
     pub fn group_open_focus_handle(&self) -> FocusHandle {
         self.group_open_focus.clone()
     }
-
-    pub fn delete_confirm_is_open(&self) -> bool {
-        connection_delete_confirm_is_open(&self.delete, &self.group_delete)
-    }
-}
-
-fn connection_delete_confirm_is_open(
-    delete: &Option<ConnectionDeleteConfirmState>,
-    group_delete: &Option<ConnectionGroupDeleteConfirmState>,
-) -> bool {
-    delete.is_some() || group_delete.is_some()
 }
 
 impl NetworkFeatureState {
@@ -1130,24 +1111,23 @@ mod tests {
         clear_connection_editor_runtime_state, clear_connection_hover_intent,
         clear_connection_list_runtime_state, clear_connection_search, clear_network_proxy_editor,
         clear_network_tunnel_editor, clear_selected_connection_ids, close_connection_more_menu,
-        commit_connection_editor_new_group, connection_delete_confirm_is_open,
-        connection_drop_position_for_target, connection_editor_inline_panel_draft,
-        connection_editor_window_open_or_pending, connection_hover_intent_ready,
-        cycle_connection_sort_mode, cycle_network_proxy_group, cycle_network_proxy_protocol,
-        cycle_network_tunnel_connection, cycle_network_tunnel_group, cycle_network_tunnel_type,
-        dismiss_connection_hover, expanded_group_ids, finish_connection_editor_save_state,
-        focus_connection_editor_field, focus_network_proxy_editor_field,
-        focus_network_tunnel_editor_field, insert_connection_editor_description_newline,
-        insert_network_proxy_command_newline, poll_connection_hover_intent,
-        remove_connection_list_references, remove_group_list_references,
-        remove_network_group_and_item_references, remove_network_group_references,
-        remove_network_item_references, retain_loaded_connection_list_references,
-        select_connection_ids, set_connection_drop_target_if_changed,
-        set_connection_editor_advanced_tab, set_connection_editor_error,
-        set_connection_editor_icon, set_connection_editor_kind, set_connection_editor_menu_value,
-        set_connection_editor_password_source, set_connection_editor_telnet_tab,
-        set_connection_group_editor_error, set_connection_group_hover,
-        set_network_group_editor_error, set_network_proxy_editor_error,
+        commit_connection_editor_new_group, connection_drop_position_for_target,
+        connection_editor_inline_panel_draft, connection_editor_window_open_or_pending,
+        connection_hover_intent_ready, cycle_connection_sort_mode, cycle_network_proxy_group,
+        cycle_network_proxy_protocol, cycle_network_tunnel_connection, cycle_network_tunnel_group,
+        cycle_network_tunnel_type, dismiss_connection_hover, expanded_group_ids,
+        finish_connection_editor_save_state, focus_connection_editor_field,
+        focus_network_proxy_editor_field, focus_network_tunnel_editor_field,
+        insert_connection_editor_description_newline, insert_network_proxy_command_newline,
+        poll_connection_hover_intent, remove_connection_list_references,
+        remove_group_list_references, remove_network_group_and_item_references,
+        remove_network_group_references, remove_network_item_references,
+        retain_loaded_connection_list_references, select_connection_ids,
+        set_connection_drop_target_if_changed, set_connection_editor_advanced_tab,
+        set_connection_editor_error, set_connection_editor_icon, set_connection_editor_kind,
+        set_connection_editor_menu_value, set_connection_editor_password_source,
+        set_connection_editor_telnet_tab, set_connection_group_editor_error,
+        set_connection_group_hover, set_network_group_editor_error, set_network_proxy_editor_error,
         set_network_tunnel_bind_localhost, set_network_tunnel_editor_error,
         toggle_connection_editor_flag, toggle_network_item_menu_state,
         toggle_network_move_picker_state, toggle_network_tunnel_auto_open,
@@ -1213,31 +1193,6 @@ mod tests {
         assert!(close_connection_more_menu(&mut more_menu_open));
         assert!(!more_menu_open);
         assert!(!close_connection_more_menu(&mut more_menu_open));
-    }
-
-    #[test]
-    fn connection_delete_confirm_is_open_includes_connection_and_group_delete() {
-        let no_delete = None;
-        let no_group_delete = None;
-
-        assert!(!connection_delete_confirm_is_open(
-            &no_delete,
-            &no_group_delete
-        ));
-
-        let delete = Some(ConnectionDeleteConfirmState {
-            connection_id: "conn".to_string(),
-            label: "Production".to_string(),
-        });
-        assert!(connection_delete_confirm_is_open(&delete, &no_group_delete));
-
-        let group_delete = Some(ConnectionGroupDeleteConfirmState {
-            group_id: "group".to_string(),
-            label: "Servers".to_string(),
-            connection_count: 2,
-            child_group_count: 1,
-        });
-        assert!(connection_delete_confirm_is_open(&no_delete, &group_delete));
     }
 
     #[test]
