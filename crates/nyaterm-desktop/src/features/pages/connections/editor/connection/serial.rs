@@ -7,7 +7,9 @@ use gpui::{
 use crate::features::NyaTermApp;
 use crate::models::{ConnectionEditorField, ConnectionEditorMenu, ConnectionEditorState};
 
-use super::super::super::list::{ConnectionEditorChoice, connection_editor_select, editor_field};
+use super::super::super::list::{
+    ConnectionEditorChoice, ConnectionEditorFields, connection_editor_select, editor_field,
+};
 
 pub(super) fn connection_editor_serial_section(
     palette: crate::theme::ThemePalette,
@@ -20,6 +22,7 @@ pub(super) fn connection_editor_serial_section(
     backspace_options: Vec<ConnectionEditorChoice>,
     open_menu: Option<ConnectionEditorMenu>,
     language: &str,
+    fields: &ConnectionEditorFields,
     cx: &mut Context<NyaTermApp>,
 ) -> gpui::Div {
     let tr = |key: &'static str| crate::i18n::text(language, key);
@@ -66,17 +69,10 @@ pub(super) fn connection_editor_serial_section(
                         .gap_1()
                         .child(div().min_w_0().flex_1().child(editor_field(
                             palette,
-                            "connection-editor-baud",
                             tr("dialog.baudRate"),
-                            editor.baud_rate.clone(),
-                            editor.focused_field == ConnectionEditorField::BaudRate,
-                            cx.listener(|this, _, window, cx| {
-                                this.focus_connection_editor_field(
-                                    ConnectionEditorField::BaudRate,
-                                    window,
-                                    cx,
-                                );
-                            }),
+                            ConnectionEditorField::BaudRate,
+                            fields,
+                            cx,
                         )))
                         .child(div().w(px(72.)).flex_none().child(connection_editor_select(
                             palette,

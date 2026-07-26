@@ -15,8 +15,6 @@ use crate::models::{
     ConnectionGroupOpenConfirmState,
 };
 
-use super::super::list::editor_field;
-
 impl NyaTermApp {
     pub(in crate::features) fn connection_group_editor_panel(
         &mut self,
@@ -52,18 +50,26 @@ impl NyaTermApp {
                     .text_color(rgb(palette.text))
                     .child(title),
             )
-            .child(editor_field(
-                palette,
-                "connection-group-name",
-                self.tr("savedConnections.folderName"),
-                editor.name.clone(),
-                true,
-                cx.listener(|this, _, window, cx| {
-                    let group_editor_focus = this.connection_state.group_editor.focus_handle();
-                    window.focus(&group_editor_focus);
-                    cx.notify();
-                }),
-            ))
+            .children(self.connection_state.group_editor_field().map(|field| {
+                div()
+                    .h(px(36.))
+                    .px_3()
+                    .py_1()
+                    .flex()
+                    .flex_col()
+                    .justify_center()
+                    .rounded_sm()
+                    .border_1()
+                    .border_color(rgb(palette.primary))
+                    .bg(rgb(palette.input))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(palette.text_muted))
+                            .child(self.tr("savedConnections.folderName")),
+                    )
+                    .child(div().min_w_0().flex_1().text_xs().child(field))
+            }))
             .when_some(editor.error.clone(), |this, error| {
                 this.child(
                     div()

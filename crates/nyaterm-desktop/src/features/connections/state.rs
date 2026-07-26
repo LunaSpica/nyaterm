@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use gpui::{
     App, AppContext as _, Context, Entity, FocusHandle, Pixels, SharedString, Subscription,
@@ -30,9 +30,9 @@ use self::editor_logic::{
     apply_connection_group_editor_name_key, clear_connection_editor_group_menu_draft,
     clear_connection_editor_runtime_state, commit_connection_editor_new_group,
     connection_editor_inline_panel_draft, connection_editor_window_open_or_pending,
-    finish_connection_editor_save_state, focus_connection_editor_field,
+    editor_field_seeds, finish_connection_editor_save_state, focus_connection_editor_field,
     insert_connection_editor_description_newline, set_connection_editor_advanced_tab,
-    set_connection_editor_error, set_connection_editor_icon,
+    set_connection_editor_error, set_connection_editor_field_text, set_connection_editor_icon,
     set_connection_editor_icon_auto_detect, set_connection_editor_kind,
     set_connection_editor_menu_value, set_connection_editor_password_source,
     set_connection_editor_telnet_tab, set_connection_group_editor_error,
@@ -120,6 +120,14 @@ pub(in crate::features) struct ConnectionImportState {
 
 pub(in crate::features) struct ConnectionEditorFeatureState {
     draft: Option<ConnectionEditorState>,
+    /// One editable field per text input, built when the editor opens.
+    ///
+    /// The draft above stays the source of truth for saving; these own the
+    /// caret, selection and composition, and write back through their
+    /// subscriptions. Keeping them out of `ConnectionEditorState` keeps that
+    /// model a plain value the runtime can clone.
+    fields: HashMap<ConnectionEditorField, Entity<TextField>>,
+    field_subscriptions: Vec<Subscription>,
     window: Option<WindowHandle<ConnectionEditorWindow>>,
     window_open_pending: bool,
     focus: FocusHandle,
@@ -129,6 +137,9 @@ pub(in crate::features) struct ConnectionEditorFeatureState {
 
 pub(in crate::features) struct ConnectionGroupEditorFeatureState {
     draft: Option<ConnectionGroupEditorState>,
+    /// The folder-name input, built with the draft it mirrors.
+    field: Option<Entity<TextField>>,
+    field_subscription: Option<Subscription>,
     focus: FocusHandle,
 }
 
@@ -205,6 +216,8 @@ impl ConnectionFeatureState {
             },
             editor: ConnectionEditorFeatureState {
                 draft: None,
+                fields: HashMap::new(),
+                field_subscriptions: Vec::new(),
                 window: None,
                 window_open_pending: false,
                 focus: focus.editor,
@@ -213,6 +226,8 @@ impl ConnectionFeatureState {
             },
             group_editor: ConnectionGroupEditorFeatureState {
                 draft: None,
+                field: None,
+                field_subscription: None,
                 focus: focus.group_editor,
             },
             confirmations: ConnectionConfirmationState {
@@ -237,6 +252,75 @@ impl ConnectionFeatureState {
                 proxy_editor_focus: focus.network_proxy_editor,
             },
         }
+    }
+
+    /// The editor's fields, for handing to the render sections.
+    pub fn editor_fields(&self) -> &HashMap<ConnectionEditorField, Entity<TextField>> {
+        &self.editor.fields
+    }
+
+    /// Build a field per input and wire each back into the draft.
+    ///
+    /// Called when the editor opens, so the entities live exactly as long as the
+    /// draft they mirror and never leak between edits.
+    pub fn build_editor_fields(&mut self, cx: &mut Context<NyaTermApp>) {
+        self.editor.fields.clear();
+        self.editor.field_subscriptions.clear();
+        let Some(draft) = self.editor.draft.as_ref() else {
+            return;
+        };
+        for (field, value, masked) in editor_field_seeds(draft) {
+            let entity = cx.new(|cx| TextField::new(cx, value).masked(masked));
+            let subscription = cx.subscribe(&entity, move |app: &mut NyaTermApp, _, event, cx| {
+                let TextFieldEvent::Changed(text) = event;
+                app.apply_connection_editor_field_text(field, text.clone(), cx);
+            });
+            self.editor.fields.insert(field, entity);
+            self.editor.field_subscriptions.push(subscription);
+        }
+    }
+
+    pub fn set_editor_field_text(&mut self, field: ConnectionEditorField, text: String) {
+        if let Some(draft) = self.editor.draft.as_mut() {
+            set_connection_editor_field_text(draft, field, text);
+        }
+    }
+
+    pub fn group_editor_field(&self) -> Option<Entity<TextField>> {
+        self.group_editor.field.clone()
+    }
+
+    pub fn build_group_editor_field(&mut self, cx: &mut Context<NyaTermApp>) {
+        let Some(draft) = self.group_editor.draft.as_ref() else {
+            self.group_editor.field = None;
+            self.group_editor.field_subscription = None;
+            return;
+        };
+        let entity = cx.new(|cx| TextField::new(cx, draft.name.clone()));
+        let subscription = cx.subscribe(&entity, |app: &mut NyaTermApp, _, event, cx| {
+            let TextFieldEvent::Changed(text) = event;
+            app.connection_state.set_group_editor_name(text.clone());
+            cx.notify();
+        });
+        self.group_editor.field = Some(entity);
+        self.group_editor.field_subscription = Some(subscription);
+    }
+
+    pub fn clear_group_editor_field(&mut self) {
+        self.group_editor.field = None;
+        self.group_editor.field_subscription = None;
+    }
+
+    pub fn set_group_editor_name(&mut self, name: String) {
+        if let Some(draft) = self.group_editor.draft.as_mut() {
+            draft.name = name;
+            draft.error = None;
+        }
+    }
+
+    pub fn clear_editor_fields(&mut self) {
+        self.editor.fields.clear();
+        self.editor.field_subscriptions.clear();
     }
 
     pub fn finish_editor_save(&mut self, connection_id: String, group_id: Option<String>) {

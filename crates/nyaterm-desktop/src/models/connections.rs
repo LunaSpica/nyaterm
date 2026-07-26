@@ -79,7 +79,7 @@ pub(crate) enum ConnectionEditorTelnetTab {
     Compatibility,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum ConnectionEditorField {
     Name,
     NewGroupName,

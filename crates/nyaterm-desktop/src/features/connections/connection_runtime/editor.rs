@@ -102,16 +102,33 @@ impl NyaTermApp {
         };
 
         self.connection_state.editor.begin_edit(editor);
+        // Fields mirror the draft, so they are rebuilt with it.
+        self.connection_state.build_editor_fields(cx);
         self.terminal.view.status = "connection editor opened".to_string();
         if !self.open_connection_editor_window(cx) {
-            let editor_focus = self.connection_state.editor.focus_handle();
-            window.focus(&editor_focus);
+            // Land on the name and select it, so an edit can start by typing.
+            match self
+                .connection_state
+                .editor_fields()
+                .get(&ConnectionEditorField::Name)
+                .cloned()
+            {
+                Some(field) => {
+                    window.focus(&field.read(cx).focus_handle());
+                    field.update(cx, |field, cx| field.select_all(window, cx));
+                }
+                None => {
+                    let editor_focus = self.connection_state.editor.focus_handle();
+                    window.focus(&editor_focus);
+                }
+            }
         }
         cx.notify();
     }
 
     pub(in crate::features) fn close_connection_editor(&mut self, cx: &mut Context<Self>) {
         self.connection_state.editor.close();
+        self.connection_state.clear_editor_fields();
         self.terminal.view.status = "connection editor closed".to_string();
         cx.notify();
     }
@@ -185,6 +202,17 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.connection_state.editor.set_telnet_tab(tab);
+        cx.notify();
+    }
+
+    /// Take an edit from a field widget into the draft.
+    pub(in crate::features) fn apply_connection_editor_field_text(
+        &mut self,
+        field: ConnectionEditorField,
+        text: String,
+        cx: &mut Context<Self>,
+    ) {
+        self.connection_state.set_editor_field_text(field, text);
         cx.notify();
     }
 

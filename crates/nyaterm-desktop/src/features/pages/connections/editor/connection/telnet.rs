@@ -11,7 +11,9 @@ use crate::models::{
     ConnectionEditorField, ConnectionEditorMenu, ConnectionEditorState, ConnectionEditorTelnetTab,
 };
 
-use super::super::super::list::{ConnectionEditorChoice, connection_editor_select, editor_field};
+use super::super::super::list::{
+    ConnectionEditorChoice, ConnectionEditorFields, connection_editor_select, editor_field,
+};
 
 fn telnet_segment_tab(
     palette: crate::theme::ThemePalette,
@@ -132,6 +134,7 @@ pub(super) fn connection_editor_telnet_section(
     backspace_options: Vec<ConnectionEditorChoice>,
     open_menu: Option<ConnectionEditorMenu>,
     language: &str,
+    fields: &ConnectionEditorFields,
     cx: &mut Context<NyaTermApp>,
 ) -> gpui::Div {
     let tr = |key: &'static str| crate::i18n::text(language, key);
@@ -194,23 +197,17 @@ pub(super) fn connection_editor_telnet_section(
                 .gap_2()
                 .child(editor_field(
                     palette,
-                    "connection-editor-telnet-host",
                     tr("dialog.host"),
-                    editor.host.clone(),
-                    editor.focused_field == ConnectionEditorField::Host,
-                    cx.listener(|this, _, window, cx| {
-                        this.focus_connection_editor_field(ConnectionEditorField::Host, window, cx);
-                    }),
+                    ConnectionEditorField::Host,
+                    fields,
+                    cx,
                 ))
                 .child(editor_field(
                     palette,
-                    "connection-editor-telnet-port",
                     tr("dialog.port"),
-                    editor.port.clone(),
-                    editor.focused_field == ConnectionEditorField::Port,
-                    cx.listener(|this, _, window, cx| {
-                        this.focus_connection_editor_field(ConnectionEditorField::Port, window, cx);
-                    }),
+                    ConnectionEditorField::Port,
+                    fields,
+                    cx,
                 )),
         )
         .child(

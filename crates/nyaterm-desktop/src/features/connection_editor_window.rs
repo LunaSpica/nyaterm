@@ -4,10 +4,14 @@ use gpui::{
 };
 
 use super::{NyaTermApp, child_window_header, child_window_titlebar};
+use crate::models::ConnectionEditorField;
 
 pub(in crate::features) struct ConnectionEditorWindow {
     app: Entity<NyaTermApp>,
     _app_subscription: Subscription,
+    /// Focus is per-window, so the field the main window focused means nothing
+    /// here; this window has to claim it on its own first frame.
+    focused_initial_field: bool,
 }
 
 impl ConnectionEditorWindow {
@@ -16,6 +20,7 @@ impl ConnectionEditorWindow {
         Self {
             app,
             _app_subscription: app_subscription,
+            focused_initial_field: false,
         }
     }
 }
@@ -40,6 +45,20 @@ impl Render for ConnectionEditorWindow {
             )
         });
         window.set_window_title(&title);
+        if !self.focused_initial_field {
+            self.focused_initial_field = true;
+            let field = self
+                .app
+                .read(cx)
+                .connection_state
+                .editor_fields()
+                .get(&ConnectionEditorField::Name)
+                .cloned();
+            if let Some(field) = field {
+                window.focus(&field.read(cx).focus_handle());
+                field.update(cx, |field, cx| field.select_all(window, cx));
+            }
+        }
         let content = self
             .app
             .update(cx, |app, cx| app.connection_editor_window_view(editor, cx));

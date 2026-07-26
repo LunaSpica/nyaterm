@@ -54,6 +54,7 @@ impl NyaTermApp {
     ) -> AnyElement {
         let palette = self.theme_palette();
         let language = self.settings.language.clone();
+        let fields = self.connection_state.editor_fields().clone();
         let title = if editor.id.is_some() {
             self.tr("dialog.editConnection")
         } else {
@@ -373,15 +374,6 @@ impl NyaTermApp {
             selected: editor.shell_path == value,
         })
         .collect::<Vec<_>>();
-        let password_display = if editor.password.is_empty() {
-            if editor.existing_password.is_some() {
-                self.tr("dialog.passwordAlreadySet").to_string()
-            } else {
-                String::new()
-            }
-        } else {
-            "•".repeat(editor.password.chars().count().min(24))
-        };
         let icon_key = editor.icon.as_deref();
         let icon_def = resolve_connection_icon(icon_key, editor.kind.label());
         let icon_picker_open = self.connection_state.editor.icon_picker_is_open();
@@ -538,12 +530,10 @@ impl NyaTermApp {
             .flex_col()
             .gap_3()
             .overflow_hidden()
+            // No blanket focus grab here: it existed to keep the old label-div
+            // inputs "focused", and would now steal focus back from whichever
+            // field the pointer just landed on, since click follows mouse-down.
             .track_focus(&editor_focus)
-            .on_click(cx.listener(|this, _, window, cx| {
-                let editor_focus = this.connection_state.editor.focus_handle();
-                window.focus(&editor_focus);
-                cx.notify();
-            }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 cx.stop_propagation();
                 this.handle_connection_editor_key_down(event, window, cx);
@@ -618,17 +608,10 @@ impl NyaTermApp {
                             .child(icon_picker)
                             .child(div().min_w(px(192.)).flex_1().child(editor_field(
                                 palette,
-                                "connection-editor-name",
                                 name_label,
-                                editor.name.clone(),
-                                editor.focused_field == ConnectionEditorField::Name,
-                                cx.listener(|this, _, window, cx| {
-                                    this.focus_connection_editor_field(
-                                        ConnectionEditorField::Name,
-                                        window,
-                                        cx,
-                                    );
-                                }),
+                                ConnectionEditorField::Name,
+                                &fields,
+                                cx,
                             )))
                             .child(div().min_w(px(192.)).max_w(px(288.)).flex_1().child(
                                 connection_editor_group_select(
@@ -649,7 +632,6 @@ impl NyaTermApp {
                         this.child(connection_editor_ssh_section(
                             palette,
                             &editor,
-                            password_display.clone(),
                             password_label.clone(),
                             key_label.clone(),
                             otp_label.clone(),
@@ -664,6 +646,7 @@ impl NyaTermApp {
                             backspace_options.clone(),
                             active_menu,
                             &language,
+                            &fields,
                             cx,
                         ))
                     })
@@ -675,6 +658,7 @@ impl NyaTermApp {
                             shell_options,
                             active_menu,
                             &language,
+                            &fields,
                             cx,
                         ))
                     })
@@ -685,6 +669,7 @@ impl NyaTermApp {
                             backspace_options.clone(),
                             active_menu,
                             &language,
+                            &fields,
                             cx,
                         ))
                     })
@@ -700,6 +685,7 @@ impl NyaTermApp {
                             backspace_options,
                             active_menu,
                             &language,
+                            &fields,
                             cx,
                         ))
                     })

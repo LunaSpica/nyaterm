@@ -54,6 +54,9 @@ pub struct TextField {
     /// Horizontal scroll, so a caret past the right edge stays visible.
     scroll_x: Pixels,
     caret_visible: bool,
+    /// Focus as of the last render, so owners can style their own chrome with
+    /// only an `&App` — focus itself is a window-scoped question.
+    focused: bool,
     blink: Option<gpui::Task<()>>,
     selecting: bool,
 }
@@ -68,6 +71,7 @@ impl TextField {
             marked: None,
             scroll_x: px(0.),
             caret_visible: true,
+            focused: false,
             blink: None,
             selecting: false,
         }
@@ -93,6 +97,10 @@ impl TextField {
 
     pub fn focus_handle(&self) -> FocusHandle {
         self.focus.clone()
+    }
+
+    pub fn has_focus(&self) -> bool {
+        self.focused
     }
 
     /// Replace the buffer from the owner's state without emitting a change.
@@ -289,6 +297,7 @@ fn buffer_offset(edit: &TextEdit, masked: bool, display: usize) -> usize {
 impl Render for TextField {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let focused = self.focus.is_focused(window);
+        self.focused = focused;
         div()
             .id("text-field")
             .track_focus(&self.focus)

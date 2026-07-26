@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
 use gpui::{
-    App, AppContext as _, ClickEvent, Context, FontWeight, IntoElement, SharedString, Window, div,
+    App, AppContext as _, ClickEvent, Context, Entity, FontWeight, IntoElement, SharedString,
+    Window, div,
     prelude::{
         FluentBuilder, InteractiveElement, ParentElement, StatefulInteractiveElement, Styled,
     },
@@ -9,8 +10,9 @@ use gpui::{
 };
 use nyaterm_core::{Group, ProxyConfig, SavedConnection, natural_compare, truncate_preview};
 
-use crate::features::{NyaTermApp, format_last_used_ms, transfer_input};
-use crate::models::{ConnectionEditorMenu, ConnectionSortMode};
+use crate::features::{NyaTermApp, format_last_used_ms};
+use crate::models::{ConnectionEditorField, ConnectionEditorMenu, ConnectionSortMode};
+use nyaterm_ui::TextField;
 
 #[derive(Clone)]
 pub(super) enum ConnectionListRow {
@@ -921,15 +923,62 @@ mod tests {
     }
 }
 
+/// The editor's text fields, resolved once per render.
+///
+/// Sections receive this rather than the app, because they are free functions
+/// that already take a `Context` and cannot borrow `NyaTermApp` again.
+pub(super) type ConnectionEditorFields = HashMap<ConnectionEditorField, Entity<TextField>>;
+
+/// A labelled row wrapping one editable field.
 pub(super) fn editor_field(
     palette: crate::theme::ThemePalette,
-    id: impl Into<String>,
     label: &'static str,
-    value: String,
-    active: bool,
-    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+    field: ConnectionEditorField,
+    fields: &ConnectionEditorFields,
+    cx: &App,
 ) -> impl IntoElement {
-    transfer_input(id, label, value, active, palette).on_click(on_click)
+    // The whole labelled row is the hit target: the field itself is only one
+    // text line tall, so clicking the label or the padding would otherwise miss.
+    let entity = fields.get(&field);
+    let handle = entity.map(|field| field.read(cx).focus_handle());
+    let focused = entity.is_some_and(|field| field.read(cx).has_focus());
+    let mut row = div()
+        .h(px(36.))
+        .px_3()
+        .py_1()
+        .flex()
+        .flex_col()
+        .justify_center()
+        .gap_0()
+        .rounded_sm()
+        .border_1()
+        .border_color(rgb(if focused {
+            palette.primary
+        } else {
+            palette.border
+        }))
+        .bg(rgb(palette.input));
+    if !label.is_empty() {
+        row = row.child(
+            div()
+                .text_xs()
+                .text_color(rgb(palette.text_muted))
+                .child(label),
+        );
+    }
+    row.when_some(handle, |row, handle| {
+        row.on_mouse_down(gpui::MouseButton::Left, move |_, window, _| {
+            window.focus(&handle);
+        })
+    })
+    .children(fields.get(&field).map(|field| {
+        div()
+            .min_w_0()
+            .flex_1()
+            .text_xs()
+            .text_color(rgb(palette.text))
+            .child(field.clone())
+    }))
 }
 
 pub(super) fn icon_action_button(

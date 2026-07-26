@@ -15,7 +15,8 @@ use crate::models::{
 };
 
 use super::super::super::list::{
-    ConnectionEditorChoice, connection_editor_select, editor_field, toggle_chip,
+    ConnectionEditorChoice, ConnectionEditorFields, connection_editor_select, editor_field,
+    toggle_chip,
 };
 
 fn ssh_segment_tab(
@@ -99,7 +100,6 @@ fn ssh_advanced_content(
 pub(super) fn connection_editor_ssh_section(
     palette: crate::theme::ThemePalette,
     editor: &ConnectionEditorState,
-    password_display: String,
     password_label: String,
     key_label: String,
     otp_label: String,
@@ -114,6 +114,7 @@ pub(super) fn connection_editor_ssh_section(
     backspace_options: Vec<ConnectionEditorChoice>,
     open_menu: Option<ConnectionEditorMenu>,
     language: &str,
+    fields: &ConnectionEditorFields,
     cx: &mut Context<NyaTermApp>,
 ) -> gpui::Div {
     let tr = |key: &'static str| crate::i18n::text(language, key);
@@ -295,34 +296,25 @@ pub(super) fn connection_editor_ssh_section(
                 .gap_2()
                 .child(editor_field(
                     palette,
-                    "connection-editor-host",
                     tr("dialog.host"),
-                    editor.host.clone(),
-                    editor.focused_field == ConnectionEditorField::Host,
-                    cx.listener(|this, _, window, cx| {
-                        this.focus_connection_editor_field(ConnectionEditorField::Host, window, cx);
-                    }),
+                    ConnectionEditorField::Host,
+                    fields,
+                    cx,
                 ))
                 .child(editor_field(
                     palette,
-                    "connection-editor-port",
                     tr("dialog.port"),
-                    editor.port.clone(),
-                    editor.focused_field == ConnectionEditorField::Port,
-                    cx.listener(|this, _, window, cx| {
-                        this.focus_connection_editor_field(ConnectionEditorField::Port, window, cx);
-                    }),
+                    ConnectionEditorField::Port,
+                    fields,
+                    cx,
                 )),
         )
         .child(editor_field(
             palette,
-            "connection-editor-username",
             tr("dialog.username"),
-            editor.username.clone(),
-            editor.focused_field == ConnectionEditorField::Username,
-            cx.listener(|this, _, window, cx| {
-                this.focus_connection_editor_field(ConnectionEditorField::Username, window, cx);
-            }),
+            ConnectionEditorField::Username,
+            fields,
+            cx,
         ))
         .child(
             div()
@@ -382,17 +374,10 @@ pub(super) fn connection_editor_ssh_section(
                         |this| {
                             this.child(editor_field(
                                 palette,
-                                "connection-editor-password",
                                 tr("dialog.password"),
-                                password_display.clone(),
-                                editor.focused_field == ConnectionEditorField::Password,
-                                cx.listener(|this, _, window, cx| {
-                                    this.focus_connection_editor_field(
-                                        ConnectionEditorField::Password,
-                                        window,
-                                        cx,
-                                    );
-                                }),
+                                ConnectionEditorField::Password,
+                                fields,
+                                cx,
                             ))
                         },
                     )
@@ -563,34 +548,18 @@ pub(super) fn connection_editor_ssh_section(
                                     .when(editor.post_login_enabled, |this| {
                                         this.child(editor_field(
                                             palette,
-                                            "connection-editor-post-login-command",
                                             tr("dialog.postLoginCommandContent"),
-                                            editor.post_login_command.clone(),
-                                            editor.focused_field
-                                                == ConnectionEditorField::PostLoginCommand,
-                                            cx.listener(|this, _, window, cx| {
-                                                this.focus_connection_editor_field(
-                                                    ConnectionEditorField::PostLoginCommand,
-                                                    window,
-                                                    cx,
-                                                );
-                                            }),
+                                            ConnectionEditorField::PostLoginCommand,
+                                            fields,
+                                            cx,
                                         ))
                                         .child(
                                             editor_field(
                                                 palette,
-                                                "connection-editor-post-login-delay",
                                                 tr("dialog.postLoginDelay"),
-                                                editor.post_login_delay_ms.clone(),
-                                                editor.focused_field
-                                                    == ConnectionEditorField::PostLoginDelay,
-                                                cx.listener(|this, _, window, cx| {
-                                                    this.focus_connection_editor_field(
-                                                        ConnectionEditorField::PostLoginDelay,
-                                                        window,
-                                                        cx,
-                                                    );
-                                                }),
+                                                ConnectionEditorField::PostLoginDelay,
+                                                fields,
+                                                cx,
                                             ),
                                         )
                                     }),

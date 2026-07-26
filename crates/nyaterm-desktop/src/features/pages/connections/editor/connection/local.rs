@@ -7,15 +7,18 @@ use gpui::{
 use crate::features::{NyaTermApp, small_button};
 use crate::models::{ConnectionEditorField, ConnectionEditorMenu, ConnectionEditorState};
 
-use super::super::super::list::{ConnectionEditorChoice, connection_editor_select, editor_field};
+use super::super::super::list::{
+    ConnectionEditorChoice, ConnectionEditorFields, connection_editor_select, editor_field,
+};
 
 pub(super) fn connection_editor_local_section(
     palette: crate::theme::ThemePalette,
-    editor: &ConnectionEditorState,
+    _editor: &ConnectionEditorState,
     shell_label: &'static str,
     shell_options: Vec<ConnectionEditorChoice>,
     open_menu: Option<ConnectionEditorMenu>,
     language: &str,
+    fields: &ConnectionEditorFields,
     cx: &mut Context<NyaTermApp>,
 ) -> gpui::Div {
     let tr = |key: &'static str| crate::i18n::text(language, key);
@@ -56,17 +59,10 @@ pub(super) fn connection_editor_local_section(
                         )
                         .child(div().min_w_0().flex_1().child(editor_field(
                             palette,
-                            "connection-editor-shell",
                             "",
-                            editor.shell_path.clone(),
-                            editor.focused_field == ConnectionEditorField::ShellPath,
-                            cx.listener(|this, _, window, cx| {
-                                this.focus_connection_editor_field(
-                                    ConnectionEditorField::ShellPath,
-                                    window,
-                                    cx,
-                                );
-                            }),
+                            ConnectionEditorField::ShellPath,
+                            fields,
+                            cx,
                         )))
                         .child(
                             div()
@@ -96,13 +92,10 @@ pub(super) fn connection_editor_local_section(
         )
         .child(editor_field(
             palette,
-            "connection-editor-args",
             tr("dialog.shellArgs"),
-            editor.shell_args.clone(),
-            editor.focused_field == ConnectionEditorField::ShellArgs,
-            cx.listener(|this, _, window, cx| {
-                this.focus_connection_editor_field(ConnectionEditorField::ShellArgs, window, cx);
-            }),
+            ConnectionEditorField::ShellArgs,
+            fields,
+            cx,
         ))
         .child(
             div()
@@ -111,17 +104,10 @@ pub(super) fn connection_editor_local_section(
                 .gap_2()
                 .child(div().min_w_0().flex_1().child(editor_field(
                     palette,
-                    "connection-editor-cwd",
                     tr("dialog.workingDir"),
-                    editor.working_dir.clone(),
-                    editor.focused_field == ConnectionEditorField::WorkingDir,
-                    cx.listener(|this, _, window, cx| {
-                        this.focus_connection_editor_field(
-                            ConnectionEditorField::WorkingDir,
-                            window,
-                            cx,
-                        );
-                    }),
+                    ConnectionEditorField::WorkingDir,
+                    fields,
+                    cx,
                 )))
                 .child(small_button(
                     palette,

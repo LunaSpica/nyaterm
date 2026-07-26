@@ -43,14 +43,17 @@ impl NyaTermApp {
                 parent_id,
                 error: None,
             });
+        self.connection_state.build_group_editor_field(cx);
         self.terminal.view.status = "connection group editor opened".to_string();
-        let group_editor_focus = self.connection_state.group_editor.focus_handle();
-        window.focus(&group_editor_focus);
+        if let Some(field) = self.connection_state.group_editor_field() {
+            window.focus(&field.read(cx).focus_handle());
+        }
         cx.notify();
     }
 
     pub(in crate::features) fn close_connection_group_editor(&mut self, cx: &mut Context<Self>) {
         self.connection_state.group_editor.close();
+        self.connection_state.clear_group_editor_field();
         self.terminal.view.status = "connection group editor closed".to_string();
         cx.notify();
     }

@@ -511,3 +511,96 @@ pub(super) fn set_connection_group_editor_error(
     editor.error = Some(error);
     true
 }
+
+/// Which draft strings become editable fields, and which are secrets.
+///
+/// Driven off the draft rather than a fixed list so a field that does not apply
+/// to the current kind is simply never built.
+pub(super) fn editor_field_seeds(
+    draft: &ConnectionEditorState,
+) -> Vec<(ConnectionEditorField, String, bool)> {
+    vec![
+        (ConnectionEditorField::Name, draft.name.clone(), false),
+        (
+            ConnectionEditorField::Description,
+            draft.description.clone(),
+            false,
+        ),
+        (
+            ConnectionEditorField::NewGroupName,
+            draft.new_group_name.clone(),
+            false,
+        ),
+        (ConnectionEditorField::Host, draft.host.clone(), false),
+        (ConnectionEditorField::Port, draft.port.clone(), false),
+        (
+            ConnectionEditorField::Username,
+            draft.username.clone(),
+            false,
+        ),
+        (
+            ConnectionEditorField::Password,
+            draft.password.clone(),
+            true,
+        ),
+        (
+            ConnectionEditorField::ShellPath,
+            draft.shell_path.clone(),
+            false,
+        ),
+        (
+            ConnectionEditorField::ShellArgs,
+            draft.shell_args.clone(),
+            false,
+        ),
+        (
+            ConnectionEditorField::WorkingDir,
+            draft.working_dir.clone(),
+            false,
+        ),
+        (
+            ConnectionEditorField::SerialPort,
+            draft.serial_port.clone(),
+            false,
+        ),
+        (
+            ConnectionEditorField::BaudRate,
+            draft.baud_rate.clone(),
+            false,
+        ),
+        (
+            ConnectionEditorField::PostLoginCommand,
+            draft.post_login_command.clone(),
+            false,
+        ),
+        (
+            ConnectionEditorField::PostLoginDelay,
+            draft.post_login_delay_ms.clone(),
+            false,
+        ),
+    ]
+}
+
+/// Write an edited field back into the draft.
+pub(super) fn set_connection_editor_field_text(
+    draft: &mut ConnectionEditorState,
+    field: ConnectionEditorField,
+    text: String,
+) {
+    match field {
+        ConnectionEditorField::Name => draft.name = text,
+        ConnectionEditorField::Description => draft.description = text,
+        ConnectionEditorField::NewGroupName => draft.new_group_name = text,
+        ConnectionEditorField::Host => draft.host = text,
+        ConnectionEditorField::Port => draft.port = text,
+        ConnectionEditorField::Username => draft.username = text,
+        ConnectionEditorField::Password => draft.password = text,
+        ConnectionEditorField::ShellPath => draft.shell_path = text,
+        ConnectionEditorField::ShellArgs => draft.shell_args = text,
+        ConnectionEditorField::WorkingDir => draft.working_dir = text,
+        ConnectionEditorField::SerialPort => draft.serial_port = text,
+        ConnectionEditorField::BaudRate => draft.baud_rate = text,
+        ConnectionEditorField::PostLoginCommand => draft.post_login_command = text,
+        ConnectionEditorField::PostLoginDelay => draft.post_login_delay_ms = text,
+    }
+}
