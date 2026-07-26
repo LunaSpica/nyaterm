@@ -6,13 +6,14 @@
 //! streaming semantics and the error mapping are unchanged; this only moves
 //! the code.
 
+use super::agent::{agent_anthropic_tools, agent_gemini_tools, agent_openai_tools};
 use super::{
     AiChatCompletion, AiChatRequest, AiChatStreamDelta, AiCommandCard, AiMessage, AiMessageRole,
     AiMode, AiModelDiscovery, AiModelError, AiModelOutput, AiModelSource, AiProviderCredential,
-    AiSettings, AiToolCall, AiToolCallDelta, ResolvedAiModel, agent_anthropic_tools,
-    agent_gemini_tools, agent_openai_tools, ai_model_id_for_credential, chat_history_for_request,
-    extract_json_object, extract_text_from_assistant, extract_think_block, genai_model_name,
-    request_system_prompt, request_user_prompt, trim_optional_to_option, trim_string_to_option,
+    AiSettings, AiToolCall, AiToolCallDelta, ResolvedAiModel, ai_model_id_for_credential,
+    chat_history_for_request, extract_json_object, extract_text_from_assistant,
+    extract_think_block, genai_model_name, request_system_prompt, request_user_prompt,
+    trim_optional_to_option, trim_string_to_option,
 };
 
 pub fn openai_compatible_models_url(base_url: &str) -> Result<String, AiModelError> {
