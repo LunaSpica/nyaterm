@@ -270,6 +270,7 @@ pub(super) fn connection_editor_telnet_section(
                                             ConnectionEditorMenu::Backspace,
                                             open_menu == Some(ConnectionEditorMenu::Backspace),
                                             backspace_options,
+                                            fields,
                                             cx,
                                         ))
                                         .child(connection_editor_select(
@@ -281,6 +282,7 @@ pub(super) fn connection_editor_telnet_section(
                                             open_menu
                                                 == Some(ConnectionEditorMenu::TelnetEnterMode),
                                             enter_options,
+                                            fields,
                                             cx,
                                         )),
                                 ),

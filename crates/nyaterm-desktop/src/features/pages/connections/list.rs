@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use gpui::{
-    App, AppContext as _, ClickEvent, Context, Edges, Entity, FontWeight, IntoElement,
-    SharedString, Window, anchored, deferred, div, point,
+    App, AppContext as _, ClickEvent, Context, Edges, Entity, FocusHandle, FontWeight, IntoElement,
+    KeyDownEvent, ScrollHandle, SharedString, Window, anchored, deferred, div, point,
     prelude::{
         FluentBuilder, InteractiveElement, ParentElement, StatefulInteractiveElement, Styled,
     },
@@ -367,14 +367,24 @@ pub(super) fn connection_editor_group_select(
     let new_group_field = new_group_entity.cloned();
     let new_group_handle = new_group_entity.map(|field| field.read(cx).focus_handle());
     let new_group_focused = new_group_entity.is_some_and(|field| field.read(cx).has_focus());
+    let menu_focus = fields.menu_focus.clone();
+    let menu_scroll = fields.menu_scroll.clone();
+    let highlight = fields.menu_highlight;
+    let values: Vec<Option<String>> = options.iter().map(|option| option.value.clone()).collect();
+    let selected_index = options
+        .iter()
+        .position(|option| option.selected)
+        .unwrap_or(0);
     let mut option_list = div()
         .id("connection-group-options")
         .max_h(px(168.))
         .flex()
         .flex_col()
-        .overflow_scroll();
+        .overflow_scroll()
+        .track_scroll(&menu_scroll);
     for (index, option) in options.into_iter().enumerate() {
         let option_value = option.value.clone();
+        let active = index == highlight;
         option_list = option_list.child(
             div()
                 .id(SharedString::from(format!(
@@ -392,12 +402,14 @@ pub(super) fn connection_editor_group_select(
                 } else {
                     rgb(palette.text)
                 })
-                .bg(if option.selected {
-                    rgba((palette.primary << 8) | 0x18)
-                } else {
-                    rgba(0x00000000)
-                })
+                .bg(option_row_background(palette, option.selected, active))
                 .hover(|this| this.bg(rgb(palette.hover)))
+                .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
+                    if *hovered {
+                        this.connection_state.editor.set_menu_highlight(index);
+                        cx.notify();
+                    }
+                }))
                 .child(option.label)
                 .on_click(cx.listener(move |this, _, _, cx| {
                     this.set_connection_editor_menu_value(
@@ -446,7 +458,15 @@ pub(super) fn connection_editor_group_select(
                 .text_color(rgb(palette.text))
                 .cursor_pointer()
                 .hover(|this| this.bg(rgb(palette.hover)))
-                .child(div().min_w_0().overflow_hidden().child(value))
+                .child(
+                    div()
+                        .min_w_0()
+                        .flex_1()
+                        .overflow_hidden()
+                        .whitespace_nowrap()
+                        .text_ellipsis()
+                        .child(value),
+                )
                 .child(
                     div()
                         .flex_none()
@@ -460,8 +480,17 @@ pub(super) fn connection_editor_group_select(
                                 .text_color(rgb(palette.text_dimmed)),
                         ),
                 )
-                .on_click(cx.listener(|this, _, _, cx| {
+                .on_click(cx.listener(move |this, _, window, cx| {
                     this.toggle_connection_editor_menu(ConnectionEditorMenu::Group, cx);
+                    if this.connection_state.editor.active_menu()
+                        == Some(ConnectionEditorMenu::Group)
+                    {
+                        this.connection_state
+                            .editor
+                            .set_menu_highlight(selected_index);
+                        let focus = this.connection_state.editor.menu_focus_handle();
+                        window.focus(&focus);
+                    }
                 })),
         )
         .when(open, |this| {
@@ -476,12 +505,26 @@ pub(super) fn connection_editor_group_select(
                             div()
                                 .id("connection-editor-group-popover")
                                 .occlude()
+                                .track_focus(&menu_focus)
                                 .w(px(SELECT_POPOVER_WIDTH_PX))
                                 .rounded_md()
                                 .border_1()
                                 .border_color(rgb(palette.border))
                                 .bg(rgb(palette.surface_elevated))
                                 .shadow_lg()
+                                .on_key_down(cx.listener(
+                                    move |this, event: &KeyDownEvent, window, cx| {
+                                        if this.handle_connection_editor_menu_key(
+                                            ConnectionEditorMenu::Group,
+                                            &values,
+                                            event,
+                                            window,
+                                            cx,
+                                        ) {
+                                            cx.stop_propagation();
+                                        }
+                                    },
+                                ))
                                 .on_mouse_down_out(cx.listener(|this, _, _, cx| {
                                     this.close_connection_editor_menu(
                                         ConnectionEditorMenu::Group,
@@ -593,21 +636,34 @@ pub(super) fn connection_editor_select(
     menu: ConnectionEditorMenu,
     open: bool,
     options: Vec<ConnectionEditorChoice>,
+    fields: &ConnectionEditorFields,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
     let label = label.into();
     let show_label = !label.is_empty();
     let value = value.into();
+    let menu_focus = fields.menu_focus.clone();
+    let menu_scroll = fields.menu_scroll.clone();
+    let highlight = fields.menu_highlight;
+    // The keys the popover answers to need the option order, and only this
+    // function has it — the choices are built where they are rendered.
+    let values: Vec<Option<String>> = options.iter().map(|option| option.value.clone()).collect();
+    let selected_index = options
+        .iter()
+        .position(|option| option.selected)
+        .unwrap_or(0);
     let mut option_list = div()
         .id(SharedString::from(format!("{id}-options")))
         .max_h(px(240.))
         .flex()
         .flex_col()
         .gap_1()
-        .overflow_y_scroll();
+        .overflow_y_scroll()
+        .track_scroll(&menu_scroll);
     for (index, option) in options.into_iter().enumerate() {
         let option_value = option.value.clone();
         let selected = option.selected;
+        let active = index == highlight;
         option_list = option_list.child(
             div()
                 .id(SharedString::from(format!("{id}-option-{index}")))
@@ -624,12 +680,16 @@ pub(super) fn connection_editor_select(
                 } else {
                     rgb(palette.text)
                 })
-                .bg(if selected {
-                    rgba((palette.primary << 8) | 0x18)
-                } else {
-                    rgba(0x00000000)
-                })
+                .bg(option_row_background(palette, selected, active))
                 .hover(|this| this.bg(rgb(palette.hover)))
+                // Pointer and keyboard share one highlight, so moving the mouse
+                // does not leave a second, stale one behind.
+                .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
+                    if *hovered {
+                        this.connection_state.editor.set_menu_highlight(index);
+                        cx.notify();
+                    }
+                }))
                 .child(div().min_w_0().flex_1().child(option.label))
                 // A tick, so the current value is readable at a glance rather
                 // than only implied by the tint.
@@ -683,7 +743,15 @@ pub(super) fn connection_editor_select(
                 .text_color(rgb(palette.text))
                 .cursor_pointer()
                 .hover(|this| this.bg(rgb(palette.hover)))
-                .child(div().min_w_0().overflow_hidden().child(value))
+                .child(
+                    div()
+                        .min_w_0()
+                        .flex_1()
+                        .overflow_hidden()
+                        .whitespace_nowrap()
+                        .text_ellipsis()
+                        .child(value),
+                )
                 .child(
                     div()
                         .flex_none()
@@ -697,8 +765,17 @@ pub(super) fn connection_editor_select(
                                 .text_color(rgb(palette.text_dimmed)),
                         ),
                 )
-                .on_click(cx.listener(move |this, _, _, cx| {
+                .on_click(cx.listener(move |this, _, window, cx| {
                     this.toggle_connection_editor_menu(menu, cx);
+                    if this.connection_state.editor.active_menu() == Some(menu) {
+                        // Open on the current value, and take the keyboard, so
+                        // the arrow keys start from something meaningful.
+                        this.connection_state
+                            .editor
+                            .set_menu_highlight(selected_index);
+                        let focus = this.connection_state.editor.menu_focus_handle();
+                        window.focus(&focus);
+                    }
                 })),
         )
         .when(open, |this| {
@@ -714,6 +791,7 @@ pub(super) fn connection_editor_select(
                             div()
                                 .id(SharedString::from(format!("{id}-popover")))
                                 .occlude()
+                                .track_focus(&menu_focus)
                                 .w(px(SELECT_POPOVER_WIDTH_PX))
                                 .p_1()
                                 .rounded_md()
@@ -721,6 +799,15 @@ pub(super) fn connection_editor_select(
                                 .border_color(rgb(palette.border))
                                 .bg(rgb(palette.surface_elevated))
                                 .shadow_lg()
+                                .on_key_down(cx.listener(
+                                    move |this, event: &KeyDownEvent, window, cx| {
+                                        if this.handle_connection_editor_menu_key(
+                                            menu, &values, event, window, cx,
+                                        ) {
+                                            cx.stop_propagation();
+                                        }
+                                    },
+                                ))
                                 .on_mouse_down_out(cx.listener(move |this, _, _, cx| {
                                     this.close_connection_editor_menu(menu, cx);
                                 }))
@@ -730,6 +817,20 @@ pub(super) fn connection_editor_select(
                 .with_priority(1),
             )
         })
+}
+
+/// A row is tinted when it is the current value and washed when the keyboard or
+/// pointer is on it; both at once reads as the strongest of the two.
+fn option_row_background(
+    palette: crate::theme::ThemePalette,
+    selected: bool,
+    active: bool,
+) -> gpui::Rgba {
+    match (selected, active) {
+        (_, true) => rgba((palette.primary << 8) | 0x2a),
+        (true, false) => rgba((palette.primary << 8) | 0x18),
+        (false, false) => rgba(0x00000000),
+    }
 }
 
 pub(super) fn toggle_chip(
@@ -972,11 +1073,40 @@ mod tests {
     }
 }
 
-/// The editor's text fields, resolved once per render.
+/// What the editor's inputs and selects need from the app, resolved once per
+/// render.
 ///
 /// Sections receive this rather than the app, because they are free functions
-/// that already take a `Context` and cannot borrow `NyaTermApp` again.
-pub(super) type ConnectionEditorFields = HashMap<ConnectionEditorField, Entity<TextField>>;
+/// that already hold a `Context` — reading the app entity again from inside its
+/// own update panics.
+pub(super) struct ConnectionEditorFields {
+    fields: HashMap<ConnectionEditorField, Entity<TextField>>,
+    /// The open select claims focus so it can own the arrow keys.
+    menu_focus: FocusHandle,
+    menu_scroll: ScrollHandle,
+    /// Which option the keyboard is on, as an index into the open select.
+    menu_highlight: usize,
+}
+
+impl ConnectionEditorFields {
+    pub(super) fn new(
+        fields: HashMap<ConnectionEditorField, Entity<TextField>>,
+        menu_focus: FocusHandle,
+        menu_scroll: ScrollHandle,
+        menu_highlight: usize,
+    ) -> Self {
+        Self {
+            fields,
+            menu_focus,
+            menu_scroll,
+            menu_highlight,
+        }
+    }
+
+    pub(super) fn get(&self, field: &ConnectionEditorField) -> Option<&Entity<TextField>> {
+        self.fields.get(field)
+    }
+}
 
 /// A labelled row wrapping one editable field.
 pub(super) fn editor_field(

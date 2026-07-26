@@ -58,6 +58,7 @@ pub(super) fn connection_editor_serial_section(
                     ConnectionEditorMenu::SerialPort,
                     open_menu == Some(ConnectionEditorMenu::SerialPort),
                     serial_port_options,
+                    fields,
                     cx,
                 )))
                 .child(
@@ -82,6 +83,7 @@ pub(super) fn connection_editor_serial_section(
                             ConnectionEditorMenu::BaudRate,
                             open_menu == Some(ConnectionEditorMenu::BaudRate),
                             baud_options,
+                            fields,
                             cx,
                         ))),
                 ),
@@ -99,6 +101,7 @@ pub(super) fn connection_editor_serial_section(
                     ConnectionEditorMenu::DataBits,
                     open_menu == Some(ConnectionEditorMenu::DataBits),
                     data_bits_options,
+                    fields,
                     cx,
                 )))
                 .child(
@@ -113,6 +116,7 @@ pub(super) fn connection_editor_serial_section(
                             ConnectionEditorMenu::Parity,
                             open_menu == Some(ConnectionEditorMenu::Parity),
                             parity_options,
+                            fields,
                             cx,
                         )),
                 )
@@ -124,6 +128,7 @@ pub(super) fn connection_editor_serial_section(
                     ConnectionEditorMenu::StopBits,
                     open_menu == Some(ConnectionEditorMenu::StopBits),
                     stop_bits_options,
+                    fields,
                     cx,
                 )))
                 .child(
@@ -138,6 +143,7 @@ pub(super) fn connection_editor_serial_section(
                             ConnectionEditorMenu::Backspace,
                             open_menu == Some(ConnectionEditorMenu::Backspace),
                             backspace_options,
+                            fields,
                             cx,
                         )),
                 ),

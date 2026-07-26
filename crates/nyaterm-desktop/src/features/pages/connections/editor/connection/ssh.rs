@@ -392,6 +392,7 @@ pub(super) fn connection_editor_ssh_section(
                                 ConnectionEditorMenu::SavedPassword,
                                 open_menu == Some(ConnectionEditorMenu::SavedPassword),
                                 password_options,
+                                fields,
                                 cx,
                             ))
                         },
@@ -409,6 +410,7 @@ pub(super) fn connection_editor_ssh_section(
                     ConnectionEditorMenu::SshKey,
                     open_menu == Some(ConnectionEditorMenu::SshKey),
                     key_options,
+                    fields,
                     cx,
                 ))
             },
@@ -462,6 +464,7 @@ pub(super) fn connection_editor_ssh_section(
                                     ConnectionEditorMenu::Proxy,
                                     open_menu == Some(ConnectionEditorMenu::Proxy),
                                     proxy_options,
+                                    fields,
                                     cx,
                                 ),
                             ))
@@ -482,6 +485,7 @@ pub(super) fn connection_editor_ssh_section(
                                     ConnectionEditorMenu::ProxyJump,
                                     open_menu == Some(ConnectionEditorMenu::ProxyJump),
                                     jump_options,
+                                    fields,
                                     cx,
                                 ),
                             ))
@@ -506,6 +510,7 @@ pub(super) fn connection_editor_ssh_section(
                                         ConnectionEditorMenu::Otp,
                                         open_menu == Some(ConnectionEditorMenu::Otp),
                                         otp_options,
+                                        fields,
                                         cx,
                                     ))
                                     .child(toggle_chip(
@@ -602,6 +607,7 @@ pub(super) fn connection_editor_ssh_section(
                                     ConnectionEditorMenu::Backspace,
                                     open_menu == Some(ConnectionEditorMenu::Backspace),
                                     backspace_options,
+                                    fields,
                                     cx,
                                 ),
                             ))

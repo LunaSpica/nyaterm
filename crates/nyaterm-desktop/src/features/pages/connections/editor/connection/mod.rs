@@ -54,7 +54,12 @@ impl NyaTermApp {
     ) -> AnyElement {
         let palette = self.theme_palette();
         let language = self.settings.language.clone();
-        let fields = self.connection_state.editor_fields().clone();
+        let fields = ConnectionEditorFields::new(
+            self.connection_state.editor_fields().clone(),
+            self.connection_state.editor.menu_focus_handle(),
+            self.connection_state.editor.menu_scroll_handle(),
+            self.connection_state.editor.menu_highlight(),
+        );
         let title = if editor.id.is_some() {
             self.tr("dialog.editConnection")
         } else {

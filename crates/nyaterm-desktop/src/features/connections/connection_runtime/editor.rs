@@ -239,6 +239,10 @@ impl NyaTermApp {
             .editor
             .commit_new_group(required_message)
         {
+            // The draft's copy is cleared by the commit; the box the name was
+            // typed into holds its own buffer and has to be told.
+            self.connection_state
+                .reset_editor_field(ConnectionEditorField::NewGroupName, "", cx);
             cx.notify();
         }
     }
@@ -325,6 +329,80 @@ impl NyaTermApp {
     ) {
         self.connection_state.editor.toggle_flag(flag);
         cx.notify();
+    }
+
+    /// Drive an open select from the keyboard.
+    ///
+    /// The popover owns these keys rather than the editor surface, because only
+    /// it knows the option list — the choices are built where they are rendered,
+    /// and mirroring them into the runtime would be a second source of truth.
+    /// Returns whether the key was consumed.
+    pub(in crate::features) fn handle_connection_editor_menu_key(
+        &mut self,
+        menu: ConnectionEditorMenu,
+        values: &[Option<String>],
+        event: &KeyDownEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        self.mark_user_activity();
+        let keystroke = &event.keystroke;
+        if keystroke.modifiers.platform || keystroke.modifiers.control || keystroke.modifiers.alt {
+            return false;
+        }
+
+        match keystroke.key.as_str() {
+            "escape" => {
+                self.connection_state
+                    .editor
+                    .close_popovers_and_cancel_group_draft();
+                let focus = self.connection_state.editor.focus_handle();
+                window.focus(&focus);
+                cx.notify();
+                true
+            }
+            "down" | "up" => {
+                let delta = if keystroke.key == "down" { 1 } else { -1 };
+                self.connection_state
+                    .editor
+                    .step_menu_highlight(delta, values.len());
+                cx.notify();
+                true
+            }
+            "home" | "end" => {
+                if values.is_empty() {
+                    return false;
+                }
+                let index = if keystroke.key == "home" {
+                    0
+                } else {
+                    values.len() - 1
+                };
+                self.connection_state.editor.set_menu_highlight(index);
+                cx.notify();
+                true
+            }
+            "enter" => {
+                // Enter in the group popover's "new folder" box creates the
+                // folder; anywhere else it takes the highlighted option.
+                if menu == ConnectionEditorMenu::Group
+                    && self.connection_state.editor.new_group_field_is_focused(cx)
+                {
+                    self.commit_connection_editor_new_group(cx);
+                    return true;
+                }
+                let highlight = self.connection_state.editor.menu_highlight();
+                let Some(value) = values.get(highlight) else {
+                    return false;
+                };
+                let value = value.clone();
+                self.set_connection_editor_menu_value(menu, value.as_deref(), cx);
+                let focus = self.connection_state.editor.focus_handle();
+                window.focus(&focus);
+                true
+            }
+            _ => false,
+        }
     }
 
     pub(in crate::features) fn handle_connection_editor_key_down(

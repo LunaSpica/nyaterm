@@ -54,6 +54,7 @@ pub(super) fn connection_editor_local_section(
                                     ConnectionEditorMenu::Shell,
                                     open_menu == Some(ConnectionEditorMenu::Shell),
                                     shell_options,
+                                    fields,
                                     cx,
                                 )),
                         )

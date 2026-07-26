@@ -1,8 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
 use gpui::{
-    App, AppContext as _, Context, Entity, FocusHandle, Pixels, SharedString, Subscription,
-    WindowHandle,
+    App, AppContext as _, Context, Entity, FocusHandle, Pixels, ScrollHandle, SharedString,
+    Subscription, WindowHandle,
 };
 use nyaterm_core::AppSettingsSummary;
 
@@ -133,6 +133,13 @@ pub(in crate::features) struct ConnectionEditorFeatureState {
     focus: FocusHandle,
     icon_picker_open: bool,
     menu: Option<ConnectionEditorMenu>,
+    /// The open popover claims focus so it can own the arrow keys; without a
+    /// handle of its own the keys would reach whichever field was last focused.
+    menu_focus: FocusHandle,
+    /// Which option the keyboard is on, as an index into the open menu's list.
+    menu_highlight: usize,
+    /// Lets the highlight scroll itself into view in a long list.
+    menu_scroll: ScrollHandle,
 }
 
 pub(in crate::features) struct ConnectionGroupEditorFeatureState {
@@ -223,6 +230,9 @@ impl ConnectionFeatureState {
                 focus: focus.editor,
                 icon_picker_open: false,
                 menu: None,
+                menu_focus: cx.focus_handle(),
+                menu_highlight: 0,
+                menu_scroll: ScrollHandle::new(),
             },
             group_editor: ConnectionGroupEditorFeatureState {
                 draft: None,
@@ -283,6 +293,17 @@ impl ConnectionFeatureState {
             });
             self.editor.fields.insert(field, entity);
             self.editor.field_subscriptions.push(subscription);
+        }
+    }
+
+    /// Push a value the runtime changed back down into its field.
+    ///
+    /// Edits normally flow field → draft; this is the other direction, for the
+    /// cases where the runtime consumes what was typed — committing a new folder
+    /// empties the box it was typed into.
+    pub fn reset_editor_field(&mut self, field: ConnectionEditorField, text: &str, cx: &mut App) {
+        if let Some(entity) = self.editor.fields.get(&field) {
+            entity.update(cx, |entity, cx| entity.set_content(text, cx));
         }
     }
 
@@ -672,6 +693,20 @@ impl ConnectionImportState {
     }
 }
 
+/// Where the highlight lands after `delta` steps through `len` options.
+///
+/// Wraps at both ends, and refuses to move in an empty list — the caller has
+/// nothing to highlight there, not even index zero.
+fn stepped_menu_highlight(current: usize, delta: isize, len: usize) -> Option<usize> {
+    if len == 0 {
+        return None;
+    }
+    // Clamp first: a stale highlight from a longer list would otherwise land
+    // somewhere arbitrary after the modulo.
+    let current = current.min(len - 1) as isize;
+    Some((current + delta).rem_euclid(len as isize) as usize)
+}
+
 impl ConnectionEditorFeatureState {
     pub fn begin_edit(&mut self, draft: ConnectionEditorState) {
         self.icon_picker_open = false;
@@ -699,6 +734,14 @@ impl ConnectionEditorFeatureState {
         self.draft
             .as_ref()
             .is_some_and(|editor| editor.focused_field == ConnectionEditorField::Description)
+    }
+
+    /// Whether the caret is in the group popover's "new folder" box, which
+    /// decides what Enter means while that popover is open.
+    pub fn new_group_field_is_focused(&self, cx: &App) -> bool {
+        self.fields
+            .get(&ConnectionEditorField::NewGroupName)
+            .is_some_and(|field| field.read(cx).has_focus())
     }
 
     pub fn new_group_name_focused_in_group_menu(&self) -> bool {
@@ -750,6 +793,7 @@ impl ConnectionEditorFeatureState {
     pub fn close_popovers(&mut self) {
         self.icon_picker_open = false;
         self.menu = None;
+        self.menu_highlight = 0;
     }
 
     pub fn toggle_icon_picker(&mut self) {
@@ -762,8 +806,35 @@ impl ConnectionEditorFeatureState {
         self.icon_picker_open = false;
         let opening = self.menu != Some(menu);
         self.menu = opening.then_some(menu);
+        self.menu_highlight = 0;
         if !opening && menu == ConnectionEditorMenu::Group {
             clear_connection_editor_group_menu_draft(&mut self.draft);
+        }
+    }
+
+    pub fn menu_focus_handle(&self) -> FocusHandle {
+        self.menu_focus.clone()
+    }
+
+    pub fn menu_scroll_handle(&self) -> ScrollHandle {
+        self.menu_scroll.clone()
+    }
+
+    pub fn menu_highlight(&self) -> usize {
+        self.menu_highlight
+    }
+
+    /// Put the highlight on `index`, and scroll it into view.
+    pub fn set_menu_highlight(&mut self, index: usize) {
+        self.menu_highlight = index;
+        self.menu_scroll.scroll_to_item(index);
+    }
+
+    /// Step the highlight by `delta` options, wrapping at both ends the way a
+    /// native combo box does.
+    pub fn step_menu_highlight(&mut self, delta: isize, len: usize) {
+        if let Some(next) = stepped_menu_highlight(self.menu_highlight, delta, len) {
+            self.set_menu_highlight(next);
         }
     }
 
@@ -1259,7 +1330,7 @@ mod tests {
         set_connection_editor_menu_value, set_connection_editor_password_source,
         set_connection_editor_telnet_tab, set_connection_group_editor_error,
         set_connection_group_hover, set_network_group_editor_error, set_network_proxy_editor_error,
-        set_network_tunnel_bind_localhost, set_network_tunnel_editor_error,
+        set_network_tunnel_bind_localhost, set_network_tunnel_editor_error, stepped_menu_highlight,
         sync_connection_search_expansion, toggle_connection_editor_flag,
         toggle_network_item_menu_state, toggle_network_move_picker_state,
         toggle_network_tunnel_auto_open,
@@ -1948,6 +2019,25 @@ mod tests {
             ConnectionEditorTelnetTab::Compatibility
         );
         assert_eq!(editor.error, None);
+    }
+
+    #[test]
+    fn stepped_menu_highlight_wraps_at_both_ends() {
+        assert_eq!(stepped_menu_highlight(0, 1, 3), Some(1));
+        assert_eq!(stepped_menu_highlight(2, 1, 3), Some(0));
+        assert_eq!(stepped_menu_highlight(0, -1, 3), Some(2));
+    }
+
+    #[test]
+    fn stepped_menu_highlight_refuses_an_empty_list() {
+        assert_eq!(stepped_menu_highlight(0, 1, 0), None);
+    }
+
+    #[test]
+    fn stepped_menu_highlight_clamps_a_highlight_left_over_from_a_longer_list() {
+        // Switching the connection kind swaps every select underneath.
+        assert_eq!(stepped_menu_highlight(9, 1, 3), Some(0));
+        assert_eq!(stepped_menu_highlight(9, -1, 3), Some(1));
     }
 
     #[test]
