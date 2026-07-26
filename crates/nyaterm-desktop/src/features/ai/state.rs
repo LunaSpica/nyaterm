@@ -11,7 +11,9 @@ use std::sync::{Arc, Mutex, mpsc};
 use std::time::Instant;
 
 use gpui::FocusHandle;
-use nyaterm_core::{AgentOutputCaptureProcessor, AiCommandCard, AiMessage, AiSession, AiSettings};
+use nyaterm_core::{
+    AgentOutputCaptureProcessor, AiCommandCard, AiMessage, AiMode, AiSession, AiSettings, uuid,
+};
 
 use crate::features::{AiAgentLoopState, AiAgentStepView, AiChatWorkerEvent, AiDiscoveryJobResult};
 use crate::models::{
@@ -234,5 +236,106 @@ impl AiFeatureState {
                 error_notice_at: HashMap::new(),
             },
         }
+    }
+}
+
+impl AiChatState {
+    pub(in crate::features) fn close_message_menu(&mut self) {
+        self.message_menu = None;
+    }
+
+    /// Tracks the trailing `@mention` the composer is currently completing.
+    ///
+    /// Only a trailing run with no whitespace counts, so the picker closes as
+    /// soon as the user types past the mention. The rules are unchanged.
+    pub(in crate::features) fn sync_mention_from_prompt(&mut self) {
+        let Some(at_index) = self.prompt_draft.rfind('@') else {
+            self.close_mention();
+            return;
+        };
+        let query = &self.prompt_draft[at_index + 1..];
+        if query.chars().any(char::is_whitespace) {
+            self.close_mention();
+            return;
+        }
+        if self.mention_query != query {
+            self.mention_query = query.to_string();
+            self.mention_index = 0;
+        }
+        self.mention_open = true;
+    }
+
+    fn close_mention(&mut self) {
+        self.mention_open = false;
+        self.mention_query.clear();
+        self.mention_index = 0;
+    }
+}
+
+impl AiHistoryState {
+    pub(in crate::features) fn cancel_clear_confirm(&mut self) {
+        self.clear_confirm_open = false;
+    }
+}
+
+impl AiAgentState {
+    pub(in crate::features) fn cancel_auto_execution_confirm(&mut self) {
+        self.auto_execution_confirm_open = false;
+    }
+}
+
+impl AiPanelState {
+    pub(in crate::features) fn dismiss_detected_error(&mut self) {
+        self.detected_error = None;
+        self.status = "terminal error notice dismissed".to_string();
+    }
+}
+
+/// Transitions that span more than one AI concern.
+impl AiFeatureState {
+    pub(in crate::features) fn clear_quote(&mut self) {
+        self.chat.quoted_text = None;
+        self.panel.status = "AI quote cleared".to_string();
+    }
+
+    /// Resets every per-conversation concern and mints a new session id.
+    ///
+    /// Provider settings are deliberately untouched; the response preview is
+    /// seeded from the configured default mode exactly as before.
+    pub(in crate::features) fn start_new_chat(&mut self) {
+        self.chat.prompt_draft.clear();
+        self.chat.target_session_ids.clear();
+        self.chat.message_menu = None;
+        self.chat.quoted_text = None;
+        self.chat.close_mention();
+        self.chat.response_preview = if self.settings.config.default_mode == AiMode::Agent {
+            "Agent mode ready".to_string()
+        } else {
+            "Ask mode ready".to_string()
+        };
+        self.chat.command_cards.clear();
+        self.chat.messages.clear();
+        self.chat.streaming_assistant_id = None;
+        self.chat.prepared_request = None;
+        self.chat.session_id = format!("ai-session-{}", uuid());
+
+        self.agent.task_prompt = None;
+        self.agent.step_index = 0;
+        self.agent.loop_state = None;
+        self.agent.capture = AgentOutputCaptureProcessor::new();
+        self.agent.steps.clear();
+        self.agent.thought_expanded.clear();
+        self.agent.output_expanded.clear();
+
+        self.history.open = false;
+        self.history.query.clear();
+
+        self.discovery.menu_open = false;
+        self.discovery.query.clear();
+        self.discovery.index = 0;
+
+        self.panel.detected_error = None;
+        self.panel.execution_menu_open = false;
+        self.panel.status = "new AI chat".to_string();
     }
 }

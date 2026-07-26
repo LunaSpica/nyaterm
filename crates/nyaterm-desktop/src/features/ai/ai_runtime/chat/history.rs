@@ -43,38 +43,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn start_new_ai_chat(&mut self, cx: &mut Context<Self>) {
-        self.ai.chat.prompt_draft.clear();
-        self.ai.chat.target_session_ids.clear();
-        self.ai.chat.message_menu = None;
-        self.ai.chat.quoted_text = None;
-        self.ai.panel.detected_error = None;
-        self.ai.chat.mention_open = false;
-        self.ai.chat.mention_query.clear();
-        self.ai.chat.mention_index = 0;
-        self.ai.chat.response_preview = if self.ai.settings.config.default_mode == AiMode::Agent {
-            "Agent mode ready".to_string()
-        } else {
-            "Ask mode ready".to_string()
-        };
-        self.ai.chat.command_cards.clear();
-        self.ai.agent.task_prompt = None;
-        self.ai.agent.step_index = 0;
-        self.ai.agent.loop_state = None;
-        self.ai.agent.capture = AgentOutputCaptureProcessor::new();
-        self.ai.agent.steps.clear();
-        self.ai.agent.thought_expanded.clear();
-        self.ai.agent.output_expanded.clear();
-        self.ai.chat.messages.clear();
-        self.ai.chat.streaming_assistant_id = None;
-        self.ai.chat.prepared_request = None;
-        self.ai.chat.session_id = format!("ai-session-{}", uuid());
-        self.ai.history.open = false;
-        self.ai.history.query.clear();
-        self.ai.panel.execution_menu_open = false;
-        self.ai.discovery.menu_open = false;
-        self.ai.discovery.query.clear();
-        self.ai.discovery.index = 0;
-        self.ai.panel.status = "new AI chat".to_string();
+        self.ai.start_new_chat();
         cx.notify();
     }
 

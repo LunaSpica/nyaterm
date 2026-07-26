@@ -20,7 +20,7 @@ fn ai_message_menu_position(
 
 impl NyaTermApp {
     pub(in crate::features) fn close_ai_message_menu(&mut self, cx: &mut Context<Self>) {
-        self.ai.chat.message_menu = None;
+        self.ai.chat.close_message_menu();
         cx.notify();
     }
 
@@ -57,8 +57,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn clear_ai_quote(&mut self, cx: &mut Context<Self>) {
-        self.ai.chat.quoted_text = None;
-        self.ai.panel.status = "AI quote cleared".to_string();
+        self.ai.clear_quote();
         cx.notify();
     }
 

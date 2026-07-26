@@ -4,8 +4,7 @@ use crate::models::{AiDetectedErrorState, AiPreparedRequest, SettingsTab};
 
 impl NyaTermApp {
     pub(in crate::features) fn dismiss_ai_detected_error(&mut self, cx: &mut Context<Self>) {
-        self.ai.panel.detected_error = None;
-        self.ai.panel.status = "terminal error notice dismissed".to_string();
+        self.ai.panel.dismiss_detected_error();
         cx.notify();
     }
 

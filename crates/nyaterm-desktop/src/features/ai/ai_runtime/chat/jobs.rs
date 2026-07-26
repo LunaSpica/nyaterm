@@ -522,24 +522,7 @@ impl NyaTermApp {
     }
 
     fn sync_ai_mention_from_prompt(&mut self) {
-        let Some(at_index) = self.ai.chat.prompt_draft.rfind('@') else {
-            self.ai.chat.mention_open = false;
-            self.ai.chat.mention_query.clear();
-            self.ai.chat.mention_index = 0;
-            return;
-        };
-        let query = &self.ai.chat.prompt_draft[at_index + 1..];
-        if query.chars().any(char::is_whitespace) {
-            self.ai.chat.mention_open = false;
-            self.ai.chat.mention_query.clear();
-            self.ai.chat.mention_index = 0;
-            return;
-        }
-        if self.ai.chat.mention_query != query {
-            self.ai.chat.mention_query = query.to_string();
-            self.ai.chat.mention_index = 0;
-        }
-        self.ai.chat.mention_open = true;
+        self.ai.chat.sync_mention_from_prompt();
     }
 
     pub(in crate::features) fn select_ai_mention_candidate(&mut self, cx: &mut Context<Self>) {

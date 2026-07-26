@@ -18,7 +18,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn cancel_ai_clear_history_confirm(&mut self, cx: &mut Context<Self>) {
-        self.ai.history.clear_confirm_open = false;
+        self.ai.history.cancel_clear_confirm();
         cx.notify();
     }
 
@@ -46,7 +46,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn cancel_ai_auto_execution_confirm(&mut self, cx: &mut Context<Self>) {
-        self.ai.agent.auto_execution_confirm_open = false;
+        self.ai.agent.cancel_auto_execution_confirm();
         cx.notify();
     }
 
