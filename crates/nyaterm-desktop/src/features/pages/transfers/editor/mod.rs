@@ -10,13 +10,9 @@ const EXTERNAL_EDITOR_WATCH_INTERVAL: Duration = Duration::from_millis(1000);
 const EXTERNAL_EDITOR_UPLOAD_SETTLE: Duration = Duration::from_millis(450);
 const EXTERNAL_EDITOR_STARTUP_SUPPRESSION: Duration = Duration::from_secs(2);
 
-#[path = "editor/helpers.rs"]
 mod helpers;
 use helpers::*;
 
-#[path = "editor/input_sync.rs"]
 mod input_sync;
-#[path = "editor/lifecycle.rs"]
 mod lifecycle;
-#[path = "editor/open.rs"]
 mod open;

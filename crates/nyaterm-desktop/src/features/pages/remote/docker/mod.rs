@@ -101,17 +101,11 @@ impl DockerLabels {
     }
 }
 
-#[path = "docker_compose.rs"]
 mod compose;
-#[path = "docker_containers.rs"]
 mod containers;
-#[path = "docker_controls.rs"]
 mod controls;
-#[path = "docker_details.rs"]
 mod details;
-#[path = "docker_matchers.rs"]
 mod matchers;
-#[path = "docker_resources.rs"]
 mod resources;
 
 pub(super) use compose::*;

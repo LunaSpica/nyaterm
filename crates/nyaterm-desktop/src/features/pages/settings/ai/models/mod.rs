@@ -1,8 +1,6 @@
 use super::*;
 
-#[path = "models/credential_rows.rs"]
 mod credential_rows;
-#[path = "models/model_groups.rs"]
 mod model_groups;
 
 impl NyaTermApp {

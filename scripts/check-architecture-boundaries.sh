@@ -461,53 +461,17 @@ while IFS=: read -r file _line text; do
   esac
 done < <(rg -n --path-separator / './temp/nyaterm-tauri|nyaterm-tauri' crates docs scripts 2>/dev/null || true)
 
+# The desktop crate no longer uses `#[path]` anywhere: every directory is a
+# real module with its own `mod.rs`. Keep it that way, so module paths keep
+# matching the directory layout and `pub(in ...)` keeps meaning something.
+check_no_matches 'desktop #[path] debt' '#\[path\s*=' \
+  crates/nyaterm-desktop/src
+check_no_matches 'terminal-gpui #[path] debt' '#\[path\s*=' \
+  crates/nyaterm-terminal-gpui/src
+
 # Baseline-friendly checks for areas under active governance. Existing debt is
 # allowed, but new files or additional occurrences fail. As files are cleaned,
 # lower these counts so the debt cannot return.
-check_no_matches 'connections feature #[path] debt' '#\[path\s*=' \
-  crates/nyaterm-desktop/src/features/connections
-check_no_matches 'connections page #[path] debt' '#\[path\s*=' \
-  crates/nyaterm-desktop/src/features/pages/connections
-check_max_count 'network page #[path] debt' '#\[path\s*=' \
-  crates/nyaterm-desktop/src/features/pages/tunnels/mod.rs 0
-check_max_count 'network proxy page #[path] debt' '#\[path\s*=' \
-  crates/nyaterm-desktop/src/features/pages/tunnels/proxy/mod.rs 0
-check_max_count 'network tunnel page #[path] debt' '#\[path\s*=' \
-  crates/nyaterm-desktop/src/features/pages/tunnels/tunnel/mod.rs 0
-check_no_matches 'ai feature #[path] debt' '#\[path\s*=' \
-  crates/nyaterm-desktop/src/features/ai
-check_no_matches 'commands feature #[path] debt' '#\[path\s*=' \
-  crates/nyaterm-desktop/src/features/commands
-check_no_matches 'remote feature #[path] debt' '#\[path\s*=' \
-  crates/nyaterm-desktop/src/features/remote
-check_no_matches 'settings feature #[path] debt' '#\[path\s*=' \
-  crates/nyaterm-desktop/src/features/settings
-check_no_matches 'sync feature #[path] debt' '#\[path\s*=' \
-  crates/nyaterm-desktop/src/features/sync
-check_no_matches 'transfers feature #[path] debt' '#\[path\s*=' \
-  crates/nyaterm-desktop/src/features/transfers
-check_no_matches 'translation feature #[path] debt' '#\[path\s*=' \
-  crates/nyaterm-desktop/src/features/translation
-check_no_matches 'formatting feature #[path] debt' '#\[path\s*=' \
-  crates/nyaterm-desktop/src/features/formatting
-check_no_matches 'inspector feature #[path] debt' '#\[path\s*=' \
-  crates/nyaterm-desktop/src/features/inspector
-check_no_matches 'layout feature #[path] debt' '#\[path\s*=' \
-  crates/nyaterm-desktop/src/features/layout
-check_no_matches 'panels feature #[path] debt' '#\[path\s*=' \
-  crates/nyaterm-desktop/src/features/panels
-check_no_matches 'view_widgets feature #[path] debt' '#\[path\s*=' \
-  crates/nyaterm-desktop/src/features/view_widgets
-check_no_matches 'features root #[path] debt' '#\[path\s*=' \
-  crates/nyaterm-desktop/src/features/mod.rs
-check_no_matches 'session feature #[path] debt' '#\[path\s*=' \
-  crates/nyaterm-desktop/src/features/session
-check_no_matches 'shell feature #[path] debt' '#\[path\s*=' \
-  crates/nyaterm-desktop/src/features/shell
-check_no_matches 'terminal feature #[path] debt' '#\[path\s*=' \
-  crates/nyaterm-desktop/src/features/terminal
-check_max_count 'tunnel runtime #[path] debt' '#\[path\s*=' \
-  crates/nyaterm-desktop/src/features/tunnels/tunnel_runtime.rs 0
 
 declare -A SUPER_BASELINE=(
   [crates/nyaterm-desktop/src/features/connections/connections/mod.rs]=0

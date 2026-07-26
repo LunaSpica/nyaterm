@@ -5,11 +5,7 @@ use crate::shortcuts::{
 };
 use crate::theme::{APPEARANCE_THEME_IDS, appearance_theme_label};
 
-#[path = "workspace/appearance.rs"]
 mod appearance;
-#[path = "workspace/general.rs"]
 mod general;
-#[path = "workspace/interaction.rs"]
 mod interaction;
-#[path = "workspace/keybindings.rs"]
 mod keybindings;

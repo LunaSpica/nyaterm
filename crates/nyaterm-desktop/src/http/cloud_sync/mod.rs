@@ -22,44 +22,35 @@ const MICROSOFT_OAUTH_TOKEN_URL: &str =
     "https://login.microsoftonline.com/common/oauth2/v2.0/token";
 const ALIYUN_DRIVE_BASE_URL: &str = "https://openapi.alipan.com";
 
-#[path = "cloud_sync/helpers.rs"]
 mod helpers;
 use helpers::*;
 
-#[path = "cloud_sync/snippet.rs"]
 mod snippet;
 pub use snippet::*;
 
-#[path = "cloud_sync/github_gist_auth.rs"]
 mod github_gist_auth;
 pub(crate) use github_gist_auth::*;
 
-#[path = "cloud_sync/webdav.rs"]
 mod webdav;
 pub use webdav::*;
 
-#[path = "cloud_sync/s3.rs"]
 mod s3;
 pub use s3::*;
 
-#[path = "cloud_sync/google_drive.rs"]
 mod google_drive;
 #[cfg(test)]
 use google_drive::google_drive_multipart_body;
 pub use google_drive::*;
 
-#[path = "cloud_sync/onedrive.rs"]
 mod onedrive;
 #[cfg(test)]
 use onedrive::onedrive_item_path;
 pub use onedrive::*;
 
-#[path = "cloud_sync/aliyun.rs"]
 mod aliyun;
 pub use aliyun::*;
 #[cfg(test)]
 use aliyun::{AliyunDriveType, aliyun_drive_error_code, aliyun_drive_remote_error};
 
 #[cfg(test)]
-#[path = "cloud_sync/tests.rs"]
 mod tests;

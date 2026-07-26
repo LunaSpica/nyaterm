@@ -10,9 +10,7 @@ use crate::models::{
     TabDockEdge, TabDockZone, TerminalWindowNode, WorkspacePaneNode, WorkspaceSplitDirection,
 };
 
-#[path = "workspace/panes.rs"]
 mod panes;
-#[path = "workspace/terminal_windows.rs"]
 mod terminal_windows;
 
 impl NyaTermApp {

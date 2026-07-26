@@ -11,7 +11,7 @@ Last updated from the working tree on 2026-07-26.
 | --- | ---: | --- |
 | `NyaTermApp` fields | 585 | Counted from `features/app_state/mod.rs`; still transitional and too broad. |
 | `impl NyaTermApp` blocks | 236 | Spread across 233 files under `crates/nyaterm-desktop/src`. |
-| `#[path = "..."]` declarations in desktop | 90 | Historical migration debt; do not add new occurrences. |
+| `#[path = "..."]` declarations in desktop | 0 | Cleared. Every directory is a real module; the boundary script fails on any new occurrence. |
 | `use super::*` imports in desktop | 355 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
 | `features/prelude.rs` rough exported-token count | 230 | Still a broad shared prelude; two hundred fifteen low-frequency transport/core/http/model exports are now explicit imports. |
 | Entity Store structs | 13 | Includes store handles/runtime stores and domain stores. |
@@ -70,8 +70,13 @@ these as staged extraction candidates, not as formatting-only refactor targets.
 - The `layout`, `panels`, `inspector`, `formatting` and `view_widgets` view
   areas are real module trees, including their nested `security_panel/panel`,
   `workspace/surface`, `quick_commands_panel/panel`, `send_command_bar`,
-  `tab_actions_overlay` and `ai_widgets` subtrees. All five are guarded against
-  new `#[path]` declarations.
+  `tab_actions_overlay` and `ai_widgets` subtrees.
+- `#[path = "..."]` is gone from `nyaterm-desktop` and `nyaterm-terminal-gpui`.
+  The `pages` tree, `http/cloud_sync` and `models/workspace_tabs` were the last
+  holdouts; `pages/remote/docker` also stopped aliasing six sibling files and
+  became a normal `docker/` directory. The per-directory guards collapsed into
+  one crate-wide `check_no_matches`, so module paths now always match the
+  directory layout and `pub(in ...)` bounds mean what they say.
 - The connections UI state has started moving out of scattered `NyaTermApp`
   fields and into `ConnectionFeatureState`.
 - The current connections state split separates list UI, import UI, editor
@@ -777,15 +782,12 @@ while `features/mod.rs` still flattened every feature directory through
 still sit in the same crate-wide namespace, reachable from everywhere. Build the
 real module tree first, then the remaining steps actually enforce something.
 
-1. Replace the remaining `#[path = "..."]` declarations in
-   `crates/nyaterm-desktop/src/features` with real nested modules, one feature
-   directory per round. The files already live in the right directories, so this
-   is mechanical and the compiler verifies every step. `features/shell` is done.
-   Each converted directory gets a `check_no_matches` guard so the debt cannot
-   return.
-2. After a directory is a real module, drop its `use super::*` chain in favor of
-   explicit imports, starting with the leaf files. Only then does the module
-   boundary mean anything.
+1. Done. `#[path = "..."]` no longer appears in `nyaterm-desktop` or
+   `nyaterm-terminal-gpui`, and a crate-wide guard keeps it that way.
+2. Drop the `use super::*` chain in favor of explicit imports, starting with the
+   leaf files of a directory and working up to its `mod.rs`. Now that each
+   directory is a real module, this is what actually narrows visibility; before
+   the module tree existed it only moved names between two flat namespaces.
 3. Split `NyaTermApp` along the pattern already validated by
    `ConnectionFeatureState`: grouped feature-state structs with private fields
    and semantic methods, covered by GPUI-free pure state tests. This is the

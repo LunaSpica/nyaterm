@@ -21,15 +21,10 @@ use nyaterm_transport::{
     DockerImage, DockerNetwork, DockerVolume, RemoteProcess,
 };
 
-#[path = "remote/docker.rs"]
 mod docker;
-#[path = "remote/docker_view.rs"]
 mod docker_view;
-#[path = "remote/process.rs"]
 mod process;
-#[path = "remote/process_view.rs"]
 mod process_view;
-#[path = "remote/stats_view.rs"]
 mod stats_view;
 
 use docker::*;

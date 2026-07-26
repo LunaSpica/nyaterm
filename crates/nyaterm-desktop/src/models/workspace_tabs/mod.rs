@@ -21,13 +21,9 @@ pub(crate) enum TerminalWindowNode {
     },
 }
 
-#[path = "workspace_tabs/docking.rs"]
 mod docking;
-#[path = "workspace_tabs/mutation.rs"]
 mod mutation;
-#[path = "workspace_tabs/persistence.rs"]
 mod persistence;
-#[path = "workspace_tabs/tree.rs"]
 mod tree;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

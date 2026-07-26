@@ -3,7 +3,6 @@ use super::*;
 use crate::features::{dialog_action_button, format_cloud_provider};
 use crate::models::{SettingsTab, SnapshotPasswordPromptKind};
 
-#[path = "cloud_sync/providers.rs"]
 mod providers;
 impl NyaTermApp {
     fn cloud_sync_provider_select(
