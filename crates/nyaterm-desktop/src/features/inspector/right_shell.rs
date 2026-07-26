@@ -1,7 +1,11 @@
 use super::*;
 
 impl NyaTermApp {
-    pub(in crate::features) fn right_panel(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+    pub(in crate::features) fn right_panel(
+        &mut self,
+        window: &mut gpui::Window,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
         let mut width = self.right_panel_width.clamp(200., 720.);
         if !cfg!(target_os = "macos") && self.last_viewport_size.0 < 768. {
             width = width.min((self.last_viewport_size.0 - 80.).max(120.));
@@ -15,14 +19,15 @@ impl NyaTermApp {
             .border_l_1()
             .border_color(rgb(palette.border))
             .bg(self.shell_surface_color(palette.surface))
-            .child(self.side_panel_stack(PanelSide::Right, cx))
+            .child(self.side_panel_stack(PanelSide::Right, window, cx))
     }
 
     pub(in crate::features) fn right_panel_body(
         &mut self,
         panel: NavItem,
+        window: &mut gpui::Window,
         cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
-        self.panel_body(panel, cx)
+        self.panel_body(panel, window, cx)
     }
 }

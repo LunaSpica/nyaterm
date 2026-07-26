@@ -1,7 +1,4 @@
 use std::collections::HashSet;
-use std::time::{Duration, Instant};
-
-use nyaterm_core::Group;
 
 use crate::features::{ConnectionDragKind, ConnectionDropPosition, ConnectionDropTarget};
 use crate::models::{
@@ -11,8 +8,6 @@ use crate::models::{
 pub(super) fn remove_connection_list_references(
     selected_ids: &mut HashSet<String>,
     last_selected_id: &mut Option<String>,
-    hovered_connection_id: &mut Option<String>,
-    hover_pending: &mut Option<(String, Instant)>,
     context_menu: &mut Option<ConnectionContextMenuState>,
     drop_target: &mut Option<ConnectionDropTarget>,
     connection_id: &str,
@@ -20,15 +15,6 @@ pub(super) fn remove_connection_list_references(
     selected_ids.remove(connection_id);
     if last_selected_id.as_deref() == Some(connection_id) {
         *last_selected_id = None;
-    }
-    if hovered_connection_id.as_deref() == Some(connection_id) {
-        *hovered_connection_id = None;
-    }
-    if hover_pending
-        .as_ref()
-        .is_some_and(|(pending_id, _)| pending_id == connection_id)
-    {
-        *hover_pending = None;
     }
     if context_menu
         .as_ref()
@@ -70,8 +56,6 @@ pub(super) fn remove_group_list_references(
 pub(super) fn retain_loaded_connection_list_references(
     selected_ids: &mut HashSet<String>,
     last_selected_id: &mut Option<String>,
-    hovered_connection_id: &mut Option<String>,
-    hover_pending: &mut Option<(String, Instant)>,
     context_menu: &mut Option<ConnectionContextMenuState>,
     expanded_group_ids: &mut HashSet<String>,
     hovered_group_id: &mut Option<String>,
@@ -86,18 +70,6 @@ pub(super) fn retain_loaded_connection_list_references(
         .is_some_and(|id| !connection_ids.contains(id))
     {
         *last_selected_id = None;
-    }
-    if hovered_connection_id
-        .as_ref()
-        .is_some_and(|id| !connection_ids.contains(id))
-    {
-        *hovered_connection_id = None;
-    }
-    if hover_pending
-        .as_ref()
-        .is_some_and(|(id, _)| !connection_ids.contains(id))
-    {
-        *hover_pending = None;
     }
     if context_menu
         .as_ref()
@@ -149,108 +121,129 @@ pub(super) fn close_connection_more_menu(more_menu_open: &mut bool) -> bool {
     was_open
 }
 
+/// Edit the filter text relative to the caret.
+///
+/// The previous version only appended and popped, so the caret could not move and
+/// backspace cut a byte off multi-byte input. Everything here steps by character
+/// boundary.
 pub(super) fn apply_connection_search_key(
     search_draft: &mut String,
+    cursor: &mut usize,
+    anchor: &mut Option<usize>,
     key: &str,
     input: Option<&str>,
+    shift: bool,
 ) -> bool {
     match key {
-        "escape" => clear_connection_search(search_draft),
-        "backspace" => {
-            search_draft.pop();
+        "escape" => clear_connection_search(search_draft, cursor, anchor),
+        "left" | "right" | "home" | "end" => {
+            let next = match key {
+                "left" => previous_char_boundary(search_draft, *cursor),
+                "right" => next_char_boundary(search_draft, *cursor),
+                "home" => 0,
+                _ => search_draft.len(),
+            };
+            move_search_caret(cursor, anchor, next, shift);
+            true
+        }
+        "backspace" | "delete" => {
+            let selection = connection_search_selected_range(search_draft, *cursor, *anchor);
+            let range = if selection.start != selection.end {
+                selection
+            } else if key == "backspace" {
+                previous_char_boundary(search_draft, *cursor)..*cursor
+            } else {
+                *cursor..next_char_boundary(search_draft, *cursor)
+            };
+            if range.start == range.end {
+                return false;
+            }
+            replace_connection_search_range(search_draft, cursor, anchor, range, "");
             true
         }
         _ => {
             let Some(input) = input.filter(|input| !input.is_empty()) else {
                 return false;
             };
-            search_draft.push_str(input);
+            let range = connection_search_selected_range(search_draft, *cursor, *anchor);
+            replace_connection_search_range(search_draft, cursor, anchor, range, input);
             true
         }
     }
 }
 
-pub(super) fn clear_connection_search(search_draft: &mut String) -> bool {
+fn move_search_caret(cursor: &mut usize, anchor: &mut Option<usize>, next: usize, shift: bool) {
+    if shift {
+        // Start the selection from wherever the caret was.
+        anchor.get_or_insert(*cursor);
+    } else {
+        *anchor = None;
+    }
+    *cursor = next;
+    if anchor.is_some_and(|anchor| anchor == *cursor) {
+        *anchor = None;
+    }
+}
+
+fn previous_char_boundary(text: &str, offset: usize) -> usize {
+    text[..offset.min(text.len())]
+        .char_indices()
+        .next_back()
+        .map(|(index, _)| index)
+        .unwrap_or(0)
+}
+
+fn next_char_boundary(text: &str, offset: usize) -> usize {
+    let offset = offset.min(text.len());
+    text[offset..]
+        .chars()
+        .next()
+        .map(|c| offset + c.len_utf8())
+        .unwrap_or(offset)
+}
+
+pub(super) fn connection_search_selected_range(
+    search_draft: &str,
+    cursor: usize,
+    anchor: Option<usize>,
+) -> std::ops::Range<usize> {
+    let cursor = cursor.min(search_draft.len());
+    let anchor = anchor.unwrap_or(cursor).min(search_draft.len());
+    if anchor <= cursor {
+        anchor..cursor
+    } else {
+        cursor..anchor
+    }
+}
+
+pub(super) fn replace_connection_search_range(
+    search_draft: &mut String,
+    cursor: &mut usize,
+    anchor: &mut Option<usize>,
+    range: std::ops::Range<usize>,
+    text: &str,
+) {
+    let start = range.start.min(search_draft.len());
+    let end = range.end.clamp(start, search_draft.len());
+    search_draft.replace_range(start..end, text);
+    *cursor = start + text.len();
+    *anchor = None;
+}
+
+pub(super) fn clear_connection_search(
+    search_draft: &mut String,
+    cursor: &mut usize,
+    anchor: &mut Option<usize>,
+) -> bool {
     search_draft.clear();
+    *cursor = 0;
+    *anchor = None;
     true
 }
 
 pub(super) fn cycle_connection_sort_mode(sort_mode: &mut ConnectionSortMode) -> ConnectionSortMode {
     *sort_mode = sort_mode.next();
     *sort_mode
-}
-
-pub(super) fn dismiss_connection_hover(
-    hovered_connection_id: &mut Option<String>,
-    hover_pending: &mut Option<(String, Instant)>,
-) -> bool {
-    let had_hovered = hovered_connection_id.take().is_some();
-    let had_pending = hover_pending.take().is_some();
-    had_hovered || had_pending
-}
-
-pub(super) fn connection_hover_intent_ready(
-    started_at: Instant,
-    now: Instant,
-    delay: Duration,
-) -> bool {
-    now.saturating_duration_since(started_at) >= delay
-}
-
-pub(super) fn poll_connection_hover_intent(
-    hovered_connection_id: &mut Option<String>,
-    hover_pending: &mut Option<(String, Instant)>,
-    now: Instant,
-    delay: Duration,
-) -> bool {
-    let Some((connection_id, started_at)) = hover_pending.clone() else {
-        return false;
-    };
-    if !connection_hover_intent_ready(started_at, now, delay) {
-        return false;
-    }
-    *hover_pending = None;
-    if hovered_connection_id.as_deref() == Some(connection_id.as_str()) {
-        return false;
-    }
-    *hovered_connection_id = Some(connection_id);
-    true
-}
-
-pub(super) fn begin_connection_hover_intent(
-    hovered_connection_id: &Option<String>,
-    hover_pending: &mut Option<(String, Instant)>,
-    connection_id: String,
-    started_at: Instant,
-) -> bool {
-    if hovered_connection_id.as_deref() == Some(connection_id.as_str())
-        || hover_pending
-            .as_ref()
-            .is_some_and(|(pending_id, _)| pending_id == &connection_id)
-    {
-        return false;
-    }
-    *hover_pending = Some((connection_id, started_at));
-    true
-}
-
-pub(super) fn clear_connection_hover_intent(
-    hovered_connection_id: &mut Option<String>,
-    hover_pending: &mut Option<(String, Instant)>,
-    connection_id: &str,
-) -> bool {
-    let mut changed = false;
-    if hover_pending
-        .as_ref()
-        .is_some_and(|(pending_id, _)| pending_id == connection_id)
-    {
-        *hover_pending = None;
-    }
-    if hovered_connection_id.as_deref() == Some(connection_id) {
-        *hovered_connection_id = None;
-        changed = true;
-    }
-    changed
 }
 
 pub(super) fn set_connection_group_hover(
@@ -301,8 +294,6 @@ pub(super) fn clear_connection_list_runtime_state(
     expanded_group_ids: &mut HashSet<String>,
     context_menu: &mut Option<ConnectionContextMenuState>,
     group_context_menu: &mut Option<ConnectionGroupContextMenuState>,
-    hovered_connection_id: &mut Option<String>,
-    hover_pending: &mut Option<(String, Instant)>,
     drop_target: &mut Option<ConnectionDropTarget>,
     hovered_group_id: &mut Option<String>,
 ) {
@@ -310,8 +301,6 @@ pub(super) fn clear_connection_list_runtime_state(
     expanded_group_ids.clear();
     *context_menu = None;
     *group_context_menu = None;
-    *hovered_connection_id = None;
-    *hover_pending = None;
     *drop_target = None;
     *hovered_group_id = None;
 }
@@ -363,6 +352,43 @@ pub(super) fn select_connection_ids(
     selected_ids.len()
 }
 
-pub(super) fn expanded_group_ids(groups: &[Group]) -> HashSet<String> {
-    groups.iter().map(|group| group.id.clone()).collect()
+/// Keep the expanded set in step with the filter box.
+///
+/// Groups start collapsed, so an unexpanded tree would hide every hit. While a
+/// filter is active the groups that still have matches are opened; clearing the
+/// filter puts the tree back the way the user left it. `applied_query` makes the
+/// auto-expand one-shot per keyword, so collapsing an auto-opened group during a
+/// search sticks instead of springing back on the next keystroke.
+pub(super) fn sync_connection_search_expansion(
+    expanded_group_ids: &mut HashSet<String>,
+    search_expanded_base: &mut Option<HashSet<String>>,
+    applied_query: &mut Option<String>,
+    query: &str,
+    matching_group_ids: impl IntoIterator<Item = String>,
+) -> bool {
+    if query.is_empty() {
+        *applied_query = None;
+        let Some(base) = search_expanded_base.take() else {
+            return false;
+        };
+        if *expanded_group_ids == base {
+            return false;
+        }
+        *expanded_group_ids = base;
+        return true;
+    }
+
+    if search_expanded_base.is_none() {
+        *search_expanded_base = Some(expanded_group_ids.clone());
+    }
+    if applied_query.as_deref() == Some(query) {
+        return false;
+    }
+    *applied_query = Some(query.to_string());
+
+    let mut changed = false;
+    for group_id in matching_group_ids {
+        changed |= expanded_group_ids.insert(group_id);
+    }
+    changed
 }

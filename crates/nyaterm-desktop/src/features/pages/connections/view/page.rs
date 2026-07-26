@@ -1,9 +1,10 @@
 use gpui::{
-    Context, FontWeight, IntoElement, KeyDownEvent, MouseButton, SharedString, div,
+    Context, IntoElement, KeyDownEvent, ListHorizontalSizingBehavior, MouseButton, SharedString,
+    div,
     prelude::{
         FluentBuilder, InteractiveElement, ParentElement, StatefulInteractiveElement, Styled,
     },
-    px, rgb, svg, uniform_list,
+    px, relative, rgb, svg, uniform_list,
 };
 
 use crate::features::{ConnectionDragKind, ConnectionDragPayload, NyaTermApp};
@@ -11,14 +12,42 @@ use crate::models::ConnectionSortMode;
 
 use super::super::list::{
     ConnectionListRow, connection_sections, connection_tree_indent_px, flatten_connection_rows,
-    icon_action_button, menu_item_with_icon, menu_separator,
+    icon_action_button, icon_action_button_styled, menu_item_submenu_trigger, menu_item_with_icon,
+    menu_separator,
 };
 
 const CONNECTION_LIST_ROW_HEIGHT_PX: f32 = 34.;
 
+/// Index of the connection row that is most likely the widest.
+///
+/// `uniform_list` measures a single row to decide how far the list can scroll
+/// sideways, so pointing it at row 0 would cap the scroll at whatever that row
+/// happens to be. This picks the candidate by indent plus rendered name width —
+/// an estimate, since the real width comes from the text system, but one that
+/// only has to identify the right row rather than its exact size.
+fn widest_connection_row(rows: &[ConnectionListRow]) -> Option<usize> {
+    rows.iter()
+        .enumerate()
+        .filter_map(|(index, row)| match row {
+            ConnectionListRow::Connection { connection, depth } => {
+                let name_width: usize = connection
+                    .name
+                    .chars()
+                    // CJK and other wide glyphs take about two Latin advances.
+                    .map(|c| if c as u32 >= 0x1100 { 2 } else { 1 })
+                    .sum();
+                Some((index, *depth * 16 + name_width * 8))
+            }
+            _ => None,
+        })
+        .max_by_key(|(_, width)| *width)
+        .map(|(index, _)| index)
+}
+
 impl NyaTermApp {
     pub(in crate::features) fn connections_view(
         &mut self,
+        window: &mut gpui::Window,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let query = self.connection_state.list.search_query();
@@ -28,12 +57,15 @@ impl NyaTermApp {
             &query,
             self.connection_state.list.sort_mode(),
         );
-        let visible_count = sections
-            .iter()
-            .map(|section| section.connections.len())
-            .sum::<usize>();
-        let selected_connections = self.selected_connections();
-        let selected_count = selected_connections.len();
+        // Folders start closed, so a filter would otherwise match into a tree the
+        // user cannot see. Open the folders that still have hits, and put the tree
+        // back once the filter clears.
+        self.connection_state.list.sync_search_expansion(
+            &query,
+            sections
+                .iter()
+                .filter_map(|section| section.group_id.clone()),
+        );
         let empty_connections_label = self.tr("savedConnections.empty");
         let empty_connections_hint = self.tr("savedConnections.emptyHint");
         let no_results_label = self.tr("savedConnections.noResults");
@@ -43,6 +75,11 @@ impl NyaTermApp {
         // the rows intersecting the scroll viewport.
         let flat_rows =
             flatten_connection_rows(&sections, self.connection_state.list.expanded_group_ids());
+        // A folder is worth showing even before anything is filed under it, so the
+        // empty state waits until there are no folders either. Otherwise a freshly
+        // created folder is swallowed by "no saved connections".
+        let store_is_empty = self.connections.is_empty() && self.connection_groups.is_empty();
+        let nothing_matched = flat_rows.is_empty();
         let palette = self.theme_palette();
 
         let mut list = div()
@@ -61,6 +98,12 @@ impl NyaTermApp {
                     }
                 }),
             )
+            .on_mouse_down(
+                MouseButton::Right,
+                cx.listener(|this, event: &gpui::MouseDownEvent, _, cx| {
+                    this.open_connection_list_context_menu(event, cx);
+                }),
+            )
             .on_drop(cx.listener(|this, payload: &ConnectionDragPayload, _, cx| {
                 this.connection_state.list.clear_drop_target();
                 match payload.kind {
@@ -72,7 +115,7 @@ impl NyaTermApp {
                     }
                 }
             }));
-        if self.connections.is_empty() {
+        if store_is_empty {
             list = list.child(
                 div()
                     .flex()
@@ -95,7 +138,7 @@ impl NyaTermApp {
                             .child(empty_connections_hint),
                     ),
             );
-        } else if visible_count == 0 {
+        } else if nothing_matched {
             list = list.child(
                 div()
                     .px_4()
@@ -106,6 +149,10 @@ impl NyaTermApp {
             );
         } else {
             let row_count = flat_rows.len();
+            // `uniform_list` derives its scrollable width from one measured row, so
+            // point it at the row most likely to be the widest or long names would
+            // still be unreachable.
+            let widest_row = widest_connection_row(&flat_rows);
             list = list.child(
                 uniform_list(
                     "connections-list-rows",
@@ -116,6 +163,9 @@ impl NyaTermApp {
                             let Some(row) = flat_rows.get(index).cloned() else {
                                 continue;
                             };
+                            // A definite width here, so the rows inside can resolve
+                            // their `min_w(relative(1.))` and still overflow it when
+                            // the name is long. It tracks the horizontal scroll.
                             let item = div()
                                 .h(px(CONNECTION_LIST_ROW_HEIGHT_PX))
                                 .w_full()
@@ -152,6 +202,8 @@ impl NyaTermApp {
                         items
                     }),
                 )
+                .with_horizontal_sizing_behavior(ListHorizontalSizingBehavior::Unconstrained)
+                .with_width_from_item(widest_row)
                 .flex_1()
                 .min_h_0(),
             );
@@ -166,10 +218,7 @@ impl NyaTermApp {
             .size_full()
             .overflow_hidden()
             .bg(self.shell_transparent_color(palette.surface))
-            .child(self.connections_search_bar(visible_count, cx))
-            .when(selected_count > 0, |this| {
-                this.child(self.connections_selection_strip(selected_count, cx))
-            })
+            .child(self.connections_search_bar(window, cx))
             .child(list)
             .when_some(
                 self.connection_state.group_editor.active_draft(),
@@ -198,32 +247,70 @@ impl NyaTermApp {
                 self.connection_state.list.group_context_menu_is_open(),
                 |this| this.child(self.connection_group_context_menu_overlay(cx)),
             )
+            .when(
+                self.connection_state.list.list_context_menu_is_open(),
+                |this| this.child(self.connection_list_context_menu_overlay(cx)),
+            )
     }
 
     pub(in crate::features) fn connections_search_bar(
         &mut self,
-        visible_count: usize,
+        window: &mut gpui::Window,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let _ = visible_count;
+        let palette = self.theme_palette();
         let search_empty = self.connection_state.list.search_is_empty();
         let search_focus = self.connection_state.list.search_focus_handle();
-        let search_value = if search_empty {
+        let search_focused = search_focus.is_focused(window);
+        let search_value = if search_empty && !search_focused {
             self.tr("savedConnections.filter").to_string()
         } else {
-            self.connection_state.list.search_text().to_string()
+            // The app has no caret-drawing widget; the multi-line paste overlay
+            // marks the insertion point with a literal bar, so do the same here
+            // rather than leaving the field with no sign of where typing lands.
+            let mut display = self.connection_state.list.search_text().to_string();
+            if search_focused {
+                let cursor = self.connection_state.list.search_cursor();
+                display.insert(cursor, '|');
+            }
+            display
         };
-        let sort_label = "icons/conn/sort.svg";
-        let sort_tooltip = self.tr(match self.connection_state.list.sort_mode() {
+        let input_entity = cx.entity();
+        // Tauri swaps the glyph, flips it for Z-A and tints it while a name sort is
+        // active, so the current mode is readable without hovering for the tooltip.
+        let sort_mode = self.connection_state.list.sort_mode();
+        let sort_label = match sort_mode {
+            ConnectionSortMode::Default => "icons/conn/sort.svg",
+            ConnectionSortMode::NameAsc | ConnectionSortMode::NameDesc => {
+                "icons/conn/sort-alpha.svg"
+            }
+        };
+        let sort_tint = (sort_mode != ConnectionSortMode::Default).then_some(palette.primary);
+        let sort_flipped = sort_mode == ConnectionSortMode::NameDesc;
+        let sort_tooltip = self.tr(match sort_mode {
             ConnectionSortMode::Default => "savedConnections.sortDefault",
             ConnectionSortMode::NameAsc => "savedConnections.sortNameAsc",
             ConnectionSortMode::NameDesc => "savedConnections.sortNameDesc",
         });
         let more_open = self.connection_state.list.more_menu_is_open();
         let can_clear_all = !self.connections.is_empty();
+        let selected_count = self.selected_connections().len();
+        let move_submenu_open = self.connection_state.list.move_submenu_is_open();
+        let selected_ids = self
+            .selected_connections()
+            .into_iter()
+            .map(|connection| connection.id)
+            .collect::<Vec<_>>();
+        let connect_selected_label = if selected_count > 1 {
+            format!(
+                "{} ({selected_count})",
+                self.tr("savedConnections.connectSelected")
+            )
+        } else {
+            self.tr("savedConnections.connect").to_string()
+        };
 
         // Tauri search strip: px-2 py-1.5, input h-7.
-        let palette = self.theme_palette();
         div()
             .h(px(36.))
             .px_2()
@@ -239,24 +326,31 @@ impl NyaTermApp {
                     .h(px(28.))
                     .flex_1()
                     .min_w_0()
+                    .relative()
                     .rounded_md()
                     .border_1()
-                    .border_color(rgb(palette.border))
+                    // Tauri gives the focused field a primary ring; without it the
+                    // box looked identical whether or not it had focus.
+                    .border_color(rgb(if search_focused {
+                        palette.primary
+                    } else {
+                        palette.border
+                    }))
                     .bg(rgb(palette.hover))
                     .px_2()
                     .flex()
                     .items_center()
                     .gap_2()
-                    .cursor_pointer()
+                    .cursor_text()
                     .track_focus(&search_focus)
                     .on_click(cx.listener(|this, _, window, cx| {
                         let search_focus = this.connection_state.list.search_focus_handle();
                         window.focus(&search_focus);
                         cx.notify();
                     }))
-                    .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+                    .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                         cx.stop_propagation();
-                        this.handle_connection_search_key_down(event, cx);
+                        this.handle_connection_search_key_down(event, window, cx);
                     }))
                     .child(
                         svg()
@@ -276,6 +370,25 @@ impl NyaTermApp {
                                 rgb(palette.text)
                             })
                             .child(search_value),
+                    )
+                    .child(
+                        gpui::canvas(
+                            |_bounds, _window, _cx| {},
+                            move |bounds, _state, window, cx| {
+                                let focus = input_entity
+                                    .read(cx)
+                                    .connection_state
+                                    .list
+                                    .search_focus_handle();
+                                window.handle_input(
+                                    &focus,
+                                    gpui::ElementInputHandler::new(bounds, input_entity.clone()),
+                                    cx,
+                                );
+                            },
+                        )
+                        .absolute()
+                        .inset_0(),
                     )
                     .when(!search_empty, |this| {
                         this.child(
@@ -300,16 +413,23 @@ impl NyaTermApp {
                                     window.focus(&search_focus);
                                     cx.notify();
                                 }))
-                                .child(svg().size(px(13.)).path("icons/window/close.svg")),
+                                .child(
+                                    svg()
+                                        .size(px(13.))
+                                        .path("icons/window/close.svg")
+                                        .text_color(rgb(palette.text_muted)),
+                                ),
                         )
                     }),
             )
             // Count lives in PanelHeader (Tauri).
-            .child(icon_action_button(
+            .child(icon_action_button_styled(
                 palette,
                 "connections-sort",
                 sort_label,
                 sort_tooltip,
+                sort_tint,
+                sort_flipped,
                 cx.listener(|this, _, _, cx| {
                     this.cycle_connection_sort_mode(cx);
                 }),
@@ -393,6 +513,69 @@ impl NyaTermApp {
                                         this.open_connection_import_dialog(window, cx);
                                     }),
                                 ))
+                                // Tauri parks the multi-selection actions here and
+                                // in the list background menu instead of on a
+                                // toolbar that shoves the tree down.
+                                .when(selected_count > 0, |this| {
+                                    this.child(menu_separator(palette))
+                                        .child(menu_item_with_icon(
+                                            palette,
+                                            "connections-selected-connect",
+                                            "icons/conn/connect.svg",
+                                            connect_selected_label.clone(),
+                                            false,
+                                            cx.listener(|this, _, window, cx| {
+                                                this.connection_state.list.close_more_menu();
+                                                this.start_selected_saved_connections(window, cx);
+                                            }),
+                                        ))
+                                        .child(menu_item_with_icon(
+                                            palette,
+                                            "connections-selected-copy",
+                                            "icons/copy.svg",
+                                            self.tr("savedConnections.copySelected"),
+                                            false,
+                                            cx.listener(|this, _, _, cx| {
+                                                this.connection_state.list.close_more_menu();
+                                                this.copy_selected_connections(cx);
+                                            }),
+                                        ))
+                                        .child(menu_item_submenu_trigger(
+                                            palette,
+                                            "connections-selected-move",
+                                            "icons/net/move.svg",
+                                            self.tr("savedConnections.moveToGroup"),
+                                            move_submenu_open,
+                                            cx.listener(|this, _, _, cx| {
+                                                this.connection_state.list.toggle_move_submenu();
+                                                cx.notify();
+                                            }),
+                                        ))
+                                        .child(menu_item_with_icon(
+                                            palette,
+                                            "connections-selected-delete",
+                                            "icons/net/delete.svg",
+                                            self.tr("savedConnections.delete"),
+                                            true,
+                                            cx.listener(|this, _, _, cx| {
+                                                this.connection_state.list.close_more_menu();
+                                                this.delete_selected_connections(cx);
+                                            }),
+                                        ))
+                                })
+                                // The header menu is laid out inline rather than
+                                // through the shared overlay, so its flyout is an
+                                // absolutely positioned sibling opening leftwards —
+                                // the menu already sits against the panel edge.
+                                .when(move_submenu_open && selected_count > 0, |this| {
+                                    this.child(div().absolute().top(px(0.)).right(px(164.)).child(
+                                        self.connection_move_to_group_submenu(
+                                            "connections-selected-move-menu",
+                                            selected_ids.clone(),
+                                            cx,
+                                        ),
+                                    ))
+                                })
                                 .when(can_clear_all, |this| {
                                     this.child(menu_separator(palette))
                                         .child(menu_item_with_icon(
@@ -408,109 +591,6 @@ impl NyaTermApp {
                                 }),
                         )
                     }),
-            )
-    }
-
-    pub(in crate::features) fn connections_selection_strip(
-        &mut self,
-        selected_count: usize,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        let palette = self.theme_palette();
-        let selected_label = self
-            .tr("savedConnections.selectedCount")
-            .replace("{{count}}", &selected_count.to_string());
-        // Tauri multi-select strip under search bar.
-        div()
-            .h(px(30.))
-            .px_2()
-            .flex()
-            .items_center()
-            .gap_1()
-            .border_b_1()
-            .border_color(rgb(palette.link))
-            .bg(rgb(0x0d2137))
-            .child(
-                div()
-                    .min_w_0()
-                    .flex_1()
-                    .text_size(px(11.))
-                    .font_weight(FontWeight(600.))
-                    .text_color(rgb(palette.link))
-                    .child(selected_label),
-            )
-            .child(
-                div()
-                    .id(SharedString::from("connections-selection-open"))
-                    .h(px(22.))
-                    .px_2()
-                    .rounded_sm()
-                    .flex()
-                    .items_center()
-                    .text_size(px(11.))
-                    .font_weight(FontWeight(600.))
-                    .text_color(rgb(palette.text))
-                    .bg(rgb(palette.surface_elevated))
-                    .cursor_pointer()
-                    .hover(|this| this.bg(rgb(palette.border)))
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.start_selected_saved_connections(window, cx);
-                    }))
-                    .child(self.tr("savedConnections.connectSelected")),
-            )
-            .child(
-                div()
-                    .id(SharedString::from("connections-selection-copy"))
-                    .h(px(22.))
-                    .px_2()
-                    .rounded_sm()
-                    .flex()
-                    .items_center()
-                    .text_size(px(11.))
-                    .text_color(rgb(palette.text))
-                    .cursor_pointer()
-                    .hover(|this| this.bg(rgb(palette.surface_elevated)))
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.copy_selected_connections(cx);
-                    }))
-                    .child(self.tr("savedConnections.copy")),
-            )
-            .child(
-                div()
-                    .id(SharedString::from("connections-selection-delete"))
-                    .h(px(22.))
-                    .px_2()
-                    .rounded_sm()
-                    .flex()
-                    .items_center()
-                    .text_size(px(11.))
-                    .text_color(rgb(palette.danger))
-                    .cursor_pointer()
-                    .hover(|this| this.bg(rgb(0x3a1717)))
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.delete_selected_connections(cx);
-                    }))
-                    .child(self.tr("savedConnections.delete")),
-            )
-            .child(
-                div()
-                    .id(SharedString::from("connections-selection-clear"))
-                    .h(px(22.))
-                    .px_2()
-                    .rounded_sm()
-                    .flex()
-                    .items_center()
-                    .text_size(px(11.))
-                    .text_color(rgb(palette.text_muted))
-                    .cursor_pointer()
-                    .hover(|this| {
-                        this.bg(rgb(palette.surface_elevated))
-                            .text_color(rgb(palette.text))
-                    })
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.clear_selected_connections(cx);
-                    }))
-                    .child(self.tr("syncGroup.deselectAll")),
             )
     }
 }

@@ -411,6 +411,7 @@ impl NyaTermApp {
     pub(in crate::features) fn side_panel_stack(
         &mut self,
         side: PanelSide,
+        window: &mut gpui::Window,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         use gpui::relative;
@@ -423,14 +424,14 @@ impl NyaTermApp {
             }
             .or_else(|| self.activity_bar_layout.first_panel_on_side(side))
             .unwrap_or(NavItem::Workspace);
-            self.single_side_panel(side, fallback, cx)
+            self.single_side_panel(side, fallback, window, cx)
         } else if open_ids.len() == 1 || !self.panel_multi_open {
             let panel = open_ids
                 .first()
                 .and_then(|id| NavItem::from_persistence_id(id))
                 .or_else(|| self.activity_bar_layout.first_panel_on_side(side))
                 .unwrap_or(NavItem::Workspace);
-            self.single_side_panel(side, panel, cx)
+            self.single_side_panel(side, panel, window, cx)
         } else {
             let weights: Vec<f32> = open_ids
                 .iter()
@@ -450,8 +451,8 @@ impl NyaTermApp {
                 let actions = self.side_panel_header_actions(panel, cx);
                 let palette = self.theme_palette();
                 let body = match side {
-                    PanelSide::Left => self.left_panel_body(panel, cx),
-                    PanelSide::Right => self.right_panel_body(panel, cx),
+                    PanelSide::Left => self.left_panel_body(panel, window, cx),
+                    PanelSide::Right => self.right_panel_body(panel, window, cx),
                 };
                 stack = stack.child(
                     div()
@@ -487,7 +488,7 @@ impl NyaTermApp {
                 .overflow_hidden()
                 .child(stack)
                 .child(
-                    self.single_side_panel(side, overlay, cx)
+                    self.single_side_panel(side, overlay, window, cx)
                         .absolute()
                         .top_0()
                         .left_0()
@@ -503,6 +504,7 @@ impl NyaTermApp {
         &mut self,
         side: PanelSide,
         panel: NavItem,
+        window: &mut gpui::Window,
         cx: &mut Context<Self>,
     ) -> gpui::Div {
         let meta = self.side_panel_meta(side, panel);
@@ -513,8 +515,8 @@ impl NyaTermApp {
         let actions = self.side_panel_header_actions(panel, cx);
         let palette = self.theme_palette();
         let body = match side {
-            PanelSide::Left => self.left_panel_body(panel, cx),
-            PanelSide::Right => self.right_panel_body(panel, cx),
+            PanelSide::Left => self.left_panel_body(panel, window, cx),
+            PanelSide::Right => self.right_panel_body(panel, window, cx),
         };
         div()
             .size_full()
@@ -806,7 +808,8 @@ impl NyaTermApp {
                                                         svg()
                                                             .size(px(14.))
                                                             .flex_none()
-                                                            .path("icons/fe/delete.svg"),
+                                                            .path("icons/fe/delete.svg")
+                                                            .text_color(rgb(palette.danger)),
                                                     )
                                                     .child(prune_label)
                                                     .on_click(cx.listener(|this, _, _, cx| {
@@ -917,7 +920,17 @@ fn header_svg_icon_button(
         })
         .when(!enabled, |this| this.opacity(0.45))
         .tooltip(move |_, cx| cx.new(|_| ChromeTooltip::new(tooltip.clone())).into())
-        .child(svg().size(px(16.)).flex_none().path(icon_path))
+        .child(
+            svg()
+                .size(px(16.))
+                .flex_none()
+                .path(icon_path)
+                .text_color(rgb(if enabled {
+                    palette.text_muted
+                } else {
+                    palette.text_dimmed
+                })),
+        )
         .on_click(move |event, window, cx| {
             if enabled {
                 on_click(event, window, cx);

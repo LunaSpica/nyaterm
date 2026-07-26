@@ -173,9 +173,88 @@ impl NyaTermApp {
         cx.notify();
     }
 
+    /// Move the keyboard-active row through the filtered results, wrapping around.
+    ///
+    /// Returns whether the key was consumed, so the caller does not also feed it
+    /// to the text field.
+    fn step_connection_keyboard_active(&mut self, forward: bool, cx: &mut Context<Self>) -> bool {
+        let visible = self.visible_connection_ids();
+        if visible.is_empty() {
+            return false;
+        }
+        let current = self
+            .connection_state
+            .list
+            .keyboard_active_connection_id()
+            .and_then(|id| visible.iter().position(|candidate| candidate == id));
+        let next = match (current, forward) {
+            (Some(index), true) => (index + 1) % visible.len(),
+            (Some(index), false) => (index + visible.len() - 1) % visible.len(),
+            (None, true) => 0,
+            (None, false) => visible.len() - 1,
+        };
+        self.connection_state
+            .list
+            .set_keyboard_active_connection_id(Some(visible[next].clone()));
+        cx.notify();
+        true
+    }
+
+    /// Open the keyboard-active row, or the first result when nothing is active.
+    fn open_connection_keyboard_active(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let visible = self.visible_connection_ids();
+        let Some(target) = self
+            .connection_state
+            .list
+            .keyboard_active_connection_id()
+            .filter(|id| visible.iter().any(|candidate| candidate == id))
+            .map(ToOwned::to_owned)
+            .or_else(|| visible.first().cloned())
+        else {
+            return false;
+        };
+        let Some(connection) = self
+            .connections
+            .iter()
+            .find(|connection| connection.id == target)
+            .cloned()
+        else {
+            return false;
+        };
+        self.start_saved_connection(connection, window, cx);
+        true
+    }
+
+    /// Drop the keyboard-active row once the filter no longer shows it.
+    fn sync_connection_keyboard_active(&mut self, cx: &mut Context<Self>) {
+        let Some(active) = self
+            .connection_state
+            .list
+            .keyboard_active_connection_id()
+            .map(ToOwned::to_owned)
+        else {
+            return;
+        };
+        if !self
+            .visible_connection_ids()
+            .iter()
+            .any(|candidate| candidate == &active)
+        {
+            self.connection_state
+                .list
+                .set_keyboard_active_connection_id(None);
+            cx.notify();
+        }
+    }
+
     pub(in crate::features) fn handle_connection_search_key_down(
         &mut self,
         event: &KeyDownEvent,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         self.mark_user_activity();
@@ -184,12 +263,36 @@ impl NyaTermApp {
             return;
         }
         let key = keystroke.key.as_str();
+
+        // While a filter is active the box also drives the results: up/down walk
+        // them and enter opens the active one, as the old UI did.
+        if !self.connection_state.list.search_is_empty()
+            && matches!(key, "up" | "down" | "enter")
+            && !keystroke.modifiers.platform
+            && !keystroke.modifiers.control
+        {
+            match key {
+                "up" | "down" => {
+                    if self.step_connection_keyboard_active(key == "down", cx) {
+                        return;
+                    }
+                }
+                _ => {
+                    if self.open_connection_keyboard_active(window, cx) {
+                        return;
+                    }
+                }
+            }
+        }
+
         let changed = if key == "escape" {
             self.connection_state.list.clear_search()
         } else if !keystroke.modifiers.platform && !keystroke.modifiers.control {
-            self.connection_state
-                .list
-                .apply_search_key(key, keystroke.key_char.as_deref())
+            self.connection_state.list.apply_search_key(
+                key,
+                keystroke.key_char.as_deref(),
+                keystroke.modifiers.shift,
+            )
         } else {
             false
         };
@@ -197,6 +300,7 @@ impl NyaTermApp {
             if key == "escape" {
                 self.terminal.view.status = "connection search cleared".to_string();
             }
+            self.sync_connection_keyboard_active(cx);
             cx.notify();
         }
     }

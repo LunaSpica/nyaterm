@@ -1,7 +1,11 @@
 use super::*;
 
 impl NyaTermApp {
-    pub(in crate::features) fn sidebar(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+    pub(in crate::features) fn sidebar(
+        &mut self,
+        window: &mut gpui::Window,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
         let mut width = self.left_panel_width.clamp(160., 720.);
         if !cfg!(target_os = "macos") && self.last_viewport_size.0 < 1024. {
             width = width.min((self.last_viewport_size.0 - 80.).max(120.));
@@ -15,20 +19,22 @@ impl NyaTermApp {
             .border_r_1()
             .border_color(rgb(palette.border))
             .bg(self.shell_surface_color(palette.surface))
-            .child(self.side_panel_stack(PanelSide::Left, cx))
+            .child(self.side_panel_stack(PanelSide::Left, window, cx))
     }
 
     pub(in crate::features) fn left_panel_body(
         &mut self,
         panel: NavItem,
+        window: &mut gpui::Window,
         cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
-        self.panel_body(panel, cx)
+        self.panel_body(panel, window, cx)
     }
 
     pub(in crate::features) fn panel_body(
         &mut self,
         panel: NavItem,
+        window: &mut gpui::Window,
         cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
         let palette = self.theme_palette();
@@ -38,7 +44,7 @@ impl NyaTermApp {
             NavItem::SecurityAuth => self.security_auth_panel(cx).into_any_element(),
             NavItem::SyncBackupHistory => self.sync_backup_history_panel(cx).into_any_element(),
             NavItem::Migration => self.migration_view().into_any_element(),
-            NavItem::Connections => self.connections_view(cx).into_any_element(),
+            NavItem::Connections => self.connections_view(window, cx).into_any_element(),
             NavItem::AiAssistant => self.ai_assistant_panel(cx).into_any_element(),
             NavItem::ActiveSessions => self.active_sessions_panel(cx).into_any_element(),
             NavItem::CommandHistory => self.command_history_panel(cx).into_any_element(),

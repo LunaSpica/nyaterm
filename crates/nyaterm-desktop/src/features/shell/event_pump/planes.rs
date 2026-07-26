@@ -260,7 +260,6 @@ impl NyaTermApp {
                 render_requests_ms = idle.render_requests.as_millis(),
                 render_requests_output_pressure = idle.render_request_output_pressure,
                 pending_focus_ms = idle.pending_focus.as_millis(),
-                connection_hover_ms = idle.connection_hover.as_millis(),
                 action_link_tooltip_ms = idle.action_link_tooltip.as_millis(),
                 remote_refresh_ms = idle.remote_refresh.as_millis(),
                 idle_lock_ms = idle.idle_lock.as_millis(),
@@ -594,9 +593,6 @@ impl NyaTermApp {
             return result;
         }
 
-        let pending_session_start = self.has_pending_session_start();
-        let queued_saved_connection_start = !self.pending_saved_connection_queue.is_empty();
-
         // Durable open-tabs/layout writes were removed from connect/register;
         // flush here when the UI is not under output/geometry pressure.
         if self.terminal.view.runtime.open_tabs_persist_dirty
@@ -637,16 +633,6 @@ impl NyaTermApp {
         let stage_started_at = Instant::now();
         dirty |= self.drive_terminal_render_requests(true);
         result.render_requests = stage_started_at.elapsed();
-
-        let stage_started_at = Instant::now();
-        if connection_hover_poll_allowed(
-            demote_idle,
-            pending_session_start,
-            queued_saved_connection_start,
-        ) {
-            dirty |= self.poll_connection_hover_delay();
-        }
-        result.connection_hover = stage_started_at.elapsed();
 
         let stage_started_at = Instant::now();
         dirty |= self.poll_action_link_tooltip_delay(cx);

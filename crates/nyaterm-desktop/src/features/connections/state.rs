@@ -1,8 +1,7 @@
 use std::collections::HashSet;
-use std::time::{Duration, Instant};
 
 use gpui::{FocusHandle, Pixels, WindowHandle};
-use nyaterm_core::{AppSettingsSummary, Group};
+use nyaterm_core::AppSettingsSummary;
 
 use super::connections::{ConnectionDragKind, ConnectionDropPosition, ConnectionDropTarget};
 use crate::features::{ConnectionEditorToggle, ConnectionEditorWindow};
@@ -11,10 +10,10 @@ use crate::models::{
     ConnectionEditorField, ConnectionEditorMenu, ConnectionEditorPasswordSource,
     ConnectionEditorState, ConnectionEditorTelnetTab, ConnectionGroupContextMenuState,
     ConnectionGroupDeleteConfirmState, ConnectionGroupEditorState, ConnectionGroupOpenConfirmState,
-    ConnectionImportSource, ConnectionKindTab, ConnectionSortMode, NetworkDeleteConfirmState,
-    NetworkGroupDeleteConfirmState, NetworkGroupEditorState, NetworkItemMenuState,
-    NetworkMovePickerState, NetworkProxyEditorField, NetworkProxyEditorState, NetworkTab,
-    NetworkTunnelEditorField, NetworkTunnelEditorState,
+    ConnectionImportSource, ConnectionKindTab, ConnectionListContextMenuState, ConnectionSortMode,
+    NetworkDeleteConfirmState, NetworkGroupDeleteConfirmState, NetworkGroupEditorState,
+    NetworkItemMenuState, NetworkMovePickerState, NetworkProxyEditorField, NetworkProxyEditorState,
+    NetworkTab, NetworkTunnelEditorField, NetworkTunnelEditorState,
 };
 
 mod editor_logic;
@@ -29,21 +28,20 @@ use self::editor_logic::{
     connection_editor_inline_panel_draft, connection_editor_window_open_or_pending,
     finish_connection_editor_save_state, focus_connection_editor_field,
     insert_connection_editor_description_newline, set_connection_editor_advanced_tab,
-    set_connection_editor_error, set_connection_editor_icon, set_connection_editor_kind,
+    set_connection_editor_error, set_connection_editor_icon,
+    set_connection_editor_icon_auto_detect, set_connection_editor_kind,
     set_connection_editor_menu_value, set_connection_editor_password_source,
     set_connection_editor_telnet_tab, set_connection_group_editor_error,
     toggle_connection_editor_flag,
 };
-#[cfg(test)]
-use self::list_logic::connection_hover_intent_ready;
 use self::list_logic::{
-    apply_connection_search_key, begin_connection_hover_intent, clear_connection_hover_intent,
-    clear_connection_list_runtime_state, clear_connection_search, clear_selected_connection_ids,
-    close_connection_more_menu, connection_drop_position_for_target, cycle_connection_sort_mode,
-    dismiss_connection_hover, expanded_group_ids, poll_connection_hover_intent,
+    apply_connection_search_key, clear_connection_list_runtime_state, clear_connection_search,
+    clear_selected_connection_ids, close_connection_more_menu, connection_drop_position_for_target,
+    connection_search_selected_range, cycle_connection_sort_mode,
     remove_connection_list_references, remove_group_list_references,
-    retain_loaded_connection_list_references, select_connection_ids,
-    set_connection_drop_target_if_changed, set_connection_group_hover,
+    replace_connection_search_range, retain_loaded_connection_list_references,
+    select_connection_ids, set_connection_drop_target_if_changed, set_connection_group_hover,
+    sync_connection_search_expansion,
 };
 #[cfg(test)]
 use self::network_logic::remove_network_group_references;
@@ -83,16 +81,31 @@ pub(in crate::features) struct ConnectionFeatureFocus {
 
 pub(in crate::features) struct ConnectionListState {
     search_draft: String,
+    /// Caret position as a byte offset into `search_draft`.
+    search_cursor: usize,
+    /// Other end of the selection while shift-extending; `None` means no selection.
+    search_anchor: Option<usize>,
+    /// In-flight IME composition and where it sits in `search_draft`.
+    search_marked_text: String,
+    search_marked_range: Option<std::ops::Range<usize>>,
     search_focus: FocusHandle,
     sort_mode: ConnectionSortMode,
     more_menu_open: bool,
     context_menu: Option<ConnectionContextMenuState>,
     group_context_menu: Option<ConnectionGroupContextMenuState>,
-    hovered_connection_id: Option<String>,
-    hover_pending: Option<(String, Instant)>,
+    list_context_menu: Option<ConnectionListContextMenuState>,
+    /// The "move to group" flyout hanging off whichever context menu is open.
+    move_submenu_open: bool,
+    /// Row the arrow keys are currently on while filtering. Distinct from the
+    /// selection: walking results must not clobber a multi-select.
+    keyboard_active_connection_id: Option<String>,
     drop_target: Option<ConnectionDropTarget>,
     hovered_group_id: Option<String>,
     expanded_group_ids: HashSet<String>,
+    /// Expansion to restore once the filter box empties again.
+    search_expanded_base: Option<HashSet<String>>,
+    /// Filter text the auto-expand has already been applied for.
+    search_applied_query: Option<String>,
     selected_ids: HashSet<String>,
     last_selected_id: Option<String>,
 }
@@ -141,14 +154,14 @@ pub(in crate::features) struct NetworkFeatureState {
 }
 
 impl ConnectionFeatureState {
-    pub fn new(
-        settings: &AppSettingsSummary,
-        groups: &[Group],
-        focus: ConnectionFeatureFocus,
-    ) -> Self {
+    pub fn new(settings: &AppSettingsSummary, focus: ConnectionFeatureFocus) -> Self {
         Self {
             list: ConnectionListState {
                 search_draft: String::new(),
+                search_cursor: 0,
+                search_anchor: None,
+                search_marked_text: String::new(),
+                search_marked_range: None,
                 search_focus: focus.search,
                 sort_mode: ConnectionSortMode::from_setting(
                     &settings.ui_saved_connections_sort_mode,
@@ -156,11 +169,16 @@ impl ConnectionFeatureState {
                 more_menu_open: false,
                 context_menu: None,
                 group_context_menu: None,
-                hovered_connection_id: None,
-                hover_pending: None,
+                list_context_menu: None,
+                move_submenu_open: false,
+                keyboard_active_connection_id: None,
                 drop_target: None,
                 hovered_group_id: None,
-                expanded_group_ids: expanded_group_ids(groups),
+                // Tauri opens the panel with every folder closed; the tree is
+                // long enough that seeding it expanded buries the folder list.
+                expanded_group_ids: HashSet::new(),
+                search_expanded_base: None,
+                search_applied_query: None,
                 selected_ids: HashSet::new(),
                 last_selected_id: None,
             },
@@ -288,14 +306,6 @@ impl ConnectionListState {
         group_id.is_some_and(|id| self.hovered_group_id.as_deref() == Some(id))
     }
 
-    pub fn connection_is_hovered(&self, connection_id: &str) -> bool {
-        self.hovered_connection_id.as_deref() == Some(connection_id)
-    }
-
-    pub fn pending_hover_is_clear(&self) -> bool {
-        self.hover_pending.is_none()
-    }
-
     pub fn drop_position_for_kind_target(
         &self,
         kind: ConnectionDragKind,
@@ -338,58 +348,135 @@ impl ConnectionListState {
     }
 
     pub fn close_more_menu(&mut self) -> bool {
+        self.move_submenu_open = false;
         close_connection_more_menu(&mut self.more_menu_open)
     }
 
-    pub fn apply_search_key(&mut self, key: &str, input: Option<&str>) -> bool {
-        apply_connection_search_key(&mut self.search_draft, key, input)
+    pub fn apply_search_key(&mut self, key: &str, input: Option<&str>, shift: bool) -> bool {
+        apply_connection_search_key(
+            &mut self.search_draft,
+            &mut self.search_cursor,
+            &mut self.search_anchor,
+            key,
+            input,
+            shift,
+        )
     }
 
     pub fn clear_search(&mut self) -> bool {
-        clear_connection_search(&mut self.search_draft)
+        self.search_marked_text.clear();
+        self.search_marked_range = None;
+        clear_connection_search(
+            &mut self.search_draft,
+            &mut self.search_cursor,
+            &mut self.search_anchor,
+        )
+    }
+
+    pub fn search_cursor(&self) -> usize {
+        self.search_cursor.min(self.search_draft.len())
+    }
+
+    pub fn search_selection_is_reversed(&self) -> bool {
+        self.search_anchor
+            .is_some_and(|anchor| anchor > self.search_cursor)
+    }
+
+    pub fn search_selected_byte_range(&self) -> std::ops::Range<usize> {
+        connection_search_selected_range(&self.search_draft, self.search_cursor, self.search_anchor)
+    }
+
+    pub fn search_marked_text(&self) -> &str {
+        &self.search_marked_text
+    }
+
+    pub fn search_marked_range(&self) -> Option<std::ops::Range<usize>> {
+        self.search_marked_range.clone()
+    }
+
+    pub fn clear_search_marked(&mut self) {
+        self.search_marked_text.clear();
+        self.search_marked_range = None;
+    }
+
+    pub fn replace_search_range(&mut self, range: std::ops::Range<usize>, text: &str) {
+        replace_connection_search_range(
+            &mut self.search_draft,
+            &mut self.search_cursor,
+            &mut self.search_anchor,
+            range,
+            text,
+        );
+        self.search_marked_text.clear();
+        self.search_marked_range = None;
+    }
+
+    /// Record an in-flight IME composition and where its selection sits.
+    pub fn set_search_marked(
+        &mut self,
+        start: usize,
+        marked_text: &str,
+        selected: Option<std::ops::Range<usize>>,
+    ) {
+        self.search_marked_text = marked_text.to_string();
+        self.search_marked_range =
+            (!marked_text.is_empty()).then_some(start..start + marked_text.len());
+        if let Some(selected) = selected {
+            self.search_anchor = (selected.start != selected.end).then_some(start + selected.start);
+            self.search_cursor = start + selected.end;
+        }
     }
 
     pub fn cycle_sort_mode(&mut self) -> ConnectionSortMode {
         cycle_connection_sort_mode(&mut self.sort_mode)
     }
 
-    pub fn dismiss_hover(&mut self) -> bool {
-        dismiss_connection_hover(&mut self.hovered_connection_id, &mut self.hover_pending)
-    }
-
-    pub fn poll_hover_intent(&mut self, now: Instant, delay: Duration) -> bool {
-        poll_connection_hover_intent(
-            &mut self.hovered_connection_id,
-            &mut self.hover_pending,
-            now,
-            delay,
-        )
-    }
-
-    pub fn begin_hover_intent(&mut self, connection_id: String, started_at: Instant) -> bool {
-        begin_connection_hover_intent(
-            &self.hovered_connection_id,
-            &mut self.hover_pending,
-            connection_id,
-            started_at,
-        )
-    }
-
-    pub fn clear_hover_intent(&mut self, connection_id: &str) -> bool {
-        clear_connection_hover_intent(
-            &mut self.hovered_connection_id,
-            &mut self.hover_pending,
-            connection_id,
-        )
-    }
-
     pub fn set_group_hover(&mut self, group_id: String, hovered: bool) -> bool {
         set_connection_group_hover(&mut self.hovered_group_id, group_id, hovered)
+    }
+
+    pub fn list_context_menu_is_open(&self) -> bool {
+        self.list_context_menu.is_some()
+    }
+
+    pub fn active_list_context_menu(&self) -> Option<ConnectionListContextMenuState> {
+        self.list_context_menu.clone()
+    }
+
+    /// Whether the open context menu is showing its "move to group" flyout.
+    pub fn keyboard_active_connection_id(&self) -> Option<&str> {
+        self.keyboard_active_connection_id.as_deref()
+    }
+
+    pub fn connection_is_keyboard_active(&self, connection_id: &str) -> bool {
+        self.keyboard_active_connection_id.as_deref() == Some(connection_id)
+    }
+
+    pub fn set_keyboard_active_connection_id(&mut self, connection_id: Option<String>) {
+        self.keyboard_active_connection_id = connection_id;
+    }
+
+    pub fn move_submenu_is_open(&self) -> bool {
+        self.move_submenu_open
+    }
+
+    pub fn toggle_move_submenu(&mut self) {
+        self.move_submenu_open = !self.move_submenu_open;
+    }
+
+    pub fn open_list_context_menu(&mut self, x: Pixels, y: Pixels) {
+        self.close_more_menu();
+        self.context_menu = None;
+        self.group_context_menu = None;
+        self.move_submenu_open = false;
+        self.list_context_menu = Some(ConnectionListContextMenuState { x, y });
     }
 
     pub fn open_context_menu(&mut self, connection_id: String, x: Pixels, y: Pixels) {
         self.close_more_menu();
         self.group_context_menu = None;
+        self.list_context_menu = None;
+        self.move_submenu_open = false;
         if !self.selected_ids.contains(&connection_id) {
             self.select_only(connection_id.clone());
         }
@@ -403,12 +490,16 @@ impl ConnectionListState {
     pub fn open_group_context_menu(&mut self, group_id: String, x: Pixels, y: Pixels) {
         self.close_more_menu();
         self.context_menu = None;
+        self.list_context_menu = None;
+        self.move_submenu_open = false;
         self.group_context_menu = Some(ConnectionGroupContextMenuState { group_id, x, y });
     }
 
     pub fn close_context_menus(&mut self) {
         self.context_menu = None;
         self.group_context_menu = None;
+        self.list_context_menu = None;
+        self.move_submenu_open = false;
     }
 
     pub fn toggle_group_expanded(&mut self, group_id: String) -> bool {
@@ -425,6 +516,20 @@ impl ConnectionListState {
 
     pub fn expand_groups(&mut self, group_ids: impl IntoIterator<Item = String>) {
         self.expanded_group_ids.extend(group_ids);
+    }
+
+    pub fn sync_search_expansion(
+        &mut self,
+        query: &str,
+        matching_group_ids: impl IntoIterator<Item = String>,
+    ) -> bool {
+        sync_connection_search_expansion(
+            &mut self.expanded_group_ids,
+            &mut self.search_expanded_base,
+            &mut self.search_applied_query,
+            query,
+            matching_group_ids,
+        )
     }
 
     pub fn set_drop_target_if_changed(&mut self, target: ConnectionDropTarget) -> bool {
@@ -444,14 +549,17 @@ impl ConnectionListState {
     }
 
     pub fn clear_runtime_state(&mut self) {
+        self.search_expanded_base = None;
+        self.search_applied_query = None;
+        self.list_context_menu = None;
+        self.move_submenu_open = false;
+        self.keyboard_active_connection_id = None;
         clear_connection_list_runtime_state(
             &mut self.selected_ids,
             &mut self.last_selected_id,
             &mut self.expanded_group_ids,
             &mut self.context_menu,
             &mut self.group_context_menu,
-            &mut self.hovered_connection_id,
-            &mut self.hover_pending,
             &mut self.drop_target,
             &mut self.hovered_group_id,
         );
@@ -461,8 +569,6 @@ impl ConnectionListState {
         remove_connection_list_references(
             &mut self.selected_ids,
             &mut self.last_selected_id,
-            &mut self.hovered_connection_id,
-            &mut self.hover_pending,
             &mut self.context_menu,
             &mut self.drop_target,
             connection_id,
@@ -484,11 +590,12 @@ impl ConnectionListState {
         connection_ids: &HashSet<String>,
         group_ids: &HashSet<String>,
     ) {
+        if let Some(base) = self.search_expanded_base.as_mut() {
+            base.retain(|id| group_ids.contains(id));
+        }
         retain_loaded_connection_list_references(
             &mut self.selected_ids,
             &mut self.last_selected_id,
-            &mut self.hovered_connection_id,
-            &mut self.hover_pending,
             &mut self.context_menu,
             &mut self.expanded_group_ids,
             &mut self.hovered_group_id,
@@ -629,6 +736,10 @@ impl ConnectionEditorFeatureState {
     pub fn set_icon(&mut self, icon: Option<&str>) -> bool {
         self.close_popovers();
         set_connection_editor_icon(&mut self.draft, icon)
+    }
+
+    pub fn set_icon_auto_detect(&mut self, enabled: bool) -> bool {
+        set_connection_editor_icon_auto_detect(&mut self.draft, enabled)
     }
 
     pub fn set_menu_value(&mut self, menu: ConnectionEditorMenu, value: Option<String>) -> bool {
@@ -1099,27 +1210,23 @@ impl NetworkFeatureState {
 mod tests {
     use std::collections::HashSet;
 
-    use std::time::{Duration, Instant};
-
     use super::{
         advance_network_proxy_editor_focus, advance_network_tunnel_editor_focus,
         apply_connection_editor_shell_path, apply_connection_editor_text_key,
         apply_connection_editor_working_dir, apply_connection_group_editor_name_key,
         apply_connection_search_key, apply_network_group_editor_name_key,
         apply_network_proxy_editor_key, apply_network_tunnel_editor_key,
-        begin_connection_hover_intent, clear_connection_editor_group_menu_draft,
-        clear_connection_editor_runtime_state, clear_connection_hover_intent,
+        clear_connection_editor_group_menu_draft, clear_connection_editor_runtime_state,
         clear_connection_list_runtime_state, clear_connection_search, clear_network_proxy_editor,
         clear_network_tunnel_editor, clear_selected_connection_ids, close_connection_more_menu,
         commit_connection_editor_new_group, connection_drop_position_for_target,
         connection_editor_inline_panel_draft, connection_editor_window_open_or_pending,
-        connection_hover_intent_ready, cycle_connection_sort_mode, cycle_network_proxy_group,
+        connection_search_selected_range, cycle_connection_sort_mode, cycle_network_proxy_group,
         cycle_network_proxy_protocol, cycle_network_tunnel_connection, cycle_network_tunnel_group,
-        cycle_network_tunnel_type, dismiss_connection_hover, expanded_group_ids,
-        finish_connection_editor_save_state, focus_connection_editor_field,
-        focus_network_proxy_editor_field, focus_network_tunnel_editor_field,
-        insert_connection_editor_description_newline, insert_network_proxy_command_newline,
-        poll_connection_hover_intent, remove_connection_list_references,
+        cycle_network_tunnel_type, finish_connection_editor_save_state,
+        focus_connection_editor_field, focus_network_proxy_editor_field,
+        focus_network_tunnel_editor_field, insert_connection_editor_description_newline,
+        insert_network_proxy_command_newline, remove_connection_list_references,
         remove_group_list_references, remove_network_group_and_item_references,
         remove_network_group_references, remove_network_item_references,
         retain_loaded_connection_list_references, select_connection_ids,
@@ -1129,50 +1236,167 @@ mod tests {
         set_connection_editor_telnet_tab, set_connection_group_editor_error,
         set_connection_group_hover, set_network_group_editor_error, set_network_proxy_editor_error,
         set_network_tunnel_bind_localhost, set_network_tunnel_editor_error,
-        toggle_connection_editor_flag, toggle_network_item_menu_state,
-        toggle_network_move_picker_state, toggle_network_tunnel_auto_open,
+        sync_connection_search_expansion, toggle_connection_editor_flag,
+        toggle_network_item_menu_state, toggle_network_move_picker_state,
+        toggle_network_tunnel_auto_open,
     };
     use crate::features::{
         ConnectionDragKind, ConnectionDropPosition, ConnectionDropTarget, ConnectionEditorToggle,
     };
     use crate::models::{
-        ConnectionContextMenuState, ConnectionDeleteConfirmState, ConnectionEditorAdvancedTab,
-        ConnectionEditorField, ConnectionEditorMenu, ConnectionEditorPasswordSource,
-        ConnectionEditorState, ConnectionEditorTelnetTab, ConnectionGroupContextMenuState,
-        ConnectionGroupDeleteConfirmState, ConnectionGroupEditorState, ConnectionKindTab,
-        ConnectionSortMode, NetworkDeleteConfirmState, NetworkGroupDeleteConfirmState,
-        NetworkGroupEditorState, NetworkItemMenuState, NetworkMovePickerState,
-        NetworkProxyEditorField, NetworkProxyEditorState, NetworkTab, NetworkTunnelEditorField,
-        NetworkTunnelEditorState,
+        ConnectionContextMenuState, ConnectionEditorAdvancedTab, ConnectionEditorField,
+        ConnectionEditorMenu, ConnectionEditorPasswordSource, ConnectionEditorState,
+        ConnectionEditorTelnetTab, ConnectionGroupContextMenuState, ConnectionGroupEditorState,
+        ConnectionKindTab, ConnectionSortMode, NetworkDeleteConfirmState,
+        NetworkGroupDeleteConfirmState, NetworkGroupEditorState, NetworkItemMenuState,
+        NetworkMovePickerState, NetworkProxyEditorField, NetworkProxyEditorState, NetworkTab,
+        NetworkTunnelEditorField, NetworkTunnelEditorState,
     };
-    use nyaterm_core::Group;
 
     #[test]
-    fn expanded_group_ids_include_all_loaded_groups() {
-        let groups = vec![
-            Group {
-                id: "root".to_string(),
-                name: "Root".to_string(),
-                parent_id: None,
-                sort_order: 0,
-                created_at_ms: Some(10),
-                updated_at_ms: Some(20),
-            },
-            Group {
-                id: "child".to_string(),
-                name: "Child".to_string(),
-                parent_id: Some("root".to_string()),
-                sort_order: 1,
-                created_at_ms: Some(30),
-                updated_at_ms: Some(40),
-            },
-        ];
+    fn search_editing_is_relative_to_the_caret_and_respects_char_boundaries() {
+        let mut draft = String::new();
+        let mut cursor = 0usize;
+        let mut anchor = None;
 
-        let expanded = expanded_group_ids(&groups);
+        for input in ["南", "京", "a"] {
+            apply_connection_search_key(
+                &mut draft,
+                &mut cursor,
+                &mut anchor,
+                "",
+                Some(input),
+                false,
+            );
+        }
+        assert_eq!(draft, "南京a");
+        assert_eq!(cursor, draft.len());
 
-        assert!(expanded.contains("root"));
-        assert!(expanded.contains("child"));
-        assert_eq!(expanded.len(), 2);
+        // Backspace must drop a whole character, not one byte of a multi-byte one.
+        apply_connection_search_key(
+            &mut draft,
+            &mut cursor,
+            &mut anchor,
+            "backspace",
+            None,
+            false,
+        );
+        apply_connection_search_key(
+            &mut draft,
+            &mut cursor,
+            &mut anchor,
+            "backspace",
+            None,
+            false,
+        );
+        assert_eq!(draft, "南");
+
+        // Insert at the caret rather than always appending.
+        apply_connection_search_key(&mut draft, &mut cursor, &mut anchor, "home", None, false);
+        apply_connection_search_key(&mut draft, &mut cursor, &mut anchor, "", Some("x"), false);
+        assert_eq!(draft, "x南");
+        assert_eq!(cursor, 1);
+
+        // Delete removes forward.
+        apply_connection_search_key(&mut draft, &mut cursor, &mut anchor, "delete", None, false);
+        assert_eq!(draft, "x");
+    }
+
+    #[test]
+    fn shift_extends_a_selection_that_typing_then_replaces() {
+        let mut draft = "abc".to_string();
+        let mut cursor = 3usize;
+        let mut anchor = None;
+
+        apply_connection_search_key(&mut draft, &mut cursor, &mut anchor, "left", None, true);
+        apply_connection_search_key(&mut draft, &mut cursor, &mut anchor, "left", None, true);
+        assert_eq!(
+            connection_search_selected_range(&draft, cursor, anchor),
+            1..3
+        );
+
+        apply_connection_search_key(&mut draft, &mut cursor, &mut anchor, "", Some("Z"), false);
+        assert_eq!(draft, "aZ");
+        assert_eq!(anchor, None);
+    }
+
+    #[test]
+    fn caret_moves_without_shift_collapse_the_selection() {
+        let mut draft = "abc".to_string();
+        let mut cursor = 3usize;
+        let mut anchor = None;
+
+        apply_connection_search_key(&mut draft, &mut cursor, &mut anchor, "left", None, true);
+        assert!(anchor.is_some());
+        apply_connection_search_key(&mut draft, &mut cursor, &mut anchor, "left", None, false);
+        assert_eq!(anchor, None);
+        assert_eq!(cursor, 1);
+    }
+
+    #[test]
+    fn search_expansion_opens_matches_and_restores_the_prior_tree() {
+        let mut expanded = HashSet::from(["kept".to_string()]);
+        let mut base = None;
+        let mut applied = None;
+
+        assert!(sync_connection_search_expansion(
+            &mut expanded,
+            &mut base,
+            &mut applied,
+            "web",
+            ["hit".to_string()],
+        ));
+        assert_eq!(
+            expanded,
+            HashSet::from(["kept".to_string(), "hit".to_string()])
+        );
+
+        // Clearing the filter must not leave the auto-opened folder behind.
+        assert!(sync_connection_search_expansion(
+            &mut expanded,
+            &mut base,
+            &mut applied,
+            "",
+            Vec::new(),
+        ));
+        assert_eq!(expanded, HashSet::from(["kept".to_string()]));
+        assert!(base.is_none());
+    }
+
+    #[test]
+    fn search_expansion_lets_a_folder_stay_collapsed_within_one_keyword() {
+        let mut expanded = HashSet::new();
+        let mut base = None;
+        let mut applied = None;
+
+        sync_connection_search_expansion(
+            &mut expanded,
+            &mut base,
+            &mut applied,
+            "web",
+            ["hit".to_string()],
+        );
+        expanded.remove("hit");
+
+        // Same keyword re-rendering must not re-open what the user just closed.
+        assert!(!sync_connection_search_expansion(
+            &mut expanded,
+            &mut base,
+            &mut applied,
+            "web",
+            ["hit".to_string()],
+        ));
+        assert!(expanded.is_empty());
+
+        // A new keyword is a fresh search, so it expands again.
+        assert!(sync_connection_search_expansion(
+            &mut expanded,
+            &mut base,
+            &mut applied,
+            "webs",
+            ["hit".to_string()],
+        ));
+        assert!(expanded.contains("hit"));
     }
 
     #[test]
@@ -1198,40 +1422,61 @@ mod tests {
     #[test]
     fn apply_connection_search_key_handles_escape_backspace_and_text() {
         let mut search_draft = "prod".to_string();
+        let mut cursor = search_draft.len();
+        let mut anchor = None;
 
         assert!(apply_connection_search_key(
             &mut search_draft,
+            &mut cursor,
+            &mut anchor,
             "x",
-            Some("x")
+            Some("x"),
+            false
         ));
         assert_eq!(search_draft, "prodx");
 
         assert!(apply_connection_search_key(
             &mut search_draft,
+            &mut cursor,
+            &mut anchor,
             "backspace",
-            None
+            None,
+            false
         ));
         assert_eq!(search_draft, "prod");
 
         assert!(apply_connection_search_key(
             &mut search_draft,
+            &mut cursor,
+            &mut anchor,
             "escape",
-            None
+            None,
+            false
         ));
         assert!(search_draft.is_empty());
         assert!(!apply_connection_search_key(
             &mut search_draft,
+            &mut cursor,
+            &mut anchor,
             "shift",
-            None
+            None,
+            false
         ));
     }
 
     #[test]
     fn clear_connection_search_is_idempotent_for_notify_callers() {
         let mut search_draft = String::new();
+        let mut cursor = 0usize;
+        let mut anchor = None;
 
-        assert!(clear_connection_search(&mut search_draft));
+        assert!(clear_connection_search(
+            &mut search_draft,
+            &mut cursor,
+            &mut anchor
+        ));
         assert!(search_draft.is_empty());
+        assert_eq!(cursor, 0);
     }
 
     #[test]
@@ -1242,110 +1487,6 @@ mod tests {
 
         assert_eq!(sort_mode, next);
         assert_eq!(sort_mode, ConnectionSortMode::NameAsc);
-    }
-
-    #[test]
-    fn connection_hover_intent_waits_for_delay() {
-        let started_at = Instant::now();
-        let delay = Duration::from_millis(350);
-
-        assert!(!connection_hover_intent_ready(
-            started_at,
-            started_at + delay - Duration::from_millis(1),
-            delay,
-        ));
-        assert!(connection_hover_intent_ready(
-            started_at,
-            started_at + delay,
-            delay,
-        ));
-    }
-
-    #[test]
-    fn begin_connection_hover_intent_ignores_current_or_pending_hover() {
-        let started_at = Instant::now();
-        let hovered_connection_id = Some("current".to_string());
-        let mut hover_pending = Some(("pending".to_string(), started_at));
-
-        assert!(!begin_connection_hover_intent(
-            &hovered_connection_id,
-            &mut hover_pending,
-            "current".to_string(),
-            started_at,
-        ));
-        assert_eq!(
-            hover_pending.as_ref().map(|(id, _)| id.as_str()),
-            Some("pending")
-        );
-
-        assert!(!begin_connection_hover_intent(
-            &None,
-            &mut hover_pending,
-            "pending".to_string(),
-            started_at,
-        ));
-
-        assert!(begin_connection_hover_intent(
-            &None,
-            &mut hover_pending,
-            "next".to_string(),
-            started_at,
-        ));
-        assert_eq!(
-            hover_pending.as_ref().map(|(id, _)| id.as_str()),
-            Some("next")
-        );
-    }
-
-    #[test]
-    fn poll_connection_hover_intent_promotes_ready_pending_hover() {
-        let started_at = Instant::now();
-        let delay = Duration::from_millis(350);
-        let mut hovered_connection_id = None;
-        let mut hover_pending = Some(("conn-a".to_string(), started_at));
-
-        assert!(!poll_connection_hover_intent(
-            &mut hovered_connection_id,
-            &mut hover_pending,
-            started_at + delay - Duration::from_millis(1),
-            delay,
-        ));
-        assert_eq!(hovered_connection_id, None);
-        assert!(hover_pending.is_some());
-
-        assert!(poll_connection_hover_intent(
-            &mut hovered_connection_id,
-            &mut hover_pending,
-            started_at + delay,
-            delay,
-        ));
-        assert_eq!(hovered_connection_id.as_deref(), Some("conn-a"));
-        assert_eq!(hover_pending, None);
-    }
-
-    #[test]
-    fn dismiss_and_clear_connection_hover_remove_transient_state() {
-        let mut hovered_connection_id = Some("conn-a".to_string());
-        let mut hover_pending = Some(("conn-b".to_string(), Instant::now()));
-
-        assert!(clear_connection_hover_intent(
-            &mut hovered_connection_id,
-            &mut hover_pending,
-            "conn-a",
-        ));
-        assert_eq!(hovered_connection_id, None);
-        assert!(hover_pending.is_some());
-
-        assert!(dismiss_connection_hover(
-            &mut hovered_connection_id,
-            &mut hover_pending,
-        ));
-        assert_eq!(hovered_connection_id, None);
-        assert_eq!(hover_pending, None);
-        assert!(!dismiss_connection_hover(
-            &mut hovered_connection_id,
-            &mut hover_pending,
-        ));
     }
 
     #[test]
@@ -1437,8 +1578,6 @@ mod tests {
             x: gpui::px(3.),
             y: gpui::px(4.),
         });
-        let mut hovered_connection_id = Some("one".to_string());
-        let mut hover_pending = Some(("one".to_string(), Instant::now()));
         let mut drop_target = Some(ConnectionDropTarget {
             id: Some("group-a".to_string()),
             kind: ConnectionDragKind::Group,
@@ -1452,8 +1591,6 @@ mod tests {
             &mut expanded_group_ids,
             &mut context_menu,
             &mut group_context_menu,
-            &mut hovered_connection_id,
-            &mut hover_pending,
             &mut drop_target,
             &mut hovered_group_id,
         );
@@ -1463,8 +1600,6 @@ mod tests {
         assert!(expanded_group_ids.is_empty());
         assert_eq!(context_menu, None);
         assert_eq!(group_context_menu, None);
-        assert_eq!(hovered_connection_id, None);
-        assert_eq!(hover_pending, None);
         assert_eq!(drop_target, None);
         assert_eq!(hovered_group_id, None);
     }
@@ -1550,8 +1685,6 @@ mod tests {
     fn remove_connection_references_clears_invalid_list_state() {
         let mut selected_ids = HashSet::from(["one".to_string(), "two".to_string()]);
         let mut last_selected_id = Some("one".to_string());
-        let mut hovered_connection_id = Some("one".to_string());
-        let mut hover_pending = Some(("one".to_string(), Instant::now()));
         let mut context_menu = Some(ConnectionContextMenuState {
             connection_id: "one".to_string(),
             x: gpui::px(4.),
@@ -1566,8 +1699,6 @@ mod tests {
         remove_connection_list_references(
             &mut selected_ids,
             &mut last_selected_id,
-            &mut hovered_connection_id,
-            &mut hover_pending,
             &mut context_menu,
             &mut drop_target,
             "one",
@@ -1575,8 +1706,6 @@ mod tests {
 
         assert_eq!(selected_ids, HashSet::from(["two".to_string()]));
         assert_eq!(last_selected_id, None);
-        assert_eq!(hovered_connection_id, None);
-        assert_eq!(hover_pending, None);
         assert_eq!(context_menu, None);
         assert_eq!(drop_target, None);
     }
@@ -1614,8 +1743,6 @@ mod tests {
     fn retain_loaded_connection_list_references_prunes_stale_refresh_state() {
         let mut selected_ids = HashSet::from(["kept".to_string(), "stale".to_string()]);
         let mut last_selected_id = Some("stale".to_string());
-        let mut hovered_connection_id = Some("stale".to_string());
-        let mut hover_pending = Some(("stale".to_string(), Instant::now()));
         let mut context_menu = Some(ConnectionContextMenuState {
             connection_id: "stale".to_string(),
             x: gpui::px(4.),
@@ -1640,8 +1767,6 @@ mod tests {
         retain_loaded_connection_list_references(
             &mut selected_ids,
             &mut last_selected_id,
-            &mut hovered_connection_id,
-            &mut hover_pending,
             &mut context_menu,
             &mut expanded_group_ids,
             &mut hovered_group_id,
@@ -1653,8 +1778,6 @@ mod tests {
 
         assert_eq!(selected_ids, HashSet::from(["kept".to_string()]));
         assert_eq!(last_selected_id, None);
-        assert_eq!(hovered_connection_id, None);
-        assert_eq!(hover_pending, None);
         assert_eq!(context_menu, None);
         assert_eq!(
             expanded_group_ids,
@@ -2700,6 +2823,7 @@ mod tests {
             name: "prod".to_string(),
             description: String::new(),
             icon: None,
+            icon_auto_detect: true,
             group_id: None,
             new_group_name: String::new(),
             pending_group_name: None,

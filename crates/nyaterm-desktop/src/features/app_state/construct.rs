@@ -283,7 +283,6 @@ impl NyaTermApp {
             pending_saved_connection_queue: VecDeque::new(),
             connection_state: ConnectionFeatureState::new(
                 &settings,
-                &connection_groups,
                 ConnectionFeatureFocus {
                     search: cx.focus_handle(),
                     import: cx.focus_handle(),

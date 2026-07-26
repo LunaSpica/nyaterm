@@ -59,7 +59,6 @@ impl NyaTermApp {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.dismiss_connection_hover(cx);
         if self.saved_connection_start_is_pending_or_queued(&connection) {
             self.terminal.view.status =
                 format!("{} is already connecting or queued", connection.name);
@@ -645,6 +644,7 @@ mod tests {
             description: None,
             sort_order: 0,
             icon: None,
+            icon_auto_detect: None,
             auth: Some(ConnectionAuth {
                 mode: "none".to_string(),
                 ..ConnectionAuth::default()

@@ -84,7 +84,6 @@ pub(super) struct RuntimeIdlePlaneResult {
     pub(super) render_requests: Duration,
     pub(super) render_request_output_pressure: bool,
     pub(super) pending_focus: Duration,
-    pub(super) connection_hover: Duration,
     pub(super) action_link_tooltip: Duration,
     pub(super) remote_refresh: Duration,
     pub(super) idle_lock: Duration,
@@ -334,14 +333,6 @@ pub(super) fn terminal_render_work_pressure_active(
     queued_saved_connection_start: bool,
 ) -> bool {
     runtime_output_pressure || pending_session_start || queued_saved_connection_start
-}
-
-pub(super) fn connection_hover_poll_allowed(
-    runtime_output_pressure: bool,
-    pending_session_start: bool,
-    queued_saved_connection_start: bool,
-) -> bool {
-    !runtime_output_pressure && !pending_session_start && !queued_saved_connection_start
 }
 
 pub(super) fn runtime_idle_plane_allowed(runtime_output_pressure: bool) -> bool {
@@ -851,14 +842,6 @@ mod tests {
         assert!(terminal_render_work_pressure_active(true, false, false));
         assert!(terminal_render_work_pressure_active(false, true, false));
         assert!(terminal_render_work_pressure_active(false, false, true));
-    }
-
-    #[test]
-    fn connection_hover_poll_waits_for_idle_runtime() {
-        assert!(connection_hover_poll_allowed(false, false, false));
-        assert!(!connection_hover_poll_allowed(true, false, false));
-        assert!(!connection_hover_poll_allowed(false, true, false));
-        assert!(!connection_hover_poll_allowed(false, false, true));
     }
 
     #[test]

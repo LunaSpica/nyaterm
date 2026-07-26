@@ -1,50 +1,82 @@
-use std::time::{Duration, Instant};
+use std::sync::Arc;
 
 use gpui::{
-    AppContext as _, Context, FontWeight, IntoElement, MouseButton, MouseDownEvent, SharedString,
-    div,
+    AppContext as _, Context, FontWeight, IntoElement, MouseButton, MouseDownEvent, Render,
+    SharedString, Window, div,
     prelude::{
         FluentBuilder, InteractiveElement, ParentElement, StatefulInteractiveElement, Styled,
     },
-    px, rgb, rgba, svg,
+    px, relative, rgb, rgba, svg,
 };
-use nyaterm_core::{SavedConnection, truncate_preview};
+use nyaterm_core::SavedConnection;
 
 use crate::features::{
     ConnectionDragKind, ConnectionDragPayload, ConnectionDragPreview, ConnectionDropPosition,
-    ConnectionDropTarget, NyaTermApp, connection_type_icon, format_last_used_ms,
-    resolve_connection_icon,
+    ConnectionDropTarget, NyaTermApp, connection_type_icon, resolve_connection_icon,
 };
 
 use super::super::list::{
     ConnectionSection, connection_detail_rows, connection_tree_indent_px, icon_action_button,
 };
 
-const CONNECTION_HOVER_INTENT_DELAY: Duration = Duration::from_millis(350);
+/// The label/value card shown after hovering a saved connection.
+///
+/// This is a tooltip rather than an absolutely positioned child of the row: the
+/// panel clips its overflow, and rows painted after the hovered one would cover
+/// an in-tree card anyway. As a tooltip it is deferred to the top paint layer and
+/// flips to stay inside the window, which is what the old UI got from portalling.
+pub(in crate::features) struct ConnectionDetailsTooltip {
+    rows: Arc<[(&'static str, String)]>,
+}
+
+impl ConnectionDetailsTooltip {
+    pub(in crate::features) fn new(rows: Arc<[(&'static str, String)]>) -> Self {
+        Self { rows }
+    }
+}
+
+impl Render for ConnectionDetailsTooltip {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        let mut grid = div().flex().flex_col().gap_1();
+        for (label, value) in self.rows.iter() {
+            grid = grid.child(
+                div()
+                    .flex()
+                    .items_start()
+                    .gap_2()
+                    .child(
+                        div()
+                            .w(px(60.))
+                            .flex_none()
+                            .text_size(px(11.))
+                            .text_color(rgb(0x8f98aa))
+                            .child(*label),
+                    )
+                    .child(
+                        div()
+                            .min_w_0()
+                            .flex_1()
+                            .text_size(px(11.))
+                            .text_color(rgb(0xe5edf7))
+                            .child(value.clone()),
+                    ),
+            );
+        }
+
+        div()
+            .w(px(228.))
+            .rounded_md()
+            .border_1()
+            .border_color(rgb(0x334155))
+            .bg(rgba(0x151b24f2))
+            .shadow_lg()
+            .px_3()
+            .py_2()
+            .child(grid)
+    }
+}
 
 impl NyaTermApp {
-    pub(in crate::features) fn dismiss_connection_hover(&mut self, cx: &mut Context<Self>) {
-        if self.connection_state.list.dismiss_hover() {
-            cx.notify();
-        }
-    }
-
-    pub(in crate::features) fn poll_connection_hover_delay(&mut self) -> bool {
-        self.connection_state
-            .list
-            .poll_hover_intent(Instant::now(), CONNECTION_HOVER_INTENT_DELAY)
-    }
-
-    fn begin_connection_hover_intent(&mut self, connection_id: String) {
-        self.connection_state
-            .list
-            .begin_hover_intent(connection_id, Instant::now());
-    }
-
-    fn clear_connection_hover_intent(&mut self, connection_id: &str) -> bool {
-        self.connection_state.list.clear_hover_intent(connection_id)
-    }
-
     pub(in crate::features) fn connection_section(
         &mut self,
         section: ConnectionSection,
@@ -96,9 +128,9 @@ impl NyaTermApp {
                     )))
                     .relative()
                     .h(px(28.))
+                    .min_w(relative(1.))
                     .flex()
                     .items_center()
-                    .justify_between()
                     .gap(px(6.))
                     .px_2()
                     .pl(px(8. + section.depth as f32 * 16.))
@@ -244,45 +276,43 @@ impl NyaTermApp {
                             this.toggle_connection_group_expanded(group_id, cx);
                         }
                     }))
+                    // The name takes the slack so the count sits against the right
+                    // edge of the panel, where Tauri puts it.
+                    .child(
+                        svg()
+                            .size(px(14.))
+                            .flex_none()
+                            .path(if expanded {
+                                "icons/chevron-down.svg"
+                            } else {
+                                "icons/fe/forward.svg"
+                            })
+                            .text_color(rgb(palette.text_muted)),
+                    )
+                    .child(connection_type_icon(
+                        palette,
+                        resolve_connection_icon(Some("folder"), "SSH"),
+                        false,
+                        16.,
+                    ))
                     .child(
                         div()
-                            .flex()
-                            .items_center()
-                            .gap(px(6.))
                             .min_w_0()
-                            .child(
-                                svg()
-                                    .size(px(14.))
-                                    .flex_none()
-                                    .path(if expanded {
-                                        "icons/chevron-down.svg"
-                                    } else {
-                                        "icons/fe/forward.svg"
-                                    })
-                                    .text_color(rgb(palette.text_muted)),
-                            )
-                            .child(connection_type_icon(
-                                palette,
-                                resolve_connection_icon(Some("folder"), "SSH"),
-                                false,
-                                16.,
-                            ))
-                            .child(
-                                div()
-                                    .min_w_0()
-                                    .flex_1()
-                                    .text_xs()
-                                    .font_weight(FontWeight(500.))
-                                    .text_color(rgb(palette.text_muted))
-                                    .overflow_hidden()
-                                    .child(truncate_preview(&group_label, 28)),
-                            )
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(rgb(palette.text_dimmed))
-                                    .child(count.to_string()),
-                            ),
+                            .flex_1()
+                            .text_xs()
+                            .font_weight(FontWeight(500.))
+                            .text_color(rgb(palette.text_muted))
+                            .overflow_hidden()
+                            .whitespace_nowrap()
+                            .text_ellipsis()
+                            .child(group_label.clone()),
+                    )
+                    .child(
+                        div()
+                            .flex_none()
+                            .text_xs()
+                            .text_color(rgb(palette.text_dimmed))
+                            .child(count.to_string()),
                     ),
             )
             .child(body)
@@ -298,23 +328,22 @@ impl NyaTermApp {
             .connection_state
             .list
             .contains_selected_id(&connection.id);
-        let hovered = self
+        // The arrow keys walk filtered results without disturbing the selection,
+        // so the active row gets its own fainter wash plus a ring.
+        let keyboard_active = self
             .connection_state
             .list
-            .connection_is_hovered(&connection.id);
+            .connection_is_keyboard_active(&connection.id);
         let connect_connection = connection.clone();
         let connect_connection_dbl = connection.clone();
         let edit_id = connection.id.clone();
-        let delete_id = connection.id.clone();
         let select_id = connection.id.clone();
-        let hover_id = connection.id.clone();
         let menu_id = connection.id.clone();
         let kind = connection.kind_label();
         let icon_def = resolve_connection_icon(connection.icon.as_deref(), kind);
-        let show_actions = hovered;
-        let details_tooltip = self.connection_details_tooltip(connection.clone());
-        let _endpoint = connection.endpoint();
-        let _last_used = format_last_used_ms(connection.last_used_at_ms);
+        let details_rows: Arc<[(&'static str, String)]> =
+            connection_detail_rows(&connection, &self.connections, &self.proxies).into();
+        let row_group = SharedString::from(format!("connection-row-group-{}", connection.id));
         let drop_position = self
             .connection_state
             .list
@@ -331,8 +360,12 @@ impl NyaTermApp {
                 "connection-row-{}",
                 connection.id
             )))
+            .group(row_group.clone())
             .relative()
             .h(px(34.))
+            // The list scrolls sideways, so a row is at least the panel width and
+            // grows past it when the name is long.
+            .min_w(relative(1.))
             .flex()
             .items_center()
             .gap_2()
@@ -340,12 +373,15 @@ impl NyaTermApp {
             .pl(px(connection_tree_indent_px(depth)))
             .bg(if selected {
                 rgba((palette.primary << 8) | 0x1a)
+            } else if keyboard_active {
+                rgba((palette.primary << 8) | 0x12)
             } else if show_inside {
-                rgb(palette.hover)
-            } else if hovered {
                 rgb(palette.hover)
             } else {
                 rgba(0x00000000)
+            })
+            .when(keyboard_active && !selected, |this| {
+                this.border_1().border_color(rgb(palette.primary))
             })
             .hover(move |this| this.bg(rgb(palette.hover)))
             .when(show_inside, |this| {
@@ -428,13 +464,6 @@ impl NyaTermApp {
                     }
                 })
             })
-            .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
-                if *hovered {
-                    this.begin_connection_hover_intent(hover_id.clone());
-                } else if this.clear_connection_hover_intent(&hover_id) {
-                    cx.notify();
-                }
-            }))
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|_, _, _, cx| {
@@ -461,12 +490,16 @@ impl NyaTermApp {
                     this.select_connection(select_id.clone(), additive, range, cx);
                 }),
             )
-            // Single-line name row; details live in the explicit selection panel.
+            // Single-line name; the detail card is a real tooltip so it can hang
+            // outside the panel instead of covering the rows underneath it.
             .child(connection_type_icon(palette, icon_def, selected, 16.))
             .child(
                 div()
-                    .min_w_0()
-                    .flex_1()
+                    .id(SharedString::from(format!(
+                        "connection-row-name-{}",
+                        connection.id
+                    )))
+                    .flex_none()
                     .text_size(px(12.))
                     .font_weight(FontWeight(500.))
                     .text_color(if selected {
@@ -474,21 +507,26 @@ impl NyaTermApp {
                     } else {
                         rgb(palette.text)
                     })
-                    .overflow_hidden()
-                    .child(truncate_preview(&connection.name, 48)),
+                    // Full name, never clipped — the list scrolls to reach it.
+                    .whitespace_nowrap()
+                    .child(connection.name.clone())
+                    .tooltip(move |_, cx| {
+                        cx.new(|_| ConnectionDetailsTooltip::new(details_rows.clone()))
+                            .into()
+                    }),
             )
+            .child(div().flex_1().min_w_0())
             .child(
                 div()
                     .flex()
+                    .flex_none()
                     .items_center()
                     .gap_0()
                     .rounded_sm()
-                    .bg(if show_actions {
-                        rgb(palette.hover)
-                    } else {
-                        rgba(0x00000000)
+                    .opacity(0.)
+                    .group_hover(row_group.clone(), |this| {
+                        this.bg(rgb(palette.hover)).opacity(1.)
                     })
-                    .opacity(if show_actions { 1. } else { 0. })
                     .child(icon_action_button(
                         palette,
                         format!("connection-connect-{}", connection.id),
@@ -512,18 +550,8 @@ impl NyaTermApp {
                                 cx,
                             );
                         }),
-                    ))
-                    .child(icon_action_button(
-                        palette,
-                        format!("connection-delete-{}", connection.id),
-                        "icons/net/delete.svg",
-                        self.tr("savedConnections.delete"),
-                        cx.listener(move |this, _, _, cx| {
-                            this.open_connection_delete_confirm(delete_id.clone(), cx);
-                        }),
                     )),
             )
-            .when(hovered, |this| this.child(details_tooltip))
             .when(show_before, |this| {
                 this.child(
                     div()
@@ -548,74 +576,5 @@ impl NyaTermApp {
                         .bg(rgb(palette.link)),
                 )
             })
-    }
-
-    pub(in crate::features) fn connection_details_tooltip(
-        &self,
-        connection: SavedConnection,
-    ) -> impl IntoElement {
-        let palette = self.theme_palette();
-        let rows = connection_detail_rows(&connection, &self.connections, &self.proxies);
-        let mut grid = div().grid().gap_1();
-        for (label, value) in rows {
-            grid = grid.child(
-                div()
-                    .flex()
-                    .items_start()
-                    .gap_2()
-                    .child(
-                        div()
-                            .w(px(66.))
-                            .flex_none()
-                            .text_size(px(10.))
-                            .text_color(rgb(palette.text_dimmed))
-                            .child(label),
-                    )
-                    .child(
-                        div()
-                            .min_w_0()
-                            .flex_1()
-                            .text_size(px(10.))
-                            .text_color(rgb(palette.text))
-                            .child(truncate_preview(&value, 52)),
-                    ),
-            );
-        }
-
-        div()
-            .absolute()
-            .top(px(30.))
-            .left(px(28.))
-            .w(px(200.))
-            .rounded_md()
-            .border_1()
-            .border_color(rgb(palette.border))
-            .bg(self.shell_surface_color(palette.surface))
-            .px_3()
-            .py_2()
-            .child(
-                div()
-                    .mb_1()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap_2()
-                    .child(
-                        div()
-                            .min_w_0()
-                            .text_size(px(11.))
-                            .font_weight(FontWeight(700.))
-                            .text_color(rgb(palette.text))
-                            .child(truncate_preview(&connection.name, 34)),
-                    )
-                    .child(
-                        div()
-                            .flex_none()
-                            .text_size(px(10.))
-                            .text_color(rgb(palette.text_dimmed))
-                            .child(connection.kind_label()),
-                    ),
-            )
-            .child(grid)
     }
 }

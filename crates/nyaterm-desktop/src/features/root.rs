@@ -240,7 +240,7 @@ impl NyaTermApp {
                     .flex_col()
                     .size_full()
                     .child(self.title_bar(window, cx))
-                    .child(self.workspace_surface(palette, cx)),
+                    .child(self.workspace_surface(palette, window, cx)),
             )
     }
 
@@ -261,7 +261,12 @@ impl NyaTermApp {
         fit_wallpaper_tile_size(self.last_viewport_size, (width as f32, height as f32))
     }
 
-    fn workspace_surface(&mut self, palette: ThemePalette, cx: &mut Context<Self>) -> AnyElement {
+    fn workspace_surface(
+        &mut self,
+        palette: ThemePalette,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         if self.main_mode == MainMode::Page && self.selected_nav == NavItem::Settings {
             div()
                 .flex()
@@ -297,7 +302,7 @@ impl NyaTermApp {
                 .when(
                     has_left_activity_items && self.left_side_open() && !left_overlay_mode,
                     |this| {
-                        this.child(self.sidebar(cx))
+                        this.child(self.sidebar(window, cx))
                             .child(self.panel_resize_handle(PanelResizeSide::Left, cx))
                     },
                 )
@@ -306,7 +311,7 @@ impl NyaTermApp {
                     has_right_activity_items && self.right_side_open() && !right_overlay_mode,
                     |this| {
                         this.child(self.panel_resize_handle(PanelResizeSide::Right, cx))
-                            .child(self.right_panel(cx))
+                            .child(self.right_panel(window, cx))
                     },
                 )
                 .when(has_right_activity_items, |this| {
@@ -349,7 +354,13 @@ impl NyaTermApp {
                                 .flex()
                                 .flex_col()
                                 .child(self.mobile_drawer_header("mobile-left-close", true, cx))
-                                .child(div().flex_1().min_h_0().flex().child(self.sidebar(cx))),
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .min_h_0()
+                                        .flex()
+                                        .child(self.sidebar(window, cx)),
+                                ),
                         ),
                 );
             }
@@ -371,7 +382,13 @@ impl NyaTermApp {
                                 .flex()
                                 .flex_col()
                                 .child(self.mobile_drawer_header("mobile-right-close", false, cx))
-                                .child(div().flex_1().min_h_0().flex().child(self.right_panel(cx))),
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .min_h_0()
+                                        .flex()
+                                        .child(self.right_panel(window, cx)),
+                                ),
                         ),
                 );
             }
@@ -408,7 +425,12 @@ impl NyaTermApp {
                     .text_color(rgb(palette.text_muted))
                     .cursor_pointer()
                     .hover(|this| this.bg(rgb(palette.hover)).text_color(rgb(palette.text)))
-                    .child(svg().size(px(16.)).path("icons/window/close.svg"))
+                    .child(
+                        svg()
+                            .size(px(16.))
+                            .path("icons/window/close.svg")
+                            .text_color(rgb(palette.text_muted)),
+                    )
                     .on_click(cx.listener(move |this, _, _, cx| {
                         if left {
                             this.mobile_left_open = false;
