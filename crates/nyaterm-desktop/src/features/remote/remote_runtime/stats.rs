@@ -11,28 +11,30 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(config) = self.active_ssh_config.clone() else {
-            self.stats_status = "start an SSH session before inspecting stats".to_string();
-            self.terminal_status = self.stats_status.clone();
+            self.remote_ops.stats.status =
+                "start an SSH session before inspecting stats".to_string();
+            self.terminal_status = self.remote_ops.stats.status.clone();
             cx.notify();
             return;
         };
         let Some(job_session_id) = self.active_session_id.clone() else {
-            self.stats_status = "start an SSH session before inspecting stats".to_string();
+            self.remote_ops.stats.status =
+                "start an SSH session before inspecting stats".to_string();
             cx.notify();
             return;
         };
-        if self.stats_pending
-            && self.stats_job_session_id.as_deref() == Some(job_session_id.as_str())
+        if self.remote_ops.stats.pending
+            && self.remote_ops.stats.job_session_id.as_deref() == Some(job_session_id.as_str())
         {
-            self.stats_status = "stats refresh already running".to_string();
+            self.remote_ops.stats.status = "stats refresh already running".to_string();
             cx.notify();
             return;
         }
 
         let job_id = self.begin_stats_job(job_session_id.clone());
-        self.stats_last_refresh_at = Some(Instant::now());
-        self.stats_status = "loading remote system stats".to_string();
-        let tx = self.stats_tx.clone();
+        self.remote_ops.stats.last_refresh_at = Some(Instant::now());
+        self.remote_ops.stats.status = "loading remote system stats".to_string();
+        let tx = self.remote_ops.stats.tx.clone();
         std::thread::spawn(move || {
             let result = RemoteStatsService::new(config)
                 .snapshot()
@@ -47,8 +49,8 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn toggle_stats_cpu_expanded(&mut self, cx: &mut Context<Self>) {
-        self.stats_cpu_expanded = !self.stats_cpu_expanded;
-        self.stats_status = if self.stats_cpu_expanded {
+        self.remote_ops.stats.cpu_expanded = !self.remote_ops.stats.cpu_expanded;
+        self.remote_ops.stats.status = if self.remote_ops.stats.cpu_expanded {
             "showing per-core CPU usage".to_string()
         } else {
             "collapsed per-core CPU usage".to_string()
@@ -59,27 +61,27 @@ impl NyaTermApp {
     pub(in crate::features) fn drain_stats_events(&mut self) -> bool {
         let mut dirty = false;
         for _ in 0..STATS_EVENT_DRAIN_LIMIT {
-            let Ok(event) = self.stats_rx.try_recv() else {
+            let Ok(event) = self.remote_ops.stats.rx.try_recv() else {
                 break;
             };
             if !remote_job_event_matches(
-                self.stats_job_id,
-                self.stats_job_session_id.as_deref(),
+                self.remote_ops.stats.job_id,
+                self.remote_ops.stats.job_session_id.as_deref(),
                 event.job_id,
                 &event.session_id,
             ) {
                 continue;
             }
             dirty = true;
-            self.stats_pending = false;
-            self.stats_job_session_id = None;
+            self.remote_ops.stats.pending = false;
+            self.remote_ops.stats.job_session_id = None;
             if self.active_session_id.as_deref() != Some(event.session_id.as_str()) {
                 continue;
             }
             match event.result {
                 Ok(stats) => {
-                    self.stats_consecutive_refresh_failures = 0;
-                    self.stats_status = format!(
+                    self.remote_ops.stats.consecutive_refresh_failures = 0;
+                    self.remote_ops.stats.status = format!(
                         "loaded stats for {} · load {:.2}/{:.2}/{:.2}",
                         if stats.system.hostname.trim().is_empty() {
                             "remote host"
@@ -90,17 +92,20 @@ impl NyaTermApp {
                         stats.load.load5,
                         stats.load.load15
                     );
-                    self.terminal_status = self.stats_status.clone();
-                    self.remote_stats = Some(stats);
+                    self.terminal_status = self.remote_ops.stats.status.clone();
+                    self.remote_ops.stats.data = Some(stats);
                 }
                 Err(error) => {
-                    self.stats_consecutive_refresh_failures =
-                        self.stats_consecutive_refresh_failures.saturating_add(1);
-                    if self.stats_consecutive_refresh_failures >= 3 {
-                        self.remote_stats = None;
+                    self.remote_ops.stats.consecutive_refresh_failures = self
+                        .remote_ops
+                        .stats
+                        .consecutive_refresh_failures
+                        .saturating_add(1);
+                    if self.remote_ops.stats.consecutive_refresh_failures >= 3 {
+                        self.remote_ops.stats.data = None;
                     }
-                    self.stats_status = format!("stats refresh failed: {error}");
-                    self.terminal_status = self.stats_status.clone();
+                    self.remote_ops.stats.status = format!("stats refresh failed: {error}");
+                    self.terminal_status = self.remote_ops.stats.status.clone();
                 }
             }
         }
@@ -108,9 +113,9 @@ impl NyaTermApp {
     }
 
     fn begin_stats_job(&mut self, session_id: String) -> u64 {
-        self.stats_job_id = self.stats_job_id.wrapping_add(1).max(1);
-        self.stats_job_session_id = Some(session_id);
-        self.stats_pending = true;
-        self.stats_job_id
+        self.remote_ops.stats.job_id = self.remote_ops.stats.job_id.wrapping_add(1).max(1);
+        self.remote_ops.stats.job_session_id = Some(session_id);
+        self.remote_ops.stats.pending = true;
+        self.remote_ops.stats.job_id
     }
 }

@@ -61,8 +61,8 @@ impl NyaTermApp {
                         || this.new_session_menu_open
                         || this.new_session_all_sessions_open
                         || !this.new_session_group_menu_path.is_empty()
-                        || this.docker_tab_menu_open
-                        || this.docker_header_menu_open
+                        || this.remote_ops.docker.tab_menu_open
+                        || this.remote_ops.docker.header_menu_open
                         || this.connection_state.list.more_menu_is_open();
                     if changed {
                         this.title_menu_open = None;
@@ -71,8 +71,8 @@ impl NyaTermApp {
                         this.new_session_menu_open = false;
                         this.new_session_all_sessions_open = false;
                         this.new_session_group_menu_path.clear();
-                        this.docker_tab_menu_open = false;
-                        this.docker_header_menu_open = false;
+                        this.remote_ops.docker.tab_menu_open = false;
+                        this.remote_ops.docker.header_menu_open = false;
                         this.connection_state.list.close_more_menu();
                         cx.notify();
                     }

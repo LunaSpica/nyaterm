@@ -202,7 +202,7 @@ pub(in crate::features::pages::remote) fn process_details(
                     .h(px(28.))
                     .track_focus(nice_focus)
                     .on_click(cx.listener(|this, _, window, cx| {
-                        window.focus(&this.process_nice_focus);
+                        window.focus(&this.remote_ops.process.nice_focus);
                         cx.notify();
                     }))
                     .on_key_down(cx.listener(

@@ -109,11 +109,11 @@ pub(in crate::features::pages::remote) fn docker_containers_panel(
                 ScrollDelta::Lines(delta) => delta.y,
                 ScrollDelta::Pixels(delta) => f32::from(delta.y) / DOCKER_ROW_PX,
             };
-            let next = (this.docker_list_offset as f32 - delta_rows)
+            let next = (this.remote_ops.docker.list_offset as f32 - delta_rows)
                 .round()
                 .clamp(0., max_offset as f32) as usize;
-            if next != this.docker_list_offset {
-                this.docker_list_offset = next;
+            if next != this.remote_ops.docker.list_offset {
+                this.remote_ops.docker.list_offset = next;
                 cx.stop_propagation();
                 cx.notify();
             }
@@ -211,7 +211,7 @@ fn docker_container_row(
                 ),
         )
         .on_click(cx.listener(move |this, _, window, cx| {
-            this.docker_container_menu_id = None;
+            this.remote_ops.docker.container_menu_id = None;
             this.load_docker_details(details_id.clone(), window, cx);
         }))
         .child(
@@ -225,10 +225,12 @@ fn docker_container_row(
                         palette,
                         cx.listener(move |this, _, _, cx| {
                             cx.stop_propagation();
-                            if this.docker_container_menu_id.as_deref() == Some(menu_id.as_str()) {
-                                this.docker_container_menu_id = None;
+                            if this.remote_ops.docker.container_menu_id.as_deref()
+                                == Some(menu_id.as_str())
+                            {
+                                this.remote_ops.docker.container_menu_id = None;
                             } else {
-                                this.docker_container_menu_id = Some(menu_id.clone());
+                                this.remote_ops.docker.container_menu_id = Some(menu_id.clone());
                             }
                             cx.notify();
                         }),
@@ -289,7 +291,7 @@ fn docker_container_action_menu(
             labels.logs,
             false,
             cx.listener(move |this, _, _, cx| {
-                this.docker_container_menu_id = None;
+                this.remote_ops.docker.container_menu_id = None;
                 this.send_docker_container_logs_to_terminal(logs_id.clone(), cx);
             }),
         ))
@@ -299,7 +301,7 @@ fn docker_container_action_menu(
             labels.enter,
             !running,
             cx.listener(move |this, _, _, cx| {
-                this.docker_container_menu_id = None;
+                this.remote_ops.docker.container_menu_id = None;
                 this.enter_docker_container_terminal(enter_id.clone(), cx);
             }),
         ))
@@ -310,7 +312,7 @@ fn docker_container_action_menu(
             labels.start,
             running,
             cx.listener(move |this, _, window, cx| {
-                this.docker_container_menu_id = None;
+                this.remote_ops.docker.container_menu_id = None;
                 this.docker_container_action(start_id.clone(), "start", window, cx);
             }),
         ))
@@ -320,7 +322,7 @@ fn docker_container_action_menu(
             labels.stop,
             !running,
             cx.listener(move |this, _, window, cx| {
-                this.docker_container_menu_id = None;
+                this.remote_ops.docker.container_menu_id = None;
                 this.docker_container_action(stop_id.clone(), "stop", window, cx);
             }),
         ))
@@ -330,7 +332,7 @@ fn docker_container_action_menu(
             labels.restart,
             false,
             cx.listener(move |this, _, window, cx| {
-                this.docker_container_menu_id = None;
+                this.remote_ops.docker.container_menu_id = None;
                 this.docker_container_action(restart_id.clone(), "restart", window, cx);
             }),
         ))
@@ -341,7 +343,7 @@ fn docker_container_action_menu(
             labels.kill,
             !running,
             cx.listener(move |this, _, _, cx| {
-                this.docker_container_menu_id = None;
+                this.remote_ops.docker.container_menu_id = None;
                 let target = if kill_name.trim().is_empty() {
                     compact_id(&kill_id)
                 } else {
@@ -366,7 +368,7 @@ fn docker_container_action_menu(
             labels.delete,
             false,
             cx.listener(move |this, _, _, cx| {
-                this.docker_container_menu_id = None;
+                this.remote_ops.docker.container_menu_id = None;
                 let target = if remove_name.trim().is_empty() {
                     compact_id(&remove_id)
                 } else {

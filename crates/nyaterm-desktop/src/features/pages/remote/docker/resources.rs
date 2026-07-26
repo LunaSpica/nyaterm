@@ -234,11 +234,11 @@ pub(in crate::features::pages::remote) fn docker_resource_panel(
                 ScrollDelta::Lines(delta) => delta.y,
                 ScrollDelta::Pixels(delta) => f32::from(delta.y) / DOCKER_RESOURCE_ROW_PX,
             };
-            let next = (this.docker_resource_list_offset as f32 - delta_rows)
+            let next = (this.remote_ops.docker.resource_list_offset as f32 - delta_rows)
                 .round()
                 .clamp(0., max_offset as f32) as usize;
-            if next != this.docker_resource_list_offset {
-                this.docker_resource_list_offset = next;
+            if next != this.remote_ops.docker.resource_list_offset {
+                this.remote_ops.docker.resource_list_offset = next;
                 cx.stop_propagation();
                 cx.notify();
             }

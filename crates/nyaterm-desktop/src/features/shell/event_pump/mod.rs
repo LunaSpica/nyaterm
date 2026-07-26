@@ -446,9 +446,9 @@ impl NyaTermApp {
             && !self.ai_chat_pending
             && self.ai_agent_loop.is_none()
             && !self.ai_discovery_pending
-            && !self.stats_pending
-            && !self.process_pending
-            && !self.docker_pending
+            && !self.remote_ops.stats.pending
+            && !self.remote_ops.process.pending
+            && !self.remote_ops.docker.pending
             && !self.translate_pending
             && !self.update_pending
             && !self.ai_chat_focus_pending
@@ -505,9 +505,9 @@ impl NyaTermApp {
 
         if right_panel == Some(NavItem::Stats)
             && self.settings.ui_show_remote_stats
-            && !self.stats_pending
+            && !self.remote_ops.stats.pending
             && remote_refresh_due(
-                self.stats_last_refresh_at,
+                self.remote_ops.stats.last_refresh_at,
                 self.settings.ui_remote_stats_interval.max(1),
             )
         {
@@ -515,9 +515,9 @@ impl NyaTermApp {
             dirty = true;
         } else if right_panel == Some(NavItem::Processes)
             && self.settings.ui_show_process_manager
-            && !self.process_pending
+            && !self.remote_ops.process.pending
             && remote_refresh_due(
-                self.process_last_refresh_at,
+                self.remote_ops.process.last_refresh_at,
                 self.settings.ui_process_manager_interval.max(3),
             )
         {
@@ -525,15 +525,15 @@ impl NyaTermApp {
             dirty = true;
         } else if right_panel == Some(NavItem::Docker)
             && self.settings.ui_show_docker_manager
-            && !self.docker_pending
+            && !self.remote_ops.docker.pending
         {
             let interval = self.settings.ui_docker_manager_interval.max(3);
-            if remote_refresh_due(self.docker_last_refresh_at, interval) {
+            if remote_refresh_due(self.remote_ops.docker.last_refresh_at, interval) {
                 self.refresh_docker(window, cx);
                 dirty = true;
-            } else if self.docker_details.is_some()
-                && remote_refresh_due(self.docker_details_last_refresh_at, interval)
-                && let Some(container_id) = self.docker_details_container_id.clone()
+            } else if self.remote_ops.docker.details.is_some()
+                && remote_refresh_due(self.remote_ops.docker.details_last_refresh_at, interval)
+                && let Some(container_id) = self.remote_ops.docker.details_container_id.clone()
             {
                 self.load_docker_details(container_id, window, cx);
                 dirty = true;

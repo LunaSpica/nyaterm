@@ -13,10 +13,10 @@ impl NyaTermApp {
                     palette,
                 ));
         }
-        let Some(stats) = self.remote_stats.clone() else {
-            let message = if self.stats_pending {
+        let Some(stats) = self.remote_ops.stats.data.clone() else {
+            let message = if self.remote_ops.stats.pending {
                 self.tr("common.loading")
-            } else if self.stats_status.contains("failed") {
+            } else if self.remote_ops.stats.status.contains("failed") {
                 self.tr("panel.resourceMonitorError")
             } else {
                 self.tr("common.loading")
@@ -219,7 +219,7 @@ impl NyaTermApp {
                                 this.child(cpu_core_summary(
                                     palette,
                                     &stats.cpu.per_core,
-                                    self.stats_cpu_expanded,
+                                    self.remote_ops.stats.cpu_expanded,
                                     cpu_label,
                                     cx,
                                 ))

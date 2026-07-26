@@ -152,10 +152,11 @@ impl NyaTermApp {
             last_status: self.cloud_sync_status.clone(),
         };
         let remote_ops = crate::entities::RemoteOpsSnapshot {
-            process_count: self.processes.len(),
-            docker_tab: self.docker_tab.label().to_string(),
-            stats_ready: self.remote_stats.is_some(),
-            confirm_open: self.docker_confirm.is_some() || self.process_signal_confirm.is_some(),
+            process_count: self.remote_ops.process.items.len(),
+            docker_tab: self.remote_ops.docker.tab.label().to_string(),
+            stats_ready: self.remote_ops.stats.data.is_some(),
+            confirm_open: self.remote_ops.docker.confirm.is_some()
+                || self.remote_ops.process.signal_confirm.is_some(),
         };
 
         self.stores.settings.update(cx, |store, cx| {

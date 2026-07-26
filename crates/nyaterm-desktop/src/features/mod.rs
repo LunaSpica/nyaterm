@@ -56,6 +56,7 @@ pub(in crate::features) use connections::{
 };
 pub(in crate::features) use formatting::*;
 pub(in crate::features) use quick_command_window::QuickCommandWindow;
+pub(in crate::features) use remote::{RemoteOpsFeatureFocus, RemoteOpsFeatureState};
 pub(in crate::features) use remote_editor_window::RemoteFileEditorWindow;
 pub(in crate::features) use remote_text_editor::RemoteTextEditor;
 pub(in crate::features) use runtime_jobs::{

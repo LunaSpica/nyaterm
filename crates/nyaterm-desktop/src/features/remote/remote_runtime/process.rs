@@ -4,29 +4,32 @@ const PROCESS_EVENT_DRAIN_LIMIT: usize = 8;
 
 impl NyaTermApp {
     pub(in crate::features) fn set_docker_tab(&mut self, tab: DockerTab, cx: &mut Context<Self>) {
-        self.docker_container_menu_id = None;
-        self.docker_compose_menu_id = None;
-        self.docker_tab_menu_open = false;
-        self.docker_header_menu_open = false;
+        self.remote_ops.docker.container_menu_id = None;
+        self.remote_ops.docker.compose_menu_id = None;
+        self.remote_ops.docker.tab_menu_open = false;
+        self.remote_ops.docker.header_menu_open = false;
         if tab == DockerTab::Compose
             && self
-                .docker_overview
+                .remote_ops
+                .docker
+                .overview
                 .as_ref()
                 .is_some_and(|overview| !overview.compose_available)
         {
-            self.docker_status = "Docker Compose is not available on this host".to_string();
+            self.remote_ops.docker.status =
+                "Docker Compose is not available on this host".to_string();
             cx.notify();
             return;
         }
-        self.docker_tab = tab;
-        self.docker_list_offset = 0;
-        self.docker_resource_list_offset = 0;
-        self.docker_status = format!("Docker tab: {}", tab.label());
+        self.remote_ops.docker.tab = tab;
+        self.remote_ops.docker.list_offset = 0;
+        self.remote_ops.docker.resource_list_offset = 0;
+        self.remote_ops.docker.status = format!("Docker tab: {}", tab.label());
         cx.notify();
     }
 
     pub(in crate::features) fn toggle_docker_tab_menu(&mut self, cx: &mut Context<Self>) {
-        self.docker_tab_menu_open = !self.docker_tab_menu_open;
+        self.remote_ops.docker.tab_menu_open = !self.remote_ops.docker.tab_menu_open;
         cx.notify();
     }
 
@@ -43,17 +46,17 @@ impl NyaTermApp {
 
         match keystroke.key.as_str() {
             "backspace" => {
-                self.docker_search_draft.pop();
-                self.docker_list_offset = 0;
-                self.docker_resource_list_offset = 0;
-                self.docker_status = "Docker search updated".to_string();
+                self.remote_ops.docker.search_draft.pop();
+                self.remote_ops.docker.list_offset = 0;
+                self.remote_ops.docker.resource_list_offset = 0;
+                self.remote_ops.docker.status = "Docker search updated".to_string();
                 cx.notify();
             }
             "escape" => {
-                self.docker_search_draft.clear();
-                self.docker_list_offset = 0;
-                self.docker_resource_list_offset = 0;
-                self.docker_status = "Docker search cleared".to_string();
+                self.remote_ops.docker.search_draft.clear();
+                self.remote_ops.docker.list_offset = 0;
+                self.remote_ops.docker.resource_list_offset = 0;
+                self.remote_ops.docker.status = "Docker search cleared".to_string();
                 cx.notify();
             }
             _ => {
@@ -62,10 +65,10 @@ impl NyaTermApp {
                     .as_deref()
                     .filter(|input| !input.is_empty())
                 {
-                    self.docker_search_draft.push_str(input);
-                    self.docker_list_offset = 0;
-                    self.docker_resource_list_offset = 0;
-                    self.docker_status = "Docker search updated".to_string();
+                    self.remote_ops.docker.search_draft.push_str(input);
+                    self.remote_ops.docker.list_offset = 0;
+                    self.remote_ops.docker.resource_list_offset = 0;
+                    self.remote_ops.docker.status = "Docker search updated".to_string();
                     cx.notify();
                 }
             }
@@ -85,16 +88,16 @@ impl NyaTermApp {
 
         match keystroke.key.as_str() {
             "escape" => {
-                self.process_search_draft.clear();
-                self.process_selected_pid = None;
-                self.process_list_offset = 0;
-                self.process_status = "process search cleared".to_string();
+                self.remote_ops.process.search_draft.clear();
+                self.remote_ops.process.selected_pid = None;
+                self.remote_ops.process.list_offset = 0;
+                self.remote_ops.process.status = "process search cleared".to_string();
                 cx.notify();
             }
             "backspace" if !keystroke.modifiers.platform && !keystroke.modifiers.control => {
-                self.process_search_draft.pop();
-                self.process_selected_pid = None;
-                self.process_list_offset = 0;
+                self.remote_ops.process.search_draft.pop();
+                self.remote_ops.process.selected_pid = None;
+                self.remote_ops.process.list_offset = 0;
                 cx.notify();
             }
             _ if !keystroke.modifiers.platform && !keystroke.modifiers.control => {
@@ -103,9 +106,9 @@ impl NyaTermApp {
                     .as_deref()
                     .filter(|input| !input.is_empty())
                 {
-                    self.process_search_draft.push_str(input);
-                    self.process_selected_pid = None;
-                    self.process_list_offset = 0;
+                    self.remote_ops.process.search_draft.push_str(input);
+                    self.remote_ops.process.selected_pid = None;
+                    self.remote_ops.process.list_offset = 0;
                     cx.notify();
                 }
             }
@@ -118,11 +121,12 @@ impl NyaTermApp {
         key: RemoteProcessSortKey,
         cx: &mut Context<Self>,
     ) {
-        if self.process_sort_key == key {
-            self.process_sort_direction = self.process_sort_direction.reversed();
+        if self.remote_ops.process.sort_key == key {
+            self.remote_ops.process.sort_direction =
+                self.remote_ops.process.sort_direction.reversed();
         } else {
-            self.process_sort_key = key;
-            self.process_sort_direction = match key {
+            self.remote_ops.process.sort_key = key;
+            self.remote_ops.process.sort_direction = match key {
                 RemoteProcessSortKey::Cpu | RemoteProcessSortKey::Memory => {
                     RemoteProcessSortDirection::Descending
                 }
@@ -131,11 +135,11 @@ impl NyaTermApp {
                 | RemoteProcessSortKey::Command => RemoteProcessSortDirection::Ascending,
             };
         }
-        self.process_list_offset = 0;
-        self.process_status = format!(
+        self.remote_ops.process.list_offset = 0;
+        self.remote_ops.process.status = format!(
             "sorted processes by {} {}",
-            self.process_sort_key.label(),
-            self.process_sort_direction.marker()
+            self.remote_ops.process.sort_key.label(),
+            self.remote_ops.process.sort_direction.marker()
         );
         cx.notify();
     }
@@ -145,12 +149,13 @@ impl NyaTermApp {
         pid: u32,
         cx: &mut Context<Self>,
     ) {
-        self.process_menu_pid = None;
-        self.process_selected_pid = if self.process_selected_pid == Some(pid) {
-            self.process_nice_draft = "0".to_string();
+        self.remote_ops.process.menu_pid = None;
+        self.remote_ops.process.selected_pid = if self.remote_ops.process.selected_pid == Some(pid)
+        {
+            self.remote_ops.process.nice_draft = "0".to_string();
             None
         } else {
-            self.process_nice_draft = "0".to_string();
+            self.remote_ops.process.nice_draft = "0".to_string();
             Some(pid)
         };
         cx.notify();
@@ -174,12 +179,12 @@ impl NyaTermApp {
             }
             "escape" => {
                 cx.stop_propagation();
-                self.process_nice_draft = "0".to_string();
+                self.remote_ops.process.nice_draft = "0".to_string();
                 cx.notify();
             }
             "backspace" => {
                 cx.stop_propagation();
-                self.process_nice_draft.pop();
+                self.remote_ops.process.nice_draft.pop();
                 cx.notify();
             }
             _ => {
@@ -193,9 +198,9 @@ impl NyaTermApp {
                 else {
                     return;
                 };
-                if self.process_nice_draft.is_empty() && input == "-" {
+                if self.remote_ops.process.nice_draft.is_empty() && input == "-" {
                     cx.stop_propagation();
-                    self.process_nice_draft.push('-');
+                    self.remote_ops.process.nice_draft.push('-');
                     cx.notify();
                     return;
                 }
@@ -203,9 +208,9 @@ impl NyaTermApp {
                     .chars()
                     .filter(|character| character.is_ascii_digit())
                     .collect::<String>();
-                if !digits.is_empty() && self.process_nice_draft.len() < 3 {
+                if !digits.is_empty() && self.remote_ops.process.nice_draft.len() < 3 {
                     cx.stop_propagation();
-                    self.process_nice_draft.push_str(&digits);
+                    self.remote_ops.process.nice_draft.push_str(&digits);
                     cx.notify();
                 }
             }
@@ -217,18 +222,18 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(pid) = self.process_selected_pid else {
-            self.process_status = "select a process before applying nice".to_string();
+        let Some(pid) = self.remote_ops.process.selected_pid else {
+            self.remote_ops.process.status = "select a process before applying nice".to_string();
             cx.notify();
             return;
         };
-        let Ok(nice) = self.process_nice_draft.trim().parse::<i32>() else {
-            self.process_status = "nice must be an integer from -20 to 19".to_string();
+        let Ok(nice) = self.remote_ops.process.nice_draft.trim().parse::<i32>() else {
+            self.remote_ops.process.status = "nice must be an integer from -20 to 19".to_string();
             cx.notify();
             return;
         };
         if !(-20..=19).contains(&nice) {
-            self.process_status = "nice must be between -20 and 19".to_string();
+            self.remote_ops.process.status = "nice must be between -20 and 19".to_string();
             cx.notify();
             return;
         }
@@ -242,8 +247,8 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         cx.write_to_clipboard(ClipboardItem::new_string(value));
-        self.process_status = format!("copied process {label}");
-        self.terminal_status = self.process_status.clone();
+        self.remote_ops.process.status = format!("copied process {label}");
+        self.terminal_status = self.remote_ops.process.status.clone();
         cx.notify();
     }
 
@@ -254,8 +259,8 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         cx.write_to_clipboard(ClipboardItem::new_string(value));
-        self.docker_status = format!("copied Docker {label}");
-        self.terminal_status = self.docker_status.clone();
+        self.remote_ops.docker.status = format!("copied Docker {label}");
+        self.terminal_status = self.remote_ops.docker.status.clone();
         cx.notify();
     }
 
@@ -268,24 +273,28 @@ impl NyaTermApp {
     ) {
         if signal == "KILL" {
             let command = self
-                .processes
+                .remote_ops
+                .process
+                .items
                 .iter()
                 .find(|process| process.pid == pid)
                 .map(|process| process.command_line.clone())
                 .filter(|command| !command.trim().is_empty())
                 .or_else(|| {
-                    self.processes
+                    self.remote_ops
+                        .process
+                        .items
                         .iter()
                         .find(|process| process.pid == pid)
                         .map(|process| process.command.clone())
                 })
                 .unwrap_or_else(|| "unknown process".to_string());
-            self.process_signal_confirm = Some(RemoteProcessSignalConfirmState {
+            self.remote_ops.process.signal_confirm = Some(RemoteProcessSignalConfirmState {
                 pid,
                 signal,
                 command,
             });
-            self.process_status = format!("confirm {signal} for pid {pid}");
+            self.remote_ops.process.status = format!("confirm {signal} for pid {pid}");
             cx.notify();
         } else {
             self.signal_process(pid, signal, window, cx);
@@ -293,8 +302,8 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn cancel_process_signal_confirm(&mut self, cx: &mut Context<Self>) {
-        self.process_signal_confirm = None;
-        self.process_status = "process signal cancelled".to_string();
+        self.remote_ops.process.signal_confirm = None;
+        self.remote_ops.process.status = "process signal cancelled".to_string();
         cx.notify();
     }
 
@@ -303,8 +312,8 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(confirm) = self.process_signal_confirm.take() else {
-            self.process_status = "no process signal pending".to_string();
+        let Some(confirm) = self.remote_ops.process.signal_confirm.take() else {
+            self.remote_ops.process.status = "no process signal pending".to_string();
             cx.notify();
             return;
         };
@@ -317,29 +326,31 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(config) = self.active_ssh_config.clone() else {
-            self.process_status = "start an SSH session before listing processes".to_string();
-            self.terminal_status = self.process_status.clone();
+            self.remote_ops.process.status =
+                "start an SSH session before listing processes".to_string();
+            self.terminal_status = self.remote_ops.process.status.clone();
             cx.notify();
             return;
         };
         let Some(job_session_id) = self.active_session_id.clone() else {
-            self.process_status = "start an SSH session before listing processes".to_string();
+            self.remote_ops.process.status =
+                "start an SSH session before listing processes".to_string();
             cx.notify();
             return;
         };
-        if self.process_pending
-            && self.process_job_session_id.as_deref() == Some(job_session_id.as_str())
+        if self.remote_ops.process.pending
+            && self.remote_ops.process.job_session_id.as_deref() == Some(job_session_id.as_str())
         {
-            self.process_status = "process operation already running".to_string();
+            self.remote_ops.process.status = "process operation already running".to_string();
             cx.notify();
             return;
         }
 
         let job_id = self.begin_process_job(job_session_id.clone());
-        self.process_menu_pid = None;
-        self.process_last_refresh_at = Some(Instant::now());
-        self.process_status = "listing remote processes".to_string();
-        let tx = self.process_tx.clone();
+        self.remote_ops.process.menu_pid = None;
+        self.remote_ops.process.last_refresh_at = Some(Instant::now());
+        self.remote_ops.process.status = "listing remote processes".to_string();
+        let tx = self.remote_ops.process.tx.clone();
         std::thread::spawn(move || {
             let result = SshProcessService::new(config)
                 .list_processes()
@@ -362,27 +373,29 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(config) = self.active_ssh_config.clone() else {
-            self.process_status = "start an SSH session before signalling processes".to_string();
-            self.terminal_status = self.process_status.clone();
+            self.remote_ops.process.status =
+                "start an SSH session before signalling processes".to_string();
+            self.terminal_status = self.remote_ops.process.status.clone();
             cx.notify();
             return;
         };
         let Some(job_session_id) = self.active_session_id.clone() else {
-            self.process_status = "start an SSH session before signalling processes".to_string();
+            self.remote_ops.process.status =
+                "start an SSH session before signalling processes".to_string();
             cx.notify();
             return;
         };
-        if self.process_pending
-            && self.process_job_session_id.as_deref() == Some(job_session_id.as_str())
+        if self.remote_ops.process.pending
+            && self.remote_ops.process.job_session_id.as_deref() == Some(job_session_id.as_str())
         {
-            self.process_status = "process operation already running".to_string();
+            self.remote_ops.process.status = "process operation already running".to_string();
             cx.notify();
             return;
         }
 
         let job_id = self.begin_process_job(job_session_id.clone());
-        self.process_status = format!("sending {signal} to pid {pid}");
-        let tx = self.process_tx.clone();
+        self.remote_ops.process.status = format!("sending {signal} to pid {pid}");
+        let tx = self.remote_ops.process.tx.clone();
         std::thread::spawn(move || {
             let result = (|| {
                 let service = SshProcessService::new(config);
@@ -412,27 +425,29 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(config) = self.active_ssh_config.clone() else {
-            self.process_status = "start an SSH session before renicing processes".to_string();
-            self.terminal_status = self.process_status.clone();
+            self.remote_ops.process.status =
+                "start an SSH session before renicing processes".to_string();
+            self.terminal_status = self.remote_ops.process.status.clone();
             cx.notify();
             return;
         };
         let Some(job_session_id) = self.active_session_id.clone() else {
-            self.process_status = "start an SSH session before renicing processes".to_string();
+            self.remote_ops.process.status =
+                "start an SSH session before renicing processes".to_string();
             cx.notify();
             return;
         };
-        if self.process_pending
-            && self.process_job_session_id.as_deref() == Some(job_session_id.as_str())
+        if self.remote_ops.process.pending
+            && self.remote_ops.process.job_session_id.as_deref() == Some(job_session_id.as_str())
         {
-            self.process_status = "process operation already running".to_string();
+            self.remote_ops.process.status = "process operation already running".to_string();
             cx.notify();
             return;
         }
 
         let job_id = self.begin_process_job(job_session_id.clone());
-        self.process_status = format!("renicing pid {pid} to {nice}");
-        let tx = self.process_tx.clone();
+        self.remote_ops.process.status = format!("renicing pid {pid} to {nice}");
+        let tx = self.remote_ops.process.tx.clone();
         std::thread::spawn(move || {
             let result = (|| {
                 let service = SshProcessService::new(config);
@@ -457,29 +472,30 @@ impl NyaTermApp {
     pub(in crate::features) fn drain_process_events(&mut self) -> bool {
         let mut dirty = false;
         for _ in 0..PROCESS_EVENT_DRAIN_LIMIT {
-            let Ok(event) = self.process_rx.try_recv() else {
+            let Ok(event) = self.remote_ops.process.rx.try_recv() else {
                 break;
             };
             if !remote_job_event_matches(
-                self.process_job_id,
-                self.process_job_session_id.as_deref(),
+                self.remote_ops.process.job_id,
+                self.remote_ops.process.job_session_id.as_deref(),
                 event.job_id,
                 &event.session_id,
             ) {
                 continue;
             }
             dirty = true;
-            self.process_pending = false;
-            self.process_job_session_id = None;
+            self.remote_ops.process.pending = false;
+            self.remote_ops.process.job_session_id = None;
             if self.active_session_id.as_deref() != Some(event.session_id.as_str()) {
                 continue;
             }
-            let was_list_refresh = self.process_status == "listing remote processes";
+            let was_list_refresh = self.remote_ops.process.status == "listing remote processes";
             match event.result {
                 Ok(ProcessJobOutput::Listed(processes)) => {
-                    self.process_consecutive_refresh_failures = 0;
-                    self.process_status = format!("loaded {} remote process(es)", processes.len());
-                    self.terminal_status = self.process_status.clone();
+                    self.remote_ops.process.consecutive_refresh_failures = 0;
+                    self.remote_ops.process.status =
+                        format!("loaded {} remote process(es)", processes.len());
+                    self.terminal_status = self.remote_ops.process.status.clone();
                     self.apply_processes(processes);
                 }
                 Ok(ProcessJobOutput::Signalled {
@@ -487,9 +503,9 @@ impl NyaTermApp {
                     signal,
                     processes,
                 }) => {
-                    self.process_status = format!("sent {signal} to pid {pid}");
-                    self.terminal_status = self.process_status.clone();
-                    self.process_signal_confirm = None;
+                    self.remote_ops.process.status = format!("sent {signal} to pid {pid}");
+                    self.terminal_status = self.remote_ops.process.status.clone();
+                    self.remote_ops.process.signal_confirm = None;
                     self.apply_processes(processes);
                 }
                 Ok(ProcessJobOutput::Reniced {
@@ -497,25 +513,28 @@ impl NyaTermApp {
                     nice,
                     processes,
                 }) => {
-                    self.process_status = format!("reniced pid {pid} to {nice}");
-                    self.terminal_status = self.process_status.clone();
+                    self.remote_ops.process.status = format!("reniced pid {pid} to {nice}");
+                    self.terminal_status = self.remote_ops.process.status.clone();
                     self.apply_processes(processes);
                 }
                 Err(error) => {
                     if was_list_refresh {
-                        self.process_consecutive_refresh_failures =
+                        self.remote_ops.process.consecutive_refresh_failures =
                             if error.contains(nyaterm_transport::PROCESS_LIST_UNSUPPORTED_ERROR) {
                                 3
                             } else {
-                                self.process_consecutive_refresh_failures.saturating_add(1)
+                                self.remote_ops
+                                    .process
+                                    .consecutive_refresh_failures
+                                    .saturating_add(1)
                             };
-                        if self.process_consecutive_refresh_failures >= 3 {
-                            self.processes.clear();
-                            self.process_snapshot_loaded = false;
+                        if self.remote_ops.process.consecutive_refresh_failures >= 3 {
+                            self.remote_ops.process.items.clear();
+                            self.remote_ops.process.snapshot_loaded = false;
                         }
                     }
-                    self.process_status = format!("process operation failed: {error}");
-                    self.terminal_status = self.process_status.clone();
+                    self.remote_ops.process.status = format!("process operation failed: {error}");
+                    self.terminal_status = self.remote_ops.process.status.clone();
                 }
             }
         }
@@ -523,21 +542,23 @@ impl NyaTermApp {
     }
 
     fn begin_process_job(&mut self, session_id: String) -> u64 {
-        self.process_job_id = self.process_job_id.wrapping_add(1).max(1);
-        self.process_job_session_id = Some(session_id);
-        self.process_pending = true;
-        self.process_job_id
+        self.remote_ops.process.job_id = self.remote_ops.process.job_id.wrapping_add(1).max(1);
+        self.remote_ops.process.job_session_id = Some(session_id);
+        self.remote_ops.process.pending = true;
+        self.remote_ops.process.job_id
     }
 
     pub(in crate::features) fn apply_processes(&mut self, processes: Vec<RemoteProcess>) {
         if self
-            .process_selected_pid
+            .remote_ops
+            .process
+            .selected_pid
             .is_some_and(|pid| !processes.iter().any(|process| process.pid == pid))
         {
-            self.process_selected_pid = None;
-            self.process_nice_draft = "0".to_string();
+            self.remote_ops.process.selected_pid = None;
+            self.remote_ops.process.nice_draft = "0".to_string();
         }
-        self.processes = processes;
-        self.process_snapshot_loaded = true;
+        self.remote_ops.process.items = processes;
+        self.remote_ops.process.snapshot_loaded = true;
     }
 }

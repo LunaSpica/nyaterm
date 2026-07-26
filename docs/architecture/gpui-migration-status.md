@@ -9,7 +9,7 @@ Last updated from the working tree on 2026-07-26.
 
 | Metric | Current value | Notes |
 | --- | ---: | --- |
-| `NyaTermApp` fields | 570 | Counted from `features/app_state/mod.rs`; still transitional and too broad. |
+| `NyaTermApp` fields | 516 | Counted from `features/app_state/mod.rs`; still transitional and too broad. |
 | `impl NyaTermApp` blocks | 236 | Spread across 233 files under `crates/nyaterm-desktop/src`. |
 | `#[path = "..."]` declarations in desktop | 0 | Cleared. Every directory is a real module; the boundary script fails on any new occurrence. |
 | `use super::*` imports in desktop | 355 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
@@ -84,6 +84,12 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   imports any of the eleven quick command UI model types. The persisted
   `quick_commands` and `quick_command_categories` collections deliberately stay
   on `NyaTermApp`, as with connections.
+- Remote page state is grouped into `RemoteOpsFeatureState` with one struct per
+  pane: `docker`, `process` and `stats`. The three panes turn out to share the
+  same refresh bookkeeping (job id, owning session, pending flag, failure
+  streak, last refresh instant), which the fifty-four prefixed `NyaTermApp`
+  fields hid. Their job channels are created inside
+  `RemoteOpsFeatureState::new` because construction was their only other use.
 - The connections UI state has started moving out of scattered `NyaTermApp`
   fields and into `ConnectionFeatureState`.
 - The current connections state split separates list UI, import UI, editor

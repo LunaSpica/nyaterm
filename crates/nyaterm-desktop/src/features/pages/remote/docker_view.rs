@@ -74,8 +74,10 @@ impl NyaTermApp {
                 .bg(self.shell_transparent_color(palette.surface))
                 .child(empty_panel(labels.no_session, palette));
         }
-        let Some(overview) = self.docker_overview.clone() else {
-            let message = if self.docker_pending || !self.docker_status.contains("failed") {
+        let Some(overview) = self.remote_ops.docker.overview.clone() else {
+            let message = if self.remote_ops.docker.pending
+                || !self.remote_ops.docker.status.contains("failed")
+            {
                 labels.loading
             } else {
                 labels.error
@@ -91,12 +93,18 @@ impl NyaTermApp {
                 .bg(self.shell_transparent_color(palette.surface))
                 .child(empty_panel(labels.unavailable, palette));
         }
-        let active_tab = if self.docker_tab == DockerTab::Compose && !overview.compose_available {
-            DockerTab::Containers
-        } else {
-            self.docker_tab
-        };
-        let query = self.docker_search_draft.trim().to_ascii_lowercase();
+        let active_tab =
+            if self.remote_ops.docker.tab == DockerTab::Compose && !overview.compose_available {
+                DockerTab::Containers
+            } else {
+                self.remote_ops.docker.tab
+            };
+        let query = self
+            .remote_ops
+            .docker
+            .search_draft
+            .trim()
+            .to_ascii_lowercase();
         let filtered_containers = overview
             .containers
             .iter()
@@ -133,8 +141,8 @@ impl NyaTermApp {
             const DOCKER_VIEWPORT_ROWS: usize = 16;
             let total = filtered_containers.len();
             let max_offset = total.saturating_sub(DOCKER_VIEWPORT_ROWS.min(total));
-            if self.docker_list_offset > max_offset {
-                self.docker_list_offset = max_offset;
+            if self.remote_ops.docker.list_offset > max_offset {
+                self.remote_ops.docker.list_offset = max_offset;
             }
         }
         {
@@ -146,8 +154,8 @@ impl NyaTermApp {
                 _ => 0,
             };
             let max_offset = total.saturating_sub(DOCKER_RESOURCE_VIEWPORT_ROWS.min(total));
-            if self.docker_resource_list_offset > max_offset {
-                self.docker_resource_list_offset = max_offset;
+            if self.remote_ops.docker.resource_list_offset > max_offset {
+                self.remote_ops.docker.resource_list_offset = max_offset;
             }
         }
 
@@ -157,13 +165,13 @@ impl NyaTermApp {
             DockerTab::Containers => docker_containers_panel(
                 palette,
                 menu_bg,
-                self.docker_overview.is_some(),
+                self.remote_ops.docker.overview.is_some(),
                 self.active_ssh_config.is_some(),
                 overview.available,
                 &filtered_containers,
                 query.is_empty(),
-                self.docker_container_menu_id.as_deref(),
-                self.docker_list_offset,
+                self.remote_ops.docker.container_menu_id.as_deref(),
+                self.remote_ops.docker.list_offset,
                 labels,
                 cx,
             )
@@ -171,7 +179,7 @@ impl NyaTermApp {
             DockerTab::Images => docker_images_panel(
                 palette,
                 &filtered_images,
-                self.docker_resource_list_offset,
+                self.remote_ops.docker.resource_list_offset,
                 labels,
                 cx,
             )
@@ -179,7 +187,7 @@ impl NyaTermApp {
             DockerTab::Volumes => docker_volumes_panel(
                 palette,
                 &filtered_volumes,
-                self.docker_resource_list_offset,
+                self.remote_ops.docker.resource_list_offset,
                 labels,
                 cx,
             )
@@ -187,7 +195,7 @@ impl NyaTermApp {
             DockerTab::Networks => docker_networks_panel(
                 palette,
                 &filtered_networks,
-                self.docker_resource_list_offset,
+                self.remote_ops.docker.resource_list_offset,
                 labels,
                 cx,
             )
@@ -196,10 +204,10 @@ impl NyaTermApp {
                 palette,
                 menu_bg,
                 &filtered_compose_projects,
-                &self.docker_compose_expanded,
-                &self.docker_compose_services,
-                &self.docker_compose_service_errors,
-                self.docker_compose_menu_id.as_deref(),
+                &self.remote_ops.docker.compose_expanded,
+                &self.remote_ops.docker.compose_services,
+                &self.remote_ops.docker.compose_service_errors,
+                self.remote_ops.docker.compose_menu_id.as_deref(),
                 labels,
                 cx,
             )
@@ -218,7 +226,9 @@ impl NyaTermApp {
             .gap(px(10.))
             .bg(self.shell_transparent_color(palette.surface))
             .when(
-                self.docker_overview
+                self.remote_ops
+                    .docker
+                    .overview
                     .as_ref()
                     .is_some_and(|snapshot| snapshot.available),
                 |this| {
@@ -249,14 +259,14 @@ impl NyaTermApp {
                             transfer_input(
                                 "docker-search-input",
                                 labels.search,
-                                self.docker_search_draft.clone(),
+                                self.remote_ops.docker.search_draft.clone(),
                                 true,
                                 self.theme_palette(),
                             )
                             .h(px(32.))
-                            .track_focus(&self.docker_search_focus)
+                            .track_focus(&self.remote_ops.docker.search_focus)
                             .on_click(cx.listener(|this, _, window, cx| {
-                                window.focus(&this.docker_search_focus);
+                                window.focus(&this.remote_ops.docker.search_focus);
                                 cx.notify();
                             }))
                             .on_key_down(cx.listener(
@@ -282,7 +292,7 @@ impl NyaTermApp {
                 ],
                 self.tr("common.more").to_string(),
                 self.right_panel_width,
-                self.docker_tab_menu_open,
+                self.remote_ops.docker.tab_menu_open,
                 cx,
             ))
             .child(
@@ -293,13 +303,13 @@ impl NyaTermApp {
                     .child(docker_content),
             )
             .when_some(
-                self.docker_details_container_id.clone(),
+                self.remote_ops.docker.details_container_id.clone(),
                 |this, container_id| {
                     this.child(docker_details_panel(
                         palette,
                         dialog_bg,
                         Some(container_id.clone()),
-                        self.docker_details.clone(),
+                        self.remote_ops.docker.details.clone(),
                         overview
                             .containers
                             .iter()
@@ -310,7 +320,7 @@ impl NyaTermApp {
                     ))
                 },
             )
-            .when_some(self.docker_confirm.clone(), |this, confirm| {
+            .when_some(self.remote_ops.docker.confirm.clone(), |this, confirm| {
                 this.child(docker_confirm_panel(
                     palette, dialog_bg, confirm, labels, cx,
                 ))

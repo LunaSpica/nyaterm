@@ -6,7 +6,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let stats = self.remote_stats.clone().unwrap_or_default();
+        let stats = self.remote_ops.stats.data.clone().unwrap_or_default();
         let memory_total = stats.memory.used.saturating_add(stats.memory.available);
         let memory_percent = if memory_total > 0 {
             stats.memory.used as f64 / memory_total as f64 * 100.
@@ -58,7 +58,7 @@ impl NyaTermApp {
                     .child(div().mt_3().child(small_button(
                         palette,
                         "right-stats-refresh",
-                        if self.stats_pending {
+                        if self.remote_ops.stats.pending {
                             "Loading"
                         } else {
                             "Refresh"
@@ -72,7 +72,10 @@ impl NyaTermApp {
                 inspector_card(palette, "Networks")
                     .child(compact_network_rows(palette, &stats.networks)),
             )
-            .child(inspector_status_line(palette, self.stats_status.clone()))
+            .child(inspector_status_line(
+                palette,
+                self.remote_ops.stats.status.clone(),
+            ))
     }
 
     pub(in crate::features) fn right_process_panel(
@@ -80,7 +83,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let top_process = self.processes.iter().max_by(|left, right| {
+        let top_process = self.remote_ops.process.items.iter().max_by(|left, right| {
             left.cpu_percent
                 .partial_cmp(&right.cpu_percent)
                 .unwrap_or(std::cmp::Ordering::Equal)
@@ -113,13 +116,13 @@ impl NyaTermApp {
                     .child(capability_line(
                         palette,
                         "Processes",
-                        self.processes.len().to_string(),
+                        self.remote_ops.process.items.len().to_string(),
                     ))
                     .child(capability_line(palette, "Top CPU", top_label))
                     .child(div().mt_3().child(small_button(
                         palette,
                         "right-process-refresh",
-                        if self.process_pending {
+                        if self.remote_ops.process.pending {
                             "Loading"
                         } else {
                             "Refresh"
@@ -130,10 +133,15 @@ impl NyaTermApp {
                     ))),
             )
             .child(
-                inspector_card(palette, "Hot Processes")
-                    .child(compact_process_rows(palette, &self.processes)),
+                inspector_card(palette, "Hot Processes").child(compact_process_rows(
+                    palette,
+                    &self.remote_ops.process.items,
+                )),
             )
-            .child(inspector_status_line(palette, self.process_status.clone()))
+            .child(inspector_status_line(
+                palette,
+                self.remote_ops.process.status.clone(),
+            ))
     }
 
     pub(in crate::features) fn right_docker_panel(
@@ -141,7 +149,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let overview = self.docker_overview.clone().unwrap_or_default();
+        let overview = self.remote_ops.docker.overview.clone().unwrap_or_default();
         let running = overview
             .containers
             .iter()
@@ -182,7 +190,7 @@ impl NyaTermApp {
                     .child(div().mt_3().child(small_button(
                         palette,
                         "right-docker-refresh",
-                        if self.docker_pending {
+                        if self.remote_ops.docker.pending {
                             "Loading"
                         } else {
                             "Refresh"
@@ -196,7 +204,10 @@ impl NyaTermApp {
                 inspector_card(palette, "Containers")
                     .child(compact_docker_container_rows(palette, &overview.containers)),
             )
-            .child(inspector_status_line(palette, self.docker_status.clone()))
+            .child(inspector_status_line(
+                palette,
+                self.remote_ops.docker.status.clone(),
+            ))
     }
 
     pub(in crate::features) fn right_translation_panel(

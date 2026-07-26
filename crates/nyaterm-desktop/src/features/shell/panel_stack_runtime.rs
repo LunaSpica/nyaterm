@@ -565,12 +565,12 @@ impl NyaTermApp {
             }
             NavItem::Processes => {
                 if self.active_ssh_config.is_none()
-                    || !self.process_snapshot_loaded
-                    || self.processes.is_empty()
+                    || !self.remote_ops.process.snapshot_loaded
+                    || self.remote_ops.process.items.is_empty()
                 {
                     SharedString::from("")
                 } else {
-                    SharedString::from(self.processes.len().to_string())
+                    SharedString::from(self.remote_ops.process.items.len().to_string())
                 }
             }
             NavItem::Docker => {
@@ -578,7 +578,9 @@ impl NyaTermApp {
                     return SharedString::from("");
                 }
                 let Some(overview) = self
-                    .docker_overview
+                    .remote_ops
+                    .docker
+                    .overview
                     .as_ref()
                     .filter(|overview| overview.available)
                 else {
@@ -693,7 +695,8 @@ impl NyaTermApp {
             }
             NavItem::Stats => {
                 let palette = self.theme_palette();
-                let can_refresh = self.active_ssh_config.is_some() && !self.stats_pending;
+                let can_refresh =
+                    self.active_ssh_config.is_some() && !self.remote_ops.stats.pending;
                 Some(
                     header_svg_icon_button(
                         palette,
@@ -710,7 +713,8 @@ impl NyaTermApp {
             }
             NavItem::Processes => {
                 let palette = self.theme_palette();
-                let can_refresh = self.active_ssh_config.is_some() && !self.process_pending;
+                let can_refresh =
+                    self.active_ssh_config.is_some() && !self.remote_ops.process.pending;
                 Some(
                     header_svg_icon_button(
                         palette,
@@ -727,10 +731,13 @@ impl NyaTermApp {
             }
             NavItem::Docker => {
                 let palette = self.theme_palette();
-                let can_refresh = self.active_ssh_config.is_some() && !self.docker_pending;
+                let can_refresh =
+                    self.active_ssh_config.is_some() && !self.remote_ops.docker.pending;
                 let can_prune = can_refresh
                     && self
-                        .docker_overview
+                        .remote_ops
+                        .docker
+                        .overview
                         .as_ref()
                         .is_some_and(|overview| overview.available);
                 let more_label = self.tr("dockerManager.moreActions").to_string();
@@ -761,12 +768,12 @@ impl NyaTermApp {
                                     more_label,
                                     can_prune,
                                     cx.listener(|this, _, _, cx| {
-                                        this.docker_header_menu_open =
-                                            !this.docker_header_menu_open;
+                                        this.remote_ops.docker.header_menu_open =
+                                            !this.remote_ops.docker.header_menu_open;
                                         cx.notify();
                                     }),
                                 ))
-                                .when(self.docker_header_menu_open, |this| {
+                                .when(self.remote_ops.docker.header_menu_open, |this| {
                                     this.child(
                                         div()
                                             .id("docker-header-more-menu")
@@ -800,7 +807,8 @@ impl NyaTermApp {
                                                     )
                                                     .child(prune_label)
                                                     .on_click(cx.listener(|this, _, _, cx| {
-                                                        this.docker_header_menu_open = false;
+                                                        this.remote_ops.docker.header_menu_open =
+                                                            false;
                                                         this.prune_docker_system(cx);
                                                     })),
                                             ),
