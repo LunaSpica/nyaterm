@@ -16,11 +16,6 @@ use crate::models::{
 };
 use nyaterm_core::{TranslateResult, TranslationSettings};
 
-use crate::send_command::{
-    SendCommandControlFocus, SendCommandDataType, SendCommandLineEnding, SendCommandMode,
-    SendCommandTarget,
-};
-
 mod construct;
 mod types;
 
@@ -54,6 +49,7 @@ pub struct NyaTermApp {
     pub(in crate::features) security: SecurityFeatureState,
     pub(in crate::features) ai: AiFeatureState,
     pub(in crate::features) terminal: TerminalFeatureState,
+    pub(in crate::features) send_command: SendCommandFeatureState,
     pub(in crate::features) transfer: TransferFeatureState,
     pub(in crate::features) command_history: Arc<[CommandHistoryEntry]>,
     pub(in crate::features) command_persistence_tx: mpsc::Sender<CommandPersistenceRequest>,
@@ -113,28 +109,6 @@ pub struct NyaTermApp {
     pub(in crate::features) quick_cmd_height: f32,
     pub(in crate::features) serial_send_height: f32,
     pub(in crate::features) bottom_panel_resize: Option<BottomPanelResizeState>,
-    pub(in crate::features) send_command_draft: String,
-    pub(in crate::features) send_command_focus: FocusHandle,
-    pub(in crate::features) send_command_controls_focus: FocusHandle,
-    pub(in crate::features) send_command_control_focus: Option<SendCommandControlFocus>,
-    pub(in crate::features) send_command_data_type: SendCommandDataType,
-    pub(in crate::features) send_command_mode: SendCommandMode,
-    pub(in crate::features) send_command_count: Option<u32>,
-    pub(in crate::features) send_command_count_input: String,
-    pub(in crate::features) send_command_interval_seconds: f64,
-    pub(in crate::features) send_command_interval_input: String,
-    pub(in crate::features) send_command_line_ending: SendCommandLineEnding,
-    pub(in crate::features) send_command_target: SendCommandTarget,
-    pub(in crate::features) send_command_data_menu_open: bool,
-    pub(in crate::features) send_command_mode_menu_open: bool,
-    pub(in crate::features) send_command_target_menu_open: bool,
-    pub(in crate::features) send_command_line_ending_menu_open: bool,
-    pub(in crate::features) send_command_sending: bool,
-    pub(in crate::features) send_command_cancel: Option<Arc<AtomicBool>>,
-    pub(in crate::features) send_command_progress_completed: u32,
-    pub(in crate::features) send_command_progress_total: u32,
-    pub(in crate::features) send_command_progress_round: u32,
-    pub(in crate::features) send_command_progress_rounds: u32,
     pub(in crate::features) sync_groups: Vec<SyncInputGroup>,
     pub(in crate::features) sync_groups_open: bool,
     pub(in crate::features) sync_groups_focus: FocusHandle,
@@ -184,8 +158,6 @@ pub struct NyaTermApp {
     pub(in crate::features) tunnel_tx: mpsc::Sender<TunnelJobResult>,
     pub(in crate::features) tunnel_rx: mpsc::Receiver<TunnelJobResult>,
     pub(in crate::features) pending_tunnels: Vec<String>,
-    pub(in crate::features) send_command_hex_scroll_x: f32,
-    pub(in crate::features) send_command_hex_scroll_y: f32,
     pub(in crate::features) translate_tx: mpsc::Sender<TranslateJobResult>,
     pub(in crate::features) translate_rx: mpsc::Receiver<TranslateJobResult>,
     pub(in crate::features) translate_provider: String,

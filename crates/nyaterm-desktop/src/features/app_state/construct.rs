@@ -8,10 +8,6 @@ use crate::models::{
 };
 use nyaterm_core::{CLOUD_SYNC_HISTORY_LIMIT, TranslationSettings, read_cloud_sync_history};
 
-use crate::send_command::{
-    SendCommandDataType, SendCommandLineEnding, SendCommandMode, SendCommandTarget,
-};
-
 impl NyaTermApp {
     pub fn new(
         runtime: AppRuntime,
@@ -341,8 +337,10 @@ impl NyaTermApp {
                     ai: cx.focus_handle(),
                 },
             ),
-            send_command_hex_scroll_x: 0.,
-            send_command_hex_scroll_y: 0.,
+            send_command: SendCommandFeatureState::new(SendCommandFeatureFocus {
+                editor: cx.focus_handle(),
+                controls: cx.focus_handle(),
+            }),
             terminal: TerminalFeatureState::new(
                 terminal_screen,
                 terminal_output_decoder,
@@ -452,28 +450,6 @@ impl NyaTermApp {
             quick_cmd_height,
             serial_send_height,
             bottom_panel_resize: None,
-            send_command_draft: String::new(),
-            send_command_focus: cx.focus_handle(),
-            send_command_controls_focus: cx.focus_handle(),
-            send_command_control_focus: None,
-            send_command_data_type: SendCommandDataType::Text,
-            send_command_mode: SendCommandMode::Line,
-            send_command_count: Some(1),
-            send_command_count_input: "1".to_string(),
-            send_command_interval_seconds: 1.0,
-            send_command_interval_input: "1.00".to_string(),
-            send_command_line_ending: SendCommandLineEnding::Crlf,
-            send_command_target: SendCommandTarget::Current,
-            send_command_data_menu_open: false,
-            send_command_mode_menu_open: false,
-            send_command_target_menu_open: false,
-            send_command_line_ending_menu_open: false,
-            send_command_sending: false,
-            send_command_cancel: None,
-            send_command_progress_completed: 0,
-            send_command_progress_total: 0,
-            send_command_progress_round: 0,
-            send_command_progress_rounds: 0,
             sync_groups: Vec::new(),
             sync_groups_open: false,
             sync_groups_focus: cx.focus_handle(),

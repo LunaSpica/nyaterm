@@ -56,6 +56,7 @@ pub(in crate::features) use connections::{
     ConnectionDropTarget, ConnectionEditorToggle, ConnectionFeatureFocus, ConnectionFeatureState,
 };
 pub(in crate::features) use formatting::*;
+pub(in crate::features) use panels::{SendCommandFeatureFocus, SendCommandFeatureState};
 pub(in crate::features) use quick_command_window::QuickCommandWindow;
 pub(in crate::features) use remote::{RemoteOpsFeatureFocus, RemoteOpsFeatureState};
 pub(in crate::features) use remote_editor_window::RemoteFileEditorWindow;

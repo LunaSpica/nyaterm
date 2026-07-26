@@ -31,3 +31,7 @@ mod send_command_helpers;
 use send_command_helpers::*;
 
 mod send_command_bar;
+mod send_command_state;
+pub(in crate::features) use send_command_state::{
+    SendCommandFeatureFocus, SendCommandFeatureState,
+};

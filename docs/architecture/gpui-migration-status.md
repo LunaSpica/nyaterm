@@ -9,7 +9,7 @@ Last updated from the working tree on 2026-07-26.
 
 | Metric | Current value | Notes |
 | --- | ---: | --- |
-| `NyaTermApp` fields | 302 | Counted from `features/app_state/mod.rs`; down from 585, still transitional. |
+| `NyaTermApp` fields | 279 | Counted from `features/app_state/mod.rs`; down from 585, still transitional. |
 | `impl NyaTermApp` blocks | 236 | Spread across 233 files under `crates/nyaterm-desktop/src`. |
 | `#[path = "..."]` declarations in desktop | 0 | Cleared. Every directory is a real module; the boundary script fails on any new occurrence. |
 | `use super::*` imports in desktop | 355 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
@@ -113,6 +113,10 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   snapshots and the wire protocol are untouched and stay in `nyaterm-terminal`
   and `nyaterm-transport`. `OverlaySnapshot` keeps its own
   `terminal_actions_open` / `terminal_context_menu_open` projection fields.
+- Send-command bar state is grouped into `SendCommandFeatureState`, split into
+  the three phases the bar actually has: `composer` (payload and caret),
+  `options` (how it is interpreted and delivered, plus the menus that set
+  those), and `progress` (in-flight send, cancellation, counters).
 - The connections UI state has started moving out of scattered `NyaTermApp`
   fields and into `ConnectionFeatureState`.
 - The current connections state split separates list UI, import UI, editor

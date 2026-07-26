@@ -17,10 +17,11 @@ impl NyaTermApp {
         let progress_label = state.progress_label.clone();
         let progress_ratio = state.progress_ratio;
         let target_available = !self.send_command_target_session_ids().is_empty();
-        let has_payload = if self.send_command_data_type == SendCommandDataType::Hex {
-            send_command_hex_byte_count(&self.send_command_draft).is_some_and(|count| count > 0)
+        let has_payload = if self.send_command.options.data_type == SendCommandDataType::Hex {
+            send_command_hex_byte_count(&self.send_command.composer.draft)
+                .is_some_and(|count| count > 0)
         } else {
-            !self.send_command_draft.is_empty()
+            !self.send_command.composer.draft.is_empty()
         };
         let send_disabled = !is_sending && (validation_error || !has_payload || !target_available);
         div()
@@ -38,20 +39,22 @@ impl NyaTermApp {
                     .min_w_0()
                     .min_h(px(72.))
                     .when(
-                        self.send_command_data_type == SendCommandDataType::Hex,
+                        self.send_command.options.data_type == SendCommandDataType::Hex,
                         |this| this.flex_none().flex_basis(gpui::relative(1.0 / 1.85)),
                     )
                     .when(
-                        self.send_command_data_type == SendCommandDataType::Hex,
+                        self.send_command.options.data_type == SendCommandDataType::Hex,
                         |this| {
                             // Tauri overlays dashed 4-byte guides per line above the hex textarea.
                             // Scroll-sync: wheel adjusts hexScroll.{top,left} approximation.
-                            let guide_rows = send_command_hex_guide_rows(&self.send_command_draft);
+                            let guide_rows =
+                                send_command_hex_guide_rows(&self.send_command.composer.draft);
                             const HEX_LINE_PX: f32 = 15.;
                             const HEX_CHAR_PX: f32 = 7.2;
                             const VIEWPORT_LINES: f32 = 5.;
                             const VIEWPORT_CHARS: f32 = 48.;
-                            let display = format_send_command_hex_display(&self.send_command_draft);
+                            let display =
+                                format_send_command_hex_display(&self.send_command.composer.draft);
                             let lines: Vec<&str> = display.lines().collect();
                             let line_count = lines.len().max(1) as f32;
                             let max_line_chars = lines
@@ -64,8 +67,16 @@ impl NyaTermApp {
                                 ((line_count - VIEWPORT_LINES).max(0.)) * HEX_LINE_PX;
                             let max_scroll_x =
                                 ((max_line_chars - VIEWPORT_CHARS).max(0.)) * HEX_CHAR_PX;
-                            let scroll_y = self.send_command_hex_scroll_y.clamp(0., max_scroll_y);
-                            let scroll_x = self.send_command_hex_scroll_x.clamp(0., max_scroll_x);
+                            let scroll_y = self
+                                .send_command
+                                .composer
+                                .hex_scroll_y
+                                .clamp(0., max_scroll_y);
+                            let scroll_x = self
+                                .send_command
+                                .composer
+                                .hex_scroll_x
+                                .clamp(0., max_scroll_x);
                             this.on_scroll_wheel(cx.listener(
                                 move |this, event: &ScrollWheelEvent, _, cx| {
                                     let (delta_x, delta_y) = match event.delta {
@@ -77,16 +88,21 @@ impl NyaTermApp {
                                         }
                                     };
                                     // Match GPUI / DOM: scroll offsets move opposite wheel delta.
-                                    let next_y = (this.send_command_hex_scroll_y - delta_y)
+                                    let next_y = (this.send_command.composer.hex_scroll_y
+                                        - delta_y)
                                         .clamp(0., max_scroll_y);
-                                    let next_x = (this.send_command_hex_scroll_x - delta_x)
+                                    let next_x = (this.send_command.composer.hex_scroll_x
+                                        - delta_x)
                                         .clamp(0., max_scroll_x);
-                                    let changed = (next_y - this.send_command_hex_scroll_y).abs()
+                                    let changed = (next_y
+                                        - this.send_command.composer.hex_scroll_y)
+                                        .abs()
                                         > 0.01
-                                        || (next_x - this.send_command_hex_scroll_x).abs() > 0.01;
+                                        || (next_x - this.send_command.composer.hex_scroll_x).abs()
+                                            > 0.01;
                                     if changed {
-                                        this.send_command_hex_scroll_y = next_y;
-                                        this.send_command_hex_scroll_x = next_x;
+                                        this.send_command.composer.hex_scroll_y = next_y;
+                                        this.send_command.composer.hex_scroll_x = next_x;
                                         cx.stop_propagation();
                                         cx.notify();
                                     }
@@ -168,10 +184,10 @@ impl NyaTermApp {
                         transfer_input(
                             "bottom-command-send-input",
                             input_hint,
-                            if self.send_command_data_type == SendCommandDataType::Hex {
-                                format_send_command_hex_display(&self.send_command_draft)
+                            if self.send_command.options.data_type == SendCommandDataType::Hex {
+                                format_send_command_hex_display(&self.send_command.composer.draft)
                             } else {
-                                self.send_command_draft.clone()
+                                self.send_command.composer.draft.clone()
                             },
                             true,
                             self.theme_palette(),
@@ -179,13 +195,13 @@ impl NyaTermApp {
                         .flex_1()
                         .min_h(px(72.))
                         .when(
-                            self.send_command_data_type == SendCommandDataType::Hex,
+                            self.send_command.options.data_type == SendCommandDataType::Hex,
                             |this| this.pt(px(22.)),
                         )
                         .font_family(crate::features::gpui_code_font_family())
-                        .track_focus(&self.send_command_focus)
+                        .track_focus(&self.send_command.composer.focus)
                         .on_click(cx.listener(|this, _, window, cx| {
-                            window.focus(&this.send_command_focus);
+                            window.focus(&this.send_command.composer.focus);
                             cx.notify();
                         }))
                         .on_key_down(cx.listener(
@@ -197,9 +213,9 @@ impl NyaTermApp {
                     ),
             )
             .when(
-                self.send_command_data_type == SendCommandDataType::Hex,
+                self.send_command.options.data_type == SendCommandDataType::Hex,
                 |this| {
-                    let byte_count = send_command_hex_byte_count(&self.send_command_draft);
+                    let byte_count = send_command_hex_byte_count(&self.send_command.composer.draft);
                     this.child(
                         div()
                             .flex_none()
@@ -280,7 +296,7 @@ impl NyaTermApp {
                 self.tr("serialSend.send"),
                 self.tr("serialSend.stop"),
                 cx.listener(|this, _, _, cx| {
-                    if this.send_command_sending {
+                    if this.send_command.progress.sending {
                         this.stop_send_command(cx);
                     } else {
                         this.send_bottom_command(false, cx);

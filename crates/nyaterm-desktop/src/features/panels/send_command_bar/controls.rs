@@ -15,24 +15,28 @@ impl NyaTermApp {
         let palette = state.palette;
         let is_sending = state.is_sending;
         let is_serial = matches!(self.active_session_kind(), Some(SessionKind::Serial));
-        let count_focused = self.send_command_control_focus == Some(SendCommandControlFocus::Count);
+        let count_focused =
+            self.send_command.composer.control_focus == Some(SendCommandControlFocus::Count);
         let interval_focused =
-            self.send_command_control_focus == Some(SendCommandControlFocus::Interval);
+            self.send_command.composer.control_focus == Some(SendCommandControlFocus::Interval);
         let count_label = if count_focused {
-            self.send_command_count_input.clone()
+            self.send_command.options.count_input.clone()
         } else {
             state.count_label.clone()
         };
         let interval_label = if interval_focused {
-            self.send_command_interval_input.clone()
+            self.send_command.options.interval_input.clone()
         } else {
             state.interval_label.clone()
         };
-        let data_label = match self.send_command_data_type {
+        let data_label = match self.send_command.options.data_type {
             SendCommandDataType::Text => self.tr("serialSend.text"),
             SendCommandDataType::Hex => self.tr("serialSend.hex"),
         };
-        let mode_label = match (self.send_command_data_type, self.send_command_mode) {
+        let mode_label = match (
+            self.send_command.options.data_type,
+            self.send_command.options.mode,
+        ) {
             (SendCommandDataType::Hex, SendCommandMode::Byte) => self.tr("serialSend.byteByByte"),
             (SendCommandDataType::Hex, SendCommandMode::Packet) => self.tr("serialSend.packet"),
             (SendCommandDataType::Text, SendCommandMode::Character) => {
@@ -56,13 +60,13 @@ impl NyaTermApp {
                     palette,
                     "bottom-command-data-select",
                     data_label,
-                    self.send_command_data_menu_open,
+                    self.send_command.options.data_menu_open,
                     is_sending,
                     cx.listener(|this, _, _, cx| {
                         this.toggle_send_command_data_menu(cx);
                     }),
                 )
-                .when(self.send_command_data_menu_open, |this| {
+                .when(self.send_command.options.data_menu_open, |this| {
                     this.child(
                         send_command_select_menu(
                             palette,
@@ -73,7 +77,7 @@ impl NyaTermApp {
                             palette,
                             "bottom-command-data-text",
                             self.tr("serialSend.text"),
-                            self.send_command_data_type == SendCommandDataType::Text,
+                            self.send_command.options.data_type == SendCommandDataType::Text,
                             cx.listener(|this, _, _, cx| {
                                 this.set_send_command_data_type(SendCommandDataType::Text, cx);
                             }),
@@ -82,7 +86,7 @@ impl NyaTermApp {
                             palette,
                             "bottom-command-data-hex",
                             self.tr("serialSend.hex"),
-                            self.send_command_data_type == SendCommandDataType::Hex,
+                            self.send_command.options.data_type == SendCommandDataType::Hex,
                             cx.listener(|this, _, _, cx| {
                                 this.set_send_command_data_type(SendCommandDataType::Hex, cx);
                             }),
@@ -97,14 +101,14 @@ impl NyaTermApp {
                     palette,
                     "bottom-command-mode-select",
                     mode_label,
-                    self.send_command_mode_menu_open,
+                    self.send_command.options.mode_menu_open,
                     is_sending,
                     cx.listener(|this, _, _, cx| {
                         this.toggle_send_command_mode_menu(cx);
                     }),
                 )
-                .when(self.send_command_mode_menu_open, |this| {
-                    let menu = if self.send_command_data_type == SendCommandDataType::Hex {
+                .when(self.send_command.options.mode_menu_open, |this| {
+                    let menu = if self.send_command.options.data_type == SendCommandDataType::Hex {
                         send_command_select_menu(
                             palette,
                             self.shell_surface_color(palette.surface),
@@ -114,7 +118,7 @@ impl NyaTermApp {
                             palette,
                             "bottom-command-mode-byte",
                             self.tr("serialSend.byteByByte"),
-                            self.send_command_mode == SendCommandMode::Byte,
+                            self.send_command.options.mode == SendCommandMode::Byte,
                             cx.listener(|this, _, _, cx| {
                                 this.set_send_command_mode(SendCommandMode::Byte, cx);
                             }),
@@ -123,7 +127,7 @@ impl NyaTermApp {
                             palette,
                             "bottom-command-mode-packet",
                             self.tr("serialSend.packet"),
-                            self.send_command_mode == SendCommandMode::Packet,
+                            self.send_command.options.mode == SendCommandMode::Packet,
                             cx.listener(|this, _, _, cx| {
                                 this.set_send_command_mode(SendCommandMode::Packet, cx);
                             }),
@@ -138,7 +142,7 @@ impl NyaTermApp {
                             palette,
                             "bottom-command-mode-line",
                             self.tr("serialSend.lineByLine"),
-                            self.send_command_mode == SendCommandMode::Line,
+                            self.send_command.options.mode == SendCommandMode::Line,
                             cx.listener(|this, _, _, cx| {
                                 this.set_send_command_mode(SendCommandMode::Line, cx);
                             }),
@@ -147,7 +151,7 @@ impl NyaTermApp {
                             palette,
                             "bottom-command-mode-character",
                             self.tr("serialSend.characterByCharacter"),
-                            self.send_command_mode == SendCommandMode::Character,
+                            self.send_command.options.mode == SendCommandMode::Character,
                             cx.listener(|this, _, _, cx| {
                                 this.set_send_command_mode(SendCommandMode::Character, cx);
                             }),
@@ -163,13 +167,13 @@ impl NyaTermApp {
                     palette,
                     "bottom-command-target-select",
                     target_label,
-                    self.send_command_target_menu_open,
+                    self.send_command.options.target_menu_open,
                     is_sending,
                     cx.listener(|this, _, _, cx| {
                         this.toggle_send_command_target_menu(cx);
                     }),
                 )
-                .when(self.send_command_target_menu_open, |this| {
+                .when(self.send_command.options.target_menu_open, |this| {
                     let mut menu = send_command_select_menu(
                         palette,
                         self.shell_surface_color(palette.surface),
@@ -179,7 +183,7 @@ impl NyaTermApp {
                         palette,
                         "bottom-command-target-current",
                         self.tr("serialSend.currentSession"),
-                        matches!(self.send_command_target, SendCommandTarget::Current),
+                        matches!(self.send_command.options.target, SendCommandTarget::Current),
                         cx.listener(|this, _, _, cx| {
                             this.set_send_command_target(SendCommandTarget::Current, cx);
                         }),
@@ -189,7 +193,10 @@ impl NyaTermApp {
                             palette,
                             "bottom-command-target-all",
                             self.tr("serialSend.allSessions"),
-                            matches!(self.send_command_target, SendCommandTarget::AllCompatible),
+                            matches!(
+                                self.send_command.options.target,
+                                SendCommandTarget::AllCompatible
+                            ),
                             cx.listener(|this, _, _, cx| {
                                 this.set_send_command_target(SendCommandTarget::AllCompatible, cx);
                             }),
@@ -197,7 +204,7 @@ impl NyaTermApp {
                     }
                     for (group_id, group_name, count) in state.group_targets.iter() {
                         let selected = matches!(
-                            &self.send_command_target,
+                            &self.send_command.options.target,
                             SendCommandTarget::Group(id) if id == group_id
                         );
                         let label = self
@@ -268,7 +275,7 @@ impl NyaTermApp {
                             }))
                             .when(!is_sending, |this| this.cursor_pointer())
                             .child(count_label)
-                            .track_focus(&self.send_command_controls_focus)
+                            .track_focus(&self.send_command.composer.controls_focus)
                             .on_click(cx.listener(|this, _, window, cx| {
                                 this.focus_send_command_control(
                                     SendCommandControlFocus::Count,
@@ -326,7 +333,7 @@ impl NyaTermApp {
                                 .text_color(rgb(palette.text_dimmed))
                                 .child(self.tr("serialSend.seconds")),
                         )
-                        .track_focus(&self.send_command_controls_focus)
+                        .track_focus(&self.send_command.composer.controls_focus)
                         .on_click(cx.listener(|this, _, window, cx| {
                             this.focus_send_command_control(
                                 SendCommandControlFocus::Interval,
@@ -348,60 +355,65 @@ impl NyaTermApp {
                         palette,
                         "bottom-command-eol-select",
                         line_ending_label,
-                        self.send_command_line_ending_menu_open,
+                        self.send_command.options.line_ending_menu_open,
                         is_sending,
                         cx.listener(|this, _, _, cx| {
                             this.toggle_send_command_line_ending_menu(cx);
                         }),
                     )
-                    .when(self.send_command_line_ending_menu_open, |this| {
-                        this.child(
-                            send_command_select_menu(
-                                palette,
-                                self.shell_surface_color(palette.surface),
-                                "bottom-command-eol-menu",
+                    .when(
+                        self.send_command.options.line_ending_menu_open,
+                        |this| {
+                            this.child(
+                                send_command_select_menu(
+                                    palette,
+                                    self.shell_surface_color(palette.surface),
+                                    "bottom-command-eol-menu",
+                                )
+                                .child(send_command_line_ending_item(
+                                    palette,
+                                    "none",
+                                    self.tr("serialSend.noLineEnding"),
+                                    SendCommandLineEnding::None,
+                                    self.send_command.options.line_ending,
+                                    cx,
+                                ))
+                                .child(send_command_line_ending_item(
+                                    palette,
+                                    "cr",
+                                    "CR",
+                                    SendCommandLineEnding::Cr,
+                                    self.send_command.options.line_ending,
+                                    cx,
+                                ))
+                                .child(send_command_line_ending_item(
+                                    palette,
+                                    "lf",
+                                    "LF",
+                                    SendCommandLineEnding::Lf,
+                                    self.send_command.options.line_ending,
+                                    cx,
+                                ))
+                                .child(
+                                    send_command_line_ending_item(
+                                        palette,
+                                        "crlf",
+                                        "CR+LF",
+                                        SendCommandLineEnding::Crlf,
+                                        self.send_command.options.line_ending,
+                                        cx,
+                                    ),
+                                ),
                             )
-                            .child(send_command_line_ending_item(
-                                palette,
-                                "none",
-                                self.tr("serialSend.noLineEnding"),
-                                SendCommandLineEnding::None,
-                                self.send_command_line_ending,
-                                cx,
-                            ))
-                            .child(send_command_line_ending_item(
-                                palette,
-                                "cr",
-                                "CR",
-                                SendCommandLineEnding::Cr,
-                                self.send_command_line_ending,
-                                cx,
-                            ))
-                            .child(send_command_line_ending_item(
-                                palette,
-                                "lf",
-                                "LF",
-                                SendCommandLineEnding::Lf,
-                                self.send_command_line_ending,
-                                cx,
-                            ))
-                            .child(send_command_line_ending_item(
-                                palette,
-                                "crlf",
-                                "CR+LF",
-                                SendCommandLineEnding::Crlf,
-                                self.send_command_line_ending,
-                                cx,
-                            )),
-                        )
-                    }),
+                        },
+                    ),
                 ))
             })
             .into_any_element()
     }
 
     fn send_command_target_label(&self, group_targets: &[(String, String, usize)]) -> String {
-        match &self.send_command_target {
+        match &self.send_command.options.target {
             SendCommandTarget::Current => self.tr("serialSend.currentSession").to_string(),
             SendCommandTarget::AllCompatible => self.tr("serialSend.allSessions").to_string(),
             SendCommandTarget::Group(group_id) => group_targets
