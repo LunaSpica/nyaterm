@@ -3,15 +3,10 @@ use futures::StreamExt;
 
 use crate::models::{TerminalSearchMode, terminal_frame_search_result_is_current};
 
-#[path = "event_pump/bridge.rs"]
 mod bridge;
-#[path = "event_pump/helpers.rs"]
 mod helpers;
-#[path = "event_pump/planes.rs"]
 mod planes;
-#[path = "event_pump/publish.rs"]
 mod publish;
-#[path = "event_pump/session_events.rs"]
 mod session_events;
 
 use crate::features::terminal_runtime::TERMINAL_INPUT_LATENCY_WINDOW;

@@ -474,8 +474,8 @@ check_max_count 'network proxy page #[path] debt' '#\[path\s*=' \
   crates/nyaterm-desktop/src/features/pages/tunnels/proxy/mod.rs 0
 check_max_count 'network tunnel page #[path] debt' '#\[path\s*=' \
   crates/nyaterm-desktop/src/features/pages/tunnels/tunnel/mod.rs 0
-check_max_count 'event pump #[path] debt' '#\[path\s*=' \
-  crates/nyaterm-desktop/src/features/shell/event_pump.rs 5
+check_no_matches 'shell feature #[path] debt' '#\[path\s*=' \
+  crates/nyaterm-desktop/src/features/shell
 check_max_count 'tunnel runtime #[path] debt' '#\[path\s*=' \
   crates/nyaterm-desktop/src/features/tunnels/tunnel_runtime.rs 0
 
@@ -513,7 +513,8 @@ declare -A SUPER_BASELINE=(
   [crates/nyaterm-desktop/src/features/pages/tunnels/tunnel/editor.rs]=0
   [crates/nyaterm-desktop/src/features/pages/tunnels/tunnel/row.rs]=0
   [crates/nyaterm-desktop/src/features/pages/tunnels/tunnel/sections.rs]=0
-  [crates/nyaterm-desktop/src/features/shell/event_pump.rs]=1
+  [crates/nyaterm-desktop/src/features/shell/mod.rs]=1
+  [crates/nyaterm-desktop/src/features/shell/event_pump/mod.rs]=1
   [crates/nyaterm-desktop/src/features/shell/event_pump/bridge.rs]=1
   [crates/nyaterm-desktop/src/features/shell/event_pump/helpers.rs]=2
   [crates/nyaterm-desktop/src/features/shell/event_pump/planes.rs]=1
@@ -540,7 +541,7 @@ done < <(rg -n --path-separator / '^[[:space:]]*use super::\*;' \
   crates/nyaterm-desktop/src/features/pages/mod.rs \
   crates/nyaterm-desktop/src/features/pages/connections \
   crates/nyaterm-desktop/src/features/pages/tunnels \
-  crates/nyaterm-desktop/src/features/shell/event_pump.rs \
+  crates/nyaterm-desktop/src/features/shell/mod.rs \
   crates/nyaterm-desktop/src/features/shell/event_pump \
   crates/nyaterm-desktop/src/features/tunnels 2>/dev/null || true)
 
@@ -698,7 +699,7 @@ check_no_matches \
 check_no_matches \
   "event pump quiet-tick list reads must use ConnectionListState methods" \
   'connection_state\.list\.(search_draft|sort_mode|hover_pending)(\.|[[:space:]]|==|,|\)|$)' \
-  crates/nyaterm-desktop/src/features/shell/event_pump.rs
+  crates/nyaterm-desktop/src/features/shell/event_pump/mod.rs
 check_no_matches \
   "event pump list projection reads must use ConnectionListState methods" \
   'connection_state\.list\.(search_draft|sort_mode|hover_pending)(\.|[[:space:]]|==|,|\)|$)' \

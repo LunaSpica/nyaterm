@@ -11,8 +11,8 @@ Last updated from the working tree on 2026-07-26.
 | --- | ---: | --- |
 | `NyaTermApp` fields | 585 | Counted from `features/app_state/mod.rs`; still transitional and too broad. |
 | `impl NyaTermApp` blocks | 236 | Spread across 233 files under `crates/nyaterm-desktop/src`. |
-| `#[path = "..."]` declarations in desktop | 306 | Historical migration debt; do not add new occurrences. |
-| `use super::*` imports in desktop | 354 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
+| `#[path = "..."]` declarations in desktop | 287 | Historical migration debt; do not add new occurrences. |
+| `use super::*` imports in desktop | 355 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
 | `features/prelude.rs` rough exported-token count | 230 | Still a broad shared prelude; two hundred fifteen low-frequency transport/core/http/model exports are now explicit imports. |
 | Entity Store structs | 13 | Includes store handles/runtime stores and domain stores. |
 | Snapshot structs | 9 | Workspace, session, overlay, settings, connections, transfer, AI, cloud sync, remote ops. |
@@ -40,6 +40,12 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   features are empty, so release/default builds do not enable the dashboard.
 - Entity stores have a documented projection rule: `NyaTermApp` / FeatureState
   remains authoritative unless a specific migration explicitly changes that.
+- The shell feature area is a real module tree. `features/shell` is declared as
+  a normal `mod shell;` with its own `mod.rs`, `event_pump` and
+  `keybinding_runtime` are directory modules, and `features/shell` no longer
+  contains any `#[path]` declaration. Shell chrome exports reach the rest of
+  `crate::features` through explicit re-exports in `features/shell/mod.rs`
+  instead of twelve flattened `#[path]` module declarations.
 - The connections UI state has started moving out of scattered `NyaTermApp`
   fields and into `ConnectionFeatureState`.
 - The current connections state split separates list UI, import UI, editor
@@ -738,34 +744,39 @@ delete old fields in the same change that makes the Entity authoritative.
 
 ## Suggested Order
 
-1. Finish locking the connections state invariants that are already centralized:
-   keep editor close and save-success cleanup, remaining editor field-specific
-   reads, group editor validation, and remaining confirmation action cleanup
-   behind `ConnectionFeatureState` or `NetworkFeatureState` methods. Add focused
-   guards or pure tests when a runtime path is converted.
-2. Continue the remaining connections module-tree cleanup outside the governed
-   connection runtime, list interaction, connections page, Network page, and
-   tunnel runtime trees. Move only edited modules from `#[path = "..."]` and
-   `use super::*` to normal modules and explicit imports.
-3. Stabilize the quick switch Entity ownership migration before starting another
-   Entity-owned domain. The next candidate should be another isolated overlay or
-   navigation UI state with no persistence, secret, terminal parser, or protocol
-   execution impact.
-4. Continue reducing `features/prelude.rs` by moving low-frequency business,
-   service, transport, and UI model imports back to explicit module imports.
-   Lower architecture-script baselines as each governed file stops using the
-   shared prelude.
-5. Tighten one more low-risk crate-root export after confirming there are no
+The order below is deliberately different from earlier rounds. Narrowing
+`features/prelude.rs` one symbol at a time produced little real encapsulation
+while `features/mod.rs` still flattened every feature directory through
+`#[path = "..."]`: a file could stop importing a symbol from the prelude and
+still sit in the same crate-wide namespace, reachable from everywhere. Build the
+real module tree first, then the remaining steps actually enforce something.
+
+1. Replace the remaining `#[path = "..."]` declarations in
+   `crates/nyaterm-desktop/src/features` with real nested modules, one feature
+   directory per round. The files already live in the right directories, so this
+   is mechanical and the compiler verifies every step. `features/shell` is done.
+   Each converted directory gets a `check_no_matches` guard so the debt cannot
+   return.
+2. After a directory is a real module, drop its `use super::*` chain in favor of
+   explicit imports, starting with the leaf files. Only then does the module
+   boundary mean anything.
+3. Split `NyaTermApp` along the pattern already validated by
+   `ConnectionFeatureState`: grouped feature-state structs with private fields
+   and semantic methods, covered by GPUI-free pure state tests. This is the
+   highest-value remaining item; roughly 590 fields and 236 `impl NyaTermApp`
+   blocks are the reason most desktop modules can reach most desktop state.
+4. Decide the Entity Store question instead of leaving it half-migrated. Either
+   move one or two more domains to authoritative Entity ownership, or delete the
+   projection-only stores. Maintaining both a `NyaTermApp` field and a snapshot
+   copy of the same state is the most expensive of the three options.
+5. Continue extracting schema-neutral internal modules from `core/storage.rs`
+   and schema/protocol-neutral modules from `nyaterm-transport/src/lib.rs`, by
+   domain rather than by individual type. Table definitions, serialized records,
+   encryption paths, backup formats, and legacy fallback behavior stay unchanged.
+6. Reduce `features/prelude.rs` opportunistically while touching a module, not
+   as standalone rounds. The remaining entries are genuinely shared types.
+7. Tighten one more low-risk crate-root export after confirming there are no
    external workspace consumers. Prefer desktop/UI presentation crates before
    touching core or transport public APIs.
-6. Continue extracting schema-neutral internal modules from `core/storage.rs`,
-   preferably pure import/parsing helpers or file-operation helpers that do not
-   alter table definitions, serialized records, encryption paths, backup
-   formats, or legacy fallback behavior. Config backup helpers and keyword
-   highlight import/merge helpers are already split.
-7. Continue extracting schema/protocol-neutral transport modules, such as
-   remote process output parsing helpers, while keeping the `nyaterm-transport`
-   public facade intact. Session type/event definitions and SFTP transfer
-   option/duplicate-policy types are already split.
 8. Revisit `nyaterm-store` only after storage modules have clearer internal
    boundaries and consumers can move without changing persistence compatibility.

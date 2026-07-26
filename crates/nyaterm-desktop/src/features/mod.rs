@@ -1,8 +1,6 @@
 mod prelude;
 use prelude::*;
 
-#[path = "shell/activity_bar_runtime.rs"]
-mod activity_bar_runtime;
 #[path = "ai/ai_agent_runtime.rs"]
 mod ai_agent_runtime;
 #[path = "ai/ai_jobs.rs"]
@@ -10,8 +8,6 @@ mod ai_jobs;
 #[path = "ai/ai_runtime.rs"]
 mod ai_runtime;
 mod app_state;
-#[path = "shell/appearance.rs"]
-mod appearance;
 #[path = "session/auth_runtime.rs"]
 mod auth_runtime;
 #[path = "sync/cloud_sync_provider.rs"]
@@ -26,34 +22,20 @@ mod connection_editor_window;
 mod connections;
 #[path = "session/credential_autofill_runtime.rs"]
 mod credential_autofill_runtime;
-#[path = "shell/event_pump.rs"]
-mod event_pump;
 mod formatting;
-#[path = "shell/global_shortcut_runtime.rs"]
-mod global_shortcut_runtime;
 #[path = "terminal/input_runtime.rs"]
 mod input_runtime;
 mod inspector;
-#[path = "shell/keybinding_runtime.rs"]
-mod keybinding_runtime;
 mod layout;
 #[path = "settings/lock_diagnostics_runtime.rs"]
 mod lock_diagnostics_runtime;
-#[path = "shell/navigation_runtime.rs"]
-mod navigation_runtime;
 mod pages;
-#[path = "shell/panel_resize_runtime.rs"]
-mod panel_resize_runtime;
-#[path = "shell/panel_stack_runtime.rs"]
-mod panel_stack_runtime;
 mod panels;
 #[path = "session/prompt_runtime.rs"]
 mod prompt_runtime;
 #[path = "commands/quick_command_runtime.rs"]
 mod quick_command_runtime;
 mod quick_command_window;
-#[path = "shell/quick_switch_runtime.rs"]
-mod quick_switch_runtime;
 #[path = "session/recording_runtime.rs"]
 mod recording_runtime;
 mod remote_editor_window;
@@ -79,13 +61,10 @@ mod session_state;
 #[path = "settings/settings_runtime.rs"]
 mod settings_runtime;
 mod settings_window;
+mod shell;
 #[path = "session/startup_restore_runtime.rs"]
 mod startup_restore_runtime;
 mod sync_input;
-#[path = "shell/tab_mouse.rs"]
-mod tab_mouse;
-#[path = "shell/tab_windows_runtime.rs"]
-mod tab_windows_runtime;
 #[path = "session/temporary_ssh_link.rs"]
 mod temporary_ssh_link;
 #[path = "terminal/terminal_context_menu_runtime.rs"]
@@ -127,8 +106,6 @@ mod tunnels;
 #[path = "settings/update_runtime.rs"]
 mod update_runtime;
 mod view_widgets;
-#[path = "shell/workspace_runtime.rs"]
-mod workspace_runtime;
 #[path = "session/zmodem_runtime.rs"]
 mod zmodem_runtime;
 
@@ -138,7 +115,7 @@ pub(in crate::features) use crate::action_links::{
     match_at_offset,
 };
 pub(in crate::features) use crate::theme::ThemePalette;
-pub(in crate::features) use activity_bar_runtime::{
+pub(in crate::features) use shell::{
     ActivityBarDragPayload, ActivityBarDragPreview,
 };
 pub(in crate::features) use ai_jobs::{
@@ -150,7 +127,7 @@ pub(in crate::features) use app_state::{
     FailedSessionStart, PendingSavedConnectionStart, PendingSessionStart,
     SavedConnectionStartOptions, SessionPaneState,
 };
-pub(in crate::features) use appearance::{
+pub(in crate::features) use shell::{
     appearance_font_options, appearance_font_stack, gpui_code_font_family,
 };
 pub(in crate::features) use auth_runtime::{
@@ -189,7 +166,7 @@ pub(in crate::features) use runtime_jobs::{
     remote_job_event_matches, spawn_command_persistence_worker,
 };
 pub(in crate::features) use settings_window::SettingsWindow;
-pub(in crate::features) use tab_mouse::{
+pub(in crate::features) use shell::{
     ChromeTooltip, SessionTabDragPayload, SessionTabDragPreview, SessionTabTooltip,
     TAB_MOUSE_ACTIONS, TabMouseActionTarget,
 };
