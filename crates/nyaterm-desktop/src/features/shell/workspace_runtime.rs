@@ -185,38 +185,6 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::features) fn focused_workspace_split_id(&self) -> Option<String> {
-        self.workspace_split
-            .as_ref()?
-            .focused_split_id(self.active_session_id.as_deref())
-    }
-
-    pub(in crate::features) fn adjust_workspace_split_ratio(
-        &mut self,
-        delta: i8,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(split_id) = self.focused_workspace_split_id() else {
-            self.terminal.view.status = "workspace is not split".to_string();
-            cx.notify();
-            return;
-        };
-        let Some(root) = self.workspace_split.as_mut() else {
-            self.terminal.view.status = "workspace is not split".to_string();
-            cx.notify();
-            return;
-        };
-        if root.adjust_ratio_for_split(&split_id, delta) {
-            let ratio = root.ratio_for_split(&split_id).unwrap_or(50);
-            self.terminal.view.status = format!("split ratio {ratio}%");
-            self.write_back_active_tab_pane_root();
-            self.persist_workspace_pane_layout();
-        } else {
-            self.terminal.view.status = "workspace is not split".to_string();
-        }
-        cx.notify();
-    }
-
     pub(in crate::features) fn split_workspace_with_duplicate(
         &mut self,
         direction: WorkspaceSplitDirection,
@@ -299,11 +267,6 @@ impl NyaTermApp {
         if self.startup_restore_complete {
             self.persist_open_tabs();
         }
-        cx.notify();
-    }
-
-    pub(in crate::features) fn ensure_workspace_focus(&mut self, cx: &mut Context<Self>) {
-        self.prune_workspace_split();
         cx.notify();
     }
 

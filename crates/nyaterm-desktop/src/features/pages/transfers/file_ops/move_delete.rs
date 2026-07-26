@@ -23,19 +23,6 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::features) fn open_selected_transfer_move_dialog(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(old_path) = self.transfer.browser.selected_remote_path.clone() else {
-            self.terminal.view.status = "select a remote item before moving".to_string();
-            cx.notify();
-            return;
-        };
-        self.open_transfer_move_dialog(old_path, window, cx);
-    }
-
     pub(in crate::features) fn close_transfer_move_dialog(&mut self, cx: &mut Context<Self>) {
         self.transfer.file_ops.move_to = None;
         self.terminal.view.status = "SFTP move cancelled".to_string();

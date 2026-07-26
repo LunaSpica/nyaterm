@@ -3,43 +3,6 @@ use super::*;
 use crate::models::{AiInputField, TransferInputField};
 
 impl NyaTermApp {
-    pub(in crate::features) fn handle_transfer_key_down(
-        &mut self,
-        event: &KeyDownEvent,
-        cx: &mut Context<Self>,
-    ) {
-        self.mark_user_activity();
-        let keystroke = &event.keystroke;
-        if keystroke.modifiers.platform || keystroke.modifiers.alt || keystroke.modifiers.control {
-            return;
-        }
-
-        let value = match self.transfer.panel.focused_field {
-            TransferInputField::Remote => &mut self.transfer.paths.remote,
-            TransferInputField::Local => &mut self.transfer.paths.local,
-        };
-        match keystroke.key.as_str() {
-            "backspace" => {
-                value.pop();
-                cx.notify();
-            }
-            "escape" => {
-                self.terminal.view.status = "transfer input blurred".to_string();
-                cx.notify();
-            }
-            _ => {
-                if let Some(input) = keystroke
-                    .key_char
-                    .as_deref()
-                    .filter(|input| !input.is_empty())
-                {
-                    value.push_str(input);
-                    cx.notify();
-                }
-            }
-        }
-    }
-
     pub(in crate::features) fn handle_ai_key_down(
         &mut self,
         event: &KeyDownEvent,

@@ -575,22 +575,6 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::features) fn copy_active_session_endpoint(&mut self, cx: &mut Context<Self>) {
-        let Some(session_id) = self.active_session_id.as_deref() else {
-            self.terminal.view.status = "no active session endpoint to copy".to_string();
-            cx.notify();
-            return;
-        };
-        let Some(endpoint) = self.session_endpoint(session_id) else {
-            self.terminal.view.status = "active session endpoint is unavailable".to_string();
-            cx.notify();
-            return;
-        };
-        cx.write_to_clipboard(ClipboardItem::new_string(endpoint.clone()));
-        self.terminal.view.status = format!("copied endpoint '{endpoint}'");
-        cx.notify();
-    }
-
     pub(in crate::features) fn copy_active_session_ssh_host(&mut self, cx: &mut Context<Self>) {
         let Some(session_id) = self.active_session_id.as_deref() else {
             self.terminal.view.status = "no active SSH host to copy".to_string();
@@ -604,22 +588,6 @@ impl NyaTermApp {
         };
         cx.write_to_clipboard(ClipboardItem::new_string(host.clone()));
         self.terminal.view.status = format!("copied SSH host '{host}'");
-        cx.notify();
-    }
-
-    pub(in crate::features) fn copy_active_session_ssh_address(&mut self, cx: &mut Context<Self>) {
-        let Some(session_id) = self.active_session_id.as_deref() else {
-            self.terminal.view.status = "no active SSH address to copy".to_string();
-            cx.notify();
-            return;
-        };
-        let Some(address) = self.session_ssh_address(session_id) else {
-            self.terminal.view.status = "active session is not SSH".to_string();
-            cx.notify();
-            return;
-        };
-        cx.write_to_clipboard(ClipboardItem::new_string(address.clone()));
-        self.terminal.view.status = format!("copied SSH address '{address}'");
         cx.notify();
     }
 
@@ -660,22 +628,6 @@ impl NyaTermApp {
             .join("\n");
         cx.write_to_clipboard(ClipboardItem::new_string(text));
         self.terminal.view.status = "copied session info".to_string();
-        cx.notify();
-    }
-
-    pub(in crate::features) fn open_tab_color_picker(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if self.active_session_id.is_none() {
-            self.terminal.view.status = "select a session before setting tab color".to_string();
-            cx.notify();
-            return;
-        }
-        self.color_picker_open = true;
-        self.terminal.view.status = "tab color picker opened".to_string();
-        window.focus(&self.color_picker_focus);
         cx.notify();
     }
 

@@ -128,26 +128,6 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::features) fn insert_quick_command(
-        &mut self,
-        index: usize,
-        cx: &mut Context<Self>,
-    ) {
-        self.apply_quick_command(index, false, cx);
-    }
-
-    pub(in crate::features) fn run_quick_command(&mut self, index: usize, cx: &mut Context<Self>) {
-        self.apply_quick_command(index, true, cx);
-    }
-
-    pub(in crate::features) fn insert_quick_command_by_id(
-        &mut self,
-        command_id: String,
-        cx: &mut Context<Self>,
-    ) {
-        self.apply_quick_command_by_id(&command_id, false, false, cx);
-    }
-
     pub(in crate::features) fn run_quick_command_by_id(
         &mut self,
         command_id: String,
@@ -173,25 +153,6 @@ impl NyaTermApp {
         };
         let execute = command.execution_mode.as_deref() != Some("append");
         self.apply_quick_command_by_id(&command.id, execute, true, cx);
-    }
-
-    pub(in crate::features) fn apply_quick_command(
-        &mut self,
-        index: usize,
-        execute: bool,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(command_id) = sorted_quick_commands(&self.quick_commands)
-            .into_iter()
-            .take(5)
-            .nth(index)
-            .map(|command| command.id)
-        else {
-            self.terminal.view.status = "quick command is no longer available".to_string();
-            cx.notify();
-            return;
-        };
-        self.apply_quick_command_by_id(&command_id, execute, false, cx);
     }
 
     pub(in crate::features) fn apply_quick_command_by_id(

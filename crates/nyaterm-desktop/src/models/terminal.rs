@@ -1280,21 +1280,6 @@ impl TerminalFramePipeline {
         });
     }
 
-    pub(crate) fn request_buffer_text(
-        &self,
-        session_id: impl Into<String>,
-        max_bytes: usize,
-        request_id: impl Into<String>,
-    ) {
-        let _ = self
-            .command_tx
-            .send(TerminalFrameCommand::RequestBufferText {
-                session_id: session_id.into(),
-                max_bytes,
-                request_id: request_id.into(),
-            });
-    }
-
     pub(crate) fn set_snapshot_priority(&self, session_ids: Vec<String>) {
         let _ = self
             .command_tx

@@ -16,26 +16,6 @@ pub(in crate::features) fn logo_mark(palette: ThemePalette) -> impl IntoElement 
         )
 }
 
-pub(in crate::features) fn menu_bar_button(
-    palette: ThemePalette,
-    label: &'static str,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    div()
-        .id(SharedString::from(format!("menu-{label}")))
-        .h(px(26.))
-        .px_2()
-        .flex()
-        .items_center()
-        .rounded_sm()
-        .text_size(px(12.))
-        .text_color(rgb(palette.text_muted))
-        .cursor_pointer()
-        .hover(|this| this.bg(rgb(palette.hover)).text_color(rgb(palette.text)))
-        .child(label)
-        .on_click(on_click)
-}
-
 pub(in crate::features) fn window_control_button(
     palette: ThemePalette,
     id: &'static str,
@@ -313,30 +293,6 @@ pub(in crate::features) fn modal_close_icon_button(
                 .path("icons/window/close.svg")
                 .text_color(rgb(palette.text_muted)),
         )
-}
-
-/// Tauri ActionFooter-like Cancel/Save row.
-pub(in crate::features) fn modal_dialog_footer(
-    palette: ThemePalette,
-    cancel_id: impl Into<String>,
-    save_id: impl Into<String>,
-    save_label: &'static str,
-    on_cancel: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-    on_save: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    div()
-        .mt_1()
-        .pt_3()
-        .border_t_1()
-        .border_color(rgb(palette.border))
-        .flex()
-        .items_center()
-        .justify_end()
-        .gap_2()
-        .child(small_button(palette, cancel_id, "Cancel", on_cancel))
-        .child(dialog_action_button(
-            palette, save_id, save_label, false, on_save,
-        ))
 }
 
 pub(in crate::features) fn modal_dialog_footer_localized(

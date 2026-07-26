@@ -228,32 +228,6 @@ pub(super) fn compact_transfer_toolbar_button_active(
         .on_click(on_click)
 }
 
-pub(super) fn transfer_dynamic_toolbar_button(
-    palette: crate::theme::ThemePalette,
-    id: impl Into<String>,
-    label: impl Into<String>,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    div()
-        .id(SharedString::from(id.into()))
-        .h(px(28.))
-        .max_w(px(116.))
-        .px_3()
-        .flex()
-        .items_center()
-        .overflow_hidden()
-        .rounded_sm()
-        .border_1()
-        .border_color(rgb(palette.border))
-        .bg(rgb(palette.surface))
-        .text_color(rgb(palette.text))
-        .text_xs()
-        .cursor_pointer()
-        .hover(|this| this.bg(rgb(palette.hover)))
-        .child(label.into())
-        .on_click(on_click)
-}
-
 pub(super) fn transfer_toolbar_divider(palette: crate::theme::ThemePalette) -> impl IntoElement {
     div()
         .h(px(16.))

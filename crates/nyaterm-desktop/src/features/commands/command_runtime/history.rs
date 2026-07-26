@@ -72,71 +72,12 @@ impl NyaTermApp {
             .cloned()
     }
 
-    pub(in crate::features) fn insert_history_command(
-        &mut self,
-        index: usize,
-        cx: &mut Context<Self>,
-    ) {
-        self.apply_history_command(index, false, cx);
-    }
-
     pub(in crate::features) fn run_history_command(
         &mut self,
         index: usize,
         cx: &mut Context<Self>,
     ) {
         self.apply_history_command(index, true, cx);
-    }
-
-    pub(in crate::features) fn insert_command_search_result(
-        &mut self,
-        index: usize,
-        cx: &mut Context<Self>,
-    ) {
-        self.apply_command_search_result(index, false, cx);
-    }
-
-    pub(in crate::features) fn run_command_search_result(
-        &mut self,
-        index: usize,
-        cx: &mut Context<Self>,
-    ) {
-        self.apply_command_search_result(index, true, cx);
-    }
-
-    pub(in crate::features) fn apply_command_search_result(
-        &mut self,
-        index: usize,
-        execute: bool,
-        cx: &mut Context<Self>,
-    ) {
-        if self.active_session_id.is_none() {
-            self.terminal.view.status =
-                "start a terminal session before using command search".to_string();
-            cx.notify();
-            return;
-        }
-        let Some(result) = self.command_search_results().into_iter().nth(index) else {
-            self.terminal.view.status = "command search result is no longer available".to_string();
-            cx.notify();
-            return;
-        };
-        let mut command = result.command.trim().to_string();
-        if command.is_empty() {
-            self.terminal.view.status = "command search result is empty".to_string();
-            cx.notify();
-            return;
-        }
-        if execute && !command.ends_with('\r') && !command.ends_with('\n') {
-            command.push('\r');
-        }
-        self.send_terminal_input(command.into_bytes(), cx);
-        self.terminal.view.status = if execute {
-            format!("ran search result '{}'", result.display)
-        } else {
-            format!("inserted search result '{}'", result.display)
-        };
-        cx.notify();
     }
 
     pub(in crate::features) fn apply_history_command(
@@ -437,50 +378,5 @@ impl NyaTermApp {
             .or_default();
         history.insert(0, normalized_command.to_string());
         history.truncate(SESSION_COMMAND_HISTORY_LIMIT);
-    }
-
-    pub(in crate::features) fn handle_command_search_key_down(
-        &mut self,
-        event: &KeyDownEvent,
-        cx: &mut Context<Self>,
-    ) {
-        self.mark_user_activity();
-        let keystroke = &event.keystroke;
-        if keystroke.modifiers.platform || keystroke.modifiers.alt || keystroke.modifiers.control {
-            return;
-        }
-
-        match keystroke.key.as_str() {
-            "backspace" => {
-                self.command_search_draft.pop();
-                cx.notify();
-            }
-            "escape" => {
-                self.command_search_draft.clear();
-                self.terminal.view.status = "command search cleared".to_string();
-                cx.notify();
-            }
-            _ => {
-                if let Some(input) = keystroke
-                    .key_char
-                    .as_deref()
-                    .filter(|input| !input.is_empty())
-                {
-                    self.command_search_draft.push_str(input);
-                    cx.notify();
-                }
-            }
-        }
-    }
-
-    pub(in crate::features) fn command_search_results(&self) -> Vec<nyaterm_core::FuzzyResult> {
-        search_command_sources(
-            &self.command_history,
-            &self.quick_commands,
-            &self.command_search_draft,
-            8,
-            Some(1),
-            Some(512),
-        )
     }
 }

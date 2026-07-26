@@ -141,15 +141,6 @@ impl NyaTermApp {
         self.start_sftp_list_job(window, cx);
     }
 
-    pub(in crate::features::pages::transfers) fn open_transfer_remote_path_from_input(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let path = self.normalized_transfer_remote_path();
-        self.open_transfer_browser_directory(path, window, cx);
-    }
-
     pub(in crate::features) fn open_transfer_browser_history(
         &mut self,
         delta: isize,
@@ -262,14 +253,6 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::features::pages::transfers) fn remove_current_transfer_browser_favorite(
-        &mut self,
-        cx: &mut Context<Self>,
-    ) {
-        let path = normalized_transfer_browser_path(&self.transfer.browser.path);
-        self.remove_transfer_browser_favorite_path(path, cx);
-    }
-
     pub(in crate::features::pages::transfers) fn remove_transfer_browser_favorite_path(
         &mut self,
         path: String,
@@ -295,24 +278,6 @@ impl NyaTermApp {
             self.persist_transfer_browser_favorites(cx);
         }
         cx.notify();
-    }
-
-    pub(in crate::features::pages::transfers) fn toggle_current_transfer_browser_favorite(
-        &mut self,
-        cx: &mut Context<Self>,
-    ) {
-        let path = normalized_transfer_browser_path(&self.transfer.browser.path);
-        if self
-            .transfer
-            .browser
-            .favorites
-            .iter()
-            .any(|entry| entry == &path)
-        {
-            self.remove_current_transfer_browser_favorite(cx);
-        } else {
-            self.add_current_transfer_browser_favorite(cx);
-        }
     }
 
     pub(in crate::features::pages::transfers) fn toggle_transfer_browser_auto_sync_cwd(

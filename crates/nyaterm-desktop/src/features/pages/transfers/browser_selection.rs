@@ -430,16 +430,6 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::features::pages::transfers) fn clear_transfer_browser_selection(
-        &mut self,
-        cx: &mut Context<Self>,
-    ) {
-        self.transfer.browser.selected_remote_paths.clear();
-        self.transfer.browser.selected_remote_path = None;
-        self.terminal.view.status = "remote file selection cleared".to_string();
-        cx.notify();
-    }
-
     pub(in crate::features::pages::transfers) fn selected_transfer_path_part(
         &self,
         part: TransferPathPart,

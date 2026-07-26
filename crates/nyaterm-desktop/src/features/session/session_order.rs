@@ -109,23 +109,6 @@ impl NyaTermApp {
             .count()
     }
 
-    /// Pane / leaf count for chrome without allocating SessionInfo.
-    pub(in crate::features) fn ordered_session_count(&self) -> usize {
-        let mut seen = HashSet::with_capacity(self.session_order.len());
-        let mut count = 0;
-        for session_id in &self.session_order {
-            if seen.insert(session_id.as_str()) && self.session_metadata.contains_key(session_id) {
-                count += 1;
-            }
-        }
-        for session_id in self.session_metadata.keys() {
-            if seen.insert(session_id.as_str()) {
-                count += 1;
-            }
-        }
-        count
-    }
-
     /// Live (non-disconnected) session count from local metadata only.
     pub(in crate::features) fn live_session_count(&self) -> usize {
         self.session_metadata
@@ -197,17 +180,6 @@ impl NyaTermApp {
         self.session_metadata
             .get(session_id)
             .is_some_and(|metadata| metadata.disconnected)
-    }
-
-    pub(in crate::features) fn disconnected_session_info(
-        &self,
-        session_id: &str,
-    ) -> Option<SessionInfo> {
-        let metadata = self.session_metadata.get(session_id)?;
-        if !metadata.disconnected {
-            return None;
-        }
-        Some(session_info_from_metadata(session_id, metadata))
     }
 }
 

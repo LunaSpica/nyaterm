@@ -98,33 +98,6 @@ impl NyaTermApp {
         .total_width()
     }
 
-    pub(in crate::features) fn terminal_timestamp_gutter_width_px(&self) -> f32 {
-        let (cell_w, _) = self.terminal_cell_size();
-        terminal_gutter_metrics(
-            cell_w,
-            true,
-            self.settings.terminal_show_timestamp_milliseconds,
-            false,
-            1,
-        )
-        .timestamp_width
-    }
-
-    pub(in crate::features) fn terminal_line_number_gutter_width_px(&self) -> f32 {
-        let (cell_w, _) = self.terminal_cell_size();
-        let display_offset = self.active_terminal_display_offset();
-        let snapshot =
-            self.terminal_snapshot_for_session(self.active_session_id.as_deref(), display_offset);
-        terminal_gutter_metrics(
-            cell_w,
-            false,
-            false,
-            true,
-            terminal_line_number_digits(snapshot.as_ref()),
-        )
-        .line_number_width
-    }
-
     pub(in crate::features) fn active_terminal_grid_size(&self) -> (usize, usize) {
         self.terminal_grid_size_for_session(self.active_session_id.as_deref())
     }

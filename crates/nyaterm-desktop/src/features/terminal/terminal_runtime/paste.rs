@@ -58,18 +58,6 @@ impl NyaTermApp {
             .unwrap_or(false)
     }
 
-    pub(in crate::features) fn active_terminal_bracketed_paste(&self) -> bool {
-        if let Some(session_id) = self.active_session_id.as_deref() {
-            self.session_bracketed_paste(session_id)
-        } else {
-            self.terminal.view.screen.bracketed_paste()
-        }
-    }
-
-    pub(in crate::features) fn wrap_terminal_paste_bytes(&self, text: &str) -> Vec<u8> {
-        self.wrap_terminal_paste_bytes_for_bracketed(text, self.active_terminal_bracketed_paste())
-    }
-
     pub(in crate::features) fn wrap_terminal_paste_bytes_for_session(
         &self,
         session_id: &str,
@@ -80,14 +68,6 @@ impl NyaTermApp {
             &body,
             self.session_bracketed_paste(session_id),
         )
-    }
-
-    pub(in crate::features) fn wrap_terminal_paste_bytes_for_bracketed(
-        &self,
-        text: &str,
-        bracketed: bool,
-    ) -> Vec<u8> {
-        Self::wrap_terminal_paste_wire_bytes_for_bracketed(text.as_bytes(), bracketed)
     }
 
     pub(in crate::features) fn wrap_terminal_paste_wire_bytes_for_bracketed(

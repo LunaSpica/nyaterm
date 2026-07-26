@@ -368,14 +368,6 @@ pub(in crate::features::panels) fn send_command_hex_guide_rows(draft: &str) -> V
         .collect()
 }
 
-/// First-line guide marks (compat helper).
-pub(in crate::features::panels) fn send_command_hex_guide_marks(draft: &str) -> Vec<u32> {
-    send_command_hex_guide_rows(draft)
-        .into_iter()
-        .next()
-        .unwrap_or_default()
-}
-
 pub(in crate::features::panels) fn terminal_action_prompt_text(
     text: &str,
     max_chars: usize,

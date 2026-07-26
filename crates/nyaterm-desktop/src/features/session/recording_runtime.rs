@@ -3,27 +3,6 @@ use super::*;
 use crate::models::{RecordingPathPromptKind, RecordingPathPromptResult};
 
 impl NyaTermApp {
-    pub(in crate::features) fn prompt_recording_path(
-        &mut self,
-        kind: RecordingPathPromptKind,
-        cx: &mut Context<Self>,
-    ) {
-        if self.recording_path_prompt.is_some() {
-            self.terminal.view.status = "recording path picker is already open".to_string();
-            cx.notify();
-            return;
-        }
-        let Some(session_id) = self.active_session_id.clone() else {
-            self.terminal.view.status = "start a session before recording".to_string();
-            cx.notify();
-            return;
-        };
-        let session_name = self
-            .session_display_name(&session_id)
-            .unwrap_or_else(|| "session".to_string());
-        self.prompt_recording_path_for_session(kind, session_id, session_name, cx);
-    }
-
     pub(in crate::features) fn prompt_recording_path_for_session(
         &mut self,
         kind: RecordingPathPromptKind,
@@ -174,15 +153,6 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::features) fn stop_active_recording(&mut self, cx: &mut Context<Self>) {
-        let Some(session_id) = self.active_session_id.clone() else {
-            self.terminal.view.status = "no active session to stop recording".to_string();
-            cx.notify();
-            return;
-        };
-        self.stop_recording_for_session(&session_id, cx);
-    }
-
     pub(in crate::features) fn stop_recording_for_session(
         &mut self,
         session_id: &str,
@@ -330,31 +300,5 @@ impl NyaTermApp {
                 }
             }
         }
-    }
-
-    pub(in crate::features) fn recording_search_results(
-        &self,
-    ) -> Result<nyaterm_transport::TerminalHistorySearchResponse, String> {
-        let Some(session_id) = self.active_session_id.clone() else {
-            return Ok(nyaterm_transport::TerminalHistorySearchResponse {
-                total: 0,
-                elapsed_ms: 0,
-                truncated: false,
-                results: Vec::new(),
-            });
-        };
-        self.recording_manager
-            .search_history(TerminalHistorySearchRequest {
-                session_id,
-                query: self.recording_search_draft.trim().to_string(),
-                case_sensitive: false,
-                regex: false,
-                whole_word: false,
-                limit: Some(8),
-                context_before: Some(1),
-                context_after: Some(1),
-                max_lines: None,
-            })
-            .map_err(|error| error.to_string())
     }
 }

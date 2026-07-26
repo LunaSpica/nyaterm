@@ -43,33 +43,6 @@ pub(in crate::features::pages::remote) fn process_sort_button(
         .on_click(on_click)
 }
 
-pub(in crate::features::pages::remote) fn process_table_header(
-    palette: ThemePalette,
-    labels: ProcessTableLabels,
-) -> impl IntoElement {
-    // Static fallback header; live header uses process_sort_button grid in process_view.
-    div()
-        .grid()
-        .grid_cols(6)
-        .gap_1()
-        .h(px(26.))
-        .flex_none()
-        .border_b_1()
-        .border_color(rgb(palette.border))
-        .bg(rgb(palette.bg))
-        .px_2()
-        .items_center()
-        .text_size(px(10.))
-        .font_weight(FontWeight(700.))
-        .text_color(rgb(palette.text_dimmed))
-        .child(labels.process)
-        .child(div().text_right().child(labels.pid))
-        .child(div().text_right().child(labels.cpu))
-        .child(div().text_right().child(labels.memory))
-        .child(labels.user)
-        .child("")
-}
-
 pub(in crate::features::pages::remote) fn process_table_row(
     palette: ThemePalette,
     menu_bg: gpui::Rgba,

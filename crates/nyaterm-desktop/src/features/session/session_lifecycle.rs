@@ -214,15 +214,6 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::features) fn disconnect_active_session(&mut self, cx: &mut Context<Self>) {
-        let Some(session_id) = self.active_session_id.clone() else {
-            self.terminal.view.status = "no active session to disconnect".to_string();
-            cx.notify();
-            return;
-        };
-        self.disconnect_session(session_id, cx);
-    }
-
     pub(in crate::features) fn mark_session_disconnected(
         &mut self,
         session_id: &str,

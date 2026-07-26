@@ -1215,32 +1215,6 @@ impl NyaTermApp {
         );
     }
 
-    pub(in crate::features) fn set_terminal_scroll_offset(
-        &mut self,
-        offset: usize,
-        cx: &mut Context<Self>,
-    ) {
-        let session_id = self.active_session_id.clone();
-        let repaint_session_id =
-            self.set_terminal_scroll_offset_for_session_state_only(session_id.as_deref(), offset);
-        if repaint_session_id.is_some() {
-            self.notify_terminal_scroll_after_state_change(repaint_session_id.as_deref(), cx);
-        }
-    }
-
-    pub(in crate::features) fn active_terminal_scroll_max(&self) -> usize {
-        if let Some(session_id) = self.active_session_id.as_deref() {
-            self.terminal
-                .view
-                .views
-                .get(session_id)
-                .map(|view| view.scrollback_len_for_ui())
-                .unwrap_or(0)
-        } else {
-            self.terminal.view.screen.scrollback_len()
-        }
-    }
-
     pub(in crate::features) fn terminal_scroll_max_for_session(
         &self,
         session_id: Option<&str>,
@@ -1254,19 +1228,6 @@ impl NyaTermApp {
                 .unwrap_or(0)
         } else {
             self.terminal.view.screen.scrollback_len()
-        }
-    }
-
-    pub(in crate::features) fn set_terminal_scroll_offset_for_session(
-        &mut self,
-        session_id: Option<&str>,
-        offset: usize,
-        cx: &mut Context<Self>,
-    ) {
-        let repaint_session_id =
-            self.set_terminal_scroll_offset_for_session_state_only(session_id, offset);
-        if repaint_session_id.is_some() {
-            self.notify_terminal_scroll_after_state_change(repaint_session_id.as_deref(), cx);
         }
     }
 
@@ -1318,18 +1279,6 @@ impl NyaTermApp {
 
     /// Map a vertical pointer position (0..=1 top→bottom of track) to scroll_offset.
     /// Top of track = oldest history (max offset); bottom = live (0).
-
-    pub(in crate::features) fn set_terminal_scroll_from_track_ratio(
-        &mut self,
-        ratio: f32,
-        cx: &mut Context<Self>,
-    ) {
-        self.set_terminal_scroll_from_track_ratio_for_session(
-            self.active_session_id.clone().as_deref(),
-            ratio,
-            cx,
-        );
-    }
 
     pub(in crate::features) fn set_terminal_scroll_from_track_ratio_for_session(
         &mut self,
@@ -1468,12 +1417,6 @@ impl NyaTermApp {
         }
     }
 
-    pub(in crate::features) fn active_terminal_surface_bounds(
-        &self,
-    ) -> Option<gpui::Bounds<gpui::Pixels>> {
-        self.terminal_surface_bounds_for_session(self.active_session_id.as_deref())
-    }
-
     pub(in crate::features) fn terminal_surface_bounds_for_session(
         &self,
         session_id: Option<&str>,
@@ -1502,11 +1445,6 @@ impl NyaTermApp {
         }
         let rows = self.terminal_snapshot_for_session(None, 0).row_count();
         if rows > 0 { rows } else { 24 }
-    }
-
-    pub(in crate::features) fn desired_terminal_grid_size(&self) -> Option<(u16, u16)> {
-        self.desired_terminal_resize_geometry()
-            .map(|geometry| (geometry.cols, geometry.rows))
     }
 
     pub(in crate::features) fn desired_terminal_resize_geometry(
@@ -1539,14 +1477,6 @@ impl NyaTermApp {
             })
             .or(self.terminal.layout.surface_bounds)?;
         Some(self.terminal_resize_geometry_for_bounds_for_session(bounds, session_id))
-    }
-
-    pub(in crate::features) fn desired_terminal_grid_size_for_bounds(
-        &self,
-        bounds: gpui::Bounds<gpui::Pixels>,
-    ) -> Option<(u16, u16)> {
-        let geometry = self.terminal_resize_geometry_for_bounds(bounds);
-        Some((geometry.cols, geometry.rows))
     }
 
     pub(in crate::features) fn terminal_resize_geometry_for_bounds(

@@ -314,22 +314,6 @@ impl NyaTermApp {
         // Shared stack already renders PanelHeader; body fills remaining height.
         self.ai_ask_panel(cx)
     }
-
-    pub(in crate::features) fn right_ai_command_panel(
-        &mut self,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        div()
-            .flex()
-            .flex_col()
-            .gap_3()
-            .child(self.command_center_panel(cx))
-            .child(self.ai_ask_panel(cx))
-            .child(self.recording_panel(cx))
-            .child(self.command_search_panel(cx))
-            .child(self.quick_commands_panel(cx))
-            .child(self.command_history_panel(cx))
-    }
 }
 
 fn ai_user_pre_wrap_text(palette: crate::theme::ThemePalette, text: &str) -> gpui::AnyElement {

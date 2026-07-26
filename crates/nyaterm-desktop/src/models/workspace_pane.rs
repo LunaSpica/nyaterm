@@ -125,22 +125,6 @@ impl WorkspacePaneNode {
         }
     }
 
-    pub(crate) fn focused_split_id(&self, active_session_id: Option<&str>) -> Option<String> {
-        if let Some(session_id) = active_session_id {
-            if let Some(id) = self.split_id_containing(session_id) {
-                return Some(id);
-            }
-        }
-        self.first_split_id()
-    }
-
-    fn first_split_id(&self) -> Option<String> {
-        match self {
-            Self::Leaf { .. } => None,
-            Self::Split { id, .. } => Some(id.clone()),
-        }
-    }
-
     fn split_id_containing(&self, session_id: &str) -> Option<String> {
         match self {
             Self::Leaf { .. } => None,

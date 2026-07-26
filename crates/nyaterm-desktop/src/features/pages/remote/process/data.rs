@@ -65,58 +65,6 @@ pub(in crate::features::pages::remote) fn sort_processes(
     });
 }
 
-pub(in crate::features::pages::remote) fn top_process_ratio(
-    processes: &[RemoteProcess],
-    cpu: bool,
-) -> f64 {
-    processes
-        .iter()
-        .map(|process| {
-            if cpu {
-                process.cpu_percent
-            } else {
-                process.memory_percent
-            }
-        })
-        .fold(0.0, f64::max)
-        / 100.
-}
-
-pub(in crate::features::pages::remote) fn process_summary_card(
-    palette: ThemePalette,
-    title: &'static str,
-    value: String,
-    ratio: f64,
-) -> impl IntoElement {
-    let ratio = ratio.clamp(0., 1.);
-    // Compact metric chip for Process Manager summary strip.
-    div()
-        .rounded_md()
-        .border_1()
-        .border_color(rgb(palette.border))
-        .bg(rgb(palette.bg))
-        .px_2()
-        .py_1()
-        .flex()
-        .flex_col()
-        .gap_1()
-        .child(
-            div()
-                .text_size(px(10.))
-                .font_weight(FontWeight(600.))
-                .text_color(rgb(palette.text_muted))
-                .child(title),
-        )
-        .child(
-            div()
-                .text_size(px(12.))
-                .font_weight(FontWeight(700.))
-                .text_color(usage_color(palette, ratio))
-                .child(value),
-        )
-        .child(stats_progress_bar(palette, ratio))
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(in crate::features::pages::remote) enum ProcessDisplayMode {
     Compact,

@@ -49,115 +49,6 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::features) fn prompt_portable_snapshot_export(&mut self, cx: &mut Context<Self>) {
-        if self.config_path_prompt.is_some() {
-            self.terminal.view.status = "config path picker is already open".to_string();
-            cx.notify();
-            return;
-        }
-
-        let directory = self.runtime.config_dir().to_path_buf();
-        let receiver = cx.prompt_for_new_path(&directory, Some("nyaterm-backup.nya"));
-        let config_dir = self.runtime.config_dir().to_path_buf();
-        let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
-        self.config_path_prompt = Some(ConfigPathPromptKind::PortableExport);
-        self.terminal.view.status = "selecting portable snapshot destination".to_string();
-        self.store_status.message = "selecting .nya export destination".to_string();
-        cx.spawn(async move |this, cx| {
-            let result = match receiver.await {
-                Ok(Ok(Some(path))) => {
-                    cx.background_spawn(async move {
-                        match ConnectionStore::export_portable_snapshot(
-                            &config_dir,
-                            portable_key_path,
-                            &path,
-                            "native-local",
-                            env!("CARGO_PKG_VERSION"),
-                        ) {
-                            Ok(info) => ConfigPathPromptResult::Exported(info),
-                            Err(error) => ConfigPathPromptResult::Failed(error.to_string()),
-                        }
-                    })
-                    .await
-                }
-                Ok(Ok(None)) => ConfigPathPromptResult::Cancelled,
-                Ok(Err(error)) => ConfigPathPromptResult::Failed(error.to_string()),
-                Err(_) => ConfigPathPromptResult::Closed,
-            };
-            let _ = this.update(cx, |this, cx| {
-                this.apply_config_path_prompt_result(ConfigPathPromptKind::PortableExport, result);
-                cx.notify();
-            });
-        })
-        .detach();
-        cx.notify();
-    }
-
-    pub(in crate::features) fn prompt_encrypted_portable_snapshot_export(
-        &mut self,
-        cx: &mut Context<Self>,
-    ) {
-        self.start_snapshot_password_prompt(SnapshotPasswordPromptKind::Export, cx);
-    }
-
-    pub(in crate::features) fn prompt_config_import(&mut self, cx: &mut Context<Self>) {
-        if self.block_import_for_settings_draft(cx) {
-            return;
-        }
-        if self.config_path_prompt.is_some() {
-            self.terminal.view.status = "config path picker is already open".to_string();
-            cx.notify();
-            return;
-        }
-        if self.active_session_id.is_some() || self.has_pending_session_start() {
-            self.terminal.view.status = "close active session before importing config".to_string();
-            cx.notify();
-            return;
-        }
-
-        let options = PathPromptOptions {
-            files: true,
-            directories: false,
-            multiple: false,
-            prompt: Some(SharedString::from("Select config backup")),
-        };
-        let receiver = cx.prompt_for_paths(options);
-        let config_dir = self.runtime.config_dir().to_path_buf();
-        let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
-        self.config_path_prompt = Some(ConfigPathPromptKind::Import);
-        self.terminal.view.status = "selecting config backup to import".to_string();
-        self.store_status.message = "selecting backup source".to_string();
-        cx.spawn(async move |this, cx| {
-            let result = match receiver.await {
-                Ok(Ok(Some(paths))) => match paths.into_iter().next() {
-                    Some(path) => {
-                        cx.background_spawn(async move {
-                            match ConnectionStore::import_config_database(
-                                &config_dir,
-                                portable_key_path,
-                                &path,
-                            ) {
-                                Ok(info) => ConfigPathPromptResult::Imported(info),
-                                Err(error) => ConfigPathPromptResult::Failed(error.to_string()),
-                            }
-                        })
-                        .await
-                    }
-                    None => ConfigPathPromptResult::Cancelled,
-                },
-                Ok(Ok(None)) => ConfigPathPromptResult::Cancelled,
-                Ok(Err(error)) => ConfigPathPromptResult::Failed(error.to_string()),
-                Err(_) => ConfigPathPromptResult::Closed,
-            };
-            let _ = this.update(cx, |this, cx| {
-                this.apply_config_path_prompt_result(ConfigPathPromptKind::Import, result);
-                cx.notify();
-            });
-        })
-        .detach();
-        cx.notify();
-    }
-
     pub(in crate::features) fn prompt_portable_snapshot_import(&mut self, cx: &mut Context<Self>) {
         if self.block_import_for_settings_draft(cx) {
             return;
@@ -214,21 +105,6 @@ impl NyaTermApp {
         })
         .detach();
         cx.notify();
-    }
-
-    pub(in crate::features) fn prompt_encrypted_portable_snapshot_import(
-        &mut self,
-        cx: &mut Context<Self>,
-    ) {
-        if self.block_import_for_settings_draft(cx) {
-            return;
-        }
-        if self.active_session_id.is_some() || self.has_pending_session_start() {
-            self.terminal.view.status = "close active session before importing config".to_string();
-            cx.notify();
-            return;
-        }
-        self.start_snapshot_password_prompt(SnapshotPasswordPromptKind::Import, cx);
     }
 
     pub(in crate::features) fn start_snapshot_password_prompt(

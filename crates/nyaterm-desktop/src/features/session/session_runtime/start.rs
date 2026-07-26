@@ -309,14 +309,6 @@ impl NyaTermApp {
         }
     }
 
-    pub(in crate::features) fn load_ssh_key_auth(
-        &self,
-        key_id: Option<&str>,
-        auth_mode: &str,
-    ) -> Result<Option<SshKeyAuthConfig>, String> {
-        load_ssh_key_auth_with_context(&self.ssh_session_config_build_context(), key_id, auth_mode)
-    }
-
     pub(in crate::features) fn build_ssh_session_config(
         &self,
         connection: &SavedConnection,
@@ -329,13 +321,6 @@ impl NyaTermApp {
         )
     }
 
-    pub(in crate::features) fn load_proxy_config(
-        &self,
-        connection: &SavedConnection,
-    ) -> Result<Option<SshProxyConfig>, String> {
-        load_proxy_config_with_context(&self.ssh_session_config_build_context(), connection)
-    }
-
     pub(in crate::features) fn apply_desired_geometry_to_local_config(
         &self,
         config: &mut LocalSessionConfig,
@@ -346,18 +331,6 @@ impl NyaTermApp {
             config.pixel_width = geometry.pixel_width;
             config.pixel_height = geometry.pixel_height;
         }
-    }
-
-    pub(in crate::features) fn load_proxy_jump_config(
-        &self,
-        connection: &SavedConnection,
-        visited_proxy_jumps: &mut Vec<String>,
-    ) -> Result<Option<Box<SshSessionConfig>>, String> {
-        load_proxy_jump_config_with_context(
-            &self.ssh_session_config_build_context(),
-            connection,
-            visited_proxy_jumps,
-        )
     }
 }
 

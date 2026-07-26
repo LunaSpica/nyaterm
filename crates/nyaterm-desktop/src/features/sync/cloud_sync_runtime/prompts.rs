@@ -3,26 +3,6 @@ use super::*;
 use crate::models::{CloudSyncConflictState, SnapshotPasswordPromptKind};
 
 impl NyaTermApp {
-    pub(in crate::features) fn prompt_local_cloud_sync_push(&mut self, cx: &mut Context<Self>) {
-        if self.block_cloud_sync_for_settings_draft(cx) {
-            return;
-        }
-        self.start_snapshot_password_prompt(SnapshotPasswordPromptKind::CloudPush, cx);
-    }
-
-    pub(in crate::features) fn prompt_local_cloud_sync_pull(&mut self, cx: &mut Context<Self>) {
-        if self.block_cloud_sync_for_settings_draft(cx) {
-            return;
-        }
-        if self.active_session_id.is_some() || self.has_pending_session_start() {
-            self.terminal.view.status =
-                "close active session before pulling cloud sync".to_string();
-            cx.notify();
-            return;
-        }
-        self.start_snapshot_password_prompt(SnapshotPasswordPromptKind::CloudPull, cx);
-    }
-
     pub(in crate::features) fn prompt_provider_cloud_sync_push(&mut self, cx: &mut Context<Self>) {
         if self.block_cloud_sync_for_settings_draft(cx) {
             return;

@@ -366,10 +366,6 @@ impl TerminalSurface {
         self.app = Some(app);
     }
 
-    pub(in crate::features) fn take_layout_cache(&self) -> Arc<Mutex<NyaTerminalLayoutCache>> {
-        self.layout_cache.clone()
-    }
-
     pub(in crate::features) fn apply_frame_snapshot(
         &mut self,
         snapshot: Arc<TerminalSnapshot>,
@@ -1114,10 +1110,6 @@ impl TerminalSurface {
         }
         self.protocol_state = protocol_state;
         true
-    }
-
-    pub(in crate::features) fn set_visual_bell(&mut self, visual_bell: bool) {
-        self.visual_bell = visual_bell;
     }
 
     pub(in crate::features) fn set_layout_cache(

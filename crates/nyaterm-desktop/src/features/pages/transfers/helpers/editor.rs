@@ -58,22 +58,3 @@ pub(in crate::features::pages::transfers) fn editor_search_matches(
 pub(in crate::features::pages::transfers) fn format_permissions_octal(mode: u32) -> String {
     format!("{:04o}", mode & 0o7777)
 }
-
-pub(in crate::features::pages::transfers) fn format_permissions_symbolic(
-    file_type: SftpFileType,
-    mode: u32,
-) -> String {
-    let mut output = String::with_capacity(10);
-    output.push(match file_type {
-        SftpFileType::Directory => 'd',
-        SftpFileType::Symlink => 'l',
-        _ => '-',
-    });
-    for shift in [6, 3, 0] {
-        let bits = (mode >> shift) & 0o7;
-        output.push(if bits & 0o4 != 0 { 'r' } else { '-' });
-        output.push(if bits & 0o2 != 0 { 'w' } else { '-' });
-        output.push(if bits & 0o1 != 0 { 'x' } else { '-' });
-    }
-    output
-}

@@ -26,18 +26,6 @@ impl NyaTermApp {
         }
     }
 
-    pub(in crate::features) fn reset_credential_autofill(&mut self, cx: &mut Context<Self>) {
-        self.credential_suggestions = None;
-        self.credential_autofill_buffer.clear();
-        self.credential_autofill_recent.clear();
-        self.credential_autofill_pending = None;
-        self.credential_autofill_detection_pending = false;
-        self.credential_autofill_pending_request = None;
-        self.credential_autofill_sending = false;
-        self.credential_prompt_input_until_ms = 0;
-        cx.notify();
-    }
-
     pub(in crate::features) fn is_credential_prompt_input_mode(&self) -> bool {
         let now = Self::now_unix_ms();
         self.credential_prompt_input_until_ms > now

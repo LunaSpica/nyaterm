@@ -51,13 +51,6 @@ impl StartupCommandAction {
         }
     }
 
-    pub(crate) fn submit_label(self) -> &'static str {
-        match self {
-            Self::Duplicate => "Duplicate",
-            Self::Multiplex => "Multiplex",
-        }
-    }
-
     pub(crate) fn status_opened(self) -> &'static str {
         match self {
             Self::Duplicate => "duplicate and run command opened",
@@ -200,10 +193,6 @@ impl MultiLinePasteDraft {
 
     pub(crate) fn line_count(&self) -> usize {
         count_paste_lines(&self.text)
-    }
-
-    pub(crate) fn character_count(&self) -> usize {
-        self.text.chars().count()
     }
 }
 

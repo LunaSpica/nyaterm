@@ -159,67 +159,6 @@ impl NyaTermApp {
         }
     }
 
-    pub(in crate::features) fn prompt_transfer_path(
-        &mut self,
-        kind: TransferPathPromptKind,
-        cx: &mut Context<Self>,
-    ) {
-        if self.transfer.paths.prompt.is_some() {
-            self.terminal.view.status = "native path picker is already open".to_string();
-            cx.notify();
-            return;
-        }
-
-        let options = match kind {
-            TransferPathPromptKind::UploadFile => PathPromptOptions {
-                files: true,
-                directories: false,
-                multiple: false,
-                prompt: Some(SharedString::from("Select upload file")),
-            },
-            TransferPathPromptKind::UploadDirectory => PathPromptOptions {
-                files: false,
-                directories: true,
-                multiple: false,
-                prompt: Some(SharedString::from("Select upload directory")),
-            },
-            TransferPathPromptKind::DownloadDirectory => PathPromptOptions {
-                files: false,
-                directories: true,
-                multiple: false,
-                prompt: Some(SharedString::from("Select download directory")),
-            },
-        };
-        let remote_path = self.normalized_transfer_remote_path();
-        let receiver = cx.prompt_for_paths(options);
-        self.transfer.paths.prompt = Some(kind);
-        self.terminal.view.status = match kind {
-            TransferPathPromptKind::UploadFile => "selecting upload file".to_string(),
-            TransferPathPromptKind::UploadDirectory => "selecting upload directory".to_string(),
-            TransferPathPromptKind::DownloadDirectory => "selecting download directory".to_string(),
-        };
-        cx.spawn(async move |this, cx| {
-            let result = match receiver.await {
-                Ok(Ok(Some(paths))) => {
-                    if paths.is_empty() {
-                        TransferPathPromptResult::Cancelled
-                    } else {
-                        TransferPathPromptResult::Selected(paths)
-                    }
-                }
-                Ok(Ok(None)) => TransferPathPromptResult::Cancelled,
-                Ok(Err(error)) => TransferPathPromptResult::Failed(error.to_string()),
-                Err(_) => TransferPathPromptResult::Closed,
-            };
-            let _ = this.update(cx, |this, cx| {
-                this.apply_transfer_path_prompt_result(kind, remote_path, result);
-                cx.notify();
-            });
-        })
-        .detach();
-        cx.notify();
-    }
-
     pub(in crate::features) fn prompt_transfer_download_directory_and_start(
         &mut self,
         remote_paths: Vec<String>,
@@ -370,50 +309,6 @@ impl NyaTermApp {
         })
         .detach();
         cx.notify();
-    }
-
-    fn apply_transfer_path_prompt_result(
-        &mut self,
-        kind: TransferPathPromptKind,
-        remote_path: String,
-        result: TransferPathPromptResult,
-    ) {
-        self.transfer.paths.prompt = None;
-        match result {
-            TransferPathPromptResult::Selected(paths) => {
-                let Some(path) = paths.into_iter().next() else {
-                    self.terminal.view.status = "path picker cancelled".to_string();
-                    return;
-                };
-                let selected = match kind {
-                    TransferPathPromptKind::UploadFile
-                    | TransferPathPromptKind::UploadDirectory => path,
-                    TransferPathPromptKind::DownloadDirectory => {
-                        path.join(download_file_name_from_remote_path(&remote_path))
-                    }
-                };
-                self.transfer.paths.local = selected.display().to_string();
-                self.transfer.panel.focused_field = TransferInputField::Local;
-                self.terminal.view.status = match kind {
-                    TransferPathPromptKind::UploadFile => "upload file selected".to_string(),
-                    TransferPathPromptKind::UploadDirectory => {
-                        "upload directory selected".to_string()
-                    }
-                    TransferPathPromptKind::DownloadDirectory => {
-                        "download target selected".to_string()
-                    }
-                };
-            }
-            TransferPathPromptResult::Cancelled => {
-                self.terminal.view.status = "path picker cancelled".to_string();
-            }
-            TransferPathPromptResult::Failed(error) => {
-                self.terminal.view.status = format!("path picker failed: {error}");
-            }
-            TransferPathPromptResult::Closed => {
-                self.terminal.view.status = "path picker closed before returning".to_string();
-            }
-        }
     }
 
     fn apply_transfer_download_start_prompt_result(

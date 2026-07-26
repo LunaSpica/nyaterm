@@ -245,17 +245,6 @@ impl NyaTermApp {
         None
     }
 
-    pub(in crate::features) fn left_panel_meta(&self) -> &'static str {
-        match self.current_left_panel().unwrap_or(NavItem::Transfers) {
-            NavItem::Transfers => "file explorer",
-            NavItem::Tunnels => "network",
-            NavItem::SecurityAuth => "security / auth",
-            NavItem::SyncBackupHistory => "sync / backup",
-            NavItem::Migration => "migration",
-            other => other.label(),
-        }
-    }
-
     pub(in crate::features) fn title_menu_trigger(
         &self,
         menu: TitleMenu,

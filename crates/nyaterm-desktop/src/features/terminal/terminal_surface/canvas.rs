@@ -17,14 +17,6 @@ fn terminal_shell_placeholder_snapshot() -> std::sync::Arc<TerminalSnapshot> {
 }
 
 impl NyaTermApp {
-    pub(in crate::features) fn terminal_canvas(
-        &mut self,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        let session_id = self.active_session_id.clone().unwrap_or_default();
-        self.terminal_canvas_for(session_id, cx)
-    }
-
     pub(in crate::features) fn terminal_canvas_for(
         &mut self,
         session_id: String,

@@ -409,12 +409,6 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::features) fn active_sync_group_label(&self, session_id: &str) -> Option<String> {
-        self.active_sync_group_for_session(session_id)
-            .filter(|group| !group.paused_session_ids.iter().any(|id| id == session_id))
-            .map(|group| group.name.clone())
-    }
-
     /// First enabled group that includes this session (paused still counts for chrome).
     /// Matches Tauri `getActiveGroupForSession`.
     pub(in crate::features) fn active_sync_group_for_session(

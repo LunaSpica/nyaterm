@@ -47,14 +47,6 @@ pub(in crate::features) fn risk_label(risk: Option<&RiskLevel>) -> &'static str 
     }
 }
 
-pub(in crate::features) fn command_source_label(source: &str) -> &'static str {
-    match source {
-        "quickCommand" => "quick",
-        "history" => "history",
-        _ => "command",
-    }
-}
-
 pub(in crate::features) fn recording_file_path(
     settings: &AppSettingsSummary,
     config_dir: &std::path::Path,

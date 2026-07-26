@@ -127,15 +127,6 @@ impl NyaTermApp {
         self.copy_terminal_visible_text(cx);
     }
 
-    pub(in crate::features) fn start_terminal_selection(
-        &mut self,
-        event: &MouseDownEvent,
-        cx: &mut Context<Self>,
-    ) {
-        let active_session_id = self.active_session_id.clone();
-        self.start_terminal_selection_for_session(active_session_id.as_deref(), event, cx);
-    }
-
     pub(in crate::features) fn start_terminal_selection_for_session(
         &mut self,
         session_id: Option<&str>,
@@ -419,19 +410,6 @@ impl NyaTermApp {
         }
     }
 
-    pub(in crate::features) fn word_bounds_at(&self, cell: TerminalCellPos) -> (usize, usize) {
-        let offset = self.active_terminal_display_offset();
-        let snapshot =
-            self.terminal_snapshot_for_session(self.active_session_id.as_deref(), offset);
-        let viewport_anchor_row = terminal_snapshot_anchor_row_for_display_offset(
-            snapshot.as_ref(),
-            offset,
-            self.terminal_viewport_rows_for_session(self.active_session_id.as_deref()),
-            self.terminal_scrollback_len_for_session(self.active_session_id.as_deref()),
-        );
-        self.word_bounds_at_for_snapshot(cell, snapshot.as_ref(), viewport_anchor_row)
-    }
-
     fn word_bounds_at_for_viewport(
         &self,
         session_id: Option<&str>,
@@ -475,25 +453,6 @@ impl NyaTermApp {
             end += 1;
         }
         (start, end)
-    }
-
-    fn terminal_selection_viewport_state(
-        &self,
-        session_id: Option<&str>,
-        cx: &App,
-    ) -> (usize, usize) {
-        if let Some(geometry) = self.terminal_hit_test_geometry_for_session(session_id, cx) {
-            return (geometry.display_offset, geometry.viewport_anchor_row);
-        }
-        let display_offset = self.terminal_display_offset_for_session(session_id);
-        let snapshot = self.terminal_snapshot_for_session(session_id, display_offset);
-        let viewport_anchor_row = terminal_snapshot_anchor_row_for_display_offset(
-            snapshot.as_ref(),
-            display_offset,
-            self.terminal_viewport_rows_for_session(session_id),
-            self.terminal_scrollback_len_for_session(session_id),
-        );
-        (display_offset, viewport_anchor_row)
     }
 }
 

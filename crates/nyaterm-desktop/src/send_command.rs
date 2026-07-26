@@ -159,46 +159,6 @@ pub(crate) fn build_send_command_units_for(
     }
 }
 
-pub(crate) fn bottom_send_field(
-    palette: ThemePalette,
-    label: &'static str,
-    value: impl Into<String>,
-) -> impl IntoElement {
-    let value = value.into();
-    div()
-        .h(px(32.))
-        .min_w(px(112.))
-        .flex_1()
-        .flex()
-        .items_center()
-        .overflow_hidden()
-        .rounded_sm()
-        .border_1()
-        .border_color(rgb(palette.border))
-        .bg(rgb(palette.input))
-        .child(
-            div()
-                .flex_none()
-                .px_2()
-                .text_xs()
-                .text_color(rgb(palette.text_muted))
-                .child(label),
-        )
-        .child(
-            div()
-                .min_w_0()
-                .flex_1()
-                .border_l_1()
-                .border_color(rgb(palette.border))
-                .px_2()
-                .text_xs()
-                .font_weight(FontWeight(700.))
-                .text_color(rgb(palette.text))
-                .overflow_hidden()
-                .child(value),
-        )
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

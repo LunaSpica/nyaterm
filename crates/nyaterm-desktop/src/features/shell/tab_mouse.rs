@@ -157,11 +157,6 @@ impl ChromeTooltip {
             detail: None,
         }
     }
-
-    pub(in crate::features) fn with_detail(mut self, detail: impl Into<String>) -> Self {
-        self.detail = Some(detail.into());
-        self
-    }
 }
 
 impl Render for ChromeTooltip {
@@ -214,20 +209,6 @@ pub(in crate::features) enum TabMouseActionTarget {
 }
 
 impl NyaTermApp {
-    pub(in crate::features) fn cycle_tab_mouse_action(
-        &mut self,
-        target: TabMouseActionTarget,
-        cx: &mut Context<Self>,
-    ) {
-        let current = match target {
-            TabMouseActionTarget::Double => &self.settings.interaction_tab_double_click_action,
-            TabMouseActionTarget::Middle => &self.settings.interaction_tab_middle_click_action,
-            TabMouseActionTarget::Right => &self.settings.interaction_tab_right_click_action,
-        };
-        let next = next_tab_mouse_action(current);
-        self.set_tab_mouse_action(target, next, cx);
-    }
-
     pub(in crate::features) fn set_tab_mouse_action(
         &mut self,
         target: TabMouseActionTarget,
@@ -426,14 +407,6 @@ pub(in crate::features) const TAB_MOUSE_ACTIONS: [&str; 9] = [
     "disconnect_session",
     "close_tab",
 ];
-
-fn next_tab_mouse_action(current: &str) -> &'static str {
-    let index = TAB_MOUSE_ACTIONS
-        .iter()
-        .position(|action| *action == current)
-        .unwrap_or(0);
-    TAB_MOUSE_ACTIONS[(index + 1) % TAB_MOUSE_ACTIONS.len()]
-}
 
 fn normalize_tab_mouse_action(action: &str) -> &'static str {
     TAB_MOUSE_ACTIONS

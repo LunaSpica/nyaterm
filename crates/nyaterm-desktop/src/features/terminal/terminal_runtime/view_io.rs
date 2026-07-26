@@ -525,26 +525,6 @@ impl NyaTermApp {
             .unwrap_or(self.terminal.view.output.as_str())
     }
 
-    pub(in crate::features) fn active_terminal_view(&self) -> Option<&TerminalViewState> {
-        self.active_session_id
-            .as_deref()
-            .and_then(|session_id| self.terminal.view.views.get(session_id))
-    }
-
-    pub(in crate::features) fn active_terminal_view_mut(
-        &mut self,
-    ) -> Option<&mut TerminalViewState> {
-        let session_id = self.active_session_id.clone()?;
-        self.terminal.view.views.get_mut(&session_id)
-    }
-
-    pub(in crate::features) fn terminal_view_for(
-        &self,
-        session_id: &str,
-    ) -> Option<&TerminalViewState> {
-        self.terminal.view.views.get(session_id)
-    }
-
     pub(in crate::features) fn terminal_snapshot_for_session(
         &self,
         session_id: Option<&str>,
@@ -600,29 +580,6 @@ impl NyaTermApp {
             self.terminal.view.status = "copied visible terminal text".to_string();
         }
         self.terminal.menus.actions_open = false;
-        cx.notify();
-    }
-
-    pub(in crate::features) fn copy_terminal_buffer_text(&mut self, cx: &mut Context<Self>) {
-        self.terminal.menus.actions_open = false;
-        let Some(session_id) = self.active_session_id.clone() else {
-            let text = self.terminal.view.output.clone();
-            if text.trim().is_empty() {
-                self.terminal.view.status = "terminal buffer is empty".to_string();
-            } else {
-                cx.write_to_clipboard(ClipboardItem::new_string(text));
-                self.terminal.view.status = "copied terminal buffer".to_string();
-            }
-            cx.notify();
-            return;
-        };
-        let request_id = uuid();
-        self.terminal.view.frame_pipeline.request_buffer_text(
-            session_id,
-            self.terminal_scrollback_max_bytes(),
-            request_id,
-        );
-        self.terminal.view.status = "preparing terminal buffer copy".to_string();
         cx.notify();
     }
 
@@ -1031,31 +988,6 @@ impl NyaTermApp {
     /// Returns true when the terminal app handled the event (caller should skip
     /// local handling). Protocol traffic is recorded but not command history.
 
-    pub(in crate::features) fn maybe_send_mouse_report(
-        &mut self,
-        button: u8,
-        col: u16,
-        row: u16,
-        press: bool,
-        motion: bool,
-        modifiers: gpui::Modifiers,
-        cx: &mut Context<Self>,
-    ) -> bool {
-        let Some(session_id) = self.active_session_id.clone() else {
-            return false;
-        };
-        self.maybe_send_mouse_report_for_session(
-            &session_id,
-            button,
-            col,
-            row,
-            press,
-            motion,
-            modifiers,
-            cx,
-        )
-    }
-
     pub(in crate::features) fn maybe_send_mouse_report_for_session(
         &mut self,
         session_id: &str,
@@ -1428,14 +1360,6 @@ impl NyaTermApp {
         self.terminal.view.screen.encode_outgoing(bytes)
     }
 
-    /// Apply interaction default encoding to a terminal screen.
-    pub(in crate::features) fn apply_terminal_encoding_to_screen(
-        &self,
-        screen: &mut nyaterm_terminal::TerminalScreen,
-    ) {
-        screen.set_encoding(&self.settings.interaction_default_encoding);
-    }
-
     /// Keep all live terminal screens on the current interaction encoding.
     pub(in crate::features) fn sync_terminal_encodings_from_settings(&mut self) {
         let label = self.settings.interaction_default_encoding.clone();
@@ -1590,10 +1514,6 @@ impl NyaTermApp {
         sent
     }
 
-    pub(in crate::features) fn active_terminal_key_mode(&self) -> TerminalKeyMode {
-        self.terminal_key_mode_for_session(self.active_session_id.as_deref())
-    }
-
     pub(in crate::features) fn set_terminal_status_if_changed(
         &mut self,
         status: impl Into<String>,
@@ -1670,13 +1590,6 @@ impl NyaTermApp {
         }
     }
 
-    pub(in crate::features) fn terminal_key_bytes_for_event(
-        &self,
-        event: &KeyDownEvent,
-    ) -> Option<Vec<u8>> {
-        self.terminal_key_bytes_for_event_for_session(self.active_session_id.as_deref(), event)
-    }
-
     pub(in crate::features) fn terminal_key_bytes_for_event_for_session(
         &self,
         session_id: Option<&str>,
@@ -1696,16 +1609,6 @@ impl NyaTermApp {
         terminal_should_defer_key_text_to_input_handler_for_state(
             self.settings.interaction_mac_ime_compatibility,
             &self.terminal.input.ime_marked_text,
-            event,
-        )
-    }
-
-    pub(in crate::features) fn terminal_key_release_bytes_for_event(
-        &self,
-        event: &KeyUpEvent,
-    ) -> Option<Vec<u8>> {
-        self.terminal_key_release_bytes_for_event_for_session(
-            self.active_session_id.as_deref(),
             event,
         )
     }

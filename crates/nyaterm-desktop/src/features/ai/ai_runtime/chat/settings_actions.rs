@@ -133,16 +133,6 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::features) fn set_ai_request_user_agent(
-        &mut self,
-        value: String,
-        cx: &mut Context<Self>,
-    ) {
-        self.ai.settings.config.request_user_agent = value;
-        self.ai.panel.status = "AI request user-agent updated".to_string();
-        self.persist_ai_settings_now(cx);
-    }
-
     pub(in crate::features) fn focus_ai_action_field(
         &mut self,
         kind: AiActionListKind,

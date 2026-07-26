@@ -36,16 +36,6 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::features) fn set_translate_provider(
-        &mut self,
-        provider: &'static str,
-        cx: &mut Context<Self>,
-    ) {
-        self.translate_provider = provider.to_string();
-        self.translate_status = format!("translation provider set to {provider}");
-        cx.notify();
-    }
-
     pub(in crate::features) fn save_translation_settings(&mut self, cx: &mut Context<Self>) {
         let next = self.pending_translation_settings();
         if self.defer_settings_persistence(cx) {

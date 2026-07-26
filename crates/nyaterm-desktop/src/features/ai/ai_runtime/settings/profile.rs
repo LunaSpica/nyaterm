@@ -1,17 +1,6 @@
 use super::*;
 
 impl NyaTermApp {
-    pub(in crate::features) fn update_ai_profile(
-        &mut self,
-        profile_id: &'static str,
-        cx: &mut Context<Self>,
-    ) {
-        self.ai.settings.config.active_profile_id = profile_id.to_string();
-        self.sync_ai_drafts_from_active_profile();
-        self.ai.panel.status = format!("AI provider set to {profile_id}; save to persist");
-        cx.notify();
-    }
-
     pub(in crate::features) fn toggle_ai_enabled(&mut self, cx: &mut Context<Self>) {
         self.ai.settings.config.enabled = !self.ai.settings.config.enabled;
         self.ai.panel.status = if self.ai.settings.config.enabled {

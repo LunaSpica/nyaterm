@@ -1,63 +1,5 @@
 use super::*;
 
-pub(in crate::features::pages::transfers) fn transfer_queue_counts(
-    jobs: &[TransferJobState],
-) -> (usize, usize, usize, usize, usize) {
-    let total = jobs.len();
-    let running = jobs
-        .iter()
-        .filter(|job| {
-            matches!(
-                job.status,
-                TransferJobStatus::Running | TransferJobStatus::Cancelling
-            )
-        })
-        .count();
-    let paused = jobs
-        .iter()
-        .filter(|job| job.status == TransferJobStatus::Paused)
-        .count();
-    let completed = jobs
-        .iter()
-        .filter(|job| job.status == TransferJobStatus::Completed)
-        .count();
-    let failed = jobs
-        .iter()
-        .filter(|job| job.status == TransferJobStatus::Failed)
-        .count();
-    (total, running, paused, completed, failed)
-}
-
-pub(in crate::features::pages::transfers) fn queue_metric(
-    palette: crate::theme::ThemePalette,
-    label: &'static str,
-    value: usize,
-    color: impl Into<Hsla>,
-) -> impl IntoElement {
-    let color = color.into();
-    div()
-        .flex()
-        .items_center()
-        .gap_1()
-        .rounded_sm()
-        .bg(rgb(palette.input))
-        .px_2()
-        .py_1()
-        .child(
-            div()
-                .text_size(px(10.))
-                .text_color(rgb(palette.text_muted))
-                .child(label),
-        )
-        .child(
-            div()
-                .text_xs()
-                .font_weight(FontWeight(800.))
-                .text_color(color)
-                .child(value.to_string()),
-        )
-}
-
 pub(in crate::features::pages::transfers) fn queue_action_button(
     palette: crate::theme::ThemePalette,
     id: impl Into<String>,
@@ -92,17 +34,6 @@ pub(in crate::features::pages::transfers) fn queue_action_button(
                 .into()
         })
         .child(svg().size(px(16.)).flex_none().path(icon_path))
-}
-
-pub(in crate::features::pages::transfers) fn duplicate_policy_short_label(
-    policy: SftpDuplicatePolicy,
-) -> &'static str {
-    match policy {
-        SftpDuplicatePolicy::Ask => "ask",
-        SftpDuplicatePolicy::Overwrite => "overwrite",
-        SftpDuplicatePolicy::Skip => "skip",
-        SftpDuplicatePolicy::Rename => "rename",
-    }
 }
 
 pub(in crate::features::pages::transfers) fn transfer_direction_label(

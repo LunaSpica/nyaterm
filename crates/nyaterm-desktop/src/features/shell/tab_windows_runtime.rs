@@ -78,45 +78,6 @@ impl NyaTermApp {
         self.terminal.windows.tree = Some(root);
     }
 
-    /// Split the active tab into a new window leaf (Tauri "Open in New Window" in-app).
-    pub(in crate::features) fn split_active_tab_to_new_window_leaf(
-        &mut self,
-        direction: WorkspaceSplitDirection,
-        edge: SplitEdge,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(session_id) = self.active_session_id.clone() else {
-            self.terminal.view.status = "no active session to split into a window leaf".to_string();
-            cx.notify();
-            return;
-        };
-        self.ensure_terminal_windows_root();
-        let Some(root) = self.terminal.windows.tree.as_mut() else {
-            self.terminal.view.status = "no sessions available for window split".to_string();
-            cx.notify();
-            return;
-        };
-        if !root.split_tab_to_edge(&session_id, direction, edge) {
-            // Only one tab in leaf — cannot detach into a second leaf.
-            self.terminal.view.status =
-                "need at least two tabs in a leaf to open a new window pane".to_string();
-            cx.notify();
-            return;
-        }
-        let _ = root.set_active_tab(&session_id);
-        self.focused_terminal_window_leaf_id =
-            find_leaf_with_tab(root, &session_id).or_else(|| root.first_leaf_id());
-        self.selected_nav = NavItem::Workspace;
-        self.main_mode = MainMode::Workspace;
-        self.terminal.view.status = format!(
-            "opened session {} in a new window leaf ({})",
-            short_id(&session_id),
-            direction.label().to_ascii_lowercase()
-        );
-        self.persist_terminal_window_layout();
-        cx.notify();
-    }
-
     pub(in crate::features) fn activate_terminal_window_tab(
         &mut self,
         leaf_id: String,
@@ -132,36 +93,6 @@ impl NyaTermApp {
         self.activate_session_id_with_surface_sync(&session_id, cx);
         self.selected_nav = NavItem::Workspace;
         self.main_mode = MainMode::Workspace;
-        cx.notify();
-    }
-
-    pub(in crate::features) fn move_active_tab_to_leaf(
-        &mut self,
-        target_leaf_id: String,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(session_id) = self.active_session_id.clone() else {
-            return;
-        };
-        let Some(root) = self.terminal.windows.tree.as_mut() else {
-            return;
-        };
-        if root.move_tab_to_leaf(&session_id, &target_leaf_id) {
-            self.focused_terminal_window_leaf_id = Some(target_leaf_id);
-            let _ = root.set_active_tab(&session_id);
-            self.terminal.view.status =
-                format!("moved tab {} to window leaf", short_id(&session_id));
-            self.persist_terminal_window_layout();
-        }
-        cx.notify();
-    }
-
-    pub(in crate::features) fn close_terminal_window_layout(&mut self, cx: &mut Context<Self>) {
-        self.terminal.windows.tree = None;
-        self.focused_terminal_window_leaf_id = None;
-        self.terminal.windows.drop = None;
-        self.terminal.view.status = "restored flat tab strip".to_string();
-        self.persist_terminal_window_layout();
         cx.notify();
     }
 

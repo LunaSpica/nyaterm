@@ -1,20 +1,6 @@
 use super::*;
 
 impl NyaTermApp {
-    pub(in crate::features) fn start_sftp_download_job(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let remote_path = self.normalized_transfer_remote_path();
-        if self.settings.transfer_ask_save_location {
-            self.prompt_transfer_download_directory_and_start(vec![remote_path], window, cx);
-            return;
-        }
-        let local_path = self.normalized_transfer_local_path();
-        self.start_sftp_download_job_for_target(remote_path, local_path, window, cx);
-    }
-
     pub(in crate::features) fn start_sftp_download_job_for_target(
         &mut self,
         remote_path: String,
@@ -96,45 +82,6 @@ impl NyaTermApp {
             });
         });
         cx.notify();
-    }
-
-    pub(in crate::features) fn start_sftp_upload_job(
-        &mut self,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let local_path = self.normalized_transfer_local_path();
-        let remote_path = self.normalized_transfer_remote_path();
-        self.start_sftp_upload_job_for_target(local_path, remote_path, cx);
-    }
-
-    pub(in crate::features) fn start_sftp_upload_job_for_target(
-        &mut self,
-        local_path: PathBuf,
-        remote_path: String,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(config) = self.active_ssh_config.clone() else {
-            self.terminal.view.status = "start an SSH session first".to_string();
-            self.ensure_panel_open(NavItem::Transfers);
-            cx.notify();
-            return;
-        };
-        let duplicate_policy = self.transfer.paths.duplicate_policy;
-        let duplicate_resolver = (duplicate_policy == SftpDuplicatePolicy::Ask)
-            .then(|| self.duplicate_prompts.clone() as Arc<dyn SftpDuplicateResolver>);
-        let transfer_options = self.sftp_transfer_options();
-        let session_id = self.active_session_id.clone();
-        self.enqueue_sftp_upload_job_for_target(
-            session_id,
-            config,
-            local_path,
-            remote_path,
-            duplicate_policy,
-            duplicate_resolver,
-            transfer_options,
-            cx,
-        );
     }
 
     pub(in crate::features) fn enqueue_sftp_upload_job_for_target(

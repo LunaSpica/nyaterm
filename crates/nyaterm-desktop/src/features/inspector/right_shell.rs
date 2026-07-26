@@ -18,20 +18,6 @@ impl NyaTermApp {
             .child(self.side_panel_stack(PanelSide::Right, cx))
     }
 
-    pub(in crate::features) fn right_panel_meta(&self) -> &'static str {
-        match self.current_right_panel().unwrap_or(NavItem::Connections) {
-            NavItem::Connections => "saved connections",
-            NavItem::AiAssistant => "assistant",
-            NavItem::ActiveSessions => "sessions",
-            NavItem::CommandHistory => "history",
-            NavItem::Stats => "resource monitor",
-            NavItem::Processes => "process manager",
-            NavItem::Docker => "docker manager",
-            NavItem::Recording => "recording",
-            other => other.label(),
-        }
-    }
-
     pub(in crate::features) fn right_panel_body(
         &mut self,
         panel: NavItem,
