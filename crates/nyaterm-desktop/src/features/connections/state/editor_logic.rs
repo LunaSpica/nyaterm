@@ -515,18 +515,14 @@ pub(super) fn set_connection_group_editor_error(
 /// Which draft strings become editable fields, and which are secrets.
 ///
 /// Driven off the draft rather than a fixed list so a field that does not apply
-/// to the current kind is simply never built.
+/// to the current kind is simply never built. The description is absent on
+/// purpose: it is a multi-line box, and the shared field widget is single-line,
+/// so it stays on the legacy key routing until that lands.
 pub(super) fn editor_field_seeds(
     draft: &ConnectionEditorState,
 ) -> Vec<(ConnectionEditorField, String, bool, &'static str)> {
     vec![
         (ConnectionEditorField::Name, draft.name.clone(), false, ""),
-        (
-            ConnectionEditorField::Description,
-            draft.description.clone(),
-            false,
-            "",
-        ),
         (
             ConnectionEditorField::NewGroupName,
             draft.new_group_name.clone(),

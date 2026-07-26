@@ -221,10 +221,13 @@ impl TextField {
                 }
                 return true;
             }
+            // Navigation and dialog keys belong to the owner. Some of them do
+            // carry a `key_char` — Tab is "	" — so they have to be named, or
+            // they would be typed into the buffer instead.
+            "tab" | "enter" | "escape" | "up" | "down" | "pageup" | "pagedown" => return false,
             _ => {
                 // Everything else is text, unless a modifier claims it or the
-                // key produces none — Enter, Tab and the arrows land here and
-                // are left for the owner.
+                // key produces none.
                 if accel || keystroke.modifiers.function {
                     return false;
                 }
