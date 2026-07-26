@@ -1,5 +1,6 @@
 use gpui::{
-    App, ClickEvent, Context, FontWeight, IntoElement, Window, div, prelude::*, px, rgb, svg,
+    AnyElement, App, ClickEvent, Context, FontWeight, IntoElement, Window, div, prelude::*, px,
+    rgb, svg,
 };
 
 use std::collections::HashMap;
@@ -79,10 +80,6 @@ impl NyaTermApp {
             }
         }
         let active_tab = self.connection_state.network.active_tab();
-        let group_editor_focus = self.connection_state.network.group_editor_focus_handle();
-        let tunnel_editor_focus = self.connection_state.network.tunnel_editor_focus_handle();
-        let proxy_editor_focus = self.connection_state.network.proxy_editor_focus_handle();
-
         // Tauri NetworkPanel body (PanelHeader is shared):
         // scroll(p-3) > Tabs(grid-cols-2) > config row (label + New Group/New item) > grouped list.
         // Network create/edit/delete use modal dialogs (Tauri Dialog) over the panel.
@@ -214,50 +211,38 @@ impl NyaTermApp {
                         })),
                 ),
             )
-            // Tauri-style Dialog overlays (absolute) above the panel body.
-            .when_some(
-                self.connection_state.network.active_delete_confirm(),
-                |this, confirm| this.child(network_delete_confirm_panel(self, confirm, cx)),
-            )
-            .when_some(
-                self.connection_state.network.active_group_editor(),
-                |this, editor| {
-                    this.child(network_group_editor_panel(
-                        self,
-                        editor,
-                        &group_editor_focus,
-                        cx,
-                    ))
-                },
-            )
-            .when_some(
-                self.connection_state.network.active_group_delete_confirm(),
-                |this, confirm| this.child(network_group_delete_confirm_panel(self, confirm, cx)),
-            )
-            .when_some(
-                self.connection_state.network.active_tunnel_editor(),
-                |this, editor| {
-                    this.child(network_tunnel_editor_panel(
-                        palette,
-                        editor,
-                        self,
-                        &tunnel_editor_focus,
-                        cx,
-                    ))
-                },
-            )
-            .when_some(
-                self.connection_state.network.active_proxy_editor(),
-                |this, editor| {
-                    this.child(network_proxy_editor_panel(
-                        palette,
-                        editor,
-                        self,
-                        &proxy_editor_focus,
-                        cx,
-                    ))
-                },
-            )
+    }
+
+    /// The network panel's dialogs, rendered by the root rather than the panel.
+    ///
+    /// A dialog drawn inside the panel is clipped to it, and the panel is a
+    /// couple of hundred pixels wide; the transfer overlays are hosted this way
+    /// for the same reason.
+    pub(in crate::features) fn network_dialog_overlay(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
+        let palette = self.theme_palette();
+        if let Some(confirm) = self.connection_state.network.active_delete_confirm() {
+            return Some(network_delete_confirm_panel(self, confirm, cx).into_any_element());
+        }
+        if let Some(editor) = self.connection_state.network.active_group_editor() {
+            let focus = self.connection_state.network.group_editor_focus_handle();
+            return Some(network_group_editor_panel(self, editor, &focus, cx).into_any_element());
+        }
+        if let Some(confirm) = self.connection_state.network.active_group_delete_confirm() {
+            return Some(network_group_delete_confirm_panel(self, confirm, cx).into_any_element());
+        }
+        if let Some(editor) = self.connection_state.network.active_tunnel_editor() {
+            return Some(network_tunnel_editor_panel(palette, editor, self, cx).into_any_element());
+        }
+        if let Some(editor) = self.connection_state.network.active_proxy_editor() {
+            let focus = self.connection_state.network.proxy_editor_focus_handle();
+            return Some(
+                network_proxy_editor_panel(palette, editor, self, &focus, cx).into_any_element(),
+            );
+        }
+        None
     }
 }
 

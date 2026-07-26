@@ -209,36 +209,28 @@ pub(super) fn advance_network_tunnel_editor_focus(
     true
 }
 
-pub(super) fn apply_network_tunnel_editor_key(
+/// Write one field of the tunnel draft.
+///
+/// A port field keeps only digits: the boxes accept anything typed, and the
+/// draft is what gets validated and saved.
+pub(super) fn set_network_tunnel_editor_field(
     tunnel_editor: &mut Option<NetworkTunnelEditorState>,
-    key: &str,
-    input: Option<&str>,
+    field: NetworkTunnelEditorField,
+    text: String,
 ) -> bool {
     let Some(editor) = tunnel_editor.as_mut() else {
         return false;
     };
-    match key {
-        "backspace" => {
-            network_tunnel_editor_field_mut(editor).pop();
-            editor.error = None;
-            true
+    editor.focused_field = field;
+    let text = match field {
+        NetworkTunnelEditorField::ListenPort | NetworkTunnelEditorField::TargetPort => {
+            text.chars().filter(char::is_ascii_digit).collect()
         }
-        _ => {
-            let Some(input) = input.filter(|input| !input.is_empty()) else {
-                return false;
-            };
-            let field = editor.focused_field;
-            let target = network_tunnel_editor_field_mut(editor);
-            match field {
-                NetworkTunnelEditorField::ListenPort | NetworkTunnelEditorField::TargetPort => {
-                    target.extend(input.chars().filter(|character| character.is_ascii_digit()));
-                }
-                _ => target.push_str(input),
-            }
-            editor.error = None;
-            true
-        }
-    }
+        _ => text,
+    };
+    *network_tunnel_editor_field_mut(editor) = text;
+    editor.error = None;
+    true
 }
 
 fn network_tunnel_editor_field_mut(editor: &mut NetworkTunnelEditorState) -> &mut String {

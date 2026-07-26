@@ -550,6 +550,7 @@ impl NyaTermApp {
             .when(overlay.terminal_actions_open, |this| {
                 this.child(self.terminal_actions_overlay(cx))
             })
+            .children(self.network_dialog_overlay(cx))
             .when(overlay.terminal_context_menu_open, |this| {
                 this.child(self.terminal_context_menu_overlay(cx))
             })

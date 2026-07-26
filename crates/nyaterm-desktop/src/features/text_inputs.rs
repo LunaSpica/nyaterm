@@ -149,6 +149,37 @@ impl NyaTermApp {
             )
     }
 
+    /// A caption above the input for `id`.
+    ///
+    /// The caption goes above rather than inside the box, so the whole width is
+    /// what was typed — the same shape the connection editor settled on.
+    pub(in crate::features) fn text_input_field(
+        &mut self,
+        id: impl Into<SharedString>,
+        caption: impl Into<SharedString>,
+        seed: &str,
+        setup: TextInputSetup,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let palette = self.theme_palette();
+        let caption = caption.into();
+        let input = self.text_input_box(id, seed, setup, cx);
+        div()
+            .min_w_0()
+            .flex()
+            .flex_col()
+            .gap_1()
+            .when(!caption.is_empty(), |this| {
+                this.child(
+                    div()
+                        .text_xs()
+                        .text_color(rgb(palette.text_muted))
+                        .child(caption),
+                )
+            })
+            .child(input)
+    }
+
     /// What the input for `id` currently holds, if it exists.
     pub(in crate::features) fn text_input_value(&self, id: &str, cx: &App) -> Option<String> {
         self.text_inputs
@@ -181,6 +212,8 @@ impl NyaTermApp {
     fn on_text_input_changed(&mut self, id: SharedString, text: String, cx: &mut Context<Self>) {
         if let Some(rest) = id.strip_prefix("settings.search-engine.") {
             self.apply_search_engine_input(rest, text, cx);
+        } else if let Some(field) = id.strip_prefix("network.tunnel-editor.") {
+            self.apply_network_tunnel_editor_input(field, text, cx);
         }
     }
 

@@ -1,16 +1,15 @@
 use gpui::prelude::*;
-use gpui::{App, ClickEvent, Context, FontWeight, IntoElement, KeyDownEvent, Window, div, px, rgb};
+use gpui::{App, ClickEvent, Context, FontWeight, IntoElement, Window, div, px, rgb};
 
 use super::super::common::{network_dialog_footer, network_modal_shell};
-use crate::features::{NyaTermApp, transfer_input};
+use crate::features::{NyaTermApp, TextInputSetup};
 use crate::models::{NetworkTunnelEditorField, NetworkTunnelEditorState};
 use nyaterm_core::truncate_preview;
 
 pub(in crate::features::pages::tunnels) fn network_tunnel_editor_panel(
     palette: crate::theme::ThemePalette,
     editor: NetworkTunnelEditorState,
-    app: &NyaTermApp,
-    focus: &gpui::FocusHandle,
+    app: &mut NyaTermApp,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
     let connection_label = editor
@@ -39,6 +38,51 @@ pub(in crate::features::pages::tunnels) fn network_tunnel_editor_panel(
         _ => app.tr("network.localTunnel"),
     };
     let preview = tunnel_editor_preview(&editor);
+    // Built up front: the card is one long builder chain that only reads `app`,
+    // and creating an input needs it mutably.
+    let name_input = tunnel_editor_input(
+        app,
+        NetworkTunnelEditorField::Name,
+        app.tr("network.tunnelName"),
+        editor.name.clone(),
+        cx,
+    );
+    let listen_port_input = tunnel_editor_input(
+        app,
+        NetworkTunnelEditorField::ListenPort,
+        match editor.tunnel_type.as_str() {
+            "remote" => app.tr("network.listenPortRemote"),
+            "dynamic" => app.tr("network.listenPortDynamic"),
+            _ => app.tr("network.listenPortLocal"),
+        },
+        editor.listen_port.clone(),
+        cx,
+    );
+    let dynamic = editor.is_dynamic();
+    let target_port_input = (!dynamic).then(|| {
+        tunnel_editor_input(
+            app,
+            NetworkTunnelEditorField::TargetPort,
+            match editor.tunnel_type.as_str() {
+                "remote" => app.tr("network.targetPortRemote"),
+                _ => app.tr("network.targetPortLocal"),
+            },
+            editor.target_port.clone(),
+            cx,
+        )
+    });
+    let target_host_input = (!dynamic).then(|| {
+        tunnel_editor_input(
+            app,
+            NetworkTunnelEditorField::TargetHost,
+            match editor.tunnel_type.as_str() {
+                "remote" => app.tr("network.targetHostRemote"),
+                _ => app.tr("network.targetHostLocal"),
+            },
+            editor.target_host.clone(),
+            cx,
+        )
+    });
 
     let card = div()
         .p_6()
@@ -74,16 +118,7 @@ pub(in crate::features::pages::tunnels) fn network_tunnel_editor_panel(
                 .grid()
                 .grid_cols(3)
                 .gap_2()
-                .child(tunnel_editor_input(
-                    palette,
-                    "network-tunnel-editor-name",
-                    app.tr("network.tunnelName"),
-                    editor.name.clone(),
-                    editor.focused_field == NetworkTunnelEditorField::Name,
-                    NetworkTunnelEditorField::Name,
-                    focus,
-                    cx,
-                ))
+                .child(name_input)
                 .child(tunnel_editor_selector(
                     palette,
                     "network-tunnel-editor-type",
@@ -117,50 +152,13 @@ pub(in crate::features::pages::tunnels) fn network_tunnel_editor_panel(
                 .grid()
                 .grid_cols(2)
                 .gap_2()
-                .child(tunnel_editor_input(
-                    palette,
-                    "network-tunnel-editor-listen-port",
-                    match editor.tunnel_type.as_str() {
-                        "remote" => app.tr("network.listenPortRemote"),
-                        "dynamic" => app.tr("network.listenPortDynamic"),
-                        _ => app.tr("network.listenPortLocal"),
-                    },
-                    editor.listen_port.clone(),
-                    editor.focused_field == NetworkTunnelEditorField::ListenPort,
-                    NetworkTunnelEditorField::ListenPort,
-                    focus,
-                    cx,
-                ))
+                .child(listen_port_input)
                 .when(!editor.is_dynamic(), |this| {
-                    this.child(tunnel_editor_input(
-                        palette,
-                        "network-tunnel-editor-target-port",
-                        match editor.tunnel_type.as_str() {
-                            "remote" => app.tr("network.targetPortRemote"),
-                            _ => app.tr("network.targetPortLocal"),
-                        },
-                        editor.target_port.clone(),
-                        editor.focused_field == NetworkTunnelEditorField::TargetPort,
-                        NetworkTunnelEditorField::TargetPort,
-                        focus,
-                        cx,
-                    ))
+                    this.children(target_port_input)
                 }),
         )
         .when(!editor.is_dynamic(), |this| {
-            this.child(tunnel_editor_input(
-                palette,
-                "network-tunnel-editor-target-host",
-                match editor.tunnel_type.as_str() {
-                    "remote" => app.tr("network.targetHostRemote"),
-                    _ => app.tr("network.targetHostLocal"),
-                },
-                editor.target_host.clone(),
-                editor.focused_field == NetworkTunnelEditorField::TargetHost,
-                NetworkTunnelEditorField::TargetHost,
-                focus,
-                cx,
-            ))
+            this.children(target_host_input)
         })
         .child(
             div()
@@ -239,6 +237,24 @@ pub(in crate::features::pages::tunnels) fn network_tunnel_editor_panel(
             }),
         ));
 
+    // Escape and Enter belong to the dialog, not to any one box: the inputs
+    // deliberately leave both unconsumed so they reach here.
+    let card = card
+        .on_key_down(cx.listener(|this, event: &gpui::KeyDownEvent, _, cx| {
+            match event.keystroke.key.as_str() {
+                "escape" => {
+                    cx.stop_propagation();
+                    this.close_network_tunnel_editor(cx);
+                }
+                "enter" => {
+                    cx.stop_propagation();
+                    this.save_network_tunnel_editor(cx);
+                }
+                _ => {}
+            }
+        }))
+        .into_any_element();
+
     network_modal_shell(
         palette,
         app.shell_surface_color(palette.bg),
@@ -249,24 +265,32 @@ pub(in crate::features::pages::tunnels) fn network_tunnel_editor_panel(
 }
 
 pub(in crate::features::pages::tunnels) fn tunnel_editor_input(
-    palette: crate::theme::ThemePalette,
-    id: impl Into<String>,
-    label: &'static str,
-    value: String,
-    active: bool,
+    app: &mut NyaTermApp,
     field: NetworkTunnelEditorField,
-    focus: &gpui::FocusHandle,
+    caption: &'static str,
+    value: String,
     cx: &mut Context<NyaTermApp>,
-) -> impl IntoElement {
-    transfer_input(id, label, value, active, palette)
-        .track_focus(focus)
-        .on_click(cx.listener(move |this, _, window, cx| {
-            this.focus_network_tunnel_editor_field(field, window, cx);
-        }))
-        .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-            cx.stop_propagation();
-            this.handle_network_tunnel_editor_key_down(event, cx);
-        }))
+) -> gpui::AnyElement {
+    app.text_input_field(
+        format!("network.tunnel-editor.{}", tunnel_editor_field_key(field)),
+        caption,
+        &value,
+        TextInputSetup::default(),
+        cx,
+    )
+    .into_any_element()
+}
+
+/// The stable part of a tunnel field's input id.
+pub(in crate::features::pages::tunnels) fn tunnel_editor_field_key(
+    field: NetworkTunnelEditorField,
+) -> &'static str {
+    match field {
+        NetworkTunnelEditorField::Name => "name",
+        NetworkTunnelEditorField::ListenPort => "listen-port",
+        NetworkTunnelEditorField::TargetHost => "target-host",
+        NetworkTunnelEditorField::TargetPort => "target-port",
+    }
 }
 
 pub(in crate::features::pages::tunnels) fn tunnel_editor_selector(

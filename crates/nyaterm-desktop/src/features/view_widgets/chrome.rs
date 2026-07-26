@@ -215,6 +215,12 @@ pub(in crate::features) fn panel_header_with_actions(
 }
 
 /// Dimmed full-area modal shell (Tauri Dialog backdrop + centered card).
+/// A dialog centred over whatever hosts it, dimming what is behind it.
+///
+/// The overlay fills its nearest positioned ancestor, so a dialog belongs to a
+/// host that spans the window — the app root — rather than to the panel that
+/// owns the state. A panel is often a couple of hundred pixels wide, and a form
+/// laid out in there wraps every caption onto its own lines.
 pub(in crate::features) fn modal_dialog_shell(
     palette: ThemePalette,
     background: gpui::Rgba,
@@ -229,6 +235,7 @@ pub(in crate::features) fn modal_dialog_shell(
         .bottom_0()
         .left_0()
         .right_0()
+        .occlude()
         .bg(rgba(0x00000080))
         .flex()
         .items_center()

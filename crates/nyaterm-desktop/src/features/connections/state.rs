@@ -51,15 +51,14 @@ use self::network_logic::remove_network_group_references;
 use self::network_logic::{
     advance_network_proxy_editor_focus, advance_network_tunnel_editor_focus,
     apply_network_group_editor_name_key, apply_network_proxy_editor_key,
-    apply_network_tunnel_editor_key, clear_network_proxy_editor, clear_network_tunnel_editor,
-    cycle_network_proxy_group, cycle_network_proxy_protocol, cycle_network_tunnel_connection,
-    cycle_network_tunnel_group, cycle_network_tunnel_type, focus_network_proxy_editor_field,
-    focus_network_tunnel_editor_field, insert_network_proxy_command_newline,
-    remove_network_group_and_item_references, remove_network_item_references,
-    set_network_group_editor_error, set_network_proxy_editor_error,
+    clear_network_proxy_editor, clear_network_tunnel_editor, cycle_network_proxy_group,
+    cycle_network_proxy_protocol, cycle_network_tunnel_connection, cycle_network_tunnel_group,
+    cycle_network_tunnel_type, focus_network_proxy_editor_field, focus_network_tunnel_editor_field,
+    insert_network_proxy_command_newline, remove_network_group_and_item_references,
+    remove_network_item_references, set_network_group_editor_error, set_network_proxy_editor_error,
     set_network_tunnel_bind_localhost, set_network_tunnel_editor_error,
-    toggle_network_item_menu_state, toggle_network_move_picker_state,
-    toggle_network_tunnel_auto_open,
+    set_network_tunnel_editor_field, toggle_network_item_menu_state,
+    toggle_network_move_picker_state, toggle_network_tunnel_auto_open,
 };
 
 pub(in crate::features) struct ConnectionFeatureState {
@@ -1208,16 +1207,13 @@ impl NetworkFeatureState {
         clear_network_tunnel_editor(&mut self.tunnel_editor);
     }
 
-    pub fn focus_tunnel_editor_field(&mut self, field: NetworkTunnelEditorField) -> bool {
-        focus_network_tunnel_editor_field(&mut self.tunnel_editor, field)
-    }
-
-    pub fn advance_tunnel_editor_focus(&mut self) -> bool {
-        advance_network_tunnel_editor_focus(&mut self.tunnel_editor)
-    }
-
-    pub fn apply_tunnel_editor_key(&mut self, key: &str, input: Option<&str>) -> bool {
-        apply_network_tunnel_editor_key(&mut self.tunnel_editor, key, input)
+    /// Write one field of the tunnel draft, clearing any stale validation.
+    pub fn set_tunnel_editor_field(
+        &mut self,
+        field: NetworkTunnelEditorField,
+        text: String,
+    ) -> bool {
+        set_network_tunnel_editor_field(&mut self.tunnel_editor, field, text)
     }
 
     pub fn cycle_tunnel_type(&mut self) -> Option<String> {
@@ -1328,29 +1324,29 @@ mod tests {
         apply_connection_editor_shell_path, apply_connection_editor_text_key,
         apply_connection_editor_working_dir, apply_connection_group_editor_name_key,
         apply_network_group_editor_name_key, apply_network_proxy_editor_key,
-        apply_network_tunnel_editor_key, clear_connection_editor_group_menu_draft,
-        clear_connection_editor_runtime_state, clear_connection_list_runtime_state,
-        clear_network_proxy_editor, clear_network_tunnel_editor, clear_selected_connection_ids,
-        close_connection_more_menu, commit_connection_editor_new_group,
-        connection_drop_position_for_target, connection_editor_inline_panel_draft,
-        connection_editor_window_open_or_pending, cycle_connection_sort_mode,
-        cycle_network_proxy_group, cycle_network_proxy_protocol, cycle_network_tunnel_connection,
-        cycle_network_tunnel_group, cycle_network_tunnel_type, finish_connection_editor_save_state,
-        focus_network_proxy_editor_field, focus_network_tunnel_editor_field,
-        insert_connection_editor_description_newline, insert_network_proxy_command_newline,
-        remove_connection_list_references, remove_group_list_references,
-        remove_network_group_and_item_references, remove_network_group_references,
-        remove_network_item_references, retain_loaded_connection_list_references,
-        select_connection_ids, set_connection_drop_target_if_changed,
-        set_connection_editor_advanced_tab, set_connection_editor_error,
-        set_connection_editor_field_text, set_connection_editor_icon, set_connection_editor_kind,
-        set_connection_editor_menu_value, set_connection_editor_password_source,
-        set_connection_editor_telnet_tab, set_connection_group_editor_error,
-        set_connection_group_hover, set_network_group_editor_error, set_network_proxy_editor_error,
-        set_network_tunnel_bind_localhost, set_network_tunnel_editor_error, stepped_menu_highlight,
-        sync_connection_search_expansion, toggle_connection_editor_flag,
-        toggle_network_item_menu_state, toggle_network_move_picker_state,
-        toggle_network_tunnel_auto_open,
+        clear_connection_editor_group_menu_draft, clear_connection_editor_runtime_state,
+        clear_connection_list_runtime_state, clear_network_proxy_editor,
+        clear_network_tunnel_editor, clear_selected_connection_ids, close_connection_more_menu,
+        commit_connection_editor_new_group, connection_drop_position_for_target,
+        connection_editor_inline_panel_draft, connection_editor_window_open_or_pending,
+        cycle_connection_sort_mode, cycle_network_proxy_group, cycle_network_proxy_protocol,
+        cycle_network_tunnel_connection, cycle_network_tunnel_group, cycle_network_tunnel_type,
+        finish_connection_editor_save_state, focus_network_proxy_editor_field,
+        focus_network_tunnel_editor_field, insert_connection_editor_description_newline,
+        insert_network_proxy_command_newline, remove_connection_list_references,
+        remove_group_list_references, remove_network_group_and_item_references,
+        remove_network_group_references, remove_network_item_references,
+        retain_loaded_connection_list_references, select_connection_ids,
+        set_connection_drop_target_if_changed, set_connection_editor_advanced_tab,
+        set_connection_editor_error, set_connection_editor_field_text, set_connection_editor_icon,
+        set_connection_editor_kind, set_connection_editor_menu_value,
+        set_connection_editor_password_source, set_connection_editor_telnet_tab,
+        set_connection_group_editor_error, set_connection_group_hover,
+        set_network_group_editor_error, set_network_proxy_editor_error,
+        set_network_tunnel_bind_localhost, set_network_tunnel_editor_error,
+        set_network_tunnel_editor_field, stepped_menu_highlight, sync_connection_search_expansion,
+        toggle_connection_editor_flag, toggle_network_item_menu_state,
+        toggle_network_move_picker_state, toggle_network_tunnel_auto_open,
     };
     use crate::features::{
         ConnectionDragKind, ConnectionDropPosition, ConnectionDropTarget, ConnectionEditorToggle,
@@ -2352,18 +2348,18 @@ mod tests {
     }
 
     #[test]
-    fn network_tunnel_editor_key_filters_ports_and_clears_error() {
+    fn network_tunnel_editor_field_filters_ports_and_clears_error() {
         let mut tunnel_editor = Some(NetworkTunnelEditorState {
-            focused_field: NetworkTunnelEditorField::ListenPort,
+            focused_field: NetworkTunnelEditorField::Name,
             listen_port: String::new(),
             error: Some("stale validation".to_string()),
             ..network_tunnel_editor("tunnel-a")
         });
 
-        assert!(apply_network_tunnel_editor_key(
+        assert!(set_network_tunnel_editor_field(
             &mut tunnel_editor,
-            "8",
-            Some("8x0")
+            NetworkTunnelEditorField::ListenPort,
+            "8x0".to_string(),
         ));
 
         let editor = tunnel_editor.expect("tunnel editor remains open");
