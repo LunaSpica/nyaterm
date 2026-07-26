@@ -63,8 +63,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn close_security_password_editor(&mut self, cx: &mut Context<Self>) {
-        self.security.editors.password = None;
-        self.security.status = "password editor closed".to_string();
+        self.security.close_password_editor();
         cx.notify();
     }
 

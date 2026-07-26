@@ -48,10 +48,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn close_security_unlock_prompt(&mut self, cx: &mut Context<Self>) {
-        self.security.unlock.prompt_open = false;
-        self.security.unlock.draft.clear();
-        self.security.unlock.marked_text.clear();
-        self.security.unlock.error = None;
+        self.security.close_unlock_prompt();
         cx.notify();
     }
 
@@ -80,19 +77,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn lock_security_secrets(&mut self, cx: &mut Context<Self>) {
-        self.security.unlock.secrets_unlocked = false;
-        self.security.revealed.passwords.clear();
-        self.security.revealed.credentials.clear();
-        self.security.editors.password = None;
-        self.security.editors.credential = None;
-        self.security.delete_confirm = None;
-        self.security.unlock.pending_action = None;
-        self.security.unlock.prompt_open = false;
-        self.security.unlock.master_required_prompt_open = false;
-        self.security.unlock.draft.clear();
-        self.security.unlock.marked_text.clear();
-        self.security.unlock.error = None;
-        self.security.status = "secrets locked".to_string();
+        self.security.lock_secrets();
         cx.notify();
     }
 

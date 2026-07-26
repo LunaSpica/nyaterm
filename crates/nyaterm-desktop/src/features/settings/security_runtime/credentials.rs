@@ -69,8 +69,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn close_security_credential_editor(&mut self, cx: &mut Context<Self>) {
-        self.security.editors.credential = None;
-        self.security.status = "credential editor closed".to_string();
+        self.security.close_credential_editor();
         cx.notify();
     }
 

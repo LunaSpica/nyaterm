@@ -57,8 +57,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn close_security_key_editor(&mut self, cx: &mut Context<Self>) {
-        self.security.editors.key = None;
-        self.security.status = "SSH key editor closed".to_string();
+        self.security.close_key_editor();
         cx.notify();
     }
 

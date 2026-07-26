@@ -169,8 +169,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn close_security_otp_editor(&mut self, cx: &mut Context<Self>) {
-        self.security.editors.otp = None;
-        self.security.status = "OTP editor closed".to_string();
+        self.security.close_otp_editor();
         cx.notify();
     }
 
@@ -200,13 +199,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn cycle_security_otp_algorithm(&mut self, cx: &mut Context<Self>) {
-        if let Some(editor) = self.security.editors.otp.as_mut() {
-            editor.algorithm = match editor.algorithm.as_str() {
-                "SHA1" => "SHA256".to_string(),
-                "SHA256" => "SHA512".to_string(),
-                _ => "SHA1".to_string(),
-            };
-        }
+        self.security.cycle_otp_algorithm();
         cx.notify();
     }
 
