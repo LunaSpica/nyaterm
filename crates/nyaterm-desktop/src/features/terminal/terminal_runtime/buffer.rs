@@ -1746,6 +1746,7 @@ fn collect_workspace_pane_node_visible_session_ids<'a>(
 #[cfg(test)]
 mod frame_event_queue_tests {
     use super::*;
+    use crate::models::TerminalProtocolState;
     use nyaterm_core::ActionLinksMatcherSettings;
 
     fn output_frame(session_id: &str, revision: u64) -> TerminalFrameEvent {
