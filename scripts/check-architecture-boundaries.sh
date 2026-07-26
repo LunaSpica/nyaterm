@@ -318,7 +318,7 @@ check_no_matches \
 
 check_no_matches \
   "low-frequency terminal performance overlay UI model must stay out of features/prelude.rs" \
-  '(^|[,{[:space:]])(TerminalPerformanceOverlay)([},[:space:]]|$)' \
+  '(^|[,{[:space:]])(TerminalPerformanceMode|TerminalPerformanceOverlay)([},[:space:]]|$)' \
   crates/nyaterm-desktop/src/features/prelude.rs
 
 check_no_matches \

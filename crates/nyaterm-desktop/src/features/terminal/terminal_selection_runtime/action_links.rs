@@ -3,7 +3,8 @@ use crate::features::terminal_runtime::{
     TERMINAL_INPUT_LATENCY_WINDOW, TERMINAL_USER_SCROLL_ACTIVE_WINDOW,
 };
 use crate::models::{
-    ActionLinkMenuAction, ActionLinkMenuState, ActionLinkTooltipState, TerminalWindowNode,
+    ActionLinkMenuAction, ActionLinkMenuState, ActionLinkTooltipState, TerminalPerformanceMode,
+    TerminalWindowNode,
 };
 
 fn action_link_hover_should_yield_to_terminal_latency(

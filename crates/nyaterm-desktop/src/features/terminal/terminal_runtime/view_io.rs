@@ -1,6 +1,6 @@
 use super::*;
 
-use crate::models::{EffectiveTerminalPaintPolicy, TerminalSearchMode};
+use crate::models::{EffectiveTerminalPaintPolicy, TerminalPerformanceMode, TerminalSearchMode};
 use nyaterm_core::{TerminalMouseReportEligibility, terminal_mouse_report_should_send};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

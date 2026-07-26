@@ -13,7 +13,7 @@ Last updated from the working tree on 2026-07-26.
 | `impl NyaTermApp` blocks | 236 | Spread across 233 files under `crates/nyaterm-desktop/src`. |
 | `#[path = "..."]` declarations in desktop | 306 | Historical migration debt; do not add new occurrences. |
 | `use super::*` imports in desktop | 354 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
-| `features/prelude.rs` rough exported-token count | 247 | Still a broad shared prelude; one hundred ninety-eight low-frequency transport/core/http/model exports are now explicit imports. |
+| `features/prelude.rs` rough exported-token count | 246 | Still a broad shared prelude; one hundred ninety-nine low-frequency transport/core/http/model exports are now explicit imports. |
 | Entity Store structs | 13 | Includes store handles/runtime stores and domain stores. |
 | Snapshot structs | 9 | Workspace, session, overlay, settings, connections, transfer, AI, cloud sync, remote ops. |
 | `replace_snapshot` methods | 9 | Entity stores are still primarily snapshot projections. |
@@ -443,6 +443,11 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   and scroll helpers. This is import plumbing only; overlay state propagation,
   render-degradation notices, terminal parsing, snapshots, and protocol logic
   are unchanged.
+- The low-frequency terminal performance mode UI model was moved out of
+  `features/prelude.rs` and imported explicitly by terminal view I/O and
+  action-link selection modules. This is import plumbing only; render
+  degradation state, terminal parsing, snapshots, and protocol logic are
+  unchanged.
 - Two low-frequency session runtime model types were moved out of
   `features/prelude.rs` and imported explicitly by app-state and session
   runtime modules. This is import plumbing only; session event draining,
