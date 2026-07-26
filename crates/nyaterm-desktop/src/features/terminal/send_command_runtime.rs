@@ -19,15 +19,11 @@ impl NyaTermApp {
     }
 
     fn sync_send_command_interval_input(&mut self) {
-        self.send_command.options.interval_input =
-            format!("{:.2}", self.send_command.options.interval_seconds);
+        self.send_command.options.sync_interval_input();
     }
 
     pub(in crate::features) fn close_send_command_menus(&mut self) {
-        self.send_command.options.data_menu_open = false;
-        self.send_command.options.mode_menu_open = false;
-        self.send_command.options.target_menu_open = false;
-        self.send_command.options.line_ending_menu_open = false;
+        self.send_command.options.close_menus();
     }
 
     pub(in crate::features) fn focus_send_command_control(
@@ -144,16 +140,7 @@ impl NyaTermApp {
     }
 
     fn apply_send_command_count_input(&mut self, live: bool) {
-        let trimmed = self.send_command.options.count_input.trim();
-        if trimmed == "∞" || trimmed.eq_ignore_ascii_case("inf") {
-            self.send_command.options.count = None;
-            return;
-        }
-        if let Ok(value) = trimmed.parse::<u32>() {
-            self.send_command.options.count = Some(value.clamp(1, 9999));
-        } else if !live {
-            self.send_command.options.count = Some(1);
-        }
+        self.send_command.options.apply_count_input(live);
     }
 
     fn apply_send_command_interval_input(&mut self, live: bool) {
@@ -727,33 +714,6 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn clamp_send_command_hex_scroll(&mut self) {
-        // Approximate viewport for guide overlay (Tauri textarea scrollTop/scrollLeft).
-        const HEX_LINE_PX: f32 = 15.;
-        const HEX_CHAR_PX: f32 = 7.2;
-        const VIEWPORT_LINES: f32 = 5.;
-        const VIEWPORT_CHARS: f32 = 48.;
-
-        let display = format_send_command_hex_display(&self.send_command.composer.draft);
-        let lines: Vec<&str> = display.lines().collect();
-        let line_count = lines.len().max(1) as f32;
-        let max_line_chars = lines
-            .iter()
-            .map(|line| line.chars().count())
-            .max()
-            .unwrap_or(0) as f32;
-
-        let max_scroll_y = ((line_count - VIEWPORT_LINES).max(0.)) * HEX_LINE_PX;
-        let max_scroll_x = ((max_line_chars - VIEWPORT_CHARS).max(0.)) * HEX_CHAR_PX;
-
-        self.send_command.composer.hex_scroll_y = self
-            .send_command
-            .composer
-            .hex_scroll_y
-            .clamp(0., max_scroll_y);
-        self.send_command.composer.hex_scroll_x = self
-            .send_command
-            .composer
-            .hex_scroll_x
-            .clamp(0., max_scroll_x);
+        self.send_command.composer.clamp_hex_scroll();
     }
 }

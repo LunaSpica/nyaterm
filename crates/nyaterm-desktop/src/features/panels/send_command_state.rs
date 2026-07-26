@@ -11,7 +11,7 @@ use gpui::FocusHandle;
 
 use crate::send_command::{
     SendCommandControlFocus, SendCommandDataType, SendCommandLineEnding, SendCommandMode,
-    SendCommandTarget,
+    SendCommandTarget, format_send_command_hex_display,
 };
 
 pub(in crate::features) struct SendCommandFeatureState {
@@ -96,5 +96,65 @@ impl SendCommandFeatureState {
                 rounds: 0,
             },
         }
+    }
+}
+
+/// Composer edits that only touch the payload and its hex viewport.
+impl SendCommandComposerState {
+    /// Keeps the hex guide overlay's scroll offsets inside the rendered text.
+    ///
+    /// The viewport constants approximate the Tauri textarea this replaced;
+    /// they are unchanged.
+    pub(in crate::features) fn clamp_hex_scroll(&mut self) {
+        const HEX_LINE_PX: f32 = 15.;
+        const HEX_CHAR_PX: f32 = 7.2;
+        const VIEWPORT_LINES: f32 = 5.;
+        const VIEWPORT_CHARS: f32 = 48.;
+
+        let display = format_send_command_hex_display(&self.draft);
+        let lines: Vec<&str> = display.lines().collect();
+        let line_count = lines.len().max(1) as f32;
+        let max_line_chars = lines
+            .iter()
+            .map(|line| line.chars().count())
+            .max()
+            .unwrap_or(0) as f32;
+
+        let max_scroll_y = ((line_count - VIEWPORT_LINES).max(0.)) * HEX_LINE_PX;
+        let max_scroll_x = ((max_line_chars - VIEWPORT_CHARS).max(0.)) * HEX_CHAR_PX;
+
+        self.hex_scroll_y = self.hex_scroll_y.clamp(0., max_scroll_y);
+        self.hex_scroll_x = self.hex_scroll_x.clamp(0., max_scroll_x);
+    }
+}
+
+/// Option edits that only touch how the payload is interpreted and delivered.
+impl SendCommandOptionsState {
+    pub(in crate::features) fn close_menus(&mut self) {
+        self.data_menu_open = false;
+        self.mode_menu_open = false;
+        self.target_menu_open = false;
+        self.line_ending_menu_open = false;
+    }
+
+    /// Parses the repeat-count field.
+    ///
+    /// `live` means the user is still typing, so an unparsable value is left
+    /// alone rather than snapped back to 1.
+    pub(in crate::features) fn apply_count_input(&mut self, live: bool) {
+        let trimmed = self.count_input.trim();
+        if trimmed == "∞" || trimmed.eq_ignore_ascii_case("inf") {
+            self.count = None;
+            return;
+        }
+        if let Ok(value) = trimmed.parse::<u32>() {
+            self.count = Some(value.clamp(1, 9999));
+        } else if !live {
+            self.count = Some(1);
+        }
+    }
+
+    pub(in crate::features) fn sync_interval_input(&mut self) {
+        self.interval_input = format!("{:.2}", self.interval_seconds);
     }
 }
