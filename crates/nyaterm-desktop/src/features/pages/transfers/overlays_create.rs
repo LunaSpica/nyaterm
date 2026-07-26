@@ -41,10 +41,8 @@ impl NyaTermApp {
             .items_center()
             .justify_center()
             .track_focus(&self.transfer.file_ops.new_folder_focus)
-            .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(&this.transfer.file_ops.new_folder_focus);
-                cx.notify();
-            }))
+            // No blanket focus grab: click follows mouse-down, so it would take
+            // focus straight back off the box the pointer landed on.
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 cx.stop_propagation();
                 this.handle_transfer_new_folder_key_down(event, window, cx);

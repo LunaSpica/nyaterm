@@ -13,6 +13,9 @@ impl NyaTermApp {
     ) {
         self.quick_command_state.list.row_menu = None;
         self.quick_command_state.editor.draft = Some(QuickCommandEditorState::blank());
+        // The boxes own their text, so they have to be dropped for the next
+        // command to seed from its own values.
+        self.forget_text_inputs("quick-command.editor.");
         self.terminal.view.status = "quick command editor opened".to_string();
         if !self.open_quick_command_window(cx) {
             window.focus(&self.quick_command_state.editor.focus);
@@ -39,6 +42,9 @@ impl NyaTermApp {
         };
         self.quick_command_state.editor.draft =
             Some(QuickCommandEditorState::from_command(command));
+        // The boxes own their text, so they have to be dropped for the next
+        // command to seed from its own values.
+        self.forget_text_inputs("quick-command.editor.");
         self.terminal.view.status = "quick command editor opened".to_string();
         if !self.open_quick_command_window(cx) {
             window.focus(&self.quick_command_state.editor.focus);
@@ -48,6 +54,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn close_quick_command_editor(&mut self, cx: &mut Context<Self>) {
         self.quick_command_state.editor.draft = None;
+        self.forget_text_inputs("quick-command.editor.");
         self.quick_command_state.editor.window = None;
         self.quick_command_state.editor.window_open_pending = false;
         self.terminal.view.status = "quick command editor closed".to_string();

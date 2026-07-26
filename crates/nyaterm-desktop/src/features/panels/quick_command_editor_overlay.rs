@@ -51,6 +51,32 @@ impl NyaTermApp {
         let cancel_label = self.tr("common.cancel");
         let save_label = self.tr("common.save");
         let wide_fields = viewport_width >= 768.;
+        // Built before the card, which reads `self` all the way down: creating
+        // an input needs it mutably.
+        let label_input = quick_command_editor_field(
+            self,
+            QuickCommandEditorField::Label,
+            label_name,
+            label_placeholder,
+            editor.label.clone(),
+            cx,
+        );
+        let description_input = quick_command_editor_field(
+            self,
+            QuickCommandEditorField::Description,
+            description_label,
+            description_placeholder,
+            editor.description.clone(),
+            cx,
+        );
+        let command_input = quick_command_editor_script_field(
+            self,
+            QuickCommandEditorField::Command,
+            command_script_label,
+            command_placeholder,
+            editor.command.clone(),
+            cx,
+        );
         let category_label = editor
             .category_id
             .as_deref()
@@ -180,12 +206,10 @@ impl NyaTermApp {
             .when(native_window, |this| this.justify_start())
             .overflow_y_scroll()
             .track_focus(&self.quick_command_state.editor.focus)
-            .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(&this.quick_command_state.editor.focus);
-                cx.notify();
-            }))
+            // No blanket focus grab: it kept the surface "focused" for the old
+            // label-div fields, and would now steal focus back from whichever
+            // box the pointer just landed on, since click follows mouse-down.
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-                cx.stop_propagation();
                 this.handle_quick_command_editor_key_down(event, cx);
             }))
             .child(
@@ -233,21 +257,7 @@ impl NyaTermApp {
                             .when(wide_fields, |this| this.flex_row())
                             .when(!wide_fields, |this| this.flex_col())
                             .gap_3()
-                            .child(quick_command_editor_field(
-                                palette,
-                                "quick-command-editor-label",
-                                label_name,
-                                label_placeholder,
-                                editor.label.clone(),
-                                editor.focused_field == QuickCommandEditorField::Label,
-                                cx.listener(|this, _, window, cx| {
-                                    this.focus_quick_command_editor_field(
-                                        QuickCommandEditorField::Label,
-                                        window,
-                                        cx,
-                                    );
-                                }),
-                            ))
+                            .child(div().min_w_0().flex_1().child(label_input))
                             .child(
                                 div()
                                     .id("quick-command-editor-category")
@@ -310,21 +320,7 @@ impl NyaTermApp {
                                     .child(category_choices),
                             ),
                     )
-                    .child(div().mt_3().child(quick_command_editor_field(
-                        palette,
-                        "quick-command-editor-description",
-                        description_label,
-                        description_placeholder,
-                        editor.description.clone(),
-                        editor.focused_field == QuickCommandEditorField::Description,
-                        cx.listener(|this, _, window, cx| {
-                            this.focus_quick_command_editor_field(
-                                QuickCommandEditorField::Description,
-                                window,
-                                cx,
-                            );
-                        }),
-                    )))
+                    .child(div().mt_3().child(description_input))
                     .child(
                         div()
                             .mt_3()
@@ -439,21 +435,7 @@ impl NyaTermApp {
                                     }),
                             ),
                     )
-                    .child(div().mt_3().child(quick_command_editor_script_field(
-                        palette,
-                        "quick-command-editor-command",
-                        command_script_label,
-                        command_placeholder,
-                        editor.command.clone(),
-                        editor.focused_field == QuickCommandEditorField::Command,
-                        cx.listener(|this, _, window, cx| {
-                            this.focus_quick_command_editor_field(
-                                QuickCommandEditorField::Command,
-                                window,
-                                cx,
-                            );
-                        }),
-                    )))
+                    .child(div().mt_3().child(command_input))
                     .child(
                         div()
                             .mt_4()

@@ -215,88 +215,51 @@ impl NyaTermApp {
             self.save_quick_command_editor(cx);
             return;
         }
-        if primary && !keystroke.modifiers.alt && matches!(keystroke.key.as_str(), "v" | "V") {
-            if let Some(text) = cx.read_from_clipboard().and_then(|item| item.text()) {
-                self.quick_command_editor_value_mut().push_str(&text);
-                if let Some(editor) = self.quick_command_state.editor.draft.as_mut() {
-                    if editor.focused_field == QuickCommandEditorField::Category {
-                        editor.category_id = None;
-                    }
-                    editor.error = None;
-                }
-                cx.notify();
-            }
-            return;
-        }
         if primary || keystroke.modifiers.alt || keystroke.modifiers.function {
             return;
         }
 
+        // The boxes own the text and the clipboard; the dialog owns the keys
+        // that close or save it, which the boxes leave unconsumed. The script
+        // box takes Enter itself, so an Enter arriving here is a save.
         match keystroke.key.as_str() {
             "escape" => self.close_quick_command_editor(cx),
-            "enter" => {
-                if self
-                    .quick_command_state
-                    .editor
-                    .draft
-                    .as_ref()
-                    .is_some_and(|editor| editor.focused_field == QuickCommandEditorField::Command)
-                {
-                    self.quick_command_editor_value_mut().push('\n');
-                    cx.notify();
-                } else {
-                    self.save_quick_command_editor(cx);
-                }
-            }
-            "tab" => {
-                if let Some(editor) = self.quick_command_state.editor.draft.as_mut() {
-                    editor.focused_field = match editor.focused_field {
-                        QuickCommandEditorField::Label => QuickCommandEditorField::Command,
-                        QuickCommandEditorField::Command => QuickCommandEditorField::Category,
-                        QuickCommandEditorField::Category => QuickCommandEditorField::Description,
-                        QuickCommandEditorField::Description => QuickCommandEditorField::Label,
-                    };
-                    editor.error = None;
-                    cx.notify();
-                }
-            }
-            "backspace" => {
-                self.quick_command_editor_value_mut().pop();
-                if let Some(editor) = self.quick_command_state.editor.draft.as_mut() {
-                    if editor.focused_field == QuickCommandEditorField::Category {
-                        editor.category_id = None;
-                    }
-                    editor.error = None;
-                }
-                cx.notify();
-            }
-            "space" => {
-                self.quick_command_editor_value_mut().push(' ');
-                if let Some(editor) = self.quick_command_state.editor.draft.as_mut() {
-                    if editor.focused_field == QuickCommandEditorField::Category {
-                        editor.category_id = None;
-                    }
-                    editor.error = None;
-                }
-                cx.notify();
-            }
-            _ => {
-                if let Some(input) = keystroke
-                    .key_char
-                    .as_deref()
-                    .filter(|input| !input.is_empty())
-                {
-                    self.quick_command_editor_value_mut().push_str(input);
-                    if let Some(editor) = self.quick_command_state.editor.draft.as_mut() {
-                        if editor.focused_field == QuickCommandEditorField::Category {
-                            editor.category_id = None;
-                        }
-                        editor.error = None;
-                    }
-                    cx.notify();
-                }
+            "enter" => self.save_quick_command_editor(cx),
+            _ => {}
+        }
+    }
+
+    /// Apply an edit from one of the quick command editor's inputs.
+    pub(in crate::features) fn apply_quick_command_editor_input(
+        &mut self,
+        field: &str,
+        text: String,
+        cx: &mut Context<Self>,
+    ) {
+        let field = match field {
+            "label" => QuickCommandEditorField::Label,
+            "command" => QuickCommandEditorField::Command,
+            "category" => QuickCommandEditorField::Category,
+            "description" => QuickCommandEditorField::Description,
+            _ => return,
+        };
+        let Some(editor) = self.quick_command_state.editor.draft.as_mut() else {
+            return;
+        };
+        editor.focused_field = field;
+        match field {
+            QuickCommandEditorField::Label => editor.label = text,
+            QuickCommandEditorField::Command => editor.command = text,
+            QuickCommandEditorField::Description => editor.description = text,
+            QuickCommandEditorField::Category => {
+                // Typing a category name is how a new one is created, so the
+                // picked id no longer stands.
+                editor.category_draft = text;
+                editor.category_id = None;
             }
         }
+        editor.error = None;
+        cx.notify();
     }
 
     pub(in crate::features) fn quick_command_editor_value_mut(&mut self) -> &mut String {

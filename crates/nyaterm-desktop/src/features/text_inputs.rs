@@ -119,9 +119,13 @@ impl NyaTermApp {
         let focused = field.read(cx).has_focus();
         div()
             .id(id)
+            // A wrapped field asks for its parent's height, so the box needs a
+            // definite one and has to stretch the row that holds it: against an
+            // indefinite height the percentage resolves to zero and the field
+            // disappears, hit-testing and all.
             .when_else(
                 multi_line,
-                |this| this.min_h(px(72.)).py_2().items_start(),
+                |this| this.h(px(88.)).py_2(),
                 |this| this.h(px(30.)).items_center(),
             )
             .min_w_0()
@@ -220,6 +224,8 @@ impl NyaTermApp {
             self.apply_network_group_editor_name(text, cx);
         } else if id.as_ref() == "transfer.new-folder.name" {
             self.apply_transfer_new_folder_name(text, cx);
+        } else if let Some(field) = id.strip_prefix("quick-command.editor.") {
+            self.apply_quick_command_editor_input(field, text, cx);
         }
     }
 

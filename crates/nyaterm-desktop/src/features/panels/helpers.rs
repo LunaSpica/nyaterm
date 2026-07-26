@@ -1,6 +1,6 @@
 use super::*;
 
-use crate::models::QuickCommandSortMode;
+use crate::models::{QuickCommandEditorField, QuickCommandSortMode};
 
 pub(in crate::features::panels) struct QuickCommandCategoryOption {
     pub id: String,
@@ -168,116 +168,67 @@ pub(in crate::features::panels) fn quick_command_color(
     }
 }
 
+/// A captioned box hosting one of the quick command editor's inputs.
 pub(in crate::features::panels) fn quick_command_editor_field(
-    palette: crate::theme::ThemePalette,
-    id: &'static str,
+    app: &mut NyaTermApp,
+    field: QuickCommandEditorField,
     label: &'static str,
     placeholder: &'static str,
     value: String,
-    active: bool,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    let is_placeholder = value.is_empty();
-    let display = if is_placeholder {
-        placeholder.to_string()
-    } else {
-        value
-    };
-    div()
-        .id(SharedString::from(id))
-        .min_w_0()
-        .flex_1()
-        .rounded_sm()
-        .border_1()
-        .border_color(if active {
-            rgb(palette.success)
-        } else {
-            rgb(palette.border)
-        })
-        .bg(if active {
-            rgb(palette.hover)
-        } else {
-            rgb(palette.input)
-        })
-        .p_2()
-        .cursor_pointer()
-        .on_click(on_click)
-        .child(
-            div()
-                .text_size(px(10.))
-                .text_color(rgb(palette.text_muted))
-                .child(label),
-        )
-        .child(
-            div()
-                .mt_1()
-                .min_h(px(20.))
-                .font_family(crate::features::gpui_code_font_family())
-                .text_xs()
-                .line_height(px(18.))
-                .text_color(if is_placeholder {
-                    rgb(palette.text_muted)
-                } else {
-                    rgb(palette.text)
-                })
-                .child(truncate_preview(&display, 160)),
-        )
+    cx: &mut Context<NyaTermApp>,
+) -> gpui::AnyElement {
+    quick_command_editor_input(app, field, label, placeholder, value, false, cx)
 }
 
+/// The script box, which is the one that takes newlines.
 pub(in crate::features::panels) fn quick_command_editor_script_field(
-    palette: crate::theme::ThemePalette,
-    id: &'static str,
+    app: &mut NyaTermApp,
+    field: QuickCommandEditorField,
     label: &'static str,
     placeholder: &'static str,
     value: String,
-    active: bool,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    let is_placeholder = value.is_empty();
-    let display = if is_placeholder {
-        placeholder.to_string()
+    cx: &mut Context<NyaTermApp>,
+) -> gpui::AnyElement {
+    quick_command_editor_input(app, field, label, placeholder, value, true, cx)
+}
+
+fn quick_command_editor_input(
+    app: &mut NyaTermApp,
+    field: QuickCommandEditorField,
+    label: &'static str,
+    placeholder: &'static str,
+    value: String,
+    multi_line: bool,
+    cx: &mut Context<NyaTermApp>,
+) -> gpui::AnyElement {
+    let setup = if multi_line {
+        TextInputSetup::multi_line(placeholder)
     } else {
-        value
+        TextInputSetup::placeholder(placeholder)
     };
-    div()
-        .id(SharedString::from(id))
-        .rounded_sm()
-        .border_1()
-        .border_color(if active {
-            rgb(palette.success)
-        } else {
-            rgb(palette.border)
-        })
-        .bg(if active {
-            rgb(palette.hover)
-        } else {
-            rgb(palette.input)
-        })
-        .p_2()
-        .cursor_pointer()
-        .on_click(on_click)
-        .child(
-            div().flex().items_center().child(
-                div()
-                    .text_size(px(10.))
-                    .text_color(rgb(palette.text_muted))
-                    .child(label),
-            ),
-        )
-        .child(
-            div()
-                .mt_2()
-                .min_h(px(112.))
-                .font_family(crate::features::gpui_code_font_family())
-                .text_xs()
-                .line_height(px(18.))
-                .text_color(if is_placeholder {
-                    rgb(palette.text_muted)
-                } else {
-                    rgb(palette.text)
-                })
-                .child(truncate_preview(&display, 360)),
-        )
+    app.text_input_field(
+        format!(
+            "quick-command.editor.{}",
+            quick_command_editor_field_key(field)
+        ),
+        label,
+        &value,
+        setup,
+        cx,
+    )
+    .into_any_element()
+}
+
+/// The stable part of a quick command field's input id.
+pub(in crate::features::panels) fn quick_command_editor_field_key(
+    field: QuickCommandEditorField,
+) -> &'static str {
+    match field {
+        QuickCommandEditorField::Label => "label",
+        QuickCommandEditorField::Command => "command",
+        QuickCommandEditorField::Category => "category",
+        QuickCommandEditorField::Description => "description",
+    }
 }
 
 pub(in crate::features::panels) fn send_command_hex_preview(draft: &str) -> String {
