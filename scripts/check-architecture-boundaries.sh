@@ -367,6 +367,11 @@ check_no_matches \
   crates/nyaterm-desktop/src/features/prelude.rs
 
 check_no_matches \
+  "low-frequency terminal frame pipeline model must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(TerminalFramePipeline)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
   "low-frequency terminal search UI model must stay out of features/prelude.rs" \
   '(^|[,{[:space:]])(TerminalSearchMode)([},[:space:]]|$)' \
   crates/nyaterm-desktop/src/features/prelude.rs
