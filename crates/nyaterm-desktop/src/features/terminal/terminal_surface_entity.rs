@@ -1845,12 +1845,14 @@ impl TerminalSurface {
                                         drag_session_id.clone(),
                                     );
                                 let Some(bounds) = (if session_id.is_empty() {
-                                    this.terminal_surface_bounds
+                                    this.terminal.layout.surface_bounds
                                 } else {
-                                    this.terminal_session_surface_bounds
+                                    this.terminal
+                                        .layout
+                                        .session_surface_bounds
                                         .get(&session_id)
                                         .copied()
-                                        .or(this.terminal_surface_bounds)
+                                        .or(this.terminal.layout.surface_bounds)
                                 }) else {
                                     return repaint_session_id;
                                 };

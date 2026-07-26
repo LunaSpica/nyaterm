@@ -159,7 +159,9 @@ impl NyaTermApp {
                     .map(|root| root.session_ids())
                     .unwrap_or_else(|| vec![session_id.clone()]);
                 let has_unread = leaf_ids.iter().any(|id| {
-                    self.terminal_views
+                    self.terminal
+                        .view
+                        .views
                         .get(id)
                         .is_some_and(|view| view.has_unread)
                 });
@@ -184,7 +186,7 @@ impl NyaTermApp {
                         .on_click(cx.listener(move |this, _, window, cx| {
                             this.close_open_tabs_menu(cx);
                             this.select_session(session_id.clone(), cx);
-                            window.focus(&this.terminal_focus);
+                            window.focus(&this.terminal.input.focus);
                         }))
                         .child(
                             div()

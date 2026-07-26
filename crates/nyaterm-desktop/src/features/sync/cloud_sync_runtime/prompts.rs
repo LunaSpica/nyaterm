@@ -15,7 +15,8 @@ impl NyaTermApp {
             return;
         }
         if self.active_session_id.is_some() || self.has_pending_session_start() {
-            self.terminal_status = "close active session before pulling cloud sync".to_string();
+            self.terminal.view.status =
+                "close active session before pulling cloud sync".to_string();
             cx.notify();
             return;
         }
@@ -34,7 +35,7 @@ impl NyaTermApp {
             return;
         }
         if self.active_session_id.is_some() || self.has_pending_session_start() {
-            self.terminal_status =
+            self.terminal.view.status =
                 "close active session before pulling provider cloud sync".to_string();
             cx.notify();
             return;
@@ -67,7 +68,7 @@ impl NyaTermApp {
             return;
         }
         if self.active_session_id.is_some() || self.has_pending_session_start() {
-            self.terminal_status = if provider_action {
+            self.terminal.view.status = if provider_action {
                 "close active session before force pulling provider cloud sync"
             } else {
                 "close active session before force pulling cloud sync"

@@ -11,7 +11,7 @@ impl NyaTermApp {
         let Some(config) = self.active_ssh_config.clone() else {
             self.remote_ops.docker.status =
                 "start an SSH session before inspecting Docker".to_string();
-            self.terminal_status = self.remote_ops.docker.status.clone();
+            self.terminal.view.status = self.remote_ops.docker.status.clone();
             cx.notify();
             return;
         };
@@ -57,7 +57,7 @@ impl NyaTermApp {
         let Some(config) = self.active_ssh_config.clone() else {
             self.remote_ops.docker.status =
                 "start an SSH session before changing containers".to_string();
-            self.terminal_status = self.remote_ops.docker.status.clone();
+            self.terminal.view.status = self.remote_ops.docker.status.clone();
             cx.notify();
             return;
         };
@@ -109,7 +109,7 @@ impl NyaTermApp {
         let Some(config) = self.active_ssh_config.clone() else {
             self.remote_ops.docker.status =
                 "start an SSH session before reading Docker details".to_string();
-            self.terminal_status = self.remote_ops.docker.status.clone();
+            self.terminal.view.status = self.remote_ops.docker.status.clone();
             cx.notify();
             return;
         };
@@ -155,7 +155,7 @@ impl NyaTermApp {
         self.remote_ops.docker.details_container_id = None;
         self.remote_ops.docker.details_last_refresh_at = None;
         self.remote_ops.docker.status = "container details closed".to_string();
-        self.terminal_status = self.remote_ops.docker.status.clone();
+        self.terminal.view.status = self.remote_ops.docker.status.clone();
         cx.notify();
     }
 
@@ -214,7 +214,7 @@ impl NyaTermApp {
         if self.active_session_id.is_none() {
             self.remote_ops.docker.status =
                 "start a terminal session before sending Docker commands".to_string();
-            self.terminal_status = self.remote_ops.docker.status.clone();
+            self.terminal.view.status = self.remote_ops.docker.status.clone();
             cx.notify();
             return;
         }
@@ -224,10 +224,10 @@ impl NyaTermApp {
         self.selected_nav = NavItem::Workspace;
         if self.send_terminal_input(command.into_bytes(), cx) {
             self.remote_ops.docker.status = status;
-            self.terminal_status = self.remote_ops.docker.status.clone();
+            self.terminal.view.status = self.remote_ops.docker.status.clone();
             cx.notify();
         } else {
-            self.remote_ops.docker.status = self.terminal_status.clone();
+            self.remote_ops.docker.status = self.terminal.view.status.clone();
         }
     }
 
@@ -270,7 +270,7 @@ impl NyaTermApp {
         let Some(config) = self.active_ssh_config.clone() else {
             self.remote_ops.docker.status =
                 "start an SSH session before reading compose services".to_string();
-            self.terminal_status = self.remote_ops.docker.status.clone();
+            self.terminal.view.status = self.remote_ops.docker.status.clone();
             cx.notify();
             return;
         };
@@ -323,7 +323,7 @@ impl NyaTermApp {
         let Some(config) = self.active_ssh_config.clone() else {
             self.remote_ops.docker.status =
                 "start an SSH session before changing compose services".to_string();
-            self.terminal_status = self.remote_ops.docker.status.clone();
+            self.terminal.view.status = self.remote_ops.docker.status.clone();
             cx.notify();
             return;
         };
@@ -385,7 +385,7 @@ impl NyaTermApp {
         let Some(config) = self.active_ssh_config.clone() else {
             self.remote_ops.docker.status =
                 "start an SSH session before changing compose projects".to_string();
-            self.terminal_status = self.remote_ops.docker.status.clone();
+            self.terminal.view.status = self.remote_ops.docker.status.clone();
             cx.notify();
             return;
         };
@@ -465,7 +465,7 @@ impl NyaTermApp {
         let Some(config) = self.active_ssh_config.clone() else {
             self.remote_ops.docker.status =
                 "start an SSH session before changing Docker resources".to_string();
-            self.terminal_status = self.remote_ops.docker.status.clone();
+            self.terminal.view.status = self.remote_ops.docker.status.clone();
             cx.notify();
             return;
         };
@@ -583,7 +583,7 @@ impl NyaTermApp {
                 Ok(DockerJobOutput::Overview(overview)) => {
                     self.remote_ops.docker.consecutive_refresh_failures = 0;
                     self.remote_ops.docker.status = docker_overview_status(&overview);
-                    self.terminal_status = self.remote_ops.docker.status.clone();
+                    self.terminal.view.status = self.remote_ops.docker.status.clone();
                     self.apply_docker_overview(overview);
                 }
                 Ok(DockerJobOutput::Details {
@@ -592,7 +592,7 @@ impl NyaTermApp {
                 }) => {
                     self.remote_ops.docker.status =
                         format!("loaded details for {}", compact_id(&container_id));
-                    self.terminal_status = self.remote_ops.docker.status.clone();
+                    self.terminal.view.status = self.remote_ops.docker.status.clone();
                     self.remote_ops.docker.details = Some(details);
                     self.remote_ops.docker.details_container_id = Some(container_id);
                 }
@@ -603,7 +603,7 @@ impl NyaTermApp {
                 }) => {
                     self.remote_ops.docker.status =
                         format!("loaded {} service(s) for {project_name}", services.len());
-                    self.terminal_status = self.remote_ops.docker.status.clone();
+                    self.terminal.view.status = self.remote_ops.docker.status.clone();
                     self.remote_ops.docker.compose_service_errors.remove(&key);
                     self.remote_ops
                         .docker
@@ -618,7 +618,7 @@ impl NyaTermApp {
                     services,
                 }) => {
                     self.remote_ops.docker.status = format!("compose {action} {service_name}");
-                    self.terminal_status = self.remote_ops.docker.status.clone();
+                    self.terminal.view.status = self.remote_ops.docker.status.clone();
                     self.apply_docker_overview(overview);
                     self.remote_ops
                         .docker
@@ -635,7 +635,7 @@ impl NyaTermApp {
                     service_error,
                 }) => {
                     self.remote_ops.docker.status = format!("compose {action} {project_name}");
-                    self.terminal_status = self.remote_ops.docker.status.clone();
+                    self.terminal.view.status = self.remote_ops.docker.status.clone();
                     self.apply_docker_overview(overview);
                     if let Some(services) = services {
                         self.remote_ops
@@ -657,7 +657,7 @@ impl NyaTermApp {
                     self.apply_docker_overview(overview);
                     self.remote_ops.docker.status =
                         format!("{label} completed · {container_count} container(s)");
-                    self.terminal_status = self.remote_ops.docker.status.clone();
+                    self.terminal.view.status = self.remote_ops.docker.status.clone();
                     self.remote_ops.docker.confirm = None;
                 }
                 Err(error) => {
@@ -672,7 +672,7 @@ impl NyaTermApp {
                         }
                     }
                     self.remote_ops.docker.status = format!("Docker operation failed: {error}");
-                    self.terminal_status = self.remote_ops.docker.status.clone();
+                    self.terminal.view.status = self.remote_ops.docker.status.clone();
                 }
             }
         }

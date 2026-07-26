@@ -9,7 +9,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(text) = cx.read_from_clipboard().and_then(|item| item.text()) else {
-            self.terminal_status = "clipboard does not contain text".to_string();
+            self.terminal.view.status = "clipboard does not contain text".to_string();
             cx.notify();
             return;
         };
@@ -23,7 +23,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if text.is_empty() {
-            self.terminal_status = "clipboard text is empty".to_string();
+            self.terminal.view.status = "clipboard text is empty".to_string();
             cx.notify();
             return;
         }
@@ -34,7 +34,7 @@ impl NyaTermApp {
             self.multi_line_paste_marked_range = None;
             self.multi_line_paste = Some(MultiLinePasteDraft::new(text));
             self.multi_line_paste_marked_text.clear();
-            self.terminal_status = "multi-line paste confirmation opened".to_string();
+            self.terminal.view.status = "multi-line paste confirmation opened".to_string();
             window.focus(&self.multi_line_paste_focus);
             cx.notify();
             return;
@@ -50,7 +50,9 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn session_bracketed_paste(&self, session_id: &str) -> bool {
-        self.terminal_views
+        self.terminal
+            .view
+            .views
             .get(session_id)
             .map(|view| view.protocol_state.bracketed_paste)
             .unwrap_or(false)
@@ -60,7 +62,7 @@ impl NyaTermApp {
         if let Some(session_id) = self.active_session_id.as_deref() {
             self.session_bracketed_paste(session_id)
         } else {
-            self.terminal_screen.bracketed_paste()
+            self.terminal.view.screen.bracketed_paste()
         }
     }
 
@@ -182,13 +184,13 @@ impl NyaTermApp {
         self.multi_line_paste_marked_range = None;
         self.multi_line_paste_cursor = 0;
         self.multi_line_paste_anchor = None;
-        self.terminal_status = "multi-line paste cancelled".to_string();
+        self.terminal.view.status = "multi-line paste cancelled".to_string();
         cx.notify();
     }
 
     pub(in crate::features) fn direct_multi_line_paste(&mut self, cx: &mut Context<Self>) {
         let Some(draft) = self.multi_line_paste.take() else {
-            self.terminal_status = "no multi-line paste is active".to_string();
+            self.terminal.view.status = "no multi-line paste is active".to_string();
             cx.notify();
             return;
         };
@@ -202,7 +204,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn send_multi_line_paste_by_line(&mut self, cx: &mut Context<Self>) {
         let Some(draft) = self.multi_line_paste.take() else {
-            self.terminal_status = "no multi-line paste is active".to_string();
+            self.terminal.view.status = "no multi-line paste is active".to_string();
             cx.notify();
             return;
         };

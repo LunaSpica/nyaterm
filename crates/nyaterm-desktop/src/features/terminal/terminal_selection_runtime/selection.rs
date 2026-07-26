@@ -9,20 +9,24 @@ impl NyaTermApp {
         session_id: &str,
     ) {
         let selection_session_id = self
-            .terminal_selection_session_id
+            .terminal
+            .selection
+            .session_id
             .as_deref()
             .or(self.active_session_id.as_deref());
         if selection_session_id != Some(session_id) {
             return;
         }
-        self.terminal_selection = None;
-        self.terminal_selection_session_id = None;
-        self.terminal_selection_dragging = false;
+        self.terminal.selection.selection = None;
+        self.terminal.selection.session_id = None;
+        self.terminal.selection.dragging = false;
     }
 
     fn notify_terminal_selection_owner_surface(&mut self, cx: &mut Context<Self>) {
         let session_id = self
-            .terminal_selection_session_id
+            .terminal
+            .selection
+            .session_id
             .as_deref()
             .or(self.active_session_id.as_deref())
             .map(str::to_string);
@@ -30,11 +34,11 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn clear_terminal_selection(&mut self, cx: &mut Context<Self>) {
-        let previous_session_id = self.terminal_selection_session_id.clone();
-        if self.terminal_selection.is_some() || self.terminal_selection_dragging {
-            self.terminal_selection = None;
-            self.terminal_selection_session_id = None;
-            self.terminal_selection_dragging = false;
+        let previous_session_id = self.terminal.selection.session_id.clone();
+        if self.terminal.selection.selection.is_some() || self.terminal.selection.dragging {
+            self.terminal.selection.selection = None;
+            self.terminal.selection.session_id = None;
+            self.terminal.selection.dragging = false;
             self.notify_terminal_surface_only(previous_session_id.as_deref(), cx);
         }
     }
@@ -42,23 +46,25 @@ impl NyaTermApp {
     pub(in crate::features) fn select_all_terminal(&mut self, cx: &mut Context<Self>) {
         let (_, cols) = self.active_terminal_grid_size();
         if cols == 0 {
-            self.terminal_selection = None;
-            self.terminal_selection_session_id = None;
+            self.terminal.selection.selection = None;
+            self.terminal.selection.session_id = None;
             self.notify_terminal_selection_owner_surface(cx);
             return;
         }
-        self.terminal_selection = Some(TerminalSelection::all_buffer(cols));
-        self.terminal_selection_session_id = self.active_session_id.clone();
-        self.terminal_selection_dragging = false;
-        self.terminal_status = "selected all terminal text".to_string();
+        self.terminal.selection.selection = Some(TerminalSelection::all_buffer(cols));
+        self.terminal.selection.session_id = self.active_session_id.clone();
+        self.terminal.selection.dragging = false;
+        self.terminal.view.status = "selected all terminal text".to_string();
         self.notify_terminal_selection_owner_surface(cx);
         cx.notify();
     }
 
     pub(in crate::features) fn selected_terminal_text(&self) -> Option<String> {
-        let selection = self.terminal_selection.as_ref()?;
+        let selection = self.terminal.selection.selection.as_ref()?;
         let session_id = self
-            .terminal_selection_session_id
+            .terminal
+            .selection
+            .session_id
             .as_deref()
             .or(self.active_session_id.as_deref());
         if selection.is_empty() {
@@ -66,12 +72,14 @@ impl NyaTermApp {
         }
         if selection.all_buffer {
             let lines = self
-                .terminal_selection_session_id
+                .terminal
+                .selection
+                .session_id
                 .as_deref()
                 .or(self.active_session_id.as_deref())
-                .and_then(|session_id| self.terminal_views.get(session_id))
+                .and_then(|session_id| self.terminal.view.views.get(session_id))
                 .map(|view| view.screen.all_lines())
-                .unwrap_or_else(|| self.terminal_screen.all_lines());
+                .unwrap_or_else(|| self.terminal.view.screen.all_lines());
             return terminal_all_lines_text(lines);
         }
         let offset = selection.display_offset;
@@ -102,9 +110,9 @@ impl NyaTermApp {
             return false;
         };
         cx.write_to_clipboard(ClipboardItem::new_string(text));
-        self.terminal_status = "copied terminal selection".to_string();
+        self.terminal.view.status = "copied terminal selection".to_string();
         self.notify_terminal_selection_owner_surface(cx);
-        self.terminal_actions_open = false;
+        self.terminal.menus.actions_open = false;
         cx.notify();
         true
     }
@@ -170,27 +178,27 @@ impl NyaTermApp {
         let (rows, cols) = self.terminal_grid_size_for_session(selection_session_id.as_deref());
         // Shift+click extends the existing selection from its anchor (xterm-style).
         if event.modifiers.shift && event.click_count <= 1 {
-            if let Some(selection) = self.terminal_selection.as_mut() {
+            if let Some(selection) = self.terminal.selection.selection.as_mut() {
                 selection.head = cell;
-                if self.terminal_selection_session_id.is_none() {
-                    self.terminal_selection_session_id = selection_session_id;
+                if self.terminal.selection.session_id.is_none() {
+                    self.terminal.selection.session_id = selection_session_id;
                 }
-                self.terminal_selection_dragging = true;
+                self.terminal.selection.dragging = true;
                 // Defer status-bar shell notify until selection finishes.
                 self.notify_terminal_selection_owner_surface(cx);
                 return;
             }
         }
         if event.click_count >= 3 {
-            self.terminal_selection = Some(TerminalSelection::from_range(
+            self.terminal.selection.selection = Some(TerminalSelection::from_range(
                 TerminalCellPos::new(cell.row, 0),
                 TerminalCellPos::new(cell.row, cols.saturating_sub(1).max(0)),
                 geometry.display_offset,
                 geometry.viewport_anchor_row,
             ));
-            self.terminal_selection_session_id = selection_session_id;
-            self.terminal_selection_dragging = false;
-            self.terminal_status = format!("selected line {}", cell.row + 1);
+            self.terminal.selection.session_id = selection_session_id;
+            self.terminal.selection.dragging = false;
+            self.terminal.view.status = format!("selected line {}", cell.row + 1);
             self.notify_terminal_selection_owner_surface(cx);
             // Discrete click: status bar update is fine (not a high-frequency path).
             cx.notify();
@@ -203,26 +211,26 @@ impl NyaTermApp {
                 geometry.display_offset,
                 geometry.viewport_anchor_row,
             );
-            self.terminal_selection = Some(TerminalSelection::from_range(
+            self.terminal.selection.selection = Some(TerminalSelection::from_range(
                 TerminalCellPos::new(cell.row, word.0),
                 TerminalCellPos::new(cell.row, word.1.saturating_sub(1).max(word.0)),
                 geometry.display_offset,
                 geometry.viewport_anchor_row,
             ));
-            self.terminal_selection_session_id = selection_session_id;
-            self.terminal_selection_dragging = false;
-            self.terminal_status = "selected word".to_string();
+            self.terminal.selection.session_id = selection_session_id;
+            self.terminal.selection.dragging = false;
+            self.terminal.view.status = "selected word".to_string();
             self.notify_terminal_selection_owner_surface(cx);
             cx.notify();
             return;
         }
-        self.terminal_selection = Some(TerminalSelection::with_viewport(
+        self.terminal.selection.selection = Some(TerminalSelection::with_viewport(
             cell,
             geometry.display_offset,
             geometry.viewport_anchor_row,
         ));
-        self.terminal_selection_session_id = selection_session_id;
-        self.terminal_selection_dragging = true;
+        self.terminal.selection.session_id = selection_session_id;
+        self.terminal.selection.dragging = true;
         let _ = rows;
         self.notify_terminal_selection_owner_surface(cx);
     }
@@ -232,9 +240,11 @@ impl NyaTermApp {
         event: &MouseMoveEvent,
         cx: &mut Context<Self>,
     ) {
-        if let Some(button) = self.terminal_mouse_report_button {
+        if let Some(button) = self.terminal.selection.mouse_report_button {
             let captured_session_id = self
-                .terminal_mouse_report_session_id
+                .terminal
+                .selection
+                .mouse_report_session_id
                 .clone()
                 .or_else(|| self.active_session_id.clone());
             if let Some(session_id) = captured_session_id
@@ -257,11 +267,13 @@ impl NyaTermApp {
                 return;
             }
         }
-        if !self.terminal_selection_dragging {
+        if !self.terminal.selection.dragging {
             return;
         }
         let selection_session_id = self
-            .terminal_selection_session_id
+            .terminal
+            .selection
+            .session_id
             .as_deref()
             .or(self.active_session_id.as_deref())
             .filter(|session_id| !session_id.is_empty());
@@ -270,11 +282,11 @@ impl NyaTermApp {
             return;
         };
         let cell = terminal_cell_for_visual_geometry(event.position, &geometry);
-        if let Some(selection) = self.terminal_selection.as_mut() {
+        if let Some(selection) = self.terminal.selection.selection.as_mut() {
             if selection.head != cell {
                 selection.head = cell;
-                if self.terminal_selection_session_id.is_none() {
-                    self.terminal_selection_session_id = selection_session_id.map(str::to_string);
+                if self.terminal.selection.session_id.is_none() {
+                    self.terminal.selection.session_id = selection_session_id.map(str::to_string);
                 }
                 self.queue_terminal_selection_drag_visual_notify(cx);
             }
@@ -293,16 +305,18 @@ impl NyaTermApp {
             self.clear_terminal_selection(cx);
             return;
         }
-        if !self.terminal_selection_dragging {
+        if !self.terminal.selection.dragging {
             // Stationary click without an active drag can still reposition the
             // tracked input cursor (Tauri handleTerminalMouseUp smart cursor).
-            if self.terminal_selection.is_none() {
+            if self.terminal.selection.selection.is_none() {
                 self.handle_smart_input_click(event, cx);
             }
             return;
         }
         let selection_session_id = self
-            .terminal_selection_session_id
+            .terminal
+            .selection
+            .session_id
             .as_deref()
             .or(self.active_session_id.as_deref())
             .filter(|session_id| !session_id.is_empty());
@@ -310,17 +324,19 @@ impl NyaTermApp {
             self.terminal_hit_test_geometry_for_session(selection_session_id, cx)
         {
             let cell = terminal_cell_for_visual_geometry(event.position, &geometry);
-            if let Some(selection) = self.terminal_selection.as_mut() {
+            if let Some(selection) = self.terminal.selection.selection.as_mut() {
                 selection.head = cell;
             }
         }
-        self.terminal_selection_dragging = false;
+        self.terminal.selection.dragging = false;
         if self
-            .terminal_selection
+            .terminal
+            .selection
+            .selection
             .as_ref()
             .is_some_and(|selection| selection.is_empty())
         {
-            self.terminal_selection = None;
+            self.terminal.selection.selection = None;
             // Empty selection after click: try smart input cursor move.
             self.handle_smart_input_click(event, cx);
         } else if let Some(selected) = self.smart_cursor_selected_input_range() {
@@ -339,9 +355,9 @@ impl NyaTermApp {
             self.clear_terminal_selection(cx);
         } else if self.settings.interaction_copy_on_select {
             let _ = self.copy_terminal_selection(cx);
-        } else if self.terminal_selection.is_some() {
+        } else if self.terminal.selection.selection.is_some() {
             // One shell notify for status after drag ends (not per mouse move).
-            self.terminal_status = "selection ready".to_string();
+            self.terminal.view.status = "selection ready".to_string();
             cx.notify();
         }
         self.notify_terminal_selection_owner_surface(cx);
@@ -349,7 +365,9 @@ impl NyaTermApp {
 
     fn queue_terminal_selection_drag_visual_notify(&mut self, cx: &mut Context<Self>) {
         let Some(session_id) = self
-            .terminal_selection_session_id
+            .terminal
+            .selection
+            .session_id
             .clone()
             .or_else(|| self.active_session_id.clone())
         else {
@@ -358,13 +376,23 @@ impl NyaTermApp {
         if session_id.is_empty() {
             return;
         }
-        self.terminal_runtime
+        self.terminal
+            .view
+            .runtime
             .pending_terminal_selection_drag_sessions
             .insert(session_id);
-        if self.terminal_runtime.terminal_selection_drag_notify_armed {
+        if self
+            .terminal
+            .view
+            .runtime
+            .terminal_selection_drag_notify_armed
+        {
             return;
         }
-        self.terminal_runtime.terminal_selection_drag_notify_armed = true;
+        self.terminal
+            .view
+            .runtime
+            .terminal_selection_drag_notify_armed = true;
         cx.spawn(async move |this, cx| {
             Timer::after(TERMINAL_SELECTION_DRAG_NOTIFY_DELAY).await;
             let _ = this.update(cx, |this, cx| {
@@ -375,10 +403,15 @@ impl NyaTermApp {
     }
 
     fn flush_terminal_selection_drag_visual_notify(&mut self, cx: &mut Context<Self>) {
-        self.terminal_runtime.terminal_selection_drag_notify_armed = false;
+        self.terminal
+            .view
+            .runtime
+            .terminal_selection_drag_notify_armed = false;
         let session_ids = terminal_selection_drag_flush_sessions(
             &mut self
-                .terminal_runtime
+                .terminal
+                .view
+                .runtime
                 .pending_terminal_selection_drag_sessions,
         );
         for session_id in session_ids {

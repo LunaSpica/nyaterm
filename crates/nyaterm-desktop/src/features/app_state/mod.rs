@@ -7,14 +7,12 @@ use crate::models::{
     CredentialSuggestionState, DiagnosticsPathPromptKind, GithubGistAuthJobEvent,
     GithubGistAuthState, KeywordHighlightEditorField, KeywordHighlightPathPromptKind, MainMode,
     MultiLinePasteDraft, PanelResizeState, PanelStackResizeState, PendingCredentialAutofill,
-    RecordingHistorySearchEvent, RecordingHistorySearchKey, RecordingPathPromptKind,
-    RecordingWritePipeline, RightFocus, SearchEngineEditorField, SessionEventBridge,
-    SessionRuntimeMetadata, SettingsTab, SnapshotPasswordPromptState, StartupCommandAction,
-    StartupCommandRequest, StoreStatus, SyncInputGroup, TabActionsSubmenu, TabDockZone,
-    TerminalContextMenuState, TerminalFrameEvent, TerminalFramePipeline, TerminalSearchMode,
-    TerminalSelection, TerminalWindowNode, TitleMenu, TitleMenuSubmenu, TranslateInputField,
-    TranslationDialogState, TranslationSecretDraft, WorkspacePaneNode, WorkspaceSplitDirection,
-    WorkspaceSplitResizeState, WorkspaceSplitState,
+    RecordingPathPromptKind, RecordingWritePipeline, RightFocus, SearchEngineEditorField,
+    SessionEventBridge, SessionRuntimeMetadata, SettingsTab, SnapshotPasswordPromptState,
+    StartupCommandAction, StartupCommandRequest, StoreStatus, SyncInputGroup, TabActionsSubmenu,
+    TerminalFrameEvent, TitleMenu, TitleMenuSubmenu, TranslateInputField, TranslationDialogState,
+    TranslationSecretDraft, WorkspacePaneNode, WorkspaceSplitDirection, WorkspaceSplitResizeState,
+    WorkspaceSplitState,
 };
 use nyaterm_core::{TranslateResult, TranslationSettings};
 
@@ -55,6 +53,7 @@ pub struct NyaTermApp {
     pub(in crate::features) remote_ops: RemoteOpsFeatureState,
     pub(in crate::features) security: SecurityFeatureState,
     pub(in crate::features) ai: AiFeatureState,
+    pub(in crate::features) terminal: TerminalFeatureState,
     pub(in crate::features) transfer: TransferFeatureState,
     pub(in crate::features) command_history: Arc<[CommandHistoryEntry]>,
     pub(in crate::features) command_persistence_tx: mpsc::Sender<CommandPersistenceRequest>,
@@ -96,16 +95,6 @@ pub struct NyaTermApp {
     /// Per-session reconnect/disconnect busy state ("reconnect" | "disconnect").
     pub(in crate::features) active_session_busy_actions: HashMap<String, String>,
     pub(in crate::features) quick_switch_focus: FocusHandle,
-    pub(in crate::features) terminal_search_open: bool,
-    pub(in crate::features) terminal_search_query: String,
-    pub(in crate::features) terminal_search_focus: FocusHandle,
-    pub(in crate::features) terminal_search_mode: TerminalSearchMode,
-    pub(in crate::features) terminal_search_case_sensitive: bool,
-    pub(in crate::features) terminal_search_regex: bool,
-    pub(in crate::features) terminal_search_whole_word: bool,
-    pub(in crate::features) terminal_search_active_index: usize,
-    pub(in crate::features) terminal_history_search_pending_key: Option<RecordingHistorySearchKey>,
-    pub(in crate::features) terminal_history_search_result: Option<RecordingHistorySearchEvent>,
     /// Which search engine row is focused for name/url editing (Settings → Search).
     pub(in crate::features) search_engine_edit_index: Option<usize>,
     pub(in crate::features) search_engine_expanded_index: Option<usize>,
@@ -113,12 +102,6 @@ pub struct NyaTermApp {
     pub(in crate::features) search_engine_actions_index: Option<usize>,
     pub(in crate::features) search_engine_edit_field: SearchEngineEditorField,
     pub(in crate::features) search_engine_focus: FocusHandle,
-    /// Dragging the terminal scrollback scrollbar thumb.
-    pub(in crate::features) terminal_scrollbar_dragging: bool,
-    pub(in crate::features) terminal_scrollbar_drag_session_id: Option<String>,
-    pub(in crate::features) terminal_actions_open: bool,
-    pub(in crate::features) terminal_actions_focus: FocusHandle,
-    pub(in crate::features) terminal_context_menu: Option<TerminalContextMenuState>,
     pub(in crate::features) action_link_menu: Option<ActionLinkMenuState>,
     pub(in crate::features) action_link_tooltip: Option<ActionLinkTooltipState>,
     /// Pending action-link hover (Tauri 250ms delay before showing tooltip).
@@ -174,7 +157,6 @@ pub struct NyaTermApp {
     pub(in crate::features) settings_master_password_draft: String,
     pub(in crate::features) settings_master_password_focus: FocusHandle,
     pub(in crate::features) interaction_word_separators_focus: FocusHandle,
-    pub(in crate::features) terminal_x11_display_focus: FocusHandle,
     pub(in crate::features) appearance_menu_open: Option<String>,
     pub(in crate::features) appearance_ui_font_options: Vec<String>,
     pub(in crate::features) appearance_terminal_font_options: Vec<String>,
@@ -290,9 +272,6 @@ pub struct NyaTermApp {
         HashMap<String, crate::features::session::TrzszSessionState>,
     pub(in crate::features) session_tab_colors: HashMap<String, u32>,
     pub(in crate::features) ssh_multiplex_handles: HashMap<String, SshMultiplexHandle>,
-    pub(in crate::features) terminal_views: HashMap<String, TerminalViewState>,
-    /// Per-session terminal grid entities (frame notify isolation).
-    pub(in crate::features) terminal_surfaces: HashMap<String, Entity<TerminalSurface>>,
     pub(in crate::features) tab_actions_session_id: Option<String>,
     pub(in crate::features) tab_actions_anchor: Option<(f32, f32)>,
     pub(in crate::features) tab_actions_submenu: Option<TabActionsSubmenu>,
@@ -326,63 +305,19 @@ pub struct NyaTermApp {
     pub(in crate::features) multi_line_paste_cursor: usize,
     pub(in crate::features) multi_line_paste_anchor: Option<usize>,
     pub(in crate::features) multi_line_paste_focus: FocusHandle,
-    pub(in crate::features) terminal_focus: FocusHandle,
-    /// True while the terminal surface owns keyboard focus.
-    pub(in crate::features) terminal_focus_active: bool,
-    /// Keep focus report subscriptions alive for DECSET 1004.
-    pub(in crate::features) terminal_focus_subscriptions: Vec<Subscription>,
-    /// Current IME preedit text for the terminal input handler.
-    pub(in crate::features) terminal_ime_marked_text: String,
     pub(in crate::features) lock_focus: FocusHandle,
     pub(in crate::features) lock_password_draft: String,
     pub(in crate::features) lock_password_marked_text: String,
     pub(in crate::features) lock_status: String,
-    pub(in crate::features) terminal_output: String,
-    pub(in crate::features) terminal_output_decoder: TerminalOutputDecoder,
-    pub(in crate::features) terminal_screen: TerminalScreen,
-    pub(in crate::features) terminal_frame_pipeline: TerminalFramePipeline,
-    pub(in crate::features) terminal_live_prefetch_generation: u64,
-    pub(in crate::features) terminal_live_prefetch_task: Option<gpui::Task<()>>,
-    /// Scroll offset for the fallback/global terminal screen (no session view).
-    pub(in crate::features) terminal_scroll_offset: usize,
-    /// Fractional wheel/touchpad scroll deltas that have not yet reached one row.
-    pub(in crate::features) terminal_scroll_delta_residuals: HashMap<String, f32>,
-    pub(in crate::features) terminal_status: String,
-    pub(in crate::features) terminal_runtime: TerminalRuntimeUiState,
     pub(in crate::features) pending_terminal_frame_events: VecDeque<TerminalFrameEvent>,
     pub(in crate::features) pending_session_events: VecDeque<SessionEvent>,
     pub(in crate::features) diagnostic_log_last_at: HashMap<&'static str, Instant>,
-    /// Active visible-grid selection for the focused terminal surface.
-    pub(in crate::features) terminal_selection: Option<TerminalSelection>,
-    /// Session whose terminal surface owns the current text selection gesture.
-    pub(in crate::features) terminal_selection_session_id: Option<String>,
-    /// True while the user is dragging a left-button text selection.
-    pub(in crate::features) terminal_selection_dragging: bool,
-    /// X10/SGR mouse button currently captured by the remote application.
-    pub(in crate::features) terminal_mouse_report_button: Option<u8>,
-    /// Session that owns the current remote mouse capture.
-    pub(in crate::features) terminal_mouse_report_session_id: Option<String>,
-    /// Sync peers that accepted the current remote mouse capture.
-    pub(in crate::features) terminal_mouse_report_peer_session_ids: Vec<String>,
-    /// Last reported terminal cell for release events that land outside the grid.
-    pub(in crate::features) terminal_mouse_report_position: Option<(u16, u16)>,
-    /// Last painted bounds of the active terminal text area (window coords).
-    pub(in crate::features) terminal_surface_bounds: Option<gpui::Bounds<gpui::Pixels>>,
-    /// Last painted terminal text-area bounds per live session pane.
-    pub(in crate::features) terminal_session_surface_bounds:
-        HashMap<String, gpui::Bounds<gpui::Pixels>>,
-    /// Device scale used when terminal viewport bounds were last painted.
-    pub(in crate::features) terminal_scale_factor: f32,
-    /// Measured monospaced cell size (width, height) from the terminal font when available.
-    pub(in crate::features) terminal_cell_metrics: Option<(f32, f32)>,
     /// Cached terminal surface palette (theme + contrast fingerprint).
     pub(in crate::features) cached_terminal_theme_palette:
         Option<(String, String, String, crate::theme::ThemePalette)>,
     /// Cached keyword highlight rules for paint (invalidated on settings change).
     pub(in crate::features) cached_keyword_highlight_rules:
         Option<std::sync::Arc<Vec<nyaterm_core::ResolvedKeywordHighlightRule>>>,
-    /// Session id currently under an external file drag (drop overlay).
-    pub(in crate::features) terminal_file_drop_hover: Option<String>,
 
     pub(in crate::features) last_viewport_size: (f32, f32),
     /// Cached intrinsic dimensions for the current tiled wallpaper path.
@@ -445,13 +380,7 @@ pub struct NyaTermApp {
     pub(in crate::features) session_pane_roots: HashMap<String, WorkspacePaneNode>,
     /// Leaf session id → owning tab-root session id (hidden from tab strip when secondary).
     pub(in crate::features) session_tab_owner: HashMap<String, String>,
-    /// Tauri-style multi-leaf tab window layout (optional; None = flat tab strip).
-    pub(in crate::features) terminal_windows: Option<TerminalWindowNode>,
     pub(in crate::features) focused_terminal_window_leaf_id: Option<String>,
-    /// Active tab-dock drop target while dragging a session tab over a multi-leaf window.
-    pub(in crate::features) terminal_window_drop: Option<(String, TabDockZone)>,
-    /// Whether we already attempted startup restore of multi-leaf layout.
-    pub(in crate::features) terminal_windows_restored: bool,
     /// Whether we already attempted startup restore of global workspace pane splits.
     pub(in crate::features) workspace_pane_layout_restored: bool,
     pub(in crate::features) startup_restore_complete: bool,

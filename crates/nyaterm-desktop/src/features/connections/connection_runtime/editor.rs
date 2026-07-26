@@ -35,7 +35,7 @@ impl NyaTermApp {
                 .find(|connection| connection.id == connection_id)
                 .cloned()
             else {
-                self.terminal_status = "connection is no longer available".to_string();
+                self.terminal.view.status = "connection is no longer available".to_string();
                 cx.notify();
                 return;
             };
@@ -99,7 +99,7 @@ impl NyaTermApp {
         };
 
         self.connection_state.editor.begin_edit(editor);
-        self.terminal_status = "connection editor opened".to_string();
+        self.terminal.view.status = "connection editor opened".to_string();
         if !self.open_connection_editor_window(cx) {
             let editor_focus = self.connection_state.editor.focus_handle();
             window.focus(&editor_focus);
@@ -109,7 +109,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn close_connection_editor(&mut self, cx: &mut Context<Self>) {
         self.connection_state.editor.close();
-        self.terminal_status = "connection editor closed".to_string();
+        self.terminal.view.status = "connection editor closed".to_string();
         cx.notify();
     }
 
@@ -218,7 +218,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if self.connection_state.editor.set_kind(kind) {
-            self.terminal_status = format!("connection type set to {}", kind.label());
+            self.terminal.view.status = format!("connection type set to {}", kind.label());
         }
         cx.notify();
     }
@@ -234,7 +234,7 @@ impl NyaTermApp {
             prompt: Some(SharedString::from("Select shell executable")),
         };
         let receiver = cx.prompt_for_paths(options);
-        self.terminal_status = "selecting shell executable".to_string();
+        self.terminal.view.status = "selecting shell executable".to_string();
         cx.spawn(async move |this, cx| {
             let selected = match receiver.await {
                 Ok(Ok(Some(paths))) => paths.into_iter().next(),
@@ -244,9 +244,9 @@ impl NyaTermApp {
                 if let Some(path) = selected {
                     let path = path.display().to_string();
                     this.connection_state.editor.apply_shell_path(path.clone());
-                    this.terminal_status = format!("shell path: {path}");
+                    this.terminal.view.status = format!("shell path: {path}");
                 } else {
-                    this.terminal_status = "shell path selection cancelled".to_string();
+                    this.terminal.view.status = "shell path selection cancelled".to_string();
                 }
                 cx.notify();
             });
@@ -266,7 +266,7 @@ impl NyaTermApp {
             prompt: Some(SharedString::from("Select working directory")),
         };
         let receiver = cx.prompt_for_paths(options);
-        self.terminal_status = "selecting working directory".to_string();
+        self.terminal.view.status = "selecting working directory".to_string();
         cx.spawn(async move |this, cx| {
             let selected = match receiver.await {
                 Ok(Ok(Some(paths))) => paths.into_iter().next(),
@@ -276,9 +276,9 @@ impl NyaTermApp {
                 if let Some(path) = selected {
                     let path = path.display().to_string();
                     this.connection_state.editor.apply_working_dir(path.clone());
-                    this.terminal_status = format!("working dir: {path}");
+                    this.terminal.view.status = format!("working dir: {path}");
                 } else {
-                    this.terminal_status = "working directory selection cancelled".to_string();
+                    this.terminal.view.status = "working directory selection cancelled".to_string();
                 }
                 cx.notify();
             });
@@ -400,7 +400,7 @@ impl NyaTermApp {
                 let connect_after_save = editor.connect_after_save;
                 self.connection_state
                     .finish_editor_save(saved.id.clone(), saved.group_id.clone());
-                self.terminal_status = format!("saved connection {}", saved.name);
+                self.terminal.view.status = format!("saved connection {}", saved.name);
                 if connect_after_save {
                     self.start_saved_connection(saved, window, cx);
                 } else {

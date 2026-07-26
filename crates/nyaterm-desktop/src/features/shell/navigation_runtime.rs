@@ -19,7 +19,7 @@ impl NyaTermApp {
             }
             if self.open_settings_window(cx) {
                 self.main_mode = MainMode::Workspace;
-                self.terminal_status = "settings opened".to_string();
+                self.terminal.view.status = "settings opened".to_string();
                 cx.notify();
                 return;
             }
@@ -27,7 +27,7 @@ impl NyaTermApp {
             self.selected_nav = NavItem::Settings;
             self.left_sidebar_collapsed = true;
             self.right_inspector_collapsed = true;
-            self.terminal_status = "settings opened".to_string();
+            self.terminal.view.status = "settings opened".to_string();
             cx.notify();
             return;
         }
@@ -66,11 +66,11 @@ impl NyaTermApp {
                 if already_open {
                     self.left_sidebar_collapsed = true;
                     self.active_left_panel = None;
-                    self.terminal_status = format!("{} closed", item.label());
+                    self.terminal.view.status = format!("{} closed", item.label());
                 } else {
                     self.active_left_panel = Some(item);
                     self.left_sidebar_collapsed = false;
-                    self.terminal_status = format!("{} opened", item.label());
+                    self.terminal.view.status = format!("{} opened", item.label());
                 }
             }
             Some(PanelSide::Right) => {
@@ -80,11 +80,11 @@ impl NyaTermApp {
                     self.right_inspector_collapsed = true;
                     self.active_right_panel = None;
                     self.right_focus = RightFocus::Default;
-                    self.terminal_status = format!("{} closed", item.label());
+                    self.terminal.view.status = format!("{} closed", item.label());
                 } else {
                     self.active_right_panel = Some(item);
                     self.right_inspector_collapsed = false;
-                    self.terminal_status = format!("{} opened", item.label());
+                    self.terminal.view.status = format!("{} opened", item.label());
                 }
             }
             None => {
@@ -132,7 +132,7 @@ impl NyaTermApp {
                 self.left_open_panels.clear();
                 self.active_left_panel = None;
                 self.left_sidebar_collapsed = true;
-                self.terminal_status = "left sidebar collapsed".to_string();
+                self.terminal.view.status = "left sidebar collapsed".to_string();
             } else if let Some(panel) = self
                 .activity_bar_layout
                 .first_panel_on_side(PanelSide::Left)
@@ -144,18 +144,18 @@ impl NyaTermApp {
                         .push(panel.persistence_id().to_string());
                 }
                 self.left_sidebar_collapsed = false;
-                self.terminal_status = "left sidebar expanded".to_string();
+                self.terminal.view.status = "left sidebar expanded".to_string();
             }
         } else if self.left_sidebar_collapsed || self.active_left_panel.is_none() {
             self.active_left_panel = self
                 .activity_bar_layout
                 .first_panel_on_side(PanelSide::Left);
             self.left_sidebar_collapsed = false;
-            self.terminal_status = "left sidebar expanded".to_string();
+            self.terminal.view.status = "left sidebar expanded".to_string();
         } else {
             self.active_left_panel = None;
             self.left_sidebar_collapsed = true;
-            self.terminal_status = "left sidebar collapsed".to_string();
+            self.terminal.view.status = "left sidebar collapsed".to_string();
         }
         self.persist_ui_layout();
         cx.notify();
@@ -167,7 +167,7 @@ impl NyaTermApp {
                 self.right_open_panels.clear();
                 self.active_right_panel = None;
                 self.right_inspector_collapsed = true;
-                self.terminal_status = "right sidebar collapsed".to_string();
+                self.terminal.view.status = "right sidebar collapsed".to_string();
             } else if let Some(panel) = self
                 .activity_bar_layout
                 .first_panel_on_side(PanelSide::Right)
@@ -179,18 +179,18 @@ impl NyaTermApp {
                         .push(panel.persistence_id().to_string());
                 }
                 self.right_inspector_collapsed = false;
-                self.terminal_status = "right sidebar expanded".to_string();
+                self.terminal.view.status = "right sidebar expanded".to_string();
             }
         } else if self.right_inspector_collapsed || self.active_right_panel.is_none() {
             self.active_right_panel = self
                 .activity_bar_layout
                 .first_panel_on_side(PanelSide::Right);
             self.right_inspector_collapsed = false;
-            self.terminal_status = "right sidebar expanded".to_string();
+            self.terminal.view.status = "right sidebar expanded".to_string();
         } else {
             self.active_right_panel = None;
             self.right_inspector_collapsed = true;
-            self.terminal_status = "right sidebar collapsed".to_string();
+            self.terminal.view.status = "right sidebar collapsed".to_string();
         }
         self.persist_ui_layout();
         cx.notify();

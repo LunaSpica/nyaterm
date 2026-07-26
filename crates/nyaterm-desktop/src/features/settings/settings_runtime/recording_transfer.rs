@@ -8,7 +8,7 @@ impl NyaTermApp {
     ) {
         self.settings.host_key_policy = policy.to_string();
         if self.defer_settings_persistence(cx) {
-            self.terminal_status = format!("host key policy staged as {policy}");
+            self.terminal.view.status = format!("host key policy staged as {policy}");
             return;
         }
         match ConnectionStore::open_with_portable_key_path(
@@ -19,12 +19,12 @@ impl NyaTermApp {
         {
             Ok(settings) => {
                 self.apply_gpui_settings(settings);
-                self.terminal_status = format!("host key policy set to {policy}");
+                self.terminal.view.status = format!("host key policy set to {policy}");
                 self.store_status.message = "settings saved".to_string();
                 self.store_status.ready = true;
             }
             Err(error) => {
-                self.terminal_status = format!("failed to save host key policy: {error}");
+                self.terminal.view.status = format!("failed to save host key policy: {error}");
                 self.store_status.message = format!("settings save failed: {error}");
                 self.store_status.ready = false;
             }
@@ -80,12 +80,12 @@ impl NyaTermApp {
                     .set_memory_limit(self.settings.recording_memory_limit_bytes as usize);
                 self.store_status.message = "recording settings saved".to_string();
                 self.store_status.ready = true;
-                self.terminal_status = "recording settings saved".to_string();
+                self.terminal.view.status = "recording settings saved".to_string();
             }
             Err(error) => {
                 self.store_status.message = format!("recording settings save failed: {error}");
                 self.store_status.ready = false;
-                self.terminal_status = self.store_status.message.clone();
+                self.terminal.view.status = self.store_status.message.clone();
             }
         }
         cx.notify();
@@ -203,12 +203,12 @@ impl NyaTermApp {
                 );
                 self.store_status.message = "transfer settings saved".to_string();
                 self.store_status.ready = true;
-                self.terminal_status = success_status.to_string();
+                self.terminal.view.status = success_status.to_string();
             }
             Err(error) => {
                 self.store_status.message = format!("transfer settings save failed: {error}");
                 self.store_status.ready = false;
-                self.terminal_status = self.store_status.message.clone();
+                self.terminal.view.status = self.store_status.message.clone();
             }
         }
         cx.notify();
@@ -228,14 +228,14 @@ impl NyaTermApp {
         match keystroke.key.as_str() {
             "backspace" => {
                 self.settings.transfer_default_editor.pop();
-                self.terminal_status = "transfer editor command edited".to_string();
+                self.terminal.view.status = "transfer editor command edited".to_string();
                 cx.notify();
             }
             "enter" => {
                 self.save_transfer_settings("transfer editor command saved", cx);
             }
             "escape" => {
-                self.terminal_status = "transfer editor command input blurred".to_string();
+                self.terminal.view.status = "transfer editor command input blurred".to_string();
                 cx.notify();
             }
             _ => {
@@ -245,7 +245,7 @@ impl NyaTermApp {
                     .filter(|input| !input.is_empty())
                 {
                     self.settings.transfer_default_editor.push_str(input);
-                    self.terminal_status = "transfer editor command edited".to_string();
+                    self.terminal.view.status = "transfer editor command edited".to_string();
                     cx.notify();
                 }
             }

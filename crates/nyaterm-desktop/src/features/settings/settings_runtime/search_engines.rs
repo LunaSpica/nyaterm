@@ -20,7 +20,7 @@ impl NyaTermApp {
         self.search_engine_actions_index = None;
         self.search_engine_edit_field = SearchEngineEditorField::Name;
         self.save_terminal_settings(cx);
-        self.terminal_status = "search engine added".to_string();
+        self.terminal.view.status = "search engine added".to_string();
     }
 
     pub(in crate::features) fn remove_search_engine(
@@ -49,7 +49,7 @@ impl NyaTermApp {
             }
         }
         self.save_terminal_settings(cx);
-        self.terminal_status = "search engine removed".to_string();
+        self.terminal.view.status = "search engine removed".to_string();
     }
 
     pub(in crate::features) fn set_search_engine_icon(
@@ -64,7 +64,7 @@ impl NyaTermApp {
         engine.icon = icon.map(str::to_string);
         self.search_engine_icon_picker_index = None;
         self.save_terminal_settings(cx);
-        self.terminal_status = "search engine icon updated".to_string();
+        self.terminal.view.status = "search engine icon updated".to_string();
     }
 
     pub(in crate::features) fn toggle_search_engine_in_menu(
@@ -122,7 +122,7 @@ impl NyaTermApp {
                         engine.url_template.pop();
                     }
                 }
-                self.terminal_status = "search engine edited".to_string();
+                self.terminal.view.status = "search engine edited".to_string();
                 cx.notify();
             }
             "tab" => {
@@ -132,11 +132,11 @@ impl NyaTermApp {
             "enter" => {
                 self.normalize_search_engines();
                 self.save_terminal_settings(cx);
-                self.terminal_status = "search engines saved".to_string();
+                self.terminal.view.status = "search engines saved".to_string();
             }
             "escape" => {
                 self.search_engine_edit_index = None;
-                self.terminal_status = "search engine input blurred".to_string();
+                self.terminal.view.status = "search engine input blurred".to_string();
                 cx.notify();
             }
             _ => {
@@ -150,7 +150,7 @@ impl NyaTermApp {
                         SearchEngineEditorField::Name => engine.name.push_str(input),
                         SearchEngineEditorField::Url => engine.url_template.push_str(input),
                     }
-                    self.terminal_status = "search engine edited".to_string();
+                    self.terminal.view.status = "search engine edited".to_string();
                     cx.notify();
                 }
             }
@@ -175,12 +175,12 @@ impl NyaTermApp {
 
     pub(in crate::features) fn test_search_engine(&mut self, index: usize, cx: &mut Context<Self>) {
         let Some(engine) = self.settings.search_custom_engines.get(index) else {
-            self.terminal_status = "search engine not found".to_string();
+            self.terminal.view.status = "search engine not found".to_string();
             cx.notify();
             return;
         };
         if !engine.url_template.contains("%s") {
-            self.terminal_status = "search engine URL must include %s".to_string();
+            self.terminal.view.status = "search engine URL must include %s".to_string();
             cx.notify();
             return;
         }
@@ -189,10 +189,10 @@ impl NyaTermApp {
             .replace("%s", &urlencoding_query("nyaterm"));
         match open_external_url_simple(&url) {
             Ok(()) => {
-                self.terminal_status = format!("tested search engine: {}", engine.name);
+                self.terminal.view.status = format!("tested search engine: {}", engine.name);
             }
             Err(error) => {
-                self.terminal_status = format!("test search engine failed: {error}");
+                self.terminal.view.status = format!("test search engine failed: {error}");
             }
         }
         cx.notify();
@@ -236,7 +236,7 @@ impl NyaTermApp {
             bytes.push(b'\n');
         }
         if self.send_terminal_input(bytes, cx) {
-            self.terminal_status = "action link command sent".to_string();
+            self.terminal.view.status = "action link command sent".to_string();
             cx.notify();
         }
     }

@@ -199,7 +199,8 @@ impl NyaTermApp {
                     .flatten()
             });
         let Some(config) = config else {
-            self.terminal_status = "start an SSH session before syncing external edits".to_string();
+            self.terminal.view.status =
+                "start an SSH session before syncing external edits".to_string();
             return;
         };
         let transfer_tx = self.transfer.queue.tx.clone();
@@ -275,7 +276,7 @@ impl NyaTermApp {
             .external_sync
             .window_open_pending
             .remove(prompt_id);
-        self.terminal_status = "external edit sync skipped".to_string();
+        self.terminal.view.status = "external edit sync skipped".to_string();
         cx.notify();
     }
 }

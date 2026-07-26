@@ -10,21 +10,21 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(request) = self.active_host_key_prompt.take() else {
-            self.terminal_status = "no SSH host key prompt is active".to_string();
+            self.terminal.view.status = "no SSH host key prompt is active".to_string();
             cx.notify();
             return;
         };
 
         if request.id != request_id {
             self.active_host_key_prompt = Some(request);
-            self.terminal_status = "SSH host key prompt changed before response".to_string();
+            self.terminal.view.status = "SSH host key prompt changed before response".to_string();
             cx.notify();
             return;
         }
 
         let host = request.host_key.host_identifier.clone();
         let _ = request.response_tx.send(choice);
-        self.terminal_status = match choice {
+        self.terminal.view.status = match choice {
             HostKeyPromptChoice::Accept => format!("accepted SSH host key for {host}"),
             HostKeyPromptChoice::Reject => format!("rejected SSH host key for {host}"),
         };
@@ -38,21 +38,21 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(prompt) = self.active_duplicate_prompt.take() else {
-            self.terminal_status = "no SFTP duplicate prompt is active".to_string();
+            self.terminal.view.status = "no SFTP duplicate prompt is active".to_string();
             cx.notify();
             return;
         };
 
         if prompt.id != request_id {
             self.active_duplicate_prompt = Some(prompt);
-            self.terminal_status = "SFTP duplicate prompt changed before response".to_string();
+            self.terminal.view.status = "SFTP duplicate prompt changed before response".to_string();
             cx.notify();
             return;
         }
 
         let target = prompt.request.target_path.clone();
         let _ = prompt.response_tx.send(decision);
-        self.terminal_status = format!(
+        self.terminal.view.status = format!(
             "SFTP duplicate decision for {target}: {}",
             duplicate_decision_label(decision)
         );
@@ -66,7 +66,7 @@ impl NyaTermApp {
         let host = credential_prompt_target(&state.prompt);
         let _ = state.response_tx.send(Some(state.value));
         self.credential_prompt_focus_pending = false;
-        self.terminal_status = format!("submitted SSH credential for {host}");
+        self.terminal.view.status = format!("submitted SSH credential for {host}");
         cx.notify();
     }
 
@@ -77,7 +77,7 @@ impl NyaTermApp {
         let host = credential_prompt_target(&state.prompt);
         let _ = state.response_tx.send(None);
         self.credential_prompt_focus_pending = false;
-        self.terminal_status = format!("cancelled SSH credential prompt for {host}");
+        self.terminal.view.status = format!("cancelled SSH credential prompt for {host}");
         cx.notify();
     }
 
@@ -91,7 +91,7 @@ impl NyaTermApp {
         let target = keyboard_interactive_prompt_target(&state.request);
         let _ = state.response_tx.send(Some(state.responses));
         self.credential_prompt_focus_pending = false;
-        self.terminal_status = format!("submitted SSH verification for {target}");
+        self.terminal.view.status = format!("submitted SSH verification for {target}");
         cx.notify();
     }
 
@@ -105,7 +105,7 @@ impl NyaTermApp {
         let target = keyboard_interactive_prompt_target(&state.request);
         let _ = state.response_tx.send(None);
         self.credential_prompt_focus_pending = false;
-        self.terminal_status = format!("cancelled SSH verification for {target}");
+        self.terminal.view.status = format!("cancelled SSH verification for {target}");
         cx.notify();
     }
 
@@ -127,7 +127,7 @@ impl NyaTermApp {
         match result {
             Ok(Some(preview)) => {
                 apply_keyboard_interactive_otp_preview(state, preview);
-                self.terminal_status = "OTP code ready".to_string();
+                self.terminal.view.status = "OTP code ready".to_string();
             }
             Ok(None) => {
                 state.otp_code = None;
@@ -155,7 +155,7 @@ impl NyaTermApp {
         if let Some(response) = state.responses.first_mut() {
             *response = code;
             state.focused_index = 0;
-            self.terminal_status = "OTP code sent to verification input".to_string();
+            self.terminal.view.status = "OTP code sent to verification input".to_string();
             cx.notify();
         }
     }
@@ -172,7 +172,7 @@ impl NyaTermApp {
             return;
         };
         cx.write_to_clipboard(ClipboardItem::new_string(code));
-        self.terminal_status = "OTP code copied".to_string();
+        self.terminal.view.status = "OTP code copied".to_string();
         cx.notify();
     }
 
@@ -271,7 +271,7 @@ impl NyaTermApp {
         }
 
         if let Some(request) = self.host_key_prompts.pop_pending() {
-            self.terminal_status = format!(
+            self.terminal.view.status = format!(
                 "SSH host key decision required for {}",
                 request.host_key.host_identifier
             );
@@ -296,7 +296,7 @@ impl NyaTermApp {
                     prompt,
                     response_tx,
                 } => {
-                    self.terminal_status = format!(
+                    self.terminal.view.status = format!(
                         "SSH credential required for {}",
                         credential_prompt_target(&prompt)
                     );
@@ -312,7 +312,7 @@ impl NyaTermApp {
                     request,
                     response_tx,
                 } => {
-                    self.terminal_status = format!(
+                    self.terminal.view.status = format!(
                         "SSH verification required for {}",
                         keyboard_interactive_prompt_target(&request)
                     );
@@ -400,7 +400,7 @@ impl NyaTermApp {
         }
 
         if let Some(request) = self.duplicate_prompts.pop_pending() {
-            self.terminal_status = format!(
+            self.terminal.view.status = format!(
                 "SFTP duplicate decision required for {}",
                 request.request.target_path
             );

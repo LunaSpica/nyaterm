@@ -9,7 +9,7 @@ use nyaterm_core::TranslationSettings;
 impl NyaTermApp {
     pub(in crate::features) fn prompt_config_export(&mut self, cx: &mut Context<Self>) {
         if self.config_path_prompt.is_some() {
-            self.terminal_status = "config path picker is already open".to_string();
+            self.terminal.view.status = "config path picker is already open".to_string();
             cx.notify();
             return;
         }
@@ -19,7 +19,7 @@ impl NyaTermApp {
         let config_dir = self.runtime.config_dir().to_path_buf();
         let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
         self.config_path_prompt = Some(ConfigPathPromptKind::Export);
-        self.terminal_status = "selecting config backup destination".to_string();
+        self.terminal.view.status = "selecting config backup destination".to_string();
         self.store_status.message = "selecting backup destination".to_string();
         cx.spawn(async move |this, cx| {
             let result = match receiver.await {
@@ -51,7 +51,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn prompt_portable_snapshot_export(&mut self, cx: &mut Context<Self>) {
         if self.config_path_prompt.is_some() {
-            self.terminal_status = "config path picker is already open".to_string();
+            self.terminal.view.status = "config path picker is already open".to_string();
             cx.notify();
             return;
         }
@@ -61,7 +61,7 @@ impl NyaTermApp {
         let config_dir = self.runtime.config_dir().to_path_buf();
         let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
         self.config_path_prompt = Some(ConfigPathPromptKind::PortableExport);
-        self.terminal_status = "selecting portable snapshot destination".to_string();
+        self.terminal.view.status = "selecting portable snapshot destination".to_string();
         self.store_status.message = "selecting .nya export destination".to_string();
         cx.spawn(async move |this, cx| {
             let result = match receiver.await {
@@ -105,12 +105,12 @@ impl NyaTermApp {
             return;
         }
         if self.config_path_prompt.is_some() {
-            self.terminal_status = "config path picker is already open".to_string();
+            self.terminal.view.status = "config path picker is already open".to_string();
             cx.notify();
             return;
         }
         if self.active_session_id.is_some() || self.has_pending_session_start() {
-            self.terminal_status = "close active session before importing config".to_string();
+            self.terminal.view.status = "close active session before importing config".to_string();
             cx.notify();
             return;
         }
@@ -125,7 +125,7 @@ impl NyaTermApp {
         let config_dir = self.runtime.config_dir().to_path_buf();
         let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
         self.config_path_prompt = Some(ConfigPathPromptKind::Import);
-        self.terminal_status = "selecting config backup to import".to_string();
+        self.terminal.view.status = "selecting config backup to import".to_string();
         self.store_status.message = "selecting backup source".to_string();
         cx.spawn(async move |this, cx| {
             let result = match receiver.await {
@@ -163,12 +163,12 @@ impl NyaTermApp {
             return;
         }
         if self.config_path_prompt.is_some() {
-            self.terminal_status = "config path picker is already open".to_string();
+            self.terminal.view.status = "config path picker is already open".to_string();
             cx.notify();
             return;
         }
         if self.active_session_id.is_some() || self.has_pending_session_start() {
-            self.terminal_status = "close active session before importing config".to_string();
+            self.terminal.view.status = "close active session before importing config".to_string();
             cx.notify();
             return;
         }
@@ -183,7 +183,7 @@ impl NyaTermApp {
         let config_dir = self.runtime.config_dir().to_path_buf();
         let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
         self.config_path_prompt = Some(ConfigPathPromptKind::PortableImport);
-        self.terminal_status = "selecting portable snapshot to import".to_string();
+        self.terminal.view.status = "selecting portable snapshot to import".to_string();
         self.store_status.message = "selecting .nya snapshot".to_string();
         cx.spawn(async move |this, cx| {
             let result = match receiver.await {
@@ -224,7 +224,7 @@ impl NyaTermApp {
             return;
         }
         if self.active_session_id.is_some() || self.has_pending_session_start() {
-            self.terminal_status = "close active session before importing config".to_string();
+            self.terminal.view.status = "close active session before importing config".to_string();
             cx.notify();
             return;
         }
@@ -237,7 +237,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if self.config_path_prompt.is_some() {
-            self.terminal_status = "config path picker is already open".to_string();
+            self.terminal.view.status = "config path picker is already open".to_string();
             cx.notify();
             return;
         }
@@ -245,7 +245,7 @@ impl NyaTermApp {
             kind,
             value: String::new(),
         });
-        self.terminal_status = match kind {
+        self.terminal.view.status = match kind {
             SnapshotPasswordPromptKind::Export => "enter password for encrypted .nya export",
             SnapshotPasswordPromptKind::Import => "enter password for encrypted .nya import",
             SnapshotPasswordPromptKind::CloudPush => "enter password for cloud sync push",
@@ -296,7 +296,8 @@ impl NyaTermApp {
                 kind: state.kind,
                 value: String::new(),
             });
-            self.terminal_status = "master password is required for encrypted .nya".to_string();
+            self.terminal.view.status =
+                "master password is required for encrypted .nya".to_string();
             cx.notify();
             return;
         }
@@ -339,7 +340,7 @@ impl NyaTermApp {
         let Some(state) = self.active_snapshot_password_prompt.take() else {
             return;
         };
-        self.terminal_status = match state.kind {
+        self.terminal.view.status = match state.kind {
             SnapshotPasswordPromptKind::Export => "encrypted .nya export cancelled".to_string(),
             SnapshotPasswordPromptKind::Import => "encrypted .nya import cancelled".to_string(),
             SnapshotPasswordPromptKind::CloudPush => "cloud sync push cancelled".to_string(),
@@ -411,7 +412,7 @@ impl NyaTermApp {
         let config_dir = self.runtime.config_dir().to_path_buf();
         let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
         self.config_path_prompt = Some(ConfigPathPromptKind::EncryptedPortableExport);
-        self.terminal_status = "selecting encrypted portable snapshot destination".to_string();
+        self.terminal.view.status = "selecting encrypted portable snapshot destination".to_string();
         self.store_status.message = "selecting encrypted .nya export destination".to_string();
         cx.spawn(async move |this, cx| {
             let result = match receiver.await {
@@ -462,7 +463,7 @@ impl NyaTermApp {
         let config_dir = self.runtime.config_dir().to_path_buf();
         let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
         self.config_path_prompt = Some(ConfigPathPromptKind::EncryptedPortableImport);
-        self.terminal_status = "selecting encrypted portable snapshot to import".to_string();
+        self.terminal.view.status = "selecting encrypted portable snapshot to import".to_string();
         self.store_status.message = "selecting encrypted .nya snapshot".to_string();
         cx.spawn(async move |this, cx| {
             let result = match receiver.await {
@@ -518,7 +519,7 @@ impl NyaTermApp {
                     _ => format!("exported {} byte config backup", info.bytes),
                 };
                 self.store_status.ready = true;
-                self.terminal_status = match kind {
+                self.terminal.view.status = match kind {
                     ConfigPathPromptKind::PortableExport => {
                         format!(
                             "portable snapshot exported to {}",
@@ -555,7 +556,7 @@ impl NyaTermApp {
                     _ => format!("imported {} byte config backup{safety}", info.bytes),
                 };
                 self.store_status.ready = true;
-                self.terminal_status = match kind {
+                self.terminal.view.status = match kind {
                     ConfigPathPromptKind::PortableImport => {
                         format!(
                             "portable snapshot imported from {}",
@@ -572,7 +573,7 @@ impl NyaTermApp {
                 };
             }
             ConfigPathPromptResult::Cancelled => {
-                self.terminal_status = match kind {
+                self.terminal.view.status = match kind {
                     ConfigPathPromptKind::Export => "config export cancelled".to_string(),
                     ConfigPathPromptKind::Import => "config import cancelled".to_string(),
                     ConfigPathPromptKind::PortableExport => {
@@ -591,7 +592,7 @@ impl NyaTermApp {
                 self.store_status.message = "config picker cancelled".to_string();
             }
             ConfigPathPromptResult::Failed(error) => {
-                self.terminal_status = match kind {
+                self.terminal.view.status = match kind {
                     ConfigPathPromptKind::Export => format!("config export failed: {error}"),
                     ConfigPathPromptKind::Import => format!("config import failed: {error}"),
                     ConfigPathPromptKind::PortableExport => {
@@ -607,11 +608,12 @@ impl NyaTermApp {
                         format!("encrypted portable snapshot import failed: {error}")
                     }
                 };
-                self.store_status.message = self.terminal_status.clone();
+                self.store_status.message = self.terminal.view.status.clone();
                 self.store_status.ready = false;
             }
             ConfigPathPromptResult::Closed => {
-                self.terminal_status = "config path picker closed before returning".to_string();
+                self.terminal.view.status =
+                    "config path picker closed before returning".to_string();
                 self.store_status.message = "config picker closed".to_string();
             }
         }

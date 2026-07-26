@@ -10,14 +10,14 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(current_name) = self.session_display_name(&session_id) else {
-            self.terminal_status = "session no longer exists".to_string();
+            self.terminal.view.status = "session no longer exists".to_string();
             cx.notify();
             return;
         };
         self.rename_session_id = Some(session_id);
         self.rename_draft = current_name.chars().take(64).collect();
         self.rename_marked_text.clear();
-        self.terminal_status = "rename tab opened".to_string();
+        self.terminal.view.status = "rename tab opened".to_string();
         window.focus(&self.rename_focus);
         cx.notify();
     }
@@ -26,13 +26,13 @@ impl NyaTermApp {
         self.rename_session_id = None;
         self.rename_draft.clear();
         self.rename_marked_text.clear();
-        self.terminal_status = "rename tab cancelled".to_string();
+        self.terminal.view.status = "rename tab cancelled".to_string();
         cx.notify();
     }
 
     pub(in crate::features) fn submit_rename_session(&mut self, cx: &mut Context<Self>) {
         let Some(session_id) = self.rename_session_id.take() else {
-            self.terminal_status = "no tab rename is active".to_string();
+            self.terminal.view.status = "no tab rename is active".to_string();
             cx.notify();
             return;
         };
@@ -45,14 +45,14 @@ impl NyaTermApp {
         self.rename_draft.clear();
         self.rename_marked_text.clear();
         if trimmed.is_empty() {
-            self.terminal_status = "tab name cannot be empty".to_string();
+            self.terminal.view.status = "tab name cannot be empty".to_string();
             self.rename_session_id = Some(session_id);
             cx.notify();
             return;
         }
         self.session_custom_names
             .insert(session_id.clone(), trimmed.clone());
-        self.terminal_status = format!("renamed tab to {trimmed}");
+        self.terminal.view.status = format!("renamed tab to {trimmed}");
         cx.notify();
     }
 
@@ -108,7 +108,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if self.active_session_id.is_none() {
-            self.terminal_status = match action {
+            self.terminal.view.status = match action {
                 StartupCommandAction::Duplicate => {
                     "select a session before duplicating with a command"
                 }
@@ -129,7 +129,7 @@ impl NyaTermApp {
                     !matches!(metadata.launch_config, SessionLaunchConfig::Ssh(_))
                 })
         {
-            self.terminal_status = "active session is not SSH".to_string();
+            self.terminal.view.status = "active session is not SSH".to_string();
             cx.notify();
             return;
         }
@@ -142,7 +142,7 @@ impl NyaTermApp {
                 .interaction_duplicate_session_command_delay_ms
                 .min(60_000),
         );
-        self.terminal_status = action.status_opened().to_string();
+        self.terminal.view.status = action.status_opened().to_string();
         window.focus(&self.startup_command_focus);
         cx.notify();
     }
@@ -154,7 +154,7 @@ impl NyaTermApp {
         self.startup_command_draft.clear();
         self.startup_command_marked_text.clear();
         self.startup_command_delay_ms = DEFAULT_DUPLICATE_STARTUP_DELAY_MS;
-        self.terminal_status = action.status_cancelled().to_string();
+        self.terminal.view.status = action.status_cancelled().to_string();
         cx.notify();
     }
 
@@ -175,7 +175,7 @@ impl NyaTermApp {
     ) {
         let command = self.startup_command_draft.trim().to_string();
         if command.is_empty() {
-            self.terminal_status = "startup command cannot be empty".to_string();
+            self.terminal.view.status = "startup command cannot be empty".to_string();
             cx.notify();
             return;
         }
@@ -252,11 +252,16 @@ impl NyaTermApp {
         self.clear_trzsz_session(session_id);
         self.session_event_bridge.clear_session(session_id);
         self.session_tab_colors.remove(session_id);
-        self.terminal_views.remove(session_id);
+        self.terminal.view.views.remove(session_id);
         self.remove_terminal_surface(session_id);
-        self.terminal_frame_pipeline
+        self.terminal
+            .view
+            .frame_pipeline
             .remove_session(session_id.to_string());
-        self.terminal_session_surface_bounds.remove(session_id);
+        self.terminal
+            .layout
+            .session_surface_bounds
+            .remove(session_id);
         self.session_command_history.remove(session_id);
         self.transfer.browser.session_cache.remove(session_id);
         self.transfer

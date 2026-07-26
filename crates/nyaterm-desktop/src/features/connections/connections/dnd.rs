@@ -15,12 +15,12 @@ impl NyaTermApp {
             return;
         }
         let Some(source) = self.connections.iter().find(|c| c.id == source_id).cloned() else {
-            self.terminal_status = "drag source connection missing".to_string();
+            self.terminal.view.status = "drag source connection missing".to_string();
             cx.notify();
             return;
         };
         let Some(target) = self.connections.iter().find(|c| c.id == target_id).cloned() else {
-            self.terminal_status = "drop target connection missing".to_string();
+            self.terminal.view.status = "drop target connection missing".to_string();
             cx.notify();
             return;
         };
@@ -50,11 +50,11 @@ impl NyaTermApp {
         match self.persist_connection_order(&siblings) {
             Ok(()) => {
                 self.refresh_store_from_runtime();
-                self.terminal_status = "connection reordered".to_string();
+                self.terminal.view.status = "connection reordered".to_string();
             }
             Err(error) => {
-                self.terminal_status = format!("reorder connection failed: {error}");
-                self.store_status.message = self.terminal_status.clone();
+                self.terminal.view.status = format!("reorder connection failed: {error}");
+                self.store_status.message = self.terminal.view.status.clone();
                 self.store_status.ready = false;
             }
         }
@@ -73,12 +73,12 @@ impl NyaTermApp {
             return;
         }
         let Some(source) = self.connections.iter().find(|c| c.id == source_id).cloned() else {
-            self.terminal_status = "drag source connection missing".to_string();
+            self.terminal.view.status = "drag source connection missing".to_string();
             cx.notify();
             return;
         };
         let Some(target) = self.connections.iter().find(|c| c.id == target_id).cloned() else {
-            self.terminal_status = "drop target connection missing".to_string();
+            self.terminal.view.status = "drop target connection missing".to_string();
             cx.notify();
             return;
         };
@@ -109,11 +109,11 @@ impl NyaTermApp {
         match self.persist_connection_order(&siblings) {
             Ok(()) => {
                 self.refresh_store_from_runtime();
-                self.terminal_status = "connection reordered".to_string();
+                self.terminal.view.status = "connection reordered".to_string();
             }
             Err(error) => {
-                self.terminal_status = format!("reorder connection failed: {error}");
-                self.store_status.message = self.terminal_status.clone();
+                self.terminal.view.status = format!("reorder connection failed: {error}");
+                self.store_status.message = self.terminal.view.status.clone();
                 self.store_status.ready = false;
             }
         }
@@ -129,7 +129,7 @@ impl NyaTermApp {
     ) {
         self.connection_state.list.clear_drop_target();
         let Some(source) = self.connections.iter().find(|c| c.id == source_id).cloned() else {
-            self.terminal_status = "drag source connection missing".to_string();
+            self.terminal.view.status = "drag source connection missing".to_string();
             cx.notify();
             return;
         };
@@ -153,11 +153,11 @@ impl NyaTermApp {
                     self.connection_state.list.expand_group(gid);
                 }
                 self.refresh_store_from_runtime();
-                self.terminal_status = "connection moved".to_string();
+                self.terminal.view.status = "connection moved".to_string();
             }
             Err(error) => {
-                self.terminal_status = format!("move connection failed: {error}");
-                self.store_status.message = self.terminal_status.clone();
+                self.terminal.view.status = format!("move connection failed: {error}");
+                self.store_status.message = self.terminal.view.status.clone();
                 self.store_status.ready = false;
             }
         }
@@ -209,10 +209,10 @@ impl NyaTermApp {
         match self.persist_group_order(&siblings) {
             Ok(()) => {
                 self.refresh_store_from_runtime();
-                self.terminal_status = "group reordered".to_string();
+                self.terminal.view.status = "group reordered".to_string();
             }
             Err(error) => {
-                self.terminal_status = format!("reorder group failed: {error}");
+                self.terminal.view.status = format!("reorder group failed: {error}");
             }
         }
         cx.notify();
@@ -226,14 +226,14 @@ impl NyaTermApp {
     ) {
         self.connection_state.list.clear_drop_target();
         if parent_id.as_deref() == Some(source_id.as_str()) {
-            self.terminal_status = "cannot nest group into itself".to_string();
+            self.terminal.view.status = "cannot nest group into itself".to_string();
             cx.notify();
             return;
         }
         // Prevent cycles: parent cannot be descendant of source.
         if let Some(pid) = parent_id.as_ref() {
             if self.group_is_descendant(pid, &source_id) {
-                self.terminal_status = "cannot create group cycle".to_string();
+                self.terminal.view.status = "cannot create group cycle".to_string();
                 cx.notify();
                 return;
             }
@@ -259,10 +259,10 @@ impl NyaTermApp {
         match self.persist_group_order(&siblings) {
             Ok(()) => {
                 self.refresh_store_from_runtime();
-                self.terminal_status = "group moved".to_string();
+                self.terminal.view.status = "group moved".to_string();
             }
             Err(error) => {
-                self.terminal_status = format!("move group failed: {error}");
+                self.terminal.view.status = format!("move group failed: {error}");
             }
         }
         cx.notify();

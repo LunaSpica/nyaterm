@@ -124,7 +124,7 @@ impl NyaTermApp {
         if state.value.is_empty() {
             return None;
         }
-        let selection = self.terminal_selection.as_ref()?;
+        let selection = self.terminal.selection.selection.as_ref()?;
         if selection.is_empty() || selection.all_buffer {
             return None;
         }

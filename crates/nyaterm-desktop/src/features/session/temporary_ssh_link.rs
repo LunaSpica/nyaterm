@@ -8,14 +8,15 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if self.has_pending_session_start() {
-            self.terminal_status = "wait for the pending session to finish connecting".to_string();
+            self.terminal.view.status =
+                "wait for the pending session to finish connecting".to_string();
             cx.notify();
             return;
         }
         self.temporary_ssh_link_open = true;
         self.temporary_ssh_link_error = None;
         self.temporary_ssh_link_marked_text.clear();
-        self.terminal_status = "temporary SSH link opened".to_string();
+        self.terminal.view.status = "temporary SSH link opened".to_string();
         window.focus(&self.temporary_ssh_link_focus);
         cx.notify();
     }
@@ -25,7 +26,7 @@ impl NyaTermApp {
         self.temporary_ssh_link_draft.clear();
         self.temporary_ssh_link_error = None;
         self.temporary_ssh_link_marked_text.clear();
-        self.terminal_status = "temporary SSH link cancelled".to_string();
+        self.terminal.view.status = "temporary SSH link cancelled".to_string();
         cx.notify();
     }
 
@@ -36,7 +37,8 @@ impl NyaTermApp {
     ) {
         if self.has_pending_session_start() {
             self.temporary_ssh_link_error = Some("temporarySsh.connecting");
-            self.terminal_status = "wait for the pending session to finish connecting".to_string();
+            self.terminal.view.status =
+                "wait for the pending session to finish connecting".to_string();
             cx.notify();
             return;
         }
@@ -45,7 +47,7 @@ impl NyaTermApp {
             Ok(parsed) => parsed,
             Err(error) => {
                 self.temporary_ssh_link_error = Some(error.locale_key());
-                self.terminal_status = "temporary SSH link is invalid".to_string();
+                self.terminal.view.status = "temporary SSH link is invalid".to_string();
                 cx.notify();
                 return;
             }

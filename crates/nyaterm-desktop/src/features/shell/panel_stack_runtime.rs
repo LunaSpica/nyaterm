@@ -35,7 +35,7 @@ impl NyaTermApp {
                     }
                 }
             }
-            self.terminal_status = "multi-open panels enabled".to_string();
+            self.terminal.view.status = "multi-open panels enabled".to_string();
         } else {
             // Collapse to active-only mode.
             if self.active_left_panel.is_none() {
@@ -52,7 +52,7 @@ impl NyaTermApp {
             }
             self.left_open_panels.clear();
             self.right_open_panels.clear();
-            self.terminal_status = "single panel mode".to_string();
+            self.terminal.view.status = "single panel mode".to_string();
         }
         self.persist_ui_layout();
         cx.notify();
@@ -169,7 +169,7 @@ impl NyaTermApp {
                         self.right_inspector_collapsed = fallback.is_none();
                     }
                 }
-                self.terminal_status = format!("{} closed", item.label());
+                self.terminal.view.status = format!("{} closed", item.label());
             } else {
                 match side {
                     PanelSide::Left => {
@@ -181,7 +181,7 @@ impl NyaTermApp {
                         self.right_inspector_collapsed = false;
                     }
                 }
-                self.terminal_status = format!("{} opened", item.label());
+                self.terminal.view.status = format!("{} opened", item.label());
             }
             self.persist_ui_layout();
             cx.notify();
@@ -214,7 +214,7 @@ impl NyaTermApp {
                     self.right_inspector_collapsed = false;
                 }
             }
-            self.terminal_status = format!("{} focused", item.label());
+            self.terminal.view.status = format!("{} focused", item.label());
             self.persist_ui_layout();
             cx.notify();
             return;
@@ -246,7 +246,7 @@ impl NyaTermApp {
                         next_active.is_none() && self.right_open_panels.is_empty();
                 }
             }
-            self.terminal_status = format!("{} closed", item.label());
+            self.terminal.view.status = format!("{} closed", item.label());
         } else {
             open_list.push(id);
             match side {
@@ -259,7 +259,7 @@ impl NyaTermApp {
                     self.right_inspector_collapsed = false;
                 }
             }
-            self.terminal_status = format!("{} opened", item.label());
+            self.terminal.view.status = format!("{} opened", item.label());
         }
         self.persist_ui_layout();
         cx.notify();
@@ -323,7 +323,7 @@ impl NyaTermApp {
             below_weight: self.panel_stack_weight(&below_id),
             container_height: container_height.max(1.),
         });
-        self.terminal_status = "resizing panel stack".to_string();
+        self.terminal.view.status = "resizing panel stack".to_string();
         cx.notify();
     }
 
@@ -359,7 +359,7 @@ impl NyaTermApp {
     ) {
         if self.panel_stack_resize.take().is_some() {
             self.persist_ui_layout();
-            self.terminal_status = "panel stack sizes saved".to_string();
+            self.terminal.view.status = "panel stack sizes saved".to_string();
             cx.notify();
         }
     }
@@ -832,7 +832,7 @@ impl NyaTermApp {
                         true,
                         cx.listener(|this, _, _, cx| {
                             this.refresh_cloud_sync_history();
-                            this.terminal_status = "cloud sync history refreshed".to_string();
+                            this.terminal.view.status = "cloud sync history refreshed".to_string();
                             cx.notify();
                         }),
                     )

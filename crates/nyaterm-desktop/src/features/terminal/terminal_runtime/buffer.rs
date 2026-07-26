@@ -177,14 +177,14 @@ impl NyaTermApp {
 
     pub(in crate::features) fn sync_terminal_scrollback_limits(&mut self) {
         let limit = self.terminal_scrollback_line_limit();
-        self.terminal_screen.set_scrollback_limit(limit);
-        for view in self.terminal_views.values_mut() {
+        self.terminal.view.screen.set_scrollback_limit(limit);
+        for view in self.terminal.view.views.values_mut() {
             view.screen.set_scrollback_limit(limit);
             view.clamp_scroll_offset();
             view.clear_scrollback_query_caches();
         }
-        if self.terminal_scroll_offset > self.terminal_screen.scrollback_len() {
-            self.terminal_scroll_offset = self.terminal_screen.scrollback_len();
+        if self.terminal.view.scroll_offset > self.terminal.view.screen.scrollback_len() {
+            self.terminal.view.scroll_offset = self.terminal.view.screen.scrollback_len();
         }
     }
 
@@ -197,7 +197,7 @@ impl NyaTermApp {
         session_id: &str,
         data: Vec<u8>,
     ) {
-        self.terminal_frame_pipeline.submit_output(
+        self.terminal.view.frame_pipeline.submit_output(
             session_id.to_string(),
             data,
             self.settings.interaction_default_encoding.clone(),
@@ -225,7 +225,10 @@ impl NyaTermApp {
                 })
             })
             .collect::<Vec<_>>();
-        self.terminal_frame_pipeline.submit_outputs(submissions);
+        self.terminal
+            .view
+            .frame_pipeline
+            .submit_outputs(submissions);
     }
 
     pub(in crate::features) fn request_terminal_frame_snapshot(
@@ -236,7 +239,7 @@ impl NyaTermApp {
         if session_id.is_empty() {
             return false;
         }
-        let Some(view) = self.terminal_views.get_mut(session_id) else {
+        let Some(view) = self.terminal.view.views.get_mut(session_id) else {
             return false;
         };
         // offset 0 is live viewport recovery (after worker skipped hidden snaps).
@@ -249,7 +252,7 @@ impl NyaTermApp {
         {
             return false;
         }
-        self.terminal_frame_pipeline.request_snapshot(
+        self.terminal.view.frame_pipeline.request_snapshot(
             session_id.to_string(),
             offset,
             self.settings.terminal_action_links_enabled && !self.settings.terminal_low_latency_mode,
@@ -266,7 +269,7 @@ impl NyaTermApp {
         if session_id.is_empty() {
             return false;
         }
-        let Some(view) = self.terminal_views.get_mut(session_id) else {
+        let Some(view) = self.terminal.view.views.get_mut(session_id) else {
             return false;
         };
         let Some(offset) = terminal_live_scrollback_prefetch_request_offset(view) else {
@@ -275,7 +278,7 @@ impl NyaTermApp {
         if !view.pending_snapshot_offsets.insert(offset) {
             return false;
         }
-        self.terminal_frame_pipeline.request_snapshot(
+        self.terminal.view.frame_pipeline.request_snapshot(
             session_id.to_string(),
             offset,
             false,
@@ -289,13 +292,16 @@ impl NyaTermApp {
         session_id: String,
         cx: &mut Context<Self>,
     ) {
-        self.terminal_live_prefetch_generation =
-            self.terminal_live_prefetch_generation.saturating_add(1);
-        let generation = self.terminal_live_prefetch_generation;
-        self.terminal_live_prefetch_task = Some(cx.spawn(async move |this, cx| {
+        self.terminal.view.live_prefetch_generation = self
+            .terminal
+            .view
+            .live_prefetch_generation
+            .saturating_add(1);
+        let generation = self.terminal.view.live_prefetch_generation;
+        self.terminal.view.live_prefetch_task = Some(cx.spawn(async move |this, cx| {
             Timer::after(TERMINAL_LIVE_PREFETCH_IDLE_DELAY).await;
             let _ = this.update(cx, |this, _cx| {
-                if this.terminal_live_prefetch_generation == generation {
+                if this.terminal.view.live_prefetch_generation == generation {
                     this.request_terminal_live_scrollback_prefetch(&session_id);
                 }
             });
@@ -307,9 +313,13 @@ impl NyaTermApp {
         session_id: &str,
         offset: usize,
     ) -> bool {
-        self.terminal_views.get(session_id).is_some_and(|view| {
-            terminal_view_has_cached_scrollback_snapshot_covering_offset(view, offset)
-        })
+        self.terminal
+            .view
+            .views
+            .get(session_id)
+            .is_some_and(|view| {
+                terminal_view_has_cached_scrollback_snapshot_covering_offset(view, offset)
+            })
     }
 
     pub(in crate::features) fn sync_terminal_frame_snapshot_priority(&self) {
@@ -318,7 +328,9 @@ impl NyaTermApp {
             .into_iter()
             .map(str::to_string)
             .collect::<Vec<_>>();
-        self.terminal_frame_pipeline
+        self.terminal
+            .view
+            .frame_pipeline
             .set_snapshot_priority(session_ids);
     }
 
@@ -352,7 +364,7 @@ impl NyaTermApp {
         if session_id.is_empty() {
             return false;
         }
-        let Some(view) = self.terminal_views.get_mut(session_id) else {
+        let Some(view) = self.terminal.view.views.get_mut(session_id) else {
             return false;
         };
         if !terminal_scroll_snapshot_request_should_enqueue(view, offset, priority) {
@@ -364,14 +376,14 @@ impl NyaTermApp {
                 self.settings.terminal_action_links_enabled,
                 self.settings.terminal_low_latency_mode,
             );
-            self.terminal_frame_pipeline.request_priority_snapshot(
+            self.terminal.view.frame_pipeline.request_priority_snapshot(
                 session_id.to_string(),
                 offset,
                 action_links_enabled,
                 self.settings.terminal_action_links_matchers.clone(),
             );
         } else {
-            self.terminal_frame_pipeline.request_snapshot(
+            self.terminal.view.frame_pipeline.request_snapshot(
                 session_id.to_string(),
                 offset,
                 false,
@@ -396,7 +408,7 @@ impl NyaTermApp {
         }
         let matcher_key =
             terminal_action_link_matcher_key(true, &self.settings.terminal_action_links_matchers);
-        let Some(view) = self.terminal_views.get_mut(session_id) else {
+        let Some(view) = self.terminal.view.views.get_mut(session_id) else {
             return false;
         };
         let action_links_current = if let Some(snapshot) = snapshot {
@@ -417,7 +429,7 @@ impl NyaTermApp {
         }
         view.pending_snapshot_offsets.insert(offset);
         view.priority_pending_snapshot_offsets.insert(offset);
-        self.terminal_frame_pipeline.request_priority_snapshot(
+        self.terminal.view.frame_pipeline.request_priority_snapshot(
             session_id.to_string(),
             offset,
             true,
@@ -434,7 +446,7 @@ impl NyaTermApp {
         if session_id.is_empty() {
             return false;
         }
-        let Some(view) = self.terminal_views.get_mut(session_id) else {
+        let Some(view) = self.terminal.view.views.get_mut(session_id) else {
             return false;
         };
         if view.search_result.as_ref().is_some_and(|result| {
@@ -444,7 +456,9 @@ impl NyaTermApp {
             return false;
         }
         view.pending_search_key = Some(key.clone());
-        self.terminal_frame_pipeline
+        self.terminal
+            .view
+            .frame_pipeline
             .request_search(session_id.to_string(), key);
         true
     }
@@ -454,7 +468,7 @@ impl NyaTermApp {
         session_id: &str,
         output: String,
     ) {
-        self.terminal_frame_pipeline.seed_session(
+        self.terminal.view.frame_pipeline.seed_session(
             session_id.to_string(),
             output,
             self.settings.interaction_default_encoding.clone(),
@@ -477,7 +491,9 @@ impl NyaTermApp {
         let live_recovery_ids = visible_session_ids
             .iter()
             .filter(|session_id| {
-                self.terminal_views
+                self.terminal
+                    .view
+                    .views
                     .get(session_id.as_str())
                     .is_some_and(|view| view.frame_snapshot.is_none() && view.scroll_offset == 0)
             })
@@ -488,8 +504,8 @@ impl NyaTermApp {
             .map(String::as_str)
             .collect::<Vec<_>>();
         let snapshot_requests = terminal_frame_snapshot_request_candidates(
-            &self.terminal_views,
-            &self.terminal_scroll_delta_residuals,
+            &self.terminal.view.views,
+            &self.terminal.view.scroll_delta_residuals,
             &visible_refs,
         );
         let mut requested = false;
@@ -558,11 +574,11 @@ impl NyaTermApp {
             }
 
             let allow_deferred_events = terminal_frame_deferred_events_can_apply(
-                self.terminal_runtime.session_event_backlog_active,
-                self.terminal_runtime.session_event_queued_output_bytes,
+                self.terminal.view.runtime.session_event_backlog_active,
+                self.terminal.view.runtime.session_event_queued_output_bytes,
                 self.session_event_bridge.queued_output_bytes(),
                 pending_terminal_frame_output_events(&self.pending_terminal_frame_events),
-                self.terminal_frame_pipeline.queued_output_bytes(),
+                self.terminal.view.frame_pipeline.queued_output_bytes(),
             );
             let (frames, coalesced) = pop_terminal_frame_events_for_apply(
                 &mut self.pending_terminal_frame_events,
@@ -601,21 +617,31 @@ impl NyaTermApp {
         }
 
         if drained_events > 0 {
-            self.terminal_runtime.last_terminal_frame_apply_at = Some(started_at);
+            self.terminal.view.runtime.last_terminal_frame_apply_at = Some(started_at);
         }
         let surface_notify_count =
             dirty_surface_sessions.len() + scroll_position_surface_sessions.len();
         for session_id in dirty_surface_sessions {
             self.sync_terminal_surface_paint(&session_id, cx);
-            self.terminal_runtime.terminal_surface_frame_notify_count = self
-                .terminal_runtime
+            self.terminal
+                .view
+                .runtime
+                .terminal_surface_frame_notify_count = self
+                .terminal
+                .view
+                .runtime
                 .terminal_surface_frame_notify_count
                 .saturating_add(1);
         }
         for session_id in scroll_position_surface_sessions {
             self.notify_terminal_scroll_position_only(&session_id, cx);
-            self.terminal_runtime.terminal_surface_frame_notify_count = self
-                .terminal_runtime
+            self.terminal
+                .view
+                .runtime
+                .terminal_surface_frame_notify_count = self
+                .terminal
+                .view
+                .runtime
                 .terminal_surface_frame_notify_count
                 .saturating_add(1);
         }
@@ -625,7 +651,7 @@ impl NyaTermApp {
             && self.should_log_slow_diagnostic("terminal_frame_event_drain", Instant::now())
         {
             let (layout_cache_hits, layout_cache_misses) = terminal_layout_cache_stats_for_sessions(
-                &self.terminal_views,
+                &self.terminal.view.views,
                 &visible_session_ids,
             );
             let surface_paint_delta =
@@ -641,7 +667,9 @@ impl NyaTermApp {
                 layout_cache_hits,
                 layout_cache_misses,
                 connect_settle_active = self
-                    .terminal_runtime
+                    .terminal
+                    .view
+                    .runtime
                     .connect_settle_until
                     .is_some_and(|until| Instant::now() < until),
                 pending_events = self.pending_terminal_frame_events.len(),
@@ -655,7 +683,9 @@ impl NyaTermApp {
 
     fn fill_pending_terminal_frame_events(&mut self, max_events: usize) -> usize {
         let room = max_events.saturating_sub(self.pending_terminal_frame_events.len());
-        self.terminal_frame_pipeline
+        self.terminal
+            .view
+            .frame_pipeline
             .drain_events_into(&mut self.pending_terminal_frame_events, room)
     }
 
@@ -703,7 +733,9 @@ impl NyaTermApp {
         if is_visible
             && accepted_bytes > 0
             && self
-                .terminal_runtime
+                .terminal
+                .view
+                .runtime
                 .connect_settle_until
                 .is_none_or(|until| Instant::now() >= until)
         {
@@ -716,7 +748,9 @@ impl NyaTermApp {
         let mut need_live_snapshot = false;
         let (unread_changed, output_scroll_offset) = {
             let view = self
-                .terminal_views
+                .terminal
+                .view
+                .views
                 .entry(session_id.clone())
                 .or_insert_with(TerminalViewState::new);
             let had_unread = view.has_unread;
@@ -825,8 +859,13 @@ impl NyaTermApp {
         let chrome_notify =
             terminal_output_frame_needs_chrome_notify(unread_changed, effects_need_ui_apply);
         if chrome_notify {
-            self.terminal_runtime.terminal_chrome_frame_notify_count = self
-                .terminal_runtime
+            self.terminal
+                .view
+                .runtime
+                .terminal_chrome_frame_notify_count = self
+                .terminal
+                .view
+                .runtime
                 .terminal_chrome_frame_notify_count
                 .saturating_add(1);
         }
@@ -850,7 +889,7 @@ impl NyaTermApp {
         if self.main_mode != MainMode::Workspace {
             return Vec::new();
         }
-        if let Some(root) = self.terminal_windows.as_ref()
+        if let Some(root) = self.terminal.windows.tree.as_ref()
             && matches!(root, TerminalWindowNode::Split { .. })
         {
             return terminal_window_node_visible_tab_ids(root);
@@ -867,7 +906,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> TerminalFrameApplyResult {
         let current_revision = {
-            let Some(view) = self.terminal_views.get_mut(&frame.session_id) else {
+            let Some(view) = self.terminal.view.views.get_mut(&frame.session_id) else {
                 return TerminalFrameApplyResult::default();
             };
             view.pending_snapshot_offsets.remove(&frame.offset);
@@ -894,7 +933,7 @@ impl NyaTermApp {
             }
             return TerminalFrameApplyResult::default();
         }
-        let Some(view) = self.terminal_views.get_mut(&frame.session_id) else {
+        let Some(view) = self.terminal.view.views.get_mut(&frame.session_id) else {
             return TerminalFrameApplyResult::default();
         };
         if frame.offset == 0 {
@@ -949,7 +988,9 @@ impl NyaTermApp {
             });
         let should_paint = self.terminal_session_has_visible_surface(&frame.session_id)
             && self
-                .terminal_views
+                .terminal
+                .view
+                .views
                 .get(&frame.session_id)
                 .is_some_and(|view| {
                     terminal_snapshot_frame_covers_scroll_target(
@@ -963,7 +1004,7 @@ impl NyaTermApp {
                 });
         if !should_paint
             && self.terminal_session_has_visible_surface(&frame.session_id)
-            && let Some(surface) = self.terminal_surfaces.get(&frame.session_id).cloned()
+            && let Some(surface) = self.terminal.view.surfaces.get(&frame.session_id).cloned()
         {
             let snapshot = frame.snapshot.clone();
             surface.update(cx, |surface, _cx| {
@@ -974,7 +1015,7 @@ impl NyaTermApp {
             should_paint,
             frame.offset,
             current_action_link_matcher_key,
-            self.terminal_views.get(&frame.session_id),
+            self.terminal.view.views.get(&frame.session_id),
             Some(frame.snapshot.as_ref()),
         );
         if should_request_scroll_enrichment {
@@ -998,8 +1039,12 @@ impl NyaTermApp {
     ) -> TerminalFrameApplyResult {
         let session_id = frame.session_id.clone();
         let result_key = frame.result.key.clone();
-        let Some((current_revision, is_current_revision)) =
-            self.terminal_views.get_mut(&frame.session_id).map(|view| {
+        let Some((current_revision, is_current_revision)) = self
+            .terminal
+            .view
+            .views
+            .get_mut(&frame.session_id)
+            .map(|view| {
                 if view.pending_search_key.as_ref() == Some(&frame.result.key) {
                     view.pending_search_key = None;
                 }
@@ -1044,8 +1089,8 @@ impl NyaTermApp {
             true,
             is_visible,
             self.active_session_id.as_deref(),
-            self.terminal_search_open,
-            self.terminal_search_mode,
+            self.terminal.search.open,
+            self.terminal.search.mode,
             current_search_key.as_ref(),
             &result_key,
         )
@@ -1058,11 +1103,11 @@ impl NyaTermApp {
     ) -> bool {
         let text_bytes = frame.text.len();
         if frame.text.trim().is_empty() {
-            self.terminal_status = "terminal buffer is empty".to_string();
+            self.terminal.view.status = "terminal buffer is empty".to_string();
         } else {
             let char_count = frame.text.chars().count();
             cx.write_to_clipboard(ClipboardItem::new_string(frame.text));
-            self.terminal_status = if frame.truncated {
+            self.terminal.view.status = if frame.truncated {
                 format!("copied terminal buffer tail ({char_count} chars)")
             } else {
                 format!("copied terminal buffer ({char_count} chars)")
@@ -1087,9 +1132,9 @@ impl NyaTermApp {
     pub(in crate::features) fn enforce_terminal_scrollback_limit(&mut self) {
         self.sync_terminal_scrollback_limits();
         let max_bytes = self.terminal_scrollback_max_bytes();
-        trim_terminal_output_to(&mut self.terminal_output, max_bytes);
+        trim_terminal_output_to(&mut self.terminal.view.output, max_bytes);
         let ui_output_tail_cap = max_bytes.min(TERMINAL_UI_OUTPUT_TAIL_CAP);
-        for view in self.terminal_views.values_mut() {
+        for view in self.terminal.view.views.values_mut() {
             trim_terminal_output_to(&mut view.output, ui_output_tail_cap);
         }
         self.sync_session_event_bridge_config();
@@ -1102,7 +1147,9 @@ impl NyaTermApp {
     ) -> String {
         let encoding = self.settings.interaction_default_encoding.clone();
         let view = self
-            .terminal_views
+            .terminal
+            .view
+            .views
             .entry(session_id.to_string())
             .or_insert_with(TerminalViewState::new);
         view.recording_decoder.set_encoding(&encoding);
@@ -1149,7 +1196,9 @@ impl NyaTermApp {
             let is_active = self.active_session_id.as_deref() == Some(session_id);
             let encoding = self.settings.interaction_default_encoding.clone();
             let view = self
-                .terminal_views
+                .terminal
+                .view
+                .views
                 .entry(session_id.to_string())
                 .or_insert_with(TerminalViewState::new);
             view.set_encoding(&encoding);
@@ -1162,7 +1211,7 @@ impl NyaTermApp {
             clipboard_store = effects.clipboard_store;
             clipboard_loads = effects.clipboard_loads;
             if effects.bell {
-                self.terminal_runtime.visual_bell_ticks = 4;
+                self.terminal.view.runtime.visual_bell_ticks = 4;
             }
             if let Some(title) = effects.title {
                 self.session_dynamic_titles
@@ -1179,16 +1228,19 @@ impl NyaTermApp {
                 pending_cwd = Some(cwd);
             }
         } else {
-            self.terminal_screen.advance_decoded_text(text.as_ref());
-            self.terminal_output.push_str(text.as_ref());
+            self.terminal
+                .view
+                .screen
+                .advance_decoded_text(text.as_ref());
+            self.terminal.view.output.push_str(text.as_ref());
             let max_bytes = self.terminal_scrollback_max_bytes();
-            trim_terminal_output_to(&mut self.terminal_output, max_bytes);
-            let effects = self.terminal_screen.take_effects();
+            trim_terminal_output_to(&mut self.terminal.view.output, max_bytes);
+            let effects = self.terminal.view.screen.take_effects();
             pending_pty_writes = effects.pty_write;
             clipboard_store = effects.clipboard_store;
             clipboard_loads = effects.clipboard_loads;
             if effects.bell {
-                self.terminal_runtime.visual_bell_ticks = 4;
+                self.terminal.view.runtime.visual_bell_ticks = 4;
             }
         }
 
@@ -1223,7 +1275,7 @@ impl NyaTermApp {
                 continue;
             }
             if let Err(error) = self.write_session_protocol_response(session_id, &response) {
-                self.terminal_status = format!("terminal response failed: {error}");
+                self.terminal.view.status = format!("terminal response failed: {error}");
                 break;
             }
         }
@@ -1240,7 +1292,7 @@ impl NyaTermApp {
         let mut clipboard_store = effects.clipboard_store;
         let mut clipboard_loads = effects.clipboard_loads;
         if effects.bell {
-            self.terminal_runtime.visual_bell_ticks = 4;
+            self.terminal.view.runtime.visual_bell_ticks = 4;
         }
         if let Some(title) = effects.title {
             self.session_dynamic_titles
@@ -1279,7 +1331,7 @@ impl NyaTermApp {
         if let Some(cx) = cx {
             if let Some(text) = clipboard_store.take() {
                 cx.write_to_clipboard(ClipboardItem::new_string(text));
-                self.terminal_status = "OSC 52 clipboard updated".to_string();
+                self.terminal.view.status = "OSC 52 clipboard updated".to_string();
             }
             if !clipboard_loads.is_empty() {
                 let clipboard_text = cx
@@ -1294,7 +1346,7 @@ impl NyaTermApp {
             }
         } else {
             if clipboard_store.take().is_some() {
-                self.terminal_status =
+                self.terminal.view.status =
                     "OSC 52 clipboard update skipped: UI unavailable".to_string();
             }
             if !clipboard_loads.is_empty() {

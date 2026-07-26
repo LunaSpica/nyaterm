@@ -248,7 +248,7 @@ impl NyaTermApp {
     ) {
         cx.write_to_clipboard(ClipboardItem::new_string(value));
         self.remote_ops.process.status = format!("copied process {label}");
-        self.terminal_status = self.remote_ops.process.status.clone();
+        self.terminal.view.status = self.remote_ops.process.status.clone();
         cx.notify();
     }
 
@@ -260,7 +260,7 @@ impl NyaTermApp {
     ) {
         cx.write_to_clipboard(ClipboardItem::new_string(value));
         self.remote_ops.docker.status = format!("copied Docker {label}");
-        self.terminal_status = self.remote_ops.docker.status.clone();
+        self.terminal.view.status = self.remote_ops.docker.status.clone();
         cx.notify();
     }
 
@@ -328,7 +328,7 @@ impl NyaTermApp {
         let Some(config) = self.active_ssh_config.clone() else {
             self.remote_ops.process.status =
                 "start an SSH session before listing processes".to_string();
-            self.terminal_status = self.remote_ops.process.status.clone();
+            self.terminal.view.status = self.remote_ops.process.status.clone();
             cx.notify();
             return;
         };
@@ -375,7 +375,7 @@ impl NyaTermApp {
         let Some(config) = self.active_ssh_config.clone() else {
             self.remote_ops.process.status =
                 "start an SSH session before signalling processes".to_string();
-            self.terminal_status = self.remote_ops.process.status.clone();
+            self.terminal.view.status = self.remote_ops.process.status.clone();
             cx.notify();
             return;
         };
@@ -427,7 +427,7 @@ impl NyaTermApp {
         let Some(config) = self.active_ssh_config.clone() else {
             self.remote_ops.process.status =
                 "start an SSH session before renicing processes".to_string();
-            self.terminal_status = self.remote_ops.process.status.clone();
+            self.terminal.view.status = self.remote_ops.process.status.clone();
             cx.notify();
             return;
         };
@@ -495,7 +495,7 @@ impl NyaTermApp {
                     self.remote_ops.process.consecutive_refresh_failures = 0;
                     self.remote_ops.process.status =
                         format!("loaded {} remote process(es)", processes.len());
-                    self.terminal_status = self.remote_ops.process.status.clone();
+                    self.terminal.view.status = self.remote_ops.process.status.clone();
                     self.apply_processes(processes);
                 }
                 Ok(ProcessJobOutput::Signalled {
@@ -504,7 +504,7 @@ impl NyaTermApp {
                     processes,
                 }) => {
                     self.remote_ops.process.status = format!("sent {signal} to pid {pid}");
-                    self.terminal_status = self.remote_ops.process.status.clone();
+                    self.terminal.view.status = self.remote_ops.process.status.clone();
                     self.remote_ops.process.signal_confirm = None;
                     self.apply_processes(processes);
                 }
@@ -514,7 +514,7 @@ impl NyaTermApp {
                     processes,
                 }) => {
                     self.remote_ops.process.status = format!("reniced pid {pid} to {nice}");
-                    self.terminal_status = self.remote_ops.process.status.clone();
+                    self.terminal.view.status = self.remote_ops.process.status.clone();
                     self.apply_processes(processes);
                 }
                 Err(error) => {
@@ -534,7 +534,7 @@ impl NyaTermApp {
                         }
                     }
                     self.remote_ops.process.status = format!("process operation failed: {error}");
-                    self.terminal_status = self.remote_ops.process.status.clone();
+                    self.terminal.view.status = self.remote_ops.process.status.clone();
                 }
             }
         }

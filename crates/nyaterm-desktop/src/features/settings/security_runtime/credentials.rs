@@ -250,7 +250,7 @@ impl NyaTermApp {
                 self.refresh_security_catalog();
                 self.security.editors.credential = None;
                 self.security.status = format!("credential saved ({})", compact_id(&id));
-                self.terminal_status = "credential saved".to_string();
+                self.terminal.view.status = "credential saved".to_string();
             }
             Err(error) => {
                 if let Some(editor) = self.security.editors.credential.as_mut() {

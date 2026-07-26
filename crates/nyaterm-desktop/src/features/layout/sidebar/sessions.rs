@@ -317,7 +317,7 @@ impl NyaTermApp {
                                     .child("START"),
                             )
                             .child(status_pill(
-                                status_label(&self.terminal_status),
+                                status_label(&self.terminal.view.status),
                                 rgb(palette.link),
                                 rgb(palette.hover),
                             )),
@@ -423,7 +423,9 @@ impl NyaTermApp {
         let is_active = self.active_session_id.as_deref() == Some(session.id.as_str());
         let is_disconnected = self.is_session_disconnected(&session.id);
         let has_unread = self
-            .terminal_views
+            .terminal
+            .view
+            .views
             .get(&session.id)
             .is_some_and(|view| view.has_unread);
         let busy_action = self.active_session_busy_actions.get(&session.id).cloned();

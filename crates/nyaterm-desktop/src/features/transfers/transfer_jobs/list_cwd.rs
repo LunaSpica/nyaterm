@@ -16,7 +16,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(config) = self.active_ssh_config.clone() else {
-            self.terminal_status = "start an SSH session first".to_string();
+            self.terminal.view.status = "start an SSH session first".to_string();
             self.ensure_panel_open(NavItem::Transfers);
             cx.notify();
             return;
@@ -48,7 +48,7 @@ impl NyaTermApp {
             progress: None,
             control: None,
         });
-        self.terminal_status = format!("SFTP list started for {remote_path}");
+        self.terminal.view.status = format!("SFTP list started for {remote_path}");
         let transfer_tx = self.transfer.queue.tx.clone();
         std::thread::spawn(move || {
             let result = SftpService::new(config)
@@ -74,7 +74,7 @@ impl NyaTermApp {
             return;
         }
         let Some(config) = self.active_ssh_config.clone() else {
-            self.terminal_status = "start an SSH session first".to_string();
+            self.terminal.view.status = "start an SSH session first".to_string();
             self.ensure_panel_open(NavItem::Transfers);
             cx.notify();
             return;
@@ -100,7 +100,7 @@ impl NyaTermApp {
         self.transfer.browser.status = "Resolving remote cwd...".to_string();
         self.transfer.browser.loading = true;
         self.transfer.browser.error = None;
-        self.terminal_status = "SFTP cwd sync started".to_string();
+        self.terminal.view.status = "SFTP cwd sync started".to_string();
         let transfer_tx = self.transfer.queue.tx.clone();
         std::thread::spawn(move || {
             let result = (|| {

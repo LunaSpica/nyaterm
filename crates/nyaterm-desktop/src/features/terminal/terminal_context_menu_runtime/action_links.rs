@@ -74,9 +74,9 @@ impl NyaTermApp {
                     this.close_action_link_menu(cx);
                     if let Some(url) = open_url.clone() {
                         match open_external_url(&url) {
-                            Ok(()) => this.terminal_status = format!("opened link: {url}"),
+                            Ok(()) => this.terminal.view.status = format!("opened link: {url}"),
                             Err(error) => {
-                                this.terminal_status = format!("open link failed: {error}")
+                                this.terminal.view.status = format!("open link failed: {error}")
                             }
                         }
                         cx.notify();

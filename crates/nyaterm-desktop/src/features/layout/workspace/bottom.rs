@@ -92,7 +92,8 @@ impl NyaTermApp {
                                 "Search",
                                 cx.listener(|this, _, window, cx| {
                                     window.focus(&this.command_search_focus);
-                                    this.terminal_status = "command search focused".to_string();
+                                    this.terminal.view.status =
+                                        "command search focused".to_string();
                                     cx.notify();
                                 }),
                             ))
@@ -102,7 +103,8 @@ impl NyaTermApp {
                                 "Refresh",
                                 cx.listener(|this, _, _, cx| {
                                     this.refresh_quick_commands();
-                                    this.terminal_status = "quick commands refreshed".to_string();
+                                    this.terminal.view.status =
+                                        "quick commands refreshed".to_string();
                                     cx.notify();
                                 }),
                             )),

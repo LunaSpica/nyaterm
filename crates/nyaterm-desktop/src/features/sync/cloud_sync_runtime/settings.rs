@@ -29,7 +29,7 @@ impl NyaTermApp {
             self.settings_active_tab = SettingsTab::Security;
             self.cloud_sync_status =
                 "configure a master password before enabling cloud sync".to_string();
-            self.terminal_status = self.cloud_sync_status.clone();
+            self.terminal.view.status = self.cloud_sync_status.clone();
             cx.notify();
             return;
         }

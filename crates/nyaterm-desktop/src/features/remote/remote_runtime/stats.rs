@@ -13,7 +13,7 @@ impl NyaTermApp {
         let Some(config) = self.active_ssh_config.clone() else {
             self.remote_ops.stats.status =
                 "start an SSH session before inspecting stats".to_string();
-            self.terminal_status = self.remote_ops.stats.status.clone();
+            self.terminal.view.status = self.remote_ops.stats.status.clone();
             cx.notify();
             return;
         };
@@ -92,7 +92,7 @@ impl NyaTermApp {
                         stats.load.load5,
                         stats.load.load15
                     );
-                    self.terminal_status = self.remote_ops.stats.status.clone();
+                    self.terminal.view.status = self.remote_ops.stats.status.clone();
                     self.remote_ops.stats.data = Some(stats);
                 }
                 Err(error) => {
@@ -105,7 +105,7 @@ impl NyaTermApp {
                         self.remote_ops.stats.data = None;
                     }
                     self.remote_ops.stats.status = format!("stats refresh failed: {error}");
-                    self.terminal_status = self.remote_ops.stats.status.clone();
+                    self.terminal.view.status = self.remote_ops.stats.status.clone();
                 }
             }
         }

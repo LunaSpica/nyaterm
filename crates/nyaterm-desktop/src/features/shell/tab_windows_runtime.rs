@@ -9,7 +9,7 @@ impl NyaTermApp {
     pub(in crate::features) fn reconcile_terminal_windows(&mut self) {
         // Flat strip mode (default): nothing to reconcile. Avoid allocating a full
         // SessionInfo list on every residual call.
-        if self.terminal_windows.is_none() {
+        if self.terminal.windows.tree.is_none() {
             return;
         }
 
@@ -23,26 +23,26 @@ impl NyaTermApp {
             .cloned()
             .collect::<Vec<_>>();
         if live_ids.is_empty() {
-            self.terminal_windows = None;
+            self.terminal.windows.tree = None;
             self.focused_terminal_window_leaf_id = None;
             return;
         }
 
-        if let Some(root) = self.terminal_windows.as_mut() {
+        if let Some(root) = self.terminal.windows.tree.as_mut() {
             // Drop closed sessions.
             for tab_id in root.collect_tab_ids() {
                 if !live_ids.iter().any(|id| id == &tab_id) {
                     if let Some(next) = root.remove_tab(&tab_id) {
                         *root = next;
                     } else {
-                        self.terminal_windows = None;
+                        self.terminal.windows.tree = None;
                         break;
                     }
                 }
             }
         }
 
-        if let Some(root) = self.terminal_windows.as_mut() {
+        if let Some(root) = self.terminal.windows.tree.as_mut() {
             let preferred = self.focused_terminal_window_leaf_id.clone();
             for tab_id in &live_ids {
                 root.ensure_tab(tab_id, preferred.as_deref());
@@ -61,7 +61,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn ensure_terminal_windows_root(&mut self) {
-        if self.terminal_windows.is_some() {
+        if self.terminal.windows.tree.is_some() {
             return;
         }
         let tab_ids = self
@@ -75,7 +75,7 @@ impl NyaTermApp {
         let active = self.active_session_id.clone();
         let root = TerminalWindowNode::leaf(tab_ids, active);
         self.focused_terminal_window_leaf_id = root.first_leaf_id();
-        self.terminal_windows = Some(root);
+        self.terminal.windows.tree = Some(root);
     }
 
     /// Split the active tab into a new window leaf (Tauri "Open in New Window" in-app).
@@ -86,19 +86,19 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(session_id) = self.active_session_id.clone() else {
-            self.terminal_status = "no active session to split into a window leaf".to_string();
+            self.terminal.view.status = "no active session to split into a window leaf".to_string();
             cx.notify();
             return;
         };
         self.ensure_terminal_windows_root();
-        let Some(root) = self.terminal_windows.as_mut() else {
-            self.terminal_status = "no sessions available for window split".to_string();
+        let Some(root) = self.terminal.windows.tree.as_mut() else {
+            self.terminal.view.status = "no sessions available for window split".to_string();
             cx.notify();
             return;
         };
         if !root.split_tab_to_edge(&session_id, direction, edge) {
             // Only one tab in leaf — cannot detach into a second leaf.
-            self.terminal_status =
+            self.terminal.view.status =
                 "need at least two tabs in a leaf to open a new window pane".to_string();
             cx.notify();
             return;
@@ -108,7 +108,7 @@ impl NyaTermApp {
             find_leaf_with_tab(root, &session_id).or_else(|| root.first_leaf_id());
         self.selected_nav = NavItem::Workspace;
         self.main_mode = MainMode::Workspace;
-        self.terminal_status = format!(
+        self.terminal.view.status = format!(
             "opened session {} in a new window leaf ({})",
             short_id(&session_id),
             direction.label().to_ascii_lowercase()
@@ -124,7 +124,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.ensure_terminal_windows_root();
-        if let Some(root) = self.terminal_windows.as_mut() {
+        if let Some(root) = self.terminal.windows.tree.as_mut() {
             let _ = set_leaf_active(root, &leaf_id, &session_id);
             let _ = root.set_active_tab(&session_id);
         }
@@ -143,41 +143,42 @@ impl NyaTermApp {
         let Some(session_id) = self.active_session_id.clone() else {
             return;
         };
-        let Some(root) = self.terminal_windows.as_mut() else {
+        let Some(root) = self.terminal.windows.tree.as_mut() else {
             return;
         };
         if root.move_tab_to_leaf(&session_id, &target_leaf_id) {
             self.focused_terminal_window_leaf_id = Some(target_leaf_id);
             let _ = root.set_active_tab(&session_id);
-            self.terminal_status = format!("moved tab {} to window leaf", short_id(&session_id));
+            self.terminal.view.status =
+                format!("moved tab {} to window leaf", short_id(&session_id));
             self.persist_terminal_window_layout();
         }
         cx.notify();
     }
 
     pub(in crate::features) fn close_terminal_window_layout(&mut self, cx: &mut Context<Self>) {
-        self.terminal_windows = None;
+        self.terminal.windows.tree = None;
         self.focused_terminal_window_leaf_id = None;
-        self.terminal_window_drop = None;
-        self.terminal_status = "restored flat tab strip".to_string();
+        self.terminal.windows.drop = None;
+        self.terminal.view.status = "restored flat tab strip".to_string();
         self.persist_terminal_window_layout();
         cx.notify();
     }
 
     pub(in crate::features) fn terminal_windows_is_multi_leaf(&self) -> bool {
         matches!(
-            self.terminal_windows,
+            self.terminal.windows.tree,
             Some(TerminalWindowNode::Split { .. })
         )
     }
 
     pub(in crate::features) fn sync_terminal_windows_active_tab(&mut self, session_id: &str) {
-        if self.terminal_windows.is_none() {
+        if self.terminal.windows.tree.is_none() {
             return;
         }
         // Multi-leaf tab ids are tab roots; map secondary pane focus to its strip tab.
         let tab_id = self.tab_root_for_session(session_id);
-        let Some(root) = self.terminal_windows.as_mut() else {
+        let Some(root) = self.terminal.windows.tree.as_mut() else {
             return;
         };
         let _ = root.set_active_tab(&tab_id);
@@ -192,8 +193,8 @@ impl NyaTermApp {
         before_tab_id: String,
         cx: &mut Context<Self>,
     ) {
-        self.terminal_window_drop = None;
-        let Some(root) = self.terminal_windows.as_mut() else {
+        self.terminal.windows.drop = None;
+        let Some(root) = self.terminal.windows.tree.as_mut() else {
             return;
         };
         if root.place_tab_before(&tab_id, &before_tab_id) {
@@ -201,7 +202,7 @@ impl NyaTermApp {
             self.focused_terminal_window_leaf_id =
                 find_leaf_with_tab(root, &tab_id).or_else(|| root.first_leaf_id());
             self.activate_session_id_with_surface_sync(&tab_id, cx);
-            self.terminal_status = format!(
+            self.terminal.view.status = format!(
                 "moved tab {} before {}",
                 short_id(&tab_id),
                 short_id(&before_tab_id)
@@ -218,14 +219,14 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let next = Some((leaf_id, zone));
-        if self.terminal_window_drop != next {
-            self.terminal_window_drop = next;
+        if self.terminal.windows.drop != next {
+            self.terminal.windows.drop = next;
             cx.notify();
         }
     }
 
     pub(in crate::features) fn clear_terminal_window_drop(&mut self, cx: &mut Context<Self>) {
-        if self.terminal_window_drop.take().is_some() {
+        if self.terminal.windows.drop.take().is_some() {
             cx.notify();
         }
     }
@@ -237,20 +238,20 @@ impl NyaTermApp {
         zone: TabDockZone,
         cx: &mut Context<Self>,
     ) {
-        self.terminal_window_drop = None;
+        self.terminal.windows.drop = None;
         self.ensure_terminal_windows_root();
-        let Some(root) = self.terminal_windows.as_mut() else {
+        let Some(root) = self.terminal.windows.tree.as_mut() else {
             cx.notify();
             return;
         };
         if !root.contains_tab(&tab_id) {
-            self.terminal_status = format!("unknown tab {}", short_id(&tab_id));
+            self.terminal.view.status = format!("unknown tab {}", short_id(&tab_id));
             cx.notify();
             return;
         }
         // Dropping onto the sole-tab same leaf is a no-op for edge; center is fine.
         if !root.dock_tab(&tab_id, &target_leaf_id, zone) {
-            self.terminal_status = "tab dock had no effect".to_string();
+            self.terminal.view.status = "tab dock had no effect".to_string();
             cx.notify();
             return;
         }
@@ -264,7 +265,7 @@ impl NyaTermApp {
             TabDockZone::Center => "merged into leaf".to_string(),
             TabDockZone::Edge(edge) => format!("split to {}", edge.label()),
         };
-        self.terminal_status = format!("docked tab {} ({})", short_id(&tab_id), zone_label);
+        self.terminal.view.status = format!("docked tab {} ({})", short_id(&tab_id), zone_label);
         self.persist_terminal_window_layout();
         cx.notify();
     }
@@ -281,12 +282,12 @@ impl NyaTermApp {
             .map(|session| session.id)
             .collect::<Vec<_>>();
         if tab_ids.is_empty() {
-            self.terminal_status = "no tabs to tile".to_string();
+            self.terminal.view.status = "no tabs to tile".to_string();
             cx.notify();
             return;
         }
         let Some(layout) = TerminalWindowNode::build_smart_split_layout(&tab_ids, mode) else {
-            self.terminal_status = "unable to build tile layout".to_string();
+            self.terminal.view.status = "unable to build tile layout".to_string();
             cx.notify();
             return;
         };
@@ -298,14 +299,14 @@ impl NyaTermApp {
             let _ = root.set_active_tab(&active);
             self.focused_terminal_window_leaf_id =
                 find_leaf_with_tab(&root, &active).or_else(|| root.first_leaf_id());
-            self.terminal_windows = Some(root);
+            self.terminal.windows.tree = Some(root);
         } else {
             self.focused_terminal_window_leaf_id = layout.first_leaf_id();
-            self.terminal_windows = Some(layout);
+            self.terminal.windows.tree = Some(layout);
         }
         self.selected_nav = NavItem::Workspace;
         self.main_mode = MainMode::Workspace;
-        self.terminal_status = format!("applied {}", mode.label().to_ascii_lowercase());
+        self.terminal.view.status = format!("applied {}", mode.label().to_ascii_lowercase());
         self.persist_terminal_window_layout();
         // Global pane layout is obsolete while multi-leaf is active.
         self.persist_workspace_pane_layout();
@@ -317,15 +318,15 @@ impl NyaTermApp {
             return;
         }
         // Defer disk write — layout changes must not open redb on the UI hot path.
-        self.terminal_runtime.window_layout_persist_dirty = true;
+        self.terminal.view.runtime.window_layout_persist_dirty = true;
     }
 
     pub(in crate::features) fn try_restore_terminal_window_layout(&mut self) {
-        if self.terminal_windows_restored {
+        if self.terminal.windows.restored {
             return;
         }
         if !self.settings.startup_restore || !self.settings.startup_restore_window_layout {
-            self.terminal_windows_restored = true;
+            self.terminal.windows.restored = true;
             return;
         }
         // Do not open the config DB during connect/register; wait for idle.
@@ -343,11 +344,11 @@ impl NyaTermApp {
         // enter the quiet cadence.
         if ordered.is_empty() {
             if self.startup_restore_complete {
-                self.terminal_windows_restored = true;
+                self.terminal.windows.restored = true;
             }
             return;
         }
-        self.terminal_windows_restored = true;
+        self.terminal.windows.restored = true;
         let Ok(store) = ConnectionStore::open_with_portable_key_path(
             self.runtime.config_dir(),
             self.runtime.portable_key_path().map(ToOwned::to_owned),
@@ -369,11 +370,11 @@ impl NyaTermApp {
             let _ = root.set_active_tab(&active);
             self.focused_terminal_window_leaf_id =
                 find_leaf_with_tab(&root, &active).or_else(|| root.first_leaf_id());
-            self.terminal_windows = Some(root);
+            self.terminal.windows.tree = Some(root);
         } else {
-            self.terminal_windows = Some(restored);
+            self.terminal.windows.tree = Some(restored);
         }
-        self.terminal_status = "restored multi-leaf window layout".to_string();
+        self.terminal.view.status = "restored multi-leaf window layout".to_string();
     }
 }
 

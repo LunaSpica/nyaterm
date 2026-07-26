@@ -123,11 +123,13 @@ impl NyaTermApp {
         // when there is simply nothing pending (common during pure window drag).
         let now = Instant::now();
         if self
-            .terminal_runtime
+            .terminal
+            .view
+            .runtime
             .connect_settle_until
             .is_some_and(|until| now >= until)
         {
-            self.terminal_runtime.connect_settle_until = None;
+            self.terminal.view.runtime.connect_settle_until = None;
         }
         if self.title_drag_active(now) {
             dirty |= self.drive_pending_focus(window);
@@ -159,9 +161,9 @@ impl NyaTermApp {
             && self.transfer.queue.jobs.is_empty()
             && self.pending_tunnels.is_empty()
             && self.pending_auto_recording_session.is_none()
-            && !self.terminal_runtime.open_tabs_persist_dirty
-            && !self.terminal_runtime.window_layout_persist_dirty
-            && self.terminal_windows_restored
+            && !self.terminal.view.runtime.open_tabs_persist_dirty
+            && !self.terminal.view.runtime.window_layout_persist_dirty
+            && self.terminal.windows.restored
             && !self.ai.chat.pending
             && self.ai.agent.loop_state.is_none()
             && !self.ai.discovery.pending
@@ -169,7 +171,7 @@ impl NyaTermApp {
         {
             dirty |= self.drive_pending_focus(window);
             // During connect settle, skip blink notifies so first frames stay free.
-            if !connect_settle_active(self.terminal_runtime.connect_settle_until, now) {
+            if !connect_settle_active(self.terminal.view.runtime.connect_settle_until, now) {
                 let visual = self.drive_runtime_visual_plane(cx);
                 dirty |= visual.dirty;
             }
@@ -188,7 +190,8 @@ impl NyaTermApp {
 
         let data = self.drive_runtime_data_plane(tick_started_at, window, cx);
         dirty |= data.dirty;
-        self.terminal_runtime.last_session_start_drain_duration = control.timings.session_start;
+        self.terminal.view.runtime.last_session_start_drain_duration =
+            control.timings.session_start;
         self.maybe_log_slow_runtime_background_event_drain(
             data.background_total,
             &data.background_timings,
@@ -209,34 +212,34 @@ impl NyaTermApp {
         let notify_started_at = Instant::now();
         let notify_now = notify_started_at;
         let connect_settle =
-            connect_settle_active(self.terminal_runtime.connect_settle_until, notify_now);
+            connect_settle_active(self.terminal.view.runtime.connect_settle_until, notify_now);
         let output_pressure_for_notify = self.runtime_output_pressure_active();
         // Control-plane dirtiness (session start/prompts) must paint immediately.
         let force_immediate_notify = control.dirty;
         let throttle_active =
             !force_immediate_notify && (output_pressure_for_notify || connect_settle);
         if visual_dirty {
-            self.terminal_runtime.pending_ui_notify = true;
+            self.terminal.view.runtime.pending_ui_notify = true;
         }
         let should_notify = runtime_ui_notify_allowed(
             visual_dirty,
-            self.terminal_runtime.pending_ui_notify,
+            self.terminal.view.runtime.pending_ui_notify,
             force_immediate_notify,
             throttle_active,
-            self.terminal_runtime.last_ui_notify_at,
+            self.terminal.view.runtime.last_ui_notify_at,
             notify_now,
         );
         if should_notify {
             cx.notify();
-            self.terminal_runtime.last_ui_notify_at = Some(notify_now);
-            self.terminal_runtime.pending_ui_notify = false;
+            self.terminal.view.runtime.last_ui_notify_at = Some(notify_now);
+            self.terminal.view.runtime.pending_ui_notify = false;
         }
         let notify_duration = notify_started_at.elapsed();
         let publish_started_at = Instant::now();
         // Planes above do not drain more output; reuse one final pressure sample.
         let output_pressure = self.runtime_output_pressure_active();
         let heartbeat_due = store_snapshot_publish_due(
-            self.terminal_runtime.last_store_snapshot_publish_at,
+            self.terminal.view.runtime.last_store_snapshot_publish_at,
             publish_started_at,
         );
         let should_publish_snapshots =
@@ -278,23 +281,30 @@ impl NyaTermApp {
                 pending_session_status_ms = pending_session_status_duration.as_millis(),
                 notify_ms = notify_duration.as_millis(),
                 publish_snapshots_ms = publish_duration.as_millis(),
-                queued_events = self.terminal_runtime.session_event_queued_events,
-                queued_output_bytes = self.terminal_runtime.session_event_queued_output_bytes,
-                frame_command_count = self.terminal_frame_pipeline.queued_command_count(),
-                frame_command_output_bytes = self.terminal_frame_pipeline.queued_output_bytes(),
-                frame_event_count = self.terminal_frame_pipeline.queued_event_count(),
-                frame_event_wake_count = self.terminal_frame_pipeline.event_wake_count(),
+                queued_events = self.terminal.view.runtime.session_event_queued_events,
+                queued_output_bytes = self.terminal.view.runtime.session_event_queued_output_bytes,
+                frame_command_count = self.terminal.view.frame_pipeline.queued_command_count(),
+                frame_command_output_bytes =
+                    self.terminal.view.frame_pipeline.queued_output_bytes(),
+                frame_event_count = self.terminal.view.frame_pipeline.queued_event_count(),
+                frame_event_wake_count = self.terminal.view.frame_pipeline.event_wake_count(),
                 pending_frame_events = self.pending_terminal_frame_events.len(),
                 pending_session_starts = self.pending_session_starts.len(),
                 queued_saved_connection_starts = self.pending_saved_connection_queue.len(),
                 output_pressure,
                 next_tick_delay_ms = self.window_runtime_tick_delay().as_millis(),
                 visual_dirty,
-                full_shell_paint_count = self.terminal_runtime.full_shell_paint_count,
-                surface_frame_notify_count =
-                    self.terminal_runtime.terminal_surface_frame_notify_count,
-                chrome_frame_notify_count =
-                    self.terminal_runtime.terminal_chrome_frame_notify_count,
+                full_shell_paint_count = self.terminal.view.runtime.full_shell_paint_count,
+                surface_frame_notify_count = self
+                    .terminal
+                    .view
+                    .runtime
+                    .terminal_surface_frame_notify_count,
+                chrome_frame_notify_count = self
+                    .terminal
+                    .view
+                    .runtime
+                    .terminal_chrome_frame_notify_count,
                 surface_paint_count = terminal_surface_paint_count(),
                 notify_requested = visual_dirty,
                 publish_snapshots = should_publish_snapshots,
@@ -303,29 +313,45 @@ impl NyaTermApp {
         }
         let heartbeat_now = Instant::now();
         let heartbeat_due = diagnostic_log_due(
-            self.terminal_runtime.last_terminal_perf_heartbeat_at,
+            self.terminal.view.runtime.last_terminal_perf_heartbeat_at,
             heartbeat_now,
             TERMINAL_PERF_HEARTBEAT_INTERVAL,
         );
         if heartbeat_due {
             let full_shell_paints = full_shell_paint_count();
             let surface_paints = terminal_surface_paint_count();
-            let surface_frame_notifies = self.terminal_runtime.terminal_surface_frame_notify_count;
-            let chrome_frame_notifies = self.terminal_runtime.terminal_chrome_frame_notify_count;
+            let surface_frame_notifies = self
+                .terminal
+                .view
+                .runtime
+                .terminal_surface_frame_notify_count;
+            let chrome_frame_notifies = self
+                .terminal
+                .view
+                .runtime
+                .terminal_chrome_frame_notify_count;
             let (layout_cache_hits, layout_cache_misses) =
                 self.visible_terminal_layout_cache_stats();
             let full_shell_paint_delta = full_shell_paints
-                .saturating_sub(self.terminal_runtime.last_perf_full_shell_paint_count);
-            let surface_paint_delta =
-                surface_paints.saturating_sub(self.terminal_runtime.last_perf_surface_paint_count);
-            let surface_frame_notify_delta = surface_frame_notifies
-                .saturating_sub(self.terminal_runtime.last_perf_surface_frame_notify_count);
-            let chrome_frame_notify_delta = chrome_frame_notifies
-                .saturating_sub(self.terminal_runtime.last_perf_chrome_frame_notify_count);
-            let layout_cache_hit_delta =
-                layout_cache_hits.saturating_sub(self.terminal_runtime.last_perf_layout_cache_hits);
+                .saturating_sub(self.terminal.view.runtime.last_perf_full_shell_paint_count);
+            let surface_paint_delta = surface_paints
+                .saturating_sub(self.terminal.view.runtime.last_perf_surface_paint_count);
+            let surface_frame_notify_delta = surface_frame_notifies.saturating_sub(
+                self.terminal
+                    .view
+                    .runtime
+                    .last_perf_surface_frame_notify_count,
+            );
+            let chrome_frame_notify_delta = chrome_frame_notifies.saturating_sub(
+                self.terminal
+                    .view
+                    .runtime
+                    .last_perf_chrome_frame_notify_count,
+            );
+            let layout_cache_hit_delta = layout_cache_hits
+                .saturating_sub(self.terminal.view.runtime.last_perf_layout_cache_hits);
             let layout_cache_miss_delta = layout_cache_misses
-                .saturating_sub(self.terminal_runtime.last_perf_layout_cache_misses);
+                .saturating_sub(self.terminal.view.runtime.last_perf_layout_cache_misses);
             let active_session_id = self.active_session_id.as_deref().unwrap_or("");
             let active_scroll_offset = self.active_terminal_scroll_offset();
             let active_display_offset = self.active_terminal_display_offset();
@@ -335,11 +361,11 @@ impl NyaTermApp {
                 || surface_paint_delta > 0
                 || surface_frame_notify_delta > 0
                 || chrome_frame_notify_delta > 0
-                || self.terminal_runtime.session_event_queued_events > 0
-                || self.terminal_runtime.session_event_queued_output_bytes > 0
+                || self.terminal.view.runtime.session_event_queued_events > 0
+                || self.terminal.view.runtime.session_event_queued_output_bytes > 0
                 || self.session_event_bridge.queued_output_bytes() > 0
-                || self.terminal_frame_pipeline.queued_output_bytes() > 0
-                || self.terminal_frame_pipeline.queued_event_count() > 0
+                || self.terminal.view.frame_pipeline.queued_output_bytes() > 0
+                || self.terminal.view.frame_pipeline.queued_event_count() > 0
                 || !self.pending_terminal_frame_events.is_empty();
             if has_runtime_activity {
                 tracing::info!(
@@ -349,7 +375,9 @@ impl NyaTermApp {
                     active_scroll_offset,
                     active_display_offset,
                     connect_settle_active = self
-                        .terminal_runtime
+                        .terminal
+                        .view
+                        .runtime
                         .connect_settle_until
                         .is_some_and(|until| heartbeat_now < until),
                     output_pressure,
@@ -366,14 +394,15 @@ impl NyaTermApp {
                     notify_ms = notify_duration.as_millis(),
                     publish_snapshots_ms = publish_duration.as_millis(),
                     publish_snapshots = should_publish_snapshots,
-                    queued_session_events = self.terminal_runtime.session_event_queued_events,
+                    queued_session_events = self.terminal.view.runtime.session_event_queued_events,
                     queued_session_output_bytes =
-                        self.terminal_runtime.session_event_queued_output_bytes,
+                        self.terminal.view.runtime.session_event_queued_output_bytes,
                     bridge_output_bytes = self.session_event_bridge.queued_output_bytes(),
-                    frame_command_count = self.terminal_frame_pipeline.queued_command_count(),
-                    frame_command_output_bytes = self.terminal_frame_pipeline.queued_output_bytes(),
-                    frame_event_count = self.terminal_frame_pipeline.queued_event_count(),
-                    frame_event_wake_count = self.terminal_frame_pipeline.event_wake_count(),
+                    frame_command_count = self.terminal.view.frame_pipeline.queued_command_count(),
+                    frame_command_output_bytes =
+                        self.terminal.view.frame_pipeline.queued_output_bytes(),
+                    frame_event_count = self.terminal.view.frame_pipeline.queued_event_count(),
+                    frame_event_wake_count = self.terminal.view.frame_pipeline.event_wake_count(),
                     pending_frame_events = self.pending_terminal_frame_events.len(),
                     full_shell_paint_delta,
                     surface_paint_delta,
@@ -390,15 +419,21 @@ impl NyaTermApp {
                     "terminal perf heartbeat"
                 );
             }
-            self.terminal_runtime.last_terminal_perf_heartbeat_at = Some(heartbeat_now);
-            self.terminal_runtime.last_perf_full_shell_paint_count = full_shell_paints;
-            self.terminal_runtime.last_perf_surface_paint_count = surface_paints;
-            self.terminal_runtime.last_perf_surface_frame_notify_count = surface_frame_notifies;
-            self.terminal_runtime.last_perf_chrome_frame_notify_count = chrome_frame_notifies;
-            self.terminal_runtime.last_perf_layout_cache_hits = layout_cache_hits;
-            self.terminal_runtime.last_perf_layout_cache_misses = layout_cache_misses;
+            self.terminal.view.runtime.last_terminal_perf_heartbeat_at = Some(heartbeat_now);
+            self.terminal.view.runtime.last_perf_full_shell_paint_count = full_shell_paints;
+            self.terminal.view.runtime.last_perf_surface_paint_count = surface_paints;
+            self.terminal
+                .view
+                .runtime
+                .last_perf_surface_frame_notify_count = surface_frame_notifies;
+            self.terminal
+                .view
+                .runtime
+                .last_perf_chrome_frame_notify_count = chrome_frame_notifies;
+            self.terminal.view.runtime.last_perf_layout_cache_hits = layout_cache_hits;
+            self.terminal.view.runtime.last_perf_layout_cache_misses = layout_cache_misses;
         }
-        self.terminal_runtime.event_pump_started
+        self.terminal.view.runtime.event_pump_started
     }
 
     pub(super) fn drive_runtime_control_plane(
@@ -462,30 +497,37 @@ impl NyaTermApp {
         let critical_background_only = self.runtime_output_pressure_active();
         let terminal_frame_backlog_active = self.terminal_frame_backlog_active();
         let user_scroll_frame_pending = terminal_user_scroll_frame_apply_pending(
-            self.terminal_runtime.last_terminal_user_scroll_at,
+            self.terminal.view.runtime.last_terminal_user_scroll_at,
             self.visible_terminal_session_ids()
                 .into_iter()
                 .any(|session_id| self.terminal_visual_scroll_active_for_session(Some(session_id))),
             tick_started_at,
             TERMINAL_USER_SCROLL_ACTIVE_WINDOW,
         );
-        let input_latency_active =
-            self.terminal_runtime
-                .last_terminal_input_at
-                .is_some_and(|last| {
-                    tick_started_at.saturating_duration_since(last) < TERMINAL_INPUT_LATENCY_WINDOW
-                });
+        let input_latency_active = self
+            .terminal
+            .view
+            .runtime
+            .last_terminal_input_at
+            .is_some_and(|last| {
+                tick_started_at.saturating_duration_since(last) < TERMINAL_INPUT_LATENCY_WINDOW
+            });
         let terminal_frame_apply_paced = terminal_frame_backlog_active
             && terminal_frame_apply_should_defer(
-                self.terminal_runtime.last_terminal_frame_apply_at,
+                self.terminal.view.runtime.last_terminal_frame_apply_at,
                 tick_started_at,
                 critical_background_only,
                 user_scroll_frame_pending,
                 input_latency_active,
             );
         let defer_terminal_frame_after_output = runtime_background_should_defer_terminal_frames(
-            self.terminal_runtime.session_event_last_output_event_count,
-            self.terminal_runtime
+            self.terminal
+                .view
+                .runtime
+                .session_event_last_output_event_count,
+            self.terminal
+                .view
+                .runtime
                 .session_event_last_drained_output_bytes,
             terminal_frame_backlog_active,
             terminal_frame_apply_paced,
@@ -553,7 +595,8 @@ impl NyaTermApp {
         let output_pressure = self.runtime_output_pressure_active();
         let now = Instant::now();
         let geometry_churn = window_geometry_churn_active(self.last_viewport_change_at, now);
-        let connect_settle = connect_settle_active(self.terminal_runtime.connect_settle_until, now);
+        let connect_settle =
+            connect_settle_active(self.terminal.view.runtime.connect_settle_until, now);
         // Geometry churn / connect settle: keep focus only (no remote/layout/DB).
         let demote_idle = output_pressure || geometry_churn || connect_settle;
         result.render_request_output_pressure = demote_idle;
@@ -573,20 +616,20 @@ impl NyaTermApp {
 
         // Durable open-tabs/layout writes were removed from connect/register;
         // flush here when the UI is not under output/geometry pressure.
-        if self.terminal_runtime.open_tabs_persist_dirty
-            || self.terminal_runtime.window_layout_persist_dirty
+        if self.terminal.view.runtime.open_tabs_persist_dirty
+            || self.terminal.view.runtime.window_layout_persist_dirty
         {
             self.flush_pending_session_persistence();
         }
         // Layout restore opens the config DB — never do it while sessions are
         // still connecting or the data plane is under pressure.
-        if !self.terminal_windows_restored
+        if !self.terminal.windows.restored
             && self.pending_session_starts.is_empty()
             && !self.runtime_output_pressure_active()
             && !connect_settle
         {
             self.try_restore_terminal_window_layout();
-            if self.terminal_windows.is_some() {
+            if self.terminal.windows.tree.is_some() {
                 self.reconcile_terminal_windows();
             }
         }
@@ -645,36 +688,43 @@ impl NyaTermApp {
         let mut dirty = false;
         let now = Instant::now();
         let output_pressure = self.runtime_output_pressure_active()
-            || connect_settle_active(self.terminal_runtime.connect_settle_until, now);
+            || connect_settle_active(self.terminal.view.runtime.connect_settle_until, now);
         // ~530ms blink half-period. This is time based so quiet runtime ticks
         // can stay slow without stretching cursor blink to multi-second periods.
         // Under output pressure / connect settle, keep last blink phase.
         let mut surface_visual_dirty = false;
         if runtime_cursor_blink_allowed(output_pressure, self.settings.cursor_blink) {
             let next_blink_at = self
-                .terminal_runtime
+                .terminal
+                .view
+                .runtime
                 .cursor_blink_next_at
                 .unwrap_or(now + CURSOR_BLINK_INTERVAL);
             if now >= next_blink_at {
-                self.terminal_runtime.cursor_blink_on = !self.terminal_runtime.cursor_blink_on;
-                self.terminal_runtime.cursor_blink_next_at = Some(now + CURSOR_BLINK_INTERVAL);
+                self.terminal.view.runtime.cursor_blink_on =
+                    !self.terminal.view.runtime.cursor_blink_on;
+                self.terminal.view.runtime.cursor_blink_next_at = Some(now + CURSOR_BLINK_INTERVAL);
                 surface_visual_dirty = true;
             } else {
-                self.terminal_runtime.cursor_blink_next_at = Some(next_blink_at);
+                self.terminal.view.runtime.cursor_blink_next_at = Some(next_blink_at);
             }
         } else if !self.settings.cursor_blink {
-            if !self.terminal_runtime.cursor_blink_on {
+            if !self.terminal.view.runtime.cursor_blink_on {
                 surface_visual_dirty = true;
             }
-            self.terminal_runtime.cursor_blink_on = true;
-            self.terminal_runtime.cursor_blink_next_at = None;
+            self.terminal.view.runtime.cursor_blink_on = true;
+            self.terminal.view.runtime.cursor_blink_next_at = None;
         } else {
-            self.terminal_runtime.cursor_blink_next_at = Some(now + CURSOR_BLINK_INTERVAL);
+            self.terminal.view.runtime.cursor_blink_next_at = Some(now + CURSOR_BLINK_INTERVAL);
         }
         // Visual BEL flash (~200ms at 50ms ticks).
-        if self.terminal_runtime.visual_bell_ticks > 0 {
-            self.terminal_runtime.visual_bell_ticks =
-                self.terminal_runtime.visual_bell_ticks.saturating_sub(1);
+        if self.terminal.view.runtime.visual_bell_ticks > 0 {
+            self.terminal.view.runtime.visual_bell_ticks = self
+                .terminal
+                .view
+                .runtime
+                .visual_bell_ticks
+                .saturating_sub(1);
             surface_visual_dirty = true;
         }
         if surface_visual_dirty {
@@ -691,7 +741,7 @@ impl NyaTermApp {
         let visible_session_ids = self.visible_terminal_session_ids();
         let mut surface_paint_sessions = Vec::new();
         for session_id in terminal_performance_tick_session_ids(&visible_session_ids) {
-            let Some(view) = self.terminal_views.get_mut(&session_id) else {
+            let Some(view) = self.terminal.view.views.get_mut(&session_id) else {
                 continue;
             };
             // Under pressure always account so views can enter degraded mode.
@@ -714,8 +764,8 @@ impl NyaTermApp {
             self.notify_terminal_surface_only(Some(session_id.as_str()), cx);
         }
         // Drop overlay only while a platform drag is active.
-        if self.terminal_file_drop_hover.is_some() && !cx.has_active_drag() {
-            self.terminal_file_drop_hover = None;
+        if self.terminal.windows.file_drop_hover.is_some() && !cx.has_active_drag() {
+            self.terminal.windows.file_drop_hover = None;
             dirty = true;
         }
         RuntimeVisualPlaneResult {

@@ -139,7 +139,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn toggle_activity_bar_labels(&mut self, cx: &mut Context<Self>) {
         self.activity_bar_layout.show_labels = !self.activity_bar_layout.show_labels;
-        self.terminal_status = if self.activity_bar_layout.show_labels {
+        self.terminal.view.status = if self.activity_bar_layout.show_labels {
             "activity labels shown".to_string()
         } else {
             "activity labels hidden".to_string()
@@ -192,7 +192,7 @@ impl NyaTermApp {
     ) {
         let Some((source_zone, source_index)) = self.activity_bar_layout.find_entry(&entry_id)
         else {
-            self.terminal_status = "activity item not found".to_string();
+            self.terminal.view.status = "activity item not found".to_string();
             cx.notify();
             return;
         };
@@ -235,7 +235,7 @@ impl NyaTermApp {
         }
 
         self.activity_bar_context_menu = None;
-        self.terminal_status = format!(
+        self.terminal.view.status = format!(
             "moved {} to {}",
             entry_id,
             target_zone.label().to_lowercase()

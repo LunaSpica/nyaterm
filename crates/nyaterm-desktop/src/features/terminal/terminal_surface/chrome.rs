@@ -13,18 +13,22 @@ impl NyaTermApp {
         use gpui::relative;
         let palette = self.theme_palette();
         let max = self
-            .terminal_views
+            .terminal
+            .view
+            .views
             .get(session_id)
             .map(|view| view.scrollback_len_for_ui())
             .unwrap_or_else(|| {
                 if session_id.is_empty() {
-                    self.terminal_screen.scrollback_len()
+                    self.terminal.view.screen.scrollback_len()
                 } else {
                     0
                 }
             });
         let viewport_rows = self
-            .terminal_views
+            .terminal
+            .view
+            .views
             .get(session_id)
             .map(|view| {
                 // viewport height equals live screen rows
@@ -75,12 +79,14 @@ impl NyaTermApp {
                                 (!session_id.is_empty()).then_some(session_id.clone());
                             this.begin_terminal_scrollbar_drag(drag_session_id.clone(), cx);
                             let Some(bounds) = (if session_id.is_empty() {
-                                this.terminal_surface_bounds
+                                this.terminal.layout.surface_bounds
                             } else {
-                                this.terminal_session_surface_bounds
+                                this.terminal
+                                    .layout
+                                    .session_surface_bounds
                                     .get(&session_id)
                                     .copied()
-                                    .or(this.terminal_surface_bounds)
+                                    .or(this.terminal.layout.surface_bounds)
                             }) else {
                                 return;
                             };
@@ -123,9 +129,9 @@ impl NyaTermApp {
         let buffer_matches = self.terminal_buffer_matches();
         let history_results = self.terminal_history_search_results();
         let history_pending = self.terminal_history_search_pending_for_current_query();
-        let (status, is_error) = match self.terminal_search_mode {
+        let (status, is_error) = match self.terminal.search.mode {
             TerminalSearchMode::Buffer => match &buffer_matches {
-                Ok(matches) if self.terminal_search_query.trim().is_empty() => {
+                Ok(matches) if self.terminal.search.query.trim().is_empty() => {
                     (String::new(), false)
                 }
                 Ok(matches) if matches.is_empty() => ("not found".to_string(), false),
@@ -139,7 +145,9 @@ impl NyaTermApp {
                     (
                         format!(
                             "{}/{}",
-                            self.terminal_search_active_index
+                            self.terminal
+                                .search
+                                .active_index
                                 .min(count.saturating_sub(1))
                                 + 1,
                             count_label
@@ -151,7 +159,7 @@ impl NyaTermApp {
             },
             TerminalSearchMode::History if history_pending => ("searching".to_string(), false),
             TerminalSearchMode::History => match &history_results {
-                Ok(response) if self.terminal_search_query.trim().is_empty() => {
+                Ok(response) if self.terminal.search.query.trim().is_empty() => {
                     (String::new(), false)
                 }
                 Ok(response) if response.results.is_empty() => ("not found".to_string(), false),
@@ -166,13 +174,13 @@ impl NyaTermApp {
                 Err(error) => (truncate_preview(error, 40), true),
             },
         };
-        let input_display = if self.terminal_search_query.is_empty() {
+        let input_display = if self.terminal.search.query.is_empty() {
             "Find".to_string()
         } else {
-            self.terminal_search_query.clone()
+            self.terminal.search.query.clone()
         };
-        let show_history_results = self.terminal_search_mode == TerminalSearchMode::History
-            && !self.terminal_search_query.trim().is_empty();
+        let show_history_results = self.terminal.search.mode == TerminalSearchMode::History
+            && !self.terminal.search.query.trim().is_empty();
         let mut history_rows = div().id(SharedString::from("terminal-search-history-results"));
         if show_history_results {
             history_rows = history_rows
@@ -295,9 +303,9 @@ impl NyaTermApp {
             .shadow_lg()
             .px_2()
             .py_1()
-            .track_focus(&self.terminal_search_focus)
+            .track_focus(&self.terminal.search.focus)
             .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(&this.terminal_search_focus);
+                window.focus(&this.terminal.search.focus);
                 cx.notify();
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
@@ -312,22 +320,22 @@ impl NyaTermApp {
                     .child(terminal_search_mode_button(
                         "terminal-search-mode-buffer",
                         TerminalSearchMode::Buffer.label(),
-                        self.terminal_search_mode == TerminalSearchMode::Buffer,
+                        self.terminal.search.mode == TerminalSearchMode::Buffer,
                         self.theme_palette(),
                         cx.listener(|this, _, _, cx| {
-                            this.terminal_search_mode = TerminalSearchMode::Buffer;
-                            this.terminal_search_active_index = 0;
+                            this.terminal.search.mode = TerminalSearchMode::Buffer;
+                            this.terminal.search.active_index = 0;
                             this.refresh_terminal_search_state(cx);
                         }),
                     ))
                     .child(terminal_search_mode_button(
                         "terminal-search-mode-history",
                         TerminalSearchMode::History.label(),
-                        self.terminal_search_mode == TerminalSearchMode::History,
+                        self.terminal.search.mode == TerminalSearchMode::History,
                         self.theme_palette(),
                         cx.listener(|this, _, _, cx| {
-                            this.terminal_search_mode = TerminalSearchMode::History;
-                            this.terminal_search_active_index = 0;
+                            this.terminal.search.mode = TerminalSearchMode::History;
+                            this.terminal.search.active_index = 0;
                             this.refresh_terminal_search_state(cx);
                         }),
                     ))
@@ -371,7 +379,7 @@ impl NyaTermApp {
                             .flex()
                             .items_center()
                             .text_xs()
-                            .text_color(if self.terminal_search_query.is_empty() {
+                            .text_color(if self.terminal.search.query.is_empty() {
                                 rgb(palette.text_muted)
                             } else {
                                 rgb(palette.text)
@@ -381,39 +389,39 @@ impl NyaTermApp {
                     .child(terminal_search_flag_button(
                         "terminal-search-case",
                         "Aa",
-                        self.terminal_search_case_sensitive,
+                        self.terminal.search.case_sensitive,
                         self.theme_palette(),
                         cx.listener(|this, _, _, cx| {
-                            this.terminal_search_case_sensitive =
-                                !this.terminal_search_case_sensitive;
-                            this.terminal_search_active_index = 0;
+                            this.terminal.search.case_sensitive =
+                                !this.terminal.search.case_sensitive;
+                            this.terminal.search.active_index = 0;
                             this.refresh_terminal_search_state(cx);
                         }),
                     ))
                     .child(terminal_search_flag_button(
                         "terminal-search-regex",
                         ".*",
-                        self.terminal_search_regex,
+                        self.terminal.search.regex,
                         self.theme_palette(),
                         cx.listener(|this, _, _, cx| {
-                            this.terminal_search_regex = !this.terminal_search_regex;
-                            this.terminal_search_active_index = 0;
+                            this.terminal.search.regex = !this.terminal.search.regex;
+                            this.terminal.search.active_index = 0;
                             this.refresh_terminal_search_state(cx);
                         }),
                     ))
                     .child(terminal_search_flag_button(
                         "terminal-search-word",
                         "Word",
-                        self.terminal_search_whole_word,
+                        self.terminal.search.whole_word,
                         self.theme_palette(),
                         cx.listener(|this, _, _, cx| {
-                            this.terminal_search_whole_word = !this.terminal_search_whole_word;
-                            this.terminal_search_active_index = 0;
+                            this.terminal.search.whole_word = !this.terminal.search.whole_word;
+                            this.terminal.search.active_index = 0;
                             this.refresh_terminal_search_state(cx);
                         }),
                     ))
                     .when(
-                        self.terminal_search_mode == TerminalSearchMode::Buffer,
+                        self.terminal.search.mode == TerminalSearchMode::Buffer,
                         |this| {
                             this.child(terminal_search_icon_button(
                                 "terminal-search-prev",

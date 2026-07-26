@@ -296,14 +296,14 @@ impl NyaTermApp {
             // Keep favorites map coherent for the active connection without wiping UI.
             self.sync_transfer_browser_favorites_for_active_session();
         }
-        if let Some(view) = self.terminal_views.get_mut(session_id) {
+        if let Some(view) = self.terminal.view.views.get_mut(session_id) {
             view.has_unread = false;
         } else {
-            self.terminal_output.clear();
-            self.terminal_output_decoder.reset_decoder();
-            self.terminal_screen.clear();
+            self.terminal.view.output.clear();
+            self.terminal.view.output_decoder.reset_decoder();
+            self.terminal.view.screen.clear();
         }
-        if switching_sessions && self.terminal_focus_active {
+        if switching_sessions && self.terminal.input.focus_active {
             if let Some(previous_session_id) = previous_session_id.as_deref() {
                 self.write_terminal_focus_report_to_session(previous_session_id, false);
             }
@@ -313,7 +313,9 @@ impl NyaTermApp {
         // Priority was refreshed via sync_workspace_split_from_active_tab.
         // Recover paint immediately if this tab was backgrounded without grids.
         if self
-            .terminal_views
+            .terminal
+            .view
+            .views
             .get(session_id)
             .is_some_and(|view| view.frame_snapshot.is_none())
         {
@@ -388,14 +390,14 @@ impl NyaTermApp {
 
     fn clear_terminal_activation_interaction_state(&mut self) -> bool {
         let mut chrome_changed = false;
-        if self.terminal_selection.take().is_some() {
+        if self.terminal.selection.selection.take().is_some() {
             chrome_changed = true;
         }
-        if self.terminal_selection_dragging {
-            self.terminal_selection_dragging = false;
+        if self.terminal.selection.dragging {
+            self.terminal.selection.dragging = false;
             chrome_changed = true;
         }
-        if self.terminal_context_menu.take().is_some() {
+        if self.terminal.menus.context_menu.take().is_some() {
             chrome_changed = true;
         }
         if self.action_link_menu.take().is_some() {
@@ -417,7 +419,7 @@ impl NyaTermApp {
         let known = self.session_metadata.contains_key(&session_id);
         let disconnected = self.is_session_disconnected(&session_id);
         if !known && !disconnected {
-            self.terminal_status = "session no longer exists".to_string();
+            self.terminal.view.status = "session no longer exists".to_string();
             self.remove_session_state(&session_id);
             cx.notify();
             return;
@@ -430,7 +432,7 @@ impl NyaTermApp {
         };
         let disconnected = self.is_session_disconnected(&focus_id) || disconnected;
         self.activate_session_id_with_surface_sync(&focus_id, cx);
-        self.terminal_status = if disconnected {
+        self.terminal.view.status = if disconnected {
             format!("disconnected {}", short_id(&focus_id))
         } else {
             format!("active {}", short_id(&focus_id))
@@ -446,7 +448,7 @@ impl NyaTermApp {
     ) {
         let sessions = self.ordered_sessions();
         if sessions.is_empty() {
-            self.terminal_status = "no sessions to switch".to_string();
+            self.terminal.view.status = "no sessions to switch".to_string();
             cx.notify();
             return;
         }
@@ -465,7 +467,7 @@ impl NyaTermApp {
         self.activate_session_id_with_surface_sync(&session_id, cx);
         self.selected_nav = NavItem::Workspace;
         self.main_mode = MainMode::Workspace;
-        self.terminal_status = format!("active {}", short_id(&session_id));
+        self.terminal.view.status = format!("active {}", short_id(&session_id));
         cx.notify();
     }
 
@@ -476,7 +478,7 @@ impl NyaTermApp {
     ) {
         let sessions = self.ordered_sessions();
         if sessions.is_empty() {
-            self.terminal_status = "no sessions to switch".to_string();
+            self.terminal.view.status = "no sessions to switch".to_string();
             cx.notify();
             return;
         }
@@ -485,7 +487,7 @@ impl NyaTermApp {
         self.activate_session_id_with_surface_sync(&session_id, cx);
         self.selected_nav = NavItem::Workspace;
         self.main_mode = MainMode::Workspace;
-        self.terminal_status = format!("active {}", short_id(&session_id));
+        self.terminal.view.status = format!("active {}", short_id(&session_id));
         cx.notify();
     }
 
@@ -544,7 +546,7 @@ impl NyaTermApp {
         self.tab_actions_session_id = Some(session_id);
         self.tab_actions_anchor = anchor;
         self.tab_actions_submenu = None;
-        self.terminal_status = "tab actions opened".to_string();
+        self.terminal.view.status = "tab actions opened".to_string();
         window.focus(&self.tab_actions_focus);
         cx.notify();
     }
@@ -553,71 +555,71 @@ impl NyaTermApp {
         self.tab_actions_session_id = None;
         self.tab_actions_anchor = None;
         self.tab_actions_submenu = None;
-        self.terminal_status = "tab actions closed".to_string();
+        self.terminal.view.status = "tab actions closed".to_string();
         cx.notify();
     }
 
     pub(in crate::features) fn copy_active_session_name(&mut self, cx: &mut Context<Self>) {
         let Some(session_id) = self.active_session_id.as_deref() else {
-            self.terminal_status = "no active session name to copy".to_string();
+            self.terminal.view.status = "no active session name to copy".to_string();
             cx.notify();
             return;
         };
         let Some(name) = self.session_display_name(session_id) else {
-            self.terminal_status = "active session name is unavailable".to_string();
+            self.terminal.view.status = "active session name is unavailable".to_string();
             cx.notify();
             return;
         };
         cx.write_to_clipboard(ClipboardItem::new_string(name.clone()));
-        self.terminal_status = format!("copied tab name '{name}'");
+        self.terminal.view.status = format!("copied tab name '{name}'");
         cx.notify();
     }
 
     pub(in crate::features) fn copy_active_session_endpoint(&mut self, cx: &mut Context<Self>) {
         let Some(session_id) = self.active_session_id.as_deref() else {
-            self.terminal_status = "no active session endpoint to copy".to_string();
+            self.terminal.view.status = "no active session endpoint to copy".to_string();
             cx.notify();
             return;
         };
         let Some(endpoint) = self.session_endpoint(session_id) else {
-            self.terminal_status = "active session endpoint is unavailable".to_string();
+            self.terminal.view.status = "active session endpoint is unavailable".to_string();
             cx.notify();
             return;
         };
         cx.write_to_clipboard(ClipboardItem::new_string(endpoint.clone()));
-        self.terminal_status = format!("copied endpoint '{endpoint}'");
+        self.terminal.view.status = format!("copied endpoint '{endpoint}'");
         cx.notify();
     }
 
     pub(in crate::features) fn copy_active_session_ssh_host(&mut self, cx: &mut Context<Self>) {
         let Some(session_id) = self.active_session_id.as_deref() else {
-            self.terminal_status = "no active SSH host to copy".to_string();
+            self.terminal.view.status = "no active SSH host to copy".to_string();
             cx.notify();
             return;
         };
         let Some(host) = self.session_ssh_host(session_id) else {
-            self.terminal_status = "active session is not SSH".to_string();
+            self.terminal.view.status = "active session is not SSH".to_string();
             cx.notify();
             return;
         };
         cx.write_to_clipboard(ClipboardItem::new_string(host.clone()));
-        self.terminal_status = format!("copied SSH host '{host}'");
+        self.terminal.view.status = format!("copied SSH host '{host}'");
         cx.notify();
     }
 
     pub(in crate::features) fn copy_active_session_ssh_address(&mut self, cx: &mut Context<Self>) {
         let Some(session_id) = self.active_session_id.as_deref() else {
-            self.terminal_status = "no active SSH address to copy".to_string();
+            self.terminal.view.status = "no active SSH address to copy".to_string();
             cx.notify();
             return;
         };
         let Some(address) = self.session_ssh_address(session_id) else {
-            self.terminal_status = "active session is not SSH".to_string();
+            self.terminal.view.status = "active session is not SSH".to_string();
             cx.notify();
             return;
         };
         cx.write_to_clipboard(ClipboardItem::new_string(address.clone()));
-        self.terminal_status = format!("copied SSH address '{address}'");
+        self.terminal.view.status = format!("copied SSH address '{address}'");
         cx.notify();
     }
 
@@ -627,12 +629,12 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if self.active_session_id.is_none() {
-            self.terminal_status = "no active session info".to_string();
+            self.terminal.view.status = "no active session info".to_string();
             cx.notify();
             return;
         }
         self.session_info_open = true;
-        self.terminal_status = self
+        self.terminal.view.status = self
             .active_session_info_line()
             .unwrap_or_else(|| "session info opened".to_string());
         window.focus(&self.session_info_focus);
@@ -641,13 +643,13 @@ impl NyaTermApp {
 
     pub(in crate::features) fn close_active_session_info(&mut self, cx: &mut Context<Self>) {
         self.session_info_open = false;
-        self.terminal_status = "session info closed".to_string();
+        self.terminal.view.status = "session info closed".to_string();
         cx.notify();
     }
 
     pub(in crate::features) fn copy_active_session_info(&mut self, cx: &mut Context<Self>) {
         let Some(details) = self.active_session_info_details() else {
-            self.terminal_status = "no active session info to copy".to_string();
+            self.terminal.view.status = "no active session info to copy".to_string();
             cx.notify();
             return;
         };
@@ -657,7 +659,7 @@ impl NyaTermApp {
             .collect::<Vec<_>>()
             .join("\n");
         cx.write_to_clipboard(ClipboardItem::new_string(text));
-        self.terminal_status = "copied session info".to_string();
+        self.terminal.view.status = "copied session info".to_string();
         cx.notify();
     }
 
@@ -667,19 +669,19 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if self.active_session_id.is_none() {
-            self.terminal_status = "select a session before setting tab color".to_string();
+            self.terminal.view.status = "select a session before setting tab color".to_string();
             cx.notify();
             return;
         }
         self.color_picker_open = true;
-        self.terminal_status = "tab color picker opened".to_string();
+        self.terminal.view.status = "tab color picker opened".to_string();
         window.focus(&self.color_picker_focus);
         cx.notify();
     }
 
     pub(in crate::features) fn close_tab_color_picker(&mut self, cx: &mut Context<Self>) {
         self.color_picker_open = false;
-        self.terminal_status = "tab color picker closed".to_string();
+        self.terminal.view.status = "tab color picker closed".to_string();
         cx.notify();
     }
 
@@ -689,18 +691,18 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(session_id) = self.active_session_id.clone() else {
-            self.terminal_status = "no active session color to set".to_string();
+            self.terminal.view.status = "no active session color to set".to_string();
             cx.notify();
             return;
         };
         match color {
             Some(color) => {
                 self.session_tab_colors.insert(session_id, color);
-                self.terminal_status = "tab color updated".to_string();
+                self.terminal.view.status = "tab color updated".to_string();
             }
             None => {
                 self.session_tab_colors.remove(&session_id);
-                self.terminal_status = "tab color reset".to_string();
+                self.terminal.view.status = "tab color reset".to_string();
             }
         }
         self.color_picker_open = false;

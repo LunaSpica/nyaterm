@@ -9,7 +9,7 @@ Last updated from the working tree on 2026-07-26.
 
 | Metric | Current value | Notes |
 | --- | ---: | --- |
-| `NyaTermApp` fields | 348 | Counted from `features/app_state/mod.rs`; still transitional and too broad. |
+| `NyaTermApp` fields | 302 | Counted from `features/app_state/mod.rs`; down from 585, still transitional. |
 | `impl NyaTermApp` blocks | 236 | Spread across 233 files under `crates/nyaterm-desktop/src`. |
 | `#[path = "..."]` declarations in desktop | 0 | Cleared. Every directory is a real module; the boundary script fails on any new occurrence. |
 | `use super::*` imports in desktop | 355 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
@@ -107,6 +107,12 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   keeps its own `ai_settings` / `ai_model_draft` / `ai_base_url_draft` /
   `ai_secret_draft` fields with the old names; it is a separate snapshot type,
   and the rewrite was anchored on `self`/`this` so those were left alone.
+- Terminal presentation state is grouped into `TerminalFeatureState`: `search`,
+  `view` runtime, `input` focus and IME, `selection` and mouse reporting,
+  painted `layout` geometry, `menus`, and the split/tab `windows` tree. Parsing,
+  snapshots and the wire protocol are untouched and stay in `nyaterm-terminal`
+  and `nyaterm-transport`. `OverlaySnapshot` keeps its own
+  `terminal_actions_open` / `terminal_context_menu_open` projection fields.
 - The connections UI state has started moving out of scattered `NyaTermApp`
   fields and into `ConnectionFeatureState`.
 - The current connections state split separates list UI, import UI, editor

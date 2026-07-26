@@ -51,7 +51,7 @@ impl NyaTermApp {
                                     .child("SAVED CONNECTIONS"),
                             )
                             .child(status_pill(
-                                status_label(&self.terminal_status),
+                                status_label(&self.terminal.view.status),
                                 rgb(palette.link),
                                 rgb(palette.hover),
                             )),
@@ -75,7 +75,7 @@ impl NyaTermApp {
                                 "Refresh",
                                 cx.listener(|this, _, _, cx| {
                                     this.refresh_store_from_runtime();
-                                    this.terminal_status = "connections refreshed".to_string();
+                                    this.terminal.view.status = "connections refreshed".to_string();
                                     cx.notify();
                                 }),
                             )),

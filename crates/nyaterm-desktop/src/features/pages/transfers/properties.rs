@@ -8,7 +8,7 @@ impl NyaTermApp {
     ) {
         let path = normalized_transfer_browser_path(&self.transfer.browser.path);
         if path.trim().is_empty() {
-            self.terminal_status = "open a remote directory first".to_string();
+            self.terminal.view.status = "open a remote directory first".to_string();
             cx.notify();
             return;
         }
@@ -32,7 +32,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(entry) = self.selected_transfer_entry() else {
-            self.terminal_status = "select a remote item first".to_string();
+            self.terminal.view.status = "select a remote item first".to_string();
             cx.notify();
             return;
         };
@@ -40,7 +40,7 @@ impl NyaTermApp {
             entry.clone(),
             self.active_session_id.clone(),
         ));
-        self.terminal_status = "remote properties opened".to_string();
+        self.terminal.view.status = "remote properties opened".to_string();
         window.focus(&self.transfer.file_ops.properties_focus);
         self.start_sftp_properties_load_job(entry.path, window, cx);
         cx.notify();
@@ -58,7 +58,7 @@ impl NyaTermApp {
             entry.clone(),
             self.active_session_id.clone(),
         ));
-        self.terminal_status = "remote properties opened".to_string();
+        self.terminal.view.status = "remote properties opened".to_string();
         window.focus(&self.transfer.file_ops.properties_focus);
         self.start_sftp_properties_load_job(entry.path, window, cx);
         cx.notify();
@@ -66,7 +66,7 @@ impl NyaTermApp {
 
     pub(super) fn close_transfer_properties(&mut self, cx: &mut Context<Self>) {
         self.transfer.file_ops.properties = None;
-        self.terminal_status = "remote properties closed".to_string();
+        self.terminal.view.status = "remote properties closed".to_string();
         cx.notify();
     }
 
@@ -143,7 +143,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(config) = self.active_ssh_config.clone() else {
-            self.terminal_status = "start an SSH session first".to_string();
+            self.terminal.view.status = "start an SSH session first".to_string();
             cx.notify();
             return;
         };
@@ -185,12 +185,12 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(state) = self.transfer.file_ops.properties.clone() else {
-            self.terminal_status = "no remote properties dialog is active".to_string();
+            self.terminal.view.status = "no remote properties dialog is active".to_string();
             cx.notify();
             return;
         };
         let Some(properties) = state.properties.clone() else {
-            self.terminal_status = "remote properties are still loading".to_string();
+            self.terminal.view.status = "remote properties are still loading".to_string();
             cx.notify();
             return;
         };
@@ -253,7 +253,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(config) = self.active_ssh_config.clone() else {
-            self.terminal_status = "start an SSH session first".to_string();
+            self.terminal.view.status = "start an SSH session first".to_string();
             cx.notify();
             return;
         };

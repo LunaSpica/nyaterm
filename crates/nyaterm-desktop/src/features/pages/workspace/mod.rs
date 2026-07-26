@@ -68,7 +68,7 @@ impl NyaTermApp {
         }
         // Multi-leaf tab windows (Tauri TabWindowsWorkspace) take precedence over
         // single-tree pane splits when active.
-        if let Some(window_root) = self.terminal_windows.clone() {
+        if let Some(window_root) = self.terminal.windows.tree.clone() {
             if matches!(window_root, TerminalWindowNode::Split { .. }) {
                 return div()
                     .flex_1()

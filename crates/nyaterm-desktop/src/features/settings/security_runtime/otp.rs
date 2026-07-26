@@ -47,7 +47,7 @@ impl NyaTermApp {
                     Err(error) => {
                         this.security.status =
                             format!("{}: {error}", this.tr("otpManager.qrImportFailed"));
-                        this.terminal_status = this.security.status.clone();
+                        this.terminal.view.status = this.security.status.clone();
                     }
                 }
                 cx.notify();
@@ -320,7 +320,7 @@ impl NyaTermApp {
                 self.refresh_security_catalog();
                 self.security.editors.otp = None;
                 self.security.status = format!("OTP entry saved ({})", compact_id(&id));
-                self.terminal_status = "OTP entry saved".to_string();
+                self.terminal.view.status = "OTP entry saved".to_string();
             }
             Err(error) => {
                 if let Some(editor) = self.security.editors.otp.as_mut() {
@@ -381,7 +381,7 @@ impl NyaTermApp {
                     .otp_codes
                     .insert(otp_id.clone(), code);
                 self.security.status = format!("OTP code ready for {}", compact_id(&otp_id));
-                self.terminal_status = "OTP code ready".to_string();
+                self.terminal.view.status = "OTP code ready".to_string();
             }
             Ok(None) => {
                 self.security.status = "OTP entry not found".to_string();
@@ -434,7 +434,7 @@ impl NyaTermApp {
             if code != "------" && !code.trim().is_empty() {
                 cx.write_to_clipboard(ClipboardItem::new_string(code));
                 self.security.status = format!("OTP code copied ({})", compact_id(&otp_id));
-                self.terminal_status = "OTP code copied".to_string();
+                self.terminal.view.status = "OTP code copied".to_string();
                 cx.notify();
                 return;
             }
@@ -446,7 +446,7 @@ impl NyaTermApp {
         {
             cx.write_to_clipboard(ClipboardItem::new_string(code));
             self.security.status = format!("OTP code copied ({})", compact_id(&otp_id));
-            self.terminal_status = "OTP code copied".to_string();
+            self.terminal.view.status = "OTP code copied".to_string();
             cx.notify();
         }
     }

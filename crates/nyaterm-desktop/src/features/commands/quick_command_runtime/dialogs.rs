@@ -13,7 +13,7 @@ impl NyaTermApp {
     ) {
         self.quick_command_state.list.row_menu = None;
         self.quick_command_state.editor.draft = Some(QuickCommandEditorState::blank());
-        self.terminal_status = "quick command editor opened".to_string();
+        self.terminal.view.status = "quick command editor opened".to_string();
         if !self.open_quick_command_window(cx) {
             window.focus(&self.quick_command_state.editor.focus);
         }
@@ -33,13 +33,13 @@ impl NyaTermApp {
             .find(|command| command.id == command_id)
             .cloned()
         else {
-            self.terminal_status = "quick command is no longer available".to_string();
+            self.terminal.view.status = "quick command is no longer available".to_string();
             cx.notify();
             return;
         };
         self.quick_command_state.editor.draft =
             Some(QuickCommandEditorState::from_command(command));
-        self.terminal_status = "quick command editor opened".to_string();
+        self.terminal.view.status = "quick command editor opened".to_string();
         if !self.open_quick_command_window(cx) {
             window.focus(&self.quick_command_state.editor.focus);
         }
@@ -50,7 +50,7 @@ impl NyaTermApp {
         self.quick_command_state.editor.draft = None;
         self.quick_command_state.editor.window = None;
         self.quick_command_state.editor.window_open_pending = false;
-        self.terminal_status = "quick command editor closed".to_string();
+        self.terminal.view.status = "quick command editor closed".to_string();
         cx.notify();
     }
 
@@ -69,7 +69,7 @@ impl NyaTermApp {
             .find(|command| command.id == command_id)
             .cloned()
         else {
-            self.terminal_status = "quick command is no longer available".to_string();
+            self.terminal.view.status = "quick command is no longer available".to_string();
             cx.notify();
             return;
         };
@@ -79,14 +79,14 @@ impl NyaTermApp {
             x,
             y,
         });
-        self.terminal_status = "quick command details opened".to_string();
+        self.terminal.view.status = "quick command details opened".to_string();
         window.focus(&self.quick_command_state.dialogs.details_focus);
         cx.notify();
     }
 
     pub(in crate::features) fn close_quick_command_details(&mut self, cx: &mut Context<Self>) {
         self.quick_command_state.dialogs.details = None;
-        self.terminal_status = "quick command details closed".to_string();
+        self.terminal.view.status = "quick command details closed".to_string();
         cx.notify();
     }
 
@@ -102,7 +102,7 @@ impl NyaTermApp {
             .find(|command| command.id == command_id)
             .cloned()
         else {
-            self.terminal_status = "quick command is no longer available".to_string();
+            self.terminal.view.status = "quick command is no longer available".to_string();
             cx.notify();
             return;
         };
@@ -110,13 +110,13 @@ impl NyaTermApp {
             id: command.id,
             label: command.label,
         });
-        self.terminal_status = "quick command delete confirmation opened".to_string();
+        self.terminal.view.status = "quick command delete confirmation opened".to_string();
         cx.notify();
     }
 
     pub(in crate::features) fn cancel_delete_quick_command(&mut self, cx: &mut Context<Self>) {
         self.quick_command_state.dialogs.delete = None;
-        self.terminal_status = "quick command delete cancelled".to_string();
+        self.terminal.view.status = "quick command delete cancelled".to_string();
         cx.notify();
     }
 
@@ -146,12 +146,12 @@ impl NyaTermApp {
                     format!("quick command '{}' was already deleted", delete.label)
                 };
                 self.store_status.ready = deleted;
-                self.terminal_status = self.store_status.message.clone();
+                self.terminal.view.status = self.store_status.message.clone();
             }
             Err(error) => {
                 self.store_status.message = format!("quick command delete failed: {error}");
                 self.store_status.ready = false;
-                self.terminal_status = self.store_status.message.clone();
+                self.terminal.view.status = self.store_status.message.clone();
             }
         }
         cx.notify();
@@ -168,7 +168,7 @@ impl NyaTermApp {
             .find(|category| category.id == category_id)
             .cloned()
         else {
-            self.terminal_status = "quick command category is no longer available".to_string();
+            self.terminal.view.status = "quick command category is no longer available".to_string();
             cx.notify();
             return;
         };
@@ -182,7 +182,7 @@ impl NyaTermApp {
             name: category.name,
             command_count,
         });
-        self.terminal_status = "quick command category delete confirmation opened".to_string();
+        self.terminal.view.status = "quick command category delete confirmation opened".to_string();
         cx.notify();
     }
 
@@ -191,7 +191,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.quick_command_state.dialogs.category_delete = None;
-        self.terminal_status = "quick command category delete cancelled".to_string();
+        self.terminal.view.status = "quick command category delete cancelled".to_string();
         cx.notify();
     }
 
@@ -246,13 +246,13 @@ impl NyaTermApp {
                     )
                 };
                 self.store_status.ready = deleted_category;
-                self.terminal_status = self.store_status.message.clone();
+                self.terminal.view.status = self.store_status.message.clone();
             }
             Err(error) => {
                 self.store_status.message =
                     format!("quick command category delete failed: {error}");
                 self.store_status.ready = false;
-                self.terminal_status = self.store_status.message.clone();
+                self.terminal.view.status = self.store_status.message.clone();
             }
         }
         cx.notify();
@@ -270,7 +270,7 @@ impl NyaTermApp {
             .find(|category| category.id == category_id)
             .cloned()
         else {
-            self.terminal_status = "quick command category is no longer available".to_string();
+            self.terminal.view.status = "quick command category is no longer available".to_string();
             cx.notify();
             return;
         };
@@ -280,7 +280,7 @@ impl NyaTermApp {
             draft: category.name,
             error: None,
         });
-        self.terminal_status = "quick command category rename opened".to_string();
+        self.terminal.view.status = "quick command category rename opened".to_string();
         window.focus(&self.quick_command_state.dialogs.category_rename_focus);
         cx.notify();
     }
@@ -290,7 +290,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.quick_command_state.dialogs.category_rename = None;
-        self.terminal_status = "quick command category rename cancelled".to_string();
+        self.terminal.view.status = "quick command category rename cancelled".to_string();
         cx.notify();
     }
 
@@ -366,7 +366,7 @@ impl NyaTermApp {
                         "quick command category rename failed: category missing".to_string();
                     self.store_status.ready = false;
                 }
-                self.terminal_status = self.store_status.message.clone();
+                self.terminal.view.status = self.store_status.message.clone();
             }
             Err(error) => {
                 if let Some(state) = self.quick_command_state.dialogs.category_rename.as_mut() {
@@ -375,7 +375,7 @@ impl NyaTermApp {
                 self.store_status.message =
                     format!("quick command category rename failed: {error}");
                 self.store_status.ready = false;
-                self.terminal_status = self.store_status.message.clone();
+                self.terminal.view.status = self.store_status.message.clone();
             }
         }
         cx.notify();

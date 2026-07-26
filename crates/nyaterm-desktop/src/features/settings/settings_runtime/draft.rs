@@ -52,7 +52,7 @@ impl NyaTermApp {
         }
         self.store_status.message = "settings draft changed".to_string();
         self.store_status.ready = true;
-        self.terminal_status = "settings draft changed; apply to persist".to_string();
+        self.terminal.view.status = "settings draft changed; apply to persist".to_string();
         cx.notify();
         true
     }
@@ -218,7 +218,7 @@ impl NyaTermApp {
             return false;
         }
         self.cloud_sync_status = "apply settings before running cloud sync".to_string();
-        self.terminal_status = self.cloud_sync_status.clone();
+        self.terminal.view.status = self.cloud_sync_status.clone();
         cx.notify();
         true
     }
@@ -230,8 +230,8 @@ impl NyaTermApp {
         if !self.settings_draft_dirty() {
             return false;
         }
-        self.terminal_status = "apply or cancel settings before importing".to_string();
-        self.store_status.message = self.terminal_status.clone();
+        self.terminal.view.status = "apply or cancel settings before importing".to_string();
+        self.store_status.message = self.terminal.view.status.clone();
         self.store_status.ready = false;
         cx.notify();
         true
@@ -261,7 +261,7 @@ impl NyaTermApp {
         if let Some(error) = self.pending_settings_cloud_error() {
             self.store_status.message = error.clone();
             self.store_status.ready = false;
-            self.terminal_status = format!("settings apply blocked: {error}");
+            self.terminal.view.status = format!("settings apply blocked: {error}");
             cx.notify();
             return;
         }
@@ -358,7 +358,7 @@ impl NyaTermApp {
                 self.settings_draft_snapshot = None;
                 self.store_status.message = "settings applied".to_string();
                 self.store_status.ready = true;
-                self.terminal_status = "settings applied".to_string();
+                self.terminal.view.status = "settings applied".to_string();
                 if close_after_apply {
                     self.finish_settings_page(cx);
                 } else {
@@ -369,7 +369,7 @@ impl NyaTermApp {
             Err(error) => {
                 self.store_status.message = format!("settings apply failed: {error}");
                 self.store_status.ready = false;
-                self.terminal_status = self.store_status.message.clone();
+                self.terminal.view.status = self.store_status.message.clone();
                 cx.notify();
             }
         }
@@ -414,14 +414,14 @@ impl NyaTermApp {
 
     pub(in crate::features) fn toggle_settings_master_password(&mut self, cx: &mut Context<Self>) {
         if self.cloud_sync_settings.enabled && self.settings_master_password_enabled {
-            self.terminal_status =
+            self.terminal.view.status =
                 "disable cloud sync before removing the master password".to_string();
             cx.notify();
             return;
         }
         self.settings_master_password_enabled = !self.settings_master_password_enabled;
         self.settings_master_password_draft.clear();
-        self.terminal_status = if self.settings_master_password_enabled {
+        self.terminal.view.status = if self.settings_master_password_enabled {
             "master password enabled; enter a password".to_string()
         } else {
             "master password removal staged".to_string()
@@ -459,7 +459,7 @@ impl NyaTermApp {
                 }
             }
         }
-        self.terminal_status = "master password edited; apply to persist".to_string();
+        self.terminal.view.status = "master password edited; apply to persist".to_string();
         cx.notify();
     }
 
@@ -482,7 +482,7 @@ impl NyaTermApp {
             self.settings_previous_left_collapsed = None;
             self.settings_previous_right_collapsed = None;
         }
-        self.terminal_status = "settings closed".to_string();
+        self.terminal.view.status = "settings closed".to_string();
         cx.notify();
     }
 }

@@ -15,11 +15,13 @@ impl NyaTermApp {
             .insert(session_id.to_string(), metadata);
         let encoding = self.settings.interaction_default_encoding.clone();
         let view = self
-            .terminal_views
+            .terminal
+            .view
+            .views
             .entry(session_id.to_string())
             .or_insert_with(TerminalViewState::new);
         view.set_encoding(&encoding);
-        self.terminal_frame_pipeline.ensure_session(
+        self.terminal.view.frame_pipeline.ensure_session(
             session_id.to_string(),
             encoding,
             self.terminal_scrollback_line_limit(),

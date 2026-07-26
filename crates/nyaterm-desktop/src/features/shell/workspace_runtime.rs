@@ -181,7 +181,7 @@ impl NyaTermApp {
         self.sync_workspace_split_from_active_tab();
         self.selected_nav = NavItem::Workspace;
         self.main_mode = MainMode::Workspace;
-        self.terminal_status = format!("focused pane {}", short_id(&session_id));
+        self.terminal.view.status = format!("focused pane {}", short_id(&session_id));
         cx.notify();
     }
 
@@ -197,22 +197,22 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(split_id) = self.focused_workspace_split_id() else {
-            self.terminal_status = "workspace is not split".to_string();
+            self.terminal.view.status = "workspace is not split".to_string();
             cx.notify();
             return;
         };
         let Some(root) = self.workspace_split.as_mut() else {
-            self.terminal_status = "workspace is not split".to_string();
+            self.terminal.view.status = "workspace is not split".to_string();
             cx.notify();
             return;
         };
         if root.adjust_ratio_for_split(&split_id, delta) {
             let ratio = root.ratio_for_split(&split_id).unwrap_or(50);
-            self.terminal_status = format!("split ratio {ratio}%");
+            self.terminal.view.status = format!("split ratio {ratio}%");
             self.write_back_active_tab_pane_root();
             self.persist_workspace_pane_layout();
         } else {
-            self.terminal_status = "workspace is not split".to_string();
+            self.terminal.view.status = "workspace is not split".to_string();
         }
         cx.notify();
     }
@@ -224,17 +224,18 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if self.has_pending_session_start() {
-            self.terminal_status = "wait for the pending session to finish connecting".to_string();
+            self.terminal.view.status =
+                "wait for the pending session to finish connecting".to_string();
             cx.notify();
             return;
         }
         let Some(source_session_id) = self.active_session_id.clone() else {
-            self.terminal_status = "start a session before splitting".to_string();
+            self.terminal.view.status = "start a session before splitting".to_string();
             cx.notify();
             return;
         };
         if !self.session_metadata.contains_key(&source_session_id) {
-            self.terminal_status = "active session cannot be duplicated for split".to_string();
+            self.terminal.view.status = "active session cannot be duplicated for split".to_string();
             cx.notify();
             return;
         }
@@ -250,20 +251,20 @@ impl NyaTermApp {
             return;
         };
         self.attach_workspace_split(direction, source_session_id, new_session_id.to_string());
-        self.terminal_status =
+        self.terminal.view.status =
             format!("split {} pane duplicated", direction.label().to_lowercase());
     }
 
     pub(in crate::features) fn unsplit_workspace(&mut self, cx: &mut Context<Self>) {
         let Some(active_id) = self.active_session_id.clone() else {
-            self.terminal_status = "workspace is not split".to_string();
+            self.terminal.view.status = "workspace is not split".to_string();
             cx.notify();
             return;
         };
         let tab_root = self.tab_root_for_session(&active_id);
         let Some(root) = self.session_pane_roots.remove(&tab_root) else {
             self.workspace_split = None;
-            self.terminal_status = "workspace is not split".to_string();
+            self.terminal.view.status = "workspace is not split".to_string();
             cx.notify();
             return;
         };
@@ -273,11 +274,11 @@ impl NyaTermApp {
             match collapsed {
                 WorkspacePaneNode::Split { .. } => {
                     self.session_pane_roots.insert(tab_root, collapsed);
-                    self.terminal_status = "collapsed focused split".to_string();
+                    self.terminal.view.status = "collapsed focused split".to_string();
                 }
                 WorkspacePaneNode::Leaf { session_id } => {
                     self.activate_session_id_with_surface_sync(&session_id, cx);
-                    self.terminal_status = "workspace split closed".to_string();
+                    self.terminal.view.status = "workspace split closed".to_string();
                 }
             }
             self.rebuild_session_tab_owners();
@@ -293,7 +294,7 @@ impl NyaTermApp {
         let _ = root;
         self.rebuild_session_tab_owners();
         self.sync_workspace_split_from_active_tab();
-        self.terminal_status = "workspace split closed".to_string();
+        self.terminal.view.status = "workspace split closed".to_string();
         self.persist_workspace_pane_layout();
         if self.startup_restore_complete {
             self.persist_open_tabs();
@@ -313,7 +314,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         // Prefer multi-leaf tab-window splits when active; otherwise pane splits.
-        let (direction, start_ratio) = if let Some(root) = self.terminal_windows.as_ref() {
+        let (direction, start_ratio) = if let Some(root) = self.terminal.windows.tree.as_ref() {
             match (
                 root.direction_for_split(&split_id),
                 root.ratio_for_split(&split_id),
@@ -355,7 +356,7 @@ impl NyaTermApp {
             start_ratio,
             container_size: 0.,
         });
-        self.terminal_status = "resizing workspace split".to_string();
+        self.terminal.view.status = "resizing workspace split".to_string();
         cx.notify();
     }
 
@@ -384,7 +385,7 @@ impl NyaTermApp {
             WorkspacePaneNode::MAX_RATIO_PERCENT as i16,
         ) as u8;
         let mut applied = false;
-        if let Some(root) = self.terminal_windows.as_mut() {
+        if let Some(root) = self.terminal.windows.tree.as_mut() {
             if root.set_ratio_for_split(&state.split_id, next) {
                 applied = true;
             }
@@ -398,7 +399,7 @@ impl NyaTermApp {
             }
         }
         if applied {
-            self.terminal_status = format!("split ratio {next}%");
+            self.terminal.view.status = format!("split ratio {next}%");
             cx.notify();
         }
     }
@@ -410,7 +411,9 @@ impl NyaTermApp {
     ) {
         if let Some(state) = self.workspace_split_resize.take() {
             let ratio = self
-                .terminal_windows
+                .terminal
+                .windows
+                .tree
                 .as_ref()
                 .and_then(|root| root.ratio_for_split(&state.split_id))
                 .or_else(|| {
@@ -419,7 +422,7 @@ impl NyaTermApp {
                         .and_then(|root| root.ratio_for_split(&state.split_id))
                 });
             if let Some(ratio) = ratio {
-                self.terminal_status = format!("split ratio set to {ratio}%");
+                self.terminal.view.status = format!("split ratio set to {ratio}%");
             }
             if self.terminal_windows_is_multi_leaf() {
                 self.persist_terminal_window_layout();
@@ -513,7 +516,7 @@ impl NyaTermApp {
         {
             Ok(()) => {}
             Err(error) => {
-                self.terminal_status = format!("failed to save pane layout: {error}");
+                self.terminal.view.status = format!("failed to save pane layout: {error}");
             }
         }
     }
@@ -577,7 +580,7 @@ impl NyaTermApp {
         }
         self.selected_nav = NavItem::Workspace;
         self.main_mode = MainMode::Workspace;
-        self.terminal_status = "restored workspace pane layout".to_string();
+        self.terminal.view.status = "restored workspace pane layout".to_string();
     }
 }
 

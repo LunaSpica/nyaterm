@@ -63,13 +63,13 @@ impl NyaTermApp {
                 self.apply_gpui_settings(settings);
                 self.store_status.message = "quick command UI settings saved".to_string();
                 self.store_status.ready = true;
-                self.terminal_status = "quick command UI settings saved".to_string();
+                self.terminal.view.status = "quick command UI settings saved".to_string();
             }
             Err(error) => {
                 self.store_status.message =
                     format!("quick command UI settings save failed: {error}");
                 self.store_status.ready = false;
-                self.terminal_status = self.store_status.message.clone();
+                self.terminal.view.status = self.store_status.message.clone();
             }
         }
         cx.notify();
@@ -94,7 +94,7 @@ impl NyaTermApp {
             "escape" => {
                 self.quick_command_state.list.search_draft.clear();
                 self.quick_command_state.list.selected_category = "all".to_string();
-                self.terminal_status = "quick command filters cleared".to_string();
+                self.terminal.view.status = "quick command filters cleared".to_string();
                 cx.notify();
             }
             _ => {
@@ -132,7 +132,7 @@ impl NyaTermApp {
     ) {
         let prompt = self.quick_command_state.ai.prompt_draft.trim().to_string();
         if prompt.is_empty() {
-            self.terminal_status = "describe a command to generate".to_string();
+            self.terminal.view.status = "describe a command to generate".to_string();
             cx.notify();
             return;
         }

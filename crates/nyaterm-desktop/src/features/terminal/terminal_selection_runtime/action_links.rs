@@ -73,8 +73,8 @@ impl NyaTermApp {
         }
         // Hide while menus are open or while selecting text.
         if self.action_link_menu.is_some()
-            || self.terminal_context_menu.is_some()
-            || self.terminal_selection_dragging
+            || self.terminal.menus.context_menu.is_some()
+            || self.terminal.selection.dragging
             || self.translation_dialog.is_some()
         {
             self.clear_action_link_tooltip(cx);
@@ -91,8 +91,8 @@ impl NyaTermApp {
                 self.terminal_visual_scroll_active_for_session(Some(session_id))
             });
         if action_link_hover_should_yield_to_terminal_latency(
-            self.terminal_runtime.last_terminal_input_at,
-            self.terminal_runtime.last_terminal_user_scroll_at,
+            self.terminal.view.runtime.last_terminal_input_at,
+            self.terminal.view.runtime.last_terminal_user_scroll_at,
             visual_scroll_active,
             now,
         ) {
@@ -198,7 +198,7 @@ impl NyaTermApp {
         let offset = self.terminal_display_offset_for_session(session_id);
         let snapshot = self.terminal_snapshot_for_session(session_id, offset);
         let frame_action_links = if let Some(session_id) = session_id.filter(|id| !id.is_empty()) {
-            let Some(view) = self.terminal_views.get(session_id) else {
+            let Some(view) = self.terminal.view.views.get(session_id) else {
                 return None;
             };
             crate::features::terminal::terminal_surface::terminal_action_links_for_paint_snapshot(
@@ -247,13 +247,13 @@ impl NyaTermApp {
     ) -> Option<Option<String>> {
         let visible_session_ids = self.visible_terminal_surface_session_ids();
         for session_id in &visible_session_ids {
-            if let Some(bounds) = self.terminal_session_surface_bounds.get(session_id)
+            if let Some(bounds) = self.terminal.layout.session_surface_bounds.get(session_id)
                 && terminal_bounds_contains(*bounds, position)
             {
                 return Some(Some(session_id.clone()));
             }
         }
-        let bounds = self.terminal_surface_bounds?;
+        let bounds = self.terminal.layout.surface_bounds?;
         if terminal_bounds_contains(bounds, position) {
             return Some(self.active_session_id.clone());
         }
@@ -261,7 +261,7 @@ impl NyaTermApp {
     }
 
     fn visible_terminal_surface_session_ids(&self) -> Vec<String> {
-        if let Some(window_root) = self.terminal_windows.as_ref()
+        if let Some(window_root) = self.terminal.windows.tree.as_ref()
             && matches!(window_root, TerminalWindowNode::Split { .. })
         {
             return window_root.active_tabs();
@@ -276,7 +276,7 @@ impl NyaTermApp {
     pub(in crate::features) fn close_action_link_menu(&mut self, cx: &mut Context<Self>) {
         let mut changed = false;
         if self.action_link_menu.take().is_some() {
-            self.terminal_status = "action link menu closed".to_string();
+            self.terminal.view.status = "action link menu closed".to_string();
             changed = true;
         }
         if self.action_link_tooltip.take().is_some() {
@@ -318,8 +318,8 @@ impl NyaTermApp {
             value: item.value,
             actions: menu_actions,
         });
-        self.terminal_context_menu = None;
-        self.terminal_status = format!("action link menu: {}", item.kind.label());
+        self.terminal.menus.context_menu = None;
+        self.terminal.view.status = format!("action link menu: {}", item.kind.label());
         cx.notify();
         true
     }
@@ -376,13 +376,13 @@ impl NyaTermApp {
             || lower.starts_with("https://")
             || lower.starts_with("mailto:"))
         {
-            self.terminal_status = format!("blocked OSC 8 scheme: {url}");
+            self.terminal.view.status = format!("blocked OSC 8 scheme: {url}");
             cx.notify();
             return true;
         }
         match open_external_url_for_action(&url) {
-            Ok(()) => self.terminal_status = format!("opened OSC 8 link: {url}"),
-            Err(error) => self.terminal_status = format!("open OSC 8 link failed: {error}"),
+            Ok(()) => self.terminal.view.status = format!("opened OSC 8 link: {url}"),
+            Err(error) => self.terminal.view.status = format!("open OSC 8 link failed: {error}"),
         }
         cx.notify();
         true
@@ -410,8 +410,10 @@ impl NyaTermApp {
         };
         if let Some(url) = default.open_url {
             match open_external_url_for_action(&url) {
-                Ok(()) => self.terminal_status = format!("opened {}: {url}", item.kind.label()),
-                Err(error) => self.terminal_status = format!("open link failed: {error}"),
+                Ok(()) => {
+                    self.terminal.view.status = format!("opened {}: {url}", item.kind.label())
+                }
+                Err(error) => self.terminal.view.status = format!("open link failed: {error}"),
             }
             cx.notify();
             return true;
@@ -431,7 +433,7 @@ impl NyaTermApp {
             return false;
         };
         let is_active = self.active_session_id.as_deref() == Some(session_id);
-        let Some(view) = self.terminal_views.get(session_id) else {
+        let Some(view) = self.terminal.view.views.get(session_id) else {
             return false;
         };
         let runtime_output_pressure = self.runtime_output_pressure_active();

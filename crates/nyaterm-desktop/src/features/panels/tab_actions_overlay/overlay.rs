@@ -65,7 +65,9 @@ impl NyaTermApp {
             .is_some_and(|root| root.is_split())
             || self.workspace_split.is_some();
         let scroll_offset = self
-            .terminal_views
+            .terminal
+            .view
+            .views
             .get(&session_id)
             .map(|view| view.scroll_offset)
             .unwrap_or(0);

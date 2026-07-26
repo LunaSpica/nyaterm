@@ -26,9 +26,9 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if self.connection_state.network.toggle_move_picker(tab, id) {
-            self.terminal_status = format!("choose {} group", tab.label());
+            self.terminal.view.status = format!("choose {} group", tab.label());
         } else {
-            self.terminal_status = "network move menu closed".to_string();
+            self.terminal.view.status = "network move menu closed".to_string();
         }
         cx.notify();
     }
@@ -60,7 +60,7 @@ impl NyaTermApp {
             .iter_mut()
             .find(|tunnel| tunnel.id == tunnel_id)
         else {
-            self.terminal_status = "tunnel profile is no longer available".to_string();
+            self.terminal.view.status = "tunnel profile is no longer available".to_string();
             cx.notify();
             return;
         };
@@ -75,13 +75,13 @@ impl NyaTermApp {
             Ok(()) => {
                 self.tunnels = next_tunnels;
                 self.connection_state.network.close_move_picker();
-                self.terminal_status = format!("tunnel moved to {label}");
+                self.terminal.view.status = format!("tunnel moved to {label}");
                 self.store_status.message = "tunnel group saved".to_string();
                 self.store_status.ready = true;
             }
             Err(error) => {
-                self.terminal_status = format!("failed to move tunnel: {error}");
-                self.store_status.message = self.terminal_status.clone();
+                self.terminal.view.status = format!("failed to move tunnel: {error}");
+                self.store_status.message = self.terminal.view.status.clone();
                 self.store_status.ready = false;
             }
         }
@@ -112,7 +112,7 @@ impl NyaTermApp {
     ) {
         let mut next_proxies = self.proxies.clone();
         let Some(proxy) = next_proxies.iter_mut().find(|proxy| proxy.id == proxy_id) else {
-            self.terminal_status = "proxy profile is no longer available".to_string();
+            self.terminal.view.status = "proxy profile is no longer available".to_string();
             cx.notify();
             return;
         };
@@ -127,13 +127,13 @@ impl NyaTermApp {
             Ok(()) => {
                 self.proxies = next_proxies;
                 self.connection_state.network.close_move_picker();
-                self.terminal_status = format!("proxy moved to {label}");
+                self.terminal.view.status = format!("proxy moved to {label}");
                 self.store_status.message = "proxy group saved".to_string();
                 self.store_status.ready = true;
             }
             Err(error) => {
-                self.terminal_status = format!("failed to move proxy: {error}");
-                self.store_status.message = self.terminal_status.clone();
+                self.terminal.view.status = format!("failed to move proxy: {error}");
+                self.store_status.message = self.terminal.view.status.clone();
                 self.store_status.ready = false;
             }
         }
@@ -150,19 +150,19 @@ impl NyaTermApp {
         self.connection_state
             .network
             .open_delete_confirm(NetworkDeleteConfirmState { tab, id, label });
-        self.terminal_status = "network delete confirmation opened".to_string();
+        self.terminal.view.status = "network delete confirmation opened".to_string();
         cx.notify();
     }
 
     pub(in crate::features) fn cancel_network_delete(&mut self, cx: &mut Context<Self>) {
         self.connection_state.network.close_delete_confirm();
-        self.terminal_status = "network delete cancelled".to_string();
+        self.terminal.view.status = "network delete cancelled".to_string();
         cx.notify();
     }
 
     pub(in crate::features) fn confirm_network_delete(&mut self, cx: &mut Context<Self>) {
         let Some(delete) = self.connection_state.network.active_delete_confirm() else {
-            self.terminal_status = "no network delete is pending".to_string();
+            self.terminal.view.status = "no network delete is pending".to_string();
             cx.notify();
             return;
         };
@@ -181,7 +181,8 @@ impl NyaTermApp {
     ) {
         if self.tunnel_manager.is_open(&tunnel_id).unwrap_or(false) {
             if let Err(error) = self.tunnel_manager.close(&tunnel_id) {
-                self.terminal_status = format!("failed to close tunnel before delete: {error}");
+                self.terminal.view.status =
+                    format!("failed to close tunnel before delete: {error}");
                 cx.notify();
                 return;
             }
@@ -203,17 +204,17 @@ impl NyaTermApp {
                 self.connection_state
                     .network
                     .remove_item_references(NetworkTab::Tunnels, &tunnel_id);
-                self.terminal_status = if deleted {
+                self.terminal.view.status = if deleted {
                     format!("tunnel '{label}' deleted")
                 } else {
                     format!("tunnel '{label}' was already deleted")
                 };
-                self.store_status.message = self.terminal_status.clone();
+                self.store_status.message = self.terminal.view.status.clone();
                 self.store_status.ready = deleted;
             }
             Err(error) => {
-                self.terminal_status = format!("failed to delete tunnel: {error}");
-                self.store_status.message = self.terminal_status.clone();
+                self.terminal.view.status = format!("failed to delete tunnel: {error}");
+                self.store_status.message = self.terminal.view.status.clone();
                 self.store_status.ready = false;
             }
         }
@@ -241,17 +242,17 @@ impl NyaTermApp {
                 self.connection_state
                     .network
                     .remove_item_references(NetworkTab::Proxies, &proxy_id);
-                self.terminal_status = if deleted {
+                self.terminal.view.status = if deleted {
                     format!("proxy '{label}' deleted")
                 } else {
                     format!("proxy '{label}' was already deleted")
                 };
-                self.store_status.message = self.terminal_status.clone();
+                self.store_status.message = self.terminal.view.status.clone();
                 self.store_status.ready = deleted;
             }
             Err(error) => {
-                self.terminal_status = format!("failed to delete proxy: {error}");
-                self.store_status.message = self.terminal_status.clone();
+                self.terminal.view.status = format!("failed to delete proxy: {error}");
+                self.store_status.message = self.terminal.view.status.clone();
                 self.store_status.ready = false;
             }
         }
@@ -265,18 +266,20 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if self.pending_tunnels.iter().any(|id| id == &tunnel.id) {
-            self.terminal_status = format!("tunnel {} is already pending", tunnel_name(&tunnel));
+            self.terminal.view.status =
+                format!("tunnel {} is already pending", tunnel_name(&tunnel));
             cx.notify();
             return;
         }
         if self.tunnel_manager.is_open(&tunnel.id).unwrap_or(false) {
-            self.terminal_status = format!("tunnel {} is already open", tunnel_name(&tunnel));
+            self.terminal.view.status = format!("tunnel {} is already open", tunnel_name(&tunnel));
             cx.notify();
             return;
         }
 
         let Some(connection_id) = tunnel.connection_id.as_deref() else {
-            self.terminal_status = format!("tunnel {} has no SSH connection", tunnel_name(&tunnel));
+            self.terminal.view.status =
+                format!("tunnel {} has no SSH connection", tunnel_name(&tunnel));
             cx.notify();
             return;
         };
@@ -286,7 +289,7 @@ impl NyaTermApp {
             .find(|connection| connection.id == connection_id)
             .cloned()
         else {
-            self.terminal_status = format!(
+            self.terminal.view.status = format!(
                 "tunnel {} references missing connection {}",
                 tunnel_name(&tunnel),
                 connection_id
@@ -297,7 +300,7 @@ impl NyaTermApp {
         let mode = match tunnel_mode(&tunnel) {
             Some(mode) => mode,
             None => {
-                self.terminal_status = format!(
+                self.terminal.view.status = format!(
                     "tunnel {} mode '{}' is not native yet",
                     tunnel_name(&tunnel),
                     tunnel.tunnel_type
@@ -309,7 +312,7 @@ impl NyaTermApp {
         let ssh_config = match self.build_ssh_session_config(&connection, &mut Vec::new()) {
             Ok(config) => config,
             Err(error) => {
-                self.terminal_status =
+                self.terminal.view.status =
                     format!("failed to prepare tunnel {}: {error}", tunnel_name(&tunnel));
                 cx.notify();
                 return;
@@ -332,7 +335,7 @@ impl NyaTermApp {
         };
 
         self.pending_tunnels.push(tunnel.id.clone());
-        self.terminal_status = format!("opening tunnel {}", tunnel_name(&tunnel));
+        self.terminal.view.status = format!("opening tunnel {}", tunnel_name(&tunnel));
         let tunnel_manager = self.tunnel_manager.clone();
         let tunnel_tx = self.tunnel_tx.clone();
         std::thread::spawn(move || {
@@ -354,18 +357,18 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if self.pending_tunnels.iter().any(|id| id == &tunnel_id) {
-            self.terminal_status = format!("tunnel {tunnel_id} is already pending");
+            self.terminal.view.status = format!("tunnel {tunnel_id} is already pending");
             cx.notify();
             return;
         }
         if !self.tunnel_manager.is_open(&tunnel_id).unwrap_or(false) {
-            self.terminal_status = format!("tunnel {tunnel_id} is not open");
+            self.terminal.view.status = format!("tunnel {tunnel_id} is not open");
             cx.notify();
             return;
         }
 
         self.pending_tunnels.push(tunnel_id.clone());
-        self.terminal_status = format!("closing tunnel {tunnel_id}");
+        self.terminal.view.status = format!("closing tunnel {tunnel_id}");
         let tunnel_manager = self.tunnel_manager.clone();
         let tunnel_tx = self.tunnel_tx.clone();
         std::thread::spawn(move || {
@@ -391,16 +394,17 @@ impl NyaTermApp {
             self.pending_tunnels.retain(|id| id != &event.tunnel_id);
             match event.result {
                 Ok(TunnelJobOutput::Opened(info)) => {
-                    self.terminal_status = format!(
+                    self.terminal.view.status = format!(
                         "tunnel {} open on {}:{}",
                         event.tunnel_id, info.bind_host, info.listen_port
                     );
                 }
                 Ok(TunnelJobOutput::Closed) => {
-                    self.terminal_status = format!("tunnel {} closed", event.tunnel_id);
+                    self.terminal.view.status = format!("tunnel {} closed", event.tunnel_id);
                 }
                 Err(error) => {
-                    self.terminal_status = format!("tunnel {} failed: {error}", event.tunnel_id);
+                    self.terminal.view.status =
+                        format!("tunnel {} failed: {error}", event.tunnel_id);
                 }
             }
         }

@@ -17,7 +17,7 @@ impl NyaTermApp {
             target: String::new(),
             focused_field: TransferSymlinkField::Name,
         });
-        self.terminal_status = "SFTP new symlink opened".to_string();
+        self.terminal.view.status = "SFTP new symlink opened".to_string();
         window.focus(&self.transfer.file_ops.new_symlink_focus);
         cx.notify();
     }
@@ -27,7 +27,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.transfer.file_ops.new_symlink = None;
-        self.terminal_status = "SFTP new symlink cancelled".to_string();
+        self.terminal.view.status = "SFTP new symlink cancelled".to_string();
         cx.notify();
     }
 
@@ -37,19 +37,19 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(state) = self.transfer.file_ops.new_symlink.clone() else {
-            self.terminal_status = "no SFTP new symlink is active".to_string();
+            self.terminal.view.status = "no SFTP new symlink is active".to_string();
             cx.notify();
             return;
         };
         let name = state.name.trim().to_string();
         let target_path = state.target.trim().to_string();
         if !valid_remote_child_name(&name) {
-            self.terminal_status = "symlink name must be a single non-empty name".to_string();
+            self.terminal.view.status = "symlink name must be a single non-empty name".to_string();
             cx.notify();
             return;
         }
         if target_path.is_empty() {
-            self.terminal_status = "symlink target cannot be empty".to_string();
+            self.terminal.view.status = "symlink target cannot be empty".to_string();
             cx.notify();
             return;
         }
@@ -130,7 +130,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(config) = self.active_ssh_config.clone() else {
-            self.terminal_status = "start an SSH session first".to_string();
+            self.terminal.view.status = "start an SSH session first".to_string();
             self.ensure_panel_open(crate::models::NavItem::Transfers);
             cx.notify();
             return;
@@ -151,7 +151,7 @@ impl NyaTermApp {
             progress: None,
             control: None,
         });
-        self.terminal_status = format!("SFTP symlink started: {link_path}");
+        self.terminal.view.status = format!("SFTP symlink started: {link_path}");
         let transfer_tx = self.transfer.queue.tx.clone();
         std::thread::spawn(move || {
             let service = SftpService::new(config);
@@ -180,7 +180,7 @@ impl NyaTermApp {
     ) {
         self.ensure_panel_open(crate::models::NavItem::Transfers);
         let Some(old_path) = self.transfer.browser.selected_remote_path.clone() else {
-            self.terminal_status = "select an SFTP list entry before renaming".to_string();
+            self.terminal.view.status = "select an SFTP list entry before renaming".to_string();
             cx.notify();
             return;
         };
@@ -209,7 +209,7 @@ impl NyaTermApp {
     ) -> bool {
         let initial_name = remote_file_name(&old_path);
         if initial_name.is_empty() || initial_name == "." || initial_name == ".." {
-            self.terminal_status = format!("cannot rename {old_path}");
+            self.terminal.view.status = format!("cannot rename {old_path}");
             cx.notify();
             return false;
         }
@@ -218,14 +218,14 @@ impl NyaTermApp {
             value: initial_name.clone(),
             initial_name,
         });
-        self.terminal_status = "SFTP rename opened".to_string();
+        self.terminal.view.status = "SFTP rename opened".to_string();
         true
     }
 
     pub(in crate::features) fn close_transfer_rename_dialog(&mut self, cx: &mut Context<Self>) {
         self.transfer.file_ops.rename = None;
         self.transfer.file_ops.rename_focus_pending = false;
-        self.terminal_status = "SFTP rename cancelled".to_string();
+        self.terminal.view.status = "SFTP rename cancelled".to_string();
         cx.notify();
     }
 
@@ -235,25 +235,25 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(state) = self.transfer.file_ops.rename.clone() else {
-            self.terminal_status = "no SFTP rename is active".to_string();
+            self.terminal.view.status = "no SFTP rename is active".to_string();
             cx.notify();
             return;
         };
         let new_name = state.value.trim().to_string();
         if new_name.is_empty() {
-            self.terminal_status = "remote name cannot be empty".to_string();
+            self.terminal.view.status = "remote name cannot be empty".to_string();
             cx.notify();
             return;
         }
         if new_name.contains('/') || new_name == "." || new_name == ".." {
-            self.terminal_status =
+            self.terminal.view.status =
                 "remote name must be a single file or directory name".to_string();
             cx.notify();
             return;
         }
         if new_name == state.initial_name {
             self.transfer.file_ops.rename = None;
-            self.terminal_status = "SFTP rename unchanged".to_string();
+            self.terminal.view.status = "SFTP rename unchanged".to_string();
             cx.notify();
             return;
         }
@@ -311,7 +311,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(config) = self.active_ssh_config.clone() else {
-            self.terminal_status = "start an SSH session first".to_string();
+            self.terminal.view.status = "start an SSH session first".to_string();
             self.ensure_panel_open(crate::models::NavItem::Transfers);
             cx.notify();
             return;
@@ -333,7 +333,7 @@ impl NyaTermApp {
             progress: None,
             control: None,
         });
-        self.terminal_status = format!("SFTP rename started: {old_path} -> {new_path}");
+        self.terminal.view.status = format!("SFTP rename started: {old_path} -> {new_path}");
         let transfer_tx = self.transfer.queue.tx.clone();
         std::thread::spawn(move || {
             let service = SftpService::new(config);

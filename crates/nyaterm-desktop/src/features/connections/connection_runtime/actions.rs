@@ -11,7 +11,7 @@ impl NyaTermApp {
     ) {
         self.connection_state.list.close_more_menu();
         self.connection_state.confirmations.open_clear_all();
-        self.terminal_status = "confirm clearing all saved connections".to_string();
+        self.terminal.view.status = "confirm clearing all saved connections".to_string();
         cx.notify();
     }
 
@@ -33,12 +33,12 @@ impl NyaTermApp {
                 self.connection_state.confirmations.close_clear_all();
                 self.connection_state.list.clear_runtime_state();
                 self.refresh_store_from_runtime();
-                self.terminal_status = self.tr("savedConnections.clearAllSuccess").to_string();
+                self.terminal.view.status = self.tr("savedConnections.clearAllSuccess").to_string();
             }
             Err(error) => {
                 self.connection_state.confirmations.close_clear_all();
-                self.terminal_status = format!("clear saved connections failed: {error}");
-                self.store_status.message = self.terminal_status.clone();
+                self.terminal.view.status = format!("clear saved connections failed: {error}");
+                self.store_status.message = self.terminal.view.status.clone();
                 self.store_status.ready = false;
             }
         }
@@ -55,7 +55,7 @@ impl NyaTermApp {
             .iter()
             .find(|connection| connection.id == connection_id)
         else {
-            self.terminal_status = "connection is no longer available".to_string();
+            self.terminal.view.status = "connection is no longer available".to_string();
             cx.notify();
             return;
         };
@@ -65,7 +65,7 @@ impl NyaTermApp {
                 connection_id,
                 label: connection.name.clone(),
             });
-        self.terminal_status = "confirm connection delete".to_string();
+        self.terminal.view.status = "confirm connection delete".to_string();
         cx.notify();
     }
 
@@ -84,10 +84,10 @@ impl NyaTermApp {
                     .list
                     .remove_connection_references(&confirm.connection_id);
                 self.refresh_store_from_runtime();
-                self.terminal_status = format!("deleted connection {}", confirm.label);
+                self.terminal.view.status = format!("deleted connection {}", confirm.label);
             }
             Err(error) => {
-                self.terminal_status = format!("delete connection failed: {error}");
+                self.terminal.view.status = format!("delete connection failed: {error}");
             }
         }
         cx.notify();
@@ -103,7 +103,7 @@ impl NyaTermApp {
             .iter()
             .find(|group| group.id == group_id)
         else {
-            self.terminal_status = "connection group is no longer available".to_string();
+            self.terminal.view.status = "connection group is no longer available".to_string();
             cx.notify();
             return;
         };
@@ -125,7 +125,7 @@ impl NyaTermApp {
                 connection_count,
                 child_group_count,
             });
-        self.terminal_status = "confirm connection group delete".to_string();
+        self.terminal.view.status = "confirm connection group delete".to_string();
         cx.notify();
     }
 
@@ -147,10 +147,10 @@ impl NyaTermApp {
                     .list
                     .remove_group_references(&confirm.group_id);
                 self.refresh_store_from_runtime();
-                self.terminal_status = format!("deleted connection group {}", confirm.label);
+                self.terminal.view.status = format!("deleted connection group {}", confirm.label);
             }
             Err(error) => {
-                self.terminal_status = format!("delete connection group failed: {error}");
+                self.terminal.view.status = format!("delete connection group failed: {error}");
             }
         }
         cx.notify();
@@ -169,7 +169,7 @@ impl NyaTermApp {
         let sort_mode = self.connection_state.list.cycle_sort_mode();
         self.settings.ui_saved_connections_sort_mode = sort_mode.persistence_id().to_string();
         self.persist_ui_layout();
-        self.terminal_status = format!("connections sorted by {}", sort_mode.label());
+        self.terminal.view.status = format!("connections sorted by {}", sort_mode.label());
         cx.notify();
     }
 
@@ -195,7 +195,7 @@ impl NyaTermApp {
         };
         if changed {
             if key == "escape" {
-                self.terminal_status = "connection search cleared".to_string();
+                self.terminal.view.status = "connection search cleared".to_string();
             }
             cx.notify();
         }
@@ -204,7 +204,7 @@ impl NyaTermApp {
     pub(in crate::features) fn delete_selected_connections(&mut self, cx: &mut Context<Self>) {
         let selected = self.selected_connections();
         if selected.is_empty() {
-            self.terminal_status = "select saved connections before deleting".to_string();
+            self.terminal.view.status = "select saved connections before deleting".to_string();
             cx.notify();
             return;
         }
@@ -225,10 +225,10 @@ impl NyaTermApp {
                         .remove_connection_references(&connection.id);
                 }
                 self.refresh_store_from_runtime();
-                self.terminal_status = format!("deleted {} connection(s)", selected.len());
+                self.terminal.view.status = format!("deleted {} connection(s)", selected.len());
             }
             Err(error) => {
-                self.terminal_status = format!("delete selected connections failed: {error}");
+                self.terminal.view.status = format!("delete selected connections failed: {error}");
             }
         }
         cx.notify();

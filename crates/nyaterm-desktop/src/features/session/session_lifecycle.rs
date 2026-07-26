@@ -18,17 +18,18 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if self.has_pending_session_start() {
-            self.terminal_status = "wait for the pending session to finish connecting".to_string();
+            self.terminal.view.status =
+                "wait for the pending session to finish connecting".to_string();
             cx.notify();
             return;
         }
         let Some(source_session_id) = self.active_session_id.clone() else {
-            self.terminal_status = "no active session to duplicate".to_string();
+            self.terminal.view.status = "no active session to duplicate".to_string();
             cx.notify();
             return;
         };
         let Some(metadata) = self.session_metadata.get(&source_session_id).cloned() else {
-            self.terminal_status = "active session cannot be duplicated".to_string();
+            self.terminal.view.status = "active session cannot be duplicated".to_string();
             cx.notify();
             return;
         };
@@ -118,22 +119,23 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if self.has_pending_session_start() {
-            self.terminal_status = "wait for the pending session to finish connecting".to_string();
+            self.terminal.view.status =
+                "wait for the pending session to finish connecting".to_string();
             cx.notify();
             return;
         }
         let Some(source_session_id) = self.active_session_id.clone() else {
-            self.terminal_status = "no active SSH session to multiplex".to_string();
+            self.terminal.view.status = "no active SSH session to multiplex".to_string();
             cx.notify();
             return;
         };
         let Some(metadata) = self.session_metadata.get(&source_session_id).cloned() else {
-            self.terminal_status = "active session cannot be multiplexed".to_string();
+            self.terminal.view.status = "active session cannot be multiplexed".to_string();
             cx.notify();
             return;
         };
         let SessionLaunchConfig::Ssh(config) = metadata.launch_config.clone() else {
-            self.terminal_status = "active session is not SSH".to_string();
+            self.terminal.view.status = "active session is not SSH".to_string();
             cx.notify();
             return;
         };
@@ -171,7 +173,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(source_session_id) = self.active_session_id.clone() else {
-            self.terminal_status = "no active session to reconnect".to_string();
+            self.terminal.view.status = "no active session to reconnect".to_string();
             cx.notify();
             return;
         };
@@ -185,17 +187,17 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if self.active_session_busy_actions.get(&session_id).is_some() {
-            self.terminal_status = "session action already in progress".to_string();
+            self.terminal.view.status = "session action already in progress".to_string();
             cx.notify();
             return;
         }
         if self.is_session_disconnected(&session_id) {
-            self.terminal_status = "session already disconnected".to_string();
+            self.terminal.view.status = "session already disconnected".to_string();
             cx.notify();
             return;
         }
         if !self.session_metadata.contains_key(&session_id) {
-            self.terminal_status = "session no longer exists".to_string();
+            self.terminal.view.status = "session no longer exists".to_string();
             cx.notify();
             return;
         }
@@ -208,13 +210,13 @@ impl NyaTermApp {
         self.cleanup_recording_for_session(&session_id);
         self.mark_session_disconnected(&session_id, cx);
         self.active_session_busy_actions.remove(&session_id);
-        self.terminal_status = format!("disconnected {}", short_id(&session_id));
+        self.terminal.view.status = format!("disconnected {}", short_id(&session_id));
         cx.notify();
     }
 
     pub(in crate::features) fn disconnect_active_session(&mut self, cx: &mut Context<Self>) {
         let Some(session_id) = self.active_session_id.clone() else {
-            self.terminal_status = "no active session to disconnect".to_string();
+            self.terminal.view.status = "no active session to disconnect".to_string();
             cx.notify();
             return;
         };
@@ -250,13 +252,16 @@ impl NyaTermApp {
         }
 
         let banner = "\r\n\x1b[31m[Session disconnected]\x1b[0m\r\n\x1b[33m[Press Enter to reconnect]\x1b[0m\r\n";
-        if let Some(view) = self.terminal_views.get_mut(session_id) {
+        if let Some(view) = self.terminal.view.views.get_mut(session_id) {
             view.append_text(banner);
         } else {
             let mut view = TerminalViewState::new();
             view.set_encoding(&self.settings.interaction_default_encoding);
             view.append_text(banner);
-            self.terminal_views.insert(session_id.to_string(), view);
+            self.terminal
+                .view
+                .views
+                .insert(session_id.to_string(), view);
         }
 
         if self.active_session_id.as_deref() == Some(session_id) {
@@ -276,17 +281,18 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if self.active_session_busy_actions.get(&session_id).is_some() {
-            self.terminal_status = "session action already in progress".to_string();
+            self.terminal.view.status = "session action already in progress".to_string();
             cx.notify();
             return;
         }
         if self.has_pending_session_start() {
-            self.terminal_status = "wait for the pending session to finish connecting".to_string();
+            self.terminal.view.status =
+                "wait for the pending session to finish connecting".to_string();
             cx.notify();
             return;
         }
         if !self.session_metadata.contains_key(&session_id) {
-            self.terminal_status = "session cannot be reconnected".to_string();
+            self.terminal.view.status = "session cannot be reconnected".to_string();
             cx.notify();
             return;
         }
@@ -305,13 +311,15 @@ impl NyaTermApp {
         let custom_name = self.session_custom_names.get(&old_id).cloned();
         let custom_color = self.session_tab_colors.get(&old_id).copied();
         let seed_output = self
-            .terminal_views
+            .terminal
+            .view
+            .views
             .get(&old_id)
             .map(|view| view.output.clone())
             .unwrap_or_default();
 
         // Tauri: write cyan reconnecting line into the buffer before recreating.
-        if let Some(view) = self.terminal_views.get_mut(&old_id) {
+        if let Some(view) = self.terminal.view.views.get_mut(&old_id) {
             view.append_text(
                 "
 [36m[Reconnecting…][0m
@@ -319,7 +327,9 @@ impl NyaTermApp {
             );
         }
         let seed_output = self
-            .terminal_views
+            .terminal
+            .view
+            .views
             .get(&old_id)
             .map(|view| view.output.clone())
             .unwrap_or(seed_output);
@@ -330,7 +340,7 @@ impl NyaTermApp {
         self.clear_terminal_mouse_report_for_session(&old_id);
         let Some(metadata) = self.session_metadata.get_mut(&old_id) else {
             self.active_session_busy_actions.remove(&old_id);
-            self.terminal_status = "session cannot be reconnected".to_string();
+            self.terminal.view.status = "session cannot be reconnected".to_string();
             cx.notify();
             return;
         };
@@ -419,8 +429,10 @@ impl NyaTermApp {
         new_id: &str,
     ) {
         self.reconnect_session_failures.remove(old_id);
-        if let Some(bounds) = self.terminal_session_surface_bounds.remove(old_id) {
-            self.terminal_session_surface_bounds
+        if let Some(bounds) = self.terminal.layout.session_surface_bounds.remove(old_id) {
+            self.terminal
+                .layout
+                .session_surface_bounds
                 .insert(new_id.to_string(), bounds);
         }
         if !self.session_custom_names.contains_key(new_id) {
@@ -457,7 +469,7 @@ impl NyaTermApp {
         if let Some(root) = self.workspace_split.as_mut() {
             root.replace_session_id(old_id, new_id);
         }
-        if let Some(root) = self.terminal_windows.as_mut() {
+        if let Some(root) = self.terminal.windows.tree.as_mut() {
             root.replace_tab_id(old_id, new_id);
         }
         for group in &mut self.sync_groups {

@@ -14,14 +14,15 @@ impl NyaTermApp {
             return;
         }
         let delay_ms = startup_command.delay_ms.min(60_000);
-        self.terminal_status = format!("scheduled startup command for {}", short_id(&session_id));
+        self.terminal.view.status =
+            format!("scheduled startup command for {}", short_id(&session_id));
         cx.spawn(async move |this, cx| {
             if delay_ms > 0 {
                 Timer::after(Duration::from_millis(delay_ms)).await;
             }
             let _ = this.update(cx, |this, cx| {
                 if this.send_terminal_input_to_session(session_id, command.into_bytes(), cx) {
-                    this.terminal_status = "startup command sent".to_string();
+                    this.terminal.view.status = "startup command sent".to_string();
                     cx.notify();
                 }
             });
@@ -31,7 +32,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn close_active_session(&mut self, cx: &mut Context<Self>) {
         let Some(session_id) = self.active_session_id.clone() else {
-            self.terminal_status = "no active session".to_string();
+            self.terminal.view.status = "no active session".to_string();
             cx.notify();
             return;
         };
@@ -61,7 +62,7 @@ impl NyaTermApp {
                 Ok(()) => {}
                 Err(_) if disconnected => {}
                 Err(error) if !disconnected && !self.session_metadata.contains_key(close_id) => {
-                    self.terminal_status = format!("close failed: {error}");
+                    self.terminal.view.status = format!("close failed: {error}");
                     cx.notify();
                     return;
                 }
@@ -77,21 +78,23 @@ impl NyaTermApp {
             self.sync_session_event_bridge_policy();
             if let Some(next_session_id) = self.next_session_after(&session_id) {
                 self.activate_session_id(&next_session_id);
-                self.terminal_status =
+                self.terminal.view.status =
                     format!("session closed; active {}", short_id(&next_session_id));
             } else {
                 self.active_session_id = None;
                 self.active_ssh_config = None;
                 self.active_ai_execution_profile = AiExecutionProfile::SendOnly;
-                self.terminal_output = String::from(INITIAL_TERMINAL_BANNER);
-                self.terminal_output_decoder.reset_decoder();
-                self.terminal_screen = initial_terminal_screen();
-                self.terminal_screen
+                self.terminal.view.output = String::from(INITIAL_TERMINAL_BANNER);
+                self.terminal.view.output_decoder.reset_decoder();
+                self.terminal.view.screen = initial_terminal_screen();
+                self.terminal
+                    .view
+                    .screen
                     .set_encoding(&self.settings.interaction_default_encoding);
-                self.terminal_status = "session closed".to_string();
+                self.terminal.view.status = "session closed".to_string();
             }
         } else {
-            self.terminal_status = format!("closed {}", short_id(&session_id));
+            self.terminal.view.status = format!("closed {}", short_id(&session_id));
         }
         cx.notify();
     }
@@ -102,7 +105,7 @@ impl NyaTermApp {
         label: &'static str,
     ) {
         if session_ids.is_empty() {
-            self.terminal_status = format!("no {label} sessions to close");
+            self.terminal.view.status = format!("no {label} sessions to close");
             return;
         }
 
@@ -150,15 +153,17 @@ impl NyaTermApp {
                 self.active_session_id = None;
                 self.active_ssh_config = None;
                 self.active_ai_execution_profile = AiExecutionProfile::SendOnly;
-                self.terminal_output = String::from(INITIAL_TERMINAL_BANNER);
-                self.terminal_output_decoder.reset_decoder();
-                self.terminal_screen = initial_terminal_screen();
-                self.terminal_screen
+                self.terminal.view.output = String::from(INITIAL_TERMINAL_BANNER);
+                self.terminal.view.output_decoder.reset_decoder();
+                self.terminal.view.screen = initial_terminal_screen();
+                self.terminal
+                    .view
+                    .screen
                     .set_encoding(&self.settings.interaction_default_encoding);
             }
         }
 
-        self.terminal_status = if failed == 0 {
+        self.terminal.view.status = if failed == 0 {
             format!("closed {closed} {label} session(s)")
         } else {
             format!("closed {closed} {label} session(s), {failed} failed")
@@ -175,7 +180,7 @@ impl NyaTermApp {
         // and the flag is honored as a documented no-op tray intent with status feedback.
         if self.settings.minimize_to_tray {
             window.minimize_window();
-            self.terminal_status =
+            self.terminal.view.status =
                 "minimized (tray mode preferred; OS tray polish pending)".to_string();
             cx.notify();
             return;
@@ -193,7 +198,8 @@ impl NyaTermApp {
             // Reuse close-all confirmation as quit-with-sessions gate (Tauri confirm_on_close).
             self.pending_quit_after_close_all = true;
             self.open_close_all_sessions_confirm(window, cx);
-            self.terminal_status = format!("confirm close: {open_sessions} session(s) still open");
+            self.terminal.view.status =
+                format!("confirm close: {open_sessions} session(s) still open");
             cx.notify();
             return;
         }
@@ -210,7 +216,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if self.ordered_sessions().is_empty() {
-            self.terminal_status = "no sessions to close".to_string();
+            self.terminal.view.status = "no sessions to close".to_string();
             cx.notify();
             return;
         }
@@ -218,7 +224,7 @@ impl NyaTermApp {
         self.tab_actions_anchor = None;
         self.tab_actions_submenu = None;
         self.close_all_sessions_confirm_open = true;
-        self.terminal_status = "close all sessions confirmation opened".to_string();
+        self.terminal.view.status = "close all sessions confirmation opened".to_string();
         window.focus(&self.close_all_sessions_confirm_focus);
         cx.notify();
     }
@@ -230,7 +236,7 @@ impl NyaTermApp {
         self.close_all_sessions_confirm_open = false;
         self.pending_quit_after_close_all = false;
         self.pending_window_quit = false;
-        self.terminal_status = "close all sessions cancelled".to_string();
+        self.terminal.view.status = "close all sessions cancelled".to_string();
         cx.notify();
     }
 
@@ -248,7 +254,7 @@ impl NyaTermApp {
             if self.settings.startup_restore {
                 self.flush_open_tabs_now();
             }
-            self.terminal_status = "sessions closed; closing window".to_string();
+            self.terminal.view.status = "sessions closed; closing window".to_string();
             window.remove_window();
             return;
         }
@@ -286,7 +292,7 @@ impl NyaTermApp {
             .iter()
             .position(|session| session.id == anchor_session_id)
         else {
-            self.terminal_status = "session no longer exists".to_string();
+            self.terminal.view.status = "session no longer exists".to_string();
             cx.notify();
             return;
         };
@@ -302,14 +308,14 @@ impl NyaTermApp {
     pub(in crate::features) fn clear_terminal(&mut self, cx: &mut Context<Self>) {
         self.clear_terminal_selection(cx);
         if let Some(session_id) = self.active_session_id.as_deref()
-            && let Some(view) = self.terminal_views.get_mut(session_id)
+            && let Some(view) = self.terminal.view.views.get_mut(session_id)
         {
             view.clear();
         }
-        self.terminal_output.clear();
-        self.terminal_output_decoder.reset_decoder();
-        self.terminal_screen.clear();
-        self.terminal_status = "terminal cleared".to_string();
+        self.terminal.view.output.clear();
+        self.terminal.view.output_decoder.reset_decoder();
+        self.terminal.view.screen.clear();
+        self.terminal.view.status = "terminal cleared".to_string();
         cx.notify();
     }
 

@@ -85,7 +85,8 @@ pub(in crate::features) use shell::{
     appearance_font_options, appearance_font_stack, gpui_code_font_family,
 };
 pub(in crate::features) use terminal::{
-    FULL_SHELL_PAINT_COUNT, TerminalSurface, full_shell_paint_count, terminal_surface_paint_count,
+    FULL_SHELL_PAINT_COUNT, TerminalFeatureFocus, TerminalFeatureState, full_shell_paint_count,
+    terminal_surface_paint_count,
 };
 pub(in crate::features) use transfer_external_sync_window::TransferExternalSyncWindow;
 pub(in crate::features) use transfers::{

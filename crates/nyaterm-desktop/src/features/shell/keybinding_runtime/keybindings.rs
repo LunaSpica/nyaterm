@@ -23,7 +23,7 @@ impl NyaTermApp {
     ) {
         self.keybinding_recording_id = Some(shortcut_id);
         self.keybinding_pending_keys = None;
-        self.terminal_status = "recording shortcut".to_string();
+        self.terminal.view.status = "recording shortcut".to_string();
         window.focus(&self.keybindings_focus);
         cx.notify();
     }
@@ -31,19 +31,19 @@ impl NyaTermApp {
     pub(in crate::features) fn cancel_keybinding_recording(&mut self, cx: &mut Context<Self>) {
         self.keybinding_recording_id = None;
         self.keybinding_pending_keys = None;
-        self.terminal_status = "shortcut recording cancelled".to_string();
+        self.terminal.view.status = "shortcut recording cancelled".to_string();
         cx.notify();
     }
 
     pub(in crate::features) fn confirm_keybinding_recording(&mut self, cx: &mut Context<Self>) {
         let Some(shortcut_id) = self.keybinding_recording_id.take() else {
-            self.terminal_status = "no shortcut recording is active".to_string();
+            self.terminal.view.status = "no shortcut recording is active".to_string();
             cx.notify();
             return;
         };
         let Some(keys) = self.keybinding_pending_keys.take() else {
             self.keybinding_recording_id = Some(shortcut_id);
-            self.terminal_status = "press a shortcut before saving".to_string();
+            self.terminal.view.status = "press a shortcut before saving".to_string();
             cx.notify();
             return;
         };
@@ -51,7 +51,7 @@ impl NyaTermApp {
         if let Some(conflict) = self.keybinding_conflict_label(&keys, &shortcut_id) {
             self.keybinding_recording_id = Some(shortcut_id);
             self.keybinding_pending_keys = Some(keys);
-            self.terminal_status = format!("shortcut conflicts with {conflict}");
+            self.terminal.view.status = format!("shortcut conflicts with {conflict}");
             cx.notify();
             return;
         }
@@ -92,7 +92,7 @@ impl NyaTermApp {
         if self.defer_settings_persistence(cx) {
             self.keybinding_recording_id = None;
             self.keybinding_pending_keys = None;
-            self.terminal_status = success_message.replace("saved", "staged");
+            self.terminal.view.status = success_message.replace("saved", "staged");
             return;
         }
         match ConnectionStore::open_with_portable_key_path(
@@ -107,12 +107,12 @@ impl NyaTermApp {
                 self.keybinding_pending_keys = None;
                 self.store_status.message = success_message.clone();
                 self.store_status.ready = true;
-                self.terminal_status = success_message;
+                self.terminal.view.status = success_message;
             }
             Err(error) => {
                 self.store_status.message = format!("shortcut save failed: {error}");
                 self.store_status.ready = false;
-                self.terminal_status = self.store_status.message.clone();
+                self.terminal.view.status = self.store_status.message.clone();
             }
         }
         cx.notify();
@@ -145,12 +145,12 @@ impl NyaTermApp {
         if recording_id == "tab.switchTo" && !crate::shortcuts::is_indexed_shortcut_template(&keys)
         {
             self.keybinding_pending_keys = None;
-            self.terminal_status = "tab switch shortcut must end with number 1".to_string();
+            self.terminal.view.status = "tab switch shortcut must end with number 1".to_string();
             cx.notify();
             return;
         }
         self.keybinding_pending_keys = Some(keys);
-        self.terminal_status = "shortcut captured; press Enter or Save".to_string();
+        self.terminal.view.status = "shortcut captured; press Enter or Save".to_string();
         cx.notify();
     }
 

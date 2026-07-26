@@ -8,7 +8,7 @@ use crate::models::{NetworkTab, NetworkTunnelEditorField, NetworkTunnelEditorSta
 impl NyaTermApp {
     pub(in crate::features) fn set_network_tab(&mut self, tab: NetworkTab, cx: &mut Context<Self>) {
         self.connection_state.network.set_tab(tab);
-        self.terminal_status = format!("network tab set to {}", tab.label());
+        self.terminal.view.status = format!("network tab set to {}", tab.label());
         cx.notify();
     }
 
@@ -20,9 +20,9 @@ impl NyaTermApp {
     ) {
         let key = network_section_key(tab, &section_id);
         if self.connection_state.network.toggle_section(key) {
-            self.terminal_status = format!("expanded {} group", tab.label());
+            self.terminal.view.status = format!("expanded {} group", tab.label());
         } else {
-            self.terminal_status = format!("collapsed {} group", tab.label());
+            self.terminal.view.status = format!("collapsed {} group", tab.label());
         }
         cx.notify();
     }
@@ -38,7 +38,7 @@ impl NyaTermApp {
             None => Some(TunnelConfig::default()),
         };
         let Some(tunnel) = tunnel else {
-            self.terminal_status = "tunnel profile is no longer available".to_string();
+            self.terminal.view.status = "tunnel profile is no longer available".to_string();
             cx.notify();
             return;
         };
@@ -75,7 +75,7 @@ impl NyaTermApp {
                 focused_field: NetworkTunnelEditorField::Name,
                 error: None,
             });
-        self.terminal_status = "tunnel editor opened".to_string();
+        self.terminal.view.status = "tunnel editor opened".to_string();
         let tunnel_editor_focus = self.connection_state.network.tunnel_editor_focus_handle();
         window.focus(&tunnel_editor_focus);
         cx.notify();
@@ -83,7 +83,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn close_network_tunnel_editor(&mut self, cx: &mut Context<Self>) {
         self.connection_state.network.close_tunnel_editor();
-        self.terminal_status = "tunnel editor closed".to_string();
+        self.terminal.view.status = "tunnel editor closed".to_string();
         cx.notify();
     }
 
@@ -149,7 +149,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn cycle_network_tunnel_type(&mut self, cx: &mut Context<Self>) {
         if let Some(tunnel_type) = self.connection_state.network.cycle_tunnel_type() {
-            self.terminal_status = format!("tunnel type set to {tunnel_type}");
+            self.terminal.view.status = format!("tunnel type set to {tunnel_type}");
         }
         cx.notify();
     }
@@ -166,7 +166,7 @@ impl NyaTermApp {
             .network
             .cycle_tunnel_connection(connection_ids)
         {
-            self.terminal_status = "tunnel SSH connection changed".to_string();
+            self.terminal.view.status = "tunnel SSH connection changed".to_string();
             cx.notify();
         }
     }
@@ -177,7 +177,7 @@ impl NyaTermApp {
             .network
             .cycle_tunnel_group(self.tunnel_groups.iter().map(|group| group.id.as_str()))
         {
-            self.terminal_status = "tunnel group changed".to_string();
+            self.terminal.view.status = "tunnel group changed".to_string();
         }
         cx.notify();
     }
@@ -195,7 +195,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn toggle_network_tunnel_auto_open(&mut self, cx: &mut Context<Self>) {
         if let Some(auto_open) = self.connection_state.network.toggle_tunnel_auto_open() {
-            self.terminal_status = if auto_open {
+            self.terminal.view.status = if auto_open {
                 "tunnel auto-open enabled"
             } else {
                 "tunnel auto-open disabled"
@@ -207,7 +207,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn save_network_tunnel_editor(&mut self, cx: &mut Context<Self>) {
         let Some(editor) = self.connection_state.network.active_tunnel_editor() else {
-            self.terminal_status = "no tunnel editor is active".to_string();
+            self.terminal.view.status = "no tunnel editor is active".to_string();
             cx.notify();
             return;
         };
@@ -289,17 +289,17 @@ impl NyaTermApp {
             Ok(()) => {
                 self.tunnels = next_tunnels;
                 self.connection_state.network.close_tunnel_editor();
-                self.terminal_status = format!("tunnel '{name}' saved");
-                self.store_status.message = self.terminal_status.clone();
+                self.terminal.view.status = format!("tunnel '{name}' saved");
+                self.store_status.message = self.terminal.view.status.clone();
                 self.store_status.ready = true;
             }
             Err(error) => {
-                self.terminal_status = format!("failed to save tunnel: {error}");
-                self.store_status.message = self.terminal_status.clone();
+                self.terminal.view.status = format!("failed to save tunnel: {error}");
+                self.store_status.message = self.terminal.view.status.clone();
                 self.store_status.ready = false;
                 self.connection_state
                     .network
-                    .set_tunnel_editor_error(self.terminal_status.clone());
+                    .set_tunnel_editor_error(self.terminal.view.status.clone());
             }
         }
         cx.notify();
@@ -314,7 +314,7 @@ impl NyaTermApp {
         self.connection_state
             .network
             .set_tunnel_editor_error(error.clone());
-        self.terminal_status = error;
+        self.terminal.view.status = error;
         cx.notify();
     }
 }

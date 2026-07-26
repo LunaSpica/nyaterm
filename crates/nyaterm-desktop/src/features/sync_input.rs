@@ -16,7 +16,7 @@ impl NyaTermApp {
         if self.sync_groups_selected_id.is_none() {
             self.sync_groups_selected_id = self.sync_groups.first().map(|group| group.id.clone());
         }
-        self.terminal_status = "sync groups opened".to_string();
+        self.terminal.view.status = "sync groups opened".to_string();
         window.focus(&self.sync_groups_focus);
         cx.notify();
     }
@@ -27,7 +27,7 @@ impl NyaTermApp {
         self.sync_groups_search_marked_text.clear();
         self.sync_groups_name_marked_text.clear();
         self.sync_groups_delete_pending = None;
-        self.terminal_status = "sync groups closed".to_string();
+        self.terminal.view.status = "sync groups closed".to_string();
         cx.notify();
     }
 
@@ -44,19 +44,19 @@ impl NyaTermApp {
         };
         self.sync_groups_selected_id = Some(group.id.clone());
         self.sync_groups.push(group);
-        self.terminal_status = "sync group created".to_string();
+        self.terminal.view.status = "sync group created".to_string();
         cx.notify();
     }
 
     pub(in crate::features) fn delete_selected_sync_group(&mut self, cx: &mut Context<Self>) {
         let Some(group_id) = self.sync_groups_selected_id.clone() else {
-            self.terminal_status = "no sync group selected".to_string();
+            self.terminal.view.status = "no sync group selected".to_string();
             cx.notify();
             return;
         };
         self.sync_groups.retain(|group| group.id != group_id);
         self.sync_groups_selected_id = self.sync_groups.first().map(|group| group.id.clone());
-        self.terminal_status = "sync group deleted".to_string();
+        self.terminal.view.status = "sync group deleted".to_string();
         cx.notify();
     }
 
@@ -65,7 +65,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(group_id) = self.sync_groups_selected_id.clone() else {
-            self.terminal_status = "no sync group selected".to_string();
+            self.terminal.view.status = "no sync group selected".to_string();
             cx.notify();
             return;
         };
@@ -229,7 +229,7 @@ impl NyaTermApp {
     ) {
         if self.sync_groups.iter().any(|group| group.id == group_id) {
             self.sync_groups_selected_id = Some(group_id);
-            self.terminal_status = "sync group selected".to_string();
+            self.terminal.view.status = "sync group selected".to_string();
             cx.notify();
         }
     }
@@ -303,12 +303,12 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(group) = self.selected_sync_group_mut() else {
-            self.terminal_status = "no sync group selected".to_string();
+            self.terminal.view.status = "no sync group selected".to_string();
             cx.notify();
             return;
         };
         group.enabled = !group.enabled;
-        self.terminal_status = if group.enabled {
+        self.terminal.view.status = if group.enabled {
             "sync group enabled".to_string()
         } else {
             "sync group disabled".to_string()
@@ -322,17 +322,17 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(group) = self.selected_sync_group_mut() else {
-            self.terminal_status = "create or select a sync group first".to_string();
+            self.terminal.view.status = "create or select a sync group first".to_string();
             cx.notify();
             return;
         };
         if group.session_ids.iter().any(|id| id == &session_id) {
             group.session_ids.retain(|id| id != &session_id);
             group.paused_session_ids.retain(|id| id != &session_id);
-            self.terminal_status = "session removed from sync group".to_string();
+            self.terminal.view.status = "session removed from sync group".to_string();
         } else {
             group.session_ids.push(session_id);
-            self.terminal_status = "session added to sync group".to_string();
+            self.terminal.view.status = "session added to sync group".to_string();
         }
         cx.notify();
     }
@@ -343,21 +343,21 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(group) = self.selected_sync_group_mut() else {
-            self.terminal_status = "create or select a sync group first".to_string();
+            self.terminal.view.status = "create or select a sync group first".to_string();
             cx.notify();
             return;
         };
         if !group.session_ids.iter().any(|id| id == &session_id) {
-            self.terminal_status = "session is not in the selected sync group".to_string();
+            self.terminal.view.status = "session is not in the selected sync group".to_string();
             cx.notify();
             return;
         }
         if group.paused_session_ids.iter().any(|id| id == &session_id) {
             group.paused_session_ids.retain(|id| id != &session_id);
-            self.terminal_status = "session sync resumed".to_string();
+            self.terminal.view.status = "session sync resumed".to_string();
         } else {
             group.paused_session_ids.push(session_id);
-            self.terminal_status = "session sync paused".to_string();
+            self.terminal.view.status = "session sync paused".to_string();
         }
         cx.notify();
     }
@@ -401,7 +401,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn toggle_broadcast_to_all(&mut self, cx: &mut Context<Self>) {
         self.broadcast_to_all = !self.broadcast_to_all;
-        self.terminal_status = if self.broadcast_to_all {
+        self.terminal.view.status = if self.broadcast_to_all {
             "broadcast to all sessions enabled".to_string()
         } else {
             "broadcast to all sessions disabled".to_string()
@@ -444,7 +444,7 @@ impl NyaTermApp {
             .active_sync_group_for_session(&session_id)
             .map(|group| group.id.clone())
         else {
-            self.terminal_status = "session is not in an active sync group".to_string();
+            self.terminal.view.status = "session is not in an active sync group".to_string();
             cx.notify();
             return;
         };
@@ -453,16 +453,16 @@ impl NyaTermApp {
             .iter_mut()
             .find(|group| group.id == group_id)
         else {
-            self.terminal_status = "sync group not found".to_string();
+            self.terminal.view.status = "sync group not found".to_string();
             cx.notify();
             return;
         };
         if group.paused_session_ids.iter().any(|id| id == &session_id) {
             group.paused_session_ids.retain(|id| id != &session_id);
-            self.terminal_status = "session sync resumed".to_string();
+            self.terminal.view.status = "session sync resumed".to_string();
         } else {
             group.paused_session_ids.push(session_id);
-            self.terminal_status = "session sync paused".to_string();
+            self.terminal.view.status = "session sync paused".to_string();
         }
         cx.notify();
     }
@@ -477,7 +477,7 @@ impl NyaTermApp {
             .active_sync_group_for_session(&session_id)
             .map(|group| group.id.clone())
         else {
-            self.terminal_status = "session is not in an active sync group".to_string();
+            self.terminal.view.status = "session is not in an active sync group".to_string();
             cx.notify();
             return;
         };
@@ -498,7 +498,7 @@ impl NyaTermApp {
         {
             self.sync_groups_selected_id = self.sync_groups.first().map(|group| group.id.clone());
         }
-        self.terminal_status = "left sync group".to_string();
+        self.terminal.view.status = "left sync group".to_string();
         cx.notify();
     }
 
@@ -512,7 +512,7 @@ impl NyaTermApp {
             .active_sync_group_for_session(&session_id)
             .map(|group| group.id.clone())
         else {
-            self.terminal_status = "session is not in an active sync group".to_string();
+            self.terminal.view.status = "session is not in an active sync group".to_string();
             cx.notify();
             return;
         };
@@ -523,7 +523,7 @@ impl NyaTermApp {
         {
             group.enabled = false;
         }
-        self.terminal_status = "sync group closed".to_string();
+        self.terminal.view.status = "sync group closed".to_string();
         cx.notify();
     }
 

@@ -9,13 +9,13 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if self.quick_command_state.import.path_prompt.is_some() {
-            self.terminal_status = "quick command import picker is already open".to_string();
+            self.terminal.view.status = "quick command import picker is already open".to_string();
             cx.notify();
             return;
         }
 
         self.quick_command_state.import.dialog_open = true;
-        self.terminal_status = "select a quick command import source".to_string();
+        self.terminal.view.status = "select a quick command import source".to_string();
         window.focus(&self.quick_command_state.import.focus);
         cx.notify();
     }
@@ -43,7 +43,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if self.quick_command_state.import.path_prompt.is_some() {
-            self.terminal_status = "quick command import picker is already open".to_string();
+            self.terminal.view.status = "quick command import picker is already open".to_string();
             cx.notify();
             return;
         }
@@ -58,7 +58,7 @@ impl NyaTermApp {
         let config_dir = self.runtime.config_dir().to_path_buf();
         let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
         self.quick_command_state.import.path_prompt = Some(kind);
-        self.terminal_status = kind.selecting_status().to_string();
+        self.terminal.view.status = kind.selecting_status().to_string();
 
         cx.spawn(async move |this, cx| {
             let result = match receiver.await {
@@ -109,22 +109,22 @@ impl NyaTermApp {
                 total_categories,
             } => {
                 self.refresh_quick_commands();
-                self.terminal_status = format!(
+                self.terminal.view.status = format!(
                     "imported {imported_commands} quick command(s), updated {updated_commands}, categories +{imported_categories}, total {total_commands}/{total_categories}"
                 );
-                self.store_status.message = self.terminal_status.clone();
+                self.store_status.message = self.terminal.view.status.clone();
                 self.store_status.ready = true;
             }
             QuickCommandImportPathPromptResult::Cancelled => {
-                self.terminal_status = "quick command import cancelled".to_string();
+                self.terminal.view.status = "quick command import cancelled".to_string();
             }
             QuickCommandImportPathPromptResult::Failed(error) => {
-                self.terminal_status = format!("quick command import failed: {error}");
-                self.store_status.message = self.terminal_status.clone();
+                self.terminal.view.status = format!("quick command import failed: {error}");
+                self.store_status.message = self.terminal.view.status.clone();
                 self.store_status.ready = false;
             }
             QuickCommandImportPathPromptResult::Closed => {
-                self.terminal_status =
+                self.terminal.view.status =
                     "quick command import picker closed before returning".to_string();
             }
         }

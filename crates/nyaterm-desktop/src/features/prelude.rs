@@ -1,9 +1,8 @@
 pub(super) use gpui::{
     AnimationExt, AnyElement, App, ClickEvent, ClipboardItem, Context, Entity, FocusHandle,
     FontWeight, IntoElement, KeyDownEvent, KeyUpEvent, MouseButton, MouseDownEvent,
-    PathPromptOptions, Render, ScrollDelta, ScrollHandle, ScrollWheelEvent, SharedString,
-    Subscription, Timer, Window, WindowControlArea, WindowHandle, div, prelude::*, px, rgb, rgba,
-    svg,
+    PathPromptOptions, Render, ScrollDelta, ScrollHandle, ScrollWheelEvent, SharedString, Timer,
+    Window, WindowControlArea, WindowHandle, div, prelude::*, px, rgb, rgba, svg,
 };
 pub(super) use nyaterm_core::{
     AgentCommandExecutionMode, AgentOutputCaptureProcessor, AiAction, AiChatRequest, AiCommandCard,

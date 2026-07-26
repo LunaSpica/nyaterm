@@ -115,7 +115,7 @@ impl NyaTermApp {
                         ..Default::default()
                     };
                     self.cloud_sync_status = self.tr("settings.githubGistConnected").to_string();
-                    self.terminal_status = self.cloud_sync_status.clone();
+                    self.terminal.view.status = self.cloud_sync_status.clone();
                 }
                 GithubGistAuthEvent::Failed(error) => {
                     self.github_gist_auth_cancel = None;
@@ -129,7 +129,7 @@ impl NyaTermApp {
                     self.github_gist_auth.verification_uri = None;
                     self.github_gist_auth.message = Some(message.clone());
                     self.cloud_sync_status = message.clone();
-                    self.terminal_status = message;
+                    self.terminal.view.status = message;
                 }
                 GithubGistAuthEvent::Cancelled => {
                     self.github_gist_auth_cancel = None;

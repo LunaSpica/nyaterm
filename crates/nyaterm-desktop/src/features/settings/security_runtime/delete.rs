@@ -46,7 +46,7 @@ impl NyaTermApp {
                 self.refresh_security_catalog();
                 self.security.delete_confirm = None;
                 self.security.status = format!("{} deleted", confirm.label);
-                self.terminal_status = self.security.status.clone();
+                self.terminal.view.status = self.security.status.clone();
             }
             Err(error) => {
                 self.security.status = error.to_string();

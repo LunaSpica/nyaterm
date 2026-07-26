@@ -293,12 +293,14 @@ pub(in crate::features) fn terminal_resize_geometry_for_bounds(
 impl NyaTermApp {
     pub(in crate::features) fn active_terminal_scroll_offset(&self) -> usize {
         if let Some(session_id) = self.active_session_id.as_deref() {
-            self.terminal_views
+            self.terminal
+                .view
+                .views
                 .get(session_id)
                 .map(|view| view.scroll_offset)
                 .unwrap_or(0)
         } else {
-            self.terminal_scroll_offset
+            self.terminal.view.scroll_offset
         }
     }
 
@@ -315,7 +317,7 @@ impl NyaTermApp {
         session_id: Option<&str>,
     ) -> bool {
         if let Some(session_id) = session_id.filter(|id| !id.is_empty()) {
-            let Some(view) = self.terminal_views.get(session_id) else {
+            let Some(view) = self.terminal.view.views.get(session_id) else {
                 return false;
             };
             return terminal_visual_scroll_active_for_state(
@@ -324,7 +326,7 @@ impl NyaTermApp {
             );
         }
         terminal_visual_scroll_active_for_state(
-            self.terminal_scroll_offset,
+            self.terminal.view.scroll_offset,
             self.terminal_scroll_residual_for_session(None),
         )
     }
@@ -334,7 +336,7 @@ impl NyaTermApp {
         session_id: Option<&str>,
     ) -> usize {
         if let Some(session_id) = session_id.filter(|id| !id.is_empty()) {
-            let Some(view) = self.terminal_views.get(session_id) else {
+            let Some(view) = self.terminal.view.views.get(session_id) else {
                 return 0;
             };
             return terminal_display_offset_from_state(
@@ -344,9 +346,9 @@ impl NyaTermApp {
             );
         }
         terminal_display_offset_from_state(
-            self.terminal_scroll_offset,
+            self.terminal.view.scroll_offset,
             self.terminal_scroll_residual_for_session(None),
-            self.terminal_screen.scrollback_len(),
+            self.terminal.view.screen.scrollback_len(),
         )
     }
 
@@ -354,7 +356,7 @@ impl NyaTermApp {
         &self,
         session_id: &str,
     ) -> Option<TerminalScrollVisualState> {
-        let view = self.terminal_views.get(session_id)?;
+        let view = self.terminal.view.views.get(session_id)?;
         let scroll_offset = view.scroll_offset;
         let scroll_residual_lines = self.terminal_scroll_residual_for_session(Some(session_id));
         let scrollback_len = view.scrollback_len_for_ui();
@@ -503,7 +505,7 @@ impl NyaTermApp {
 
         let previous_display_offset = self.terminal_display_offset_for_session(Some(&session_id));
         let (target_display_offset, residual_lines) = {
-            let view = self.terminal_views.get_mut(&session_id)?;
+            let view = self.terminal.view.views.get_mut(&session_id)?;
             let scrollback_len = view.scrollback_len_for_ui();
             let scroll_offset = terminal_scroll_offset_reanchored_for_scrollback_growth(
                 state.scroll_offset,
@@ -528,9 +530,11 @@ impl NyaTermApp {
 
         let key = terminal_scroll_key(Some(&session_id));
         if residual_lines == 0.0 {
-            self.terminal_scroll_delta_residuals.remove(&key);
+            self.terminal.view.scroll_delta_residuals.remove(&key);
         } else {
-            self.terminal_scroll_delta_residuals
+            self.terminal
+                .view
+                .scroll_delta_residuals
                 .insert(key, residual_lines);
         }
 
@@ -613,7 +617,7 @@ impl NyaTermApp {
             return None;
         }
         if let Some(session_id) = session_id.filter(|id| !id.is_empty()) {
-            if let Some(view) = self.terminal_views.get_mut(session_id) {
+            if let Some(view) = self.terminal.view.views.get_mut(session_id) {
                 let max = view.scrollback_len_for_ui();
                 let next = if delta_lines > 0 {
                     view.scroll_offset.saturating_add(delta_lines as usize)
@@ -623,25 +627,29 @@ impl NyaTermApp {
                 view.scroll_offset = next.min(max);
                 if view.scroll_offset == 0 {
                     view.has_new_while_scrolled = false;
-                    self.terminal_scroll_delta_residuals.remove(session_id);
+                    self.terminal.view.scroll_delta_residuals.remove(session_id);
                 }
             }
             return self.terminal_scroll_visual_state_for_session(session_id);
         }
 
-        let max = self.terminal_screen.scrollback_len();
+        let max = self.terminal.view.screen.scrollback_len();
         let next = if delta_lines > 0 {
-            self.terminal_scroll_offset
+            self.terminal
+                .view
+                .scroll_offset
                 .saturating_add(delta_lines as usize)
         } else {
-            self.terminal_scroll_offset
+            self.terminal
+                .view
+                .scroll_offset
                 .saturating_sub((-delta_lines) as usize)
         };
-        self.terminal_scroll_offset = next.min(max);
-        if self.terminal_scroll_offset == 0 {
+        self.terminal.view.scroll_offset = next.min(max);
+        if self.terminal.view.scroll_offset == 0 {
             self.clear_terminal_scroll_residual_for_session(None);
             if let Some(session_id) = self.active_session_id.clone()
-                && let Some(view) = self.terminal_views.get_mut(&session_id)
+                && let Some(view) = self.terminal.view.views.get_mut(&session_id)
             {
                 view.has_new_while_scrolled = false;
             }
@@ -664,13 +672,22 @@ impl NyaTermApp {
         // immediately, but defer target snapshot/decorations to the coalesced
         // position notify below.
         self.notify_terminal_scroll_visual_only(session_id, cx);
-        self.terminal_runtime
+        self.terminal
+            .view
+            .runtime
             .pending_terminal_scroll_snapshot_only_sessions
             .remove(session_id);
-        self.terminal_runtime
+        self.terminal
+            .view
+            .runtime
             .pending_terminal_scroll_position_sessions
             .insert(session_id.to_string());
-        if self.terminal_runtime.terminal_scroll_position_notify_armed {
+        if self
+            .terminal
+            .view
+            .runtime
+            .terminal_scroll_position_notify_armed
+        {
             return;
         }
         self.arm_terminal_scroll_position_notify(cx);
@@ -686,11 +703,15 @@ impl NyaTermApp {
         }
         self.mark_terminal_user_scroll_activity(session_id, cx);
         if !self
-            .terminal_runtime
+            .terminal
+            .view
+            .runtime
             .pending_terminal_scroll_position_sessions
             .contains(session_id)
         {
-            self.terminal_runtime
+            self.terminal
+                .view
+                .runtime
                 .pending_terminal_scroll_snapshot_only_sessions
                 .insert(session_id.to_string());
         }
@@ -698,26 +719,43 @@ impl NyaTermApp {
     }
 
     fn arm_terminal_scroll_position_notify(&mut self, cx: &mut Context<Self>) {
-        if self.terminal_runtime.terminal_scroll_position_notify_armed {
+        if self
+            .terminal
+            .view
+            .runtime
+            .terminal_scroll_position_notify_armed
+        {
             return;
         }
-        self.terminal_runtime.terminal_scroll_position_notify_armed = true;
+        self.terminal
+            .view
+            .runtime
+            .terminal_scroll_position_notify_armed = true;
         cx.spawn(async move |this, cx| {
             Timer::after(TERMINAL_SCROLL_POSITION_NOTIFY_DELAY).await;
             let _ = this.update(cx, |this, cx| {
-                this.terminal_runtime.terminal_scroll_position_notify_armed = false;
+                this.terminal
+                    .view
+                    .runtime
+                    .terminal_scroll_position_notify_armed = false;
                 let (session_ids, snapshot_only_session_ids) =
                     terminal_scroll_position_flush_queued_sessions(
                         &mut this
-                            .terminal_runtime
+                            .terminal
+                            .view
+                            .runtime
                             .pending_terminal_scroll_position_repaint_sessions,
                         &mut this
-                            .terminal_runtime
+                            .terminal
+                            .view
+                            .runtime
                             .pending_terminal_scroll_snapshot_only_sessions,
                     );
                 let mut session_ids = session_ids;
                 session_ids.extend(
-                    this.terminal_runtime
+                    this.terminal
+                        .view
+                        .runtime
                         .pending_terminal_scroll_position_sessions
                         .drain(),
                 );
@@ -725,7 +763,9 @@ impl NyaTermApp {
                 session_ids.dedup();
                 for session_id in snapshot_only_session_ids {
                     if let Some(offset) = this
-                        .terminal_views
+                        .terminal
+                        .view
+                        .views
                         .get(&session_id)
                         .map(|view| {
                             let residual =
@@ -746,7 +786,9 @@ impl NyaTermApp {
                 }
                 for session_id in session_ids {
                     if let Some(offset) = this
-                        .terminal_views
+                        .terminal
+                        .view
+                        .views
                         .get(&session_id)
                         .map(|view| {
                             let residual =
@@ -781,7 +823,7 @@ impl NyaTermApp {
         }
         self.mark_terminal_user_scroll_activity(session_id, cx);
         if let Some((scroll_offset, residual_lines, scrollback_len)) =
-            self.terminal_views.get(session_id).map(|view| {
+            self.terminal.view.views.get(session_id).map(|view| {
                 (
                     view.scroll_offset,
                     self.terminal_scroll_residual_for_session(Some(session_id)),
@@ -802,14 +844,24 @@ impl NyaTermApp {
         if session_id.is_empty() {
             return;
         }
-        self.terminal_runtime.last_terminal_user_scroll_at = Some(Instant::now());
-        self.terminal_runtime
+        self.terminal.view.runtime.last_terminal_user_scroll_at = Some(Instant::now());
+        self.terminal
+            .view
+            .runtime
             .pending_terminal_user_scroll_idle_sessions
             .insert(session_id.to_string());
-        if self.terminal_runtime.terminal_user_scroll_idle_notify_armed {
+        if self
+            .terminal
+            .view
+            .runtime
+            .terminal_user_scroll_idle_notify_armed
+        {
             return;
         }
-        self.terminal_runtime.terminal_user_scroll_idle_notify_armed = true;
+        self.terminal
+            .view
+            .runtime
+            .terminal_user_scroll_idle_notify_armed = true;
         cx.spawn(async move |this, cx| {
             Timer::after(TERMINAL_USER_SCROLL_ACTIVE_WINDOW).await;
             let _ = this.update(cx, |this, cx| {
@@ -822,7 +874,7 @@ impl NyaTermApp {
     fn flush_terminal_user_scroll_idle_notify(&mut self, cx: &mut Context<Self>) {
         let now = Instant::now();
         if let Some(delay) = terminal_user_scroll_idle_remaining_delay(
-            self.terminal_runtime.last_terminal_user_scroll_at,
+            self.terminal.view.runtime.last_terminal_user_scroll_at,
             now,
             TERMINAL_USER_SCROLL_ACTIVE_WINDOW,
         ) {
@@ -835,9 +887,14 @@ impl NyaTermApp {
             .detach();
             return;
         }
-        self.terminal_runtime.terminal_user_scroll_idle_notify_armed = false;
+        self.terminal
+            .view
+            .runtime
+            .terminal_user_scroll_idle_notify_armed = false;
         let session_ids = self
-            .terminal_runtime
+            .terminal
+            .view
+            .runtime
             .pending_terminal_user_scroll_idle_sessions
             .drain()
             .collect::<Vec<_>>();
@@ -882,7 +939,9 @@ impl NyaTermApp {
         let key = terminal_scroll_key(session_id);
         let delta_lines = {
             let residual = self
-                .terminal_scroll_delta_residuals
+                .terminal
+                .view
+                .scroll_delta_residuals
                 .entry(key.clone())
                 .or_insert(0.0);
             terminal_scroll_delta_lines_from_raw(residual, raw_lines)
@@ -901,12 +960,14 @@ impl NyaTermApp {
             return 0;
         }
         let scroll_offset = if let Some(session_id) = session_id.filter(|id| !id.is_empty()) {
-            self.terminal_views
+            self.terminal
+                .view
+                .views
                 .get(session_id)
                 .map(|view| view.scroll_offset)
                 .unwrap_or(0)
         } else {
-            self.terminal_scroll_offset
+            self.terminal.view.scroll_offset
         };
         let residual = self.terminal_scroll_residual_for_session(session_id);
         let (delta_lines, next_residual) = terminal_local_scroll_delta_lines_from_state(
@@ -917,9 +978,11 @@ impl NyaTermApp {
         );
         let key = terminal_scroll_key(session_id);
         if next_residual == 0.0 {
-            self.terminal_scroll_delta_residuals.remove(&key);
+            self.terminal.view.scroll_delta_residuals.remove(&key);
         } else {
-            self.terminal_scroll_delta_residuals
+            self.terminal
+                .view
+                .scroll_delta_residuals
                 .insert(key, next_residual);
         }
         delta_lines
@@ -929,7 +992,9 @@ impl NyaTermApp {
         &self,
         session_id: Option<&str>,
     ) -> f32 {
-        self.terminal_scroll_delta_residuals
+        self.terminal
+            .view
+            .scroll_delta_residuals
             .get(&terminal_scroll_key(session_id))
             .copied()
             .unwrap_or(0.0)
@@ -939,7 +1004,9 @@ impl NyaTermApp {
         &mut self,
         session_id: Option<&str>,
     ) {
-        self.terminal_scroll_delta_residuals
+        self.terminal
+            .view
+            .scroll_delta_residuals
             .remove(&terminal_scroll_key(session_id));
     }
 
@@ -962,13 +1029,13 @@ impl NyaTermApp {
         paths: Vec<std::path::PathBuf>,
         cx: &mut Context<Self>,
     ) {
-        self.terminal_file_drop_hover = None;
+        self.terminal.windows.file_drop_hover = None;
         if session_id.is_empty() || paths.is_empty() {
             cx.notify();
             return;
         }
         if self.is_session_disconnected(&session_id) {
-            self.terminal_status =
+            self.terminal.view.status =
                 "session disconnected — reconnect before dropping files".to_string();
             cx.notify();
             return;
@@ -992,7 +1059,7 @@ impl NyaTermApp {
         match kind {
             Some(SessionKind::LocalPty) | None => {
                 if path_strings.is_empty() {
-                    self.terminal_status =
+                    self.terminal.view.status =
                         "folders cannot be dropped into a local terminal".to_string();
                     cx.notify();
                     return;
@@ -1003,7 +1070,7 @@ impl NyaTermApp {
                 }
                 let text = nyaterm_core::format_local_terminal_drop_input(&path_strings);
                 if self.send_terminal_input(text.into_bytes(), cx) {
-                    self.terminal_status =
+                    self.terminal.view.status =
                         format!("inserted {} path(s) into terminal", path_strings.len());
                     cx.notify();
                 }
@@ -1012,7 +1079,7 @@ impl NyaTermApp {
                 SessionKind::Ssh | SessionKind::Telnet | SessionKind::Serial | SessionKind::RawTcp,
             ) => {
                 if has_dirs {
-                    self.terminal_status =
+                    self.terminal.view.status =
                         "folders cannot be uploaded via ZMODEM — use the file explorer for SFTP"
                             .to_string();
                     cx.notify();
@@ -1036,8 +1103,8 @@ impl NyaTermApp {
         session_id: Option<String>,
         cx: &mut Context<Self>,
     ) {
-        if self.terminal_file_drop_hover != session_id {
-            self.terminal_file_drop_hover = session_id;
+        if self.terminal.windows.file_drop_hover != session_id {
+            self.terminal.windows.file_drop_hover = session_id;
             cx.notify();
         }
     }
@@ -1099,7 +1166,7 @@ impl NyaTermApp {
     pub(in crate::features) fn scroll_terminal_to_bottom_state_only(&mut self) -> Option<String> {
         if let Some(session_id) = self.active_session_id.clone() {
             let residual_lines = self.terminal_scroll_residual_for_session(Some(&session_id));
-            if let Some(view) = self.terminal_views.get_mut(&session_id) {
+            if let Some(view) = self.terminal.view.views.get_mut(&session_id) {
                 let changed = terminal_scroll_to_bottom_state_needs_update(
                     view.scroll_offset,
                     residual_lines,
@@ -1114,15 +1181,15 @@ impl NyaTermApp {
                 return Some(session_id);
             }
             let changed = terminal_scroll_to_bottom_state_needs_update(
-                self.terminal_scroll_offset,
+                self.terminal.view.scroll_offset,
                 self.terminal_scroll_residual_for_session(None),
                 false,
             );
-            self.terminal_scroll_offset = 0;
+            self.terminal.view.scroll_offset = 0;
             self.clear_terminal_scroll_residual_for_session(None);
             return changed.then_some(session_id);
         }
-        self.terminal_scroll_offset = 0;
+        self.terminal.view.scroll_offset = 0;
         self.clear_terminal_scroll_residual_for_session(None);
         None
     }
@@ -1136,11 +1203,11 @@ impl NyaTermApp {
 
     pub(in crate::features) fn scroll_terminal_to_top(&mut self, cx: &mut Context<Self>) {
         if let Some(session_id) = self.active_session_id.clone() {
-            if let Some(view) = self.terminal_views.get_mut(&session_id) {
+            if let Some(view) = self.terminal.view.views.get_mut(&session_id) {
                 view.scroll_offset = view.scrollback_len_for_ui();
             }
         } else {
-            self.terminal_scroll_offset = self.terminal_screen.scrollback_len();
+            self.terminal.view.scroll_offset = self.terminal.view.screen.scrollback_len();
         }
         self.notify_terminal_scroll_after_state_change(
             self.active_session_id.clone().as_deref(),
@@ -1163,12 +1230,14 @@ impl NyaTermApp {
 
     pub(in crate::features) fn active_terminal_scroll_max(&self) -> usize {
         if let Some(session_id) = self.active_session_id.as_deref() {
-            self.terminal_views
+            self.terminal
+                .view
+                .views
                 .get(session_id)
                 .map(|view| view.scrollback_len_for_ui())
                 .unwrap_or(0)
         } else {
-            self.terminal_screen.scrollback_len()
+            self.terminal.view.screen.scrollback_len()
         }
     }
 
@@ -1177,12 +1246,14 @@ impl NyaTermApp {
         session_id: Option<&str>,
     ) -> usize {
         if let Some(session_id) = session_id.filter(|id| !id.is_empty()) {
-            self.terminal_views
+            self.terminal
+                .view
+                .views
                 .get(session_id)
                 .map(|view| view.scrollback_len_for_ui())
                 .unwrap_or(0)
         } else {
-            self.terminal_screen.scrollback_len()
+            self.terminal.view.screen.scrollback_len()
         }
     }
 
@@ -1206,7 +1277,7 @@ impl NyaTermApp {
     ) -> Option<String> {
         if let Some(session_id) = session_id.filter(|id| !id.is_empty()) {
             let current_residual = self.terminal_scroll_residual_for_session(Some(session_id));
-            if let Some(view) = self.terminal_views.get_mut(session_id) {
+            if let Some(view) = self.terminal.view.views.get_mut(session_id) {
                 let max = view.scrollback_len_for_ui();
                 let next_offset = offset.min(max);
                 if !terminal_scroll_offset_state_needs_update(
@@ -1220,25 +1291,25 @@ impl NyaTermApp {
                 view.scroll_offset = next_offset;
                 if view.scroll_offset == 0 {
                     view.has_new_while_scrolled = false;
-                    self.terminal_scroll_delta_residuals.remove(session_id);
+                    self.terminal.view.scroll_delta_residuals.remove(session_id);
                 }
                 return Some(session_id.to_string());
             }
             return None;
         } else {
-            let max = self.terminal_screen.scrollback_len();
+            let max = self.terminal.view.screen.scrollback_len();
             let next_offset = offset.min(max);
             let current_residual = self.terminal_scroll_residual_for_session(None);
             if !terminal_scroll_offset_state_needs_update(
-                self.terminal_scroll_offset,
+                self.terminal.view.scroll_offset,
                 current_residual,
                 false,
                 next_offset,
             ) {
                 return None;
             }
-            self.terminal_scroll_offset = next_offset;
-            if self.terminal_scroll_offset == 0 {
+            self.terminal.view.scroll_offset = next_offset;
+            if self.terminal.view.scroll_offset == 0 {
                 self.clear_terminal_scroll_residual_for_session(None);
             }
         }
@@ -1301,8 +1372,8 @@ impl NyaTermApp {
         &mut self,
         session_id: Option<String>,
     ) -> Option<String> {
-        self.terminal_scrollbar_dragging = true;
-        self.terminal_scrollbar_drag_session_id = session_id.clone();
+        self.terminal.view.scrollbar_dragging = true;
+        self.terminal.view.scrollbar_drag_session_id = session_id.clone();
         session_id.or_else(|| self.active_session_id.clone())
     }
 
@@ -1311,15 +1382,15 @@ impl NyaTermApp {
         event: &gpui::MouseMoveEvent,
         cx: &mut Context<Self>,
     ) {
-        if !self.terminal_scrollbar_dragging {
+        if !self.terminal.view.scrollbar_dragging {
             return;
         }
-        let drag_session_id = self.terminal_scrollbar_drag_session_id.as_deref();
+        let drag_session_id = self.terminal.view.scrollbar_drag_session_id.as_deref();
         let Some(bounds) = self.terminal_surface_bounds_for_session(drag_session_id) else {
             return;
         };
         let ratio = terminal_scroll_track_ratio(bounds, event.position.y);
-        let drag_session_id = self.terminal_scrollbar_drag_session_id.clone();
+        let drag_session_id = self.terminal.view.scrollbar_drag_session_id.clone();
         let repaint_session_id = self.set_terminal_scroll_from_track_ratio_for_session_state_only(
             drag_session_id.as_deref(),
             ratio,
@@ -1330,10 +1401,10 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn finish_terminal_scrollbar_drag(&mut self, cx: &mut Context<Self>) {
-        if self.terminal_scrollbar_dragging {
-            let session_id = self.terminal_scrollbar_drag_session_id.clone();
-            self.terminal_scrollbar_dragging = false;
-            self.terminal_scrollbar_drag_session_id = None;
+        if self.terminal.view.scrollbar_dragging {
+            let session_id = self.terminal.view.scrollbar_drag_session_id.clone();
+            self.terminal.view.scrollbar_dragging = false;
+            self.terminal.view.scrollbar_drag_session_id = None;
             self.notify_terminal_surface_only(session_id.as_deref(), cx);
         }
     }
@@ -1354,13 +1425,23 @@ impl NyaTermApp {
             return;
         }
         self.mark_terminal_user_scroll_activity(session_id.as_str(), cx);
-        self.terminal_runtime
+        self.terminal
+            .view
+            .runtime
             .pending_terminal_scrollbar_drag_sessions
             .insert(session_id);
-        if self.terminal_runtime.terminal_scrollbar_drag_notify_armed {
+        if self
+            .terminal
+            .view
+            .runtime
+            .terminal_scrollbar_drag_notify_armed
+        {
             return;
         }
-        self.terminal_runtime.terminal_scrollbar_drag_notify_armed = true;
+        self.terminal
+            .view
+            .runtime
+            .terminal_scrollbar_drag_notify_armed = true;
         cx.spawn(async move |this, cx| {
             Timer::after(TERMINAL_SCROLLBAR_DRAG_NOTIFY_DELAY).await;
             let _ = this.update(cx, |this, cx| {
@@ -1371,10 +1452,15 @@ impl NyaTermApp {
     }
 
     fn flush_terminal_scrollbar_drag_visual_notify(&mut self, cx: &mut Context<Self>) {
-        self.terminal_runtime.terminal_scrollbar_drag_notify_armed = false;
+        self.terminal
+            .view
+            .runtime
+            .terminal_scrollbar_drag_notify_armed = false;
         let session_ids = terminal_scrollbar_drag_flush_sessions(
             &mut self
-                .terminal_runtime
+                .terminal
+                .view
+                .runtime
                 .pending_terminal_scrollbar_drag_sessions,
         );
         for session_id in session_ids {
@@ -1393,19 +1479,21 @@ impl NyaTermApp {
         session_id: Option<&str>,
     ) -> Option<gpui::Bounds<gpui::Pixels>> {
         if let Some(session_id) = session_id.filter(|id| !id.is_empty()) {
-            self.terminal_session_surface_bounds
+            self.terminal
+                .layout
+                .session_surface_bounds
                 .get(session_id)
                 .copied()
-                .or(self.terminal_surface_bounds)
+                .or(self.terminal.layout.surface_bounds)
         } else {
-            self.terminal_surface_bounds
+            self.terminal.layout.surface_bounds
         }
     }
 
     pub(in crate::features) fn active_terminal_page_rows(&self) -> usize {
         // Prefer live screen rows when available; fall back to classic 24-row page.
         if let Some(session_id) = self.active_session_id.as_deref() {
-            if let Some(view) = self.terminal_views.get(session_id) {
+            if let Some(view) = self.terminal.view.views.get(session_id) {
                 let rows = view.viewport_rows_for_ui();
                 if rows > 0 {
                     return rows;
@@ -1434,18 +1522,22 @@ impl NyaTermApp {
         let bounds = session_id
             .filter(|id| !id.is_empty())
             .and_then(|session_id| {
-                self.terminal_session_surface_bounds
+                self.terminal
+                    .layout
+                    .session_surface_bounds
                     .get(session_id)
                     .copied()
             })
             .or_else(|| {
                 self.active_session_id.as_deref().and_then(|session_id| {
-                    self.terminal_session_surface_bounds
+                    self.terminal
+                        .layout
+                        .session_surface_bounds
                         .get(session_id)
                         .copied()
                 })
             })
-            .or(self.terminal_surface_bounds)?;
+            .or(self.terminal.layout.surface_bounds)?;
         Some(self.terminal_resize_geometry_for_bounds_for_session(bounds, session_id))
     }
 
@@ -1482,23 +1574,25 @@ impl NyaTermApp {
             cell_h,
             insets,
             gutter,
-            self.terminal_scale_factor,
+            self.terminal.layout.scale_factor,
         )
     }
 
     pub(in crate::features) fn drive_terminal_resize(&mut self) -> bool {
-        if let Some(last) = self.terminal_runtime.last_terminal_resize_at
+        if let Some(last) = self.terminal.view.runtime.last_terminal_resize_at
             && last.elapsed() < Duration::from_millis(100)
         {
             return false;
         }
         let bounds = if let Some(session_id) = self.active_session_id.as_deref() {
-            self.terminal_session_surface_bounds
+            self.terminal
+                .layout
+                .session_surface_bounds
                 .get(session_id)
                 .copied()
-                .or(self.terminal_surface_bounds)
+                .or(self.terminal.layout.surface_bounds)
         } else {
-            self.terminal_surface_bounds
+            self.terminal.layout.surface_bounds
         };
         let Some(bounds) = bounds else {
             return false;
@@ -1511,11 +1605,13 @@ impl NyaTermApp {
 
     pub(in crate::features) fn resize_all_known_terminal_surfaces(&mut self) -> bool {
         let mut dirty = false;
-        if let Some(bounds) = self.terminal_surface_bounds {
+        if let Some(bounds) = self.terminal.layout.surface_bounds {
             dirty |= self.resize_terminal_to_bounds_for_session(None, bounds);
         }
         let bounds_by_session = self
-            .terminal_session_surface_bounds
+            .terminal
+            .layout
+            .session_surface_bounds
             .iter()
             .map(|(session_id, bounds)| (session_id.clone(), *bounds))
             .collect::<Vec<_>>();
@@ -1532,7 +1628,7 @@ impl NyaTermApp {
     ) -> bool {
         let (cell_width, cell_height) = self.terminal_cell_size();
         let snapped_cell_height =
-            terminal_snapped_cell_height(cell_height, self.terminal_scale_factor);
+            terminal_snapped_cell_height(cell_height, self.terminal.layout.scale_factor);
         let TerminalResizeGeometry {
             cols,
             rows,
@@ -1540,7 +1636,7 @@ impl NyaTermApp {
             pixel_height,
         } = self.terminal_resize_geometry_for_bounds_for_session(bounds, session_id);
         if let Some(session_id) = session_id.filter(|id| !id.is_empty()) {
-            let Some(view) = self.terminal_views.get_mut(session_id) else {
+            let Some(view) = self.terminal.view.views.get_mut(session_id) else {
                 return false;
             };
             let current_rows = view.screen.rows() as u16;
@@ -1554,7 +1650,7 @@ impl NyaTermApp {
             tracing::info!(
                 diagnostic = "terminal_resize",
                 session_id,
-                scale_factor = self.terminal_scale_factor,
+                scale_factor = self.terminal.layout.scale_factor,
                 bounds_width = f32::from(bounds.size.width),
                 bounds_height = f32::from(bounds.size.height),
                 cell_width,
@@ -1573,9 +1669,12 @@ impl NyaTermApp {
                 view.clear_scrollback_query_caches();
                 view.grid_resize_pending = true;
                 view.frame_action_links = None;
-                self.terminal_scroll_delta_residuals.remove(session_id);
-                self.terminal_frame_pipeline
-                    .resize_session(session_id.to_string(), cols, rows);
+                self.terminal.view.scroll_delta_residuals.remove(session_id);
+                self.terminal.view.frame_pipeline.resize_session(
+                    session_id.to_string(),
+                    cols,
+                    rows,
+                );
             }
             if backend_changed {
                 view.remember_backend_resize(cols, rows, pixel_width, pixel_height);
@@ -1591,15 +1690,15 @@ impl NyaTermApp {
                 self.clear_terminal_selection_state_for_session(session_id);
             }
         } else {
-            let current_rows = self.terminal_screen.rows() as u16;
-            let current_cols = self.terminal_screen.cols() as u16;
+            let current_rows = self.terminal.view.screen.rows() as u16;
+            let current_cols = self.terminal.view.screen.cols() as u16;
             if current_rows == rows && current_cols == cols {
                 return false;
             }
-            self.terminal_screen.resize(cols, rows);
+            self.terminal.view.screen.resize(cols, rows);
             self.clear_terminal_scroll_residual_for_session(None);
         }
-        self.terminal_runtime.last_terminal_resize_at = Some(Instant::now());
+        self.terminal.view.runtime.last_terminal_resize_at = Some(Instant::now());
         true
     }
 

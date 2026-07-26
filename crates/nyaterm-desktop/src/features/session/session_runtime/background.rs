@@ -120,7 +120,7 @@ impl NyaTermApp {
                     .map(|(request_id, _)| request_id.clone());
             }
         }
-        self.terminal_status = format!(
+        self.terminal.view.status = format!(
             "cancelled connection {}",
             pending_session_start_display_name(&pending)
         );
@@ -182,7 +182,7 @@ impl NyaTermApp {
             self.last_connect_failure_name = None;
             self.last_connect_failure_error = None;
         }
-        self.terminal_status = format!(
+        self.terminal.view.status = format!(
             "closed failed connection {}",
             failed_session_start_display_name(&failed)
         );
@@ -260,7 +260,7 @@ impl NyaTermApp {
             self.active_pending_session_start = Some(request_id.clone());
             self.active_failed_session_start = None;
         }
-        self.terminal_status = status_message;
+        self.terminal.view.status = status_message;
         // Status + connecting tab already show progress; avoid full terminal decode
         // work on the click path before the worker even starts.
         let _ = append_start_log;
@@ -480,12 +480,13 @@ impl NyaTermApp {
 
     pub(in crate::features) fn send_probe_command(&mut self, cx: &mut Context<Self>) {
         let Some(session_id) = self.active_session_id.clone() else {
-            self.terminal_status = "start a session first".to_string();
+            self.terminal.view.status = "start a session first".to_string();
             cx.notify();
             return;
         };
         if self.is_session_disconnected(&session_id) {
-            self.terminal_status = "session disconnected — reconnect before probing".to_string();
+            self.terminal.view.status =
+                "session disconnected — reconnect before probing".to_string();
             cx.notify();
             return;
         }
@@ -497,10 +498,10 @@ impl NyaTermApp {
         };
         match self.write_session_input_recorded(&session_id, command.as_bytes()) {
             Ok(()) => {
-                self.terminal_status = "probe command sent".to_string();
+                self.terminal.view.status = "probe command sent".to_string();
             }
             Err(error) => {
-                self.terminal_status = format!("write failed: {error}");
+                self.terminal.view.status = format!("write failed: {error}");
             }
         }
         cx.notify();
@@ -663,7 +664,7 @@ impl NyaTermApp {
                         .and_then(|pending| pending.seed_output.clone())
                     {
                         self.seed_terminal_frame_session(&session_id, seed_output.clone());
-                        self.terminal_views.insert(
+                        self.terminal.view.views.insert(
                             session_id.clone(),
                             TerminalViewState::from_output_with_encoding(
                                 seed_output,
@@ -707,10 +708,10 @@ impl NyaTermApp {
                     // Enter degraded paint immediately so tab-strip/status repaint
                     // does not stack full terminal decorations on connect.
                     self.enter_connect_settle();
-                    if let Some(view) = self.terminal_views.get_mut(&session_id) {
+                    if let Some(view) = self.terminal.view.views.get_mut(&session_id) {
                         view.enter_render_degraded_mode();
                     }
-                    self.terminal_status = format!(
+                    self.terminal.view.status = format!(
                         "running {} · {}",
                         short_id(&session_id),
                         event.connection_name
@@ -803,7 +804,8 @@ impl NyaTermApp {
                             },
                         );
                     }
-                    self.terminal_status = format!("failed to start {connection_name}: {error}");
+                    self.terminal.view.status =
+                        format!("failed to start {connection_name}: {error}");
                     if self.active_session_id.is_none() {
                         self.append_terminal_log(format!(
                             "\n# failed to start {}: {error}\n",

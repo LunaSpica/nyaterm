@@ -11,12 +11,12 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.terminal_actions_open = false;
-        self.terminal_search_open = true;
-        self.terminal_search_active_index = 0;
-        self.terminal_status = "terminal search opened".to_string();
+        self.terminal.menus.actions_open = false;
+        self.terminal.search.open = true;
+        self.terminal.search.active_index = 0;
+        self.terminal.view.status = "terminal search opened".to_string();
         self.refresh_terminal_search_state(cx);
-        window.focus(&self.terminal_search_focus);
+        window.focus(&self.terminal.search.focus);
     }
 
     pub(in crate::features) fn close_terminal_search(
@@ -24,10 +24,10 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.terminal_search_open = false;
-        self.terminal_search_active_index = 0;
-        self.terminal_status = "terminal search closed".to_string();
-        window.focus(&self.terminal_focus);
+        self.terminal.search.open = false;
+        self.terminal.search.active_index = 0;
+        self.terminal.view.status = "terminal search closed".to_string();
+        window.focus(&self.terminal.input.focus);
         self.notify_active_terminal_surface(cx);
         cx.notify();
     }
@@ -39,21 +39,21 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn terminal_search_key(&self) -> Option<TerminalFrameSearchKey> {
-        let query = self.terminal_search_query.trim();
+        let query = self.terminal.search.query.trim();
         if query.is_empty() {
             return None;
         }
         Some(TerminalFrameSearchKey {
             query: query.to_string(),
-            case_sensitive: self.terminal_search_case_sensitive,
-            regex: self.terminal_search_regex,
-            whole_word: self.terminal_search_whole_word,
+            case_sensitive: self.terminal.search.case_sensitive,
+            regex: self.terminal.search.regex,
+            whole_word: self.terminal.search.whole_word,
             limit: 1000,
         })
     }
 
     pub(in crate::features) fn request_active_terminal_buffer_search(&mut self) -> bool {
-        if !self.terminal_search_open || self.terminal_search_mode != TerminalSearchMode::Buffer {
+        if !self.terminal.search.open || self.terminal.search.mode != TerminalSearchMode::Buffer {
             return false;
         }
         let Some(session_id) = self.active_session_id.clone() else {
@@ -79,7 +79,7 @@ impl NyaTermApp {
         let Some(view) = self
             .active_session_id
             .as_deref()
-            .and_then(|session_id| self.terminal_views.get(session_id))
+            .and_then(|session_id| self.terminal.view.views.get(session_id))
         else {
             return Ok(Vec::new());
         };
@@ -99,7 +99,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if let Some(session_id) = self.active_session_id.clone() {
-            if let Some(view) = self.terminal_views.get_mut(&session_id) {
+            if let Some(view) = self.terminal.view.views.get_mut(&session_id) {
                 let total = view.total_rows_for_ui();
                 let rows = view.viewport_rows_for_ui();
                 let max_start = total.saturating_sub(rows);
@@ -110,7 +110,7 @@ impl NyaTermApp {
             }
             self.notify_terminal_scroll_after_state_change(Some(session_id.as_str()), cx);
         } else {
-            let total = self.terminal_screen.total_rows().max(1);
+            let total = self.terminal.view.screen.total_rows().max(1);
             let rows = self
                 .terminal_snapshot_for_session(None, 0)
                 .row_count()
@@ -118,7 +118,8 @@ impl NyaTermApp {
             let max_start = total.saturating_sub(rows);
             let start = abs_line.min(max_start);
             let offset = total.saturating_sub(start + rows);
-            self.terminal_scroll_offset = offset.min(self.terminal_screen.scrollback_len());
+            self.terminal.view.scroll_offset =
+                offset.min(self.terminal.view.screen.scrollback_len());
             self.clear_terminal_scroll_residual_for_session(None);
             cx.notify();
         }
@@ -128,16 +129,16 @@ impl NyaTermApp {
         &self,
     ) -> Option<RecordingHistorySearchKey> {
         let session_id = self.active_session_id.clone()?;
-        let query = self.terminal_search_query.trim();
+        let query = self.terminal.search.query.trim();
         if query.is_empty() {
             return None;
         }
         Some(RecordingHistorySearchKey {
             session_id,
             query: query.to_string(),
-            case_sensitive: self.terminal_search_case_sensitive,
-            regex: self.terminal_search_regex,
-            whole_word: self.terminal_search_whole_word,
+            case_sensitive: self.terminal.search.case_sensitive,
+            regex: self.terminal.search.regex,
+            whole_word: self.terminal.search.whole_word,
             limit: Some(8),
             context_before: Some(1),
             context_after: Some(1),
@@ -146,37 +147,39 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn request_active_terminal_history_search(&mut self) {
-        if !self.terminal_search_open || self.terminal_search_mode != TerminalSearchMode::History {
+        if !self.terminal.search.open || self.terminal.search.mode != TerminalSearchMode::History {
             return;
         }
         let Some(key) = self.terminal_history_search_key() else {
-            self.terminal_history_search_pending_key = None;
-            self.terminal_history_search_result = None;
+            self.terminal.search.history_pending_key = None;
+            self.terminal.search.history_result = None;
             return;
         };
-        if self.terminal_history_search_pending_key.as_ref() == Some(&key)
+        if self.terminal.search.history_pending_key.as_ref() == Some(&key)
             || self
-                .terminal_history_search_result
+                .terminal
+                .search
+                .history_result
                 .as_ref()
                 .is_some_and(|result| result.key == key)
         {
             return;
         }
-        self.terminal_history_search_pending_key = Some(key.clone());
+        self.terminal.search.history_pending_key = Some(key.clone());
         self.recording_write_pipeline.request_history_search(key);
     }
 
     pub(in crate::features) fn drain_recording_pipeline_events(&mut self) -> bool {
-        if self.terminal_history_search_pending_key.is_none() {
+        if self.terminal.search.history_pending_key.is_none() {
             return false;
         }
         let mut dirty = false;
         while let Some(event) = self.recording_write_pipeline.try_recv_event() {
             match event {
                 RecordingWriteEvent::HistorySearch(event) => {
-                    if self.terminal_history_search_pending_key.as_ref() == Some(&event.key) {
-                        self.terminal_history_search_pending_key = None;
-                        self.terminal_history_search_result = Some(event);
+                    if self.terminal.search.history_pending_key.as_ref() == Some(&event.key) {
+                        self.terminal.search.history_pending_key = None;
+                        self.terminal.search.history_result = Some(event);
                         dirty = true;
                     }
                 }
@@ -189,7 +192,7 @@ impl NyaTermApp {
         let Some(key) = self.terminal_history_search_key() else {
             return false;
         };
-        self.terminal_history_search_pending_key.as_ref() == Some(&key)
+        self.terminal.search.history_pending_key.as_ref() == Some(&key)
     }
 
     pub(in crate::features) fn terminal_history_search_results(
@@ -199,7 +202,9 @@ impl NyaTermApp {
             return Ok(empty_terminal_history_search_response());
         };
         if let Some(result) = self
-            .terminal_history_search_result
+            .terminal
+            .search
+            .history_result
             .as_ref()
             .filter(|result| result.key == key)
         {
@@ -213,7 +218,7 @@ impl NyaTermApp {
         direction: isize,
         cx: &mut Context<Self>,
     ) {
-        let count = match self.terminal_search_mode {
+        let count = match self.terminal.search.mode {
             TerminalSearchMode::Buffer => self
                 .terminal_buffer_matches()
                 .map(|matches| matches.len())
@@ -224,24 +229,24 @@ impl NyaTermApp {
                 .unwrap_or(0),
         };
         if count == 0 {
-            self.terminal_search_active_index = 0;
-            self.terminal_status = "terminal search has no matches".to_string();
+            self.terminal.search.active_index = 0;
+            self.terminal.view.status = "terminal search has no matches".to_string();
             self.notify_active_terminal_surface(cx);
             cx.notify();
             return;
         }
-        self.terminal_search_active_index = (self.terminal_search_active_index as isize + direction)
+        self.terminal.search.active_index = (self.terminal.search.active_index as isize + direction)
             .rem_euclid(count as isize) as usize;
-        if self.terminal_search_mode == TerminalSearchMode::Buffer {
+        if self.terminal.search.mode == TerminalSearchMode::Buffer {
             if let Ok(matches) = self.terminal_buffer_matches() {
-                if let Some(m) = matches.get(self.terminal_search_active_index) {
+                if let Some(m) = matches.get(self.terminal.search.active_index) {
                     self.reveal_terminal_absolute_line(m.line_index, cx);
                 }
             }
         }
-        self.terminal_status = format!(
+        self.terminal.view.status = format!(
             "terminal search match {}/{}",
-            self.terminal_search_active_index + 1,
+            self.terminal.search.active_index + 1,
             count
         );
         self.notify_active_terminal_surface(cx);
@@ -270,18 +275,18 @@ impl NyaTermApp {
                 }
             }
             "backspace" => {
-                self.terminal_search_query.pop();
-                self.terminal_search_active_index = 0;
+                self.terminal.search.query.pop();
+                self.terminal.search.active_index = 0;
                 self.refresh_terminal_search_state(cx);
             }
             "tab" => {
-                self.terminal_search_mode =
-                    if self.terminal_search_mode == TerminalSearchMode::Buffer {
+                self.terminal.search.mode =
+                    if self.terminal.search.mode == TerminalSearchMode::Buffer {
                         TerminalSearchMode::History
                     } else {
                         TerminalSearchMode::Buffer
                     };
-                self.terminal_search_active_index = 0;
+                self.terminal.search.active_index = 0;
                 self.refresh_terminal_search_state(cx);
             }
             _ => {
@@ -290,8 +295,8 @@ impl NyaTermApp {
                     .as_deref()
                     .filter(|input| !input.is_empty())
                 {
-                    self.terminal_search_query.push_str(input);
-                    self.terminal_search_active_index = 0;
+                    self.terminal.search.query.push_str(input);
+                    self.terminal.search.active_index = 0;
                     self.refresh_terminal_search_state(cx);
                 }
             }
@@ -312,7 +317,7 @@ impl NyaTermApp {
         match keystroke.key.as_str() {
             "escape" => {
                 self.active_sessions_search_draft.clear();
-                self.terminal_status = "active sessions search cleared".to_string();
+                self.terminal.view.status = "active sessions search cleared".to_string();
                 cx.notify();
             }
             "backspace" => {

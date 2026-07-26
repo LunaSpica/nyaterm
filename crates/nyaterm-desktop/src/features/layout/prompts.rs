@@ -361,7 +361,7 @@ impl NyaTermApp {
                     .track_focus(&self.credential_focus)
                     .on_click(cx.listener(|this, _, window, cx| {
                         window.focus(&this.credential_focus);
-                        this.terminal_status = "credential prompt focused".to_string();
+                        this.terminal.view.status = "credential prompt focused".to_string();
                         cx.notify();
                     }))
                     .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
@@ -780,7 +780,7 @@ impl NyaTermApp {
                             .track_focus(&self.snapshot_password_focus)
                             .on_click(cx.listener(|this, _, window, cx| {
                                 window.focus(&this.snapshot_password_focus);
-                                this.terminal_status =
+                                this.terminal.view.status =
                                     "snapshot password prompt focused".to_string();
                                 cx.notify();
                             }))

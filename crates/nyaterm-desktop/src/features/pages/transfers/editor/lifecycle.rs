@@ -68,7 +68,7 @@ impl NyaTermApp {
             workspace.close_confirm = true;
             workspace.pending_close_tab_id = Some(tab_id.to_string());
             workspace.close_after_save_all = false;
-            self.terminal_status = "remote editor tab has unsaved changes".to_string();
+            self.terminal.view.status = "remote editor tab has unsaved changes".to_string();
             cx.notify();
             return;
         }
@@ -77,7 +77,7 @@ impl NyaTermApp {
             self.transfer.editor.workspace = None;
             self.remote_editor_window_open_pending = false;
         }
-        self.terminal_status = "remote editor tab closed".to_string();
+        self.terminal.view.status = "remote editor tab closed".to_string();
         cx.notify();
     }
 
@@ -95,14 +95,14 @@ impl NyaTermApp {
             workspace.close_confirm = true;
             workspace.pending_close_tab_id = None;
             workspace.close_after_save_all = false;
-            self.terminal_status = "remote editor has unsaved changes".to_string();
+            self.terminal.view.status = "remote editor has unsaved changes".to_string();
             cx.notify();
             return;
         }
         self.transfer.editor.workspace = None;
         self.transfer.editor.tabs_menu_open = false;
         self.remote_editor_window_open_pending = false;
-        self.terminal_status = "remote editor closed".to_string();
+        self.terminal.view.status = "remote editor closed".to_string();
         cx.notify();
     }
 
@@ -124,11 +124,11 @@ impl NyaTermApp {
                     self.remote_editor_window_open_pending = false;
                 }
             }
-            self.terminal_status = "remote editor tab discarded".to_string();
+            self.terminal.view.status = "remote editor tab discarded".to_string();
         } else {
             self.transfer.editor.workspace = None;
             self.remote_editor_window_open_pending = false;
-            self.terminal_status = "remote editor discarded".to_string();
+            self.terminal.view.status = "remote editor discarded".to_string();
         }
         cx.notify();
     }
@@ -147,7 +147,7 @@ impl NyaTermApp {
         for tab in &mut workspace.tabs {
             tab.close_after_save = false;
         }
-        self.terminal_status = "remote editor close cancelled".to_string();
+        self.terminal.view.status = "remote editor close cancelled".to_string();
         cx.notify();
     }
 
@@ -173,7 +173,7 @@ impl NyaTermApp {
         {
             state.error = None;
         }
-        self.terminal_status = "remote editor reload cancelled".to_string();
+        self.terminal.view.status = "remote editor reload cancelled".to_string();
         cx.notify();
     }
 
@@ -189,7 +189,7 @@ impl NyaTermApp {
             return;
         };
         state.conflict = false;
-        self.terminal_status = "remote editor conflict dismissed".to_string();
+        self.terminal.view.status = "remote editor conflict dismissed".to_string();
         cx.notify();
     }
 
@@ -212,7 +212,7 @@ impl NyaTermApp {
                 state.loading = false;
                 state.error = Some(error.clone());
             }
-            self.terminal_status = error;
+            self.terminal.view.status = error;
             cx.notify();
             return;
         };
@@ -258,7 +258,7 @@ impl NyaTermApp {
             .and_then(TransferEditorWorkspaceState::active_tab)
             .map(|tab| tab.id.clone());
         let Some(tab_id) = tab_id else {
-            self.terminal_status = "no remote editor is active".to_string();
+            self.terminal.view.status = "no remote editor is active".to_string();
             cx.notify();
             return;
         };
@@ -321,7 +321,7 @@ impl NyaTermApp {
             {
                 tab.error = Some(error.clone());
             }
-            self.terminal_status = error;
+            self.terminal.view.status = error;
             cx.notify();
             return;
         };
@@ -384,7 +384,7 @@ impl NyaTermApp {
         }
 
         let Some(workspace) = self.transfer.editor.workspace.as_mut() else {
-            self.terminal_status = "no remote editor is active".to_string();
+            self.terminal.view.status = "no remote editor is active".to_string();
             cx.notify();
             return;
         };

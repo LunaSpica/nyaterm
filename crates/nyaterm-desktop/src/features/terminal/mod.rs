@@ -4,6 +4,7 @@ use super::*;
 
 mod input_runtime;
 mod send_command_runtime;
+mod state;
 mod terminal_context_menu_runtime;
 pub(in crate::features) mod terminal_runtime;
 mod terminal_search_runtime;
@@ -11,6 +12,7 @@ mod terminal_selection_runtime;
 mod terminal_surface;
 mod terminal_surface_entity;
 
+pub(in crate::features) use state::{TerminalFeatureFocus, TerminalFeatureState};
 pub(in crate::features) use terminal_selection_runtime::terminal_bounds_tracker;
 pub(in crate::features) use terminal_surface::terminal_snapshot_absolute_range;
 pub(in crate::features) use terminal_surface_entity::{

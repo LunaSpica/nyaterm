@@ -18,7 +18,9 @@ impl NyaTermApp {
                     .or_else(|| tab_ids.first().cloned())
                     .unwrap_or_default();
                 let drop_zone = self
-                    .terminal_window_drop
+                    .terminal
+                    .windows
+                    .drop
                     .as_ref()
                     .filter(|(leaf, _)| leaf == &id)
                     .map(|(_, zone)| *zone);
@@ -70,7 +72,9 @@ impl NyaTermApp {
                     let is_disconnected =
                         leaf_ids.iter().any(|id| self.is_session_disconnected(id));
                     let has_unread = leaf_ids.iter().any(|id| {
-                        self.terminal_views
+                        self.terminal
+                            .view
+                            .views
                             .get(id)
                             .is_some_and(|view| view.has_unread)
                     });
@@ -169,7 +173,7 @@ impl NyaTermApp {
                                     select_id.clone(),
                                     cx,
                                 );
-                                window.focus(&this.terminal_focus);
+                                window.focus(&this.terminal.input.focus);
                             }))
                             .on_mouse_down(
                                 gpui::MouseButton::Right,
@@ -335,7 +339,9 @@ impl NyaTermApp {
                     .on_drop(
                         cx.listener(move |this, payload: &SessionTabDragPayload, _, cx| {
                             let zone = this
-                                .terminal_window_drop
+                                .terminal
+                                .windows
+                                .drop
                                 .as_ref()
                                 .filter(|(leaf, _)| leaf == &drop_leaf_id_drop)
                                 .map(|(_, zone)| *zone)

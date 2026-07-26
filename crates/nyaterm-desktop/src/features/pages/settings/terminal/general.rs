@@ -81,9 +81,9 @@ impl NyaTermApp {
                                 )
                                 .w_full()
                                 .max_w(px(520.))
-                                .track_focus(&self.terminal_x11_display_focus)
+                                .track_focus(&self.terminal.input.x11_display_focus)
                                 .on_click(cx.listener(|this, _, window, cx| {
-                                    window.focus(&this.terminal_x11_display_focus);
+                                    window.focus(&this.terminal.input.x11_display_focus);
                                     cx.notify();
                                 }))
                                 .on_key_down(cx.listener(

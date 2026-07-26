@@ -416,8 +416,8 @@ impl NyaTermApp {
                 startup_command_open: self.startup_command_open,
                 temporary_ssh_link_open: self.temporary_ssh_link_open,
                 multi_line_paste_open: self.multi_line_paste.is_some(),
-                terminal_actions_open: self.terminal_actions_open,
-                terminal_context_menu_open: self.terminal_context_menu.is_some(),
+                terminal_actions_open: self.terminal.menus.actions_open,
+                terminal_context_menu_open: self.terminal.menus.context_menu.is_some(),
                 action_link_menu_open: self.action_link_menu.is_some(),
                 action_link_tooltip_open: self.action_link_tooltip.is_some(),
                 command_suggestions_open: self.command_suggestions.is_some(),
@@ -741,8 +741,10 @@ impl Render for NyaTermApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let render_started_at = Instant::now();
         FULL_SHELL_PAINT_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        self.terminal_runtime.full_shell_paint_count = self
-            .terminal_runtime
+        self.terminal.view.runtime.full_shell_paint_count = self
+            .terminal
+            .view
+            .runtime
             .full_shell_paint_count
             .saturating_add(1);
         let root_started_at = Instant::now();
@@ -763,11 +765,13 @@ impl Render for NyaTermApp {
                 active_session_id = self.active_session_id.as_deref().unwrap_or(""),
                 visible_session_count = self.visible_terminal_session_ids().len(),
                 connect_settle_active = self
-                    .terminal_runtime
+                    .terminal
+                    .view
+                    .runtime
                     .connect_settle_until
                     .is_some_and(|until| Instant::now() < until),
                 output_pressure = self.runtime_output_pressure_active(),
-                full_shell_paint_count = self.terminal_runtime.full_shell_paint_count,
+                full_shell_paint_count = self.terminal.view.runtime.full_shell_paint_count,
                 surface_paint_count = terminal_surface_paint_count(),
                 "slow root render"
             );

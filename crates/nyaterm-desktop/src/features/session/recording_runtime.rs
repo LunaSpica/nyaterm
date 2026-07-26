@@ -9,12 +9,12 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if self.recording_path_prompt.is_some() {
-            self.terminal_status = "recording path picker is already open".to_string();
+            self.terminal.view.status = "recording path picker is already open".to_string();
             cx.notify();
             return;
         }
         let Some(session_id) = self.active_session_id.clone() else {
-            self.terminal_status = "start a session before recording".to_string();
+            self.terminal.view.status = "start a session before recording".to_string();
             cx.notify();
             return;
         };
@@ -32,7 +32,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if self.recording_path_prompt.is_some() {
-            self.terminal_status = "recording path picker is already open".to_string();
+            self.terminal.view.status = "recording path picker is already open".to_string();
             cx.notify();
             return;
         }
@@ -41,7 +41,7 @@ impl NyaTermApp {
             .get(&session_id)
             .is_some_and(|metadata| !metadata.disconnected);
         if !exists {
-            self.terminal_status = "session no longer exists".to_string();
+            self.terminal.view.status = "session no longer exists".to_string();
             self.remove_session_state(&session_id);
             cx.notify();
             return;
@@ -57,7 +57,7 @@ impl NyaTermApp {
             .unwrap_or("nyaterm-recording.log");
         let receiver = cx.prompt_for_new_path(&directory, Some(file_name));
         self.recording_path_prompt = Some(kind);
-        self.terminal_status = match kind {
+        self.terminal.view.status = match kind {
             RecordingPathPromptKind::Start => "selecting recording path".to_string(),
             RecordingPathPromptKind::SaveTranscript => "selecting transcript path".to_string(),
         };
@@ -95,7 +95,7 @@ impl NyaTermApp {
                 }
             },
             RecordingPathPromptResult::Cancelled => {
-                self.terminal_status = match kind {
+                self.terminal.view.status = match kind {
                     RecordingPathPromptKind::Start => "recording start cancelled".to_string(),
                     RecordingPathPromptKind::SaveTranscript => {
                         "transcript save cancelled".to_string()
@@ -103,23 +103,24 @@ impl NyaTermApp {
                 };
             }
             RecordingPathPromptResult::Failed(error) => {
-                self.terminal_status = format!("recording path picker failed: {error}");
+                self.terminal.view.status = format!("recording path picker failed: {error}");
             }
             RecordingPathPromptResult::Closed => {
-                self.terminal_status = "recording path picker closed before returning".to_string();
+                self.terminal.view.status =
+                    "recording path picker closed before returning".to_string();
             }
         }
     }
 
     fn start_recording_to_path(&mut self, session_id: &str, path: String, cx: &mut Context<Self>) {
         if self.recording_busy_actions.contains_key(session_id) {
-            self.terminal_status = "recording operation already in progress".to_string();
+            self.terminal.view.status = "recording operation already in progress".to_string();
             cx.notify();
             return;
         }
         self.recording_busy_actions
             .insert(session_id.to_string(), "record".to_string());
-        self.terminal_status = "starting recording".to_string();
+        self.terminal.view.status = "starting recording".to_string();
         let manager = Arc::clone(&self.recording_manager);
         let writer = self.recording_write_pipeline.writer();
         let job_session_id = session_id.to_string();
@@ -153,17 +154,17 @@ impl NyaTermApp {
                     {
                         this.recording_active_count =
                             this.recording_manager.list_recording_sessions().len();
-                        this.terminal_status = format!("recording started: {path}");
+                        this.terminal.view.status = format!("recording started: {path}");
                         this.append_terminal_log(format!("\n# recording started: {path}\n"));
                     }
                     Ok(_) => {
                         this.recording_write_pipeline
                             .cleanup_session(result_session_id.clone());
-                        this.terminal_status =
+                        this.terminal.view.status =
                             "recording start cancelled because session closed".to_string();
                     }
                     Err(error) => {
-                        this.terminal_status = format!("recording start failed: {error}");
+                        this.terminal.view.status = format!("recording start failed: {error}");
                     }
                 }
                 cx.notify();
@@ -175,7 +176,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn stop_active_recording(&mut self, cx: &mut Context<Self>) {
         let Some(session_id) = self.active_session_id.clone() else {
-            self.terminal_status = "no active session to stop recording".to_string();
+            self.terminal.view.status = "no active session to stop recording".to_string();
             cx.notify();
             return;
         };
@@ -188,13 +189,13 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if self.recording_busy_actions.contains_key(session_id) {
-            self.terminal_status = "recording operation already in progress".to_string();
+            self.terminal.view.status = "recording operation already in progress".to_string();
             cx.notify();
             return;
         }
         self.recording_busy_actions
             .insert(session_id.to_string(), "record".to_string());
-        self.terminal_status = "stopping recording".to_string();
+        self.terminal.view.status = "stopping recording".to_string();
         let manager = Arc::clone(&self.recording_manager);
         let writer = self.recording_write_pipeline.writer();
         let job_session_id = session_id.to_string();
@@ -213,11 +214,11 @@ impl NyaTermApp {
                     this.recording_manager.list_recording_sessions().len();
                 match result {
                     Ok(path) => {
-                        this.terminal_status = format!("recording saved: {path}");
+                        this.terminal.view.status = format!("recording saved: {path}");
                         this.append_terminal_log(format!("\n# recording saved: {path}\n"));
                     }
                     Err(error) => {
-                        this.terminal_status = format!("recording stop failed: {error}");
+                        this.terminal.view.status = format!("recording stop failed: {error}");
                     }
                 }
                 cx.notify();
@@ -229,13 +230,13 @@ impl NyaTermApp {
 
     fn save_transcript_to_path(&mut self, session_id: &str, path: String, cx: &mut Context<Self>) {
         if self.recording_busy_actions.contains_key(session_id) {
-            self.terminal_status = "recording operation already in progress".to_string();
+            self.terminal.view.status = "recording operation already in progress".to_string();
             cx.notify();
             return;
         }
         self.recording_busy_actions
             .insert(session_id.to_string(), "save".to_string());
-        self.terminal_status = "saving transcript".to_string();
+        self.terminal.view.status = "saving transcript".to_string();
         let manager = Arc::clone(&self.recording_manager);
         let writer = self.recording_write_pipeline.writer();
         let job_session_id = session_id.to_string();
@@ -261,11 +262,11 @@ impl NyaTermApp {
                 this.recording_busy_actions.remove(&result_session_id);
                 match result {
                     Ok(path) => {
-                        this.terminal_status = format!("transcript saved: {path}");
+                        this.terminal.view.status = format!("transcript saved: {path}");
                         this.append_terminal_log(format!("\n# transcript saved: {path}\n"));
                     }
                     Err(error) => {
-                        this.terminal_status = format!("transcript save failed: {error}");
+                        this.terminal.view.status = format!("transcript save failed: {error}");
                     }
                 }
                 cx.notify();
@@ -315,7 +316,7 @@ impl NyaTermApp {
             }
             "escape" => {
                 self.recording_search_draft.clear();
-                self.terminal_status = "recording search cleared".to_string();
+                self.terminal.view.status = "recording search cleared".to_string();
                 cx.notify();
             }
             _ => {

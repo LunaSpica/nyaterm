@@ -74,7 +74,7 @@ impl NyaTermApp {
                                 cx.listener(|this, _, window, cx| {
                                     this.set_bottom_panel_mode(BottomPanelMode::QuickCommands);
                                     window.focus(&this.command_search_focus);
-                                    this.terminal_status = "quick commands opened".to_string();
+                                    this.terminal.view.status = "quick commands opened".to_string();
                                     cx.notify();
                                 }),
                             ))

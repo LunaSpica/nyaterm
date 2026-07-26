@@ -24,7 +24,7 @@ impl NyaTermApp {
                 cx.notify();
             }
             "escape" => {
-                self.terminal_status = "transfer input blurred".to_string();
+                self.terminal.view.status = "transfer input blurred".to_string();
                 cx.notify();
             }
             _ => {

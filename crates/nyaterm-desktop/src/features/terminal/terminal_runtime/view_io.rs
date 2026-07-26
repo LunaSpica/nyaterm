@@ -453,10 +453,12 @@ impl NyaTermApp {
         &self,
         session_id: &str,
     ) -> TerminalProtocolState {
-        self.terminal_views
+        self.terminal
+            .view
+            .views
             .get(session_id)
             .map(|view| view.protocol_state)
-            .unwrap_or_else(|| TerminalProtocolState::from_screen(&self.terminal_screen))
+            .unwrap_or_else(|| TerminalProtocolState::from_screen(&self.terminal.view.screen))
     }
 
     pub(in crate::features) fn open_terminal_actions(
@@ -464,9 +466,9 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.terminal_actions_open = true;
-        self.terminal_status = "terminal actions opened".to_string();
-        window.focus(&self.terminal_actions_focus);
+        self.terminal.menus.actions_open = true;
+        self.terminal.view.status = "terminal actions opened".to_string();
+        window.focus(&self.terminal.menus.actions_focus);
         cx.notify();
     }
 
@@ -475,9 +477,9 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.terminal_actions_open = false;
-        self.terminal_status = "terminal actions closed".to_string();
-        window.focus(&self.terminal_focus);
+        self.terminal.menus.actions_open = false;
+        self.terminal.view.status = "terminal actions closed".to_string();
+        window.focus(&self.terminal.input.focus);
         cx.notify();
     }
 
@@ -494,49 +496,53 @@ impl NyaTermApp {
         self.active_session_id
             .as_deref()
             .map(|session_id| self.terminal_buffer_text_for_session(session_id))
-            .unwrap_or_else(|| self.terminal_output.clone())
+            .unwrap_or_else(|| self.terminal.view.output.clone())
     }
 
     pub(in crate::features) fn terminal_buffer_text_for_session(&self, session_id: &str) -> String {
-        self.terminal_views
+        self.terminal
+            .view
+            .views
             .get(session_id)
             .map(|view| view.output.clone())
-            .unwrap_or_else(|| self.terminal_output.clone())
+            .unwrap_or_else(|| self.terminal.view.output.clone())
     }
 
     pub(in crate::features) fn active_terminal_buffer_tail(&self) -> &str {
         self.active_session_id
             .as_deref()
-            .and_then(|session_id| self.terminal_views.get(session_id))
+            .and_then(|session_id| self.terminal.view.views.get(session_id))
             .map(|view| view.output.as_str())
-            .unwrap_or(self.terminal_output.as_str())
+            .unwrap_or(self.terminal.view.output.as_str())
     }
 
     pub(in crate::features) fn terminal_buffer_tail_for_session(&self, session_id: &str) -> &str {
-        self.terminal_views
+        self.terminal
+            .view
+            .views
             .get(session_id)
             .map(|view| view.output.as_str())
-            .unwrap_or(self.terminal_output.as_str())
+            .unwrap_or(self.terminal.view.output.as_str())
     }
 
     pub(in crate::features) fn active_terminal_view(&self) -> Option<&TerminalViewState> {
         self.active_session_id
             .as_deref()
-            .and_then(|session_id| self.terminal_views.get(session_id))
+            .and_then(|session_id| self.terminal.view.views.get(session_id))
     }
 
     pub(in crate::features) fn active_terminal_view_mut(
         &mut self,
     ) -> Option<&mut TerminalViewState> {
         let session_id = self.active_session_id.clone()?;
-        self.terminal_views.get_mut(&session_id)
+        self.terminal.view.views.get_mut(&session_id)
     }
 
     pub(in crate::features) fn terminal_view_for(
         &self,
         session_id: &str,
     ) -> Option<&TerminalViewState> {
-        self.terminal_views.get(session_id)
+        self.terminal.view.views.get(session_id)
     }
 
     pub(in crate::features) fn terminal_snapshot_for_session(
@@ -545,7 +551,7 @@ impl NyaTermApp {
         offset: usize,
     ) -> std::sync::Arc<TerminalSnapshot> {
         if let Some(session_id) = session_id.filter(|id| !id.is_empty()) {
-            if let Some(view) = self.terminal_views.get(session_id) {
+            if let Some(view) = self.terminal.view.views.get(session_id) {
                 if offset == 0 {
                     return view
                         .frame_snapshot
@@ -575,7 +581,7 @@ impl NyaTermApp {
                     .unwrap_or_else(|| std::sync::Arc::new(view.screen.viewport_snapshot(offset)));
             }
         }
-        std::sync::Arc::new(self.terminal_screen.viewport_snapshot(offset))
+        std::sync::Arc::new(self.terminal.view.screen.viewport_snapshot(offset))
     }
 
     pub(in crate::features) fn active_terminal_snapshot(&self) -> std::sync::Arc<TerminalSnapshot> {
@@ -588,43 +594,43 @@ impl NyaTermApp {
     pub(in crate::features) fn copy_terminal_visible_text(&mut self, cx: &mut Context<Self>) {
         let text = self.active_terminal_visible_text();
         if text.trim().is_empty() {
-            self.terminal_status = "visible terminal text is empty".to_string();
+            self.terminal.view.status = "visible terminal text is empty".to_string();
         } else {
             cx.write_to_clipboard(ClipboardItem::new_string(text));
-            self.terminal_status = "copied visible terminal text".to_string();
+            self.terminal.view.status = "copied visible terminal text".to_string();
         }
-        self.terminal_actions_open = false;
+        self.terminal.menus.actions_open = false;
         cx.notify();
     }
 
     pub(in crate::features) fn copy_terminal_buffer_text(&mut self, cx: &mut Context<Self>) {
-        self.terminal_actions_open = false;
+        self.terminal.menus.actions_open = false;
         let Some(session_id) = self.active_session_id.clone() else {
-            let text = self.terminal_output.clone();
+            let text = self.terminal.view.output.clone();
             if text.trim().is_empty() {
-                self.terminal_status = "terminal buffer is empty".to_string();
+                self.terminal.view.status = "terminal buffer is empty".to_string();
             } else {
                 cx.write_to_clipboard(ClipboardItem::new_string(text));
-                self.terminal_status = "copied terminal buffer".to_string();
+                self.terminal.view.status = "copied terminal buffer".to_string();
             }
             cx.notify();
             return;
         };
         let request_id = uuid();
-        self.terminal_frame_pipeline.request_buffer_text(
+        self.terminal.view.frame_pipeline.request_buffer_text(
             session_id,
             self.terminal_scrollback_max_bytes(),
             request_id,
         );
-        self.terminal_status = "preparing terminal buffer copy".to_string();
+        self.terminal.view.status = "preparing terminal buffer copy".to_string();
         cx.notify();
     }
 
     pub(in crate::features) fn send_terminal_clear_screen(&mut self, cx: &mut Context<Self>) {
-        self.terminal_actions_open = false;
+        self.terminal.menus.actions_open = false;
         self.clear_terminal_selection(cx);
         if self.send_terminal_input(vec![0x0c], cx) {
-            self.terminal_status = "clear screen command sent".to_string();
+            self.terminal.view.status = "clear screen command sent".to_string();
             cx.notify();
         }
     }
@@ -658,8 +664,8 @@ impl NyaTermApp {
         // Tauri/xterm custom key path: non-smart buffer selections stay painted while
         // typing. Smart input selections are handled earlier and clear themselves.
         // Only drop an in-progress drag so a stuck drag cannot block further input.
-        if self.terminal_selection_dragging {
-            self.terminal_selection_dragging = false;
+        if self.terminal.selection.dragging {
+            self.terminal.selection.dragging = false;
         }
         let Some(session_id) = self.active_session_id.clone() else {
             if self.set_terminal_status_if_changed("start a session before typing") {
@@ -687,7 +693,7 @@ impl NyaTermApp {
             terminal_wire_write_disposition(TerminalWireWriteKind::LogicalInput)
                 .allow_command_history
         );
-        self.terminal_frame_pipeline.arm_output_event_wake();
+        self.terminal.view.frame_pipeline.arm_output_event_wake();
         // Primary + sync peers share write/record/history so recording and per-session
         // command history stay consistent. Resolve history once after all writes so a
         // pending Enter submission is applied to every successful peer.
@@ -778,8 +784,8 @@ impl NyaTermApp {
         // Key protocol modes are session-local (application cursor/keypad,
         // Kitty keyboard). Re-encode for each sync peer instead of broadcasting
         // the active session's wire bytes.
-        if self.terminal_selection_dragging {
-            self.terminal_selection_dragging = false;
+        if self.terminal.selection.dragging {
+            self.terminal.selection.dragging = false;
         }
         let Some(session_id) = self.active_session_id.clone() else {
             if self.set_terminal_status_if_changed("start a session before typing") {
@@ -813,7 +819,7 @@ impl NyaTermApp {
             terminal_wire_write_disposition(TerminalWireWriteKind::LogicalInput)
                 .allow_command_history
         );
-        self.terminal_frame_pipeline.arm_output_event_wake();
+        self.terminal.view.frame_pipeline.arm_output_event_wake();
         let byte_count = primary_bytes.len();
         let peers = self.sync_peer_session_ids(&session_id);
         let mut ok_sessions = Vec::new();
@@ -1001,7 +1007,7 @@ impl NyaTermApp {
             }
         }
         if failed > 0 {
-            self.terminal_status =
+            self.terminal.view.status =
                 format!("alternate scroll synced {synced} peer(s), {failed} failed");
             cx.notify();
         }
@@ -1070,9 +1076,13 @@ impl NyaTermApp {
             MouseReportWriteResult::Sent => {}
         }
 
-        self.terminal_mouse_report_position = Some((col, row));
+        self.terminal.selection.mouse_report_position = Some((col, row));
         if motion {
-            let peers = self.terminal_mouse_report_peer_session_ids.clone();
+            let peers = self
+                .terminal
+                .selection
+                .mouse_report_peer_session_ids
+                .clone();
             for peer_id in peers {
                 let _ = self.write_mouse_report_to_session(
                     &peer_id, button, col, row, press, true, modifiers, cx,
@@ -1091,11 +1101,11 @@ impl NyaTermApp {
                     captured_peers.push(peer_id);
                 }
             }
-            self.terminal_mouse_report_button = Some(button);
-            self.terminal_mouse_report_session_id = Some(session_id.to_string());
-            self.terminal_mouse_report_peer_session_ids = captured_peers;
+            self.terminal.selection.mouse_report_button = Some(button);
+            self.terminal.selection.mouse_report_session_id = Some(session_id.to_string());
+            self.terminal.selection.mouse_report_peer_session_ids = captured_peers;
         } else if !press {
-            let peers = std::mem::take(&mut self.terminal_mouse_report_peer_session_ids);
+            let peers = std::mem::take(&mut self.terminal.selection.mouse_report_peer_session_ids);
             for peer_id in peers {
                 let _ = self.write_mouse_report_to_session(
                     &peer_id, button, col, row, false, false, modifiers, cx,
@@ -1111,7 +1121,7 @@ impl NyaTermApp {
         event: &gpui::MouseMoveEvent,
         cx: &mut Context<Self>,
     ) -> bool {
-        if self.terminal_mouse_report_button.is_some() {
+        if self.terminal.selection.mouse_report_button.is_some() {
             return false;
         }
         let Some(session_id) = self.terminal_session_at_point(event.position) else {
@@ -1219,11 +1229,13 @@ impl NyaTermApp {
         event: &gpui::MouseUpEvent,
         cx: &mut Context<Self>,
     ) -> bool {
-        let Some(button) = self.terminal_mouse_report_button else {
+        let Some(button) = self.terminal.selection.mouse_report_button else {
             return false;
         };
         let Some(session_id) = self
-            .terminal_mouse_report_session_id
+            .terminal
+            .selection
+            .mouse_report_session_id
             .clone()
             .or_else(|| self.active_session_id.clone())
         else {
@@ -1234,7 +1246,7 @@ impl NyaTermApp {
             self.point_to_terminal_cell_for_session(Some(session_id.as_str()), event.position, cx)
         {
             (cell.col as u16, cell.row as u16)
-        } else if let Some((col, row)) = self.terminal_mouse_report_position {
+        } else if let Some((col, row)) = self.terminal.selection.mouse_report_position {
             (col, row)
         } else {
             self.clear_terminal_mouse_report_capture();
@@ -1256,9 +1268,11 @@ impl NyaTermApp {
         &mut self,
         session_id: &str,
     ) {
-        if self.terminal_mouse_report_session_id.as_deref() == Some(session_id)
+        if self.terminal.selection.mouse_report_session_id.as_deref() == Some(session_id)
             || self
-                .terminal_mouse_report_peer_session_ids
+                .terminal
+                .selection
+                .mouse_report_peer_session_ids
                 .iter()
                 .any(|peer_id| peer_id == session_id)
         {
@@ -1267,10 +1281,13 @@ impl NyaTermApp {
     }
 
     fn clear_terminal_mouse_report_capture(&mut self) {
-        self.terminal_mouse_report_button = None;
-        self.terminal_mouse_report_session_id = None;
-        self.terminal_mouse_report_peer_session_ids.clear();
-        self.terminal_mouse_report_position = None;
+        self.terminal.selection.mouse_report_button = None;
+        self.terminal.selection.mouse_report_session_id = None;
+        self.terminal
+            .selection
+            .mouse_report_peer_session_ids
+            .clear();
+        self.terminal.selection.mouse_report_position = None;
     }
 
     /// Write UTF-8/ASCII input to a live session and mirror the logical input
@@ -1405,10 +1422,10 @@ impl NyaTermApp {
         session_id: &str,
         bytes: &[u8],
     ) -> Vec<u8> {
-        if let Some(view) = self.terminal_views.get(session_id) {
+        if let Some(view) = self.terminal.view.views.get(session_id) {
             return view.screen.encode_outgoing(bytes);
         }
-        self.terminal_screen.encode_outgoing(bytes)
+        self.terminal.view.screen.encode_outgoing(bytes)
     }
 
     /// Apply interaction default encoding to a terminal screen.
@@ -1422,9 +1439,9 @@ impl NyaTermApp {
     /// Keep all live terminal screens on the current interaction encoding.
     pub(in crate::features) fn sync_terminal_encodings_from_settings(&mut self) {
         let label = self.settings.interaction_default_encoding.clone();
-        self.terminal_screen.set_encoding(&label);
-        self.terminal_output_decoder.set_encoding(&label);
-        for view in self.terminal_views.values_mut() {
+        self.terminal.view.screen.set_encoding(&label);
+        self.terminal.view.output_decoder.set_encoding(&label);
+        for view in self.terminal.view.views.values_mut() {
             view.set_encoding(&label);
         }
         self.sync_session_event_bridge_config();
@@ -1435,17 +1452,20 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if !self.terminal_focus_subscriptions.is_empty() {
+        if !self.terminal.input.focus_subscriptions.is_empty() {
             return;
         }
-        let focus_in = cx.on_focus_in(&self.terminal_focus, window, |this, _window, cx| {
+        let focus_in = cx.on_focus_in(&self.terminal.input.focus, window, |this, _window, cx| {
             this.report_terminal_focus(true, cx);
         });
-        let focus_out =
-            cx.on_focus_out(&self.terminal_focus, window, |this, _event, _window, cx| {
+        let focus_out = cx.on_focus_out(
+            &self.terminal.input.focus,
+            window,
+            |this, _event, _window, cx| {
                 this.report_terminal_focus(false, cx);
-            });
-        self.terminal_focus_subscriptions = vec![focus_in, focus_out];
+            },
+        );
+        self.terminal.input.focus_subscriptions = vec![focus_in, focus_out];
     }
 
     pub(in crate::features) fn report_terminal_focus(
@@ -1453,7 +1473,7 @@ impl NyaTermApp {
         focused: bool,
         cx: &mut Context<Self>,
     ) {
-        self.terminal_focus_active = focused;
+        self.terminal.input.focus_active = focused;
         let Some(session_id) = self.active_session_id.clone() else {
             return;
         };
@@ -1487,8 +1507,8 @@ impl NyaTermApp {
         let (width, height) = self.terminal_cell_size();
         let width = width.round().clamp(1.0, 512.0) as u16;
         let height = height.round().clamp(1.0, 512.0) as u16;
-        self.terminal_screen.set_cell_metrics(width, height);
-        for view in self.terminal_views.values_mut() {
+        self.terminal.view.screen.set_cell_metrics(width, height);
+        for view in self.terminal.view.views.values_mut() {
             view.screen.set_cell_metrics(width, height);
         }
     }
@@ -1510,7 +1530,7 @@ impl NyaTermApp {
             }
             return false;
         }
-        self.terminal_frame_pipeline.arm_output_event_wake();
+        self.terminal.view.frame_pipeline.arm_output_event_wake();
         let sent = match self.write_session_input_recorded(&session_id, &bytes) {
             Ok(()) => {
                 self.record_command_history_from_bytes(Some(&session_id), &bytes);
@@ -1549,7 +1569,7 @@ impl NyaTermApp {
             }
             return false;
         }
-        self.terminal_frame_pipeline.arm_output_event_wake();
+        self.terminal.view.frame_pipeline.arm_output_event_wake();
         let sent = match self.write_session_raw_input_recorded(&session_id, &bytes) {
             Ok(()) => {
                 let terminal_status_changed =
@@ -1579,10 +1599,10 @@ impl NyaTermApp {
         status: impl Into<String>,
     ) -> bool {
         let status = status.into();
-        if !terminal_status_changed(self.terminal_status.as_str(), status.as_str()) {
+        if !terminal_status_changed(self.terminal.view.status.as_str(), status.as_str()) {
             return false;
         }
-        self.terminal_status = status;
+        self.terminal.view.status = status;
         true
     }
 
@@ -1599,7 +1619,9 @@ impl NyaTermApp {
             kitty_keyboard_report_all_keys_as_esc,
             kitty_keyboard_report_associated_text,
         ) = if let Some(session_id) = session_id {
-            self.terminal_views
+            self.terminal
+                .view
+                .views
                 .get(session_id)
                 .map(|view| {
                     let protocol = view.protocol_state;
@@ -1616,13 +1638,25 @@ impl NyaTermApp {
                 .unwrap_or((false, false, false, false, false, false, false))
         } else {
             (
-                self.terminal_screen.application_cursor_keys(),
-                self.terminal_screen.application_keypad(),
-                self.terminal_screen.kitty_keyboard_disambiguate(),
-                self.terminal_screen.kitty_keyboard_report_event_types(),
-                self.terminal_screen.kitty_keyboard_report_alternate_keys(),
-                self.terminal_screen.kitty_keyboard_report_all_keys_as_esc(),
-                self.terminal_screen.kitty_keyboard_report_associated_text(),
+                self.terminal.view.screen.application_cursor_keys(),
+                self.terminal.view.screen.application_keypad(),
+                self.terminal.view.screen.kitty_keyboard_disambiguate(),
+                self.terminal
+                    .view
+                    .screen
+                    .kitty_keyboard_report_event_types(),
+                self.terminal
+                    .view
+                    .screen
+                    .kitty_keyboard_report_alternate_keys(),
+                self.terminal
+                    .view
+                    .screen
+                    .kitty_keyboard_report_all_keys_as_esc(),
+                self.terminal
+                    .view
+                    .screen
+                    .kitty_keyboard_report_associated_text(),
             )
         };
         TerminalKeyMode {
@@ -1661,7 +1695,7 @@ impl NyaTermApp {
     ) -> bool {
         terminal_should_defer_key_text_to_input_handler_for_state(
             self.settings.interaction_mac_ime_compatibility,
-            &self.terminal_ime_marked_text,
+            &self.terminal.input.ime_marked_text,
             event,
         )
     }
@@ -1689,11 +1723,13 @@ impl NyaTermApp {
         session_id: &str,
         cx: &mut Context<Self>,
     ) -> Entity<TerminalSurface> {
-        if let Some(surface) = self.terminal_surfaces.get(session_id) {
+        if let Some(surface) = self.terminal.view.surfaces.get(session_id) {
             return surface.clone();
         }
         let layout_cache = self
-            .terminal_views
+            .terminal
+            .view
+            .views
             .get(session_id)
             .map(|view| view.render_cache.layout_cache.clone())
             .unwrap_or_else(|| {
@@ -1707,13 +1743,15 @@ impl NyaTermApp {
             surface.set_app(app);
             surface
         });
-        self.terminal_surfaces
+        self.terminal
+            .view
+            .surfaces
             .insert(session_id.to_string(), surface.clone());
         surface
     }
 
     pub(in crate::features) fn remove_terminal_surface(&mut self, session_id: &str) {
-        self.terminal_surfaces.remove(session_id);
+        self.terminal.view.surfaces.remove(session_id);
     }
 
     fn remember_terminal_scroll_window_snapshot(
@@ -1725,7 +1763,7 @@ impl NyaTermApp {
         if display_offset == 0 {
             return;
         }
-        if let Some(view) = self.terminal_views.get_mut(session_id) {
+        if let Some(view) = self.terminal.view.views.get_mut(session_id) {
             view.remember_scrollback_snapshot(display_offset, snapshot.clone());
         }
     }
@@ -1740,7 +1778,7 @@ impl NyaTermApp {
         if display_offset != 0 || !action_links_enabled {
             return;
         }
-        let Some(view) = self.terminal_views.get(session_id) else {
+        let Some(view) = self.terminal.view.views.get(session_id) else {
             return;
         };
         let matcher_key =
@@ -1757,7 +1795,7 @@ impl NyaTermApp {
         ) else {
             return;
         };
-        if let Some(view) = self.terminal_views.get_mut(session_id) {
+        if let Some(view) = self.terminal.view.views.get_mut(session_id) {
             view.frame_action_links = Some(action_links);
         }
     }
@@ -1771,7 +1809,7 @@ impl NyaTermApp {
             return false;
         }
         let surface = self.ensure_terminal_surface(session_id, cx);
-        let Some(view) = self.terminal_views.get(session_id) else {
+        let Some(view) = self.terminal.view.views.get(session_id) else {
             return false;
         };
         let scroll_offset = view.scroll_offset;
@@ -1783,14 +1821,16 @@ impl NyaTermApp {
         let now = Instant::now();
         let user_scroll_active = terminal_user_scroll_active(
             display_offset,
-            self.terminal_runtime
+            self.terminal
+                .view
+                .runtime
                 .pending_terminal_user_scroll_idle_sessions
                 .contains(session_id),
-            self.terminal_runtime.last_terminal_user_scroll_at,
+            self.terminal.view.runtime.last_terminal_user_scroll_at,
             now,
         );
         let input_latency_active =
-            terminal_input_latency_active(self.terminal_runtime.last_terminal_input_at, now);
+            terminal_input_latency_active(self.terminal.view.runtime.last_terminal_input_at, now);
         let Some(snapshot) = terminal_paint_window_snapshot_for_view(
             Some(view),
             display_offset,
@@ -1807,7 +1847,7 @@ impl NyaTermApp {
             &snapshot,
             action_links_enabled,
         );
-        let Some(view) = self.terminal_views.get(session_id) else {
+        let Some(view) = self.terminal.view.views.get(session_id) else {
             return false;
         };
         let palette = self.terminal_theme_palette();
@@ -1820,10 +1860,12 @@ impl NyaTermApp {
         let show_timestamps = self.settings.terminal_show_timestamps;
         let show_timestamp_ms = self.settings.terminal_show_timestamp_milliseconds;
         let (cell_w, cell_h) = self
-            .terminal_cell_metrics
+            .terminal
+            .layout
+            .cell_metrics
             .unwrap_or(((font_size * 0.6).max(6.0), (font_size * 1.35).max(12.0)));
         let is_active = self.active_session_id.as_deref() == Some(session_id);
-        let visual_bell = is_active && self.terminal_runtime.visual_bell_ticks > 0;
+        let visual_bell = is_active && self.terminal.view.runtime.visual_bell_ticks > 0;
         let layout_cache = view.render_cache.layout_cache.clone();
         let render_degraded = view.render_degraded || self.settings.terminal_low_latency_mode;
         let has_new = view.has_new_while_scrolled;
@@ -1833,8 +1875,8 @@ impl NyaTermApp {
         let search_matches = if is_active
             && !input_latency_active
             && !self.settings.terminal_low_latency_mode
-            && self.terminal_search_open
-            && self.terminal_search_mode == TerminalSearchMode::Buffer
+            && self.terminal.search.open
+            && self.terminal.search.mode == TerminalSearchMode::Buffer
         {
             self.terminal_buffer_matches().unwrap_or_default()
         } else {
@@ -1961,7 +2003,7 @@ impl NyaTermApp {
         let is_active = self.active_session_id.as_deref() == Some(session_id);
         let is_disconnected = self.is_session_disconnected(session_id);
         let render_output_pressure = self.runtime_output_pressure_active();
-        let view = self.terminal_views.get(session_id);
+        let view = self.terminal.view.views.get(session_id);
         let scroll_offset = view.map(|v| v.scroll_offset).unwrap_or(0);
         let scroll_residual_lines = self.terminal_scroll_residual_for_session(Some(session_id));
         let has_new = view.map(|v| v.has_new_while_scrolled).unwrap_or(false);
@@ -1979,12 +2021,16 @@ impl NyaTermApp {
             .map(|v| v.performance_mode)
             .unwrap_or(TerminalPerformanceMode::Normal);
         let scrollback_len = self
-            .terminal_views
+            .terminal
+            .view
+            .views
             .get(session_id)
             .map(|view| view.scrollback_len_for_ui())
             .unwrap_or(0);
         let viewport_rows = self
-            .terminal_views
+            .terminal
+            .view
+            .views
             .get(session_id)
             .map(|view| view.viewport_rows_for_ui())
             .unwrap_or(1);
@@ -1992,14 +2038,16 @@ impl NyaTermApp {
             terminal_visual_display_offset(scroll_offset, scroll_residual_lines, scrollback_len);
         let user_scroll_active = terminal_user_scroll_active(
             display_offset,
-            self.terminal_runtime
+            self.terminal
+                .view
+                .runtime
                 .pending_terminal_user_scroll_idle_sessions
                 .contains(session_id),
-            self.terminal_runtime.last_terminal_user_scroll_at,
+            self.terminal.view.runtime.last_terminal_user_scroll_at,
             paint_started_at,
         );
         let input_latency_active = terminal_input_latency_active(
-            self.terminal_runtime.last_terminal_input_at,
+            self.terminal.view.runtime.last_terminal_input_at,
             paint_started_at,
         );
         let render_pressure = render_output_pressure
@@ -2062,7 +2110,7 @@ impl NyaTermApp {
                 action_links_enabled,
             );
         }
-        let view = self.terminal_views.get(session_id);
+        let view = self.terminal.view.views.get(session_id);
         let palette = self.terminal_theme_palette();
         let transparent_background = self.wallpaper_enabled();
         let font_family = self.gpui_terminal_font_family();
@@ -2073,9 +2121,11 @@ impl NyaTermApp {
         let show_timestamps = self.settings.terminal_show_timestamps;
         let show_timestamp_ms = self.settings.terminal_show_timestamp_milliseconds;
         let (cell_w, cell_h) = self
-            .terminal_cell_metrics
+            .terminal
+            .layout
+            .cell_metrics
             .unwrap_or(((font_size * 0.6).max(6.0), (font_size * 1.35).max(12.0)));
-        let visual_bell = is_active && self.terminal_runtime.visual_bell_ticks > 0;
+        let visual_bell = is_active && self.terminal.view.runtime.visual_bell_ticks > 0;
         let Some(snapshot) = snapshot else {
             if let Some(request_offset) = terminal_scroll_snapshot_request_offset(
                 scroll_offset,
@@ -2088,7 +2138,9 @@ impl NyaTermApp {
                         return;
                     }
                 } else if self
-                    .terminal_views
+                    .terminal
+                    .view
+                    .views
                     .get(session_id)
                     .is_some_and(|view| view.scrollback_snapshots.contains_key(&request_offset))
                     && self.sync_terminal_scroll_text_first_surface_paint(session_id, cx)
@@ -2152,7 +2204,7 @@ impl NyaTermApp {
             display_offset,
             remote_cursor_visible,
             blink_enabled,
-            self.terminal_runtime.cursor_blink_on,
+            self.terminal.view.runtime.cursor_blink_on,
         );
         let cursor_style = match snapshot.cursor.shape {
             nyaterm_terminal::CursorShape::Underline => "underline".to_string(),
@@ -2197,8 +2249,8 @@ impl NyaTermApp {
         let mut active_search_ranges_by_line: HashMap<usize, Vec<(usize, usize)>> = HashMap::new();
         if enhanced
             && is_active
-            && self.terminal_search_open
-            && self.terminal_search_mode == TerminalSearchMode::Buffer
+            && self.terminal.search.open
+            && self.terminal.search.mode == TerminalSearchMode::Buffer
         {
             let search_matches = self.terminal_buffer_matches().unwrap_or_default();
             let (abs_start, abs_end) =
@@ -2207,7 +2259,9 @@ impl NyaTermApp {
                 );
             let active_match_abs = search_matches
                 .get(
-                    self.terminal_search_active_index
+                    self.terminal
+                        .search
+                        .active_index
                         .min(search_matches.len().saturating_sub(1)),
                 )
                 .map(|search_match| search_match.line_index);
@@ -2225,7 +2279,9 @@ impl NyaTermApp {
                 if Some(abs) == active_match_abs
                     && match_index
                         == self
-                            .terminal_search_active_index
+                            .terminal
+                            .search
+                            .active_index
                             .min(search_matches.len().saturating_sub(1))
                 {
                     active_search_ranges_by_line
@@ -2238,7 +2294,9 @@ impl NyaTermApp {
         let search_mapping_duration = search_mapping_started_at.elapsed();
 
         let terminal_selection = if enhanced {
-            is_active.then_some(self.terminal_selection).flatten()
+            is_active
+                .then_some(self.terminal.selection.selection)
+                .flatten()
         } else {
             None
         };
@@ -2294,7 +2352,7 @@ impl NyaTermApp {
                         include_command_marks,
                     )
                 };
-                if let Some(view) = self.terminal_views.get(session_id) {
+                if let Some(view) = self.terminal.view.views.get(session_id) {
                     view.render_cache
                         .line_decorations(decoration_cache_key, build)
                 } else {
@@ -2417,7 +2475,7 @@ impl NyaTermApp {
         }
         let notify_started_at = Instant::now();
         let surface = self.ensure_terminal_surface(session_id, cx);
-        let Some(view) = self.terminal_views.get(session_id) else {
+        let Some(view) = self.terminal.view.views.get(session_id) else {
             return;
         };
         let scroll_offset = view.scroll_offset;
@@ -2570,7 +2628,7 @@ impl NyaTermApp {
         }
         let notify_started_at = Instant::now();
         let surface = self.ensure_terminal_surface(session_id, cx);
-        let Some(view) = self.terminal_views.get(session_id) else {
+        let Some(view) = self.terminal.view.views.get(session_id) else {
             return;
         };
         let scroll_offset = view.scroll_offset;
@@ -2691,11 +2749,11 @@ impl NyaTermApp {
         if session_id.is_empty() {
             return;
         }
-        let Some(surface) = self.terminal_surfaces.get(session_id).cloned() else {
+        let Some(surface) = self.terminal.view.surfaces.get(session_id).cloned() else {
             self.sync_terminal_surface_paint(session_id, cx);
             return;
         };
-        let selection = self.terminal_selection;
+        let selection = self.terminal.selection.selection;
         let visual_state_ready = surface.update(cx, |surface, cx| {
             if surface.set_selection_visual(selection) {
                 cx.notify();

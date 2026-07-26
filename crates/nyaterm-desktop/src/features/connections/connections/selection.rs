@@ -51,7 +51,7 @@ impl NyaTermApp {
             additive,
             range,
         );
-        self.terminal_status = if count == 0 {
+        self.terminal.view.status = if count == 0 {
             "connection selection cleared".to_string()
         } else {
             format!("selected {count} connection(s)")
@@ -159,14 +159,14 @@ impl NyaTermApp {
 
     pub(in crate::features) fn clear_selected_connections(&mut self, cx: &mut Context<Self>) {
         self.connection_state.list.clear_selection();
-        self.terminal_status = "connection selection cleared".to_string();
+        self.terminal.view.status = "connection selection cleared".to_string();
         cx.notify();
     }
 
     pub(in crate::features) fn copy_selected_connections(&mut self, cx: &mut Context<Self>) {
         let selected = self.selected_connections();
         if selected.is_empty() {
-            self.terminal_status = "select saved connections before copying".to_string();
+            self.terminal.view.status = "select saved connections before copying".to_string();
             cx.notify();
             return;
         }
@@ -174,11 +174,11 @@ impl NyaTermApp {
         match self.copy_connections_to_store(&selected) {
             Ok(count) => {
                 self.connection_state.list.clear_selection();
-                self.terminal_status = format!("copied {count} saved connection(s)");
+                self.terminal.view.status = format!("copied {count} saved connection(s)");
             }
             Err(error) => {
-                self.terminal_status = format!("copy selected connections failed: {error}");
-                self.store_status.message = self.terminal_status.clone();
+                self.terminal.view.status = format!("copy selected connections failed: {error}");
+                self.store_status.message = self.terminal.view.status.clone();
                 self.store_status.ready = false;
             }
         }

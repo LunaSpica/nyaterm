@@ -13,7 +13,7 @@ impl NyaTermApp {
         } else {
             String::new()
         };
-        self.terminal_status = "screen locked".to_string();
+        self.terminal.view.status = "screen locked".to_string();
         window.focus(&self.lock_focus);
         cx.notify();
     }
@@ -24,7 +24,7 @@ impl NyaTermApp {
         self.lock_password_marked_text.clear();
         self.lock_status.clear();
         self.last_user_activity_at = Instant::now();
-        self.terminal_status = "screen unlocked".to_string();
+        self.terminal.view.status = "screen unlocked".to_string();
         cx.notify();
     }
 
@@ -45,14 +45,14 @@ impl NyaTermApp {
                 self.lock_password_draft.clear();
                 self.lock_password_marked_text.clear();
                 self.lock_status = self.tr("lockScreen.wrongPassword").to_string();
-                self.terminal_status = "screen unlock rejected".to_string();
+                self.terminal.view.status = "screen unlock rejected".to_string();
                 cx.notify();
             }
             Err(error) => {
                 self.lock_password_draft.clear();
                 self.lock_password_marked_text.clear();
                 self.lock_status = format!("{}: {error}", self.tr("lockScreen.unlockFailed"));
-                self.terminal_status = "screen unlock failed".to_string();
+                self.terminal.view.status = "screen unlock failed".to_string();
                 cx.notify();
             }
         }
@@ -101,11 +101,11 @@ impl NyaTermApp {
         match std::fs::create_dir_all(self.runtime.log_dir()) {
             Ok(()) => {
                 cx.reveal_path(self.runtime.log_dir());
-                self.terminal_status =
+                self.terminal.view.status =
                     format!("opened log directory {}", self.runtime.log_dir().display());
             }
             Err(error) => {
-                self.terminal_status = format!("failed to prepare log directory: {error}");
+                self.terminal.view.status = format!("failed to prepare log directory: {error}");
             }
         }
         cx.notify();
@@ -113,7 +113,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn prompt_diagnostics_export(&mut self, cx: &mut Context<Self>) {
         if self.diagnostics_path_prompt.is_some() {
-            self.terminal_status = "diagnostics path picker is already open".to_string();
+            self.terminal.view.status = "diagnostics path picker is already open".to_string();
             cx.notify();
             return;
         }
@@ -123,7 +123,7 @@ impl NyaTermApp {
         let runtime = self.runtime.clone();
         let options = self.diagnostics_export_options();
         self.diagnostics_path_prompt = Some(DiagnosticsPathPromptKind::Export);
-        self.terminal_status = "selecting diagnostics export destination".to_string();
+        self.terminal.view.status = "selecting diagnostics export destination".to_string();
         cx.spawn(async move |this, cx| {
             let result = match receiver.await {
                 Ok(Ok(Some(path))) => {
@@ -155,7 +155,7 @@ impl NyaTermApp {
         self.diagnostics_path_prompt = None;
         match result {
             DiagnosticsPathPromptResult::Exported(info) => {
-                self.terminal_status = format!(
+                self.terminal.view.status = format!(
                     "diagnostics exported to {} ({} log file(s), {} bytes)",
                     info.output_path.display(),
                     info.log_files,
@@ -163,13 +163,13 @@ impl NyaTermApp {
                 );
             }
             DiagnosticsPathPromptResult::Cancelled => {
-                self.terminal_status = "diagnostics export cancelled".to_string();
+                self.terminal.view.status = "diagnostics export cancelled".to_string();
             }
             DiagnosticsPathPromptResult::Failed(error) => {
-                self.terminal_status = format!("diagnostics export failed: {error}");
+                self.terminal.view.status = format!("diagnostics export failed: {error}");
             }
             DiagnosticsPathPromptResult::Closed => {
-                self.terminal_status =
+                self.terminal.view.status =
                     "diagnostics path picker closed before returning".to_string();
             }
         }

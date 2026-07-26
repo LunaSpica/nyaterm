@@ -398,7 +398,9 @@ impl NyaTermApp {
             let is_disconnected = leaf_ids.iter().any(|id| self.is_session_disconnected(id));
             let tab_title = truncate_preview(&display_name, 28);
             let has_unread = leaf_ids.iter().any(|id| {
-                self.terminal_views
+                self.terminal
+                    .view
+                    .views
                     .get(id)
                     .is_some_and(|view| view.has_unread)
             });

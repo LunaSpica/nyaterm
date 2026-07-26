@@ -176,7 +176,7 @@ fn open_settings_window_now_from_app(app: Entity<NyaTermApp>, cx: &mut App) {
             app.selected_nav = super::NavItem::Settings;
             app.left_sidebar_collapsed = true;
             app.right_inspector_collapsed = true;
-            app.terminal_status = format!("failed to open settings window: {error}");
+            app.terminal.view.status = format!("failed to open settings window: {error}");
             cx.notify();
         }
     });

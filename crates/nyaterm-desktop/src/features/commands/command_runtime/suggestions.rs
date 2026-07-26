@@ -367,7 +367,7 @@ impl NyaTermApp {
                 }
                 let now = Instant::now();
                 if let Some(delay) = command_suggestion_refresh_input_delay(
-                    this.terminal_runtime.last_terminal_input_at,
+                    this.terminal.view.runtime.last_terminal_input_at,
                     now,
                 ) {
                     this.schedule_command_suggestion_refresh_after(delay, cx);
@@ -809,7 +809,7 @@ impl NyaTermApp {
                 apply_terminal_input_data(&TerminalInputState::new(), &command);
             self.refresh_command_suggestions(cx);
         }
-        self.terminal_status = if execute {
+        self.terminal.view.status = if execute {
             format!("executed suggestion from {source}")
         } else {
             format!("filled suggestion from {source}")
@@ -832,7 +832,7 @@ impl NyaTermApp {
         ) {
             Ok(store) => {
                 if let Err(error) = store.delete_command_history(&command) {
-                    self.terminal_status = format!("failed to delete history: {error}");
+                    self.terminal.view.status = format!("failed to delete history: {error}");
                     cx.notify();
                     return;
                 }
@@ -843,7 +843,7 @@ impl NyaTermApp {
                 }
             }
             Err(error) => {
-                self.terminal_status = format!("failed to open store: {error}");
+                self.terminal.view.status = format!("failed to open store: {error}");
                 cx.notify();
                 return;
             }
@@ -863,7 +863,7 @@ impl NyaTermApp {
         } else {
             self.refresh_command_suggestions(cx);
         }
-        self.terminal_status = format!("deleted history command '{command}'");
+        self.terminal.view.status = format!("deleted history command '{command}'");
         cx.notify();
     }
 

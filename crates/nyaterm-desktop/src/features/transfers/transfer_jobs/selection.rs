@@ -10,9 +10,9 @@ impl NyaTermApp {
     ) {
         if self.transfer.queue.jobs.iter().any(|job| job.id == job_id) {
             self.transfer.queue.selected_job_id = Some(job_id.clone());
-            self.terminal_status = format!("selected transfer {job_id}");
+            self.terminal.view.status = format!("selected transfer {job_id}");
         } else {
-            self.terminal_status = "transfer job not found".to_string();
+            self.terminal.view.status = "transfer job not found".to_string();
         }
         cx.notify();
     }
@@ -32,10 +32,10 @@ impl NyaTermApp {
                 x: event.position.x,
                 y: event.position.y,
             });
-            self.terminal_status = "transfer menu opened".to_string();
+            self.terminal.view.status = "transfer menu opened".to_string();
         } else {
             self.transfer.queue.job_menu = None;
-            self.terminal_status = "transfer job not found".to_string();
+            self.terminal.view.status = "transfer job not found".to_string();
         }
         cx.notify();
     }
@@ -51,12 +51,12 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(job) = self.transfer.queue.jobs.iter().find(|job| job.id == job_id) else {
-            self.terminal_status = "transfer job not found".to_string();
+            self.terminal.view.status = "transfer job not found".to_string();
             cx.notify();
             return;
         };
         if !self.can_delete_transfer_job(&job_id) {
-            self.terminal_status = format!("transfer {} cannot be deleted yet", job.id);
+            self.terminal.view.status = format!("transfer {} cannot be deleted yet", job.id);
             cx.notify();
             return;
         }
@@ -93,7 +93,7 @@ impl NyaTermApp {
                         .map(|job| job.id.clone())
                 });
         let Some(job_id) = job_id else {
-            self.terminal_status = "transfer queue is empty".to_string();
+            self.terminal.view.status = "transfer queue is empty".to_string();
             cx.notify();
             return;
         };
@@ -113,7 +113,7 @@ impl NyaTermApp {
         if self.transfer.queue.selected_job_id.as_deref() == Some(state.job_id.as_str()) {
             self.transfer.queue.selected_job_id = None;
         }
-        self.terminal_status = if self.transfer.queue.jobs.len() < before {
+        self.terminal.view.status = if self.transfer.queue.jobs.len() < before {
             format!("deleted transfer {}", state.job_id)
         } else {
             "transfer job not found".to_string()
@@ -123,7 +123,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn cancel_delete_transfer_job(&mut self, cx: &mut Context<Self>) {
         self.transfer.queue.job_delete = None;
-        self.terminal_status = "transfer delete cancelled".to_string();
+        self.terminal.view.status = "transfer delete cancelled".to_string();
         cx.notify();
     }
 
@@ -133,18 +133,18 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(job) = self.transfer.queue.jobs.iter().find(|job| job.id == job_id) else {
-            self.terminal_status = "transfer job not found".to_string();
+            self.terminal.view.status = "transfer job not found".to_string();
             cx.notify();
             return;
         };
         let Some(target_path) = transfer_job_local_target_path(job) else {
-            self.terminal_status = format!("transfer {} has no local target", job.id);
+            self.terminal.view.status = format!("transfer {} has no local target", job.id);
             cx.notify();
             return;
         };
         let target_dir = transfer_job_reveal_dir(target_path);
         cx.reveal_path(&target_dir);
-        self.terminal_status = format!("opened transfer directory {}", target_dir.display());
+        self.terminal.view.status = format!("opened transfer directory {}", target_dir.display());
         cx.notify();
     }
 

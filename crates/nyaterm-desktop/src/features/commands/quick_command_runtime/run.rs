@@ -167,7 +167,7 @@ impl NyaTermApp {
             .find(|command| command.id == command_id)
             .cloned()
         else {
-            self.terminal_status = "quick command is no longer available".to_string();
+            self.terminal.view.status = "quick command is no longer available".to_string();
             cx.notify();
             return;
         };
@@ -187,7 +187,7 @@ impl NyaTermApp {
             .nth(index)
             .map(|command| command.id)
         else {
-            self.terminal_status = "quick command is no longer available".to_string();
+            self.terminal.view.status = "quick command is no longer available".to_string();
             cx.notify();
             return;
         };
@@ -203,13 +203,13 @@ impl NyaTermApp {
     ) {
         if send_to_all {
             if self.live_session_count() == 0 {
-                self.terminal_status =
+                self.terminal.view.status =
                     "start a terminal session before using a quick command".to_string();
                 cx.notify();
                 return;
             }
         } else if self.active_session_id.is_none() {
-            self.terminal_status =
+            self.terminal.view.status =
                 "start a terminal session before using a quick command".to_string();
             cx.notify();
             return;
@@ -220,13 +220,13 @@ impl NyaTermApp {
             .find(|command| command.id == command_id)
             .cloned()
         else {
-            self.terminal_status = "quick command is no longer available".to_string();
+            self.terminal.view.status = "quick command is no longer available".to_string();
             cx.notify();
             return;
         };
         let command_text = command.command.trim().to_string();
         if command_text.is_empty() {
-            self.terminal_status = "quick command has no command text".to_string();
+            self.terminal.view.status = "quick command has no command text".to_string();
             cx.notify();
             return;
         }
@@ -242,7 +242,7 @@ impl NyaTermApp {
                     variables,
                     focused_index: 0,
                 });
-            self.terminal_status = "fill quick command variables".to_string();
+            self.terminal.view.status = "fill quick command variables".to_string();
             cx.notify();
             return;
         }
@@ -278,7 +278,7 @@ impl NyaTermApp {
                 .filter(|session| !self.is_session_disconnected(&session.id))
                 .collect::<Vec<_>>();
             if sessions.is_empty() {
-                self.terminal_status =
+                self.terminal.view.status =
                     "start a terminal session before using a quick command".to_string();
                 cx.notify();
                 return;
@@ -297,7 +297,7 @@ impl NyaTermApp {
             }
             let session_refs: Vec<&str> = ok_sessions.iter().map(String::as_str).collect();
             self.record_command_history_for_sessions(&session_refs, &command_bytes);
-            self.terminal_status = if failed == 0 {
+            self.terminal.view.status = if failed == 0 {
                 format!("sent quick command '{label}' to {sent} session(s)")
             } else {
                 format!("sent quick command '{label}' to {sent} session(s), {failed} failed")
@@ -307,7 +307,7 @@ impl NyaTermApp {
         }
 
         if self.send_terminal_input(command_bytes, cx) {
-            self.terminal_status = if execute {
+            self.terminal.view.status = if execute {
                 format!("ran quick command '{label}'")
             } else {
                 format!("inserted quick command '{label}'")

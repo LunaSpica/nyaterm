@@ -39,14 +39,14 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.update_quick_switch_state(cx, |store| store.open_quick_switch());
-        self.terminal_status = "quick switch opened".to_string();
+        self.terminal.view.status = "quick switch opened".to_string();
         window.focus(&self.quick_switch_focus);
         cx.notify();
     }
 
     pub(in crate::features) fn close_quick_switch(&mut self, cx: &mut Context<Self>) {
         self.update_quick_switch_state(cx, |store| store.close_quick_switch());
-        self.terminal_status = "quick switch closed".to_string();
+        self.terminal.view.status = "quick switch closed".to_string();
         cx.notify();
     }
 

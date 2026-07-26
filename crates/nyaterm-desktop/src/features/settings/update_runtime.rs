@@ -53,12 +53,12 @@ impl NyaTermApp {
                     } else {
                         format!("NyaTerm is up to date ({})", info.current_version)
                     };
-                    self.terminal_status = self.update_status.clone();
+                    self.terminal.view.status = self.update_status.clone();
                     self.update_info = Some(info);
                 }
                 Err(error) => {
                     self.update_status = format!("update check failed: {error}");
-                    self.terminal_status = self.update_status.clone();
+                    self.terminal.view.status = self.update_status.clone();
                     self.update_info = None;
                 }
             }

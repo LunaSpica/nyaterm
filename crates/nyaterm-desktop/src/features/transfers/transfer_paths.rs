@@ -7,7 +7,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if self.transfer.paths.prompt.is_some() {
-            self.terminal_status = "native path picker is already open".to_string();
+            self.terminal.view.status = "native path picker is already open".to_string();
             cx.notify();
             return;
         }
@@ -18,7 +18,7 @@ impl NyaTermApp {
             prompt: Some(SharedString::from("Select default download directory")),
         };
         let receiver = cx.prompt_for_paths(options);
-        self.terminal_status = "selecting default download directory".to_string();
+        self.terminal.view.status = "selecting default download directory".to_string();
         cx.spawn(async move |this, cx| {
             let path = match receiver.await {
                 Ok(Ok(Some(paths))) => paths.into_iter().next(),
@@ -29,7 +29,7 @@ impl NyaTermApp {
                     this.settings.transfer_download_path = path.display().to_string();
                     this.save_transfer_settings("transfer download path saved", cx);
                 } else {
-                    this.terminal_status = "download path selection cancelled".to_string();
+                    this.terminal.view.status = "download path selection cancelled".to_string();
                     cx.notify();
                 }
             });
@@ -46,7 +46,7 @@ impl NyaTermApp {
             prompt: Some(SharedString::from("Select recording directory")),
         };
         let receiver = cx.prompt_for_paths(options);
-        self.terminal_status = "selecting recording directory".to_string();
+        self.terminal.view.status = "selecting recording directory".to_string();
         cx.spawn(async move |this, cx| {
             let path = match receiver.await {
                 Ok(Ok(Some(paths))) => paths.into_iter().next(),
@@ -57,7 +57,7 @@ impl NyaTermApp {
                     this.settings.recording_path = path.display().to_string();
                     this.save_recording_settings(cx);
                 } else {
-                    this.terminal_status = "recording path selection cancelled".to_string();
+                    this.terminal.view.status = "recording path selection cancelled".to_string();
                     cx.notify();
                 }
             });
@@ -77,7 +77,7 @@ impl NyaTermApp {
             prompt: Some(SharedString::from("Select default editor executable")),
         };
         let receiver = cx.prompt_for_paths(options);
-        self.terminal_status = "selecting default editor".to_string();
+        self.terminal.view.status = "selecting default editor".to_string();
         cx.spawn(async move |this, cx| {
             let path = match receiver.await {
                 Ok(Ok(Some(paths))) => paths.into_iter().next(),
@@ -88,7 +88,7 @@ impl NyaTermApp {
                     this.settings.transfer_default_editor = path.display().to_string();
                     this.save_transfer_settings("transfer editor path saved", cx);
                 } else {
-                    this.terminal_status = "editor path selection cancelled".to_string();
+                    this.terminal.view.status = "editor path selection cancelled".to_string();
                     cx.notify();
                 }
             });
@@ -107,13 +107,13 @@ impl NyaTermApp {
 
     pub(in crate::features) fn reveal_transfer_download_dir(&mut self, cx: &mut Context<Self>) {
         let Some(path) = self.resolved_transfer_download_dir() else {
-            self.terminal_status = "cannot determine system download directory".to_string();
+            self.terminal.view.status = "cannot determine system download directory".to_string();
             cx.notify();
             return;
         };
 
         if path.exists() && !path.is_dir() {
-            self.terminal_status = format!(
+            self.terminal.view.status = format!(
                 "configured download path is not a directory: {}",
                 path.display()
             );
@@ -124,10 +124,11 @@ impl NyaTermApp {
         match std::fs::create_dir_all(&path) {
             Ok(()) => {
                 cx.reveal_path(&path);
-                self.terminal_status = format!("opened download directory {}", path.display());
+                self.terminal.view.status = format!("opened download directory {}", path.display());
             }
             Err(error) => {
-                self.terminal_status = format!("failed to prepare download directory: {error}");
+                self.terminal.view.status =
+                    format!("failed to prepare download directory: {error}");
             }
         }
         cx.notify();
@@ -164,7 +165,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if self.transfer.paths.prompt.is_some() {
-            self.terminal_status = "native path picker is already open".to_string();
+            self.terminal.view.status = "native path picker is already open".to_string();
             cx.notify();
             return;
         }
@@ -192,7 +193,7 @@ impl NyaTermApp {
         let remote_path = self.normalized_transfer_remote_path();
         let receiver = cx.prompt_for_paths(options);
         self.transfer.paths.prompt = Some(kind);
-        self.terminal_status = match kind {
+        self.terminal.view.status = match kind {
             TransferPathPromptKind::UploadFile => "selecting upload file".to_string(),
             TransferPathPromptKind::UploadDirectory => "selecting upload directory".to_string(),
             TransferPathPromptKind::DownloadDirectory => "selecting download directory".to_string(),
@@ -226,17 +227,17 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if remote_paths.is_empty() {
-            self.terminal_status = "select remote items before downloading".to_string();
+            self.terminal.view.status = "select remote items before downloading".to_string();
             cx.notify();
             return;
         }
         if self.transfer.paths.prompt.is_some() {
-            self.terminal_status = "native path picker is already open".to_string();
+            self.terminal.view.status = "native path picker is already open".to_string();
             cx.notify();
             return;
         }
         let Some(config) = self.active_ssh_config.clone() else {
-            self.terminal_status = "start an SSH session first".to_string();
+            self.terminal.view.status = "start an SSH session first".to_string();
             self.selected_nav = NavItem::Transfers;
             cx.notify();
             return;
@@ -255,7 +256,7 @@ impl NyaTermApp {
         };
         let receiver = cx.prompt_for_paths(options);
         self.transfer.paths.prompt = Some(TransferPathPromptKind::DownloadDirectory);
-        self.terminal_status = "selecting download directory".to_string();
+        self.terminal.view.status = "selecting download directory".to_string();
         cx.spawn(async move |this, cx| {
             let result = match receiver.await {
                 Ok(Ok(Some(paths))) => {
@@ -296,17 +297,17 @@ impl NyaTermApp {
             kind,
             TransferPathPromptKind::UploadFile | TransferPathPromptKind::UploadDirectory
         ) {
-            self.terminal_status = "browser upload requires a file or directory".to_string();
+            self.terminal.view.status = "browser upload requires a file or directory".to_string();
             cx.notify();
             return;
         }
         if self.transfer.paths.prompt.is_some() {
-            self.terminal_status = "native path picker is already open".to_string();
+            self.terminal.view.status = "native path picker is already open".to_string();
             cx.notify();
             return;
         }
         let Some(config) = self.active_ssh_config.clone() else {
-            self.terminal_status = "start an SSH session first".to_string();
+            self.terminal.view.status = "start an SSH session first".to_string();
             cx.notify();
             return;
         };
@@ -334,7 +335,7 @@ impl NyaTermApp {
         let remote_path = self.normalized_transfer_browser_upload_target();
         let receiver = cx.prompt_for_paths(options);
         self.transfer.paths.prompt = Some(kind);
-        self.terminal_status = match kind {
+        self.terminal.view.status = match kind {
             TransferPathPromptKind::UploadFile => "selecting upload file".to_string(),
             TransferPathPromptKind::UploadDirectory => "selecting upload directory".to_string(),
             TransferPathPromptKind::DownloadDirectory => unreachable!(),
@@ -381,7 +382,7 @@ impl NyaTermApp {
         match result {
             TransferPathPromptResult::Selected(paths) => {
                 let Some(path) = paths.into_iter().next() else {
-                    self.terminal_status = "path picker cancelled".to_string();
+                    self.terminal.view.status = "path picker cancelled".to_string();
                     return;
                 };
                 let selected = match kind {
@@ -393,7 +394,7 @@ impl NyaTermApp {
                 };
                 self.transfer.paths.local = selected.display().to_string();
                 self.transfer.panel.focused_field = TransferInputField::Local;
-                self.terminal_status = match kind {
+                self.terminal.view.status = match kind {
                     TransferPathPromptKind::UploadFile => "upload file selected".to_string(),
                     TransferPathPromptKind::UploadDirectory => {
                         "upload directory selected".to_string()
@@ -404,13 +405,13 @@ impl NyaTermApp {
                 };
             }
             TransferPathPromptResult::Cancelled => {
-                self.terminal_status = "path picker cancelled".to_string();
+                self.terminal.view.status = "path picker cancelled".to_string();
             }
             TransferPathPromptResult::Failed(error) => {
-                self.terminal_status = format!("path picker failed: {error}");
+                self.terminal.view.status = format!("path picker failed: {error}");
             }
             TransferPathPromptResult::Closed => {
-                self.terminal_status = "path picker closed before returning".to_string();
+                self.terminal.view.status = "path picker closed before returning".to_string();
             }
         }
     }
@@ -430,7 +431,7 @@ impl NyaTermApp {
         match result {
             TransferPathPromptResult::Selected(paths) => {
                 let Some(directory) = paths.into_iter().next() else {
-                    self.terminal_status = "path picker cancelled".to_string();
+                    self.terminal.view.status = "path picker cancelled".to_string();
                     return;
                 };
                 let total = remote_paths.len();
@@ -450,21 +451,21 @@ impl NyaTermApp {
                         cx,
                     );
                 }
-                self.terminal_status = format!("{total} SFTP download job(s) started");
+                self.terminal.view.status = format!("{total} SFTP download job(s) started");
                 self.transfer.browser.status =
                     format!("Downloading {total} item(s) to {}", directory.display());
             }
             TransferPathPromptResult::Cancelled => {
-                self.terminal_status = "download directory selection cancelled".to_string();
+                self.terminal.view.status = "download directory selection cancelled".to_string();
                 self.transfer.browser.status = "download selection cancelled".to_string();
             }
             TransferPathPromptResult::Failed(error) => {
-                self.terminal_status = format!("path picker failed: {error}");
-                self.transfer.browser.status = self.terminal_status.clone();
+                self.terminal.view.status = format!("path picker failed: {error}");
+                self.transfer.browser.status = self.terminal.view.status.clone();
             }
             TransferPathPromptResult::Closed => {
-                self.terminal_status = "path picker closed before returning".to_string();
-                self.transfer.browser.status = self.terminal_status.clone();
+                self.terminal.view.status = "path picker closed before returning".to_string();
+                self.transfer.browser.status = self.terminal.view.status.clone();
             }
         }
     }
@@ -485,7 +486,7 @@ impl NyaTermApp {
         match result {
             TransferPathPromptResult::Selected(paths) => {
                 if paths.is_empty() {
-                    self.terminal_status = "path picker cancelled".to_string();
+                    self.terminal.view.status = "path picker cancelled".to_string();
                     self.transfer.browser.status = "upload selection cancelled".to_string();
                     return;
                 }
@@ -530,16 +531,16 @@ impl NyaTermApp {
                 }
             }
             TransferPathPromptResult::Cancelled => {
-                self.terminal_status = "path picker cancelled".to_string();
+                self.terminal.view.status = "path picker cancelled".to_string();
                 self.transfer.browser.status = "upload selection cancelled".to_string();
             }
             TransferPathPromptResult::Failed(error) => {
-                self.terminal_status = format!("path picker failed: {error}");
-                self.transfer.browser.status = self.terminal_status.clone();
+                self.terminal.view.status = format!("path picker failed: {error}");
+                self.transfer.browser.status = self.terminal.view.status.clone();
             }
             TransferPathPromptResult::Closed => {
-                self.terminal_status = "path picker closed before returning".to_string();
-                self.transfer.browser.status = self.terminal_status.clone();
+                self.terminal.view.status = "path picker closed before returning".to_string();
+                self.transfer.browser.status = self.terminal.view.status.clone();
             }
         }
     }

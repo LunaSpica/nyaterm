@@ -43,7 +43,9 @@ impl NyaTermApp {
         let action_links_enabled = self.settings.terminal_action_links_enabled && !low_latency_mode;
         let render_output_pressure = self.runtime_output_pressure_active();
         let render_pressure = self
-            .terminal_views
+            .terminal
+            .view
+            .views
             .get(&session_id)
             .map(|view| {
                 terminal_render_pressure_active(
@@ -56,17 +58,21 @@ impl NyaTermApp {
             || low_latency_mode;
         if render_pressure
             && !low_latency_mode
-            && let Some(view) = self.terminal_views.get_mut(&session_id)
+            && let Some(view) = self.terminal.view.views.get_mut(&session_id)
         {
             view.enter_render_degraded_mode();
         }
         let render_degraded = self
-            .terminal_views
+            .terminal
+            .view
+            .views
             .get(&session_id)
             .is_some_and(|view| view.render_degraded || render_pressure);
         let render_profile = terminal_render_profile(render_degraded);
         let (output_burst_bytes, performance_mode) = self
-            .terminal_views
+            .terminal
+            .view
+            .views
             .get(&session_id)
             .map(|view| (view.output_burst_bytes, view.performance_mode))
             .unwrap_or((0, TerminalPerformanceMode::Normal));
@@ -94,14 +100,18 @@ impl NyaTermApp {
         };
         let snapshot_stage_started_at = Instant::now();
         let layout_cache = self
-            .terminal_views
+            .terminal
+            .view
+            .views
             .get(&session_id)
             .map(|view| view.render_cache.layout_cache.clone());
         let scroll_offset = self
-            .terminal_views
+            .terminal
+            .view
+            .views
             .get(&session_id)
             .map(|view| view.scroll_offset)
-            .unwrap_or(self.terminal_scroll_offset);
+            .unwrap_or(self.terminal.view.scroll_offset);
         let display_offset = self.terminal_display_offset_for_session(
             (!session_id.is_empty()).then_some(session_id.as_str()),
         );
@@ -111,7 +121,7 @@ impl NyaTermApp {
         let needs_shell_viewport_snapshot = session_id.is_empty()
             || (is_active
                 && self.settings.interaction_mac_ime_compatibility
-                && !self.terminal_ime_marked_text.is_empty());
+                && !self.terminal.input.ime_marked_text.is_empty());
         let snapshot = if needs_shell_viewport_snapshot {
             self.terminal_snapshot_for_session(
                 (!session_id.is_empty()).then_some(session_id.as_str()),
@@ -143,7 +153,7 @@ impl NyaTermApp {
             && !is_disconnected
             && display_offset == 0
             && remote_cursor_visible
-            && (!blink_enabled || self.terminal_runtime.cursor_blink_on);
+            && (!blink_enabled || self.terminal.view.runtime.cursor_blink_on);
         let cursor_style = match snapshot.cursor.shape {
             nyaterm_terminal::CursorShape::Underline => "underline".to_string(),
             nyaterm_terminal::CursorShape::Beam => "bar".to_string(),
@@ -170,7 +180,7 @@ impl NyaTermApp {
         } else {
             let frame_action_links = if session_id.is_empty() {
                 terminal_action_links_for_paint_snapshot(
-                    self.terminal_views.get(&session_id),
+                    self.terminal.view.views.get(&session_id),
                     display_offset,
                     &snapshot,
                     action_link_matcher_key,
@@ -182,8 +192,8 @@ impl NyaTermApp {
             let search_stage_started_at = Instant::now();
             let search_matches = if render_profile.enhanced_decorations_enabled()
                 && is_active
-                && self.terminal_search_open
-                && self.terminal_search_mode == TerminalSearchMode::Buffer
+                && self.terminal.search.open
+                && self.terminal.search.mode == TerminalSearchMode::Buffer
             {
                 self.terminal_buffer_matches().unwrap_or_default()
             } else {
@@ -192,7 +202,9 @@ impl NyaTermApp {
             // Buffer matches use absolute history indices; map into current viewport rows.
             let active_match_abs = search_matches
                 .get(
-                    self.terminal_search_active_index
+                    self.terminal
+                        .search
+                        .active_index
                         .min(search_matches.len().saturating_sub(1)),
                 )
                 .map(|search_match| search_match.line_index);
@@ -213,7 +225,9 @@ impl NyaTermApp {
                 if Some(abs) == active_match_abs
                     && match_index
                         == self
-                            .terminal_search_active_index
+                            .terminal
+                            .search
+                            .active_index
                             .min(search_matches.len().saturating_sub(1))
                 {
                     active_search_ranges_by_line
@@ -226,7 +240,9 @@ impl NyaTermApp {
             let decoration_stage_started_at = Instant::now();
             let mut action_link_duration = Duration::ZERO;
             let terminal_selection = if render_profile.enhanced_decorations_enabled() {
-                is_active.then_some(self.terminal_selection).flatten()
+                is_active
+                    .then_some(self.terminal.selection.selection)
+                    .flatten()
             } else {
                 None
             };
@@ -282,7 +298,7 @@ impl NyaTermApp {
                     action_link_duration += action_link_started_at.elapsed();
                     decorations
                 };
-                if let Some(view) = self.terminal_views.get(&session_id) {
+                if let Some(view) = self.terminal.view.views.get(&session_id) {
                     view.render_cache
                         .line_decorations(decoration_cache_key, build)
                 } else {
@@ -306,8 +322,8 @@ impl NyaTermApp {
         let ime_preedit_text = (is_active
             && !session_id.is_empty()
             && self.settings.interaction_mac_ime_compatibility
-            && !self.terminal_ime_marked_text.is_empty())
-        .then(|| self.terminal_ime_marked_text.clone());
+            && !self.terminal.input.ime_marked_text.is_empty())
+        .then(|| self.terminal.input.ime_marked_text.clone());
         let ime_preedit_position = ime_preedit_text.as_ref().map(|_| {
             let insets = self.terminal_content_insets();
             let gutter = self.terminal_gutter_width_px_for_session(
@@ -481,11 +497,15 @@ impl NyaTermApp {
         let output_session_id = session_id.clone();
         let terminal_font_size = self.settings.terminal_font_size as f32;
         let performance_overlay = self
-            .terminal_views
+            .terminal
+            .view
+            .views
             .get(&session_id)
             .and_then(|view| view.performance_overlay);
         let skipped_output_chars = self
-            .terminal_views
+            .terminal
+            .view
+            .views
             .get(&session_id)
             .map(|view| view.skipped_output_chars)
             .unwrap_or(0);
@@ -506,12 +526,16 @@ impl NyaTermApp {
             }
         });
         let (render_cache_hits, render_cache_misses) = self
-            .terminal_views
+            .terminal
+            .view
+            .views
             .get(&session_id)
             .map(|view| view.render_cache.decoration_stats())
             .unwrap_or((0, 0));
         let (layout_cache_hits, layout_cache_misses, layout_shape_calls, layout_shape_duration_ms) =
-            self.terminal_views
+            self.terminal
+                .view
+                .views
                 .get(&session_id)
                 .and_then(|view| {
                     view.render_cache.layout_cache.lock().ok().map(|cache| {
@@ -524,9 +548,11 @@ impl NyaTermApp {
                     })
                 })
                 .unwrap_or((0, 0, 0, 0));
-        let show_visual_bell = is_active && self.terminal_runtime.visual_bell_ticks > 0;
+        let show_visual_bell = is_active && self.terminal.view.runtime.visual_bell_ticks > 0;
         let file_drop_hover = self
-            .terminal_file_drop_hover
+            .terminal
+            .windows
+            .file_drop_hover
             .as_deref()
             .is_some_and(|id| id == session_id.as_str());
         let drop_session_kind = self
@@ -551,11 +577,13 @@ impl NyaTermApp {
                     .flex_col()
                     .relative()
                     .bg(self.shell_transparent_color(palette.terminal_bg))
-                    .track_focus(&self.terminal_focus)
+                    .track_focus(&self.terminal.input.focus)
                     .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                         this.mark_user_activity();
                         let smart_input_selection = this
-                            .terminal_selection
+                            .terminal
+                            .selection
+                            .selection
                             .is_some()
                             .then(|| this.smart_cursor_selected_input_range())
                             .flatten();
@@ -567,7 +595,7 @@ impl NyaTermApp {
                                 cx.stop_propagation();
                                 return;
                             }
-                            if this.terminal_selection.is_some()
+                            if this.terminal.selection.selection.is_some()
                                 && smart_input_selection.is_some()
                                 && this.handle_smart_input_selection_key(event, cx)
                             {
@@ -581,7 +609,7 @@ impl NyaTermApp {
                             // When a non-smart buffer selection is painted, still send
                             // keystrokes but skip suggestion tracking so the selection
                             // edit path stays isolated (Tauri preserves selection).
-                            let has_buffer_selection = this.terminal_selection.is_some()
+                            let has_buffer_selection = this.terminal.selection.selection.is_some()
                                 && smart_input_selection.is_none();
                             if has_buffer_selection {
                                 this.send_terminal_key_event(event, false, cx);
@@ -656,8 +684,8 @@ impl NyaTermApp {
                         // When a non-smart buffer selection is painted, still send
                         // keystrokes but skip suggestion tracking so the selection
                         // edit path stays isolated (Tauri preserves selection).
-                        let has_buffer_selection =
-                            this.terminal_selection.is_some() && smart_input_selection.is_none();
+                        let has_buffer_selection = this.terminal.selection.selection.is_some()
+                            && smart_input_selection.is_none();
                         if has_buffer_selection {
                             this.send_terminal_key_event(event, false, cx);
                         } else {
@@ -699,7 +727,7 @@ impl NyaTermApp {
                     })
                     .when(
                         !session_id.is_empty()
-                            && !self.terminal_status.trim().is_empty()
+                            && !self.terminal.view.status.trim().is_empty()
                             && !is_active,
                         |this| {
                             this.child(
@@ -715,7 +743,7 @@ impl NyaTermApp {
                                         div()
                                             .text_xs()
                                             .text_color(rgb(palette.text_muted))
-                                            .child(self.terminal_status.clone()),
+                                            .child(self.terminal.view.status.clone()),
                                     ),
                             )
                         },
@@ -753,7 +781,7 @@ impl NyaTermApp {
                                     div()
                                         .text_xs()
                                         .text_color(rgb(palette.text_muted))
-                                        .child(self.terminal_status.clone()),
+                                        .child(self.terminal.view.status.clone()),
                                 ),
                         )
                     })
@@ -807,7 +835,7 @@ impl NyaTermApp {
                                 cx.listener(
                                     move |this, event: &gpui::MouseDownEvent, window, cx| {
                                         this.activate_workspace_pane(session_id.clone(), cx);
-                                        window.focus(&this.terminal_focus);
+                                        window.focus(&this.terminal.input.focus);
                                         this.close_terminal_context_menu(cx);
                                         this.close_action_link_menu(cx);
                                         let mods = event.modifiers;
@@ -830,7 +858,7 @@ impl NyaTermApp {
                                 cx.listener(
                                     move |this, event: &gpui::MouseDownEvent, window, cx| {
                                         this.activate_workspace_pane(session_id.clone(), cx);
-                                        window.focus(&this.terminal_focus);
+                                        window.focus(&this.terminal.input.focus);
                                         if let Some(cell) = this.point_to_terminal_cell_for_session(
                                             Some(session_id.as_str()),
                                             event.position,
@@ -866,7 +894,7 @@ impl NyaTermApp {
                                     move |this, event: &gpui::MouseDownEvent, window, cx| {
                                         // xterm/Linux middle-click paste convention.
                                         this.activate_workspace_pane(session_id.clone(), cx);
-                                        window.focus(&this.terminal_focus);
+                                        window.focus(&this.terminal.input.focus);
                                         this.close_terminal_context_menu(cx);
                                         this.close_action_link_menu(cx);
                                         if let Some(cell) = this.point_to_terminal_cell_for_session(
@@ -902,7 +930,7 @@ impl NyaTermApp {
                                         cx.stop_propagation();
                                         return;
                                     }
-                                    window.focus(&this.terminal_focus);
+                                    window.focus(&this.terminal.input.focus);
                                     let modifiers = event.modifiers();
                                     if this.settings.terminal_action_links_enabled {
                                         if modifiers.alt {
@@ -917,10 +945,10 @@ impl NyaTermApp {
                                             }
                                         }
                                     }
-                                    if this.terminal_selection.is_none()
-                                        && this.terminal_status != "terminal focused"
+                                    if this.terminal.selection.selection.is_none()
+                                        && this.terminal.view.status != "terminal focused"
                                     {
-                                        this.terminal_status = "terminal focused".to_string();
+                                        this.terminal.view.status = "terminal focused".to_string();
                                         cx.notify();
                                     }
                                 })
@@ -1180,7 +1208,7 @@ impl NyaTermApp {
                                 )
                             }),
                     )
-                    .when(is_active && self.terminal_search_open, |this| {
+                    .when(is_active && self.terminal.search.open, |this| {
                         this.child(self.terminal_search_bar(cx))
                     }),
             );
@@ -1197,7 +1225,7 @@ impl NyaTermApp {
             && (search_mapping_duration >= TERMINAL_RENDER_SLOW_STAGE
                 || action_link_duration >= TERMINAL_RENDER_SLOW_STAGE
                 || decorations_duration >= TERMINAL_RENDER_SLOW_STAGE)
-            && let Some(view) = self.terminal_views.get_mut(&session_id)
+            && let Some(view) = self.terminal.view.views.get_mut(&session_id)
         {
             view.enter_render_degraded_mode();
         }
@@ -1216,7 +1244,7 @@ impl NyaTermApp {
                 output_burst_bytes,
                 ?performance_mode,
                 action_links_enabled = self.settings.terminal_action_links_enabled,
-                search_open = self.terminal_search_open,
+                search_open = self.terminal.search.open,
                 search_matches = search_matches_len,
                 render_cache_hits,
                 render_cache_misses,

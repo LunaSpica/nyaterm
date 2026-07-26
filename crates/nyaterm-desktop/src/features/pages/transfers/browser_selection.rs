@@ -14,7 +14,7 @@ impl NyaTermApp {
             .insert(path.clone());
         self.transfer.paths.remote = path.clone();
         self.transfer.panel.focused_field = TransferInputField::Remote;
-        self.terminal_status = format!("selected remote {path}");
+        self.terminal.view.status = format!("selected remote {path}");
         cx.notify();
     }
 
@@ -240,7 +240,7 @@ impl NyaTermApp {
         if self.transfer.browser.selected_remote_paths.contains(&path) {
             self.transfer.browser.selected_remote_path = Some(path.clone());
             self.transfer.paths.remote = path;
-            self.terminal_status = format!(
+            self.terminal.view.status = format!(
                 "{} remote item(s) marked",
                 self.transfer.browser.selected_remote_paths.len()
             );
@@ -382,7 +382,7 @@ impl NyaTermApp {
         self.transfer.browser.selected_remote_path = Some(target_path.clone());
         self.transfer.paths.remote = target_path;
         self.transfer.panel.focused_field = TransferInputField::Remote;
-        self.terminal_status = format!(
+        self.terminal.view.status = format!(
             "{} remote item(s) marked",
             self.transfer.browser.selected_remote_paths.len()
         );
@@ -405,7 +405,7 @@ impl NyaTermApp {
         self.transfer.browser.selected_remote_path = Some(path.clone());
         self.transfer.paths.remote = path.clone();
         self.transfer.panel.focused_field = TransferInputField::Remote;
-        self.terminal_status = format!(
+        self.terminal.view.status = format!(
             "{} remote item(s) marked",
             self.transfer.browser.selected_remote_paths.len()
         );
@@ -423,7 +423,7 @@ impl NyaTermApp {
             self.transfer.browser.selected_remote_path = Some(entry.path.clone());
             self.transfer.paths.remote = entry.path.clone();
         }
-        self.terminal_status = format!(
+        self.terminal.view.status = format!(
             "{} remote item(s) marked",
             self.transfer.browser.selected_remote_paths.len()
         );
@@ -436,7 +436,7 @@ impl NyaTermApp {
     ) {
         self.transfer.browser.selected_remote_paths.clear();
         self.transfer.browser.selected_remote_path = None;
-        self.terminal_status = "remote file selection cleared".to_string();
+        self.terminal.view.status = "remote file selection cleared".to_string();
         cx.notify();
     }
 
@@ -454,12 +454,12 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(value) = self.selected_transfer_path_part(part) else {
-            self.terminal_status = "select a remote item first".to_string();
+            self.terminal.view.status = "select a remote item first".to_string();
             cx.notify();
             return;
         };
         cx.write_to_clipboard(ClipboardItem::new_string(value.clone()));
-        self.terminal_status = format!("copied remote {}", part.label());
+        self.terminal.view.status = format!("copied remote {}", part.label());
         self.transfer.browser.status = truncate_preview(&value, 92);
         cx.notify();
     }
@@ -470,17 +470,17 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(value) = self.selected_transfer_path_part(part) else {
-            self.terminal_status = "select a remote item first".to_string();
+            self.terminal.view.status = "select a remote item first".to_string();
             cx.notify();
             return;
         };
         if self.active_session_id.is_none() {
-            self.terminal_status = "start a session before sending remote path".to_string();
+            self.terminal.view.status = "start a session before sending remote path".to_string();
             cx.notify();
             return;
         }
         if self.send_terminal_input(value.clone().into_bytes(), cx) {
-            self.terminal_status = format!("sent remote {} to terminal", part.label());
+            self.terminal.view.status = format!("sent remote {} to terminal", part.label());
             self.transfer.browser.status = truncate_preview(&value, 92);
             cx.notify();
         }
@@ -522,7 +522,7 @@ impl NyaTermApp {
     ) {
         let entries = self.selected_transfer_entries();
         if entries.is_empty() {
-            self.terminal_status = "mark remote items before downloading".to_string();
+            self.terminal.view.status = "mark remote items before downloading".to_string();
             cx.notify();
             return;
         }
@@ -544,7 +544,7 @@ impl NyaTermApp {
             };
             self.start_sftp_download_job_for_target(entry.path, local_path, window, cx);
         }
-        self.terminal_status = format!("{total} SFTP download job(s) started");
+        self.terminal.view.status = format!("{total} SFTP download job(s) started");
         cx.notify();
     }
 }

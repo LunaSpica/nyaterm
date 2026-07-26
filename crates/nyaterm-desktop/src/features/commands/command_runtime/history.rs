@@ -111,19 +111,19 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if self.active_session_id.is_none() {
-            self.terminal_status =
+            self.terminal.view.status =
                 "start a terminal session before using command search".to_string();
             cx.notify();
             return;
         }
         let Some(result) = self.command_search_results().into_iter().nth(index) else {
-            self.terminal_status = "command search result is no longer available".to_string();
+            self.terminal.view.status = "command search result is no longer available".to_string();
             cx.notify();
             return;
         };
         let mut command = result.command.trim().to_string();
         if command.is_empty() {
-            self.terminal_status = "command search result is empty".to_string();
+            self.terminal.view.status = "command search result is empty".to_string();
             cx.notify();
             return;
         }
@@ -131,7 +131,7 @@ impl NyaTermApp {
             command.push('\r');
         }
         self.send_terminal_input(command.into_bytes(), cx);
-        self.terminal_status = if execute {
+        self.terminal.view.status = if execute {
             format!("ran search result '{}'", result.display)
         } else {
             format!("inserted search result '{}'", result.display)
@@ -146,18 +146,18 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if self.active_session_id.is_none() {
-            self.terminal_status = "start a terminal session before using history".to_string();
+            self.terminal.view.status = "start a terminal session before using history".to_string();
             cx.notify();
             return;
         }
         let Some(command_text) = self.active_session_history_command(index) else {
-            self.terminal_status = "history command is no longer available".to_string();
+            self.terminal.view.status = "history command is no longer available".to_string();
             cx.notify();
             return;
         };
         let mut command = command_text.trim().to_string();
         if command.is_empty() {
-            self.terminal_status = "history command is empty".to_string();
+            self.terminal.view.status = "history command is empty".to_string();
             cx.notify();
             return;
         }
@@ -165,7 +165,7 @@ impl NyaTermApp {
             command.push('\r');
         }
         self.send_terminal_input(command.into_bytes(), cx);
-        self.terminal_status = if execute {
+        self.terminal.view.status = if execute {
             format!("ran history command '{command_text}'")
         } else {
             format!("inserted history command '{command_text}'")
@@ -457,7 +457,7 @@ impl NyaTermApp {
             }
             "escape" => {
                 self.command_search_draft.clear();
-                self.terminal_status = "command search cleared".to_string();
+                self.terminal.view.status = "command search cleared".to_string();
                 cx.notify();
             }
             _ => {

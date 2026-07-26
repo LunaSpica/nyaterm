@@ -243,13 +243,13 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn invalidate_terminal_cell_metrics(&mut self, cx: &mut Context<Self>) {
-        self.terminal_cell_metrics = None;
+        self.terminal.layout.cell_metrics = None;
         // Refresh the measured metrics before resizing the terminal. Using the
         // font-size fallback here makes the app and surface briefly disagree;
         // that is especially visible while scrolled or dragging a selection.
         self.refresh_terminal_cell_metrics(cx);
         self.sync_terminal_cell_metrics_to_screens();
-        for view in self.terminal_views.values_mut() {
+        for view in self.terminal.view.views.values_mut() {
             view.render_cache.clear();
         }
         self.resize_all_known_terminal_surfaces();
@@ -292,13 +292,13 @@ impl NyaTermApp {
         };
         self.settings.cursor_style = normalized.to_string();
         self.save_appearance_settings(cx);
-        self.terminal_status = format!("cursor style → {normalized}");
+        self.terminal.view.status = format!("cursor style → {normalized}");
     }
 
     pub(in crate::features) fn toggle_cursor_blink(&mut self, cx: &mut Context<Self>) {
         self.settings.cursor_blink = !self.settings.cursor_blink;
         self.save_appearance_settings(cx);
-        self.terminal_status = if self.settings.cursor_blink {
+        self.terminal.view.status = if self.settings.cursor_blink {
             "cursor blink on".to_string()
         } else {
             "cursor blink off".to_string()
@@ -318,7 +318,7 @@ impl NyaTermApp {
             }
         });
         self.save_appearance_settings(cx);
-        self.terminal_status = match self.settings.terminal_theme.as_deref() {
+        self.terminal.view.status = match self.settings.terminal_theme.as_deref() {
             Some(id) => format!("terminal theme → {id}"),
             None => "terminal theme → follow UI".to_string(),
         };
@@ -338,7 +338,7 @@ impl NyaTermApp {
         }
         self.settings.minimum_contrast_ratio = ratio.to_string();
         self.save_appearance_settings(cx);
-        self.terminal_status = format!("minimum contrast → {ratio}");
+        self.terminal.view.status = format!("minimum contrast → {ratio}");
     }
 
     pub(in crate::features) fn update_ui_font_family(
@@ -494,7 +494,7 @@ impl NyaTermApp {
             )),
         };
         let receiver = cx.prompt_for_paths(options);
-        self.terminal_status = "selecting wallpaper image".to_string();
+        self.terminal.view.status = "selecting wallpaper image".to_string();
         cx.spawn(async move |this, cx| {
             let path = match receiver.await {
                 Ok(Ok(Some(paths))) => paths.into_iter().next(),
@@ -507,9 +507,9 @@ impl NyaTermApp {
                         this.settings.background_image_fit = "cover".to_string();
                     }
                     this.save_appearance_settings(cx);
-                    this.terminal_status = "wallpaper image selected".to_string();
+                    this.terminal.view.status = "wallpaper image selected".to_string();
                 } else {
-                    this.terminal_status = "wallpaper selection cancelled".to_string();
+                    this.terminal.view.status = "wallpaper selection cancelled".to_string();
                     cx.notify();
                 }
             });
@@ -522,7 +522,7 @@ impl NyaTermApp {
         self.settings.background_image_path = None;
         self.appearance_menu_open = None;
         self.save_appearance_settings(cx);
-        self.terminal_status = "wallpaper cleared".to_string();
+        self.terminal.view.status = "wallpaper cleared".to_string();
     }
 
     pub(in crate::features) fn set_background_image_fit(
@@ -538,7 +538,7 @@ impl NyaTermApp {
         };
         self.settings.background_image_fit = normalized.to_string();
         self.save_appearance_settings(cx);
-        self.terminal_status = format!("wallpaper fit → {normalized}");
+        self.terminal.view.status = format!("wallpaper fit → {normalized}");
     }
 
     pub(in crate::features) fn set_background_image_opacity(
@@ -583,12 +583,12 @@ impl NyaTermApp {
                 self.refresh_visible_terminal_surfaces(cx);
                 self.store_status.message = "appearance settings saved".to_string();
                 self.store_status.ready = true;
-                self.terminal_status = "appearance settings saved".to_string();
+                self.terminal.view.status = "appearance settings saved".to_string();
             }
             Err(error) => {
                 self.store_status.message = format!("appearance settings save failed: {error}");
                 self.store_status.ready = false;
-                self.terminal_status = self.store_status.message.clone();
+                self.terminal.view.status = self.store_status.message.clone();
             }
         }
         cx.notify();

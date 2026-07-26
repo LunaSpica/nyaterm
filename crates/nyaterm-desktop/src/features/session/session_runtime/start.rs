@@ -61,7 +61,8 @@ impl NyaTermApp {
     ) {
         self.dismiss_connection_hover(cx);
         if self.saved_connection_start_is_pending_or_queued(&connection) {
-            self.terminal_status = format!("{} is already connecting or queued", connection.name);
+            self.terminal.view.status =
+                format!("{} is already connecting or queued", connection.name);
             self.selected_nav = NavItem::Workspace;
             self.main_mode = MainMode::Workspace;
             cx.notify();

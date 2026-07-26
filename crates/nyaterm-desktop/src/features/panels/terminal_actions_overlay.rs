@@ -36,9 +36,9 @@ impl NyaTermApp {
             .items_start()
             .justify_center()
             .pt(px(96.))
-            .track_focus(&self.terminal_actions_focus)
+            .track_focus(&self.terminal.menus.actions_focus)
             .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(&this.terminal_actions_focus);
+                window.focus(&this.terminal.menus.actions_focus);
                 cx.notify();
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
@@ -49,7 +49,7 @@ impl NyaTermApp {
                         if event.keystroke.modifiers.control
                             || event.keystroke.modifiers.platform =>
                     {
-                        this.terminal_actions_open = false;
+                        this.terminal.menus.actions_open = false;
                         this.paste_from_clipboard(window, cx);
                     }
                     "f" | "F"
@@ -148,7 +148,7 @@ impl NyaTermApp {
                                 self.tr("syncGroup.title"),
                                 self.tr("terminalActions.broadcastInput"),
                                 cx.listener(|this, _, window, cx| {
-                                    this.terminal_actions_open = false;
+                                    this.terminal.menus.actions_open = false;
                                     this.open_sync_groups(window, cx);
                                 }),
                             ))
@@ -158,7 +158,7 @@ impl NyaTermApp {
                                 self.tr("terminalCtx.paste"),
                                 self.tr("terminalActions.clipboardText"),
                                 cx.listener(|this, _, window, cx| {
-                                    this.terminal_actions_open = false;
+                                    this.terminal.menus.actions_open = false;
                                     this.paste_from_clipboard(window, cx);
                                 }),
                             ))
@@ -177,7 +177,7 @@ impl NyaTermApp {
                                 self.tr("terminalCtx.clearAll"),
                                 self.tr("terminalActions.dropBuffer"),
                                 cx.listener(|this, _, _, cx| {
-                                    this.terminal_actions_open = false;
+                                    this.terminal.menus.actions_open = false;
                                     this.clear_terminal(cx);
                                 }),
                             ))
@@ -187,7 +187,7 @@ impl NyaTermApp {
                                 self.tr("terminalActions.tempSsh"),
                                 self.tr("terminalActions.pasteLink"),
                                 cx.listener(|this, _, window, cx| {
-                                    this.terminal_actions_open = false;
+                                    this.terminal.menus.actions_open = false;
                                     this.open_temporary_ssh_link_dialog(window, cx);
                                 }),
                             )),
@@ -206,9 +206,9 @@ impl NyaTermApp {
                                         self.tr("translation.title"),
                                         self.tr("terminalActions.visibleScreen"),
                                         cx.listener(move |this, _, window, cx| {
-                                            this.terminal_actions_open = false;
+                                            this.terminal.menus.actions_open = false;
                                             if visible_for_translate.trim().is_empty() {
-                                                this.terminal_status =
+                                                this.terminal.view.status =
                                                     "terminal visible screen is empty".to_string();
                                             } else {
                                                 let provider = this.translate_provider.clone();
@@ -245,7 +245,7 @@ impl NyaTermApp {
                                         self.tr("ai.title"),
                                         self.tr("terminalActions.visibleScreen"),
                                         cx.listener(move |this, _, window, cx| {
-                                            this.terminal_actions_open = false;
+                                            this.terminal.menus.actions_open = false;
                                             if visible_for_ai.trim().is_empty() {
                                                 this.ai.panel.status =
                                                     "terminal visible screen is empty".to_string();
@@ -272,7 +272,7 @@ impl NyaTermApp {
                                         self.tr("terminalActions.aiBuffer"),
                                         self.tr("terminalActions.bufferContext"),
                                         cx.listener(move |this, _, window, cx| {
-                                            this.terminal_actions_open = false;
+                                            this.terminal.menus.actions_open = false;
                                             if buffer_for_ai.trim().is_empty() {
                                                 this.ai.panel.status =
                                                     "terminal buffer is empty".to_string();
@@ -297,7 +297,7 @@ impl NyaTermApp {
                                 self.tr("terminalActions.sendPanel"),
                                 self.tr("terminalActions.bottomSender"),
                                 cx.listener(|this, _, window, cx| {
-                                    this.terminal_actions_open = false;
+                                    this.terminal.menus.actions_open = false;
                                     this.set_bottom_panel_mode(BottomPanelMode::CommandSend);
                                     window.focus(&this.send_command_focus);
                                     cx.notify();
@@ -316,9 +316,9 @@ impl NyaTermApp {
                                 self.tr("suggestions.title"),
                                 self.tr("terminalActions.commandHistory"),
                                 cx.listener(|this, _, window, cx| {
-                                    this.terminal_actions_open = false;
+                                    this.terminal.menus.actions_open = false;
                                     window.focus(&this.command_search_focus);
-                                    this.terminal_status =
+                                    this.terminal.view.status =
                                         "command history search focused".to_string();
                                     cx.notify();
                                 }),
@@ -329,7 +329,7 @@ impl NyaTermApp {
                                 self.tr("quickCommands.title"),
                                 self.tr("terminalActions.quickCommands"),
                                 cx.listener(|this, _, _, cx| {
-                                    this.terminal_actions_open = false;
+                                    this.terminal.menus.actions_open = false;
                                     this.set_bottom_panel_mode(BottomPanelMode::QuickCommands);
                                     cx.notify();
                                 }),
@@ -340,7 +340,7 @@ impl NyaTermApp {
                                 self.tr("terminalActions.recording"),
                                 self.tr("terminalActions.sessionLog"),
                                 cx.listener(|this, _, _, cx| {
-                                    this.terminal_actions_open = false;
+                                    this.terminal.menus.actions_open = false;
                                     this.right_focus = RightFocus::Recording;
                                     cx.notify();
                                 }),
@@ -351,7 +351,7 @@ impl NyaTermApp {
                                 self.tr("tabCtx.sessionInfo"),
                                 self.tr("terminalActions.sessionDetails"),
                                 cx.listener(|this, _, window, cx| {
-                                    this.terminal_actions_open = false;
+                                    this.terminal.menus.actions_open = false;
                                     this.open_active_session_info(window, cx);
                                 }),
                             )),

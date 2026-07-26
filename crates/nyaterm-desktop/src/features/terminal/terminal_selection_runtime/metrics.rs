@@ -6,11 +6,13 @@ use nyaterm_core::TerminalViewportInsets;
 impl NyaTermApp {
     pub(in crate::features) fn terminal_cell_size(&self) -> (f32, f32) {
         let (cell_w, cell_h) = self
-            .terminal_cell_metrics
+            .terminal
+            .layout
+            .cell_metrics
             .unwrap_or_else(|| self.fallback_terminal_cell_size());
         (
             cell_w,
-            nyaterm_core::terminal_snapped_cell_height(cell_h, self.terminal_scale_factor),
+            nyaterm_core::terminal_snapped_cell_height(cell_h, self.terminal.layout.scale_factor),
         )
     }
 
@@ -52,8 +54,8 @@ impl NyaTermApp {
         };
         let cell_w = measured_w.unwrap_or_else(|| (font_size * CELL_WIDTH_RATIO).max(4.));
         let next = (cell_w, cell_h);
-        if self.terminal_cell_metrics != Some(next) {
-            self.terminal_cell_metrics = Some(next);
+        if self.terminal.layout.cell_metrics != Some(next) {
+            self.terminal.layout.cell_metrics = Some(next);
         }
     }
 
@@ -134,7 +136,7 @@ impl NyaTermApp {
         let rows = self.terminal_viewport_rows_for_session(session_id);
         let cols = session_id
             .filter(|id| !id.is_empty())
-            .and_then(|id| self.terminal_views.get(id))
+            .and_then(|id| self.terminal.view.views.get(id))
             .map(|view| view.screen.cols())
             .unwrap_or_else(|| {
                 let offset = self.terminal_display_offset_for_session(session_id);
@@ -151,7 +153,9 @@ impl NyaTermApp {
     ) -> TerminalViewportInsets {
         let session_id = session_id.filter(|id| !id.is_empty());
         if session_id.is_some_and(|id| {
-            self.terminal_session_surface_bounds
+            self.terminal
+                .layout
+                .session_surface_bounds
                 .get(id)
                 .is_some_and(|tracked| *tracked == bounds)
         }) {
@@ -170,11 +174,11 @@ impl NyaTermApp {
     ) -> usize {
         let session_id = session_id.filter(|id| !id.is_empty());
         if let Some(session_id) = session_id
-            && let Some(view) = self.terminal_views.get(session_id)
+            && let Some(view) = self.terminal.view.views.get(session_id)
         {
             return view.viewport_rows_for_ui();
         }
-        self.terminal_screen.rows().max(1)
+        self.terminal.view.screen.rows().max(1)
     }
 
     pub(in crate::features) fn terminal_scrollback_len_for_session(
@@ -183,11 +187,11 @@ impl NyaTermApp {
     ) -> usize {
         let session_id = session_id.filter(|id| !id.is_empty());
         if let Some(session_id) = session_id
-            && let Some(view) = self.terminal_views.get(session_id)
+            && let Some(view) = self.terminal.view.views.get(session_id)
         {
             return view.scrollback_len_for_ui();
         }
-        self.terminal_screen.scrollback_len()
+        self.terminal.view.screen.scrollback_len()
     }
 
     pub(in crate::features) fn terminal_snapshot_row_for_session_viewport_row(
@@ -231,8 +235,8 @@ impl NyaTermApp {
     ) -> Option<TerminalHitTestGeometry> {
         let session_id = session_id.filter(|id| !id.is_empty());
         let bounds = session_id
-            .and_then(|id| self.terminal_session_surface_bounds.get(id).copied())
-            .or(self.terminal_surface_bounds)?;
+            .and_then(|id| self.terminal.layout.session_surface_bounds.get(id).copied())
+            .or(self.terminal.layout.surface_bounds)?;
         let (cell_w, cell_h) = self.terminal_cell_size();
         let insets = self.terminal_content_insets_for_bounds(session_id, bounds);
         let gutter = self.terminal_gutter_width_px_for_session(session_id);
@@ -248,7 +252,7 @@ impl NyaTermApp {
             scrollback_len,
         );
         let scroll_geometry = session_id
-            .and_then(|session_id| self.terminal_surfaces.get(session_id))
+            .and_then(|session_id| self.terminal.view.surfaces.get(session_id))
             .and_then(|surface| surface.read(cx).hit_test_scroll_geometry())
             .unwrap_or(TerminalSurfaceHitTestScrollGeometry {
                 snapshot_pending: false,
@@ -257,7 +261,9 @@ impl NyaTermApp {
                 viewport_anchor_row: fallback_viewport_anchor_row,
             });
         let (scroll_offset, residual_lines) = if let Some(session_id) = session_id {
-            self.terminal_views
+            self.terminal
+                .view
+                .views
                 .get(session_id)
                 .map(|view| {
                     (
@@ -268,7 +274,7 @@ impl NyaTermApp {
                 .unwrap_or((target_display_offset, 0.0))
         } else {
             (
-                self.terminal_scroll_offset,
+                self.terminal.view.scroll_offset,
                 self.terminal_scroll_residual_for_session(None),
             )
         };
@@ -299,7 +305,7 @@ impl NyaTermApp {
 
     /// Capture painted bounds for hit-testing; called from a canvas prepaint under the output area.
     pub(in crate::features) fn remember_terminal_surface_bounds(&mut self, bounds: Bounds<Pixels>) {
-        self.terminal_surface_bounds = Some(bounds);
+        self.terminal.layout.surface_bounds = Some(bounds);
     }
 
     /// Capture painted bounds for a specific terminal pane and keep that pane's
@@ -314,7 +320,9 @@ impl NyaTermApp {
             self.remember_terminal_surface_bounds(bounds);
         }
         if let Some(session_id) = session_id {
-            self.terminal_session_surface_bounds
+            self.terminal
+                .layout
+                .session_surface_bounds
                 .insert(session_id.to_string(), bounds);
             self.resize_terminal_to_bounds_for_session(Some(session_id), bounds)
         } else {
@@ -329,7 +337,7 @@ impl NyaTermApp {
         scale_factor: f32,
         cx: &mut Context<Self>,
     ) {
-        self.terminal_scale_factor = if scale_factor.is_finite() {
+        self.terminal.layout.scale_factor = if scale_factor.is_finite() {
             scale_factor.max(1e-3)
         } else {
             1.0

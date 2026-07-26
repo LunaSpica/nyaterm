@@ -180,7 +180,7 @@ impl NyaTermApp {
                 self.refresh_security_catalog();
                 self.security.editors.password = None;
                 self.security.status = format!("password saved ({})", compact_id(&id));
-                self.terminal_status = "password saved".to_string();
+                self.terminal.view.status = "password saved".to_string();
             }
             Err(error) => {
                 if let Some(editor) = self.security.editors.password.as_mut() {

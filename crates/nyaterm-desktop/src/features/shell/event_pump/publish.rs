@@ -17,7 +17,7 @@ impl NyaTermApp {
         if !include_sideband && self.published_core_store_snapshots_are_current(cx) {
             return;
         }
-        self.terminal_runtime.last_store_snapshot_publish_at = Some(Instant::now());
+        self.terminal.view.runtime.last_store_snapshot_publish_at = Some(Instant::now());
 
         let workspace = crate::entities::WorkspaceSnapshot {
             active_session_id: self.active_session_id.clone(),
@@ -39,7 +39,7 @@ impl NyaTermApp {
             left_sidebar_collapsed: self.left_sidebar_collapsed,
             right_inspector_collapsed: self.right_inspector_collapsed,
             workspace_split_active: self.workspace_split.is_some(),
-            terminal_windows_active: self.terminal_windows.is_some(),
+            terminal_windows_active: self.terminal.windows.tree.is_some(),
         };
 
         // Prefer local metadata over SessionManager::list_sessions so publish
@@ -57,7 +57,7 @@ impl NyaTermApp {
             ordered_session_ids: self.session_order.clone(),
             live_session_ids,
             metadata_count: self.session_metadata.len(),
-            terminal_view_count: self.terminal_views.len(),
+            terminal_view_count: self.terminal.view.views.len(),
             pending_start_count,
             host_prompt_active: self.active_host_key_prompt.is_some(),
             credential_prompt_active: self.active_credential_prompt.is_some()
@@ -73,8 +73,8 @@ impl NyaTermApp {
             startup_command_open: self.startup_command_open,
             temporary_ssh_link_open: self.temporary_ssh_link_open,
             multi_line_paste_open: self.multi_line_paste.is_some(),
-            terminal_actions_open: self.terminal_actions_open,
-            terminal_context_menu_open: self.terminal_context_menu.is_some(),
+            terminal_actions_open: self.terminal.menus.actions_open,
+            terminal_context_menu_open: self.terminal.menus.context_menu.is_some(),
             action_link_menu_open: self.action_link_menu.is_some(),
             action_link_tooltip_open: self.action_link_tooltip.is_some(),
             command_suggestions_open: self.command_suggestions.is_some(),
@@ -243,7 +243,7 @@ impl NyaTermApp {
             && snapshot.left_sidebar_collapsed == self.left_sidebar_collapsed
             && snapshot.right_inspector_collapsed == self.right_inspector_collapsed
             && snapshot.workspace_split_active == self.workspace_split.is_some()
-            && snapshot.terminal_windows_active == self.terminal_windows.is_some()
+            && snapshot.terminal_windows_active == self.terminal.windows.tree.is_some()
     }
 
     fn session_store_snapshot_is_current(&self, store: &crate::entities::SessionStore) -> bool {
@@ -264,7 +264,7 @@ impl NyaTermApp {
                 .filter(|(_, metadata)| !metadata.disconnected)
                 .all(|(session_id, _)| store.is_live(session_id))
             && snapshot.metadata_count == self.session_metadata.len()
-            && snapshot.terminal_view_count == self.terminal_views.len()
+            && snapshot.terminal_view_count == self.terminal.view.views.len()
             && snapshot.pending_start_count
                 == self.pending_session_starts.len() + self.pending_saved_connection_queue.len()
             && snapshot.host_prompt_active == self.active_host_key_prompt.is_some()
@@ -282,8 +282,8 @@ impl NyaTermApp {
             && snapshot.startup_command_open == self.startup_command_open
             && snapshot.temporary_ssh_link_open == self.temporary_ssh_link_open
             && snapshot.multi_line_paste_open == self.multi_line_paste.is_some()
-            && snapshot.terminal_actions_open == self.terminal_actions_open
-            && snapshot.terminal_context_menu_open == self.terminal_context_menu.is_some()
+            && snapshot.terminal_actions_open == self.terminal.menus.actions_open
+            && snapshot.terminal_context_menu_open == self.terminal.menus.context_menu.is_some()
             && snapshot.action_link_menu_open == self.action_link_menu.is_some()
             && snapshot.action_link_tooltip_open == self.action_link_tooltip.is_some()
             && snapshot.command_suggestions_open == self.command_suggestions.is_some()

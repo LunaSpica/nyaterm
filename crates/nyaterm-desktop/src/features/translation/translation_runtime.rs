@@ -435,12 +435,12 @@ impl NyaTermApp {
                         result.original.chars().count(),
                         result.detected_language
                     );
-                    self.terminal_status = self.translate_status.clone();
+                    self.terminal.view.status = self.translate_status.clone();
                     self.translate_result = Some(result);
                 }
                 Err(error) => {
                     self.translate_status = format!("translation failed: {error}");
-                    self.terminal_status = self.translate_status.clone();
+                    self.terminal.view.status = self.translate_status.clone();
                 }
             }
         }

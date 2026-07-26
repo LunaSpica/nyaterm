@@ -37,7 +37,7 @@ pub(in crate::features) fn terminal_bounds_tracker(
                 .read(cx)
                 .terminal_surface_bounds_for_session(session_id.as_deref())
                 .is_some_and(|previous| previous == bounds);
-            if unchanged && bounds_entity.read(cx).terminal_scale_factor == scale_factor {
+            if unchanged && bounds_entity.read(cx).terminal.layout.scale_factor == scale_factor {
                 return;
             }
             // Defer mutation so we never re-enter the entity while layout/prepaint is running.
@@ -58,7 +58,7 @@ pub(in crate::features) fn terminal_bounds_tracker(
             if !active {
                 return;
             }
-            let focus = input_entity.read(cx).terminal_focus.clone();
+            let focus = input_entity.read(cx).terminal.input.focus.clone();
             if input_entity
                 .read(cx)
                 .settings
@@ -166,14 +166,14 @@ impl EntityInputHandler for NyaTermApp {
             *adjusted_range = Some(start..end);
             return Some(marked.clone());
         }
-        if self.terminal_ime_marked_text.is_empty() {
+        if self.terminal.input.ime_marked_text.is_empty() {
             return None;
         }
-        let len = self.terminal_ime_marked_text.encode_utf16().count();
+        let len = self.terminal.input.ime_marked_text.encode_utf16().count();
         let start = range.start.min(len);
         let end = range.end.min(len).max(start);
         *adjusted_range = Some(start..end);
-        Some(self.terminal_ime_marked_text.clone())
+        Some(self.terminal.input.ime_marked_text.clone())
     }
 
     fn selected_text_range(
@@ -303,7 +303,7 @@ impl EntityInputHandler for NyaTermApp {
             let len = self.startup_command_marked_text.encode_utf16().count();
             return (len > 0).then_some(0..len);
         }
-        let len = self.terminal_ime_marked_text.encode_utf16().count();
+        let len = self.terminal.input.ime_marked_text.encode_utf16().count();
         (len > 0).then_some(0..len)
     }
 
@@ -345,7 +345,7 @@ impl EntityInputHandler for NyaTermApp {
             self.startup_command_marked_text.clear();
             return;
         }
-        self.terminal_ime_marked_text.clear();
+        self.terminal.input.ime_marked_text.clear();
     }
 
     fn replace_text_in_range(
@@ -431,7 +431,7 @@ impl EntityInputHandler for NyaTermApp {
             cx.notify();
             return;
         }
-        self.terminal_ime_marked_text.clear();
+        self.terminal.input.ime_marked_text.clear();
         if !text.is_empty() {
             if let Some(selected) = self.smart_cursor_selected_input_range() {
                 if self.replace_smart_input_selection(selected, text, cx) {
@@ -439,7 +439,7 @@ impl EntityInputHandler for NyaTermApp {
                 }
             }
             let bytes = text.as_bytes().to_vec();
-            let has_buffer_selection = self.terminal_selection.is_some()
+            let has_buffer_selection = self.terminal.selection.selection.is_some()
                 && self.smart_cursor_selected_input_range().is_none();
             if has_buffer_selection {
                 self.send_terminal_input_without_suggestion_track(bytes, cx);
@@ -519,7 +519,7 @@ impl EntityInputHandler for NyaTermApp {
             cx.notify();
             return;
         }
-        self.terminal_ime_marked_text = new_text.to_string();
+        self.terminal.input.ime_marked_text = new_text.to_string();
         cx.notify();
     }
 

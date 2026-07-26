@@ -118,10 +118,10 @@ impl NyaTermApp {
                     }),
                     cx.listener(move |this, _, _, cx| {
                         if copy_message.trim().is_empty() {
-                            this.terminal_status = "history entry has no message".to_string();
+                            this.terminal.view.status = "history entry has no message".to_string();
                         } else {
                             cx.write_to_clipboard(ClipboardItem::new_string(copy_message.clone()));
-                            this.terminal_status = "sync history message copied".to_string();
+                            this.terminal.view.status = "sync history message copied".to_string();
                         }
                         cx.notify();
                     }),

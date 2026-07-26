@@ -122,11 +122,11 @@ impl NyaTermApp {
             self.active_session_id.as_deref(),
             !self.connection_saved_credentials.is_empty()
                 || self.credential_autofill_pending.is_some(),
-            self.terminal_runtime.session_event_queued_output_bytes,
+            self.terminal.view.runtime.session_event_queued_output_bytes,
             self.pending_session_events.len(),
             self.pending_terminal_frame_events.len(),
-            self.terminal_frame_pipeline.queued_event_count(),
-            self.terminal_frame_pipeline.queued_output_bytes(),
+            self.terminal.view.frame_pipeline.queued_event_count(),
+            self.terminal.view.frame_pipeline.queued_output_bytes(),
             self.credential_autofill_pending_request.is_some(),
         ) {
             dirty |= self.sync_credential_autofill_from_active_snapshot(cx);
@@ -136,11 +136,11 @@ impl NyaTermApp {
             credential_autofill_pending_detection_can_run(
                 self.active_session_id.as_deref(),
                 self.credential_autofill_detection_pending,
-                self.terminal_runtime.session_event_queued_output_bytes,
+                self.terminal.view.runtime.session_event_queued_output_bytes,
                 self.pending_session_events.len(),
                 self.pending_terminal_frame_events.len(),
-                self.terminal_frame_pipeline.queued_event_count(),
-                self.terminal_frame_pipeline.queued_output_bytes(),
+                self.terminal.view.frame_pipeline.queued_event_count(),
+                self.terminal.view.frame_pipeline.queued_output_bytes(),
                 self.credential_autofill_pending_request.is_some(),
             ),
         ) {
@@ -156,7 +156,9 @@ impl NyaTermApp {
             return false;
         };
         let Some(prompt_text) = self
-            .terminal_views
+            .terminal
+            .view
+            .views
             .get(&session_id)
             .and_then(|view| view.frame_snapshot.as_deref())
             .and_then(credential_autofill_prompt_text_from_snapshot)
@@ -353,7 +355,7 @@ impl NyaTermApp {
             return;
         }
         if self.is_session_disconnected(session_id) {
-            self.terminal_status =
+            self.terminal.view.status =
                 "session disconnected - reconnect before filling credentials".to_string();
             cx.notify();
             return;
@@ -366,12 +368,12 @@ impl NyaTermApp {
                 let mut payload = credential.username.clone();
                 payload.push('\r');
                 self.send_terminal_input_without_suggestion_track(payload.into_bytes(), cx);
-                self.terminal_status = format!("filled username from '{}'", credential.name);
+                self.terminal.view.status = format!("filled username from '{}'", credential.name);
             }
             CredentialPromptKind::Password => {
                 let password = self.decrypt_saved_credential_password(&credential.id);
                 let Some(password) = password.filter(|value| !value.is_empty()) else {
-                    self.terminal_status =
+                    self.terminal.view.status =
                         format!("credential '{}' has no password", credential.name);
                     cx.notify();
                     return;
@@ -379,7 +381,7 @@ impl NyaTermApp {
                 let mut payload = password;
                 payload.push('\r');
                 self.send_terminal_input_without_suggestion_track(payload.into_bytes(), cx);
-                self.terminal_status = format!("filled password from '{}'", credential.name);
+                self.terminal.view.status = format!("filled password from '{}'", credential.name);
             }
         }
         cx.notify();

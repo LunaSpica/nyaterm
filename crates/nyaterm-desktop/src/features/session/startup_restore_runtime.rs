@@ -18,7 +18,7 @@ impl NyaTermApp {
         if !self.settings.startup_restore {
             return;
         }
-        self.terminal_runtime.open_tabs_persist_dirty = true;
+        self.terminal.view.runtime.open_tabs_persist_dirty = true;
         // Keep multi-leaf layout indexes aligned with the same ordered tab list.
         self.persist_terminal_window_layout();
     }
@@ -26,12 +26,12 @@ impl NyaTermApp {
     /// Force a durable open-tabs write (window close / explicit quit paths).
     pub(in crate::features) fn flush_open_tabs_now(&mut self) {
         if !self.settings.startup_restore {
-            self.terminal_runtime.open_tabs_persist_dirty = false;
-            self.terminal_runtime.window_layout_persist_dirty = false;
+            self.terminal.view.runtime.open_tabs_persist_dirty = false;
+            self.terminal.view.runtime.window_layout_persist_dirty = false;
             return;
         }
-        self.terminal_runtime.open_tabs_persist_dirty = true;
-        self.terminal_runtime.window_layout_persist_dirty = true;
+        self.terminal.view.runtime.open_tabs_persist_dirty = true;
+        self.terminal.view.runtime.window_layout_persist_dirty = true;
         self.flush_pending_session_persistence_sync();
     }
 
@@ -42,12 +42,12 @@ impl NyaTermApp {
     /// and the first idle frame after connect.
     pub(in crate::features) fn flush_pending_session_persistence(&mut self) {
         if !self.settings.startup_restore {
-            self.terminal_runtime.open_tabs_persist_dirty = false;
-            self.terminal_runtime.window_layout_persist_dirty = false;
+            self.terminal.view.runtime.open_tabs_persist_dirty = false;
+            self.terminal.view.runtime.window_layout_persist_dirty = false;
             return;
         }
-        let need_tabs = self.terminal_runtime.open_tabs_persist_dirty;
-        let need_layout = self.terminal_runtime.window_layout_persist_dirty
+        let need_tabs = self.terminal.view.runtime.open_tabs_persist_dirty;
+        let need_layout = self.terminal.view.runtime.window_layout_persist_dirty
             && self.settings.startup_restore_window_layout;
         if !need_tabs && !need_layout {
             return;
@@ -61,7 +61,9 @@ impl NyaTermApp {
                 .map(|session| session.id)
                 .collect::<Vec<_>>();
             Some(
-                self.terminal_windows
+                self.terminal
+                    .windows
+                    .tree
                     .as_ref()
                     .filter(|_| self.terminal_windows_is_multi_leaf())
                     .and_then(|root| root.serialize_layout(&ordered)),
@@ -73,10 +75,10 @@ impl NyaTermApp {
         // Clear dirty before spawn so repeated idle ticks do not re-queue while
         // the worker is still writing. Window-close uses the sync path below.
         if need_tabs {
-            self.terminal_runtime.open_tabs_persist_dirty = false;
+            self.terminal.view.runtime.open_tabs_persist_dirty = false;
         }
         if need_layout {
-            self.terminal_runtime.window_layout_persist_dirty = false;
+            self.terminal.view.runtime.window_layout_persist_dirty = false;
         }
 
         let config_dir = self.runtime.config_dir().to_path_buf();
@@ -118,12 +120,12 @@ impl NyaTermApp {
     /// Synchronous durable write used by window-close / quit (must not race exit).
     fn flush_pending_session_persistence_sync(&mut self) {
         if !self.settings.startup_restore {
-            self.terminal_runtime.open_tabs_persist_dirty = false;
-            self.terminal_runtime.window_layout_persist_dirty = false;
+            self.terminal.view.runtime.open_tabs_persist_dirty = false;
+            self.terminal.view.runtime.window_layout_persist_dirty = false;
             return;
         }
-        let need_tabs = self.terminal_runtime.open_tabs_persist_dirty;
-        let need_layout = self.terminal_runtime.window_layout_persist_dirty
+        let need_tabs = self.terminal.view.runtime.open_tabs_persist_dirty;
+        let need_layout = self.terminal.view.runtime.window_layout_persist_dirty
             && self.settings.startup_restore_window_layout;
         if !need_tabs && !need_layout {
             return;
@@ -137,7 +139,9 @@ impl NyaTermApp {
                 .map(|session| session.id)
                 .collect::<Vec<_>>();
             Some(
-                self.terminal_windows
+                self.terminal
+                    .windows
+                    .tree
                     .as_ref()
                     .filter(|_| self.terminal_windows_is_multi_leaf())
                     .and_then(|root| root.serialize_layout(&ordered)),
@@ -152,23 +156,25 @@ impl NyaTermApp {
             Ok(store) => {
                 if let Some(tabs) = tabs.as_ref() {
                     match store.save_open_tabs(tabs) {
-                        Ok(()) => self.terminal_runtime.open_tabs_persist_dirty = false,
+                        Ok(()) => self.terminal.view.runtime.open_tabs_persist_dirty = false,
                         Err(error) => {
-                            self.terminal_status = format!("failed to save open tabs: {error}");
+                            self.terminal.view.status =
+                                format!("failed to save open tabs: {error}");
                         }
                     }
                 }
                 if let Some(layout) = layout.as_ref() {
                     match store.save_terminal_window_layout(layout.as_ref()) {
-                        Ok(()) => self.terminal_runtime.window_layout_persist_dirty = false,
+                        Ok(()) => self.terminal.view.runtime.window_layout_persist_dirty = false,
                         Err(error) => {
-                            self.terminal_status = format!("failed to save window layout: {error}");
+                            self.terminal.view.status =
+                                format!("failed to save window layout: {error}");
                         }
                     }
                 }
             }
             Err(error) => {
-                self.terminal_status = format!("failed to open config store: {error}");
+                self.terminal.view.status = format!("failed to open config store: {error}");
             }
         }
     }
@@ -402,7 +408,7 @@ impl NyaTermApp {
             }
             store.set_queue(expanded);
         });
-        self.terminal_status = format!("restoring {} workspace tab(s)...", queue_len);
+        self.terminal.view.status = format!("restoring {} workspace tab(s)...", queue_len);
         self.pump_startup_restore_queue(window, cx);
     }
 
@@ -447,7 +453,7 @@ impl NyaTermApp {
         }
         self.mark_startup_restore_complete(cx);
         // After all tabs reconnect, attempt multi-leaf then global pane layout restore.
-        self.terminal_windows_restored = false;
+        self.terminal.windows.restored = false;
         self.workspace_pane_layout_restored = false;
         self.try_restore_terminal_window_layout();
         // Prefer stored ui.workspace_pane_layout only when no open_tabs per-tab roots exist.
@@ -481,16 +487,16 @@ impl NyaTermApp {
             }
         }
         if self.terminal_windows_is_multi_leaf() {
-            self.terminal_status = "restored workspace tabs and window layout".to_string();
+            self.terminal.view.status = "restored workspace tabs and window layout".to_string();
         } else if !self.session_pane_roots.is_empty()
             || self
                 .workspace_split
                 .as_ref()
                 .is_some_and(|root| root.is_split())
         {
-            self.terminal_status = "restored workspace tabs and pane layout".to_string();
+            self.terminal.view.status = "restored workspace tabs and pane layout".to_string();
         } else if !self.ordered_sessions().is_empty() {
-            self.terminal_status = "restored workspace tabs".to_string();
+            self.terminal.view.status = "restored workspace tabs".to_string();
         }
         if !self.ordered_sessions().is_empty() {
             self.persist_open_tabs();
@@ -518,7 +524,7 @@ impl NyaTermApp {
                 .find(|connection| &connection.id == connection_id)
                 .cloned();
             let Some(connection) = connection else {
-                self.terminal_status =
+                self.terminal.view.status =
                     format!("restore skipped missing connection {connection_id}");
                 return false;
             };
@@ -554,7 +560,7 @@ impl NyaTermApp {
             return true;
         }
 
-        self.terminal_status = format!(
+        self.terminal.view.status = format!(
             "restore skipped unsupported tab {} ({})",
             tab.title, tab.session_type
         );
@@ -598,7 +604,7 @@ impl NyaTermApp {
         self.workspace_pane_layout_restored = true;
         self.selected_nav = NavItem::Workspace;
         self.main_mode = MainMode::Workspace;
-        self.terminal_status = "restored pane layout from open_tabs root".to_string();
+        self.terminal.view.status = "restored pane layout from open_tabs root".to_string();
     }
 }
 

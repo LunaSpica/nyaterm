@@ -36,7 +36,7 @@ impl NyaTermApp {
             start_x: event.position.x,
             start_width,
         });
-        self.terminal_status = match side {
+        self.terminal.view.status = match side {
             PanelResizeSide::Left => "resizing left panel".to_string(),
             PanelResizeSide::Right => "resizing right panel".to_string(),
         };
@@ -56,13 +56,13 @@ impl NyaTermApp {
         match state.side {
             PanelResizeSide::Left => {
                 self.left_panel_width = (start + delta).clamp(LEFT_PANEL_MIN, LEFT_PANEL_MAX);
-                self.terminal_status =
+                self.terminal.view.status =
                     format!("left panel: {:.0}px", self.left_panel_width.round());
             }
             PanelResizeSide::Right => {
                 // Right handle sits on the left edge of the right panel: drag left grows width.
                 self.right_panel_width = (start - delta).clamp(RIGHT_PANEL_MIN, RIGHT_PANEL_MAX);
-                self.terminal_status =
+                self.terminal.view.status =
                     format!("right panel: {:.0}px", self.right_panel_width.round());
             }
         }
@@ -76,7 +76,7 @@ impl NyaTermApp {
     ) {
         if self.panel_resize.take().is_some() {
             self.persist_panel_widths();
-            self.terminal_status = format!(
+            self.terminal.view.status = format!(
                 "panel sizes L{:.0}/R{:.0}",
                 self.left_panel_width.round(),
                 self.right_panel_width.round()
@@ -213,7 +213,7 @@ impl NyaTermApp {
             start_y: event.position.y,
             start_height: px(self.transfer.panel.height),
         });
-        self.terminal_status = "resizing transfer queue".to_string();
+        self.terminal.view.status = "resizing transfer queue".to_string();
         cx.notify();
     }
 
@@ -236,7 +236,7 @@ impl NyaTermApp {
         // shrinks FE / grows transfer? Handle is between FE and transfer; drag down => FE larger,
         // transfer smaller => height decreases with positive delta. So: start - delta.
         self.transfer.panel.height = (start - delta).clamp(60., 600.);
-        self.terminal_status = format!(
+        self.terminal.view.status = format!(
             "transfer queue: {:.0}px",
             self.transfer.panel.height.round()
         );
@@ -250,7 +250,7 @@ impl NyaTermApp {
     ) {
         if self.transfer.panel.height_resize.take().is_some() {
             self.persist_ui_layout();
-            self.terminal_status =
+            self.terminal.view.status =
                 format!("transfer queue {:.0}px", self.transfer.panel.height.round());
             cx.notify();
         }
@@ -295,7 +295,7 @@ impl NyaTermApp {
             start_y: event.position.y,
             start_height: px(start_height),
         });
-        self.terminal_status = "resizing bottom panel".to_string();
+        self.terminal.view.status = "resizing bottom panel".to_string();
         cx.notify();
     }
 
@@ -321,7 +321,7 @@ impl NyaTermApp {
             BottomPanelMode::CommandSend => self.serial_send_height = next,
             BottomPanelMode::Hidden => return,
         }
-        self.terminal_status = format!("bottom panel: {:.0}px", next.round());
+        self.terminal.view.status = format!("bottom panel: {:.0}px", next.round());
         cx.notify();
     }
 
@@ -332,7 +332,7 @@ impl NyaTermApp {
     ) {
         if self.bottom_panel_resize.take().is_some() {
             self.persist_ui_layout();
-            self.terminal_status = "bottom panel size saved".to_string();
+            self.terminal.view.status = "bottom panel size saved".to_string();
             cx.notify();
         }
     }
