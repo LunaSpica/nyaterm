@@ -37,6 +37,35 @@ these as staged extraction candidates, not as formatting-only refactor targets.
 
 ## Completed
 
+- Text inputs are real widgets, not label divs. `nyaterm-ui::TextField` owns the
+  caret, selection, IME composition and clipboard for a box; `nyaterm-core`'s
+  `TextEdit` owns the editing model behind it. Panels reach it either by holding
+  their own entities (the connection editor) or through the id-keyed registry in
+  `features/text_inputs.rs`, which creates a field the first time a panel renders
+  one and routes edits back by id prefix. Converted so far: the connection
+  editor, the saved-connections filter, the settings search-engine editor, all
+  three network dialogs, the quick command editor and the SFTP new-folder
+  dialog. **22 `transfer_input(..)` call sites remain** — each is a label div
+  over a draft string with a hand-written key handler, and each still needs the
+  same treatment.
+
+  Three GPUI behaviours make this migration go wrong in ways that are invisible
+  until you drive the UI:
+
+  - A surface that grabs focus on click (`.on_click(|| window.focus(&own))`)
+    takes it straight back off whichever field the pointer landed on, because
+    click follows mouse-down. Every converted dialog had one and every one had
+    to lose it.
+  - A wrapped field asks for its parent's height (`relative(1.)`). The box that
+    hosts it needs a *definite* height and must not set `items_start`, or the
+    percentage resolves against an indefinite value, the field lays out at zero
+    height, and the box renders as an empty rectangle that cannot even be
+    clicked.
+  - `Div::text_ellipsis()` and `overflow_hidden()` do not stop text wrapping.
+    Without `whitespace_nowrap()` a one-row label lays itself out as a column
+    and shows whichever line lands in the row — a session tab read "ste", out of
+    the middle of "System32".
+
 - Icon assets are no longer hand-drawn approximations. The migration had redrawn
   ~113 SVGs by hand in a thin-stroke style, while the pre-GPUI UI was
   overwhelmingly Material Design (140 `react-icons/md` imports against 41 lucide,
