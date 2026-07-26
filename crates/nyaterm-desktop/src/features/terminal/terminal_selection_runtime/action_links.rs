@@ -4,7 +4,7 @@ use crate::features::terminal_runtime::{
 };
 use crate::models::{
     ActionLinkMenuAction, ActionLinkMenuState, ActionLinkTooltipState, TerminalPerformanceMode,
-    TerminalWindowNode,
+    TerminalWindowNode, terminal_expensive_interactions_enabled,
 };
 
 fn action_link_hover_should_yield_to_terminal_latency(
