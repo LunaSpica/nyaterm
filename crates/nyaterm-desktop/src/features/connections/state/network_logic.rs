@@ -362,36 +362,26 @@ pub(super) fn advance_network_proxy_editor_focus(
     true
 }
 
-pub(super) fn apply_network_proxy_editor_key(
+/// Write one field of the proxy draft.
+///
+/// The port keeps only digits: the box accepts anything typed, and the draft is
+/// what gets validated and saved.
+pub(super) fn set_network_proxy_editor_field(
     proxy_editor: &mut Option<NetworkProxyEditorState>,
-    key: &str,
-    input: Option<&str>,
+    field: NetworkProxyEditorField,
+    text: String,
 ) -> bool {
     let Some(editor) = proxy_editor.as_mut() else {
         return false;
     };
-    match key {
-        "backspace" => {
-            network_proxy_editor_field_mut(editor).pop();
-            editor.error = None;
-            true
-        }
-        _ => {
-            let Some(input) = input.filter(|input| !input.is_empty()) else {
-                return false;
-            };
-            let field = editor.focused_field;
-            let target = network_proxy_editor_field_mut(editor);
-            match field {
-                NetworkProxyEditorField::Port => {
-                    target.extend(input.chars().filter(|character| character.is_ascii_digit()));
-                }
-                _ => target.push_str(input),
-            }
-            editor.error = None;
-            true
-        }
-    }
+    editor.focused_field = field;
+    let text = match field {
+        NetworkProxyEditorField::Port => text.chars().filter(char::is_ascii_digit).collect(),
+        _ => text,
+    };
+    *network_proxy_editor_field_mut(editor) = text;
+    editor.error = None;
+    true
 }
 
 fn network_proxy_editor_field_mut(editor: &mut NetworkProxyEditorState) -> &mut String {

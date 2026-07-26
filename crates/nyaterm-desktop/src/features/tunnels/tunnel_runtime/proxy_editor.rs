@@ -50,6 +50,9 @@ impl NyaTermApp {
                 focused_field: NetworkProxyEditorField::Name,
                 error: None,
             });
+        // The dialog's boxes own their text, so they have to be dropped for
+        // the next proxy to seed from its own values.
+        self.forget_text_inputs("network.proxy-editor.");
         self.terminal.view.status = "proxy editor opened".to_string();
         let proxy_editor_focus = self.connection_state.network.proxy_editor_focus_handle();
         window.focus(&proxy_editor_focus);
@@ -58,71 +61,31 @@ impl NyaTermApp {
 
     pub(in crate::features) fn close_network_proxy_editor(&mut self, cx: &mut Context<Self>) {
         self.connection_state.network.close_proxy_editor();
+        self.forget_text_inputs("network.proxy-editor.");
         self.terminal.view.status = "proxy editor closed".to_string();
         cx.notify();
     }
 
-    pub(in crate::features) fn focus_network_proxy_editor_field(
+    /// Apply an edit from one of the proxy dialog's inputs.
+    pub(in crate::features) fn apply_network_proxy_editor_input(
         &mut self,
-        field: NetworkProxyEditorField,
-        window: &mut Window,
+        field: &str,
+        text: String,
         cx: &mut Context<Self>,
     ) {
-        self.connection_state
-            .network
-            .focus_proxy_editor_field(field);
-        let proxy_editor_focus = self.connection_state.network.proxy_editor_focus_handle();
-        window.focus(&proxy_editor_focus);
-        cx.notify();
-    }
-
-    pub(in crate::features) fn handle_network_proxy_editor_key_down(
-        &mut self,
-        event: &KeyDownEvent,
-        cx: &mut Context<Self>,
-    ) {
-        self.mark_user_activity();
-        let keystroke = &event.keystroke;
-        if keystroke.modifiers.alt || keystroke.modifiers.function {
-            return;
-        }
-
-        match keystroke.key.as_str() {
-            "escape" => {
-                self.close_network_proxy_editor(cx);
-                return;
-            }
-            "enter" => {
-                if keystroke.modifiers.shift
-                    && self.connection_state.network.insert_proxy_command_newline()
-                {
-                    cx.notify();
-                    return;
-                }
-                self.save_network_proxy_editor(cx);
-                return;
-            }
-            "tab" if !keystroke.modifiers.platform && !keystroke.modifiers.control => {
-                if self.connection_state.network.advance_proxy_editor_focus() {
-                    cx.notify();
-                }
-                return;
-            }
-            _ => {}
-        }
-
-        if keystroke.modifiers.platform || keystroke.modifiers.control {
-            return;
-        }
-
-        let input = keystroke
-            .key_char
-            .as_deref()
-            .filter(|input| !input.is_empty());
+        let field = match field {
+            "name" => NetworkProxyEditorField::Name,
+            "host" => NetworkProxyEditorField::Host,
+            "port" => NetworkProxyEditorField::Port,
+            "command" => NetworkProxyEditorField::Command,
+            "username" => NetworkProxyEditorField::Username,
+            "password" => NetworkProxyEditorField::Password,
+            _ => return,
+        };
         if self
             .connection_state
             .network
-            .apply_proxy_editor_key(keystroke.key.as_str(), input)
+            .set_proxy_editor_field(field, text)
         {
             cx.notify();
         }

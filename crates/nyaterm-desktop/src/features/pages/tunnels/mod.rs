@@ -237,10 +237,7 @@ impl NyaTermApp {
             return Some(network_tunnel_editor_panel(palette, editor, self, cx).into_any_element());
         }
         if let Some(editor) = self.connection_state.network.active_proxy_editor() {
-            let focus = self.connection_state.network.proxy_editor_focus_handle();
-            return Some(
-                network_proxy_editor_panel(palette, editor, self, &focus, cx).into_any_element(),
-            );
+            return Some(network_proxy_editor_panel(palette, editor, self, cx).into_any_element());
         }
         None
     }

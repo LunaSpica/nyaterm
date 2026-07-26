@@ -1,17 +1,16 @@
 use gpui::prelude::*;
-use gpui::{Context, FontWeight, IntoElement, KeyDownEvent, div, px, rgb};
+use gpui::{Context, FontWeight, IntoElement, div, px, rgb};
 
 use super::super::common::{network_dialog_footer, network_modal_shell};
 use super::super::tunnel::tunnel_editor_selector;
 use super::helpers::proxy_protocol_label;
-use crate::features::{NyaTermApp, transfer_input};
+use crate::features::{NyaTermApp, TextInputSetup};
 use crate::models::{NetworkProxyEditorField, NetworkProxyEditorState};
 
 pub(in crate::features::pages::tunnels) fn network_proxy_editor_panel(
     palette: crate::theme::ThemePalette,
     editor: NetworkProxyEditorState,
-    app: &NyaTermApp,
-    focus: &gpui::FocusHandle,
+    app: &mut NyaTermApp,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
     let protocol_label = proxy_protocol_label(&editor.protocol);
@@ -25,15 +24,77 @@ pub(in crate::features::pages::tunnels) fn network_proxy_editor_panel(
                 .map(|group| group.name.clone())
         })
         .unwrap_or_else(|| app.tr("network.ungrouped").to_string());
-    let password_value = if editor.password.is_empty() {
-        if editor.existing_password.is_some() || editor.password_id.is_some() {
-            app.tr("network.proxyPasswordKeep").to_string()
-        } else {
-            String::new()
-        }
+    // A stored password is never shown, so the box says so in its placeholder
+    // rather than putting a row of asterisks where the text would go.
+    let password_placeholder = if editor.existing_password.is_some() || editor.password_id.is_some()
+    {
+        app.tr("network.proxyPasswordKeep")
     } else {
-        "*".repeat(editor.password.chars().count().max(1))
+        ""
     };
+    let name_input = proxy_editor_input(
+        app,
+        NetworkProxyEditorField::Name,
+        app.tr("network.proxyName"),
+        editor.name.clone(),
+        TextInputSetup::default(),
+        cx,
+    );
+    let is_command = editor.is_proxy_command();
+    let command_input = is_command.then(|| {
+        proxy_editor_input(
+            app,
+            NetworkProxyEditorField::Command,
+            app.tr("network.proxyCommand"),
+            editor.command.clone(),
+            TextInputSetup::default(),
+            cx,
+        )
+    });
+    let host_input = (!is_command).then(|| {
+        proxy_editor_input(
+            app,
+            NetworkProxyEditorField::Host,
+            app.tr("dialog.host"),
+            editor.host.clone(),
+            TextInputSetup::default(),
+            cx,
+        )
+    });
+    let port_input = (!is_command).then(|| {
+        proxy_editor_input(
+            app,
+            NetworkProxyEditorField::Port,
+            app.tr("dialog.port"),
+            editor.port.clone(),
+            TextInputSetup::default(),
+            cx,
+        )
+    });
+    let username_input = (!is_command).then(|| {
+        proxy_editor_input(
+            app,
+            NetworkProxyEditorField::Username,
+            app.tr("network.proxyUsername"),
+            editor.username.clone(),
+            TextInputSetup::default(),
+            cx,
+        )
+    });
+    let password_input = (!is_command).then(|| {
+        proxy_editor_input(
+            app,
+            NetworkProxyEditorField::Password,
+            app.tr("network.proxyPassword"),
+            editor.password.clone(),
+            TextInputSetup {
+                placeholder: password_placeholder.into(),
+                masked: true,
+                multi_line: false,
+            },
+            cx,
+        )
+    });
 
     let card = div()
         .p_6()
@@ -77,16 +138,7 @@ pub(in crate::features::pages::tunnels) fn network_proxy_editor_panel(
                         this.cycle_network_proxy_protocol(cx);
                     }),
                 )))
-                .child(div().flex_1().min_w_0().child(proxy_editor_input(
-                    palette,
-                    "network-proxy-editor-name",
-                    app.tr("network.proxyName"),
-                    editor.name.clone(),
-                    editor.focused_field == NetworkProxyEditorField::Name,
-                    NetworkProxyEditorField::Name,
-                    focus,
-                    cx,
-                ))),
+                .child(div().flex_1().min_w_0().child(name_input)),
         )
         .child(tunnel_editor_selector(
             palette,
@@ -98,17 +150,7 @@ pub(in crate::features::pages::tunnels) fn network_proxy_editor_panel(
             }),
         ))
         .when(editor.is_proxy_command(), |this| {
-            this.child(proxy_editor_input(
-                palette,
-                "network-proxy-editor-command",
-                app.tr("network.proxyCommand"),
-                editor.command.clone(),
-                editor.focused_field == NetworkProxyEditorField::Command,
-                NetworkProxyEditorField::Command,
-                focus,
-                cx,
-            ))
-            .child(
+            this.children(command_input).child(
                 div()
                     .text_xs()
                     .text_color(rgb(palette.text_muted))
@@ -121,52 +163,16 @@ pub(in crate::features::pages::tunnels) fn network_proxy_editor_panel(
                     .grid()
                     .grid_cols(2)
                     .gap_2()
-                    .child(proxy_editor_input(
-                        palette,
-                        "network-proxy-editor-host",
-                        app.tr("dialog.host"),
-                        editor.host.clone(),
-                        editor.focused_field == NetworkProxyEditorField::Host,
-                        NetworkProxyEditorField::Host,
-                        focus,
-                        cx,
-                    ))
-                    .child(proxy_editor_input(
-                        palette,
-                        "network-proxy-editor-port",
-                        app.tr("dialog.port"),
-                        editor.port.clone(),
-                        editor.focused_field == NetworkProxyEditorField::Port,
-                        NetworkProxyEditorField::Port,
-                        focus,
-                        cx,
-                    )),
+                    .children(host_input)
+                    .children(port_input),
             )
             .child(
                 div()
                     .grid()
                     .grid_cols(2)
                     .gap_2()
-                    .child(proxy_editor_input(
-                        palette,
-                        "network-proxy-editor-username",
-                        app.tr("network.proxyUsername"),
-                        editor.username.clone(),
-                        editor.focused_field == NetworkProxyEditorField::Username,
-                        NetworkProxyEditorField::Username,
-                        focus,
-                        cx,
-                    ))
-                    .child(proxy_editor_input(
-                        palette,
-                        "network-proxy-editor-password",
-                        app.tr("network.proxyPassword"),
-                        password_value,
-                        editor.focused_field == NetworkProxyEditorField::Password,
-                        NetworkProxyEditorField::Password,
-                        focus,
-                        cx,
-                    )),
+                    .children(username_input)
+                    .children(password_input),
             )
         })
         .when_some(editor.error.clone(), |this, error| {
@@ -186,6 +192,20 @@ pub(in crate::features::pages::tunnels) fn network_proxy_editor_panel(
             }),
         ));
 
+    let card = card.on_key_down(cx.listener(|this, event: &gpui::KeyDownEvent, _, cx| {
+        match event.keystroke.key.as_str() {
+            "escape" => {
+                cx.stop_propagation();
+                this.close_network_proxy_editor(cx);
+            }
+            "enter" => {
+                cx.stop_propagation();
+                this.save_network_proxy_editor(cx);
+            }
+            _ => {}
+        }
+    }));
+
     network_modal_shell(
         palette,
         app.shell_surface_color(palette.bg),
@@ -196,22 +216,31 @@ pub(in crate::features::pages::tunnels) fn network_proxy_editor_panel(
 }
 
 pub(in crate::features::pages::tunnels) fn proxy_editor_input(
-    palette: crate::theme::ThemePalette,
-    id: impl Into<String>,
-    label: &'static str,
-    value: String,
-    active: bool,
+    app: &mut NyaTermApp,
     field: NetworkProxyEditorField,
-    focus: &gpui::FocusHandle,
+    caption: &'static str,
+    value: String,
+    setup: TextInputSetup,
     cx: &mut Context<NyaTermApp>,
-) -> impl IntoElement {
-    transfer_input(id, label, value, active, palette)
-        .track_focus(focus)
-        .on_click(cx.listener(move |this, _, window, cx| {
-            this.focus_network_proxy_editor_field(field, window, cx);
-        }))
-        .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-            cx.stop_propagation();
-            this.handle_network_proxy_editor_key_down(event, cx);
-        }))
+) -> gpui::AnyElement {
+    app.text_input_field(
+        format!("network.proxy-editor.{}", proxy_editor_field_key(field)),
+        caption,
+        &value,
+        setup,
+        cx,
+    )
+    .into_any_element()
+}
+
+/// The stable part of a proxy field's input id.
+fn proxy_editor_field_key(field: NetworkProxyEditorField) -> &'static str {
+    match field {
+        NetworkProxyEditorField::Name => "name",
+        NetworkProxyEditorField::Host => "host",
+        NetworkProxyEditorField::Port => "port",
+        NetworkProxyEditorField::Command => "command",
+        NetworkProxyEditorField::Username => "username",
+        NetworkProxyEditorField::Password => "password",
+    }
 }

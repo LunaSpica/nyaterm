@@ -50,12 +50,12 @@ use self::list_logic::{
 use self::network_logic::remove_network_group_references;
 use self::network_logic::{
     advance_network_proxy_editor_focus, advance_network_tunnel_editor_focus,
-    apply_network_group_editor_name_key, apply_network_proxy_editor_key,
-    clear_network_proxy_editor, clear_network_tunnel_editor, cycle_network_proxy_group,
-    cycle_network_proxy_protocol, cycle_network_tunnel_connection, cycle_network_tunnel_group,
-    cycle_network_tunnel_type, focus_network_proxy_editor_field, focus_network_tunnel_editor_field,
-    insert_network_proxy_command_newline, remove_network_group_and_item_references,
-    remove_network_item_references, set_network_group_editor_error, set_network_proxy_editor_error,
+    apply_network_group_editor_name_key, clear_network_proxy_editor, clear_network_tunnel_editor,
+    cycle_network_proxy_group, cycle_network_proxy_protocol, cycle_network_tunnel_connection,
+    cycle_network_tunnel_group, cycle_network_tunnel_type, focus_network_proxy_editor_field,
+    focus_network_tunnel_editor_field, insert_network_proxy_command_newline,
+    remove_network_group_and_item_references, remove_network_item_references,
+    set_network_group_editor_error, set_network_proxy_editor_error, set_network_proxy_editor_field,
     set_network_tunnel_bind_localhost, set_network_tunnel_editor_error,
     set_network_tunnel_editor_field, toggle_network_item_menu_state,
     toggle_network_move_picker_state, toggle_network_tunnel_auto_open,
@@ -1253,20 +1253,9 @@ impl NetworkFeatureState {
         clear_network_proxy_editor(&mut self.proxy_editor);
     }
 
-    pub fn focus_proxy_editor_field(&mut self, field: NetworkProxyEditorField) -> bool {
-        focus_network_proxy_editor_field(&mut self.proxy_editor, field)
-    }
-
-    pub fn insert_proxy_command_newline(&mut self) -> bool {
-        insert_network_proxy_command_newline(&mut self.proxy_editor)
-    }
-
-    pub fn advance_proxy_editor_focus(&mut self) -> bool {
-        advance_network_proxy_editor_focus(&mut self.proxy_editor)
-    }
-
-    pub fn apply_proxy_editor_key(&mut self, key: &str, input: Option<&str>) -> bool {
-        apply_network_proxy_editor_key(&mut self.proxy_editor, key, input)
+    /// Write one field of the proxy draft, clearing any stale validation.
+    pub fn set_proxy_editor_field(&mut self, field: NetworkProxyEditorField, text: String) -> bool {
+        set_network_proxy_editor_field(&mut self.proxy_editor, field, text)
     }
 
     pub fn cycle_proxy_protocol(&mut self) -> Option<String> {
@@ -1323,30 +1312,30 @@ mod tests {
         advance_network_proxy_editor_focus, advance_network_tunnel_editor_focus,
         apply_connection_editor_shell_path, apply_connection_editor_text_key,
         apply_connection_editor_working_dir, apply_connection_group_editor_name_key,
-        apply_network_group_editor_name_key, apply_network_proxy_editor_key,
-        clear_connection_editor_group_menu_draft, clear_connection_editor_runtime_state,
-        clear_connection_list_runtime_state, clear_network_proxy_editor,
-        clear_network_tunnel_editor, clear_selected_connection_ids, close_connection_more_menu,
-        commit_connection_editor_new_group, connection_drop_position_for_target,
-        connection_editor_inline_panel_draft, connection_editor_window_open_or_pending,
-        cycle_connection_sort_mode, cycle_network_proxy_group, cycle_network_proxy_protocol,
-        cycle_network_tunnel_connection, cycle_network_tunnel_group, cycle_network_tunnel_type,
-        finish_connection_editor_save_state, focus_network_proxy_editor_field,
-        focus_network_tunnel_editor_field, insert_connection_editor_description_newline,
-        insert_network_proxy_command_newline, remove_connection_list_references,
-        remove_group_list_references, remove_network_group_and_item_references,
-        remove_network_group_references, remove_network_item_references,
-        retain_loaded_connection_list_references, select_connection_ids,
-        set_connection_drop_target_if_changed, set_connection_editor_advanced_tab,
-        set_connection_editor_error, set_connection_editor_field_text, set_connection_editor_icon,
-        set_connection_editor_kind, set_connection_editor_menu_value,
-        set_connection_editor_password_source, set_connection_editor_telnet_tab,
-        set_connection_group_editor_error, set_connection_group_hover,
-        set_network_group_editor_error, set_network_proxy_editor_error,
-        set_network_tunnel_bind_localhost, set_network_tunnel_editor_error,
-        set_network_tunnel_editor_field, stepped_menu_highlight, sync_connection_search_expansion,
-        toggle_connection_editor_flag, toggle_network_item_menu_state,
-        toggle_network_move_picker_state, toggle_network_tunnel_auto_open,
+        apply_network_group_editor_name_key, clear_connection_editor_group_menu_draft,
+        clear_connection_editor_runtime_state, clear_connection_list_runtime_state,
+        clear_network_proxy_editor, clear_network_tunnel_editor, clear_selected_connection_ids,
+        close_connection_more_menu, commit_connection_editor_new_group,
+        connection_drop_position_for_target, connection_editor_inline_panel_draft,
+        connection_editor_window_open_or_pending, cycle_connection_sort_mode,
+        cycle_network_proxy_group, cycle_network_proxy_protocol, cycle_network_tunnel_connection,
+        cycle_network_tunnel_group, cycle_network_tunnel_type, finish_connection_editor_save_state,
+        focus_network_proxy_editor_field, focus_network_tunnel_editor_field,
+        insert_connection_editor_description_newline, insert_network_proxy_command_newline,
+        remove_connection_list_references, remove_group_list_references,
+        remove_network_group_and_item_references, remove_network_group_references,
+        remove_network_item_references, retain_loaded_connection_list_references,
+        select_connection_ids, set_connection_drop_target_if_changed,
+        set_connection_editor_advanced_tab, set_connection_editor_error,
+        set_connection_editor_field_text, set_connection_editor_icon, set_connection_editor_kind,
+        set_connection_editor_menu_value, set_connection_editor_password_source,
+        set_connection_editor_telnet_tab, set_connection_group_editor_error,
+        set_connection_group_hover, set_network_group_editor_error, set_network_proxy_editor_error,
+        set_network_proxy_editor_field, set_network_tunnel_bind_localhost,
+        set_network_tunnel_editor_error, set_network_tunnel_editor_field, stepped_menu_highlight,
+        sync_connection_search_expansion, toggle_connection_editor_flag,
+        toggle_network_item_menu_state, toggle_network_move_picker_state,
+        toggle_network_tunnel_auto_open,
     };
     use crate::features::{
         ConnectionDragKind, ConnectionDropPosition, ConnectionDropTarget, ConnectionEditorToggle,
@@ -2434,7 +2423,7 @@ mod tests {
     }
 
     #[test]
-    fn network_proxy_editor_key_filters_port_and_preserves_password_draft() {
+    fn network_proxy_editor_field_filters_port_and_preserves_password_draft() {
         let mut proxy_editor = Some(NetworkProxyEditorState {
             focused_field: NetworkProxyEditorField::Port,
             port: String::new(),
@@ -2444,10 +2433,10 @@ mod tests {
             ..network_proxy_editor("proxy-a")
         });
 
-        assert!(apply_network_proxy_editor_key(
+        assert!(set_network_proxy_editor_field(
             &mut proxy_editor,
-            "1",
-            Some("1x2")
+            NetworkProxyEditorField::Port,
+            "1x2".to_string(),
         ));
 
         let editor = proxy_editor.expect("proxy editor remains open");
