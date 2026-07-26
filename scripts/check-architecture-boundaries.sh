@@ -459,7 +459,7 @@ while IFS=: read -r file _line text; do
       fail "local legacy source path appears outside the migration allowlist: $file"
       ;;
   esac
-done < <(rg -n './temp/nyaterm-tauri|nyaterm-tauri' crates docs scripts 2>/dev/null || true)
+done < <(rg -n --path-separator / './temp/nyaterm-tauri|nyaterm-tauri' crates docs scripts 2>/dev/null || true)
 
 # Baseline-friendly checks for areas under active governance. Existing debt is
 # allowed, but new files or additional occurrences fail. As files are cleaned,
@@ -535,10 +535,9 @@ while IFS=: read -r file _line _text; do
   if [[ -z "${SUPER_BASELINE[$file]+set}" ]]; then
     fail "new use super::* in governed scope: $file"
   fi
-done < <(rg -n '^[[:space:]]*use super::\*;' \
+done < <(rg -n --path-separator / '^[[:space:]]*use super::\*;' \
   crates/nyaterm-desktop/src/features/connections \
   crates/nyaterm-desktop/src/features/pages/mod.rs \
-  crates/nyaterm-desktop/src/features/pages/connections.rs \
   crates/nyaterm-desktop/src/features/pages/connections \
   crates/nyaterm-desktop/src/features/pages/tunnels \
   crates/nyaterm-desktop/src/features/shell/event_pump.rs \
@@ -628,7 +627,7 @@ check_no_matches_in_rust_fn \
   "connection editor save success cleanup must stay centralized in ConnectionFeatureState::finish_editor_save" \
   crates/nyaterm-desktop/src/features/connections/connection_runtime/editor.rs \
   save_connection_editor \
-  'connection_state\.(editor\.(close\(|window|window_open_pending|icon_picker_open|menu)|list\.(select_only\(|expand_group\(|selected_ids|last_selected_id|expanded_group_ids))'
+  'connection_state[.](editor[.](close[(]|window|window_open_pending|icon_picker_open|menu)|list[.](select_only[(]|expand_group[(]|selected_ids|last_selected_id|expanded_group_ids))'
 
 check_no_matches \
   "connection editor window lifecycle reads must use ConnectionEditorFeatureState methods" \
@@ -733,15 +732,19 @@ check_no_matches \
 # Obvious secret-bearing Debug derives are forbidden. This is intentionally
 # conservative; if a secret-bearing type really needs Debug, implement a custom
 # redacted formatter and add a narrow exception here with a comment.
+# NOTE: the name match below is deliberately case-sensitive. `IGNORECASE` is a
+# gawk extension, so relying on it made this check behave differently depending
+# on which awk was installed. Keeping it case-sensitive keeps the result
+# identical everywhere. It also means the heuristic is currently very weak and
+# still needs a real triage pass over secret-bearing types.
 if awk '
-  BEGIN { IGNORECASE = 1 }
   /#\[derive\(/ {
     derive = $0
     file = FILENAME
     line = FNR
     next
   }
-  derive && /struct .*?(secret|password|credential|otp|token|key)/ {
+  derive && /struct .*(secret|password|credential|otp|token|key)/ {
     if (derive ~ /Debug/) {
       printf "%s:%d: %s -> %s\n", file, line, derive, $0
     }
