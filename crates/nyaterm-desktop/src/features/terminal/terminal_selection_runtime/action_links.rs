@@ -1,5 +1,5 @@
 use super::*;
-use crate::features::terminal_runtime::{
+use crate::features::terminal::terminal_runtime::{
     TERMINAL_INPUT_LATENCY_WINDOW, TERMINAL_USER_SCROLL_ACTIVE_WINDOW,
 };
 use crate::models::{
@@ -201,7 +201,7 @@ impl NyaTermApp {
             let Some(view) = self.terminal_views.get(session_id) else {
                 return None;
             };
-            crate::features::terminal_surface::terminal_action_links_for_paint_snapshot(
+            crate::features::terminal::terminal_surface::terminal_action_links_for_paint_snapshot(
                 Some(view),
                 offset,
                 snapshot.as_ref(),

@@ -1666,13 +1666,13 @@ fn terminal_action_links_current_for_snapshot(
         .values()
         .filter(|links| {
             links.matcher_key == matcher_key
-                && crate::features::terminal_surface::terminal_action_links_overlap_snapshot(
+                && crate::features::terminal::terminal_surface::terminal_action_links_overlap_snapshot(
                     snapshot, links,
                 )
         })
         .cloned()
         .collect::<Vec<_>>();
-    crate::features::terminal_surface::terminal_action_links_cover_all_snapshot_rows(
+    crate::features::terminal::terminal_surface::terminal_action_links_cover_all_snapshot_rows(
         snapshot, &links,
     )
 }
@@ -2093,7 +2093,9 @@ mod frame_event_queue_tests {
             Some(&snapshot),
         ));
         let (absolute_start_row, absolute_end_row) =
-            crate::features::terminal_surface::terminal_snapshot_absolute_range(&snapshot);
+            crate::features::terminal::terminal_surface::terminal_snapshot_absolute_range(
+                &snapshot,
+            );
 
         view.scrollback_action_links.insert(
             98,

@@ -2012,8 +2012,8 @@ mod tests {
     #[test]
     fn terminal_resize_geometry_uses_text_bounds_excluding_scrollbar_column() {
         let outer_width = 810.;
-        let text_width =
-            outer_width - crate::features::terminal_surface::TERMINAL_SCROLLBAR_COLUMN_WIDTH;
+        let text_width = outer_width
+            - crate::features::terminal::terminal_surface::TERMINAL_SCROLLBAR_COLUMN_WIDTH;
         let bounds = Bounds::new(point(px(0.), px(0.)), size(px(text_width), px(480.)));
 
         let geometry = terminal_resize_geometry_for_bounds(bounds, 10., 20., 0., 0.);

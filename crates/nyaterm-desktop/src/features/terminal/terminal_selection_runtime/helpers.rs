@@ -662,8 +662,8 @@ mod tests {
     #[test]
     fn terminal_surface_bounds_exclude_scrollbar_column() {
         let outer_width = 610.;
-        let text_width =
-            outer_width - crate::features::terminal_surface::TERMINAL_SCROLLBAR_COLUMN_WIDTH;
+        let text_width = outer_width
+            - crate::features::terminal::terminal_surface::TERMINAL_SCROLLBAR_COLUMN_WIDTH;
         let bounds = Bounds::new(
             gpui::point(px(10.), px(20.)),
             gpui::size(px(text_width), px(400.)),

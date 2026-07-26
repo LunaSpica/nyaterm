@@ -1,5 +1,5 @@
 use super::*;
-use crate::features::terminal_runtime::TERMINAL_USER_SCROLL_ACTIVE_WINDOW;
+use crate::features::terminal::terminal_runtime::TERMINAL_USER_SCROLL_ACTIVE_WINDOW;
 
 impl NyaTermApp {
     fn drive_startup_restore_queue_tick(

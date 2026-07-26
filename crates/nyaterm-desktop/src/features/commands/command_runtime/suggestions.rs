@@ -1,5 +1,5 @@
 use super::*;
-use crate::features::terminal_runtime::TERMINAL_INPUT_LATENCY_WINDOW;
+use crate::features::terminal::terminal_runtime::TERMINAL_INPUT_LATENCY_WINDOW;
 use crate::models::{CommandSuggestionItem, CommandSuggestionState};
 use gpui::{Bounds, Pixels};
 
@@ -1177,7 +1177,7 @@ fn terminal_line_prefix_for_cell_col(line: &str, cell_col: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::features::terminal_runtime::TERMINAL_INPUT_LATENCY_WINDOW;
+    use crate::features::terminal::terminal_runtime::TERMINAL_INPUT_LATENCY_WINDOW;
 
     #[test]
     fn terminal_line_prefix_uses_terminal_cells_for_wide_chars() {

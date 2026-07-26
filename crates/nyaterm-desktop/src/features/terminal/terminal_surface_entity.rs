@@ -1,13 +1,13 @@
 use super::*;
-use crate::features::terminal_runtime::{
+use crate::features::terminal::terminal_runtime::{
     TerminalScrollVisualState, terminal_display_offset_from_state,
     terminal_local_scroll_delta_lines_from_state, terminal_scroll_needs_text_first_repaint,
     terminal_scroll_track_ratio, terminal_visual_scroll_active_for_state,
 };
-use crate::features::terminal_selection_runtime::{
+use crate::features::terminal::terminal_selection_runtime::{
     terminal_gutter_metrics, terminal_line_number_digits,
 };
-use crate::features::terminal_surface::TERMINAL_SCROLLBAR_COLUMN_WIDTH;
+use crate::features::terminal::terminal_surface::TERMINAL_SCROLLBAR_COLUMN_WIDTH;
 use crate::models::{TerminalPerformanceOverlay, TerminalProtocolState, TerminalSelection};
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeMap, BTreeSet};

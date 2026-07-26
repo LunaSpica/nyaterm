@@ -11,7 +11,7 @@ Last updated from the working tree on 2026-07-26.
 | --- | ---: | --- |
 | `NyaTermApp` fields | 585 | Counted from `features/app_state/mod.rs`; still transitional and too broad. |
 | `impl NyaTermApp` blocks | 236 | Spread across 233 files under `crates/nyaterm-desktop/src`. |
-| `#[path = "..."]` declarations in desktop | 272 | Historical migration debt; do not add new occurrences. |
+| `#[path = "..."]` declarations in desktop | 247 | Historical migration debt; do not add new occurrences. |
 | `use super::*` imports in desktop | 355 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
 | `features/prelude.rs` rough exported-token count | 230 | Still a broad shared prelude; two hundred fifteen low-frequency transport/core/http/model exports are now explicit imports. |
 | Entity Store structs | 13 | Includes store handles/runtime stores and domain stores. |
@@ -52,6 +52,14 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   explicit re-exports. Nesting immediately surfaced four prompt-drain methods
   that were only reachable because the module used to be a flat sibling; they
   are now declared `pub(in crate::features)` on purpose.
+- The terminal feature area is a real module tree. `features/terminal` is
+  declared as `mod terminal;`, and `terminal_runtime`, `terminal_surface`,
+  `terminal_selection_runtime` and `terminal_context_menu_runtime` are directory
+  modules, so seventeen further `#[path]` declarations are gone. Terminal
+  internals are now addressed as `crate::features::terminal::terminal_runtime`
+  rather than a top-level `crate::features::terminal_runtime`. Nesting also
+  showed that nine prompt/terminal symbols no longer needed a `crate::features`
+  level alias at all; those re-exports were removed.
 - The connections UI state has started moving out of scattered `NyaTermApp`
   fields and into `ConnectionFeatureState`.
 - The current connections state split separates list UI, import UI, editor

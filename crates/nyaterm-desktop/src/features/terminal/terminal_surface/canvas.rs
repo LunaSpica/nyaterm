@@ -1,5 +1,5 @@
 use super::*;
-use crate::features::terminal_selection_runtime::{
+use crate::features::terminal::terminal_selection_runtime::{
     terminal_gutter_metrics, terminal_line_number_digits,
 };
 use crate::models::{

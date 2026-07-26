@@ -9,7 +9,7 @@ mod planes;
 mod publish;
 mod session_events;
 
-use crate::features::terminal_runtime::TERMINAL_INPUT_LATENCY_WINDOW;
+use crate::features::terminal::terminal_runtime::TERMINAL_INPUT_LATENCY_WINDOW;
 use helpers::*;
 
 // These intervals produce wake deadlines at 4ms, 12ms, and 24ms. `Timer::after`

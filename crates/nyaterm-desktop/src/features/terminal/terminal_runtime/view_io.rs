@@ -372,7 +372,7 @@ fn terminal_scroll_text_first_decorations(
     let mut search_ranges_by_line: HashMap<usize, Vec<(usize, usize)>> = HashMap::new();
     if let Some(search_matches) = search_matches {
         let (abs_start, abs_end) =
-            crate::features::terminal_surface::terminal_snapshot_absolute_range(snapshot);
+            crate::features::terminal::terminal_surface::terminal_snapshot_absolute_range(snapshot);
         for search_match in search_matches {
             let abs = search_match.line_index;
             if abs < abs_start || abs >= abs_end {
@@ -386,13 +386,13 @@ fn terminal_scroll_text_first_decorations(
     }
     let has_search_decorations = !search_ranges_by_line.is_empty();
     let has_frame_action_links = include_action_links
-        && crate::features::terminal_surface::terminal_action_links_have_ranges_for_snapshot(
+        && crate::features::terminal::terminal_surface::terminal_action_links_have_ranges_for_snapshot(
             snapshot,
             frame_action_links,
         );
     let has_hyperlinks =
         include_hyperlinks && snapshot.rows().iter().any(|row| !row.hyperlinks.is_empty());
-    if !crate::features::terminal_surface::terminal_line_decorations_needed(
+    if !crate::features::terminal::terminal_surface::terminal_line_decorations_needed(
         false,
         has_search_decorations,
         has_frame_action_links,
@@ -402,7 +402,7 @@ fn terminal_scroll_text_first_decorations(
         return Vec::new();
     }
 
-    crate::features::terminal_surface::build_terminal_line_decorations(
+    crate::features::terminal::terminal_surface::build_terminal_line_decorations(
         snapshot,
         None,
         0,
@@ -1846,7 +1846,7 @@ impl NyaTermApp {
         );
         let frame_action_links = action_links_enabled
             .then(|| {
-                crate::features::terminal_surface::terminal_action_links_for_paint_snapshot(
+                crate::features::terminal::terminal_surface::terminal_action_links_for_paint_snapshot(
                     Some(view),
                     display_offset,
                     snapshot.as_ref(),
@@ -1870,7 +1870,7 @@ impl NyaTermApp {
             is_active && !input_latency_active && !self.settings.terminal_low_latency_mode,
         );
         let has_action_link_decorations =
-            crate::features::terminal_surface::terminal_action_links_have_ranges_for_snapshot(
+            crate::features::terminal::terminal_surface::terminal_action_links_have_ranges_for_snapshot(
                 snapshot.as_ref(),
                 &frame_action_links,
             );
@@ -2177,7 +2177,7 @@ impl NyaTermApp {
         );
         let frame_action_links = action_links_enabled
             .then(|| {
-                crate::features::terminal_surface::terminal_action_links_for_paint_snapshot(
+                crate::features::terminal::terminal_surface::terminal_action_links_for_paint_snapshot(
                     view,
                     display_offset,
                     snapshot.as_ref(),
@@ -2202,7 +2202,9 @@ impl NyaTermApp {
         {
             let search_matches = self.terminal_buffer_matches().unwrap_or_default();
             let (abs_start, abs_end) =
-                crate::features::terminal_surface::terminal_snapshot_absolute_range(&snapshot);
+                crate::features::terminal::terminal_surface::terminal_snapshot_absolute_range(
+                    &snapshot,
+                );
             let active_match_abs = search_matches
                 .get(
                     self.terminal_search_active_index
@@ -2247,7 +2249,7 @@ impl NyaTermApp {
         let has_search_decorations =
             !search_ranges_by_line.is_empty() || !active_search_ranges_by_line.is_empty();
         let has_frame_action_links = action_links_enabled
-            && crate::features::terminal_surface::terminal_action_links_have_ranges_for_snapshot(
+            && crate::features::terminal::terminal_surface::terminal_action_links_have_ranges_for_snapshot(
                 &snapshot,
                 &frame_action_links,
             );
@@ -2257,17 +2259,18 @@ impl NyaTermApp {
         let has_command_marks =
             include_command_marks && snapshot.rows().iter().any(|row| row.command_mark.is_some());
         let decorations_started_at = Instant::now();
-        let decorations = if crate::features::terminal_surface::terminal_line_decorations_needed(
-            has_selection,
-            has_search_decorations,
-            has_frame_action_links,
-            has_hyperlinks,
-            has_command_marks,
-        ) {
-            let include_action_links = action_links_enabled;
-            let include_hyperlinks = action_links_enabled;
-            let decoration_cache_key =
-                crate::features::terminal_surface::terminal_line_decorations_cache_key(
+        let decorations =
+            if crate::features::terminal::terminal_surface::terminal_line_decorations_needed(
+                has_selection,
+                has_search_decorations,
+                has_frame_action_links,
+                has_hyperlinks,
+                has_command_marks,
+            ) {
+                let include_action_links = action_links_enabled;
+                let include_hyperlinks = action_links_enabled;
+                let decoration_cache_key =
+                crate::features::terminal::terminal_surface::terminal_line_decorations_cache_key(
                     &snapshot,
                     terminal_selection,
                     selection_viewport_anchor_row,
@@ -2278,28 +2281,28 @@ impl NyaTermApp {
                     include_hyperlinks,
                     include_command_marks,
                 );
-            let build = || {
-                crate::features::terminal_surface::build_terminal_line_decorations(
-                    &snapshot,
-                    terminal_selection,
-                    selection_viewport_anchor_row,
-                    &search_ranges_by_line,
-                    &active_search_ranges_by_line,
-                    &frame_action_links,
-                    include_action_links,
-                    include_hyperlinks,
-                    include_command_marks,
-                )
-            };
-            if let Some(view) = self.terminal_views.get(session_id) {
-                view.render_cache
-                    .line_decorations(decoration_cache_key, build)
+                let build = || {
+                    crate::features::terminal::terminal_surface::build_terminal_line_decorations(
+                        &snapshot,
+                        terminal_selection,
+                        selection_viewport_anchor_row,
+                        &search_ranges_by_line,
+                        &active_search_ranges_by_line,
+                        &frame_action_links,
+                        include_action_links,
+                        include_hyperlinks,
+                        include_command_marks,
+                    )
+                };
+                if let Some(view) = self.terminal_views.get(session_id) {
+                    view.render_cache
+                        .line_decorations(decoration_cache_key, build)
+                } else {
+                    build().into()
+                }
             } else {
-                build().into()
-            }
-        } else {
-            std::sync::Arc::from(Vec::<TerminalLineDecorations>::new())
-        };
+                std::sync::Arc::from(Vec::<TerminalLineDecorations>::new())
+            };
         let decorations_duration = decorations_started_at.elapsed();
 
         if needs_scroll_enrichment {
@@ -3067,11 +3070,15 @@ mod tests {
         let base = std::sync::Arc::new(view.screen.viewport_snapshot(1));
         let newer = std::sync::Arc::new(view.screen.viewport_snapshot(0));
         let (base_start, _) =
-            crate::features::terminal_surface::terminal_snapshot_absolute_range(base.as_ref());
+            crate::features::terminal::terminal_surface::terminal_snapshot_absolute_range(
+                base.as_ref(),
+            );
 
         let snapshot = terminal_snapshot_with_newer_edge_row(base, newer);
         let (start, end) =
-            crate::features::terminal_surface::terminal_snapshot_absolute_range(snapshot.as_ref());
+            crate::features::terminal::terminal_surface::terminal_snapshot_absolute_range(
+                snapshot.as_ref(),
+            );
 
         assert_eq!(start, base_start);
         assert_eq!(
@@ -3398,7 +3405,9 @@ mod tests {
         view.scrollback_snapshots
             .insert(display_offset, base.clone());
         let (base_start, _) =
-            crate::features::terminal_surface::terminal_snapshot_absolute_range(base.as_ref());
+            crate::features::terminal::terminal_surface::terminal_snapshot_absolute_range(
+                base.as_ref(),
+            );
 
         let snapshot = terminal_paint_window_snapshot_for_view(
             Some(&view),
@@ -3414,7 +3423,9 @@ mod tests {
             view.scrollback_len_for_ui(),
         );
         let (window_start, _) =
-            crate::features::terminal_surface::terminal_snapshot_absolute_range(snapshot.as_ref());
+            crate::features::terminal::terminal_surface::terminal_snapshot_absolute_range(
+                snapshot.as_ref(),
+            );
 
         assert_eq!(window_start + anchor, base_start);
     }
@@ -3424,7 +3435,9 @@ mod tests {
         let view = TerminalViewState::from_output(terminal_output_lines(80));
         let snapshot = view.screen.viewport_snapshot(6);
         let (abs_start, _) =
-            crate::features::terminal_surface::terminal_snapshot_absolute_range(&snapshot);
+            crate::features::terminal::terminal_surface::terminal_snapshot_absolute_range(
+                &snapshot,
+            );
         let matches = vec![TerminalBufferMatch {
             line_index: abs_start + 1,
             start_col: 2,
@@ -3453,7 +3466,9 @@ mod tests {
         screen.advance(b"\x1b]8;;https://example.com\x07click\x1b]8;;\x07 plain");
         let snapshot = screen.viewport_snapshot(0);
         let (absolute_start_row, absolute_end_row) =
-            crate::features::terminal_surface::terminal_snapshot_absolute_range(&snapshot);
+            crate::features::terminal::terminal_surface::terminal_snapshot_absolute_range(
+                &snapshot,
+            );
         let mut links = TerminalFrameActionLinks {
             matcher_key: 1,
             absolute_start_row,
@@ -3484,7 +3499,9 @@ mod tests {
         let view = TerminalViewState::from_output(terminal_output_lines(80));
         let snapshot = view.screen.viewport_snapshot(6);
         let (snapshot_start, snapshot_end) =
-            crate::features::terminal_surface::terminal_snapshot_absolute_range(&snapshot);
+            crate::features::terminal::terminal_surface::terminal_snapshot_absolute_range(
+                &snapshot,
+            );
         let mut links = TerminalFrameActionLinks {
             matcher_key: 1,
             absolute_start_row: snapshot_start.saturating_sub(2),
@@ -3516,7 +3533,9 @@ mod tests {
         let view = TerminalViewState::from_output(terminal_output_lines(80));
         let snapshot = view.screen.viewport_snapshot(6);
         let (snapshot_start, snapshot_end) =
-            crate::features::terminal_surface::terminal_snapshot_absolute_range(&snapshot);
+            crate::features::terminal::terminal_surface::terminal_snapshot_absolute_range(
+                &snapshot,
+            );
         let top_links = TerminalFrameActionLinks {
             matcher_key: 1,
             absolute_start_row: snapshot_start,

@@ -478,6 +478,8 @@ check_no_matches 'session feature #[path] debt' '#\[path\s*=' \
   crates/nyaterm-desktop/src/features/session
 check_no_matches 'shell feature #[path] debt' '#\[path\s*=' \
   crates/nyaterm-desktop/src/features/shell
+check_no_matches 'terminal feature #[path] debt' '#\[path\s*=' \
+  crates/nyaterm-desktop/src/features/terminal
 check_max_count 'tunnel runtime #[path] debt' '#\[path\s*=' \
   crates/nyaterm-desktop/src/features/tunnels/tunnel_runtime.rs 0
 

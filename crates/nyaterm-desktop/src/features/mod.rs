@@ -19,8 +19,6 @@ mod config_runtime;
 mod connection_editor_window;
 mod connections;
 mod formatting;
-#[path = "terminal/input_runtime.rs"]
-mod input_runtime;
 mod inspector;
 mod layout;
 #[path = "settings/lock_diagnostics_runtime.rs"]
@@ -38,37 +36,16 @@ mod root;
 mod runtime_jobs;
 #[path = "settings/security_runtime.rs"]
 mod security_runtime;
-#[path = "terminal/send_command_runtime.rs"]
-mod send_command_runtime;
 mod session;
 #[path = "settings/settings_runtime.rs"]
 mod settings_runtime;
 mod settings_window;
 mod shell;
 mod sync_input;
-#[path = "terminal/terminal_context_menu_runtime.rs"]
-mod terminal_context_menu_runtime;
-#[path = "terminal/terminal_runtime.rs"]
-mod terminal_runtime;
-#[path = "terminal/terminal_search_runtime.rs"]
-mod terminal_search_runtime;
-#[path = "terminal/terminal_selection_runtime.rs"]
-mod terminal_selection_runtime;
-pub(in crate::features) use terminal_selection_runtime::terminal_bounds_tracker;
-#[path = "terminal/terminal_surface.rs"]
-mod terminal_surface;
-pub(in crate::features) use terminal_surface::terminal_snapshot_absolute_range;
-#[path = "terminal/terminal_surface_entity.rs"]
-mod terminal_surface_entity;
-mod transfer_external_sync_window;
-pub(in crate::features) use terminal_surface_entity::{
-    FULL_SHELL_PAINT_COUNT, TerminalSurface, TerminalSurfaceHitTestScrollGeometry,
-    full_shell_paint_count, terminal_effective_visual_scroll_offset_px,
-    terminal_snapshot_anchor_row_for_display_offset, terminal_snapshot_covers_display_offset,
-    terminal_surface_paint_count,
-};
+mod terminal;
 #[path = "transfers/transfer_events.rs"]
 mod transfer_events;
+mod transfer_external_sync_window;
 #[path = "transfers/transfer_jobs.rs"]
 mod transfer_jobs;
 #[path = "transfers/transfer_options.rs"]
@@ -125,14 +102,10 @@ pub(in crate::features) use runtime_jobs::{
     remote_job_event_matches, spawn_command_persistence_worker,
 };
 pub(in crate::features) use session::{
-    CredentialPromptBroker, CredentialPromptRequest, CredentialPromptState, HostKeyPromptBroker,
-    HostKeyPromptChoice, HostKeyPromptIssue, HostKeyPromptRequest, KeyboardInteractivePromptState,
-    NativeHostKeyVerifier, NativeOtpCodePreview, NativeOtpProvider, SftpDuplicatePromptBroker,
-    SftpDuplicatePromptState, unix_seconds_now,
-};
-pub(in crate::features) use session::{
-    credential_prompt_id, credential_prompt_target, keyboard_interactive_prompt_id,
-    keyboard_interactive_prompt_target, sftp_duplicate_prompt_id, uuid_like_prompt_id,
+    CredentialPromptBroker, CredentialPromptState, HostKeyPromptBroker, HostKeyPromptChoice,
+    HostKeyPromptIssue, HostKeyPromptRequest, KeyboardInteractivePromptState, NativeOtpProvider,
+    SftpDuplicatePromptBroker, SftpDuplicatePromptState, credential_prompt_target,
+    keyboard_interactive_prompt_target, unix_seconds_now,
 };
 pub(in crate::features) use settings_window::SettingsWindow;
 pub(in crate::features) use shell::{ActivityBarDragPayload, ActivityBarDragPreview};
@@ -142,6 +115,9 @@ pub(in crate::features) use shell::{
 };
 pub(in crate::features) use shell::{
     appearance_font_options, appearance_font_stack, gpui_code_font_family,
+};
+pub(in crate::features) use terminal::{
+    FULL_SHELL_PAINT_COUNT, TerminalSurface, full_shell_paint_count, terminal_surface_paint_count,
 };
 pub(in crate::features) use transfer_external_sync_window::TransferExternalSyncWindow;
 pub(in crate::features) use transfer_widgets::{

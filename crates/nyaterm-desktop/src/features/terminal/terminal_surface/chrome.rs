@@ -1,5 +1,5 @@
 use super::*;
-use crate::features::terminal_runtime::terminal_scroll_track_ratio;
+use crate::features::terminal::terminal_runtime::terminal_scroll_track_ratio;
 use crate::models::TerminalSearchMode;
 
 impl NyaTermApp {
