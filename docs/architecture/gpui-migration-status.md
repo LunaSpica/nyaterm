@@ -23,11 +23,13 @@ Large files currently over 4,000 lines:
 
 | File | Lines | Status |
 | --- | ---: | --- |
+| `crates/nyaterm-desktop/src/models/terminal.rs` | 4995 | Split candidate; coordinate with terminal render/runtime ownership. |
+| `crates/nyaterm-desktop/src/features/terminal/terminal_surface_entity.rs` | 4528 | Split candidate; avoid hot-path regressions. |
 | `crates/nyaterm-transport/src/lib.rs` | 4423 | Split by domain: SFTP, X11 forwarding, SSH tunnels and SSH authentication are out. What remains is the session manager, the four `TerminalTransport` impls and the SSH/serial/telnet session lifecycle. |
 | `crates/nyaterm-core/src/storage.rs` | 4020 | Split by domain: config backup, keyword highlights, command history, known hosts, AI history, the secret vault, portable snapshots, app settings and cloud sync are out. About 1,450 lines of that are code; the rest is the test module. Schema compatibility is public contract. |
-| `crates/nyaterm-desktop/src/models/terminal.rs` | 4995 | Split candidate; coordinate with terminal render/runtime ownership. |
-| `crates/nyaterm-desktop/src/features/terminal/terminal_surface_entity.rs` | 4524 | Split candidate; avoid hot-path regressions. |
-| `crates/nyaterm-core/src/ai.rs` | 4032 | Split candidate after storage/transport boundaries are clearer. |
+
+`core/ai.rs` was on this list at 4,032 lines; it is now 1,554 after being split
+into `providers`, `agent`, `risk` and `settings`.
 
 Other files currently over 2,000 lines include terminal runtime/view modules,
 transport transfer protocol modules, and terminal GPUI painting modules. Treat
@@ -123,6 +125,15 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   that had no caller left outside it — that is the sign a seam is in the right
   place. Table names, key layouts, record shapes, document keys and the
   hashed-host matching rules are unchanged.
+- `core/ai.rs` follows the same cut: `providers` (the three provider HTTP
+  surfaces), `agent` (tool schemas, reply parsing, execution policy), `risk`
+  (command risk classification) and `settings` (defaults, legacy migration,
+  secret masking). `risk` is deliberately small and separate: it decides
+  whether the agent may run a command unattended, so the pattern lists and
+  escalation rules are worth reviewing on their own rather than buried in a
+  4,000-line file. The `default_*` functions back serde attributes on types
+  that stayed behind, so `ai.rs` imports them back by name -- a reminder that
+  a serde-heavy type is not free to move away from its defaults.
 - `transport/lib.rs` is split the same way: `sftp`, `x11`, `tunnel` and
   `ssh_auth`. Each carries its own domain types and unit tests, and each uses an
   explicit import list rather than a `use super::*` glob, so the split narrows
@@ -908,6 +919,7 @@ Items 1, 3 and 4 are done. What follows is the honest remaining list.
    compatibility surface and stay unchanged. `models/terminal.rs` (4,995) and
    `terminal_surface_entity.rs` (4,524) are the next files of this size, but
    they are render hot paths and need a different approach than a domain cut.
+   `core/ai.rs` is done too, down from 4,032 to 1,554.
 6. Reduce `features/prelude.rs` opportunistically while touching a module, not
    as standalone rounds. The remaining entries are genuinely shared types.
 7. Tighten one more low-risk crate-root export after confirming there are no
