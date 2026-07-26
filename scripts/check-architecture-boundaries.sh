@@ -382,6 +382,11 @@ check_no_matches \
   crates/nyaterm-desktop/src/features/prelude.rs
 
 check_no_matches \
+  "low-frequency terminal snapshot geometry helper must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(terminal_snapshot_matches_grid_geometry)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
   "low-frequency terminal search UI model must stay out of features/prelude.rs" \
   '(^|[,{[:space:]])(TerminalSearchMode)([},[:space:]]|$)' \
   crates/nyaterm-desktop/src/features/prelude.rs
