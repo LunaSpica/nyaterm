@@ -235,20 +235,7 @@ impl NyaTermApp {
             self.terminal.view.runtime.pending_ui_notify = false;
         }
         let notify_duration = notify_started_at.elapsed();
-        let publish_started_at = Instant::now();
-        // Planes above do not drain more output; reuse one final pressure sample.
         let output_pressure = self.runtime_output_pressure_active();
-        let heartbeat_due = store_snapshot_publish_due(
-            self.terminal.view.runtime.last_store_snapshot_publish_at,
-            publish_started_at,
-        );
-        let should_publish_snapshots =
-            should_publish_store_snapshots(visual_dirty, output_pressure, heartbeat_due);
-        if should_publish_snapshots {
-            // Core workspace/session/overlay always; sideband stores only on heartbeat.
-            self.publish_store_snapshots_with_scope(cx, heartbeat_due || !visual_dirty);
-        }
-        let publish_duration = publish_started_at.elapsed();
         let tick_duration = tick_started_at.elapsed();
         if tick_duration >= RUNTIME_TICK_SLOW_THRESHOLD
             && self.should_log_slow_diagnostic("runtime_tick", Instant::now())
@@ -280,7 +267,6 @@ impl NyaTermApp {
                 visual_runtime_ms = visual.duration.as_millis(),
                 pending_session_status_ms = pending_session_status_duration.as_millis(),
                 notify_ms = notify_duration.as_millis(),
-                publish_snapshots_ms = publish_duration.as_millis(),
                 queued_events = self.terminal.view.runtime.session_event_queued_events,
                 queued_output_bytes = self.terminal.view.runtime.session_event_queued_output_bytes,
                 frame_command_count = self.terminal.view.frame_pipeline.queued_command_count(),
@@ -307,7 +293,6 @@ impl NyaTermApp {
                     .terminal_chrome_frame_notify_count,
                 surface_paint_count = terminal_surface_paint_count(),
                 notify_requested = visual_dirty,
-                publish_snapshots = should_publish_snapshots,
                 "slow runtime tick"
             );
         }
@@ -392,8 +377,6 @@ impl NyaTermApp {
                     terminal_frames_deferred_for_pacing = data.terminal_frame_apply_paced,
                     visual_runtime_ms = visual.duration.as_millis(),
                     notify_ms = notify_duration.as_millis(),
-                    publish_snapshots_ms = publish_duration.as_millis(),
-                    publish_snapshots = should_publish_snapshots,
                     queued_session_events = self.terminal.view.runtime.session_event_queued_events,
                     queued_session_output_bytes =
                         self.terminal.view.runtime.session_event_queued_output_bytes,

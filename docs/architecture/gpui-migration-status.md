@@ -14,10 +14,10 @@ Last updated from the working tree on 2026-07-26.
 | `#[path = "..."]` declarations in desktop | 0 | Cleared. Every directory is a real module; the boundary script fails on any new occurrence. |
 | `use super::*` imports in desktop | 355 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
 | `features/prelude.rs` rough exported-token count | 230 | Still a broad shared prelude; two hundred fifteen low-frequency transport/core/http/model exports are now explicit imports. |
-| Entity Store structs | 7 | `Runtime`, `WindowRuntime`, `StartupRestore` own real state; `Overlay` owns quick switch and is read for rendering; `Workspace` and `Session` remain projections. |
-| Snapshot structs | 3 | Workspace, session, overlay. |
-| `replace_snapshot` methods | 3 | Down from nine; the six write-only domain projections are gone. |
-| Store snapshot publish calls | 3 | Published from `features/shell/event_pump/publish.rs`. |
+| Entity Store structs | 4 | `Runtime`, `WindowRuntime`, `StartupRestore`, `Overlay`. Each owns state the app does not. |
+| Snapshot structs | 0 | Cleared. No store is a projection of `NyaTermApp` any more. |
+| `replace_snapshot` methods | 0 | Cleared. |
+| Store snapshot publish calls | 0 | `publish.rs` and the publish throttle are gone. |
 
 Large files currently over 4,000 lines:
 
@@ -117,31 +117,31 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   the three phases the bar actually has: `composer` (payload and caret),
   `options` (how it is interpreted and delivered, plus the menus that set
   those), and `progress` (in-flight send, cancellation, counters).
-- The projection-only Entity Stores are gone. Tracing consumers showed the six
-  domain stores (`Ai`, `CloudSync`, `Connections`, `RemoteOps`, `Settings`,
-  `Transfer`) were write-only: published on every qualifying tick and read by
-  nothing outside `entities/`, so they cost a snapshot build plus a `cx.notify`
-  and returned nothing. They and their snapshots are deleted, along with six
-  accessors and one `SettingsTab::label` that existed only to feed them.
-  What remains has a reason to exist: `RuntimeStore`, `WindowRuntimeStore` and
-  `StartupRestoreStore` own real state, and `OverlayStore` both owns quick
-  switch authoritatively and is read by `root.rs` for overlay rendering.
-  `WorkspaceStore` and `SessionStore` are still projections, and are the honest
-  remaining question — their snapshots are read only by
-  `published_core_store_snapshots_are_current`, which decides whether to
-  republish them. That loop is self-referential, but it also gates the overlay
-  publish, so untangling it is a separate change.
+- The Entity Store projection layer is gone entirely, in two steps.
 
-  Two findings for whoever takes that on. First, `OverlaySnapshot` is a
-  same-render round-trip: `Render` publishes it in its prologue, then
-  `overlay_host` reads it back and, when it is absent, falls back to an
-  expression that recomputes every field from the same `self` fields. The
-  fallback is proof the renderer never needed the store. It is not a staleness
-  bug today only because publish runs before `overlay_host` in the same pass.
-  Second, `AppShell` deliberately does not observe the stores — there is a
-  comment explaining that store-observe was amplifying each publish into an
-  extra shell paint — so the `cx.notify()` in each publish currently has no
-  subscriber at all.
+  First, the six domain stores (`Ai`, `CloudSync`, `Connections`, `RemoteOps`,
+  `Settings`, `Transfer`) turned out to be write-only: outside `entities/` they
+  appeared only in `app_shell::new`, and nothing read their snapshots. Every
+  qualifying tick built six snapshot structs, compared them, and called
+  `cx.notify()` for a reader that did not exist.
+
+  Then `Workspace`, `Session` and `OverlaySnapshot` went the same way once the
+  loop was traced end to end. `Workspace` and `Session` were read only by
+  `published_core_store_snapshots_are_current`, which decided whether to
+  republish them — a closed loop. `OverlaySnapshot` was a same-render
+  round-trip: `Render` published it in its prologue and `overlay_host` read it
+  back a few calls later, with a fallback that recomputed every field from the
+  same `self` fields. `overlay_host` now computes those flags directly into a
+  local `OverlayFlags`, which is what the fallback already did.
+
+  `AppShell` never observed the stores — a comment there records that
+  store-observe was amplifying each publish into an extra shell paint — so the
+  `cx.notify()` in every publish had no subscriber either.
+
+  What remains owns something the app does not: `RuntimeStore` (app runtime and
+  native services), `WindowRuntimeStore` (the window runtime pump),
+  `StartupRestoreStore` (the restore queue) and `OverlayStore` (quick switch
+  state, authoritative since the earlier migration).
 - The connections UI state has started moving out of scattered `NyaTermApp`
   fields and into `ConnectionFeatureState`.
 - The current connections state split separates list UI, import UI, editor
@@ -858,9 +858,9 @@ real module tree first, then the remaining steps actually enforce something.
    and semantic methods, covered by GPUI-free pure state tests. This is the
    highest-value remaining item; roughly 590 fields and 236 `impl NyaTermApp`
    blocks are the reason most desktop modules can reach most desktop state.
-4. Done for the write-only stores. What is left is `WorkspaceStore` and
-   `SessionStore`: decide whether the publish/skip loop earns its keep, or
-   collapse it so the skip check reads app state directly.
+4. Done. No store is a projection any more; the four that remain own real
+   state. If a future domain wants Entity ownership, migrate it authoritatively
+   rather than reintroducing a published read model.
 5. Continue extracting schema-neutral internal modules from `core/storage.rs`
    and schema/protocol-neutral modules from `nyaterm-transport/src/lib.rs`, by
    domain rather than by individual type. Table definitions, serialized records,

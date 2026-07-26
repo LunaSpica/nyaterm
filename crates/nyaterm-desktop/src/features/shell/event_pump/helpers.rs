@@ -33,7 +33,6 @@ pub(super) const TERMINAL_PERF_HEARTBEAT_INTERVAL: Duration = Duration::from_sec
 pub(super) const RUNTIME_TICK_SLOW_THRESHOLD: Duration = Duration::from_millis(40);
 pub(super) const SESSION_EVENT_DRAIN_SLOW_TOTAL: Duration = Duration::from_millis(20);
 pub(super) const SESSION_EVENT_DRAIN_SLOW_CHUNK: Duration = Duration::from_millis(8);
-pub(super) const STORE_SNAPSHOT_HEARTBEAT: Duration = Duration::from_secs(1);
 pub(super) const PENDING_SESSION_STILL_CONNECTING_AFTER: Duration = Duration::from_secs(15);
 pub(super) const PENDING_SESSION_STATUS_INTERVAL: Duration = Duration::from_secs(1);
 
@@ -127,20 +126,8 @@ pub(super) fn diagnostic_log_due(
     })
 }
 
-pub(super) fn store_snapshot_publish_due(last_at: Option<Instant>, now: Instant) -> bool {
-    diagnostic_log_due(last_at, now, STORE_SNAPSHOT_HEARTBEAT)
-}
-
 pub(super) fn terminal_cell_metrics_refresh_needed(metrics: Option<(f32, f32)>) -> bool {
     metrics.is_none()
-}
-
-pub(super) fn should_publish_store_snapshots(
-    visual_dirty: bool,
-    output_pressure: bool,
-    heartbeat_due: bool,
-) -> bool {
-    !output_pressure && (visual_dirty || heartbeat_due)
 }
 
 pub(super) fn pending_session_status_message(
@@ -474,30 +461,6 @@ mod tests {
             start + SLOW_DIAGNOSTIC_THROTTLE,
             SLOW_DIAGNOSTIC_THROTTLE
         ));
-    }
-
-    #[test]
-    fn store_snapshot_publish_due_uses_low_frequency_heartbeat() {
-        let start = Instant::now();
-
-        assert!(store_snapshot_publish_due(None, start));
-        assert!(!store_snapshot_publish_due(
-            Some(start),
-            start + STORE_SNAPSHOT_HEARTBEAT - Duration::from_millis(1)
-        ));
-        assert!(store_snapshot_publish_due(
-            Some(start),
-            start + STORE_SNAPSHOT_HEARTBEAT
-        ));
-    }
-
-    #[test]
-    fn store_snapshot_publish_waits_until_output_pressure_clears() {
-        assert!(should_publish_store_snapshots(true, false, false));
-        assert!(should_publish_store_snapshots(false, false, true));
-        assert!(!should_publish_store_snapshots(false, false, false));
-        assert!(!should_publish_store_snapshots(true, true, false));
-        assert!(!should_publish_store_snapshots(false, true, true));
     }
 
     #[test]

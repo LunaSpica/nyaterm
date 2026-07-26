@@ -9,6 +9,29 @@ use gpui::{
 const WALLPAPER_TILE_ELEMENT_LIMIT: usize = 8192;
 const WALLPAPER_TILE_MIN_SIZE: f32 = 8.;
 
+/// Which overlays the root chrome should render this frame.
+///
+/// Computed from `NyaTermApp` directly. This used to be read back from a
+/// snapshot the same `Render` pass had just published into `OverlayStore`,
+/// with a fallback that recomputed exactly these expressions.
+struct OverlayFlags {
+    tab_actions_open: bool,
+    rename_open: bool,
+    color_picker_open: bool,
+    session_info_open: bool,
+    startup_command_open: bool,
+    temporary_ssh_link_open: bool,
+    multi_line_paste_open: bool,
+    terminal_actions_open: bool,
+    terminal_context_menu_open: bool,
+    action_link_menu_open: bool,
+    action_link_tooltip_open: bool,
+    command_suggestions_open: bool,
+    credential_suggestions_open: bool,
+    close_all_sessions_confirm_open: bool,
+    locked: bool,
+}
+
 impl NyaTermApp {
     pub(crate) fn start_after_window_open(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.refresh_window_render_inputs(window, cx);
@@ -22,7 +45,6 @@ impl NyaTermApp {
         }
 
         self.ensure_terminal_focus_reporting(window, cx);
-        self.publish_store_snapshots(cx);
     }
 
     fn root_chrome(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Stateful<Div> {
@@ -404,27 +426,23 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
-        let overlay = self
-            .stores
-            .overlays
-            .read_with(cx, |store, _| store.snapshot().cloned())
-            .unwrap_or_else(|| crate::entities::OverlaySnapshot {
-                tab_actions_open: self.tab_actions_session_id.is_some(),
-                rename_open: self.rename_session_id.is_some(),
-                color_picker_open: self.color_picker_open,
-                session_info_open: self.session_info_open,
-                startup_command_open: self.startup_command_open,
-                temporary_ssh_link_open: self.temporary_ssh_link_open,
-                multi_line_paste_open: self.multi_line_paste.is_some(),
-                terminal_actions_open: self.terminal.menus.actions_open,
-                terminal_context_menu_open: self.terminal.menus.context_menu.is_some(),
-                action_link_menu_open: self.action_link_menu.is_some(),
-                action_link_tooltip_open: self.action_link_tooltip.is_some(),
-                command_suggestions_open: self.command_suggestions.is_some(),
-                credential_suggestions_open: self.credential_suggestions.is_some(),
-                close_all_sessions_confirm_open: self.close_all_sessions_confirm_open,
-                locked: self.is_locked,
-            });
+        let overlay = OverlayFlags {
+            tab_actions_open: self.tab_actions_session_id.is_some(),
+            rename_open: self.rename_session_id.is_some(),
+            color_picker_open: self.color_picker_open,
+            session_info_open: self.session_info_open,
+            startup_command_open: self.startup_command_open,
+            temporary_ssh_link_open: self.temporary_ssh_link_open,
+            multi_line_paste_open: self.multi_line_paste.is_some(),
+            terminal_actions_open: self.terminal.menus.actions_open,
+            terminal_context_menu_open: self.terminal.menus.context_menu.is_some(),
+            action_link_menu_open: self.action_link_menu.is_some(),
+            action_link_tooltip_open: self.action_link_tooltip.is_some(),
+            command_suggestions_open: self.command_suggestions.is_some(),
+            credential_suggestions_open: self.credential_suggestions.is_some(),
+            close_all_sessions_confirm_open: self.close_all_sessions_confirm_open,
+            locked: self.is_locked,
+        };
         let quick_switch_open = self.quick_switch_open(cx);
         let transfer_properties_open = self
             .transfer

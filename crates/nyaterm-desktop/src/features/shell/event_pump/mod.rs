@@ -6,7 +6,6 @@ use crate::models::{TerminalSearchMode, terminal_frame_search_result_is_current}
 mod bridge;
 mod helpers;
 mod planes;
-mod publish;
 mod session_events;
 
 use crate::features::terminal::terminal_runtime::TERMINAL_INPUT_LATENCY_WINDOW;

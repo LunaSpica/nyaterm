@@ -8,8 +8,7 @@ use nyaterm_core::AppRuntime;
 
 use crate::{
     entities::{
-        OverlayStore, RuntimeStore, SessionStore, StartupRestoreStore, UiStoreHandles,
-        WindowRuntimeStore, WorkspaceStore,
+        OverlayStore, RuntimeStore, StartupRestoreStore, UiStoreHandles, WindowRuntimeStore,
     },
     features::NyaTermApp,
 };
@@ -20,8 +19,6 @@ pub struct AppShell {
     runtime: Entity<RuntimeStore>,
     window_runtime: Entity<WindowRuntimeStore>,
     startup_restore: Entity<StartupRestoreStore>,
-    workspace: Entity<WorkspaceStore>,
-    sessions: Entity<SessionStore>,
     overlays: Entity<OverlayStore>,
     _subscriptions: Vec<Subscription>,
 }
@@ -30,13 +27,9 @@ impl AppShell {
     pub fn new(runtime: AppRuntime, cx: &mut Context<Self>) -> Self {
         let runtime_store = cx.new(|_| RuntimeStore::new(runtime.clone()));
         let startup_restore = cx.new(|_| StartupRestoreStore::default());
-        let workspace = cx.new(|_| WorkspaceStore::default());
-        let sessions = cx.new(|_| SessionStore::default());
         let overlays = cx.new(|_| OverlayStore::default());
         let stores = UiStoreHandles {
             startup_restore: startup_restore.clone(),
-            workspace: workspace.clone(),
-            sessions: sessions.clone(),
             overlays: overlays.clone(),
         };
         let app = cx.new(|cx| NyaTermApp::new(runtime, stores, cx));
@@ -51,8 +44,6 @@ impl AppShell {
             runtime: runtime_store,
             window_runtime: cx.new(|_| WindowRuntimeStore::default()),
             startup_restore,
-            workspace,
-            sessions,
             overlays,
             _subscriptions: subscriptions,
         }
