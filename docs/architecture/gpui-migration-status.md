@@ -857,6 +857,36 @@ authoritative Entity-owned UI state:
 Future overlay migrations should record the exact old write/read paths and
 delete old fields in the same change that makes the Entity authoritative.
 
+## Unwired Capabilities
+
+`nyaterm-desktop` went from 104 dead-code warnings to 18. The 152 items removed
+were the superseded migration render layer: the old `left_*_panel` /
+`right_*_panel` tree that `panel_body`'s `*_view` dispatch replaced, the widget
+helpers only it called, and the handlers only those widgets invoked.
+
+The 18 that remain are deliberately kept, because they are not cruft. Each is a
+capability that exists and in most cases is tested, but that nothing in the
+product reaches. Deleting them would remove work and hide the gap; wiring them
+up or dropping the feature is a product decision, not cleanup.
+
+| Item | Evidence it is unfinished rather than dead |
+| --- | --- |
+| `TerminalWindowNode::split_tab_to_edge` + `SplitEdge` | Six tests in `models/tests_workspace.rs` cover splitting a tab to a named edge. No UI raises it. |
+| `terminal_resize_geometry_for_bounds` (free fn + method) | Three tests pin the geometry maths. Nothing calls either form. |
+| `credential_autofill_prompt_line_from_viewport` | Two tests cover prompt-line detection from a viewport. No caller. |
+| `TerminalSurface::set_cursor_blink_visible` | One test. Cursor blink is driven another way today. |
+| `apply_cursor_style` (`nyaterm-terminal-gpui`) | One test. Its only caller was the deleted `terminal_line_element`. |
+| `SnapshotPasswordPromptKind::{Export, Import, CloudPush, CloudPull}` | 35 live match arms still handle these prompts; nothing raises one since the prompt entry points went. |
+| `ConfigPathPromptKind::{Import, PortableExport}` | Same shape: the handling survives, the trigger does not. |
+| `AiInputField::{BaseUrl, ApiKey}`, `TranslateInputField::TargetLanguage` | Editable fields the settings UI no longer routes to. |
+| `SessionPaneState` payloads and its `Disconnected` variant | The pane state machine carries `request_id`, `name`, `kind`, `session_id` and `error` that no reader consumes. |
+| `ActivityBarDragPayload::{zone, index}` | A drag carries where it came from; the drop handler ignores it. |
+| `TerminalOutputRequest::RequestBufferText` | Buffer-text request variant with no producer. |
+
+Treat this table as the migration's real remaining to-do list. It is more
+useful than a dead-code count: a warning that stays at 18 and a warning that
+creeps back to 104 mean very different things, and only the second is rot.
+
 ## Migration-Only Exit List
 
 | Item | Current use | Default build | Removal condition | Replacement direction |
