@@ -44,10 +44,13 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   `features/text_inputs.rs`, which creates a field the first time a panel renders
   one and routes edits back by id prefix. Converted so far: the connection
   editor, the saved-connections filter, the settings search-engine editor, all
-  three network dialogs, the quick command editor and the SFTP new-folder
-  dialog. **22 `transfer_input(..)` call sites remain** — each is a label div
-  over a draft string with a hand-written key handler, and each still needs the
-  same treatment.
+  three network dialogs, the quick command editor, the command send box, the
+  four security-auth editors and the SFTP new-folder dialog. **20
+  `transfer_input(..)` call sites remain** — AI settings and the ask panel,
+  translation, the transfer settings pages, cloud sync, the remaining quick
+  command overlays, the sessions sidebar and the remote process/docker filters.
+  Each is a label div over a draft string with a hand-written key handler, and
+  each still needs the same treatment.
 
   Three GPUI behaviours make this migration go wrong in ways that are invisible
   until you drive the UI:
