@@ -578,6 +578,11 @@ impl NyaTermApp {
                                 rgb(palette.text_muted)
                             })
                             .overflow_hidden()
+                            // Without this the title wraps inside the tab and the
+                            // strip shows whichever line happens to land on the
+                            // one row of height it has — "ste", out of "System32".
+                            .whitespace_nowrap()
+                            .text_ellipsis()
                             .child(tab_title.clone()),
                     )
                     .when(show_sync_indicator, |this| {
