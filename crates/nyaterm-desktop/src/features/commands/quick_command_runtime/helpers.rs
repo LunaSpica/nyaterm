@@ -9,30 +9,6 @@ pub(super) fn unix_millis_now() -> u64 {
         .unwrap_or_default()
 }
 
-pub(in crate::features) fn sorted_quick_commands(commands: &[QuickCommand]) -> Vec<QuickCommand> {
-    let mut commands = commands.to_vec();
-    commands.sort_by(|left, right| {
-        right
-            .pinned
-            .unwrap_or_default()
-            .cmp(&left.pinned.unwrap_or_default())
-            .then_with(|| {
-                right
-                    .use_count
-                    .unwrap_or_default()
-                    .cmp(&left.use_count.unwrap_or_default())
-            })
-            .then_with(|| {
-                right
-                    .updated_at
-                    .unwrap_or_default()
-                    .cmp(&left.updated_at.unwrap_or_default())
-            })
-            .then_with(|| left.label.to_lowercase().cmp(&right.label.to_lowercase()))
-    });
-    commands
-}
-
 pub(in crate::features) fn quick_command_view_mode_from_setting(
     value: &str,
 ) -> QuickCommandViewMode {

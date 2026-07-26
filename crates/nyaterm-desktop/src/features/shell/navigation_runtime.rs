@@ -3,10 +3,6 @@ use super::*;
 use crate::models::{MainMode, RightFocus};
 
 impl NyaTermApp {
-    pub(in crate::features) fn select(&mut self, item: NavItem, cx: &mut Context<Self>) {
-        self.open_panel(item, cx);
-    }
-
     pub(in crate::features) fn open_page(&mut self, item: NavItem, cx: &mut Context<Self>) {
         if item == NavItem::Settings || item.opens_settings() {
             self.begin_settings_draft();

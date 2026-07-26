@@ -5,7 +5,8 @@ use gpui::{
 };
 
 /// Approximate monospaced cell metrics used for hit-testing the painted terminal grid.
-/// Keep in sync with `terminal_line_element` row height and surface font size.
+/// Keep in sync with the row height `nyaterm-terminal-gpui` paints and the
+/// surface font size.
 const CELL_WIDTH_RATIO: f32 = 0.62;
 const LINE_HEIGHT_RATIO: f32 = 1.25;
 

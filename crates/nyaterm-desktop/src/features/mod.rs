@@ -48,7 +48,7 @@ pub(in crate::features) use app_state::{
 pub(in crate::features) use commands::{
     QUICK_COMMAND_COLOR_OPTIONS, QUICK_COMMAND_ICON_OPTIONS, QuickCommandFeatureFocus,
     QuickCommandFeatureState, quick_command_category_label, quick_command_sort_mode_from_setting,
-    quick_command_view_mode_from_setting, sorted_quick_commands,
+    quick_command_view_mode_from_setting,
 };
 pub(in crate::features) use connection_editor_window::ConnectionEditorWindow;
 pub(in crate::features) use connections::{
@@ -91,9 +91,8 @@ pub(in crate::features) use terminal::{
 };
 pub(in crate::features) use transfer_external_sync_window::TransferExternalSyncWindow;
 pub(in crate::features) use transfers::{
-    TransferFeatureFocus, TransferFeatureState, compact_transfer_job_row, duplicate_decision_label,
-    duplicate_policy_label, format_file_size, transfer_input, transfer_job_title,
-    transfer_status_label,
+    TransferFeatureFocus, TransferFeatureState, duplicate_decision_label, duplicate_policy_label,
+    format_file_size, transfer_input, transfer_job_title, transfer_status_label,
 };
 pub(in crate::features) use view_widgets::*;
 

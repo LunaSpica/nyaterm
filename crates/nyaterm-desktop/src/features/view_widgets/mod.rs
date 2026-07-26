@@ -16,7 +16,7 @@ use super::{
     ConnectionIconDef, InlineMdStyle, MarkdownBlock, ThemePalette, cloud_sync_history_summary,
     cloud_sync_kind_text_color, cloud_sync_status_dot_color, cloud_sync_status_text_color,
     compact_id, docker_state_color, docker_state_label, format_history_timestamp_ms, format_rate,
-    parse_inline_markdown, parse_markdown_blocks, tunnel_endpoint, tunnel_mode_label, tunnel_name,
+    parse_inline_markdown, parse_markdown_blocks, tunnel_endpoint, tunnel_name,
 };
 
 mod chrome;

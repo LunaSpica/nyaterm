@@ -369,15 +369,6 @@ pub(in crate::features) fn tunnel_mode(tunnel: &TunnelConfig) -> Option<SshTunne
     }
 }
 
-pub(in crate::features) fn tunnel_mode_label(tunnel: &TunnelConfig) -> &'static str {
-    match tunnel.tunnel_type.as_str() {
-        "local" => "Local",
-        "remote" => "Remote",
-        "dynamic" => "SOCKS5",
-        _ => "Tunnel",
-    }
-}
-
 pub(in crate::features) fn tunnel_name(tunnel: &TunnelConfig) -> String {
     if tunnel.name.trim().is_empty() {
         tunnel.id.clone()

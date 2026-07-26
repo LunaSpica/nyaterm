@@ -218,10 +218,6 @@ impl TerminalSurface {
         }
     }
 
-    pub(in crate::features) fn session_id(&self) -> &str {
-        &self.session_id
-    }
-
     pub(in crate::features) fn has_snapshot(&self) -> bool {
         self.snapshot.is_some()
     }

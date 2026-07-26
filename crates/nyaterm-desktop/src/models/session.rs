@@ -37,20 +37,6 @@ pub(crate) enum StartupCommandAction {
 }
 
 impl StartupCommandAction {
-    pub(crate) fn title(self) -> &'static str {
-        match self {
-            Self::Duplicate => "Duplicate and Run Command",
-            Self::Multiplex => "Multiplex and Run Command",
-        }
-    }
-
-    pub(crate) fn placeholder(self) -> &'static str {
-        match self {
-            Self::Duplicate => "Command to run after duplicate",
-            Self::Multiplex => "Command to run after multiplex",
-        }
-    }
-
     pub(crate) fn status_opened(self) -> &'static str {
         match self {
             Self::Duplicate => "duplicate and run command opened",
@@ -190,10 +176,6 @@ impl MultiLinePasteDraft {
     pub(crate) fn normalized_text(&self) -> String {
         normalize_paste_newlines(&self.text)
     }
-
-    pub(crate) fn line_count(&self) -> usize {
-        count_paste_lines(&self.text)
-    }
 }
 
 pub(crate) fn normalize_paste_newlines(text: &str) -> String {
@@ -202,8 +184,4 @@ pub(crate) fn normalize_paste_newlines(text: &str) -> String {
 
 pub(crate) fn is_multi_line_paste(text: &str) -> bool {
     normalize_paste_newlines(text).contains('\n')
-}
-
-pub(crate) fn count_paste_lines(text: &str) -> usize {
-    normalize_paste_newlines(text).split('\n').count()
 }

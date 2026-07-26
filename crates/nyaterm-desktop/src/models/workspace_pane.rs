@@ -118,63 +118,6 @@ impl WorkspacePaneNode {
         matches!(self, Self::Split { .. })
     }
 
-    pub(crate) fn split_count(&self) -> usize {
-        match self {
-            Self::Leaf { .. } => 0,
-            Self::Split { first, second, .. } => 1 + first.split_count() + second.split_count(),
-        }
-    }
-
-    fn split_id_containing(&self, session_id: &str) -> Option<String> {
-        match self {
-            Self::Leaf { .. } => None,
-            Self::Split {
-                id, first, second, ..
-            } => {
-                if first.contains_session(session_id) || second.contains_session(session_id) {
-                    if matches!(**first, Self::Leaf { .. }) || matches!(**second, Self::Leaf { .. })
-                    {
-                        // Prefer the deepest split that still directly owns the leaf when possible.
-                    }
-                    if let Some(nested) = first
-                        .split_id_containing(session_id)
-                        .or_else(|| second.split_id_containing(session_id))
-                    {
-                        return Some(nested);
-                    }
-                    Some(id.clone())
-                } else {
-                    None
-                }
-            }
-        }
-    }
-
-    pub(crate) fn adjust_ratio_for_split(&mut self, split_id: &str, delta: i8) -> bool {
-        match self {
-            Self::Leaf { .. } => false,
-            Self::Split {
-                id,
-                ratio_percent,
-                first,
-                second,
-                ..
-            } => {
-                if id == split_id {
-                    let next = (*ratio_percent as i16 + delta as i16).clamp(
-                        Self::MIN_RATIO_PERCENT as i16,
-                        Self::MAX_RATIO_PERCENT as i16,
-                    );
-                    *ratio_percent = next as u8;
-                    true
-                } else {
-                    first.adjust_ratio_for_split(split_id, delta)
-                        || second.adjust_ratio_for_split(split_id, delta)
-                }
-            }
-        }
-    }
-
     pub(crate) fn set_ratio_for_split(&mut self, split_id: &str, value: u8) -> bool {
         match self {
             Self::Leaf { .. } => false,
@@ -268,40 +211,6 @@ impl WorkspacePaneNode {
                     direction,
                     split_id.clone(),
                 ) || second.split_leaf(target_session_id, new_session_id, direction, split_id)
-            }
-        }
-    }
-
-    /// Remove a leaf session and collapse its parent split into the sibling.
-    pub(crate) fn remove_leaf(self, target_session_id: &str) -> Option<Self> {
-        match self {
-            Self::Leaf { session_id } => {
-                if session_id == target_session_id {
-                    None
-                } else {
-                    Some(Self::Leaf { session_id })
-                }
-            }
-            Self::Split {
-                id,
-                direction,
-                ratio_percent,
-                first,
-                second,
-            } => {
-                let first = first.remove_leaf(target_session_id);
-                let second = second.remove_leaf(target_session_id);
-                match (first, second) {
-                    (Some(first), Some(second)) => Some(Self::Split {
-                        id,
-                        direction,
-                        ratio_percent,
-                        first: Box::new(first),
-                        second: Box::new(second),
-                    }),
-                    (Some(only), None) | (None, Some(only)) => Some(only),
-                    (None, None) => None,
-                }
             }
         }
     }

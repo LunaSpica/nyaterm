@@ -6,58 +6,6 @@ use nyaterm_transport::{SftpDuplicateDecision, SftpDuplicatePolicy, SftpTransfer
 use crate::models::{TransferJobKind, TransferJobState, TransferJobStatus};
 use crate::widgets::status_pill;
 
-pub(in crate::features) fn compact_transfer_job_row(
-    palette: ThemePalette,
-    job: &TransferJobState,
-) -> impl IntoElement {
-    let (status_fg, status_bg) = match job.status {
-        TransferJobStatus::Running => (rgb(palette.success), rgb(palette.hover)),
-        TransferJobStatus::Paused => (rgb(0xfacc15), rgb(0x3a2f14)),
-        TransferJobStatus::Cancelling => (rgb(0xfbbf24), rgb(0x3a2f14)),
-        TransferJobStatus::Cancelled => (rgb(0xcbd5e1), rgb(palette.border)),
-        TransferJobStatus::Completed => (rgb(0x86efac), rgb(0x12301f)),
-        TransferJobStatus::Failed => (rgb(0xfca5a5), rgb(0x3a1717)),
-    };
-    let detail = if job.detail.trim().is_empty() {
-        transfer_job_title(&job.kind)
-    } else {
-        job.detail.clone()
-    };
-
-    div()
-        .rounded_md()
-        .border_1()
-        .border_color(rgb(palette.border))
-        .bg(rgb(palette.input))
-        .p_3()
-        .child(
-            div()
-                .flex()
-                .items_center()
-                .justify_between()
-                .gap_2()
-                .child(
-                    div()
-                        .min_w_0()
-                        .text_sm()
-                        .font_weight(FontWeight(800.))
-                        .child(truncate_preview(&transfer_job_title(&job.kind), 30)),
-                )
-                .child(status_pill(
-                    transfer_status_label(job.status),
-                    status_fg,
-                    status_bg,
-                )),
-        )
-        .child(
-            div()
-                .mt_1()
-                .text_xs()
-                .text_color(rgb(palette.text_muted))
-                .child(truncate_preview(&detail, 48)),
-        )
-}
-
 pub(in crate::features) fn duplicate_policy_label(policy: SftpDuplicatePolicy) -> &'static str {
     match policy {
         SftpDuplicatePolicy::Ask => "ask",

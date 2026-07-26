@@ -27,15 +27,6 @@ impl ConnectionKindTab {
         }
     }
 
-    pub(crate) fn next(self) -> Self {
-        match self {
-            Self::Ssh => Self::Local,
-            Self::Local => Self::Telnet,
-            Self::Telnet => Self::Serial,
-            Self::Serial => Self::Ssh,
-        }
-    }
-
     pub(crate) fn from_connection_type(config: &nyaterm_core::ConnectionType) -> Self {
         match config {
             nyaterm_core::ConnectionType::Ssh { .. } => Self::Ssh,

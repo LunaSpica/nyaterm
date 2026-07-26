@@ -450,10 +450,6 @@ impl TitleMenu {
             Self::Help => "Help",
         }
     }
-
-    pub(crate) fn all() -> [Self; 4] {
-        [Self::File, Self::View, Self::Terminal, Self::Help]
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

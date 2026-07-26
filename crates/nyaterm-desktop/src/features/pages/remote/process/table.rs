@@ -350,27 +350,3 @@ pub(in crate::features::pages::remote) fn process_table_cell(
         .overflow_hidden()
         .child(value)
 }
-
-pub(in crate::features::pages::remote) fn icon_action_button(
-    palette: ThemePalette,
-    id: impl Into<String>,
-    label: &'static str,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    div()
-        .id(gpui::SharedString::from(id.into()))
-        .h(px(24.))
-        .px_2()
-        .flex()
-        .items_center()
-        .rounded_sm()
-        .border_1()
-        .border_color(rgb(palette.border))
-        .bg(rgb(palette.input))
-        .text_color(rgb(palette.text))
-        .text_xs()
-        .cursor_pointer()
-        .hover(|this| this.bg(rgb(palette.hover)))
-        .child(label)
-        .on_click(on_click)
-}
