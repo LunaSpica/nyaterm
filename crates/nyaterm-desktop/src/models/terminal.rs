@@ -1096,22 +1096,24 @@ pub(crate) struct TerminalFrameOutputSubmission {
     pub(crate) scrollback_limit: usize,
 }
 
+/// Hand a submission to the frame processor as one command.
+///
+/// Splitting it here would only be undone downstream — `push_terminal_frame_command`
+/// re-merges adjacent same-session output on enqueue, and the worker coalesces
+/// again up to [`TERMINAL_FRAME_OUTPUT_BURST_BYTE_LIMIT`] — while costing a copy
+/// of the payload plus two `String` clones per slice.
 fn terminal_frame_output_commands(
     output: TerminalFrameOutputSubmission,
-) -> Vec<TerminalFrameCommand> {
+) -> Option<TerminalFrameCommand> {
     if output.data.is_empty() {
-        return Vec::new();
+        return None;
     }
-    output
-        .data
-        .chunks(TERMINAL_FRAME_OUTPUT_CHUNK_SIZE)
-        .map(|chunk| TerminalFrameCommand::Output {
-            session_id: output.session_id.clone(),
-            data: chunk.to_vec(),
-            encoding: output.encoding.clone(),
-            scrollback_limit: output.scrollback_limit,
-        })
-        .collect()
+    Some(TerminalFrameCommand::Output {
+        session_id: output.session_id,
+        data: output.data,
+        encoding: output.encoding,
+        scrollback_limit: output.scrollback_limit,
+    })
 }
 
 impl TerminalFramePipeline {
@@ -1774,10 +1776,11 @@ impl TerminalFrameSession {
         let (feed, skipped_output_bytes) =
             protect_terminal_output_burst(&mut self.screen, &mut self.output_decoder, &data);
         self.screen.advance(feed);
-        let visible_text = terminal_text_tail(
-            self.output_decoder.decode_output_text(feed),
-            TERMINAL_FRAME_VISIBLE_TEXT_TAIL_CAP,
-        );
+        // Only the tail is ever kept, so cap inside the decoder rather than
+        // building a whole burst's worth of text and draining it back down.
+        let visible_text = self
+            .output_decoder
+            .decode_output_text_tail(feed, TERMINAL_FRAME_VISIBLE_TEXT_TAIL_CAP);
         self.revision = self.revision.saturating_add(1);
         let effects = self.screen.take_effects();
         TerminalFrameOutputChunk {
@@ -2056,29 +2059,6 @@ impl TerminalFrameCommandReceiver {
     fn try_recv(&self) -> Option<TerminalFrameCommand> {
         let mut inner = self.shared.inner.lock().ok()?;
         pop_terminal_frame_command(&self.shared, &mut inner)
-    }
-
-    fn recv_timeout(&self, timeout: Duration) -> Option<TerminalFrameCommand> {
-        let deadline = Instant::now() + timeout;
-        let mut inner = self.shared.inner.lock().ok()?;
-        loop {
-            if let Some(command) = pop_terminal_frame_command(&self.shared, &mut inner) {
-                return Some(command);
-            }
-            if inner.sender_count == 0 {
-                return None;
-            }
-            let remaining = deadline.saturating_duration_since(Instant::now());
-            if remaining.is_zero() {
-                return None;
-            }
-            let (next_inner, timeout_result) =
-                self.shared.ready.wait_timeout(inner, remaining).ok()?;
-            inner = next_inner;
-            if timeout_result.timed_out() && inner.commands.is_empty() {
-                return None;
-            }
-        }
     }
 }
 
@@ -2418,7 +2398,6 @@ fn process_terminal_frame_output_burst(
     mut emit: impl FnMut(TerminalFrameOutputEvent),
 ) {
     let started_at = Instant::now();
-    let wall_budget = terminal_frame_output_burst_wall_budget(data.len());
     let mut batch = TerminalFrameOutputBatch::default();
     let mut processed_bytes = data.len();
     let session = sessions
@@ -2437,15 +2416,13 @@ fn process_terminal_frame_output_burst(
         if processed_bytes >= TERMINAL_FRAME_OUTPUT_BURST_BYTE_LIMIT {
             break;
         }
+        // Coalesce only what has already arrived. Blocking here to see whether
+        // more output shows up would buy larger batches at the cost of holding
+        // finished bytes off the screen — the wait landed on the keystroke-echo
+        // path, and at the tail of a flood it delayed the last chunk too.
         let next = pending_commands
             .pop_front()
-            .or_else(|| command_rx.try_recv())
-            .or_else(|| {
-                let remaining = wall_budget.saturating_sub(started_at.elapsed());
-                (!remaining.is_zero())
-                    .then(|| command_rx.recv_timeout(remaining))
-                    .flatten()
-            });
+            .or_else(|| command_rx.try_recv());
         let Some(next) = next else {
             break;
         };
@@ -2562,6 +2539,8 @@ fn terminal_frame_output_commands_can_merge(
 
 const TERMINAL_FRAME_EVENT_QUEUE_CAP: usize = 1024;
 const TERMINAL_FRAME_COMMAND_QUEUE_CAP: usize = 512;
+/// Ceiling on how far `push_terminal_frame_command` grows a queued `Output` by
+/// absorbing the next one. Also the size of a representative PTY read.
 const TERMINAL_FRAME_OUTPUT_CHUNK_SIZE: usize = 8 * 1024;
 #[cfg(test)]
 const TERMINAL_FRAME_OUTPUT_COALESCE_BYTE_LIMIT: usize = 32 * 1024;
@@ -2569,54 +2548,40 @@ const TERMINAL_FRAME_OUTPUT_COALESCE_BYTE_LIMIT: usize = 32 * 1024;
 // next owned viewport. Zed renders from the terminal grid directly, so it does
 // not pay this snapshot cost for every 8 KiB event-loop chunk.
 const TERMINAL_FRAME_OUTPUT_BURST_BYTE_LIMIT: usize = 128 * 1024;
-const TERMINAL_FRAME_OUTPUT_BURST_WALL_BUDGET: Duration = Duration::from_millis(8);
-const TERMINAL_FRAME_INTERACTIVE_BURST_WALL_BUDGET: Duration = Duration::from_millis(1);
-const TERMINAL_FRAME_INTERACTIVE_BURST_MAX_BYTES: usize = 1024;
-
-fn terminal_frame_output_burst_wall_budget(initial_bytes: usize) -> Duration {
-    if initial_bytes <= TERMINAL_FRAME_INTERACTIVE_BURST_MAX_BYTES {
-        TERMINAL_FRAME_INTERACTIVE_BURST_WALL_BUDGET
-    } else {
-        TERMINAL_FRAME_OUTPUT_BURST_WALL_BUDGET
-    }
-}
-
-#[cfg(test)]
-fn terminal_frame_output_batch_should_continue(
-    processed_bytes: usize,
-    elapsed: Duration,
-    byte_limit: usize,
-    wall_budget: Duration,
-) -> bool {
-    processed_bytes < byte_limit && elapsed < wall_budget
-}
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    /// A submission is handed over whole. Slicing it here would only be undone
+    /// by the enqueue-side merge and the worker's burst coalescing.
     #[test]
-    fn terminal_frame_output_submission_uses_zed_sized_chunks() {
+    fn terminal_frame_output_submission_is_a_single_command() {
         let data = vec![b'x'; TERMINAL_FRAME_OUTPUT_CHUNK_SIZE * 2 + 5];
-        let commands = terminal_frame_output_commands(TerminalFrameOutputSubmission {
+        let command = terminal_frame_output_commands(TerminalFrameOutputSubmission {
             session_id: "s1".to_string(),
             data: data.clone(),
             encoding: "UTF-8".to_string(),
             scrollback_limit: 1000,
         });
 
-        let chunks = commands
-            .into_iter()
-            .map(|command| match command {
-                TerminalFrameCommand::Output { data, .. } => data,
-                _ => panic!("submission should only produce output commands"),
-            })
-            .collect::<Vec<_>>();
-        assert_eq!(
-            chunks.iter().map(Vec::len).collect::<Vec<_>>(),
-            [8192, 8192, 5]
-        );
-        assert_eq!(chunks.concat(), data);
+        match command {
+            Some(TerminalFrameCommand::Output {
+                data: submitted, ..
+            }) => assert_eq!(submitted, data),
+            other => panic!("submission should produce one output command, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn terminal_frame_empty_output_submission_produces_no_command() {
+        let command = terminal_frame_output_commands(TerminalFrameOutputSubmission {
+            session_id: "s1".to_string(),
+            data: Vec::new(),
+            encoding: "UTF-8".to_string(),
+            scrollback_limit: 1000,
+        });
+        assert!(command.is_none());
     }
 
     #[test]
@@ -4304,47 +4269,47 @@ mod tests {
         ));
     }
 
+    /// The burst coalesces what has already arrived and stops there. It must
+    /// not block hoping for more: the sender below is still very much alive,
+    /// and holding finished bytes back for it would sit on the echo path.
     #[test]
-    fn terminal_frame_output_batch_policy_stops_at_latency_budget() {
-        assert!(terminal_frame_output_batch_should_continue(
-            1024,
-            Duration::from_millis(1),
-            TERMINAL_FRAME_OUTPUT_BURST_BYTE_LIMIT,
-            TERMINAL_FRAME_OUTPUT_BURST_WALL_BUDGET,
-        ));
-        assert!(!terminal_frame_output_batch_should_continue(
-            1024,
-            TERMINAL_FRAME_OUTPUT_BURST_WALL_BUDGET,
-            TERMINAL_FRAME_OUTPUT_BURST_BYTE_LIMIT,
-            TERMINAL_FRAME_OUTPUT_BURST_WALL_BUDGET,
-        ));
-    }
+    fn terminal_frame_output_burst_does_not_wait_for_a_live_sender() {
+        let (tx, rx) = terminal_frame_command_channel();
 
-    #[test]
-    fn terminal_frame_output_burst_uses_short_budget_for_interactive_echo() {
-        assert_eq!(
-            terminal_frame_output_burst_wall_budget(1),
-            TERMINAL_FRAME_INTERACTIVE_BURST_WALL_BUDGET
+        let recording_manager = Arc::new(nyaterm_transport::RecordingManager::new());
+        let recording_pipeline =
+            super::super::RecordingWritePipeline::spawn(Arc::clone(&recording_manager));
+        let mut pending = VecDeque::new();
+        let mut sessions = HashMap::new();
+        let mut events = Vec::new();
+        process_terminal_frame_output_burst(
+            &rx,
+            &mut pending,
+            &mut sessions,
+            &recording_pipeline.writer(),
+            "s1".to_string(),
+            b"echo".to_vec(),
+            "UTF-8".to_string(),
+            1000,
+            |event| events.push(event),
         );
-        assert_eq!(
-            terminal_frame_output_burst_wall_budget(TERMINAL_FRAME_INTERACTIVE_BURST_MAX_BYTES),
-            TERMINAL_FRAME_INTERACTIVE_BURST_WALL_BUDGET
-        );
-        assert_eq!(
-            terminal_frame_output_burst_wall_budget(
-                TERMINAL_FRAME_INTERACTIVE_BURST_MAX_BYTES.saturating_add(1)
-            ),
-            TERMINAL_FRAME_OUTPUT_BURST_WALL_BUDGET
-        );
-    }
 
-    #[test]
-    fn terminal_frame_output_batch_policy_stops_at_byte_budget() {
-        assert!(!terminal_frame_output_batch_should_continue(
-            TERMINAL_FRAME_OUTPUT_BURST_BYTE_LIMIT,
-            Duration::from_millis(1),
-            TERMINAL_FRAME_OUTPUT_BURST_BYTE_LIMIT,
-            TERMINAL_FRAME_OUTPUT_BURST_WALL_BUDGET,
+        assert_eq!(events.len(), 1);
+        assert_eq!(
+            events[0].accepted_bytes, 4,
+            "only the bytes already in hand should have been folded in"
+        );
+
+        // Whatever the sender produces next is the *next* burst's work.
+        assert!(tx.send(TerminalFrameCommand::Output {
+            session_id: "s1".to_string(),
+            data: b"later".to_vec(),
+            encoding: "UTF-8".to_string(),
+            scrollback_limit: 1000,
+        }));
+        assert!(matches!(
+            rx.try_recv(),
+            Some(TerminalFrameCommand::Output { data, .. }) if data == b"later"
         ));
     }
 

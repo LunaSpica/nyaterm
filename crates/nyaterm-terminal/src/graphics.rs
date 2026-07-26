@@ -4,6 +4,7 @@
 //! payloads are intercepted *before* Alacritty's ANSI processor so their
 //! binary/base64 bodies never pollute the character grid.
 
+use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 
 /// Which protocol produced a graphics payload.
@@ -120,41 +121,62 @@ impl GraphicsIngress {
     }
 
     /// Feed raw session output and return ordered terminal / graphics segments.
+    ///
+    /// Only a real graphics introducer (`ESC _` / `ESC ]` / `ESC P`) splits the
+    /// stream. Every other escape — every SGR colour code, every cursor move —
+    /// stays inside the surrounding run, so a TUI frame carrying hundreds of
+    /// CSI sequences still leaves here as a single [`GraphicsSegment::Terminal`]
+    /// instead of hundreds of one-per-escape allocations.
     pub fn advance(&mut self, input: &[u8]) -> Vec<GraphicsSegment> {
         if input.is_empty() && self.pending.is_empty() {
             return Vec::new();
         }
-        let mut buf = std::mem::take(&mut self.pending);
-        buf.extend_from_slice(input);
+        // Splice only when a prior chunk left an unfinished sequence behind;
+        // the common case borrows the caller's bytes and copies nothing.
+        let buf = if self.pending.is_empty() {
+            Cow::Borrowed(input)
+        } else {
+            let mut spliced = std::mem::take(&mut self.pending);
+            spliced.extend_from_slice(input);
+            Cow::Owned(spliced)
+        };
+        let buf: &[u8] = &buf;
         let mut out = Vec::new();
         let mut i = 0usize;
         let mut terminal_start = 0usize;
 
         while i < buf.len() {
-            if buf[i] != 0x1b {
-                i += 1;
-                continue;
-            }
-            // Potential graphics introducer. Flush plain terminal first.
-            if i > terminal_start {
-                out.push(GraphicsSegment::Terminal(buf[terminal_start..i].to_vec()));
-            }
-            match classify_at(&buf, i) {
+            let Some(offset) = memchr::memchr(0x1b, &buf[i..]) else {
+                break;
+            };
+            i += offset;
+            match classify_at(buf, i) {
                 SequenceClass::Incomplete => {
                     if buf.len().saturating_sub(i) > GRAPHICS_PENDING_LIMIT {
-                        out.push(GraphicsSegment::Terminal(buf[i..].to_vec()));
+                        // Oversized unfinished sequence: give up on it and hand
+                        // everything still unflushed to the terminal parser.
+                        if terminal_start < buf.len() {
+                            out.push(GraphicsSegment::Terminal(buf[terminal_start..].to_vec()));
+                        }
                         self.pending.clear();
                         return out;
+                    }
+                    if i > terminal_start {
+                        out.push(GraphicsSegment::Terminal(buf[terminal_start..i].to_vec()));
                     }
                     self.pending = buf[i..].to_vec();
                     return out;
                 }
                 SequenceClass::NotGraphics => {
-                    // Leave ESC to the terminal parser.
-                    terminal_start = i;
+                    // Leave ESC to the terminal parser, inside the current run.
                     i += 1;
                 }
                 SequenceClass::Complete { end, event } => {
+                    // A graphics sequence does split the stream: flush the plain
+                    // terminal bytes ahead of it first.
+                    if i > terminal_start {
+                        out.push(GraphicsSegment::Terminal(buf[terminal_start..i].to_vec()));
+                    }
                     if let Some(event) = event {
                         out.push(GraphicsSegment::Event(event));
                     }
@@ -1617,6 +1639,55 @@ mod tests {
             pixel_height: None,
             quiet: 0,
         }
+    }
+
+    /// A stream of SGR/CSI escapes carries no graphics introducer, so it must
+    /// leave the ingress whole. Splitting per escape used to cost one `Vec`
+    /// plus a full decode/parse round trip for every colour code a TUI paints.
+    #[test]
+    fn plain_csi_escapes_do_not_split_the_stream() {
+        let mut ingress = GraphicsIngress::new();
+        let seq = b"\x1b[31mred\x1b[0m \x1b[1;32mgreen\x1b[0m\x1b[2K\x1b[H";
+        let segments = ingress.advance(seq);
+        assert_eq!(
+            segments,
+            vec![GraphicsSegment::Terminal(seq.to_vec())],
+            "CSI-only output should stay in a single terminal segment"
+        );
+    }
+
+    /// Graphics sequences still split, and the plain bytes on either side —
+    /// escapes included — coalesce into one segment each.
+    #[test]
+    fn csi_runs_around_a_graphics_sequence_coalesce() {
+        let mut ingress = GraphicsIngress::new();
+        let seq = b"\x1b[31mhi\x1b[0m\x1b]1337;ClearScrollback\x07\x1b[1myo\x1b[0m";
+        let segments = ingress.advance(seq);
+        assert_eq!(
+            segments,
+            vec![
+                GraphicsSegment::Terminal(b"\x1b[31mhi\x1b[0m".to_vec()),
+                GraphicsSegment::Event(GraphicsEvent::ClearScrollback),
+                GraphicsSegment::Terminal(b"\x1b[1myo\x1b[0m".to_vec()),
+            ]
+        );
+    }
+
+    /// A chunk ending on a bare ESC can still turn out to be a graphics
+    /// introducer, so it stays held until the next chunk decides.
+    #[test]
+    fn trailing_bare_escape_is_held_until_the_next_chunk() {
+        let mut ingress = GraphicsIngress::new();
+        assert_eq!(
+            ingress.advance(b"hi\x1b"),
+            vec![GraphicsSegment::Terminal(b"hi".to_vec())],
+            "the dangling ESC must not be emitted yet"
+        );
+        assert_eq!(
+            ingress.advance(b"[0mbye"),
+            vec![GraphicsSegment::Terminal(b"\x1b[0mbye".to_vec())],
+            "the held ESC rejoins the next chunk"
+        );
     }
 
     #[test]

@@ -401,10 +401,58 @@ impl TerminalOutputDecoder {
         out
     }
 
+    /// Decode terminal-text segments, keeping only the last `max_bytes` of text.
+    ///
+    /// The whole input still flows through the graphics ingress and the charset
+    /// decoder, so their streaming state stays exact — only the *result* is
+    /// capped. Callers that want a visible-output tail get to skip
+    /// materialising a whole multi-hundred-kilobyte burst just to drain 7/8 of
+    /// it back off again.
+    pub fn decode_output_text_tail(&mut self, bytes: &[u8], max_bytes: usize) -> String {
+        let mut out = String::new();
+        for segment in self.graphics_ingress.advance(bytes) {
+            let GraphicsSegment::Terminal(data) = segment else {
+                continue;
+            };
+            let decoded = self.session_encoding.decode_output_bytes(&data);
+            out.push_str(&String::from_utf8_lossy(utf8_tail_bytes(
+                &decoded, max_bytes,
+            )));
+            truncate_text_to_tail(&mut out, max_bytes);
+        }
+        out
+    }
+
     /// Decode terminal-text segments to UTF-8 bytes, skipping graphics payloads.
     pub fn decode_output_chunk(&mut self, bytes: &[u8]) -> Vec<u8> {
         self.decode_output_text(bytes).into_bytes()
     }
+}
+
+/// The last `max_bytes` of `text`, snapped forward to a character boundary.
+fn utf8_tail_bytes(text: &[u8], max_bytes: usize) -> &[u8] {
+    if text.len() <= max_bytes {
+        return text;
+    }
+    let mut start = text.len() - max_bytes;
+    // Continuation bytes are 0b10xx_xxxx: walk off the middle of a character.
+    while start < text.len() && text[start] & 0xc0 == 0x80 {
+        start += 1;
+    }
+    &text[start..]
+}
+
+/// Drop leading characters until `text` fits in `max_bytes`.
+fn truncate_text_to_tail(text: &mut String, max_bytes: usize) {
+    if text.len() <= max_bytes {
+        return;
+    }
+    let min_start = text.len() - max_bytes;
+    let cut = text
+        .char_indices()
+        .find_map(|(index, _)| (index >= min_start).then_some(index))
+        .unwrap_or(text.len());
+    text.drain(..cut);
 }
 
 impl Default for TerminalCore {
@@ -728,7 +776,9 @@ impl TerminalCore {
                         continue;
                     }
                     // Charset conversion after graphics split, before ANSI/grid.
-                    let data = self.session_encoding.decode_output_chunk(&data);
+                    // Borrows straight through for valid UTF-8, which is the
+                    // default charset and so the overwhelming majority.
+                    let data = self.session_encoding.decode_output_bytes(&data);
                     if data.is_empty() {
                         continue;
                     }
@@ -2940,6 +2990,48 @@ mod tests {
         let bytes = "测".as_bytes();
         assert!(decoder.decode_output_text(&bytes[..1]).is_empty());
         assert_eq!(decoder.decode_output_text(&bytes[1..]), "测");
+    }
+
+    #[test]
+    fn output_decoder_tail_keeps_only_the_last_bytes() {
+        let mut decoder = TerminalOutputDecoder::new();
+        assert_eq!(decoder.decode_output_text_tail(b"abcdefgh", 3), "fgh");
+    }
+
+    #[test]
+    fn output_decoder_tail_returns_everything_below_the_cap() {
+        let mut decoder = TerminalOutputDecoder::new();
+        assert_eq!(decoder.decode_output_text_tail(b"abc", 64), "abc");
+    }
+
+    /// The cap is a byte budget, but it must never slice a character in half.
+    #[test]
+    fn output_decoder_tail_snaps_to_a_character_boundary() {
+        let mut decoder = TerminalOutputDecoder::new();
+        // Each character is 3 bytes; a 4-byte budget can only fit the last one.
+        assert_eq!(decoder.decode_output_text_tail("测试".as_bytes(), 4), "试");
+    }
+
+    /// Capping the *result* must not desync the decoder: a character split
+    /// across the chunk boundary still lands whole in the next call.
+    #[test]
+    fn output_decoder_tail_keeps_streaming_state_exact() {
+        let mut decoder = TerminalOutputDecoder::new();
+        let bytes = "测".as_bytes();
+        let mut first = Vec::from(&b"abcdefgh"[..]);
+        first.extend_from_slice(&bytes[..1]);
+
+        assert_eq!(decoder.decode_output_text_tail(&first, 3), "fgh");
+        assert_eq!(decoder.decode_output_text_tail(&bytes[1..], 64), "测");
+    }
+
+    /// Graphics payloads stay excluded from the text tail, exactly as they are
+    /// from the uncapped decode.
+    #[test]
+    fn output_decoder_tail_skips_graphics_payload() {
+        let mut decoder = TerminalOutputDecoder::new();
+        let text = decoder.decode_output_text_tail(b"pre\x1b_Ga=T,i=1,c=1,r=1;QUI=\x1b\\post", 64);
+        assert_eq!(text, "prepost");
     }
 
     #[test]

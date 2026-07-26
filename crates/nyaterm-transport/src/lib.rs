@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use std::pin::Pin;
 use std::process::Stdio;
 use std::sync::{
-    Arc, Mutex,
+    Arc, Condvar, Mutex,
     atomic::{AtomicBool, Ordering},
     mpsc,
 };
@@ -1061,7 +1061,13 @@ const SESSION_EVENT_QUEUE_OUTPUT_EVENT_LIMIT: usize = 256 * 1024;
 
 #[derive(Clone)]
 struct SessionEventQueue {
-    inner: Arc<Mutex<SessionEventQueueInner>>,
+    shared: Arc<SessionEventQueueShared>,
+}
+
+struct SessionEventQueueShared {
+    inner: Mutex<SessionEventQueueInner>,
+    /// Signalled on every push so a consumer can park instead of polling.
+    ready: Condvar,
 }
 
 #[derive(Default)]
@@ -1073,15 +1079,20 @@ struct SessionEventQueueInner {
 impl SessionEventQueue {
     fn new() -> Self {
         Self {
-            inner: Arc::new(Mutex::new(SessionEventQueueInner::default())),
+            shared: Arc::new(SessionEventQueueShared {
+                inner: Mutex::new(SessionEventQueueInner::default()),
+                ready: Condvar::new(),
+            }),
         }
     }
 
     fn push(&self, event: SessionEvent) {
-        let Ok(mut inner) = self.inner.lock() else {
+        let Ok(mut inner) = self.shared.inner.lock() else {
             return;
         };
         inner.push(event);
+        drop(inner);
+        self.shared.ready.notify_one();
     }
 
     fn drain(&self, max_events: usize) -> SessionDrain {
@@ -1093,9 +1104,33 @@ impl SessionEventQueue {
         max_events: usize,
         max_output_bytes: Option<usize>,
     ) -> SessionDrain {
-        let Ok(mut inner) = self.inner.lock() else {
+        let Ok(mut inner) = self.shared.inner.lock() else {
             return SessionDrain::default();
         };
+        inner.drain(max_events, max_output_bytes)
+    }
+
+    /// Drain, parking up to `timeout` for the first event rather than returning
+    /// empty. Lets a dedicated consumer thread wake on the producer's push
+    /// instead of sleeping on a fixed interval and eating the latency.
+    ///
+    /// The timeout still bounds the park so a caller keeps its shutdown flag
+    /// and periodic bookkeeping on schedule.
+    fn drain_blocking_with_output_budget(
+        &self,
+        max_events: usize,
+        max_output_bytes: Option<usize>,
+        timeout: Duration,
+    ) -> SessionDrain {
+        let Ok(mut inner) = self.shared.inner.lock() else {
+            return SessionDrain::default();
+        };
+        if inner.events.is_empty() {
+            let Ok((waited, _)) = self.shared.ready.wait_timeout(inner, timeout) else {
+                return SessionDrain::default();
+            };
+            inner = waited;
+        }
         inner.drain(max_events, max_output_bytes)
     }
 }
@@ -1810,6 +1845,24 @@ impl SessionManager {
         Ok(self
             .event_queue
             .drain_with_output_budget(max_events, Some(max_output_bytes)))
+    }
+
+    /// Like [`Self::drain_events_with_output_budget`], but parks up to `timeout`
+    /// waiting for the first event instead of returning an empty drain.
+    ///
+    /// Only for a dedicated consumer thread — the UI tick path must keep using
+    /// the non-blocking variants.
+    pub fn drain_events_blocking_with_output_budget(
+        &self,
+        max_events: usize,
+        max_output_bytes: usize,
+        timeout: Duration,
+    ) -> Result<SessionDrain, SessionError> {
+        Ok(self.event_queue.drain_blocking_with_output_budget(
+            max_events,
+            Some(max_output_bytes),
+            timeout,
+        ))
     }
 }
 
@@ -3524,6 +3577,69 @@ mod tests {
     use super::*;
     use std::net::TcpListener;
     use std::time::{Duration, Instant};
+
+    /// A push must hand the event straight to a parked consumer. Before the
+    /// queue carried a condvar the bridge could only poll, so every event paid
+    /// an arbitrary slice of the poll interval before anyone looked at it.
+    #[test]
+    fn blocking_drain_wakes_on_push_rather_than_timing_out() {
+        let queue = SessionEventQueue::new();
+        let producer = queue.clone();
+        let (ready_tx, ready_rx) = mpsc::sync_channel(0);
+
+        let waiter = std::thread::spawn(move || {
+            let _ = ready_tx.send(());
+            let started = Instant::now();
+            let drain = producer.drain_blocking_with_output_budget(
+                16,
+                Some(64 * 1024),
+                Duration::from_secs(30),
+            );
+            (drain, started.elapsed())
+        });
+
+        // Let the waiter reach its park before producing.
+        ready_rx.recv().expect("waiter started");
+        std::thread::sleep(Duration::from_millis(20));
+        queue.push(SessionEvent::Output {
+            session_id: "s1".to_string(),
+            data: b"hi".to_vec(),
+        });
+
+        let (drain, waited) = waiter.join().expect("waiter finished");
+        assert_eq!(drain.events.len(), 1);
+        assert!(
+            waited < Duration::from_secs(5),
+            "the push should have woken the park, not the 30s timeout (waited {waited:?})"
+        );
+    }
+
+    /// An event already queued must not cost a park at all.
+    #[test]
+    fn blocking_drain_returns_queued_events_immediately() {
+        let queue = SessionEventQueue::new();
+        queue.push(SessionEvent::Output {
+            session_id: "s1".to_string(),
+            data: b"hi".to_vec(),
+        });
+
+        let started = Instant::now();
+        let drain =
+            queue.drain_blocking_with_output_budget(16, Some(64 * 1024), Duration::from_secs(30));
+
+        assert_eq!(drain.events.len(), 1);
+        assert!(started.elapsed() < Duration::from_secs(5));
+    }
+
+    /// A fully idle queue still has to return so the consumer can re-check its
+    /// stop flag.
+    #[test]
+    fn blocking_drain_gives_up_at_the_timeout() {
+        let queue = SessionEventQueue::new();
+        let drain =
+            queue.drain_blocking_with_output_budget(16, Some(64 * 1024), Duration::from_millis(20));
+        assert!(drain.events.is_empty());
+    }
 
     struct GatedWriter {
         started_tx: mpsc::SyncSender<()>,
