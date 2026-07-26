@@ -9,7 +9,7 @@ Last updated from the working tree on 2026-07-26.
 
 | Metric | Current value | Notes |
 | --- | ---: | --- |
-| `NyaTermApp` fields | 585 | Counted from `features/app_state/mod.rs`; still transitional and too broad. |
+| `NyaTermApp` fields | 570 | Counted from `features/app_state/mod.rs`; still transitional and too broad. |
 | `impl NyaTermApp` blocks | 236 | Spread across 233 files under `crates/nyaterm-desktop/src`. |
 | `#[path = "..."]` declarations in desktop | 0 | Cleared. Every directory is a real module; the boundary script fails on any new occurrence. |
 | `use super::*` imports in desktop | 355 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
@@ -77,6 +77,13 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   became a normal `docker/` directory. The per-directory guards collapsed into
   one crate-wide `check_no_matches`, so module paths now always match the
   directory layout and `pub(in ...)` bounds mean what they say.
+- Quick command UI state is grouped into `QuickCommandFeatureState`, following
+  the `ConnectionFeatureState` pattern: list, editor, dialogs, import and AI
+  popover sub-structs, built from one `QuickCommandFeatureFocus` bundle.
+  Twenty-seven `NyaTermApp` fields collapse into one, and `app_state` no longer
+  imports any of the eleven quick command UI model types. The persisted
+  `quick_commands` and `quick_command_categories` collections deliberately stay
+  on `NyaTermApp`, as with connections.
 - The connections UI state has started moving out of scattered `NyaTermApp`
   fields and into `ConnectionFeatureState`.
 - The current connections state split separates list UI, import UI, editor

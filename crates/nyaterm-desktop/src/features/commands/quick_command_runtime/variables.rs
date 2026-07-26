@@ -7,7 +7,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        self.quick_command_variable_prompt = None;
+        self.quick_command_state.dialogs.variable_prompt = None;
         self.terminal_status = "quick command variables cancelled".to_string();
         cx.notify();
     }
@@ -16,7 +16,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        let Some(prompt) = self.quick_command_variable_prompt.take() else {
+        let Some(prompt) = self.quick_command_state.dialogs.variable_prompt.take() else {
             return;
         };
         let mut command_text = prompt.command.clone();
@@ -38,7 +38,7 @@ impl NyaTermApp {
         index: usize,
         cx: &mut Context<Self>,
     ) {
-        let Some(prompt) = self.quick_command_variable_prompt.as_mut() else {
+        let Some(prompt) = self.quick_command_state.dialogs.variable_prompt.as_mut() else {
             return;
         };
         if index < prompt.variables.len() {
@@ -53,7 +53,7 @@ impl NyaTermApp {
         delta: isize,
         cx: &mut Context<Self>,
     ) {
-        let Some(prompt) = self.quick_command_variable_prompt.as_mut() else {
+        let Some(prompt) = self.quick_command_state.dialogs.variable_prompt.as_mut() else {
             return;
         };
         let Some(variable) = prompt.variables.get_mut(index) else {
@@ -85,7 +85,7 @@ impl NyaTermApp {
         let primary = keystroke.modifiers.platform || keystroke.modifiers.control;
         if primary && !keystroke.modifiers.alt && matches!(keystroke.key.as_str(), "v" | "V") {
             if let Some(text) = cx.read_from_clipboard().and_then(|item| item.text())
-                && let Some(prompt) = self.quick_command_variable_prompt.as_mut()
+                && let Some(prompt) = self.quick_command_state.dialogs.variable_prompt.as_mut()
                 && let Some(variable) = prompt.variables.get(prompt.focused_index)
                 && variable.options.is_empty()
             {
@@ -104,14 +104,14 @@ impl NyaTermApp {
             "escape" => self.cancel_quick_command_variable_prompt(cx),
             "enter" => self.submit_quick_command_variable_prompt(cx),
             "tab" => {
-                if let Some(prompt) = self.quick_command_variable_prompt.as_mut() {
+                if let Some(prompt) = self.quick_command_state.dialogs.variable_prompt.as_mut() {
                     let len = prompt.variables.len().max(1);
                     prompt.focused_index = (prompt.focused_index + 1) % len;
                     cx.notify();
                 }
             }
             "backspace" => {
-                if let Some(prompt) = self.quick_command_variable_prompt.as_mut()
+                if let Some(prompt) = self.quick_command_state.dialogs.variable_prompt.as_mut()
                     && let Some(variable) = prompt.variables.get(prompt.focused_index)
                     && variable.options.is_empty()
                 {
@@ -122,12 +122,12 @@ impl NyaTermApp {
                 }
             }
             "left" | "up" => {
-                if let Some(prompt) = self.quick_command_variable_prompt.as_ref() {
+                if let Some(prompt) = self.quick_command_state.dialogs.variable_prompt.as_ref() {
                     self.cycle_quick_command_variable_option(prompt.focused_index, -1, cx);
                 }
             }
             "right" | "down" => {
-                if let Some(prompt) = self.quick_command_variable_prompt.as_ref() {
+                if let Some(prompt) = self.quick_command_state.dialogs.variable_prompt.as_ref() {
                     self.cycle_quick_command_variable_option(prompt.focused_index, 1, cx);
                 }
             }
@@ -136,7 +136,7 @@ impl NyaTermApp {
                     .key_char
                     .as_deref()
                     .filter(|input| !input.is_empty())
-                    && let Some(prompt) = self.quick_command_variable_prompt.as_mut()
+                    && let Some(prompt) = self.quick_command_state.dialogs.variable_prompt.as_mut()
                     && let Some(variable) = prompt.variables.get(prompt.focused_index)
                     && variable.options.is_empty()
                 {

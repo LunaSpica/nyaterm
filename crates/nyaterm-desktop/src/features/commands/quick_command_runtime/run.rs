@@ -231,15 +231,16 @@ impl NyaTermApp {
         }
         let variables = parse_quick_command_variables(&command_text);
         if !variables.is_empty() {
-            self.quick_command_variable_prompt = Some(QuickCommandVariablePromptState {
-                command_id: command.id,
-                label: command.label,
-                command: command_text,
-                execute,
-                send_to_all,
-                variables,
-                focused_index: 0,
-            });
+            self.quick_command_state.dialogs.variable_prompt =
+                Some(QuickCommandVariablePromptState {
+                    command_id: command.id,
+                    label: command.label,
+                    command: command_text,
+                    execute,
+                    send_to_all,
+                    variables,
+                    focused_index: 0,
+                });
             self.terminal_status = "fill quick command variables".to_string();
             cx.notify();
             return;

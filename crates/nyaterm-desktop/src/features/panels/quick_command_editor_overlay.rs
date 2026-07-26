@@ -26,7 +26,9 @@ impl NyaTermApp {
     ) -> AnyElement {
         let palette = self.theme_palette();
         let editor = self
-            .quick_command_editor
+            .quick_command_state
+            .editor
+            .draft
             .clone()
             .unwrap_or_else(QuickCommandEditorState::blank);
         let title = self.quick_command_editor_title();
@@ -177,9 +179,9 @@ impl NyaTermApp {
             .when(!native_window, |this| this.justify_center())
             .when(native_window, |this| this.justify_start())
             .overflow_y_scroll()
-            .track_focus(&self.quick_command_editor_focus)
+            .track_focus(&self.quick_command_state.editor.focus)
             .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(&this.quick_command_editor_focus);
+                window.focus(&this.quick_command_state.editor.focus);
                 cx.notify();
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {

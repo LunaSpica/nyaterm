@@ -45,9 +45,9 @@ pub(in crate::features) use app_state::{
     SavedConnectionStartOptions, SessionPaneState,
 };
 pub(in crate::features) use commands::{
-    QUICK_COMMAND_COLOR_OPTIONS, QUICK_COMMAND_ICON_OPTIONS, quick_command_category_label,
-    quick_command_sort_mode_from_setting, quick_command_view_mode_from_setting,
-    sorted_quick_commands,
+    QUICK_COMMAND_COLOR_OPTIONS, QUICK_COMMAND_ICON_OPTIONS, QuickCommandFeatureFocus,
+    QuickCommandFeatureState, quick_command_category_label, quick_command_sort_mode_from_setting,
+    quick_command_view_mode_from_setting, sorted_quick_commands,
 };
 pub(in crate::features) use connection_editor_window::ConnectionEditorWindow;
 pub(in crate::features) use connections::{

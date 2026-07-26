@@ -8,18 +8,20 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let prompt =
-            self.quick_command_variable_prompt
-                .clone()
-                .unwrap_or(QuickCommandVariablePromptState {
-                    command_id: String::new(),
-                    label: "command".to_string(),
-                    command: String::new(),
-                    execute: true,
-                    send_to_all: false,
-                    variables: Vec::new(),
-                    focused_index: 0,
-                });
+        let prompt = self
+            .quick_command_state
+            .dialogs
+            .variable_prompt
+            .clone()
+            .unwrap_or(QuickCommandVariablePromptState {
+                command_id: String::new(),
+                label: "command".to_string(),
+                command: String::new(),
+                execute: true,
+                send_to_all: false,
+                variables: Vec::new(),
+                focused_index: 0,
+            });
         let mut preview = prompt.command.clone();
         for variable in &prompt.variables {
             preview = preview.replace(&variable.raw, &variable.value);
@@ -42,7 +44,7 @@ impl NyaTermApp {
                     focused,
                     self.theme_palette(),
                 )
-                .track_focus(&self.quick_command_variable_focus)
+                .track_focus(&self.quick_command_state.dialogs.variable_focus)
                 .into_any_element()
             } else {
                 div()
@@ -106,7 +108,7 @@ impl NyaTermApp {
                     .cursor_pointer()
                     .on_click(cx.listener(move |this, _, window, cx| {
                         this.focus_quick_command_variable(index, cx);
-                        window.focus(&this.quick_command_variable_focus);
+                        window.focus(&this.quick_command_state.dialogs.variable_focus);
                     }))
                     .child(
                         div()
@@ -129,9 +131,9 @@ impl NyaTermApp {
             .flex()
             .items_center()
             .justify_center()
-            .track_focus(&self.quick_command_variable_focus)
+            .track_focus(&self.quick_command_state.dialogs.variable_focus)
             .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(&this.quick_command_variable_focus);
+                window.focus(&this.quick_command_state.dialogs.variable_focus);
                 cx.notify();
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {

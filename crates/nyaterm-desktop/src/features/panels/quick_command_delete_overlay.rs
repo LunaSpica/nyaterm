@@ -8,13 +8,15 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let delete = self
-            .quick_command_delete
-            .clone()
-            .unwrap_or(QuickCommandDeleteState {
-                id: String::new(),
-                label: "command".to_string(),
-            });
+        let delete =
+            self.quick_command_state
+                .dialogs
+                .delete
+                .clone()
+                .unwrap_or(QuickCommandDeleteState {
+                    id: String::new(),
+                    label: "command".to_string(),
+                });
 
         div()
             .id(SharedString::from("quick-command-delete-overlay"))

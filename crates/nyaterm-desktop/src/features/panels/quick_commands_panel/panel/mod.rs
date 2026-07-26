@@ -13,9 +13,9 @@ impl NyaTermApp {
         let filtered_commands = filtered_quick_commands(
             &self.quick_commands,
             &self.quick_command_categories,
-            &self.quick_command_search_draft,
-            &self.quick_command_selected_category,
-            self.quick_command_sort_mode,
+            &self.quick_command_state.list.search_draft,
+            &self.quick_command_state.list.selected_category,
+            self.quick_command_state.list.sort_mode,
         );
         let total_commands = self.quick_commands.len();
         let visible_commands = filtered_commands.len();
@@ -33,14 +33,14 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         let popover_bg = self.shell_surface_color(palette.surface);
         let input_bg = self.shell_surface_color(palette.bg);
-        let view_icon = match self.quick_command_view_mode {
+        let view_icon = match self.quick_command_state.list.view_mode {
             QuickCommandViewMode::List => "icons/view-list.svg",
             QuickCommandViewMode::Compact => "icons/view-compact.svg",
             QuickCommandViewMode::Tile => "icons/view-grid.svg",
         };
 
         let category_sidebar = self.quick_command_category_sidebar(categories, palette, cx);
-        let view_mode = self.quick_command_view_mode;
+        let view_mode = self.quick_command_state.list.view_mode;
         let tile_columns = quick_command_tile_column_count(
             self.last_viewport_size.0,
             self.left_panel_width,
@@ -203,10 +203,10 @@ impl NyaTermApp {
                             .items_center()
                             .gap_1()
                             .cursor_text()
-                            .track_focus(&self.quick_command_search_focus)
+                            .track_focus(&self.quick_command_state.list.search_focus)
                             .on_click(cx.listener(|this, _, window, cx| {
                                 this.close_quick_command_toolbar_popovers();
-                                window.focus(&this.quick_command_search_focus);
+                                window.focus(&this.quick_command_state.list.search_focus);
                                 cx.notify();
                             }))
                             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
@@ -225,24 +225,31 @@ impl NyaTermApp {
                                     .min_w_0()
                                     .flex_1()
                                     .text_size(px(11.))
-                                    .text_color(if self.quick_command_search_draft.is_empty() {
-                                        rgb(palette.text_dimmed)
-                                    } else {
-                                        rgb(palette.text)
-                                    })
-                                    .child(if self.quick_command_search_draft.is_empty() {
-                                        self.tr("quickCommands.search").to_string()
-                                    } else {
-                                        truncate_preview(&self.quick_command_search_draft, 18)
-                                    }),
+                                    .text_color(
+                                        if self.quick_command_state.list.search_draft.is_empty() {
+                                            rgb(palette.text_dimmed)
+                                        } else {
+                                            rgb(palette.text)
+                                        },
+                                    )
+                                    .child(
+                                        if self.quick_command_state.list.search_draft.is_empty() {
+                                            self.tr("quickCommands.search").to_string()
+                                        } else {
+                                            truncate_preview(
+                                                &self.quick_command_state.list.search_draft,
+                                                18,
+                                            )
+                                        },
+                                    ),
                             ),
                     )
                     .child(quick_command_toolbar_divider(palette))
                     .child(quick_command_sort_menu_button(
                         palette,
                         popover_bg,
-                        self.quick_command_sort_mode,
-                        self.quick_command_sort_menu_open,
+                        self.quick_command_state.list.sort_mode,
+                        self.quick_command_state.list.sort_menu_open,
                         self.tr("quickCommands.sort"),
                         self.tr("quickCommands.sortByCreated"),
                         self.tr("quickCommands.sortByName"),
@@ -252,9 +259,9 @@ impl NyaTermApp {
                     .child(quick_command_view_menu_button(
                         palette,
                         popover_bg,
-                        self.quick_command_view_mode,
+                        self.quick_command_state.list.view_mode,
                         view_icon,
-                        self.quick_command_view_menu_open,
+                        self.quick_command_state.list.view_menu_open,
                         self.tr("quickCommands.viewMode"),
                         self.tr("quickCommands.listMode"),
                         self.tr("quickCommands.compactListMode"),
@@ -277,7 +284,7 @@ impl NyaTermApp {
                         palette,
                         "quick-command-import",
                         "icons/import.svg",
-                        self.quick_command_import_path_prompt.is_some(),
+                        self.quick_command_state.import.path_prompt.is_some(),
                         self.tr("quickCommands.import"),
                         cx.listener(|this, _, window, cx| {
                             this.close_quick_command_toolbar_popovers();
@@ -289,9 +296,9 @@ impl NyaTermApp {
                         palette,
                         popover_bg,
                         input_bg,
-                        self.quick_command_ai_popover_open,
-                        self.quick_command_ai_prompt_draft.clone(),
-                        self.quick_command_ai_focus.clone(),
+                        self.quick_command_state.ai.popover_open,
+                        self.quick_command_state.ai.prompt_draft.clone(),
+                        self.quick_command_state.ai.focus.clone(),
                         self.tr("ai.generateCommand"),
                         self.tr("ai.placeholder"),
                         self.tr("ai.generate"),
@@ -306,9 +313,9 @@ impl NyaTermApp {
                     .on_mouse_down(
                         MouseButton::Left,
                         cx.listener(|this, _, _, cx| {
-                            let changed = this.quick_command_sort_menu_open
-                                || this.quick_command_view_menu_open
-                                || this.quick_command_ai_popover_open;
+                            let changed = this.quick_command_state.list.sort_menu_open
+                                || this.quick_command_state.list.view_menu_open
+                                || this.quick_command_state.ai.popover_open;
                             this.close_quick_command_toolbar_popovers();
                             if changed {
                                 cx.notify();
@@ -355,11 +362,12 @@ fn quick_command_sort_menu_button(
                 quick_command_sort_mode_label(current, created_label, name_label, usage_label)
             ),
             cx.listener(|this, _, _, cx| {
-                this.quick_command_sort_menu_open = !this.quick_command_sort_menu_open;
-                if this.quick_command_sort_menu_open {
-                    this.quick_command_view_menu_open = false;
-                    this.quick_command_ai_popover_open = false;
-                    this.quick_command_menu = None;
+                this.quick_command_state.list.sort_menu_open =
+                    !this.quick_command_state.list.sort_menu_open;
+                if this.quick_command_state.list.sort_menu_open {
+                    this.quick_command_state.list.view_menu_open = false;
+                    this.quick_command_state.ai.popover_open = false;
+                    this.quick_command_state.list.row_menu = None;
                 }
                 cx.notify();
             }),
@@ -423,11 +431,12 @@ fn quick_command_view_menu_button(
                 quick_command_view_mode_label(current, list_label, compact_label, tile_label)
             ),
             cx.listener(|this, _, _, cx| {
-                this.quick_command_view_menu_open = !this.quick_command_view_menu_open;
-                if this.quick_command_view_menu_open {
-                    this.quick_command_sort_menu_open = false;
-                    this.quick_command_ai_popover_open = false;
-                    this.quick_command_menu = None;
+                this.quick_command_state.list.view_menu_open =
+                    !this.quick_command_state.list.view_menu_open;
+                if this.quick_command_state.list.view_menu_open {
+                    this.quick_command_state.list.sort_menu_open = false;
+                    this.quick_command_state.ai.popover_open = false;
+                    this.quick_command_state.list.row_menu = None;
                 }
                 cx.notify();
             }),
@@ -532,7 +541,7 @@ fn quick_command_ai_popover_button(
                             .cursor_text()
                             .track_focus(&focus)
                             .on_click(cx.listener(|this, _, window, cx| {
-                                window.focus(&this.quick_command_ai_focus);
+                                window.focus(&this.quick_command_state.ai.focus);
                                 cx.notify();
                             }))
                             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {

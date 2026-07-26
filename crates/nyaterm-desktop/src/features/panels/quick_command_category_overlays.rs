@@ -8,14 +8,16 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let delete =
-            self.quick_command_category_delete
-                .clone()
-                .unwrap_or(QuickCommandCategoryDeleteState {
-                    id: String::new(),
-                    name: "category".to_string(),
-                    command_count: 0,
-                });
+        let delete = self
+            .quick_command_state
+            .dialogs
+            .category_delete
+            .clone()
+            .unwrap_or(QuickCommandCategoryDeleteState {
+                id: String::new(),
+                name: "category".to_string(),
+                command_count: 0,
+            });
 
         div()
             .id(SharedString::from("quick-command-category-delete-overlay"))
@@ -90,15 +92,17 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let rename =
-            self.quick_command_category_rename
-                .clone()
-                .unwrap_or(QuickCommandCategoryRenameState {
-                    id: String::new(),
-                    original_name: "category".to_string(),
-                    draft: String::new(),
-                    error: None,
-                });
+        let rename = self
+            .quick_command_state
+            .dialogs
+            .category_rename
+            .clone()
+            .unwrap_or(QuickCommandCategoryRenameState {
+                id: String::new(),
+                original_name: "category".to_string(),
+                draft: String::new(),
+                error: None,
+            });
 
         div()
             .id(SharedString::from("quick-command-category-rename-overlay"))
@@ -137,9 +141,9 @@ impl NyaTermApp {
                             self.theme_palette(),
                         )
                         .mt_4()
-                        .track_focus(&self.quick_command_category_rename_focus)
+                        .track_focus(&self.quick_command_state.dialogs.category_rename_focus)
                         .on_click(cx.listener(|this, _, window, cx| {
-                            window.focus(&this.quick_command_category_rename_focus);
+                            window.focus(&this.quick_command_state.dialogs.category_rename_focus);
                             cx.notify();
                         }))
                         .on_key_down(cx.listener(

@@ -9,10 +9,10 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some(editor) = self.quick_command_editor.as_mut() {
+        if let Some(editor) = self.quick_command_state.editor.draft.as_mut() {
             editor.focused_field = field;
             editor.error = None;
-            window.focus(&self.quick_command_editor_focus);
+            window.focus(&self.quick_command_state.editor.focus);
             cx.notify();
         }
     }
@@ -22,7 +22,7 @@ impl NyaTermApp {
         category_id: Option<String>,
         cx: &mut Context<Self>,
     ) {
-        if let Some(editor) = self.quick_command_editor.as_mut() {
+        if let Some(editor) = self.quick_command_state.editor.draft.as_mut() {
             editor.category_id = category_id;
             editor.category_draft.clear();
             editor.error = None;
@@ -34,7 +34,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        let Some(editor) = self.quick_command_editor.as_mut() else {
+        let Some(editor) = self.quick_command_state.editor.draft.as_mut() else {
             return;
         };
         let draft = editor.category_draft.trim().to_string();
@@ -61,7 +61,7 @@ impl NyaTermApp {
         color_tag: Option<&'static str>,
         cx: &mut Context<Self>,
     ) {
-        if let Some(editor) = self.quick_command_editor.as_mut() {
+        if let Some(editor) = self.quick_command_state.editor.draft.as_mut() {
             editor.color_tag = color_tag.map(ToOwned::to_owned);
             editor.icon_tag = None;
             editor.error = None;
@@ -74,7 +74,7 @@ impl NyaTermApp {
         icon_tag: Option<&'static str>,
         cx: &mut Context<Self>,
     ) {
-        if let Some(editor) = self.quick_command_editor.as_mut() {
+        if let Some(editor) = self.quick_command_state.editor.draft.as_mut() {
             editor.icon_tag = icon_tag.map(ToOwned::to_owned);
             if icon_tag.is_some() {
                 editor.color_tag = None;
@@ -88,7 +88,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        if let Some(editor) = self.quick_command_editor.as_mut() {
+        if let Some(editor) = self.quick_command_state.editor.draft.as_mut() {
             editor.pinned = !editor.pinned;
             editor.error = None;
             cx.notify();
@@ -100,7 +100,7 @@ impl NyaTermApp {
         mode: &'static str,
         cx: &mut Context<Self>,
     ) {
-        if let Some(editor) = self.quick_command_editor.as_mut() {
+        if let Some(editor) = self.quick_command_state.editor.draft.as_mut() {
             editor.execution_mode = if mode == "append" {
                 "append".to_string()
             } else {
@@ -114,7 +114,7 @@ impl NyaTermApp {
     pub(in crate::features) fn save_quick_command_editor(&mut self, cx: &mut Context<Self>) {
         let label_required = self.tr("quickCommands.errorLabelRequired").to_string();
         let command_required = self.tr("quickCommands.errorCommandRequired").to_string();
-        let Some(editor) = self.quick_command_editor.as_mut() else {
+        let Some(editor) = self.quick_command_state.editor.draft.as_mut() else {
             return;
         };
         let label = editor.label.trim().to_string();
@@ -184,15 +184,15 @@ impl NyaTermApp {
             Ok(config) => {
                 self.quick_commands = Arc::from(config.commands);
                 self.quick_command_categories = config.categories;
-                self.quick_command_editor = None;
-                self.quick_command_window = None;
-                self.quick_command_window_open_pending = false;
+                self.quick_command_state.editor.draft = None;
+                self.quick_command_state.editor.window = None;
+                self.quick_command_state.editor.window_open_pending = false;
                 self.store_status.message = format!("quick command '{}' saved", command.label);
                 self.store_status.ready = true;
                 self.terminal_status = self.store_status.message.clone();
             }
             Err(error) => {
-                if let Some(editor) = self.quick_command_editor.as_mut() {
+                if let Some(editor) = self.quick_command_state.editor.draft.as_mut() {
                     editor.error = Some(error.to_string());
                 }
                 self.store_status.message = format!("quick command save failed: {error}");
@@ -218,7 +218,7 @@ impl NyaTermApp {
         if primary && !keystroke.modifiers.alt && matches!(keystroke.key.as_str(), "v" | "V") {
             if let Some(text) = cx.read_from_clipboard().and_then(|item| item.text()) {
                 self.quick_command_editor_value_mut().push_str(&text);
-                if let Some(editor) = self.quick_command_editor.as_mut() {
+                if let Some(editor) = self.quick_command_state.editor.draft.as_mut() {
                     if editor.focused_field == QuickCommandEditorField::Category {
                         editor.category_id = None;
                     }
@@ -236,7 +236,9 @@ impl NyaTermApp {
             "escape" => self.close_quick_command_editor(cx),
             "enter" => {
                 if self
-                    .quick_command_editor
+                    .quick_command_state
+                    .editor
+                    .draft
                     .as_ref()
                     .is_some_and(|editor| editor.focused_field == QuickCommandEditorField::Command)
                 {
@@ -247,7 +249,7 @@ impl NyaTermApp {
                 }
             }
             "tab" => {
-                if let Some(editor) = self.quick_command_editor.as_mut() {
+                if let Some(editor) = self.quick_command_state.editor.draft.as_mut() {
                     editor.focused_field = match editor.focused_field {
                         QuickCommandEditorField::Label => QuickCommandEditorField::Command,
                         QuickCommandEditorField::Command => QuickCommandEditorField::Category,
@@ -260,7 +262,7 @@ impl NyaTermApp {
             }
             "backspace" => {
                 self.quick_command_editor_value_mut().pop();
-                if let Some(editor) = self.quick_command_editor.as_mut() {
+                if let Some(editor) = self.quick_command_state.editor.draft.as_mut() {
                     if editor.focused_field == QuickCommandEditorField::Category {
                         editor.category_id = None;
                     }
@@ -270,7 +272,7 @@ impl NyaTermApp {
             }
             "space" => {
                 self.quick_command_editor_value_mut().push(' ');
-                if let Some(editor) = self.quick_command_editor.as_mut() {
+                if let Some(editor) = self.quick_command_state.editor.draft.as_mut() {
                     if editor.focused_field == QuickCommandEditorField::Category {
                         editor.category_id = None;
                     }
@@ -285,7 +287,7 @@ impl NyaTermApp {
                     .filter(|input| !input.is_empty())
                 {
                     self.quick_command_editor_value_mut().push_str(input);
-                    if let Some(editor) = self.quick_command_editor.as_mut() {
+                    if let Some(editor) = self.quick_command_state.editor.draft.as_mut() {
                         if editor.focused_field == QuickCommandEditorField::Category {
                             editor.category_id = None;
                         }
@@ -299,7 +301,9 @@ impl NyaTermApp {
 
     pub(in crate::features) fn quick_command_editor_value_mut(&mut self) -> &mut String {
         let editor = self
-            .quick_command_editor
+            .quick_command_state
+            .editor
+            .draft
             .as_mut()
             .expect("quick command editor should be open while editing");
         match editor.focused_field {
