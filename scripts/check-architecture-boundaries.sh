@@ -362,6 +362,11 @@ check_no_matches \
   crates/nyaterm-desktop/src/features/prelude.rs
 
 check_no_matches \
+  "low-frequency terminal frame event model must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(TerminalFrameEvent)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
   "low-frequency terminal frame search key model must stay out of features/prelude.rs" \
   '(^|[,{[:space:]])(TerminalFrameSearchKey)([},[:space:]]|$)' \
   crates/nyaterm-desktop/src/features/prelude.rs
