@@ -28,7 +28,7 @@ impl NyaTermApp {
                 .find(|entry| entry.id == credential_id)
                 .cloned()
             else {
-                self.security_status = "credential is no longer available".to_string();
+                self.security.status = "credential is no longer available".to_string();
                 cx.notify();
                 return;
             };
@@ -58,19 +58,19 @@ impl NyaTermApp {
                 error: None,
             }
         };
-        self.security_credential_editor = Some(editor);
-        self.security_key_editor = None;
-        self.security_otp_editor = None;
-        self.security_password_editor = None;
-        self.security_delete_confirm = None;
-        self.security_status = "credential editor opened".to_string();
-        window.focus(&self.security_credential_editor_focus);
+        self.security.editors.credential = Some(editor);
+        self.security.editors.key = None;
+        self.security.editors.otp = None;
+        self.security.editors.password = None;
+        self.security.delete_confirm = None;
+        self.security.status = "credential editor opened".to_string();
+        window.focus(&self.security.editors.credential_focus);
         cx.notify();
     }
 
     pub(in crate::features) fn close_security_credential_editor(&mut self, cx: &mut Context<Self>) {
-        self.security_credential_editor = None;
-        self.security_status = "credential editor closed".to_string();
+        self.security.editors.credential = None;
+        self.security.status = "credential editor closed".to_string();
         cx.notify();
     }
 
@@ -80,11 +80,11 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some(editor) = self.security_credential_editor.as_mut() {
+        if let Some(editor) = self.security.editors.credential.as_mut() {
             editor.focused_field = field;
             editor.error = None;
         }
-        window.focus(&self.security_credential_editor_focus);
+        window.focus(&self.security.editors.credential_focus);
         cx.notify();
     }
 
@@ -92,7 +92,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        if let Some(editor) = self.security_credential_editor.as_mut() {
+        if let Some(editor) = self.security.editors.credential.as_mut() {
             editor.enabled = !editor.enabled;
         }
         cx.notify();
@@ -119,7 +119,7 @@ impl NyaTermApp {
             .find(|entry| entry.id == credential_id)
             .cloned()
         else {
-            self.security_status = "credential not found".to_string();
+            self.security.status = "credential not found".to_string();
             cx.notify();
             return;
         };
@@ -129,7 +129,7 @@ impl NyaTermApp {
         ) {
             Ok(store) => store,
             Err(error) => {
-                self.security_status = error.to_string();
+                self.security.status = error.to_string();
                 cx.notify();
                 return;
             }
@@ -139,14 +139,14 @@ impl NyaTermApp {
         match store.save_credential(next.clone()) {
             Ok(_) => {
                 self.refresh_security_catalog();
-                self.security_status = format!(
+                self.security.status = format!(
                     "credential {} {}",
                     next.name,
                     if next.enabled { "enabled" } else { "disabled" }
                 );
             }
             Err(error) => {
-                self.security_status = error.to_string();
+                self.security.status = error.to_string();
             }
         }
         cx.notify();
@@ -174,7 +174,7 @@ impl NyaTermApp {
             }
             _ => {}
         }
-        let Some(editor) = self.security_credential_editor.as_mut() else {
+        let Some(editor) = self.security.editors.credential.as_mut() else {
             return;
         };
         let field = match editor.focused_field {
@@ -207,12 +207,12 @@ impl NyaTermApp {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(editor) = self.security_credential_editor.clone() else {
+        let Some(editor) = self.security.editors.credential.clone() else {
             return;
         };
         let name = editor.name.trim().to_string();
         if name.is_empty() {
-            if let Some(editor) = self.security_credential_editor.as_mut() {
+            if let Some(editor) = self.security.editors.credential.as_mut() {
                 editor.error = Some("credential name is required".to_string());
             }
             cx.notify();
@@ -224,7 +224,7 @@ impl NyaTermApp {
         ) {
             Ok(store) => store,
             Err(error) => {
-                if let Some(editor) = self.security_credential_editor.as_mut() {
+                if let Some(editor) = self.security.editors.credential.as_mut() {
                     editor.error = Some(error.to_string());
                 }
                 cx.notify();
@@ -248,12 +248,12 @@ impl NyaTermApp {
         match store.save_credential(entry) {
             Ok(id) => {
                 self.refresh_security_catalog();
-                self.security_credential_editor = None;
-                self.security_status = format!("credential saved ({})", compact_id(&id));
+                self.security.editors.credential = None;
+                self.security.status = format!("credential saved ({})", compact_id(&id));
                 self.terminal_status = "credential saved".to_string();
             }
             Err(error) => {
-                if let Some(editor) = self.security_credential_editor.as_mut() {
+                if let Some(editor) = self.security.editors.credential.as_mut() {
                     editor.error = Some(error.to_string());
                 }
             }
@@ -282,7 +282,7 @@ impl NyaTermApp {
             .find(|entry| entry.id == credential_id)
             .map(|entry| entry.name.clone())
             .unwrap_or_else(|| credential_id.clone());
-        self.security_delete_confirm = Some(SecurityDeleteConfirmState {
+        self.security.delete_confirm = Some(SecurityDeleteConfirmState {
             kind: SecurityAuthTab::Credentials,
             id: credential_id,
             label,
@@ -297,11 +297,13 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if self
-            .security_revealed_credentials
+            .security
+            .revealed
+            .credentials
             .contains_key(&credential_id)
         {
-            self.security_revealed_credentials.remove(&credential_id);
-            self.security_status = "credential password hidden".to_string();
+            self.security.revealed.credentials.remove(&credential_id);
+            self.security.status = "credential password hidden".to_string();
             cx.notify();
             return;
         }
@@ -320,7 +322,7 @@ impl NyaTermApp {
         ) {
             Ok(store) => store,
             Err(error) => {
-                self.security_status = error.to_string();
+                self.security.status = error.to_string();
                 cx.notify();
                 return;
             }
@@ -329,16 +331,18 @@ impl NyaTermApp {
             Ok(Some(entry)) => {
                 let value = entry.password.unwrap_or_default();
                 if value.is_empty() {
-                    self.security_status = "credential has no password".to_string();
+                    self.security.status = "credential has no password".to_string();
                 } else {
-                    self.security_revealed_credentials
+                    self.security
+                        .revealed
+                        .credentials
                         .insert(credential_id.clone(), value.clone());
                     cx.write_to_clipboard(ClipboardItem::new_string(value));
-                    self.security_status = "credential password revealed and copied".to_string();
+                    self.security.status = "credential password revealed and copied".to_string();
                 }
             }
-            Ok(None) => self.security_status = "credential not found".to_string(),
-            Err(error) => self.security_status = error.to_string(),
+            Ok(None) => self.security.status = "credential not found".to_string(),
+            Err(error) => self.security.status = error.to_string(),
         }
         cx.notify();
     }

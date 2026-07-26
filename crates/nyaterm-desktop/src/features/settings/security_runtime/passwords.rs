@@ -28,7 +28,7 @@ impl NyaTermApp {
                 .find(|entry| entry.id == password_id)
                 .cloned()
             else {
-                self.security_status = "password is no longer available".to_string();
+                self.security.status = "password is no longer available".to_string();
                 cx.notify();
                 return;
             };
@@ -52,19 +52,19 @@ impl NyaTermApp {
                 error: None,
             }
         };
-        self.security_password_editor = Some(editor);
-        self.security_key_editor = None;
-        self.security_otp_editor = None;
-        self.security_credential_editor = None;
-        self.security_delete_confirm = None;
-        self.security_status = "password editor opened".to_string();
-        window.focus(&self.security_password_editor_focus);
+        self.security.editors.password = Some(editor);
+        self.security.editors.key = None;
+        self.security.editors.otp = None;
+        self.security.editors.credential = None;
+        self.security.delete_confirm = None;
+        self.security.status = "password editor opened".to_string();
+        window.focus(&self.security.editors.password_focus);
         cx.notify();
     }
 
     pub(in crate::features) fn close_security_password_editor(&mut self, cx: &mut Context<Self>) {
-        self.security_password_editor = None;
-        self.security_status = "password editor closed".to_string();
+        self.security.editors.password = None;
+        self.security.status = "password editor closed".to_string();
         cx.notify();
     }
 
@@ -74,11 +74,11 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some(editor) = self.security_password_editor.as_mut() {
+        if let Some(editor) = self.security.editors.password.as_mut() {
             editor.focused_field = field;
             editor.error = None;
         }
-        window.focus(&self.security_password_editor_focus);
+        window.focus(&self.security.editors.password_focus);
         cx.notify();
     }
 
@@ -104,7 +104,7 @@ impl NyaTermApp {
             }
             _ => {}
         }
-        let Some(editor) = self.security_password_editor.as_mut() else {
+        let Some(editor) = self.security.editors.password.as_mut() else {
             return;
         };
         let field = match editor.focused_field {
@@ -134,19 +134,19 @@ impl NyaTermApp {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(editor) = self.security_password_editor.clone() else {
+        let Some(editor) = self.security.editors.password.clone() else {
             return;
         };
         let name = editor.name.trim().to_string();
         if name.is_empty() {
-            if let Some(editor) = self.security_password_editor.as_mut() {
+            if let Some(editor) = self.security.editors.password.as_mut() {
                 editor.error = Some("password name is required".to_string());
             }
             cx.notify();
             return;
         }
         if editor.id.is_none() && editor.password.trim().is_empty() {
-            if let Some(editor) = self.security_password_editor.as_mut() {
+            if let Some(editor) = self.security.editors.password.as_mut() {
                 editor.error = Some("password value is required".to_string());
             }
             cx.notify();
@@ -158,7 +158,7 @@ impl NyaTermApp {
         ) {
             Ok(store) => store,
             Err(error) => {
-                if let Some(editor) = self.security_password_editor.as_mut() {
+                if let Some(editor) = self.security.editors.password.as_mut() {
                     editor.error = Some(error.to_string());
                 }
                 cx.notify();
@@ -178,12 +178,12 @@ impl NyaTermApp {
         match store.save_password(entry) {
             Ok(id) => {
                 self.refresh_security_catalog();
-                self.security_password_editor = None;
-                self.security_status = format!("password saved ({})", compact_id(&id));
+                self.security.editors.password = None;
+                self.security.status = format!("password saved ({})", compact_id(&id));
                 self.terminal_status = "password saved".to_string();
             }
             Err(error) => {
-                if let Some(editor) = self.security_password_editor.as_mut() {
+                if let Some(editor) = self.security.editors.password.as_mut() {
                     editor.error = Some(error.to_string());
                 }
             }
@@ -210,7 +210,7 @@ impl NyaTermApp {
             .find(|entry| entry.id == password_id)
             .map(|entry| entry.name.clone())
             .unwrap_or_else(|| password_id.clone());
-        self.security_delete_confirm = Some(SecurityDeleteConfirmState {
+        self.security.delete_confirm = Some(SecurityDeleteConfirmState {
             kind: SecurityAuthTab::Passwords,
             id: password_id,
             label,
@@ -225,9 +225,9 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         // Tauri PasswordManagementTab: eye toggles reveal; hide does not need unlock.
-        if self.security_revealed_passwords.contains_key(&password_id) {
-            self.security_revealed_passwords.remove(&password_id);
-            self.security_status = "password hidden".to_string();
+        if self.security.revealed.passwords.contains_key(&password_id) {
+            self.security.revealed.passwords.remove(&password_id);
+            self.security.status = "password hidden".to_string();
             cx.notify();
             return;
         }
@@ -244,7 +244,7 @@ impl NyaTermApp {
         ) {
             Ok(store) => store,
             Err(error) => {
-                self.security_status = error.to_string();
+                self.security.status = error.to_string();
                 cx.notify();
                 return;
             }
@@ -253,15 +253,17 @@ impl NyaTermApp {
             Ok(Some(entry)) => {
                 let value = entry.password.unwrap_or_default();
                 if value.is_empty() {
-                    self.security_status = "password has no secret".to_string();
+                    self.security.status = "password has no secret".to_string();
                 } else {
-                    self.security_revealed_passwords
+                    self.security
+                        .revealed
+                        .passwords
                         .insert(password_id.clone(), value);
-                    self.security_status = "password revealed".to_string();
+                    self.security.status = "password revealed".to_string();
                 }
             }
-            Ok(None) => self.security_status = "password not found".to_string(),
-            Err(error) => self.security_status = error.to_string(),
+            Ok(None) => self.security.status = "password not found".to_string(),
+            Err(error) => self.security.status = error.to_string(),
         }
         cx.notify();
     }
@@ -279,12 +281,12 @@ impl NyaTermApp {
         ) {
             return;
         }
-        if let Some(value) = self.security_revealed_passwords.get(&password_id).cloned() {
+        if let Some(value) = self.security.revealed.passwords.get(&password_id).cloned() {
             if value.is_empty() {
-                self.security_status = "password has no secret".to_string();
+                self.security.status = "password has no secret".to_string();
             } else {
                 cx.write_to_clipboard(ClipboardItem::new_string(value));
-                self.security_status = "password copied".to_string();
+                self.security.status = "password copied".to_string();
             }
             cx.notify();
             return;
@@ -295,7 +297,7 @@ impl NyaTermApp {
         ) {
             Ok(store) => store,
             Err(error) => {
-                self.security_status = error.to_string();
+                self.security.status = error.to_string();
                 cx.notify();
                 return;
             }
@@ -304,16 +306,18 @@ impl NyaTermApp {
             Ok(Some(entry)) => {
                 let value = entry.password.unwrap_or_default();
                 if value.is_empty() {
-                    self.security_status = "password has no secret".to_string();
+                    self.security.status = "password has no secret".to_string();
                 } else {
-                    self.security_revealed_passwords
+                    self.security
+                        .revealed
+                        .passwords
                         .insert(password_id.clone(), value.clone());
                     cx.write_to_clipboard(ClipboardItem::new_string(value));
-                    self.security_status = "password revealed and copied".to_string();
+                    self.security.status = "password revealed and copied".to_string();
                 }
             }
-            Ok(None) => self.security_status = "password not found".to_string(),
-            Err(error) => self.security_status = error.to_string(),
+            Ok(None) => self.security.status = "password not found".to_string(),
+            Err(error) => self.security.status = error.to_string(),
         }
         cx.notify();
     }
@@ -322,7 +326,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        if let Some(editor) = self.security_password_editor.as_mut() {
+        if let Some(editor) = self.security.editors.password.as_mut() {
             editor.show_password = !editor.show_password;
             cx.notify();
         }

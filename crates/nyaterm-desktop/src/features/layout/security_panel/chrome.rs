@@ -7,7 +7,7 @@ impl NyaTermApp {
         &self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let unlocked = self.settings.has_master_password && self.security_secrets_unlocked;
+        let unlocked = self.settings.has_master_password && self.security.unlock.secrets_unlocked;
         let palette = self.theme_palette();
         div()
             .id(SharedString::from("security-secrets-toggle"))
@@ -88,8 +88,8 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let draft_length = self.security_unlock_draft.chars().count()
-            + self.security_unlock_marked_text.chars().count();
+        let draft_length = self.security.unlock.draft.chars().count()
+            + self.security.unlock.marked_text.chars().count();
         let draft = if draft_length == 0 {
             " ".to_string()
         } else {
@@ -114,7 +114,7 @@ impl NyaTermApp {
                     .flex()
                     .flex_col()
                     .gap_2()
-                    .track_focus(&self.security_unlock_focus)
+                    .track_focus(&self.security.unlock.focus)
                     .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                         this.handle_security_unlock_key_down(event, window, cx);
                     }))
@@ -152,7 +152,7 @@ impl NyaTermApp {
                                     |_bounds, _window, _cx| {},
                                     move |bounds, _state, window, cx| {
                                         let focus =
-                                            input_entity.read(cx).security_unlock_focus.clone();
+                                            input_entity.read(cx).security.unlock.focus.clone();
                                         window.handle_input(
                                             &focus,
                                             gpui::ElementInputHandler::new(
@@ -167,7 +167,7 @@ impl NyaTermApp {
                                 .inset_0(),
                             ),
                     )
-                    .when_some(self.security_unlock_error.clone(), |this, error| {
+                    .when_some(self.security.unlock.error.clone(), |this, error| {
                         this.child(
                             div()
                                 .text_size(px(10.))
@@ -266,7 +266,7 @@ impl NyaTermApp {
         tab: SecurityAuthTab,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let selected = self.security_auth_tab == tab;
+        let selected = self.security.auth_tab == tab;
         let palette = self.theme_palette();
         // Tauri TabsTrigger text-xs inside h-8 grid segment.
         div()

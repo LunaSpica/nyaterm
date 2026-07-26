@@ -122,7 +122,7 @@ impl NyaTermApp {
         );
         self.apply_panel_stack_from_settings();
         if !self.settings.has_master_password {
-            self.security_secrets_unlocked = true;
+            self.security.unlock.secrets_unlocked = true;
         }
     }
 

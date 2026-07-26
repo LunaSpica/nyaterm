@@ -7,7 +7,8 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> gpui::Stateful<gpui::Div> {
         let mut body = security_auth_body_base("security-otp-body");
-        let actions_enabled = self.security_otp_editor.is_none() && !self.security_otp_qr_importing;
+        let actions_enabled =
+            self.security.editors.otp.is_none() && !self.security.editors.otp_qr_importing;
         let has_entries = !self.connection_otp_entries.is_empty();
         body = body.child(
             div()
@@ -32,7 +33,7 @@ impl NyaTermApp {
                         .child(security_toolbar_action_button(
                             palette,
                             "security-otp-scan-qr",
-                            if self.security_otp_qr_importing {
+                            if self.security.editors.otp_qr_importing {
                                 self.tr("otpManager.scanningQr")
                             } else {
                                 self.tr("otpManager.scanQr")
@@ -62,7 +63,7 @@ impl NyaTermApp {
                         )),
                 ),
         );
-        if let Some(editor) = self.security_otp_editor.clone() {
+        if let Some(editor) = self.security.editors.otp.clone() {
             body = body.child(self.security_otp_editor_view(editor, cx));
         } else if self.connection_otp_entries.is_empty() {
             body = body.child(empty_panel(
@@ -99,7 +100,9 @@ impl NyaTermApp {
                     compact_id(&entry.id)
                 };
                 let code_raw = self
-                    .security_otp_codes
+                    .security
+                    .revealed
+                    .otp_codes
                     .get(&entry.id)
                     .cloned()
                     .unwrap_or_else(|| "------".to_string());

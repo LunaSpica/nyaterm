@@ -73,6 +73,7 @@ pub(in crate::features) use session::{
     SftpDuplicatePromptBroker, SftpDuplicatePromptState, credential_prompt_target,
     keyboard_interactive_prompt_target, unix_seconds_now,
 };
+pub(in crate::features) use settings::{SecurityFeatureFocus, SecurityFeatureState};
 pub(in crate::features) use settings_window::SettingsWindow;
 pub(in crate::features) use shell::{ActivityBarDragPayload, ActivityBarDragPreview};
 pub(in crate::features) use shell::{

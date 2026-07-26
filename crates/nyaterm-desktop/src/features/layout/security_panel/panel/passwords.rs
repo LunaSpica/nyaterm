@@ -12,12 +12,12 @@ impl NyaTermApp {
             self.tr("passwordManager.title"),
             "security-add-password",
             self.tr("passwordManager.add"),
-            self.security_password_editor.is_none(),
+            self.security.editors.password.is_none(),
             cx.listener(|this, _, window, cx| {
                 this.open_security_password_editor(None, window, cx);
             }),
         ));
-        if let Some(editor) = self.security_password_editor.clone() {
+        if let Some(editor) = self.security.editors.password.clone() {
             body = body.child(self.security_password_editor_view(editor, cx));
         } else if self.connection_saved_passwords.is_empty() {
             body = body.child(empty_panel(
@@ -38,8 +38,8 @@ impl NyaTermApp {
                 let delete_id = entry.id.clone();
                 let reveal_id = entry.id.clone();
                 let copy_id = entry.id.clone();
-                let is_revealed = self.security_revealed_passwords.contains_key(&entry.id);
-                let revealed_value = self.security_revealed_passwords.get(&entry.id).cloned();
+                let is_revealed = self.security.revealed.passwords.contains_key(&entry.id);
+                let revealed_value = self.security.revealed.passwords.get(&entry.id).cloned();
                 // Tauri: masked until revealed; revealed shows secret + Copy.
                 let secret_line = if is_revealed {
                     revealed_value

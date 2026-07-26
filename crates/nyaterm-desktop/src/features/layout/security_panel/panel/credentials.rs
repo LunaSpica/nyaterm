@@ -12,12 +12,12 @@ impl NyaTermApp {
             self.tr("credentialManager.title"),
             "security-add-credential",
             self.tr("credentialManager.add"),
-            self.security_credential_editor.is_none(),
+            self.security.editors.credential.is_none(),
             cx.listener(|this, _, window, cx| {
                 this.open_security_credential_editor(None, window, cx);
             }),
         ));
-        if let Some(editor) = self.security_credential_editor.clone() {
+        if let Some(editor) = self.security.editors.credential.clone() {
             body = body.child(self.security_credential_editor_view(editor, cx));
         } else if self.connection_saved_credentials.is_empty() {
             body = body.child(empty_panel(
@@ -38,9 +38,11 @@ impl NyaTermApp {
                 let delete_id = entry.id.clone();
                 let reveal_id = entry.id.clone();
                 let toggle_id = entry.id.clone();
-                let is_revealed = self.security_revealed_credentials.contains_key(&entry.id);
+                let is_revealed = self.security.revealed.credentials.contains_key(&entry.id);
                 let secret = self
-                    .security_revealed_credentials
+                    .security
+                    .revealed
+                    .credentials
                     .get(&entry.id)
                     .cloned()
                     .unwrap_or_default();

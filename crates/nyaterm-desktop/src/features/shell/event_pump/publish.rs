@@ -106,7 +106,7 @@ impl NyaTermApp {
         let settings = crate::entities::SettingsSnapshot {
             active_tab: self.settings_active_tab.label().to_string(),
             has_master_password: self.settings.has_master_password,
-            security_unlocked: self.security_secrets_unlocked,
+            security_unlocked: self.security.unlock.secrets_unlocked,
             cloud_sync_enabled: self.cloud_sync_settings.enabled,
             startup_restore: self.settings.startup_restore,
         };

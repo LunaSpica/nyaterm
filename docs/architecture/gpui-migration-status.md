@@ -9,7 +9,7 @@ Last updated from the working tree on 2026-07-26.
 
 | Metric | Current value | Notes |
 | --- | ---: | --- |
-| `NyaTermApp` fields | 516 | Counted from `features/app_state/mod.rs`; still transitional and too broad. |
+| `NyaTermApp` fields | 494 | Counted from `features/app_state/mod.rs`; still transitional and too broad. |
 | `impl NyaTermApp` blocks | 236 | Spread across 233 files under `crates/nyaterm-desktop/src`. |
 | `#[path = "..."]` declarations in desktop | 0 | Cleared. Every directory is a real module; the boundary script fails on any new occurrence. |
 | `use super::*` imports in desktop | 355 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
@@ -90,6 +90,11 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   streak, last refresh instant), which the fifty-four prefixed `NyaTermApp`
   fields hid. Their job channels are created inside
   `RemoteOpsFeatureState::new` because construction was their only other use.
+- Security panel state is grouped into `SecurityFeatureState`: the four editors
+  and their focus handles in `editors`, revealed passwords/credentials and
+  generated OTP codes in `revealed`, and the master password prompt in
+  `unlock`. Secrets themselves still live in `nyaterm-core`; this is the panel's
+  view state only, cleared through the same paths as before.
 - The connections UI state has started moving out of scattered `NyaTermApp`
   fields and into `ConnectionFeatureState`.
 - The current connections state split separates list UI, import UI, editor
