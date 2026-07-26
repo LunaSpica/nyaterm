@@ -539,10 +539,10 @@ pub struct NyaTermApp {
     pub(in crate::features) session_cwds: HashMap<String, String>,
     /// Per-session ZMODEM detector / transfer state (UI-layer interception).
     pub(in crate::features) zmodem_sessions:
-        HashMap<String, crate::features::zmodem_runtime::ZmodemSessionState>,
+        HashMap<String, crate::features::session::ZmodemSessionState>,
     /// Per-session trzsz trigger detector state (pre-parser protocol slot).
     pub(in crate::features) trzsz_sessions:
-        HashMap<String, crate::features::trzsz_runtime::TrzszSessionState>,
+        HashMap<String, crate::features::session::TrzszSessionState>,
     pub(in crate::features) session_tab_colors: HashMap<String, u32>,
     pub(in crate::features) ssh_multiplex_handles: HashMap<String, SshMultiplexHandle>,
     pub(in crate::features) terminal_views: HashMap<String, TerminalViewState>,

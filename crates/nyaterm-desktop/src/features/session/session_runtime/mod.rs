@@ -19,7 +19,5 @@ pub(in crate::features) struct PendingSessionStartRegistration {
     pub(in crate::features) append_start_log: bool,
 }
 
-#[path = "session_runtime/background.rs"]
 mod background;
-#[path = "session_runtime/start.rs"]
 mod start;

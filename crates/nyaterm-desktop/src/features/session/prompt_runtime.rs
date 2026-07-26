@@ -265,7 +265,7 @@ impl NyaTermApp {
         }
     }
 
-    pub(super) fn drain_host_key_prompts(&mut self) -> bool {
+    pub(in crate::features) fn drain_host_key_prompts(&mut self) -> bool {
         if self.active_host_key_prompt.is_some() || !self.host_key_prompts.has_pending() {
             return false;
         }
@@ -281,7 +281,7 @@ impl NyaTermApp {
         false
     }
 
-    pub(super) fn drain_credential_prompts(&mut self) -> bool {
+    pub(in crate::features) fn drain_credential_prompts(&mut self) -> bool {
         if self.active_credential_prompt.is_some()
             || self.active_keyboard_interactive_prompt.is_some()
             || !self.credential_prompts.has_pending()
@@ -359,7 +359,7 @@ impl NyaTermApp {
         false
     }
 
-    pub(super) fn refresh_keyboard_interactive_totp(&mut self) -> bool {
+    pub(in crate::features) fn refresh_keyboard_interactive_totp(&mut self) -> bool {
         let Some(state) = self.active_keyboard_interactive_prompt.as_ref() else {
             return false;
         };
@@ -394,7 +394,7 @@ impl NyaTermApp {
         true
     }
 
-    pub(super) fn drain_duplicate_prompts(&mut self) -> bool {
+    pub(in crate::features) fn drain_duplicate_prompts(&mut self) -> bool {
         if self.active_duplicate_prompt.is_some() || !self.duplicate_prompts.has_pending() {
             return false;
         }

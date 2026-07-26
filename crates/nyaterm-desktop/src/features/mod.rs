@@ -8,8 +8,6 @@ mod ai_jobs;
 #[path = "ai/ai_runtime.rs"]
 mod ai_runtime;
 mod app_state;
-#[path = "session/auth_runtime.rs"]
-mod auth_runtime;
 #[path = "sync/cloud_sync_provider.rs"]
 mod cloud_sync_provider;
 #[path = "sync/cloud_sync_runtime.rs"]
@@ -20,8 +18,6 @@ mod command_runtime;
 mod config_runtime;
 mod connection_editor_window;
 mod connections;
-#[path = "session/credential_autofill_runtime.rs"]
-mod credential_autofill_runtime;
 mod formatting;
 #[path = "terminal/input_runtime.rs"]
 mod input_runtime;
@@ -31,13 +27,9 @@ mod layout;
 mod lock_diagnostics_runtime;
 mod pages;
 mod panels;
-#[path = "session/prompt_runtime.rs"]
-mod prompt_runtime;
 #[path = "commands/quick_command_runtime.rs"]
 mod quick_command_runtime;
 mod quick_command_window;
-#[path = "session/recording_runtime.rs"]
-mod recording_runtime;
 mod remote_editor_window;
 #[path = "remote/remote_runtime.rs"]
 mod remote_runtime;
@@ -48,25 +40,12 @@ mod runtime_jobs;
 mod security_runtime;
 #[path = "terminal/send_command_runtime.rs"]
 mod send_command_runtime;
-#[path = "session/session_dialog_runtime.rs"]
-mod session_dialog_runtime;
-#[path = "session/session_lifecycle.rs"]
-mod session_lifecycle;
-#[path = "session/session_order.rs"]
-mod session_order;
-#[path = "session/session_runtime.rs"]
-mod session_runtime;
-#[path = "session/session_state.rs"]
-mod session_state;
+mod session;
 #[path = "settings/settings_runtime.rs"]
 mod settings_runtime;
 mod settings_window;
 mod shell;
-#[path = "session/startup_restore_runtime.rs"]
-mod startup_restore_runtime;
 mod sync_input;
-#[path = "session/temporary_ssh_link.rs"]
-mod temporary_ssh_link;
 #[path = "terminal/terminal_context_menu_runtime.rs"]
 mod terminal_context_menu_runtime;
 #[path = "terminal/terminal_runtime.rs"]
@@ -100,14 +79,10 @@ mod transfer_paths;
 mod transfer_widgets;
 #[path = "translation/translation_runtime.rs"]
 mod translation_runtime;
-#[path = "session/trzsz_runtime.rs"]
-mod trzsz_runtime;
 mod tunnels;
 #[path = "settings/update_runtime.rs"]
 mod update_runtime;
 mod view_widgets;
-#[path = "session/zmodem_runtime.rs"]
-mod zmodem_runtime;
 
 #[allow(unused_imports)]
 pub(in crate::features) use crate::action_links::{
@@ -115,9 +90,6 @@ pub(in crate::features) use crate::action_links::{
     match_at_offset,
 };
 pub(in crate::features) use crate::theme::ThemePalette;
-pub(in crate::features) use shell::{
-    ActivityBarDragPayload, ActivityBarDragPreview,
-};
 pub(in crate::features) use ai_jobs::{
     ai_active_profile_drafts, ai_job_cancelled, ai_usage_counts, is_agent_command_card,
     observation_summary, remote_command_observation, run_ai_ask_job,
@@ -126,15 +98,6 @@ pub use app_state::NyaTermApp;
 pub(in crate::features) use app_state::{
     FailedSessionStart, PendingSavedConnectionStart, PendingSessionStart,
     SavedConnectionStartOptions, SessionPaneState,
-};
-pub(in crate::features) use shell::{
-    appearance_font_options, appearance_font_stack, gpui_code_font_family,
-};
-pub(in crate::features) use auth_runtime::{
-    CredentialPromptBroker, CredentialPromptRequest, CredentialPromptState, HostKeyPromptBroker,
-    HostKeyPromptChoice, HostKeyPromptIssue, HostKeyPromptRequest, KeyboardInteractivePromptState,
-    NativeHostKeyVerifier, NativeOtpCodePreview, NativeOtpProvider, SftpDuplicatePromptBroker,
-    SftpDuplicatePromptState, unix_seconds_now,
 };
 pub(in crate::features) use cloud_sync_provider::{
     pull_provider_snapshot, push_provider_snapshot, test_provider_connection,
@@ -145,10 +108,6 @@ pub(in crate::features) use connections::{
     ConnectionDropTarget, ConnectionEditorToggle, ConnectionFeatureFocus, ConnectionFeatureState,
 };
 pub(in crate::features) use formatting::*;
-pub(in crate::features) use prompt_runtime::{
-    credential_prompt_id, credential_prompt_target, keyboard_interactive_prompt_id,
-    keyboard_interactive_prompt_target, sftp_duplicate_prompt_id, uuid_like_prompt_id,
-};
 pub(in crate::features) use quick_command_runtime::{
     QUICK_COMMAND_COLOR_OPTIONS, QUICK_COMMAND_ICON_OPTIONS, quick_command_category_label,
     quick_command_sort_mode_from_setting, quick_command_view_mode_from_setting,
@@ -165,10 +124,24 @@ pub(in crate::features) use runtime_jobs::{
     TranslateJobResult, TunnelJobOutput, TunnelJobResult, UpdateJobResult,
     remote_job_event_matches, spawn_command_persistence_worker,
 };
+pub(in crate::features) use session::{
+    CredentialPromptBroker, CredentialPromptRequest, CredentialPromptState, HostKeyPromptBroker,
+    HostKeyPromptChoice, HostKeyPromptIssue, HostKeyPromptRequest, KeyboardInteractivePromptState,
+    NativeHostKeyVerifier, NativeOtpCodePreview, NativeOtpProvider, SftpDuplicatePromptBroker,
+    SftpDuplicatePromptState, unix_seconds_now,
+};
+pub(in crate::features) use session::{
+    credential_prompt_id, credential_prompt_target, keyboard_interactive_prompt_id,
+    keyboard_interactive_prompt_target, sftp_duplicate_prompt_id, uuid_like_prompt_id,
+};
 pub(in crate::features) use settings_window::SettingsWindow;
+pub(in crate::features) use shell::{ActivityBarDragPayload, ActivityBarDragPreview};
 pub(in crate::features) use shell::{
     ChromeTooltip, SessionTabDragPayload, SessionTabDragPreview, SessionTabTooltip,
     TAB_MOUSE_ACTIONS, TabMouseActionTarget,
+};
+pub(in crate::features) use shell::{
+    appearance_font_options, appearance_font_stack, gpui_code_font_family,
 };
 pub(in crate::features) use transfer_external_sync_window::TransferExternalSyncWindow;
 pub(in crate::features) use transfer_widgets::{

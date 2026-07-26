@@ -474,6 +474,8 @@ check_max_count 'network proxy page #[path] debt' '#\[path\s*=' \
   crates/nyaterm-desktop/src/features/pages/tunnels/proxy/mod.rs 0
 check_max_count 'network tunnel page #[path] debt' '#\[path\s*=' \
   crates/nyaterm-desktop/src/features/pages/tunnels/tunnel/mod.rs 0
+check_no_matches 'session feature #[path] debt' '#\[path\s*=' \
+  crates/nyaterm-desktop/src/features/session
 check_no_matches 'shell feature #[path] debt' '#\[path\s*=' \
   crates/nyaterm-desktop/src/features/shell
 check_max_count 'tunnel runtime #[path] debt' '#\[path\s*=' \

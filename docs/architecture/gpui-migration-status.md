@@ -11,7 +11,7 @@ Last updated from the working tree on 2026-07-26.
 | --- | ---: | --- |
 | `NyaTermApp` fields | 585 | Counted from `features/app_state/mod.rs`; still transitional and too broad. |
 | `impl NyaTermApp` blocks | 236 | Spread across 233 files under `crates/nyaterm-desktop/src`. |
-| `#[path = "..."]` declarations in desktop | 287 | Historical migration debt; do not add new occurrences. |
+| `#[path = "..."]` declarations in desktop | 272 | Historical migration debt; do not add new occurrences. |
 | `use super::*` imports in desktop | 355 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
 | `features/prelude.rs` rough exported-token count | 230 | Still a broad shared prelude; two hundred fifteen low-frequency transport/core/http/model exports are now explicit imports. |
 | Entity Store structs | 13 | Includes store handles/runtime stores and domain stores. |
@@ -46,6 +46,12 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   contains any `#[path]` declaration. Shell chrome exports reach the rest of
   `crate::features` through explicit re-exports in `features/shell/mod.rs`
   instead of twelve flattened `#[path]` module declarations.
+- The session feature area is a real module tree. `features/session` is declared
+  as `mod session;`, `session_runtime` is a directory module, and the prompt,
+  auth and file-transfer session-state exports reach `crate::features` through
+  explicit re-exports. Nesting immediately surfaced four prompt-drain methods
+  that were only reachable because the module used to be a flat sibling; they
+  are now declared `pub(in crate::features)` on purpose.
 - The connections UI state has started moving out of scattered `NyaTermApp`
   fields and into `ConnectionFeatureState`.
 - The current connections state split separates list UI, import UI, editor
