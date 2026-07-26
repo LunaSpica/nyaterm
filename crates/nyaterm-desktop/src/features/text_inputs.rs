@@ -226,6 +226,8 @@ impl NyaTermApp {
             self.apply_transfer_new_folder_name(text, cx);
         } else if let Some(field) = id.strip_prefix("quick-command.editor.") {
             self.apply_quick_command_editor_input(field, text, cx);
+        } else if id.as_ref() == "send-command.draft" {
+            self.apply_send_command_draft(text, cx);
         }
     }
 

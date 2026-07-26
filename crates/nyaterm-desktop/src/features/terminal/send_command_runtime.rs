@@ -211,66 +211,44 @@ impl NyaTermApp {
         if keystroke.modifiers.alt || keystroke.modifiers.function {
             return;
         }
+        let accel = keystroke.modifiers.platform || keystroke.modifiers.control;
 
+        // The box owns the text and takes Enter as a newline, the way Tauri's
+        // textarea does; Ctrl/Cmd+Enter is what sends, and Escape clears.
         match keystroke.key.as_str() {
-            "enter" => {
-                self.send_bottom_command(true, cx);
-            }
-            "backspace" if !keystroke.modifiers.platform && !keystroke.modifiers.control => {
-                if self.send_command.options.data_type == SendCommandDataType::Hex {
-                    // Delete last hex digit (ignore spacing), then reformat pairs.
-                    let mut cleaned: String = self
-                        .send_command
-                        .composer
-                        .draft
-                        .chars()
-                        .filter(|ch| ch.is_ascii_hexdigit())
-                        .collect();
-                    cleaned.pop();
-                    self.send_command.composer.draft = format_send_command_hex_display(&cleaned);
-                    self.clamp_send_command_hex_scroll();
-                } else {
-                    self.send_command.composer.draft.pop();
-                }
-                cx.notify();
-            }
-            "tab" if !keystroke.modifiers.platform && !keystroke.modifiers.control => {
-                if self.send_command.options.data_type != SendCommandDataType::Hex {
-                    self.send_command.composer.draft.push_str("\t");
-                    cx.notify();
-                }
-            }
-            "escape" => {
+            "enter" if accel => self.send_bottom_command(true, cx),
+            "escape" if !accel => {
                 self.send_command.composer.draft.clear();
+                self.reset_text_input("send-command.draft", "", cx);
                 self.terminal.view.status = "command send cleared".to_string();
                 cx.notify();
             }
-            _ if !keystroke.modifiers.platform && !keystroke.modifiers.control => {
-                if let Some(input) = keystroke
-                    .key_char
-                    .as_deref()
-                    .filter(|input| !input.is_empty())
-                {
-                    if self.send_command.options.data_type == SendCommandDataType::Hex {
-                        let filtered: String = input
-                            .chars()
-                            .filter(|ch| ch.is_ascii_hexdigit() || ch.is_whitespace())
-                            .collect();
-                        if filtered.is_empty() {
-                            return;
-                        }
-                        self.send_command.composer.draft.push_str(&filtered);
-                        self.send_command.composer.draft =
-                            format_send_command_hex_display(&self.send_command.composer.draft);
-                        self.clamp_send_command_hex_scroll();
-                    } else {
-                        self.send_command.composer.draft.push_str(input);
-                    }
-                    cx.notify();
-                }
-            }
             _ => {}
         }
+    }
+
+    /// Apply an edit from the command send box.
+    ///
+    /// Hex is normalised as it is typed — the digits are regrouped into pairs
+    /// and anything that is not a hex digit is dropped — so the box is written
+    /// back with what the draft actually holds.
+    pub(in crate::features) fn apply_send_command_draft(
+        &mut self,
+        text: String,
+        cx: &mut Context<Self>,
+    ) {
+        if self.send_command.options.data_type == SendCommandDataType::Hex {
+            let cleaned: String = text.chars().filter(|ch| ch.is_ascii_hexdigit()).collect();
+            let formatted = format_send_command_hex_display(&cleaned);
+            self.send_command.composer.draft = formatted.clone();
+            self.clamp_send_command_hex_scroll();
+            if formatted != text {
+                self.reset_text_input("send-command.draft", &formatted, cx);
+            }
+        } else {
+            self.send_command.composer.draft = text;
+        }
+        cx.notify();
     }
 
     pub(in crate::features) fn send_bottom_command(

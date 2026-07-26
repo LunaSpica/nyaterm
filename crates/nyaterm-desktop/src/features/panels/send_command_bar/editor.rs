@@ -24,6 +24,17 @@ impl NyaTermApp {
             !self.send_command.composer.draft.is_empty()
         };
         let send_disabled = !is_sending && (validation_error || !has_payload || !target_available);
+        // Built before the panel, which reads `self` throughout: creating the
+        // box needs it mutably. Wrapped, like Tauri's textarea — Enter is a
+        // newline and Ctrl/Cmd+Enter is what sends.
+        let send_input = self
+            .text_input_box(
+                "send-command.draft",
+                &self.send_command.composer.draft.clone(),
+                TextInputSetup::multi_line(input_hint),
+                cx,
+            )
+            .into_any_element();
         div()
             .relative()
             .flex_1()
@@ -181,35 +192,11 @@ impl NyaTermApp {
                         },
                     )
                     .child(
-                        transfer_input(
-                            "bottom-command-send-input",
-                            input_hint,
-                            if self.send_command.options.data_type == SendCommandDataType::Hex {
-                                format_send_command_hex_display(&self.send_command.composer.draft)
-                            } else {
-                                self.send_command.composer.draft.clone()
-                            },
-                            true,
-                            self.theme_palette(),
-                        )
-                        .flex_1()
-                        .min_h(px(72.))
-                        .when(
-                            self.send_command.options.data_type == SendCommandDataType::Hex,
-                            |this| this.pt(px(22.)),
-                        )
-                        .font_family(crate::features::gpui_code_font_family())
-                        .track_focus(&self.send_command.composer.focus)
-                        .on_click(cx.listener(|this, _, window, cx| {
-                            window.focus(&this.send_command.composer.focus);
-                            cx.notify();
-                        }))
-                        .on_key_down(cx.listener(
-                            |this, event: &KeyDownEvent, _, cx| {
-                                cx.stop_propagation();
-                                this.handle_send_command_key_down(event, cx);
-                            },
-                        )),
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .font_family(crate::features::gpui_code_font_family())
+                            .child(send_input),
                     ),
             )
             .when(
