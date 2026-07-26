@@ -875,14 +875,26 @@ Items 1, 3 and 4 are done. What follows is the honest remaining list.
    the module tree existed it only moved names between two flat namespaces.
    Note this one does not batch: every file needs its own dependency set
    resolved, so it is 355 small compiler-guided edits rather than one sweep.
-3. Largely done. `NyaTermApp` is down from 585 fields to 279, across eight
+3. Largely done. `NyaTermApp` is down from 585 fields to 284, across eight
    feature-state structs. What is left is a long tail — the biggest remaining
    domain is eighteen fields, and much of the rest is genuinely app-level
    (stores, runtime, services, persisted collections). Group by cohesion where
    a cluster exists; do not force the count down for its own sake.
-   The 236 `impl NyaTermApp` blocks are the next structural question: grouping
-   fields did not move the methods, so most desktop modules can still reach
-   most desktop state through `self`.
+   Method ownership is now moving too, which is what grouping the fields alone
+   did not buy. The rule: if a method only reads and writes one feature state,
+   it belongs on that state, and the `NyaTermApp` method becomes a forwarder
+   that owns `cx.notify()`. That is enforced by the type system rather than by
+   convention — a handler taking `&mut TransferBrowserState` cannot reach the
+   session list no matter what a later edit tries. Twenty-two methods have
+   moved this way across transfers, security, the send command bar, AI and
+   quick commands; the transfer browser one made
+   `TransferBrowserColumnResizeState` stop leaking into the page layer, which
+   is the kind of signal to look for.
+   Two caveats worth keeping. Render helpers stay on the view even when they
+   read one state — moving element construction onto a data struct trades one
+   coupling for a worse one. And a method that reads a state plus `self.tr(...)`
+   or a service is not a candidate; only move what is genuinely self-contained.
+   The remaining `impl NyaTermApp` blocks are mostly this second kind.
 4. Done. No store is a projection any more; the four that remain own real
    state. If a future domain wants Entity ownership, migrate it authoritatively
    rather than reintroducing a published read model.
