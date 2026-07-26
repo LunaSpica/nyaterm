@@ -12,6 +12,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.forget_text_inputs("security.editor.cred-");
         if !self.require_security_secrets_unlocked(
             window,
             cx,
@@ -69,6 +70,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn close_security_credential_editor(&mut self, cx: &mut Context<Self>) {
+        self.forget_text_inputs("security.editor.cred-");
         self.security.close_credential_editor();
         cx.notify();
     }
@@ -162,6 +164,8 @@ impl NyaTermApp {
         if keystroke.modifiers.platform || keystroke.modifiers.alt || keystroke.modifiers.control {
             return;
         }
+        // The boxes own the text; the editor owns the keys that close or save
+        // it, which the boxes leave unconsumed.
         match keystroke.key.as_str() {
             "escape" => {
                 self.close_security_credential_editor(cx);
@@ -172,32 +176,6 @@ impl NyaTermApp {
                 return;
             }
             _ => {}
-        }
-        let Some(editor) = self.security.editors.credential.as_mut() else {
-            return;
-        };
-        let field = match editor.focused_field {
-            SecurityCredentialEditorField::Name => &mut editor.name,
-            SecurityCredentialEditorField::Username => &mut editor.username,
-            SecurityCredentialEditorField::Password => &mut editor.password,
-            SecurityCredentialEditorField::UsernameRegex => &mut editor.username_prompt_regex,
-            SecurityCredentialEditorField::PasswordRegex => &mut editor.password_prompt_regex,
-        };
-        match keystroke.key.as_str() {
-            "backspace" => {
-                field.pop();
-                cx.notify();
-            }
-            _ => {
-                if let Some(input) = keystroke
-                    .key_char
-                    .as_deref()
-                    .filter(|input| !input.is_empty())
-                {
-                    field.push_str(input);
-                    cx.notify();
-                }
-            }
         }
     }
 

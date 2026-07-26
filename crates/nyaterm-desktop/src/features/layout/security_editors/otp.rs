@@ -14,14 +14,12 @@ impl NyaTermApp {
         } else {
             self.tr("otpManager.newTitle")
         };
-        let secret_display = if editor.secret.is_empty() {
-            if editor.has_secret {
-                self.tr("otpManager.secretUnchanged").to_string()
-            } else {
-                " ".to_string()
-            }
+        // A stored secret is never shown, so the box says so in its
+        // placeholder rather than standing a row of bullets in for it.
+        let secret_placeholder = if editor.has_secret {
+            self.tr("otpManager.secretUnchanged")
         } else {
-            "•".repeat(editor.secret.chars().count().min(24))
+            ""
         };
 
         div()
@@ -87,42 +85,32 @@ impl NyaTermApp {
                     ),
             )
             .child(security_editor_field(
-                palette,
-                "security-otp-issuer",
+                self,
+                "otp-issuer",
                 self.tr("otpManager.issuerLabel"),
-                if editor.issuer.is_empty() {
-                    " ".to_string()
-                } else {
-                    editor.issuer.clone()
-                },
-                editor.focused_field == SecurityOtpEditorField::Issuer,
-                cx.listener(|this, _, window, cx| {
-                    this.focus_security_otp_field(SecurityOtpEditorField::Issuer, window, cx);
-                }),
+                editor.issuer.clone(),
+                TextInputSetup::default(),
+                cx,
             ))
             .child(security_editor_field(
-                palette,
-                "security-otp-username",
+                self,
+                "otp-username",
                 self.tr("otpManager.usernameLabel"),
-                if editor.username.is_empty() {
-                    " ".to_string()
-                } else {
-                    editor.username.clone()
-                },
-                editor.focused_field == SecurityOtpEditorField::Username,
-                cx.listener(|this, _, window, cx| {
-                    this.focus_security_otp_field(SecurityOtpEditorField::Username, window, cx);
-                }),
+                editor.username.clone(),
+                TextInputSetup::default(),
+                cx,
             ))
             .child(security_editor_field(
-                palette,
-                "security-otp-secret",
+                self,
+                "otp-secret",
                 self.tr("otpManager.secretLabel"),
-                secret_display,
-                editor.focused_field == SecurityOtpEditorField::Secret,
-                cx.listener(|this, _, window, cx| {
-                    this.focus_security_otp_field(SecurityOtpEditorField::Secret, window, cx);
-                }),
+                editor.secret.clone(),
+                TextInputSetup {
+                    placeholder: secret_placeholder.into(),
+                    masked: true,
+                    multi_line: false,
+                },
+                cx,
             ))
             .child(
                 div()
@@ -130,58 +118,28 @@ impl NyaTermApp {
                     .grid_cols(3)
                     .gap_2()
                     .child(security_editor_field(
-                        palette,
-                        "security-otp-digits",
+                        self,
+                        "otp-digits",
                         self.tr("otpManager.digits"),
-                        if editor.digits.is_empty() {
-                            " ".to_string()
-                        } else {
-                            editor.digits.clone()
-                        },
-                        editor.focused_field == SecurityOtpEditorField::Digits,
-                        cx.listener(|this, _, window, cx| {
-                            this.focus_security_otp_field(
-                                SecurityOtpEditorField::Digits,
-                                window,
-                                cx,
-                            );
-                        }),
+                        editor.digits.clone(),
+                        TextInputSetup::default(),
+                        cx,
                     ))
                     .child(security_editor_field(
-                        palette,
-                        "security-otp-period",
+                        self,
+                        "otp-period",
                         self.tr("otpManager.period"),
-                        if editor.period.is_empty() {
-                            " ".to_string()
-                        } else {
-                            editor.period.clone()
-                        },
-                        editor.focused_field == SecurityOtpEditorField::Period,
-                        cx.listener(|this, _, window, cx| {
-                            this.focus_security_otp_field(
-                                SecurityOtpEditorField::Period,
-                                window,
-                                cx,
-                            );
-                        }),
+                        editor.period.clone(),
+                        TextInputSetup::default(),
+                        cx,
                     ))
                     .child(security_editor_field(
-                        palette,
-                        "security-otp-counter",
+                        self,
+                        "otp-counter",
                         self.tr("otpManager.counter"),
-                        if editor.counter.is_empty() {
-                            " ".to_string()
-                        } else {
-                            editor.counter.clone()
-                        },
-                        editor.focused_field == SecurityOtpEditorField::Counter,
-                        cx.listener(|this, _, window, cx| {
-                            this.focus_security_otp_field(
-                                SecurityOtpEditorField::Counter,
-                                window,
-                                cx,
-                            );
-                        }),
+                        editor.counter.clone(),
+                        TextInputSetup::default(),
+                        cx,
                     )),
             )
             .when_some(editor.error.clone(), |this, error| {

@@ -14,17 +14,15 @@ impl NyaTermApp {
         } else {
             self.tr("passwordManager.newTitle")
         };
-        let password_display = if editor.password.is_empty() {
-            if editor.has_password {
-                self.tr("passwordManager.passwordUnchanged").to_string()
-            } else {
-                " ".to_string()
-            }
-        } else if editor.show_password {
-            truncate_preview(&editor.password, 48)
+        // A stored secret is never shown, so the box says so in its
+        // placeholder rather than standing a row of bullets in for it. The
+        // reveal toggle now unmasks the box itself.
+        let password_placeholder = if editor.has_password {
+            self.tr("passwordManager.passwordUnchanged")
         } else {
-            "•".repeat(editor.password.chars().count().min(24))
+            ""
         };
+        let password_masked = !editor.show_password;
         div()
             .rounded_md()
             .border_1()
@@ -46,22 +44,12 @@ impl NyaTermApp {
                     .child(title),
             )
             .child(security_editor_field(
-                palette,
-                "security-pw-name",
+                self,
+                "pw-name",
                 self.tr("passwordManager.nameLabel"),
-                if editor.name.is_empty() {
-                    " ".to_string()
-                } else {
-                    editor.name.clone()
-                },
-                editor.focused_field == SecurityPasswordEditorField::Name,
-                cx.listener(|this, _, window, cx| {
-                    this.focus_security_password_field(
-                        SecurityPasswordEditorField::Name,
-                        window,
-                        cx,
-                    );
-                }),
+                editor.name.clone(),
+                TextInputSetup::default(),
+                cx,
             ))
             .child(
                 div()
@@ -69,18 +57,16 @@ impl NyaTermApp {
                     .items_end()
                     .gap_1()
                     .child(div().min_w_0().flex_1().child(security_editor_field(
-                        palette,
-                        "security-pw-value",
+                        self,
+                        "pw-value",
                         self.tr("passwordManager.passwordLabel"),
-                        password_display,
-                        editor.focused_field == SecurityPasswordEditorField::Password,
-                        cx.listener(|this, _, window, cx| {
-                            this.focus_security_password_field(
-                                SecurityPasswordEditorField::Password,
-                                window,
-                                cx,
-                            );
-                        }),
+                        editor.password.clone(),
+                        TextInputSetup {
+                            placeholder: password_placeholder.into(),
+                            masked: password_masked,
+                            multi_line: false,
+                        },
+                        cx,
                     )))
                     .child(small_button(
                         palette,

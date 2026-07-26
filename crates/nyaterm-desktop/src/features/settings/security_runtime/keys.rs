@@ -11,6 +11,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.forget_text_inputs("security.editor.key-");
         let editor = if let Some(key_id) = key_id {
             let Some(key) = self
                 .connection_ssh_keys
@@ -57,6 +58,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn close_security_key_editor(&mut self, cx: &mut Context<Self>) {
+        self.forget_text_inputs("security.editor.key-");
         self.security.close_key_editor();
         cx.notify();
     }
@@ -86,6 +88,8 @@ impl NyaTermApp {
         if keystroke.modifiers.platform || keystroke.modifiers.alt || keystroke.modifiers.control {
             return;
         }
+        // The boxes own the text; the editor owns the keys that close or save
+        // it, which the boxes leave unconsumed.
         match keystroke.key.as_str() {
             "escape" => {
                 self.close_security_key_editor(cx);
@@ -96,31 +100,6 @@ impl NyaTermApp {
                 return;
             }
             _ => {}
-        }
-        let Some(editor) = self.security.editors.key.as_mut() else {
-            return;
-        };
-        let field = match editor.focused_field {
-            SecurityKeyEditorField::Name => &mut editor.name,
-            SecurityKeyEditorField::KeyPath => &mut editor.key_file_path,
-            SecurityKeyEditorField::CertPath => &mut editor.cert_file_path,
-            SecurityKeyEditorField::Passphrase => &mut editor.passphrase,
-        };
-        match keystroke.key.as_str() {
-            "backspace" => {
-                field.pop();
-                cx.notify();
-            }
-            _ => {
-                if let Some(input) = keystroke
-                    .key_char
-                    .as_deref()
-                    .filter(|input| !input.is_empty())
-                {
-                    field.push_str(input);
-                    cx.notify();
-                }
-            }
         }
     }
 

@@ -1,16 +1,19 @@
 use super::*;
 
+/// A captioned box hosting one of the security editors' inputs.
+///
+/// `id` is the stable part of the field's registry key, so an edit finds its
+/// way back to the right draft without the editor tracking a focused field.
 pub(super) fn security_editor_field(
-    palette: crate::theme::ThemePalette,
-    id: impl Into<String>,
+    app: &mut NyaTermApp,
+    id: &'static str,
     label: &'static str,
     value: String,
-    active: bool,
-    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
-) -> impl IntoElement {
-    transfer_input(id, label, value, active, palette)
-        .h(px(42.))
-        .on_click(on_click)
+    setup: crate::features::TextInputSetup,
+    cx: &mut gpui::Context<NyaTermApp>,
+) -> gpui::AnyElement {
+    app.text_input_field(format!("security.editor.{id}"), label, &value, setup, cx)
+        .into_any_element()
 }
 
 pub(super) fn security_type_chip(

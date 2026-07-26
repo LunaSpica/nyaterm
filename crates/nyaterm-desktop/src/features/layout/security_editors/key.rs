@@ -28,11 +28,6 @@ impl NyaTermApp {
         } else {
             self.tr("securityAuth.optionalCertificate").to_string()
         };
-        let passphrase_display = if editor.passphrase.is_empty() {
-            " ".to_string()
-        } else {
-            "•".repeat(editor.passphrase.chars().count().min(24))
-        };
 
         div()
             .rounded_md()
@@ -55,18 +50,12 @@ impl NyaTermApp {
                     .child(title),
             )
             .child(security_editor_field(
-                palette,
-                "security-key-name",
+                self,
+                "key-name",
                 self.tr("securityAuth.nameLabel"),
-                if editor.name.is_empty() {
-                    " ".to_string()
-                } else {
-                    editor.name.clone()
-                },
-                editor.focused_field == SecurityKeyEditorField::Name,
-                cx.listener(|this, _, window, cx| {
-                    this.focus_security_key_field(SecurityKeyEditorField::Name, window, cx);
-                }),
+                editor.name.clone(),
+                TextInputSetup::default(),
+                cx,
             ))
             .child(
                 div()
@@ -184,14 +173,12 @@ impl NyaTermApp {
                     ),
             )
             .child(security_editor_field(
-                palette,
-                "security-key-passphrase",
+                self,
+                "key-passphrase",
                 self.tr("securityAuth.passphrase"),
-                passphrase_display,
-                editor.focused_field == SecurityKeyEditorField::Passphrase,
-                cx.listener(|this, _, window, cx| {
-                    this.focus_security_key_field(SecurityKeyEditorField::Passphrase, window, cx);
-                }),
+                editor.passphrase.clone(),
+                TextInputSetup::masked(),
+                cx,
             ))
             .when_some(editor.error.clone(), |this, error| {
                 this.child(

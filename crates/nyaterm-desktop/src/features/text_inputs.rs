@@ -228,6 +228,8 @@ impl NyaTermApp {
             self.apply_quick_command_editor_input(field, text, cx);
         } else if id.as_ref() == "send-command.draft" {
             self.apply_send_command_draft(text, cx);
+        } else if let Some(field) = id.strip_prefix("security.editor.") {
+            self.apply_security_editor_input(field, text, cx);
         }
     }
 

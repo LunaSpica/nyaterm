@@ -14,14 +14,12 @@ impl NyaTermApp {
         } else {
             self.tr("credentialManager.newTitle")
         };
-        let password_display = if editor.password.is_empty() {
-            if editor.has_password {
-                self.tr("credentialManager.passwordUnchanged").to_string()
-            } else {
-                " ".to_string()
-            }
+        // A stored secret is never shown, so the box says so in its
+        // placeholder rather than standing a row of bullets in for it.
+        let password_placeholder = if editor.has_password {
+            self.tr("credentialManager.passwordUnchanged")
         } else {
-            "•".repeat(editor.password.chars().count().min(24))
+            ""
         };
         div()
             .rounded_md()
@@ -63,90 +61,48 @@ impl NyaTermApp {
                     )),
             )
             .child(security_editor_field(
-                palette,
-                "security-cred-name",
+                self,
+                "cred-name",
                 self.tr("credentialManager.nameLabel"),
-                if editor.name.is_empty() {
-                    " ".to_string()
-                } else {
-                    editor.name.clone()
-                },
-                editor.focused_field == SecurityCredentialEditorField::Name,
-                cx.listener(|this, _, window, cx| {
-                    this.focus_security_credential_field(
-                        SecurityCredentialEditorField::Name,
-                        window,
-                        cx,
-                    );
-                }),
+                editor.name.clone(),
+                TextInputSetup::default(),
+                cx,
             ))
             .child(security_editor_field(
-                palette,
-                "security-cred-user",
+                self,
+                "cred-user",
                 self.tr("credentialManager.usernameLabel"),
-                if editor.username.is_empty() {
-                    " ".to_string()
-                } else {
-                    editor.username.clone()
-                },
-                editor.focused_field == SecurityCredentialEditorField::Username,
-                cx.listener(|this, _, window, cx| {
-                    this.focus_security_credential_field(
-                        SecurityCredentialEditorField::Username,
-                        window,
-                        cx,
-                    );
-                }),
+                editor.username.clone(),
+                TextInputSetup::default(),
+                cx,
             ))
             .child(security_editor_field(
-                palette,
-                "security-cred-pass",
+                self,
+                "cred-pass",
                 self.tr("credentialManager.passwordLabel"),
-                password_display,
-                editor.focused_field == SecurityCredentialEditorField::Password,
-                cx.listener(|this, _, window, cx| {
-                    this.focus_security_credential_field(
-                        SecurityCredentialEditorField::Password,
-                        window,
-                        cx,
-                    );
-                }),
+                editor.password.clone(),
+                TextInputSetup {
+                    placeholder: password_placeholder.into(),
+                    masked: true,
+                    multi_line: false,
+                },
+                cx,
             ))
             .child(security_editor_field(
-                palette,
-                "security-cred-user-re",
+                self,
+                "cred-user-re",
                 self.tr("credentialManager.promptRegexLabel"),
-                if editor.username_prompt_regex.is_empty() {
-                    " ".to_string()
-                } else {
-                    editor.username_prompt_regex.clone()
-                },
-                editor.focused_field == SecurityCredentialEditorField::UsernameRegex,
-                cx.listener(|this, _, window, cx| {
-                    this.focus_security_credential_field(
-                        SecurityCredentialEditorField::UsernameRegex,
-                        window,
-                        cx,
-                    );
-                }),
+                editor.username_prompt_regex.clone(),
+                TextInputSetup::default(),
+                cx,
             ))
             .child(security_editor_field(
-                palette,
-                "security-cred-pass-re",
+                self,
+                "cred-pass-re",
                 self.tr("credentialManager.passwordRegexPlaceholder"),
-                if editor.password_prompt_regex.is_empty() {
-                    " ".to_string()
-                } else {
-                    editor.password_prompt_regex.clone()
-                },
-                editor.focused_field == SecurityCredentialEditorField::PasswordRegex,
-                cx.listener(|this, _, window, cx| {
-                    this.focus_security_credential_field(
-                        SecurityCredentialEditorField::PasswordRegex,
-                        window,
-                        cx,
-                    );
-                }),
+                editor.password_prompt_regex.clone(),
+                TextInputSetup::default(),
+                cx,
             ))
             .when_some(editor.error.clone(), |this, error| {
                 this.child(
