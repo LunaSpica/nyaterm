@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use gpui::{
-    App, AppContext as _, ClickEvent, Context, Entity, FontWeight, IntoElement, SharedString,
-    Window, div,
+    App, AppContext as _, ClickEvent, Context, Edges, Entity, FontWeight, IntoElement,
+    SharedString, Window, anchored, deferred, div, point,
     prelude::{
         FluentBuilder, InteractiveElement, ParentElement, StatefulInteractiveElement, Styled,
     },
@@ -13,6 +13,9 @@ use nyaterm_core::{Group, ProxyConfig, SavedConnection, natural_compare, truncat
 use crate::features::{NyaTermApp, format_last_used_ms};
 use crate::models::{ConnectionEditorField, ConnectionEditorMenu, ConnectionSortMode};
 use nyaterm_ui::TextField;
+
+/// Wide enough for a group path or a proxy summary without wrapping.
+const SELECT_POPOVER_WIDTH_PX: f32 = 260.;
 
 #[derive(Clone)]
 pub(super) enum ConnectionListRow {
@@ -355,13 +358,15 @@ pub(super) fn connection_editor_group_select(
     value: impl Into<SharedString>,
     open: bool,
     options: Vec<ConnectionGroupChoice>,
-    draft: String,
-    draft_active: bool,
-    placeholder: &'static str,
     parent_hint: String,
+    fields: &ConnectionEditorFields,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
     let value = value.into();
+    let new_group_entity = fields.get(&ConnectionEditorField::NewGroupName);
+    let new_group_field = new_group_entity.cloned();
+    let new_group_handle = new_group_entity.map(|field| field.read(cx).focus_handle());
+    let new_group_focused = new_group_entity.is_some_and(|field| field.read(cx).has_focus());
     let mut option_list = div()
         .id("connection-group-options")
         .max_h(px(168.))
@@ -404,7 +409,7 @@ pub(super) fn connection_editor_group_select(
         );
     }
 
-    let can_add = !draft.trim().is_empty();
+    let can_add = new_group_entity.is_some_and(|field| !field.read(cx).content().trim().is_empty());
     div()
         .id("connection-editor-group")
         .relative()
@@ -460,104 +465,122 @@ pub(super) fn connection_editor_group_select(
                 })),
         )
         .when(open, |this| {
+            // Same reason as the other selects: inline, this panel pushed the
+            // icon and name rows down the dialog every time it opened.
             this.child(
-                div()
-                    .mt_1()
-                    .rounded_md()
-                    .border_1()
-                    .border_color(rgb(palette.border))
-                    .bg(rgb(palette.surface_elevated))
-                    .shadow_lg()
-                    .child(option_list)
-                    .child(
-                        div()
-                            .border_t_1()
-                            .border_color(rgb(palette.border))
-                            .p_2()
-                            .flex()
-                            .flex_col()
-                            .gap_1()
-                            .child(
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .gap_1()
-                                    .child(
-                                        div()
-                                            .id("connection-editor-new-group-input")
-                                            .h(px(28.))
-                                            .min_w_0()
-                                            .flex_1()
-                                            .px_2()
-                                            .flex()
-                                            .items_center()
-                                            .rounded_sm()
-                                            .border_1()
-                                            .border_color(if draft_active {
-                                                rgb(palette.primary)
-                                            } else {
-                                                rgb(palette.border)
-                                            })
-                                            .bg(rgb(palette.input))
-                                            .text_xs()
-                                            .text_color(if draft.is_empty() {
-                                                rgb(palette.text_dimmed)
-                                            } else {
-                                                rgb(palette.text)
-                                            })
-                                            .cursor_text()
-                                            .child(if draft.is_empty() {
-                                                placeholder.to_string()
-                                            } else {
-                                                draft.clone()
-                                            })
-                                            .on_click(cx.listener(|this, _, window, cx| {
-                                                this.focus_connection_editor_new_group(window, cx);
-                                            })),
-                                    )
-                                    .child(
-                                        div()
-                                            .id("connection-editor-new-group-add")
-                                            .size(px(28.))
-                                            .flex_none()
-                                            .flex()
-                                            .items_center()
-                                            .justify_center()
-                                            .rounded_sm()
-                                            .text_size(px(16.))
-                                            .text_color(if can_add {
-                                                rgb(palette.text)
-                                            } else {
-                                                rgb(palette.text_dimmed)
-                                            })
-                                            .opacity(if can_add { 1.0 } else { 0.55 })
-                                            .when(can_add, |this| {
-                                                this.cursor_pointer()
+                deferred(
+                    anchored()
+                        .snap_to_window_with_margin(Edges::all(px(8.)))
+                        .offset(point(px(0.), px(52.)))
+                        .child(
+                            div()
+                                .id("connection-editor-group-popover")
+                                .occlude()
+                                .w(px(SELECT_POPOVER_WIDTH_PX))
+                                .rounded_md()
+                                .border_1()
+                                .border_color(rgb(palette.border))
+                                .bg(rgb(palette.surface_elevated))
+                                .shadow_lg()
+                                .on_mouse_down_out(cx.listener(|this, _, _, cx| {
+                                    this.close_connection_editor_menu(
+                                        ConnectionEditorMenu::Group,
+                                        cx,
+                                    );
+                                }))
+                                .child(option_list)
+                                .child(
+                                    div()
+                                        .border_t_1()
+                                        .border_color(rgb(palette.border))
+                                        .p_2()
+                                        .flex()
+                                        .flex_col()
+                                        .gap_1()
+                                        .child(
+                                            div()
+                                                .flex()
+                                                .items_center()
+                                                .gap_1()
+                                                .child(
+                                                    div()
+                                                        .id("connection-editor-new-group-input")
+                                                        .h(px(28.))
+                                                        .min_w_0()
+                                                        .flex_1()
+                                                        .px_2()
+                                                        .flex()
+                                                        .items_center()
+                                                        .rounded_sm()
+                                                        .border_1()
+                                                        .border_color(if new_group_focused {
+                                                            rgb(palette.primary)
+                                                        } else {
+                                                            rgb(palette.border)
+                                                        })
+                                                        .bg(rgb(palette.input))
+                                                        .text_xs()
+                                                        .text_color(rgb(palette.text))
+                                                        .cursor_text()
+                                                        .when_some(
+                                                            new_group_handle,
+                                                            |row, handle| {
+                                                                row.on_mouse_down(
+                                                                    gpui::MouseButton::Left,
+                                                                    move |_, window, _| {
+                                                                        window.focus(&handle)
+                                                                    },
+                                                                )
+                                                            },
+                                                        )
+                                                        .children(new_group_field.clone()),
+                                                )
+                                                .child(
+                                                    div()
+                                                        .id("connection-editor-new-group-add")
+                                                        .size(px(28.))
+                                                        .flex_none()
+                                                        .flex()
+                                                        .items_center()
+                                                        .justify_center()
+                                                        .rounded_sm()
+                                                        .text_size(px(16.))
+                                                        .text_color(if can_add {
+                                                            rgb(palette.text)
+                                                        } else {
+                                                            rgb(palette.text_dimmed)
+                                                        })
+                                                        .opacity(if can_add { 1.0 } else { 0.55 })
+                                                        .when(can_add, |this| {
+                                                            this.cursor_pointer()
                                                     .hover(|this| this.bg(rgb(palette.hover)))
                                                     .on_click(cx.listener(|this, _, _, cx| {
                                                         this.commit_connection_editor_new_group(cx);
                                                     }))
-                                            })
-                                            .child(
-                                                svg()
-                                                    .size(px(16.))
-                                                    .path("icons/conn/add.svg")
-                                                    .text_color(rgb(if can_add {
-                                                        palette.text
-                                                    } else {
-                                                        palette.text_dimmed
-                                                    })),
-                                            ),
-                                    ),
-                            )
-                            .child(
-                                div()
-                                    .px_1()
-                                    .text_size(px(10.))
-                                    .text_color(rgb(palette.text_dimmed))
-                                    .child(parent_hint),
-                            ),
-                    ),
+                                                        })
+                                                        .child(
+                                                            svg()
+                                                                .size(px(16.))
+                                                                .path("icons/conn/add.svg")
+                                                                .text_color(rgb(if can_add {
+                                                                    palette.text
+                                                                } else {
+                                                                    palette.text_dimmed
+                                                                })),
+                                                        ),
+                                                ),
+                                        )
+                                        .child(
+                                            div()
+                                                .px_1()
+                                                .text_size(px(10.))
+                                                .text_color(rgb(palette.text_dimmed))
+                                                .child(parent_hint),
+                                        ),
+                                ),
+                        ),
+                )
+                .with_priority(1),
             )
         })
 }
@@ -577,35 +600,45 @@ pub(super) fn connection_editor_select(
     let value = value.into();
     let mut option_list = div()
         .id(SharedString::from(format!("{id}-options")))
-        .max_h(px(144.))
+        .max_h(px(240.))
         .flex()
         .flex_col()
         .gap_1()
-        .overflow_scroll();
+        .overflow_y_scroll();
     for (index, option) in options.into_iter().enumerate() {
         let option_value = option.value.clone();
+        let selected = option.selected;
         option_list = option_list.child(
             div()
                 .id(SharedString::from(format!("{id}-option-{index}")))
-                .min_h(px(26.))
+                .min_h(px(28.))
                 .px_2()
                 .flex()
                 .items_center()
+                .gap_2()
                 .rounded_sm()
                 .text_xs()
                 .cursor_pointer()
-                .text_color(if option.selected {
+                .text_color(if selected {
                     rgb(palette.primary)
                 } else {
                     rgb(palette.text)
                 })
-                .bg(if option.selected {
+                .bg(if selected {
                     rgba((palette.primary << 8) | 0x18)
                 } else {
                     rgba(0x00000000)
                 })
                 .hover(|this| this.bg(rgb(palette.hover)))
-                .child(option.label)
+                .child(div().min_w_0().flex_1().child(option.label))
+                // A tick, so the current value is readable at a glance rather
+                // than only implied by the tint.
+                .child(div().w(px(14.)).flex_none().children(selected.then(|| {
+                    svg()
+                        .size(px(12.))
+                        .path("icons/check.svg")
+                        .text_color(rgb(palette.primary))
+                })))
                 .on_click(cx.listener(move |this, _, _, cx| {
                     this.set_connection_editor_menu_value(menu, option_value.as_deref(), cx);
                 })),
@@ -669,16 +702,32 @@ pub(super) fn connection_editor_select(
                 })),
         )
         .when(open, |this| {
+            // A popover, not a child: as an inline element the option list
+            // pushed everything below it down the dialog every time it opened,
+            // and was clipped by whichever ancestor hid its overflow.
             this.child(
-                div()
-                    .mt_1()
-                    .p_1()
-                    .rounded_md()
-                    .border_1()
-                    .border_color(rgb(palette.border))
-                    .bg(rgb(palette.surface_elevated))
-                    .shadow_lg()
-                    .child(option_list),
+                deferred(
+                    anchored()
+                        .snap_to_window_with_margin(Edges::all(px(8.)))
+                        .offset(point(px(0.), px(34.)))
+                        .child(
+                            div()
+                                .id(SharedString::from(format!("{id}-popover")))
+                                .occlude()
+                                .w(px(SELECT_POPOVER_WIDTH_PX))
+                                .p_1()
+                                .rounded_md()
+                                .border_1()
+                                .border_color(rgb(palette.border))
+                                .bg(rgb(palette.surface_elevated))
+                                .shadow_lg()
+                                .on_mouse_down_out(cx.listener(move |this, _, _, cx| {
+                                    this.close_connection_editor_menu(menu, cx);
+                                }))
+                                .child(option_list),
+                        ),
+                )
+                .with_priority(1),
             )
         })
 }

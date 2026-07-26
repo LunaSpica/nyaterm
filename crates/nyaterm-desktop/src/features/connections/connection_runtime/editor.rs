@@ -166,6 +166,19 @@ impl NyaTermApp {
         cx.notify();
     }
 
+    /// Dismiss one select's popover, ignoring a stale click for another.
+    pub(in crate::features) fn close_connection_editor_menu(
+        &mut self,
+        menu: ConnectionEditorMenu,
+        cx: &mut Context<Self>,
+    ) {
+        if self.connection_state.editor.active_menu() != Some(menu) {
+            return;
+        }
+        self.connection_state.editor.close_popovers();
+        cx.notify();
+    }
+
     pub(in crate::features) fn set_connection_editor_menu_value(
         &mut self,
         menu: ConnectionEditorMenu,

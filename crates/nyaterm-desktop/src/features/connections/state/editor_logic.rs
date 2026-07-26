@@ -518,65 +518,76 @@ pub(super) fn set_connection_group_editor_error(
 /// to the current kind is simply never built.
 pub(super) fn editor_field_seeds(
     draft: &ConnectionEditorState,
-) -> Vec<(ConnectionEditorField, String, bool)> {
+) -> Vec<(ConnectionEditorField, String, bool, &'static str)> {
     vec![
-        (ConnectionEditorField::Name, draft.name.clone(), false),
+        (ConnectionEditorField::Name, draft.name.clone(), false, ""),
         (
             ConnectionEditorField::Description,
             draft.description.clone(),
             false,
+            "",
         ),
         (
             ConnectionEditorField::NewGroupName,
             draft.new_group_name.clone(),
             false,
+            "New group...",
         ),
-        (ConnectionEditorField::Host, draft.host.clone(), false),
-        (ConnectionEditorField::Port, draft.port.clone(), false),
+        (ConnectionEditorField::Host, draft.host.clone(), false, ""),
+        (ConnectionEditorField::Port, draft.port.clone(), false, ""),
         (
             ConnectionEditorField::Username,
             draft.username.clone(),
             false,
+            "",
         ),
         (
             ConnectionEditorField::Password,
             draft.password.clone(),
             true,
+            "",
         ),
         (
             ConnectionEditorField::ShellPath,
             draft.shell_path.clone(),
             false,
+            "",
         ),
         (
             ConnectionEditorField::ShellArgs,
             draft.shell_args.clone(),
             false,
+            "",
         ),
         (
             ConnectionEditorField::WorkingDir,
             draft.working_dir.clone(),
             false,
+            "",
         ),
         (
             ConnectionEditorField::SerialPort,
             draft.serial_port.clone(),
             false,
+            "",
         ),
         (
             ConnectionEditorField::BaudRate,
             draft.baud_rate.clone(),
             false,
+            "",
         ),
         (
             ConnectionEditorField::PostLoginCommand,
             draft.post_login_command.clone(),
             false,
+            "",
         ),
         (
             ConnectionEditorField::PostLoginDelay,
             draft.post_login_delay_ms.clone(),
             false,
+            "",
         ),
     ]
 }

@@ -269,8 +269,12 @@ impl ConnectionFeatureState {
         let Some(draft) = self.editor.draft.as_ref() else {
             return;
         };
-        for (field, value, masked) in editor_field_seeds(draft) {
-            let entity = cx.new(|cx| TextField::new(cx, value).masked(masked));
+        for (field, value, masked, placeholder) in editor_field_seeds(draft) {
+            let entity = cx.new(|cx| {
+                TextField::new(cx, value)
+                    .masked(masked)
+                    .placeholder(placeholder)
+            });
             let subscription = cx.subscribe(&entity, move |app: &mut NyaTermApp, _, event, cx| {
                 let TextFieldEvent::Changed(text) = event;
                 app.apply_connection_editor_field_text(field, text.clone(), cx);
