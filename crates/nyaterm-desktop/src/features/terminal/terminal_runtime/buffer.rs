@@ -3,8 +3,9 @@ use std::fmt::Write as _;
 
 use super::*;
 use crate::models::{
-    MainMode, TerminalFrameBufferTextEvent, TerminalSearchMode, TerminalWindowNode,
-    WorkspacePaneNode, append_terminal_ui_output_tail, terminal_frame_scroll_window_extra_rows,
+    MainMode, TerminalFrameBufferTextEvent, TerminalFrameOutputEvent, TerminalSearchMode,
+    TerminalWindowNode, WorkspacePaneNode, append_terminal_ui_output_tail,
+    terminal_frame_scroll_window_extra_rows,
 };
 
 const MAX_OSC52_REPLY_CHARS: usize = 1_048_576;
