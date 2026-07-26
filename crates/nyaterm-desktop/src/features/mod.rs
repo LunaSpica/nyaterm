@@ -25,6 +25,7 @@ mod shell;
 mod sync;
 mod sync_input;
 mod terminal;
+mod text_inputs;
 mod transfer_external_sync_window;
 mod transfers;
 mod translation;
@@ -95,6 +96,7 @@ pub(in crate::features) use terminal::{
     FULL_SHELL_PAINT_COUNT, TerminalFeatureFocus, TerminalFeatureState, full_shell_paint_count,
     terminal_surface_paint_count,
 };
+pub(in crate::features) use text_inputs::{TextInputRegistry, TextInputSetup};
 pub(in crate::features) use transfer_external_sync_window::TransferExternalSyncWindow;
 pub(in crate::features) use transfers::{
     TransferFeatureFocus, TransferFeatureState, duplicate_decision_label, duplicate_policy_label,

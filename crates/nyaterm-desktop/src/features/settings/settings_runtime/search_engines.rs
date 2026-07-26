@@ -4,6 +4,37 @@ use crate::models::SearchEngineEditorField;
 use nyaterm_core::SearchEngineConfig;
 
 impl NyaTermApp {
+    /// Apply an edit from one of the engine editor's inputs.
+    ///
+    /// `rest` is what follows `settings.search-engine.` in the field id:
+    /// `<index>.name` or `<index>.url`.
+    pub(in crate::features) fn apply_search_engine_input(
+        &mut self,
+        rest: &str,
+        text: String,
+        cx: &mut Context<Self>,
+    ) {
+        let Some((index, field)) = rest.split_once('.') else {
+            return;
+        };
+        let Ok(index) = index.parse::<usize>() else {
+            return;
+        };
+        let Some(engine) = self.settings.search_custom_engines.get_mut(index) else {
+            return;
+        };
+        match field {
+            "name" => engine.name = text,
+            "url" => engine.url_template = text,
+            _ => return,
+        }
+        // Persist as it is typed, the way every other settings control does.
+        // Trimming waits for the row to close, so a space mid-word survives.
+        self.save_terminal_settings(cx);
+        self.terminal.view.status = "search engine edited".to_string();
+        cx.notify();
+    }
+
     pub(in crate::features) fn add_search_engine(&mut self, cx: &mut Context<Self>) {
         self.settings.search_custom_engines.insert(
             0,
@@ -19,6 +50,9 @@ impl NyaTermApp {
         self.search_engine_icon_picker_index = None;
         self.search_engine_actions_index = None;
         self.search_engine_edit_field = SearchEngineEditorField::Name;
+        // The inputs are keyed by row index and every row just shifted down, so
+        // they have to be rebuilt from the engines they now stand for.
+        self.forget_text_inputs("settings.search-engine.");
         self.save_terminal_settings(cx);
         self.terminal.view.status = "search engine added".to_string();
     }
@@ -48,6 +82,7 @@ impl NyaTermApp {
                 self.search_engine_edit_index = Some(edit - 1);
             }
         }
+        self.forget_text_inputs("settings.search-engine.");
         self.save_terminal_settings(cx);
         self.terminal.view.status = "search engine removed".to_string();
     }
@@ -79,84 +114,6 @@ impl NyaTermApp {
         self.save_terminal_settings(cx);
     }
 
-    pub(in crate::features) fn focus_search_engine_field(
-        &mut self,
-        index: usize,
-        field: SearchEngineEditorField,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if index >= self.settings.search_custom_engines.len() {
-            return;
-        }
-        self.search_engine_edit_index = Some(index);
-        self.search_engine_edit_field = field;
-        window.focus(&self.search_engine_focus);
-        cx.notify();
-    }
-
-    pub(in crate::features) fn handle_search_engine_key_down(
-        &mut self,
-        event: &KeyDownEvent,
-        cx: &mut Context<Self>,
-    ) {
-        self.mark_user_activity();
-        let Some(index) = self.search_engine_edit_index else {
-            return;
-        };
-        if index >= self.settings.search_custom_engines.len() {
-            return;
-        }
-        let keystroke = &event.keystroke;
-        if keystroke.modifiers.platform || keystroke.modifiers.alt || keystroke.modifiers.control {
-            return;
-        }
-        match keystroke.key.as_str() {
-            "backspace" => {
-                let engine = &mut self.settings.search_custom_engines[index];
-                match self.search_engine_edit_field {
-                    SearchEngineEditorField::Name => {
-                        engine.name.pop();
-                    }
-                    SearchEngineEditorField::Url => {
-                        engine.url_template.pop();
-                    }
-                }
-                self.terminal.view.status = "search engine edited".to_string();
-                cx.notify();
-            }
-            "tab" => {
-                self.search_engine_edit_field = self.search_engine_edit_field.next();
-                cx.notify();
-            }
-            "enter" => {
-                self.normalize_search_engines();
-                self.save_terminal_settings(cx);
-                self.terminal.view.status = "search engines saved".to_string();
-            }
-            "escape" => {
-                self.search_engine_edit_index = None;
-                self.terminal.view.status = "search engine input blurred".to_string();
-                cx.notify();
-            }
-            _ => {
-                if let Some(input) = keystroke
-                    .key_char
-                    .as_deref()
-                    .filter(|input| !input.is_empty())
-                {
-                    let engine = &mut self.settings.search_custom_engines[index];
-                    match self.search_engine_edit_field {
-                        SearchEngineEditorField::Name => engine.name.push_str(input),
-                        SearchEngineEditorField::Url => engine.url_template.push_str(input),
-                    }
-                    self.terminal.view.status = "search engine edited".to_string();
-                    cx.notify();
-                }
-            }
-        }
-    }
-
     pub(in crate::features) fn expand_search_engine(
         &mut self,
         index: usize,
@@ -165,6 +122,8 @@ impl NyaTermApp {
         if self.search_engine_expanded_index == Some(index) {
             self.search_engine_expanded_index = None;
             self.search_engine_edit_index = None;
+            self.normalize_search_engines();
+            self.save_terminal_settings(cx);
         } else {
             self.search_engine_expanded_index = Some(index);
         }

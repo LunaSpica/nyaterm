@@ -33,6 +33,9 @@ pub struct NyaTermApp {
     pub(in crate::features) pending_saved_connection_queue: VecDeque<PendingSavedConnectionStart>,
     pub(in crate::features) connection_groups: Vec<Group>,
     pub(in crate::features) connection_state: ConnectionFeatureState,
+    /// Real text inputs for the panels that have not been given their own,
+    /// keyed by an id the panel picks. See `features::text_inputs`.
+    pub(in crate::features) text_inputs: TextInputRegistry,
     pub(in crate::features) connection_ssh_keys: Vec<SshKey>,
     pub(in crate::features) connection_otp_entries: Vec<OtpEntry>,
     pub(in crate::features) connection_saved_passwords: Vec<SavedPassword>,

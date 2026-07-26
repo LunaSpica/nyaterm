@@ -438,6 +438,7 @@ impl NyaTermApp {
             search_engine_actions_index: None,
             search_engine_edit_field: SearchEngineEditorField::Name,
             search_engine_focus: cx.focus_handle(),
+            text_inputs: TextInputRegistry::default(),
             action_link_menu: None,
             action_link_tooltip: None,
             action_link_hover_pending: None,

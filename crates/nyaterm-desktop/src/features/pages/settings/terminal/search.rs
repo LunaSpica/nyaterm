@@ -1,5 +1,5 @@
 use super::*;
-use crate::features::{SEARCH_ENGINE_ICON_IDS, mono_icon, search_engine_icon};
+use crate::features::{SEARCH_ENGINE_ICON_IDS, TextInputSetup, mono_icon, search_engine_icon};
 
 impl NyaTermApp {
     pub(in crate::features) fn terminal_search_settings_section(
@@ -20,6 +20,29 @@ impl NyaTermApp {
         let icon_picker_index = self.search_engine_icon_picker_index;
         let actions_index = self.search_engine_actions_index;
         let edit_field = self.search_engine_edit_field;
+        // Built before the row closure, which only has `&self`: the inputs are
+        // entities the app has to create, and only the expanded row shows them.
+        let mut editor_inputs = expanded_index.and_then(|index| {
+            let engine = engines.get(index)?.clone();
+            let name_placeholder = self.tr("settings.engineName");
+            let name = self
+                .text_input_box(
+                    format!("settings.search-engine.{index}.name"),
+                    &engine.name,
+                    TextInputSetup::placeholder(name_placeholder),
+                    cx,
+                )
+                .into_any_element();
+            let url = self
+                .text_input_box(
+                    format!("settings.search-engine.{index}.url"),
+                    &engine.url_template,
+                    TextInputSetup::placeholder("https://google.com/search?q=%s"),
+                    cx,
+                )
+                .into_any_element();
+            Some((name, url))
+        });
         let add_action = search_engine_text_button(
             palette,
             "settings-search-engine-add",
@@ -70,22 +93,16 @@ impl NyaTermApp {
                             .overflow_hidden()
                             .children(engines.into_iter().enumerate().map(|(index, engine)| {
                                 let is_open = expanded_index == Some(index);
+                                let (name_input, url_input) = if is_open {
+                                    match editor_inputs.take() {
+                                        Some((name, url)) => (Some(name), Some(url)),
+                                        None => (None, None),
+                                    }
+                                } else {
+                                    (None, None)
+                                };
                                 let icon_picker_open = icon_picker_index == Some(index);
                                 let actions_open = actions_index == Some(index);
-                                let name_active = edit_index == Some(index)
-                                    && edit_field == SearchEngineEditorField::Name;
-                                let url_active = edit_index == Some(index)
-                                    && edit_field == SearchEngineEditorField::Url;
-                                let name_value = if engine.name.is_empty() {
-                                    " ".to_string()
-                                } else {
-                                    engine.name.clone()
-                                };
-                                let url_value = if engine.url_template.is_empty() {
-                                    " ".to_string()
-                                } else {
-                                    engine.url_template.clone()
-                                };
                                 let has_placeholder = engine.url_template.contains("%s");
                                 let icon_def = engine
                                     .icon
@@ -364,41 +381,7 @@ impl NyaTermApp {
                                                                     "settings.engineName",
                                                                 )),
                                                         )
-                                                        .child(
-                                                            transfer_input(
-                                                                format!(
-                                                                    "settings-search-engine-name-{index}"
-                                                                ),
-                                                                self.tr("settings.engineName"),
-                                                                name_value,
-                                                                name_active,
-                                                                palette,
-                                                            )
-                                                            .track_focus(
-                                                                &self.search_engine_focus,
-                                                            )
-                                                            .on_click(cx.listener(
-                                                                move |this, _, window, cx| {
-                                                                    this.focus_search_engine_field(
-                                                                        index,
-                                                                        SearchEngineEditorField::Name,
-                                                                        window,
-                                                                        cx,
-                                                                    );
-                                                                },
-                                                            ))
-                                                            .on_key_down(cx.listener(
-                                                                |this,
-                                                                 event: &KeyDownEvent,
-                                                                 _,
-                                                                 cx| {
-                                                                    cx.stop_propagation();
-                                                                    this.handle_search_engine_key_down(
-                                                                        event, cx,
-                                                                    );
-                                                                },
-                                                            )),
-                                                        ),
+                                                        .children(name_input),
                                                 )
                                                 .child(
                                                     div()
@@ -416,41 +399,7 @@ impl NyaTermApp {
                                                                     "settings.engineUrl",
                                                                 )),
                                                         )
-                                                        .child(
-                                                            transfer_input(
-                                                                format!(
-                                                                    "settings-search-engine-url-{index}"
-                                                                ),
-                                                                "https://google.com/search?q=%s",
-                                                                url_value,
-                                                                url_active,
-                                                                palette,
-                                                            )
-                                                            .track_focus(
-                                                                &self.search_engine_focus,
-                                                            )
-                                                            .on_click(cx.listener(
-                                                                move |this, _, window, cx| {
-                                                                    this.focus_search_engine_field(
-                                                                        index,
-                                                                        SearchEngineEditorField::Url,
-                                                                        window,
-                                                                        cx,
-                                                                    );
-                                                                },
-                                                            ))
-                                                            .on_key_down(cx.listener(
-                                                                |this,
-                                                                 event: &KeyDownEvent,
-                                                                 _,
-                                                                 cx| {
-                                                                    cx.stop_propagation();
-                                                                    this.handle_search_engine_key_down(
-                                                                        event, cx,
-                                                                    );
-                                                                },
-                                                            )),
-                                                        )
+                                                        .children(url_input)
                                                         .child(
                                                             div()
                                                                 .text_size(px(10.))
