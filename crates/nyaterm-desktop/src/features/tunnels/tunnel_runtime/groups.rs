@@ -38,49 +38,28 @@ impl NyaTermApp {
                 name,
                 error: None,
             });
+        // The box owns its text, so it has to be dropped for the next group to
+        // seed from its own name.
+        self.forget_text_inputs("network.group-editor.");
         self.terminal.view.status = "network group editor opened".to_string();
         cx.notify();
     }
 
     pub(in crate::features) fn close_network_group_editor(&mut self, cx: &mut Context<Self>) {
         self.connection_state.network.close_group_editor();
+        self.forget_text_inputs("network.group-editor.");
         self.terminal.view.status = "network group editor closed".to_string();
         cx.notify();
     }
 
-    pub(in crate::features) fn handle_network_group_editor_key_down(
+    /// Apply an edit from the group dialog's name box.
+    pub(in crate::features) fn apply_network_group_editor_name(
         &mut self,
-        event: &KeyDownEvent,
+        text: String,
         cx: &mut Context<Self>,
     ) {
-        self.mark_user_activity();
-        let keystroke = &event.keystroke;
-        if keystroke.modifiers.alt || keystroke.modifiers.function {
-            return;
-        }
-
-        match keystroke.key.as_str() {
-            "escape" => self.close_network_group_editor(cx),
-            "enter" => self.save_network_group_editor(cx),
-            "backspace" if !keystroke.modifiers.platform && !keystroke.modifiers.control => {
-                self.connection_state
-                    .network
-                    .apply_group_editor_name_key("backspace", None);
-                cx.notify();
-            }
-            _ if !keystroke.modifiers.platform && !keystroke.modifiers.control => {
-                if let Some(input) = keystroke
-                    .key_char
-                    .as_deref()
-                    .filter(|input| !input.is_empty())
-                {
-                    self.connection_state
-                        .network
-                        .apply_group_editor_name_key(keystroke.key.as_str(), Some(input));
-                    cx.notify();
-                }
-            }
-            _ => {}
+        if self.connection_state.network.set_group_editor_name(text) {
+            cx.notify();
         }
     }
 

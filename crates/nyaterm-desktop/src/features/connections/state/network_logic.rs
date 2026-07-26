@@ -6,29 +6,17 @@ use crate::models::{
     NetworkTab, NetworkTunnelEditorField, NetworkTunnelEditorState,
 };
 
-pub(super) fn apply_network_group_editor_name_key(
+/// Write the group draft's name.
+pub(super) fn set_network_group_editor_name(
     group_editor: &mut Option<NetworkGroupEditorState>,
-    key: &str,
-    input: Option<&str>,
+    text: String,
 ) -> bool {
     let Some(editor) = group_editor.as_mut() else {
         return false;
     };
-    match key {
-        "backspace" => {
-            editor.name.pop();
-            editor.error = None;
-            true
-        }
-        _ => {
-            let Some(input) = input.filter(|input| !input.is_empty()) else {
-                return false;
-            };
-            editor.name.push_str(input);
-            editor.error = None;
-            true
-        }
-    }
+    editor.name = text;
+    editor.error = None;
+    true
 }
 
 pub(super) fn set_network_group_editor_error(

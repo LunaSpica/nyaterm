@@ -227,8 +227,7 @@ impl NyaTermApp {
             return Some(network_delete_confirm_panel(self, confirm, cx).into_any_element());
         }
         if let Some(editor) = self.connection_state.network.active_group_editor() {
-            let focus = self.connection_state.network.group_editor_focus_handle();
-            return Some(network_group_editor_panel(self, editor, &focus, cx).into_any_element());
+            return Some(network_group_editor_panel(self, editor, cx).into_any_element());
         }
         if let Some(confirm) = self.connection_state.network.active_group_delete_confirm() {
             return Some(network_group_delete_confirm_panel(self, confirm, cx).into_any_element());

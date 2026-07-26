@@ -1,11 +1,9 @@
 use gpui::prelude::*;
-use gpui::{
-    App, ClickEvent, Context, FontWeight, IntoElement, KeyDownEvent, Window, div, px, rgb, svg,
-};
+use gpui::{App, ClickEvent, Context, FontWeight, IntoElement, Window, div, px, rgb, svg};
 
 use crate::features::{
-    ChromeTooltip, NyaTermApp, modal_dialog_footer_localized, modal_dialog_footer_localized_danger,
-    modal_dialog_shell, transfer_input,
+    ChromeTooltip, NyaTermApp, TextInputSetup, modal_dialog_footer_localized,
+    modal_dialog_footer_localized_danger, modal_dialog_shell,
 };
 use crate::models::{
     NetworkDeleteConfirmState, NetworkGroupDeleteConfirmState, NetworkGroupEditorState, NetworkTab,
@@ -225,12 +223,20 @@ pub(super) fn network_delete_confirm_panel(
 }
 
 pub(super) fn network_group_editor_panel(
-    app: &NyaTermApp,
+    app: &mut NyaTermApp,
     editor: NetworkGroupEditorState,
-    focus: &gpui::FocusHandle,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
     let palette = app.theme_palette();
+    let name_input = app
+        .text_input_field(
+            "network.group-editor.name",
+            app.tr("network.groupName"),
+            &editor.name,
+            TextInputSetup::default(),
+            cx,
+        )
+        .into_any_element();
     let card = div()
         .p_6()
         .flex()
@@ -255,25 +261,7 @@ pub(super) fn network_group_editor_panel(
                 .text_color(rgb(palette.text_muted))
                 .child(app.tr("network.groupDialogDescription")),
         )
-        .child(
-            transfer_input(
-                "network-group-editor-name",
-                app.tr("network.groupName"),
-                editor.name.clone(),
-                true,
-                palette,
-            )
-            .track_focus(focus)
-            .on_click(cx.listener(|this, _, window, cx| {
-                let group_editor_focus = this.connection_state.network.group_editor_focus_handle();
-                window.focus(&group_editor_focus);
-                cx.notify();
-            }))
-            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-                cx.stop_propagation();
-                this.handle_network_group_editor_key_down(event, cx);
-            })),
-        )
+        .child(name_input)
         .when_some(editor.error.clone(), |this, error| {
             this.child(
                 div()
@@ -294,7 +282,20 @@ pub(super) fn network_group_editor_panel(
             cx.listener(|this, _, _, cx| {
                 this.save_network_group_editor(cx);
             }),
-        ));
+        ))
+        .on_key_down(cx.listener(|this, event: &gpui::KeyDownEvent, _, cx| {
+            match event.keystroke.key.as_str() {
+                "escape" => {
+                    cx.stop_propagation();
+                    this.close_network_group_editor(cx);
+                }
+                "enter" => {
+                    cx.stop_propagation();
+                    this.save_network_group_editor(cx);
+                }
+                _ => {}
+            }
+        }));
     network_modal_shell(
         palette,
         app.shell_surface_color(palette.bg),

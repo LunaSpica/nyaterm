@@ -214,6 +214,10 @@ impl NyaTermApp {
             self.apply_search_engine_input(rest, text, cx);
         } else if let Some(field) = id.strip_prefix("network.tunnel-editor.") {
             self.apply_network_tunnel_editor_input(field, text, cx);
+        } else if let Some(field) = id.strip_prefix("network.proxy-editor.") {
+            self.apply_network_proxy_editor_input(field, text, cx);
+        } else if id.as_ref() == "network.group-editor.name" {
+            self.apply_network_group_editor_name(text, cx);
         }
     }
 
