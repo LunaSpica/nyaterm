@@ -131,6 +131,17 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   `published_core_store_snapshots_are_current`, which decides whether to
   republish them. That loop is self-referential, but it also gates the overlay
   publish, so untangling it is a separate change.
+
+  Two findings for whoever takes that on. First, `OverlaySnapshot` is a
+  same-render round-trip: `Render` publishes it in its prologue, then
+  `overlay_host` reads it back and, when it is absent, falls back to an
+  expression that recomputes every field from the same `self` fields. The
+  fallback is proof the renderer never needed the store. It is not a staleness
+  bug today only because publish runs before `overlay_host` in the same pass.
+  Second, `AppShell` deliberately does not observe the stores — there is a
+  comment explaining that store-observe was amplifying each publish into an
+  extra shell paint — so the `cx.notify()` in each publish currently has no
+  subscriber at all.
 - The connections UI state has started moving out of scattered `NyaTermApp`
   fields and into `ConnectionFeatureState`.
 - The current connections state split separates list UI, import UI, editor
