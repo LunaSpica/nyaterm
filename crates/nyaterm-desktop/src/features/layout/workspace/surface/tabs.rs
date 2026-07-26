@@ -111,6 +111,9 @@ impl NyaTermApp {
                     .id(SharedString::from(format!(
                         "pending-session-tab-close-{close_request_id}"
                     )))
+                    .group(SharedString::from(format!(
+                        "pending-session-tab-close-group-{close_request_id}"
+                    )))
                     .size(px(18.))
                     .flex()
                     .items_center()
@@ -119,7 +122,18 @@ impl NyaTermApp {
                     .text_xs()
                     .text_color(rgb(palette.text_muted))
                     .hover(|this| this.bg(rgb(palette.border)).text_color(rgb(palette.danger)))
-                    .child(svg().size(px(13.)).path("icons/window/close.svg"))
+                    .child(
+                        svg()
+                            .size(px(13.))
+                            .path("icons/window/close.svg")
+                            .text_color(rgb(palette.text_muted))
+                            .group_hover(
+                                SharedString::from(format!(
+                                    "pending-session-tab-close-group-{close_request_id}"
+                                )),
+                                |this| this.text_color(rgb(palette.danger)),
+                            ),
+                    )
                     .on_click(cx.listener(move |this, _, _, cx| {
                         cx.stop_propagation();
                         this.close_pending_session_start(close_request_id.clone(), cx);
@@ -214,6 +228,9 @@ impl NyaTermApp {
                     .id(SharedString::from(format!(
                         "failed-session-tab-close-{close_request_id}"
                     )))
+                    .group(SharedString::from(format!(
+                        "failed-session-tab-close-group-{close_request_id}"
+                    )))
                     .size(px(18.))
                     .flex()
                     .items_center()
@@ -222,7 +239,18 @@ impl NyaTermApp {
                     .text_xs()
                     .text_color(rgb(palette.text_muted))
                     .hover(|this| this.bg(rgb(palette.border)).text_color(rgb(palette.danger)))
-                    .child(svg().size(px(13.)).path("icons/window/close.svg"))
+                    .child(
+                        svg()
+                            .size(px(13.))
+                            .path("icons/window/close.svg")
+                            .text_color(rgb(palette.text_muted))
+                            .group_hover(
+                                SharedString::from(format!(
+                                    "failed-session-tab-close-group-{close_request_id}"
+                                )),
+                                |this| this.text_color(rgb(palette.danger)),
+                            ),
+                    )
                     .on_click(cx.listener(move |this, _, _, cx| {
                         cx.stop_propagation();
                         this.close_failed_session_start(close_request_id.clone(), cx);
@@ -590,7 +618,12 @@ impl NyaTermApp {
                             .hover(|this| {
                                 this.bg(rgb(palette.border)).text_color(rgb(palette.danger))
                             })
-                            .child(svg().size(px(13.)).path("icons/window/close.svg"))
+                            .child(
+                                svg()
+                                    .size(px(13.))
+                                    .path("icons/window/close.svg")
+                                    .text_color(rgb(palette.text_muted)),
+                            )
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 cx.stop_propagation();
                                 this.close_session(close_session_id.clone(), cx);
@@ -689,7 +722,8 @@ impl NyaTermApp {
                                 svg()
                                     .size(px(16.))
                                     .flex_none()
-                                    .path("icons/chevron-down.svg"),
+                                    .path("icons/chevron-down.svg")
+                                    .text_color(rgb(palette.text_muted)),
                             )
                             .tooltip(move |_, cx| {
                                 cx.new(|_| {
@@ -733,7 +767,13 @@ impl NyaTermApp {
                         .text_color(rgb(palette.text_muted))
                         .cursor_pointer()
                         .hover(move |this| this.bg(shell_hover_bg).text_color(rgb(palette.text)))
-                        .child(svg().size(px(16.)).flex_none().path("icons/conn/add.svg"))
+                        .child(
+                            svg()
+                                .size(px(16.))
+                                .flex_none()
+                                .path("icons/conn/add.svg")
+                                .text_color(rgb(palette.text_muted)),
+                        )
                         .tooltip(move |_, cx| {
                             cx.new(|_| {
                                 crate::features::ChromeTooltip::new(new_session_label.clone())

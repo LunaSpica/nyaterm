@@ -1002,7 +1002,12 @@ impl NyaTermApp {
                             cx.stop_propagation();
                             this.delete_command_suggestion_history(delete_command.clone(), cx);
                         }))
-                        .child(svg().size(px(13.)).path("icons/fe/delete.svg")),
+                        .child(
+                            svg()
+                                .size(px(13.))
+                                .path("icons/fe/delete.svg")
+                                .text_color(rgb(palette.text_dimmed)),
+                        ),
                 );
             }
             list = list.child(row);

@@ -32,7 +32,12 @@ pub(super) fn title_menu_item(
                 .items_center()
                 .justify_center()
                 .when(checked, |this| {
-                    this.child(svg().size(px(13.)).path("icons/check.svg"))
+                    this.child(
+                        svg()
+                            .size(px(13.))
+                            .path("icons/check.svg")
+                            .text_color(rgb(palette.text)),
+                    )
                 })
                 .when_some(icon, |this, icon_path| {
                     this.child(

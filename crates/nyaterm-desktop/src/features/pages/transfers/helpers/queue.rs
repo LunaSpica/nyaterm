@@ -33,7 +33,17 @@ pub(in crate::features::pages::transfers) fn queue_action_button(
             cx.new(|_| crate::features::ChromeTooltip::new(tooltip.clone()))
                 .into()
         })
-        .child(svg().size(px(16.)).flex_none().path(icon_path))
+        .child(
+            svg()
+                .size(px(16.))
+                .flex_none()
+                .path(icon_path)
+                .text_color(if enabled {
+                    rgb(palette.text_muted)
+                } else {
+                    rgb(palette.text_dimmed)
+                }),
+        )
 }
 
 pub(in crate::features::pages::transfers) fn transfer_direction_label(

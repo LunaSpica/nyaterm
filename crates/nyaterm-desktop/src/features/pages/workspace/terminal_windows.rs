@@ -276,7 +276,12 @@ impl NyaTermApp {
                                     .hover(|this| {
                                         this.bg(rgb(palette.border)).text_color(rgb(palette.danger))
                                     })
-                                    .child(svg().size(px(13.)).path("icons/window/close.svg"))
+                                    .child(
+                                        svg()
+                                            .size(px(13.))
+                                            .path("icons/window/close.svg")
+                                            .text_color(rgb(palette.text_muted)),
+                                    )
                                     .on_click(cx.listener(move |this, _, _, cx| {
                                         cx.stop_propagation();
                                         this.close_session(close_id.clone(), cx);
@@ -300,7 +305,12 @@ impl NyaTermApp {
                         .text_color(rgb(palette.text_muted))
                         .hover(|this| this.bg(rgb(palette.hover)).text_color(rgb(palette.text)))
                         .cursor_pointer()
-                        .child(svg().size(px(16.)).path("icons/conn/add.svg"))
+                        .child(
+                            svg()
+                                .size(px(16.))
+                                .path("icons/conn/add.svg")
+                                .text_color(rgb(palette.text_muted)),
+                        )
                         .on_click(cx.listener({
                             let leaf_id = id.clone();
                             move |this, _, window, cx| {

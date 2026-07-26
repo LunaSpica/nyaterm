@@ -493,7 +493,12 @@ fn terminal_search_icon_button(
         .text_color(rgb(palette.text_muted))
         .cursor_pointer()
         .hover(|this| this.opacity(0.8))
-        .child(svg().size(px(14.)).path(icon_path))
+        .child(
+            svg()
+                .size(px(14.))
+                .path(icon_path)
+                .text_color(rgb(palette.text_muted)),
+        )
         .on_click(on_click)
 }
 

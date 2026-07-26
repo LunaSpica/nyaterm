@@ -23,8 +23,14 @@ pub(in crate::features) fn window_control_button(
     area: WindowControlArea,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let hovered_color = if matches!(area, WindowControlArea::Close) {
+        0xffffff
+    } else {
+        palette.text
+    };
     div()
         .id(SharedString::from(id))
+        .group(SharedString::from(id))
         .w(px(46.))
         .h_full()
         .flex()
@@ -40,7 +46,16 @@ pub(in crate::features) fn window_control_button(
                 this.bg(rgb(palette.hover)).text_color(rgb(palette.text))
             }
         })
-        .child(svg().size(px(16.)).flex_none().path(icon_path))
+        .child(
+            svg()
+                .size(px(16.))
+                .flex_none()
+                .path(icon_path)
+                .text_color(rgb(palette.text_muted))
+                .group_hover(SharedString::from(id), move |this| {
+                    this.text_color(rgb(hovered_color))
+                }),
+        )
         .on_click(on_click)
 }
 

@@ -38,6 +38,12 @@ pub(in crate::features::pages::remote) fn compact_remote_svg_button(
             cx.new(|_| crate::features::ChromeTooltip::new(tooltip.clone()))
                 .into()
         })
-        .child(svg().size(px(16.)).flex_none().path(icon_path))
+        .child(
+            svg()
+                .size(px(16.))
+                .flex_none()
+                .path(icon_path)
+                .text_color(rgb(palette.text_muted)),
+        )
         .on_click(on_click)
 }

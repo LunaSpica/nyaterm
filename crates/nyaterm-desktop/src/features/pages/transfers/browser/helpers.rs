@@ -26,7 +26,13 @@ pub(super) fn compact_transfer_footer_button(
             cx.new(|_| crate::features::ChromeTooltip::new(tooltip.clone()))
                 .into()
         })
-        .child(svg().size(px(14.)).flex_none().path(icon_path));
+        .child(
+            svg()
+                .size(px(14.))
+                .flex_none()
+                .path(icon_path)
+                .text_color(rgb(palette.text_muted)),
+        );
     if enabled {
         button = button.cursor_pointer().on_click(on_click);
     } else {
@@ -75,7 +81,13 @@ pub(super) fn compact_transfer_footer_button_active(
             cx.new(|_| crate::features::ChromeTooltip::new(tooltip.clone()))
                 .into()
         })
-        .child(svg().size(px(14.)).flex_none().path(icon_path));
+        .child(
+            svg()
+                .size(px(14.))
+                .flex_none()
+                .path(icon_path)
+                .text_color(color),
+        );
     if enabled {
         button = button.cursor_pointer().on_click(on_click);
     } else {
@@ -108,7 +120,13 @@ pub(super) fn compact_transfer_upload_menu_button(
             cx.new(|_| crate::features::ChromeTooltip::new(tooltip.clone()))
                 .into()
         })
-        .child(svg().size(px(16.)).flex_none().path("icons/fe/upload.svg"))
+        .child(
+            svg()
+                .size(px(16.))
+                .flex_none()
+                .path("icons/fe/upload.svg")
+                .text_color(rgb(palette.text_muted)),
+        )
         .on_mouse_down(
             MouseButton::Left,
             cx.listener(|this, event: &MouseDownEvent, _, cx| {
@@ -143,7 +161,13 @@ pub(super) fn compact_transfer_toolbar_button(
             cx.new(|_| crate::features::ChromeTooltip::new(tooltip.clone()))
                 .into()
         })
-        .child(svg().size(px(16.)).flex_none().path(icon_path))
+        .child(
+            svg()
+                .size(px(16.))
+                .flex_none()
+                .path(icon_path)
+                .text_color(rgb(palette.text_muted)),
+        )
         .on_click(on_click)
 }
 
@@ -173,7 +197,17 @@ pub(super) fn compact_transfer_toolbar_button_enabled(
             cx.new(|_| crate::features::ChromeTooltip::new(tooltip.clone()))
                 .into()
         })
-        .child(svg().size(px(16.)).flex_none().path(icon_path))
+        .child(
+            svg()
+                .size(px(16.))
+                .flex_none()
+                .path(icon_path)
+                .text_color(if enabled {
+                    rgb(palette.text_muted)
+                } else {
+                    rgb(palette.text_dimmed)
+                }),
+        )
         .when(enabled, |this| {
             this.cursor_pointer()
                 .hover(|this| {
@@ -224,7 +258,13 @@ pub(super) fn compact_transfer_toolbar_button_active(
             cx.new(|_| crate::features::ChromeTooltip::new(tooltip.clone()))
                 .into()
         })
-        .child(svg().size(px(16.)).flex_none().path(icon_path))
+        .child(
+            svg()
+                .size(px(16.))
+                .flex_none()
+                .path(icon_path)
+                .text_color(color),
+        )
         .on_click(on_click)
 }
 

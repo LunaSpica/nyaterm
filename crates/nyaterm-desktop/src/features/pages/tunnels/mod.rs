@@ -280,7 +280,13 @@ fn icon_network_action(
             this.bg(rgb(palette.surface_elevated))
                 .text_color(rgb(palette.text))
         })
-        .child(svg().size(px(16.)).flex_none().path(icon_path))
+        .child(
+            svg()
+                .size(px(16.))
+                .flex_none()
+                .path(icon_path)
+                .text_color(rgb(palette.text_muted)),
+        )
         .on_click(on_click)
 }
 
@@ -307,7 +313,13 @@ fn network_create_button(
                 .on_click(on_click)
         })
         .when(!enabled, |this| this.opacity(0.4))
-        .child(svg().size(px(16.)).flex_none().path("icons/conn/add.svg"))
+        .child(
+            svg()
+                .size(px(16.))
+                .flex_none()
+                .path("icons/conn/add.svg")
+                .text_color(rgb(palette.link)),
+        )
         .child(label)
 }
 

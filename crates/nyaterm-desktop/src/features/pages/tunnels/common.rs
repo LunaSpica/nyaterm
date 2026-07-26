@@ -87,7 +87,8 @@ pub(super) fn network_item_overflow_menu(
                     svg()
                         .size(px(14.))
                         .flex_none()
-                        .path("icons/session/more.svg"),
+                        .path("icons/session/more.svg")
+                        .text_color(rgb(palette.text_muted)),
                 )
                 .tooltip(move |_, cx| cx.new(|_| ChromeTooltip::new(more_label)).into())
                 .on_click(on_toggle),
@@ -159,7 +160,13 @@ fn network_item_menu_entry(
         .text_color(rgb(if danger { palette.danger } else { palette.text }))
         .cursor_pointer()
         .hover(|this| this.bg(rgb(palette.hover)))
-        .child(svg().size(px(14.)).flex_none().path(icon_path))
+        .child(
+            svg()
+                .size(px(14.))
+                .flex_none()
+                .path(icon_path)
+                .text_color(rgb(if danger { palette.danger } else { palette.text })),
+        )
         .child(label)
         .on_click(on_click)
 }

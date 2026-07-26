@@ -89,7 +89,12 @@ impl NyaTermApp {
                     .text_size(px(11.))
                     .text_color(rgb(palette.text))
                     .child(active_label)
-                    .child(svg().size(px(13.)).path("icons/chevron-down.svg"))
+                    .child(
+                        svg()
+                            .size(px(13.))
+                            .path("icons/chevron-down.svg")
+                            .text_color(rgb(palette.text)),
+                    )
                     .when(enabled, |this| {
                         this.cursor_pointer()
                             .hover(move |this| this.bg(rgb(palette.hover)))

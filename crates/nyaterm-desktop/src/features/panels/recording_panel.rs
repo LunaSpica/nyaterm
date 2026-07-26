@@ -361,7 +361,13 @@ fn recording_action_svg_button(
             })
         })
         .when(!enabled, |this| this.opacity(0.4))
-        .child(svg().size(px(16.)).flex_none().path(icon_path))
+        .child(
+            svg()
+                .size(px(16.))
+                .flex_none()
+                .path(icon_path)
+                .text_color(color),
+        )
         .tooltip(move |_, cx| {
             cx.new(|_| crate::features::ChromeTooltip::new(tooltip.clone()))
                 .into()

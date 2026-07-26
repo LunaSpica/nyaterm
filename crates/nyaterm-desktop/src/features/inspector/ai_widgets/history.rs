@@ -351,7 +351,12 @@ impl NyaTermApp {
                     .justify_center()
                     .text_color(rgb(palette.bg))
                     .when(enabled, |this| {
-                        this.child(svg().size(px(11.)).path("icons/check.svg"))
+                        this.child(
+                            svg()
+                                .size(px(11.))
+                                .path("icons/check.svg")
+                                .text_color(rgb(palette.bg)),
+                        )
                     }),
             )
             .child(
@@ -447,7 +452,12 @@ impl NyaTermApp {
                     .flex_none()
                     .text_color(rgb(palette.link))
                     .when(selected, |this| {
-                        this.child(svg().size(px(13.)).path("icons/check.svg"))
+                        this.child(
+                            svg()
+                                .size(px(13.))
+                                .path("icons/check.svg")
+                                .text_color(rgb(palette.link)),
+                        )
                     }),
             )
     }
@@ -649,7 +659,12 @@ impl NyaTermApp {
                                             window.focus(&this.ai.history.search_focus);
                                             cx.notify();
                                         }))
-                                        .child(svg().size(px(13.)).path("icons/window/close.svg")),
+                                        .child(
+                                            svg()
+                                                .size(px(13.))
+                                                .path("icons/window/close.svg")
+                                                .text_color(rgb(palette.text_muted)),
+                                        ),
                                 )
                             }),
                     ),

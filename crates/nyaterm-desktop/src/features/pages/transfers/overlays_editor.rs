@@ -482,7 +482,12 @@ impl NyaTermApp {
                                 cx.stop_propagation();
                                 this.close_transfer_editor_tab(&close_tab_id, cx);
                             }))
-                            .child(svg().size(px(13.)).path("icons/window/close.svg")),
+                            .child(
+                                svg()
+                                    .size(px(13.))
+                                    .path("icons/window/close.svg")
+                                    .text_color(rgb(palette.text_muted)),
+                            ),
                     ),
             );
 
@@ -571,7 +576,12 @@ impl NyaTermApp {
                                 !this.transfer.editor.tabs_menu_open;
                             cx.notify();
                         }))
-                        .child(svg().size(px(15.)).path("icons/chevron-down.svg")),
+                        .child(
+                            svg()
+                                .size(px(15.))
+                                .path("icons/chevron-down.svg")
+                                .text_color(rgb(palette.text_muted)),
+                        ),
                 )
             });
 

@@ -53,6 +53,7 @@ impl NyaTermApp {
                         this.child(
                             div()
                                 .id("title-mobile-left")
+                                .group("title-mobile-left")
                                 .size(px(28.))
                                 .flex()
                                 .items_center()
@@ -63,7 +64,15 @@ impl NyaTermApp {
                                 .hover(|this| {
                                     this.bg(rgb(palette.hover)).text_color(rgb(palette.text))
                                 })
-                                .child(svg().size(px(16.)).path("icons/menu/menu.svg"))
+                                .child(
+                                    svg()
+                                        .size(px(16.))
+                                        .path("icons/menu/menu.svg")
+                                        .text_color(rgb(palette.text_muted))
+                                        .group_hover("title-mobile-left", |this| {
+                                            this.text_color(rgb(palette.text))
+                                        }),
+                                )
                                 .on_click(cx.listener(|this, _, _, cx| {
                                     this.toggle_mobile_left_drawer(cx);
                                 })),
@@ -119,6 +128,7 @@ impl NyaTermApp {
                         this.child(
                             div()
                                 .id("title-mobile-right")
+                                .group("title-mobile-right")
                                 .size(px(28.))
                                 .flex()
                                 .items_center()
@@ -129,7 +139,15 @@ impl NyaTermApp {
                                 .hover(|this| {
                                     this.bg(rgb(palette.hover)).text_color(rgb(palette.text))
                                 })
-                                .child(svg().size(px(16.)).path("icons/menu/sidebar.svg"))
+                                .child(
+                                    svg()
+                                        .size(px(16.))
+                                        .path("icons/menu/sidebar.svg")
+                                        .text_color(rgb(palette.text_muted))
+                                        .group_hover("title-mobile-right", |this| {
+                                            this.text_color(rgb(palette.text))
+                                        }),
+                                )
                                 .on_click(cx.listener(|this, _, _, cx| {
                                     this.toggle_mobile_right_drawer(cx);
                                 })),

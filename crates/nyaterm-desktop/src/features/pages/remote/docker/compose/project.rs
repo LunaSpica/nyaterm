@@ -111,11 +111,16 @@ pub(in crate::features::pages::remote) fn docker_compose_project_row(
                             this.bg(rgb(palette.surface_elevated))
                                 .text_color(rgb(palette.text))
                         })
-                        .child(svg().size(px(14.)).path(if expanded {
-                            "icons/chevron-down.svg"
-                        } else {
-                            "icons/fe/forward.svg"
-                        }))
+                        .child(
+                            svg()
+                                .size(px(14.))
+                                .path(if expanded {
+                                    "icons/chevron-down.svg"
+                                } else {
+                                    "icons/fe/forward.svg"
+                                })
+                                .text_color(rgb(palette.text_muted)),
+                        )
                         .on_click(cx.listener({
                             let project_name = project_name.clone();
                             let config_files = config_files.clone();

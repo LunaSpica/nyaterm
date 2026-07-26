@@ -314,7 +314,12 @@ impl NyaTermApp {
                                         .on_click(cx.listener(|this, _, _, cx| {
                                             this.clear_ai_quote(cx);
                                         }))
-                                        .child(svg().size(px(13.)).path("icons/window/close.svg")),
+                                        .child(
+                                            svg()
+                                                .size(px(13.))
+                                                .path("icons/window/close.svg")
+                                                .text_color(rgb(palette.text_muted)),
+                                        ),
                                 ),
                         )
                     })
@@ -380,7 +385,12 @@ impl NyaTermApp {
                                                     cx,
                                                 );
                                             }))
-                                            .child(svg().size(px(11.)).path("icons/window/close.svg")),
+                                            .child(
+                                                svg()
+                                                    .size(px(11.))
+                                                    .path("icons/window/close.svg")
+                                                    .text_color(rgb(palette.text_muted)),
+                                            ),
                                     ),
                             );
                         }
@@ -780,7 +790,8 @@ impl NyaTermApp {
                                                                                 this.child(
                                                                                     svg()
                                                                                         .size(px(13.))
-                                                                                        .path("icons/check.svg"),
+                                                                                        .path("icons/check.svg")
+                                                                                        .text_color(rgb(palette.link)),
                                                                                 )
                                                                             }),
                                                                     )
@@ -878,7 +889,17 @@ fn ai_send_button(
                     .text_color(rgb(palette.text))
             })
         })
-        .child(svg().size(px(16.)).flex_none().path(icon))
+        .child(
+            svg()
+                .size(px(16.))
+                .flex_none()
+                .path(icon)
+                .text_color(if disabled {
+                    rgb(palette.text_dimmed)
+                } else {
+                    rgb(palette.text_muted)
+                }),
+        )
         .on_click(cx.listener(move |this, _, _, cx| {
             if this.ai.chat.pending || this.ai.agent.loop_state.is_some() {
                 this.cancel_ai_chat(cx);

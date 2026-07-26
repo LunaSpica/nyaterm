@@ -86,7 +86,16 @@ pub(super) fn send_command_select_trigger(
                 } else {
                     rgb(palette.text_dimmed)
                 })
-                .child(svg().size(px(13.)).path("icons/chevron-down.svg")),
+                .child(
+                    svg()
+                        .size(px(13.))
+                        .path("icons/chevron-down.svg")
+                        .text_color(if open {
+                            rgb(palette.link)
+                        } else {
+                            rgb(palette.text_dimmed)
+                        }),
+                ),
         )
         .when(!disabled, |this| this.on_click(on_click))
 }

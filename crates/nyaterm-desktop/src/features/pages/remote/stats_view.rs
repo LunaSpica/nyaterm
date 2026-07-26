@@ -545,8 +545,18 @@ fn resource_network_row(
                 .justify_end()
                 .gap_2()
                 .flex_wrap()
-                .child(rate_value(palette, "↑", tx, rgb(0x22c55e).into()))
-                .child(rate_value(palette, "↓", rx, rgb(0x3b82f6).into())),
+                .child(rate_value(
+                    palette,
+                    "icons/fe/up.svg",
+                    tx,
+                    rgb(0x22c55e).into(),
+                ))
+                .child(rate_value(
+                    palette,
+                    "icons/arrow-down.svg",
+                    rx,
+                    rgb(0x3b82f6).into(),
+                )),
         )
 }
 
@@ -630,7 +640,7 @@ fn rate_value(
         .font_family(crate::features::gpui_code_font_family())
         .text_size(px(11.))
         .text_color(rgb(palette.text_muted))
-        .child(div().text_color(color).child(arrow))
+        .child(crate::features::mono_icon(arrow, color, 11.))
         .child(format_rate(value))
 }
 
@@ -678,7 +688,12 @@ fn cpu_core_summary(
             .on_click(cx.listener(|this, _, _, cx| {
                 this.toggle_stats_cpu_expanded(cx);
             }))
-            .child(svg().size(px(13.)).path("icons/chevron-down.svg"))
+            .child(
+                svg()
+                    .size(px(13.))
+                    .path("icons/chevron-down.svg")
+                    .text_color(rgb(palette.text_muted)),
+            )
             .child(summary),
     );
 

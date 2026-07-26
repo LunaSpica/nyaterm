@@ -71,7 +71,13 @@ fn quick_command_action_icon_button(
             this.bg(rgb(palette.surface_elevated))
                 .text_color(rgb(palette.text))
         })
-        .child(svg().size(px(14.)).flex_none().path(icon_path))
+        .child(
+            svg()
+                .size(px(14.))
+                .flex_none()
+                .path(icon_path)
+                .text_color(rgb(palette.text_muted)),
+        )
         .on_click(on_click)
 }
 
@@ -105,7 +111,8 @@ pub(super) fn quick_command_more_menu(
                 svg()
                     .size(px(14.))
                     .flex_none()
-                    .path("icons/session/more.svg"),
+                    .path("icons/session/more.svg")
+                    .text_color(rgb(palette.text_muted)),
             )
             .on_click(on_more),
     )

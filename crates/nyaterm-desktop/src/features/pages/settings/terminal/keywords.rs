@@ -814,7 +814,13 @@ fn keyword_highlight_action_button(
         .bg(rgb(palette.surface_elevated))
         .text_color(rgb(palette.text))
         .text_xs()
-        .child(svg().size(px(14.)).flex_none().path(icon_path))
+        .child(
+            svg()
+                .size(px(14.))
+                .flex_none()
+                .path(icon_path)
+                .text_color(rgb(palette.text)),
+        )
         .child(div().ml_1().child(label))
         .when(enabled, |this| {
             this.cursor_pointer()
@@ -841,7 +847,12 @@ fn keyword_highlight_icon_button(
         .justify_center()
         .rounded_sm()
         .text_color(rgb(palette.danger))
-        .child(svg().size(px(15.)).path(icon_path))
+        .child(
+            svg()
+                .size(px(15.))
+                .path(icon_path)
+                .text_color(rgb(palette.danger)),
+        )
         .tooltip(move |_, cx| cx.new(|_| ChromeTooltip::new(tooltip)).into())
         .when(enabled, |this| {
             this.cursor_pointer()

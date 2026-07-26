@@ -593,7 +593,17 @@ fn quick_command_ai_popover_button(
                                             .text_color(rgb(palette.text))
                                     })
                                 })
-                                .child(svg().size(px(13.)).flex_none().path("icons/ai.svg"))
+                                .child(
+                                    svg()
+                                        .size(px(13.))
+                                        .flex_none()
+                                        .path("icons/ai.svg")
+                                        .text_color(if prompt.trim().is_empty() {
+                                            rgb(palette.text_dimmed)
+                                        } else {
+                                            rgb(palette.text)
+                                        }),
+                                )
                                 .child(generate_label)
                                 .when(can_generate, |this| {
                                     this.on_click(cx.listener(|this, _, window, cx| {
@@ -630,7 +640,17 @@ fn quick_command_toolbar_icon_button(
         })
         .cursor_pointer()
         .hover(|this| this.bg(rgb(palette.hover)).text_color(rgb(palette.text)))
-        .child(svg().size(px(15.)).flex_none().path(icon_path))
+        .child(
+            svg()
+                .size(px(15.))
+                .flex_none()
+                .path(icon_path)
+                .text_color(if active {
+                    rgb(palette.link)
+                } else {
+                    rgb(palette.text_muted)
+                }),
+        )
         .tooltip(move |_, cx| cx.new(|_| ChromeTooltip::new(tooltip.clone())).into())
         .on_click(on_click)
 }

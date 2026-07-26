@@ -1,4 +1,5 @@
 use super::*;
+use crate::features::{SEARCH_ENGINE_ICON_IDS, mono_icon, search_engine_icon};
 
 impl NyaTermApp {
     pub(in crate::features) fn terminal_search_settings_section(
@@ -86,12 +87,10 @@ impl NyaTermApp {
                                     engine.url_template.clone()
                                 };
                                 let has_placeholder = engine.url_template.contains("%s");
-                                let icon_label = engine
+                                let icon_def = engine
                                     .icon
                                     .as_deref()
-                                    .map(|icon| search_engine_icon_label(Some(icon)))
-                                    .unwrap_or_else(|| "+".to_string());
-                                let icon_color = search_engine_icon_color(engine.icon.as_deref());
+                                    .map(|icon| search_engine_icon(Some(icon), palette));
                                 let select_icon_label = self.tr("settings.selectIcon");
                                 let show_menu_label = self.tr("settings.showInSearchMenu");
                                 let actions_label = self.tr("settings.searchEngineActions");
@@ -130,9 +129,6 @@ impl NyaTermApp {
                                                     .flex()
                                                     .items_center()
                                                     .justify_center()
-                                                    .text_size(px(11.))
-                                                    .font_weight(FontWeight(700.))
-                                                    .text_color(rgb(icon_color))
                                                     .cursor_pointer()
                                                     .hover(|this| this.bg(rgb(palette.hover)))
                                                     .tooltip(move |_, cx| {
@@ -141,7 +137,26 @@ impl NyaTermApp {
                                                         })
                                                         .into()
                                                     })
-                                                    .child(icon_label)
+                                                    .child(match icon_def {
+                                                        Some(def) => mono_icon(
+                                                            def.path,
+                                                            rgb(def
+                                                                .tint(palette)
+                                                                .unwrap_or(palette.text))
+                                                            .into(),
+                                                            18.,
+                                                        )
+                                                        .into_any_element(),
+                                                        // No engine icon yet: an
+                                                        // add affordance, not a
+                                                        // brand.
+                                                        None => mono_icon(
+                                                            "icons/conn/add.svg",
+                                                            rgb(palette.text_muted).into(),
+                                                            18.,
+                                                        )
+                                                        .into_any_element(),
+                                                    })
                                                     .on_click(cx.listener(move |this, _, _, cx| {
                                                         if this.search_engine_icon_picker_index
                                                             == Some(index)
@@ -485,9 +500,9 @@ fn search_engine_icon_picker(
         .child(search_engine_icon_choice(
             palette,
             format!("settings-search-engine-icon-clear-{index}"),
-            "x".to_string(),
-            clear_label.to_string(),
+            "icons/close.svg",
             palette.text_muted,
+            clear_label.to_string(),
             selected_icon.is_none(),
             cx.listener(move |this, _, _, cx| {
                 this.set_search_engine_icon(index, None, cx);
@@ -495,12 +510,13 @@ fn search_engine_icon_picker(
         ))
         .children(SEARCH_ENGINE_ICON_IDS.iter().map(|icon| {
             let icon_id = (*icon).to_string();
+            let def = search_engine_icon(Some(icon), palette);
             search_engine_icon_choice(
                 palette,
                 format!("settings-search-engine-icon-{index}-{icon}"),
-                search_engine_icon_label(Some(icon)),
+                def.path,
+                def.tint(palette).unwrap_or(palette.text),
                 (*icon).to_string(),
-                search_engine_icon_color(Some(icon)),
                 selected_icon == Some(*icon),
                 cx.listener(move |this, _, _, cx| {
                     this.set_search_engine_icon(index, Some(&icon_id), cx);
@@ -512,9 +528,9 @@ fn search_engine_icon_picker(
 fn search_engine_icon_choice(
     palette: ThemePalette,
     id: String,
-    label: String,
-    tooltip: String,
+    icon_path: &'static str,
     color: u32,
+    tooltip: String,
     selected: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
@@ -536,13 +552,10 @@ fn search_engine_icon_choice(
         .flex()
         .items_center()
         .justify_center()
-        .text_size(px(10.))
-        .font_weight(FontWeight(700.))
-        .text_color(rgb(color))
         .cursor_pointer()
         .hover(|this| this.bg(rgb(palette.hover)))
         .tooltip(move |_, cx| cx.new(|_| ChromeTooltip::new(tooltip.clone())).into())
-        .child(label)
+        .child(mono_icon(icon_path, rgb(color).into(), 15.))
         .on_click(on_click)
 }
 
@@ -617,7 +630,12 @@ fn search_engine_icon_button(
         .cursor_pointer()
         .hover(|this| this.bg(rgb(palette.hover)).text_color(rgb(palette.text)))
         .tooltip(move |_, cx| cx.new(|_| ChromeTooltip::new(tooltip)).into())
-        .child(svg().size(px(15.)).path(icon_path))
+        .child(
+            svg()
+                .size(px(15.))
+                .path(icon_path)
+                .text_color(rgb(palette.text_muted)),
+        )
         .on_click(on_click)
 }
 
@@ -650,7 +668,16 @@ fn search_engine_text_button(
             palette.primary
         }))
         .opacity(if enabled { 1.0 } else { 0.45 })
-        .child(svg().size(px(14.)).path(icon_path))
+        .child(
+            svg()
+                .size(px(14.))
+                .path(icon_path)
+                .text_color(rgb(if destructive {
+                    palette.danger
+                } else {
+                    palette.primary
+                })),
+        )
         .child(label)
         .when(enabled, |this| {
             this.cursor_pointer()

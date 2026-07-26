@@ -1158,7 +1158,16 @@ fn appearance_icon_text_button(
         }))
         .cursor_pointer()
         .hover(move |this| this.bg(hover))
-        .child(svg().size(px(14.)).path(icon_path))
+        .child(
+            svg()
+                .size(px(14.))
+                .path(icon_path)
+                .text_color(rgb(if destructive {
+                    palette.danger
+                } else {
+                    palette.primary
+                })),
+        )
         .child(label)
         .on_click(on_click)
 }
@@ -1182,7 +1191,12 @@ fn appearance_icon_button(
         .text_color(rgb(palette.danger))
         .cursor_pointer()
         .hover(move |this| this.bg(hover))
-        .child(svg().size(px(15.)).path(icon_path))
+        .child(
+            svg()
+                .size(px(15.))
+                .path(icon_path)
+                .text_color(rgb(palette.danger)),
+        )
         .tooltip(move |_, cx| cx.new(|_| ChromeTooltip::new(tooltip)).into())
         .on_click(on_click)
 }

@@ -393,11 +393,17 @@ fn send_command_floating_action_button(
         })
         .text_color(rgb(0xffffff))
         .opacity(if disabled { 0.45 } else { 1.0 })
-        .child(svg().size(px(14.)).flex_none().path(if is_sending {
-            "icons/session/stop.svg"
-        } else {
-            "icons/send.svg"
-        }))
+        .child(
+            svg()
+                .size(px(14.))
+                .flex_none()
+                .path(if is_sending {
+                    "icons/session/stop.svg"
+                } else {
+                    "icons/send.svg"
+                })
+                .text_color(rgb(0xffffff)),
+        )
         .tooltip(move |_, cx| cx.new(|_| ChromeTooltip::new(tooltip)).into())
         .when(!disabled, |this| {
             this.cursor_pointer()

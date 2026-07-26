@@ -178,31 +178,6 @@ pub fn mode_button(
         .on_click(on_click)
 }
 
-pub fn icon_button(
-    id: impl Into<String>,
-    label: &'static str,
-    palette: ThemePalette,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    // Tauri ghost icon-sm buttons: no hard border until hover.
-    div()
-        .id(SharedString::from(id.into()))
-        .size(px(24.))
-        .flex()
-        .items_center()
-        .justify_center()
-        .rounded_md()
-        .text_color(rgb(palette.text_muted))
-        .text_xs()
-        .cursor_pointer()
-        .hover(move |this| {
-            this.bg(rgb(palette.surface_elevated))
-                .text_color(rgb(palette.text))
-        })
-        .child(label)
-        .on_click(on_click)
-}
-
 pub fn svg_icon_button(
     id: impl Into<String>,
     icon_path: &'static str,
@@ -210,8 +185,14 @@ pub fn svg_icon_button(
     palette: ThemePalette,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let id = SharedString::from(id.into());
+    // `svg()` reads its tint from its own computed style, which GPUI starts from
+    // `Style::default()` — the color on this `div` reaches text but not the glyph,
+    // and a glyph with no color of its own is skipped at paint time. Hence the
+    // explicit color, and the group so hover still brightens the icon.
     div()
-        .id(SharedString::from(id.into()))
+        .id(id.clone())
+        .group(id.clone())
         .size(px(24.))
         .flex()
         .items_center()
@@ -223,6 +204,12 @@ pub fn svg_icon_button(
             this.bg(rgb(palette.surface_elevated))
                 .text_color(rgb(palette.text))
         })
-        .child(svg().size(px(icon_size)).path(icon_path))
+        .child(
+            svg()
+                .size(px(icon_size))
+                .path(icon_path)
+                .text_color(rgb(palette.text_muted))
+                .group_hover(id, move |this| this.text_color(rgb(palette.text))),
+        )
         .on_click(on_click)
 }

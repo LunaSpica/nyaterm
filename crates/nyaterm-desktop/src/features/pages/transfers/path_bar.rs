@@ -146,6 +146,11 @@ impl NyaTermApp {
                                         "icons/fe/star.svg"
                                     } else {
                                         "icons/fe/star-outline.svg"
+                                    })
+                                    .text_color(if is_current_favorite {
+                                        rgb(palette.link)
+                                    } else {
+                                        rgb(palette.text_muted)
                                     }),
                             ),
                     ),

@@ -54,18 +54,21 @@ pub(super) fn session_action_svg_button(
 ) -> impl IntoElement {
     // Tauri ActiveSessions action icons: h-7 ghost.
     let tooltip = tooltip.into();
+    let id = SharedString::from(id.into());
+    let icon_color = if enabled {
+        palette.text_muted
+    } else {
+        palette.text_dimmed
+    };
     div()
-        .id(SharedString::from(id.into()))
+        .id(id.clone())
+        .group(id.clone())
         .size(px(28.))
         .flex()
         .items_center()
         .justify_center()
         .rounded_md()
-        .text_color(rgb(if enabled {
-            palette.text_muted
-        } else {
-            palette.text_dimmed
-        }))
+        .text_color(rgb(icon_color))
         .when(enabled, |this| {
             this.cursor_pointer().hover(|this| {
                 this.bg(rgb(palette.surface_elevated))
@@ -73,7 +76,16 @@ pub(super) fn session_action_svg_button(
             })
         })
         .when(!enabled, |this| this.opacity(0.4))
-        .child(svg().size(px(16.)).flex_none().path(icon_path))
+        .child(
+            svg()
+                .size(px(16.))
+                .flex_none()
+                .path(icon_path)
+                .text_color(rgb(icon_color))
+                .when(enabled, |this| {
+                    this.group_hover(id, move |this| this.text_color(rgb(palette.text)))
+                }),
+        )
         .tooltip(move |_, cx| {
             cx.new(|_| crate::features::ChromeTooltip::new(tooltip.clone()))
                 .into()

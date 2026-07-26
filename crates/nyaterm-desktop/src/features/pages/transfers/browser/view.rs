@@ -454,7 +454,10 @@ impl NyaTermApp {
                                                     .text_color(rgb(palette.text))
                                             })
                                             .child(
-                                                svg().size(px(13.)).path("icons/window/close.svg"),
+                                                svg()
+                                                    .size(px(13.))
+                                                    .path("icons/window/close.svg")
+                                                    .text_color(rgb(palette.text_muted)),
                                             )
                                             .on_click(cx.listener(|this, _, _, cx| {
                                                 if this.transfer.browser.search.is_empty() {

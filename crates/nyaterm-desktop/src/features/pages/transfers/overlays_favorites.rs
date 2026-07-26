@@ -117,7 +117,12 @@ impl NyaTermApp {
                                 cx.stop_propagation();
                                 this.remove_transfer_browser_favorite_path(remove_path.clone(), cx);
                             }))
-                            .child(svg().size(px(14.)).path("icons/fe/bookmark-remove.svg")),
+                            .child(
+                                svg()
+                                    .size(px(14.))
+                                    .path("icons/fe/bookmark-remove.svg")
+                                    .text_color(rgb(0x86efac)),
+                            ),
                     ),
             );
         }

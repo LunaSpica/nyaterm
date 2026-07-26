@@ -128,7 +128,12 @@ impl NyaTermApp {
                             .flex_none()
                             .text_color(rgb(palette.link))
                             .when(show_labels, |this| {
-                                this.child(svg().size(px(13.)).path("icons/check.svg"))
+                                this.child(
+                                    svg()
+                                        .size(px(13.))
+                                        .path("icons/check.svg")
+                                        .text_color(rgb(palette.link)),
+                                )
                             }),
                     )
                     .child(show_labels_label),
@@ -262,7 +267,6 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let selected = self.activity_entry_selected(entry);
         let icon_path = entry.icon_path();
-        let glyph = entry.glyph();
         let tooltip = entry
             .i18n_key()
             .map(|key| self.tr(key))
@@ -325,7 +329,7 @@ impl NyaTermApp {
                     .when(side == ActivitySide::Left, |this| this.left_0())
                     .when(side == ActivitySide::Right, |this| this.right_0()),
             )
-            .child(activity_icon(icon_path, glyph, icon_color.into(), 18.))
+            .child(activity_icon(icon_path, icon_color.into(), 18.))
             .when(show_labels, |this| {
                 this.child(
                     div()
@@ -349,6 +353,7 @@ impl NyaTermApp {
                     zone,
                     index,
                     label: tooltip.clone(),
+                    icon_path,
                 },
                 |payload, position, _, cx| {
                     cx.new(|_| ActivityBarDragPreview::new(payload.clone(), position))
