@@ -6,11 +6,14 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let download_path_value = if self.settings.transfer_download_path.is_empty() {
-            " ".to_string()
-        } else {
-            truncate_preview(&self.settings.transfer_download_path, 34)
-        };
+        let download_path_input = self
+            .text_input_box(
+                "settings.transfer.download-path",
+                &self.settings.transfer_download_path.clone(),
+                TextInputSetup::placeholder(self.tr("settings.downloadPath")),
+                cx,
+            )
+            .into_any_element();
         let policy = self.transfer.paths.duplicate_policy;
 
         div()
@@ -35,26 +38,7 @@ impl NyaTermApp {
                             .flex()
                             .flex_col()
                             .gap_1()
-                            .child(
-                                transfer_input(
-                                    "settings-transfer-download-path",
-                                    self.tr("settings.downloadPath"),
-                                    download_path_value,
-                                    true,
-                                    palette,
-                                )
-                                .track_focus(&self.transfer.paths.download_focus)
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    window.focus(&this.transfer.paths.download_focus);
-                                    cx.notify();
-                                }))
-                                .on_key_down(cx.listener(
-                                    |this, event: &KeyDownEvent, _, cx| {
-                                        cx.stop_propagation();
-                                        this.handle_transfer_download_path_key_down(event, cx);
-                                    },
-                                )),
-                            )
+                            .child(download_path_input)
                             .child(small_button(
                                 palette,
                                 "transfer-browse-download",

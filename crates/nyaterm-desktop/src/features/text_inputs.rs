@@ -242,6 +242,8 @@ impl NyaTermApp {
             self.apply_send_command_draft(text, cx);
         } else if let Some(field) = id.strip_prefix("security.editor.") {
             self.apply_security_editor_input(field, text, cx);
+        } else if let Some(rest) = id.strip_prefix("ai.credential.") {
+            self.apply_ai_credential_input(rest, text, cx);
         } else if let Some(field) = id
             .strip_prefix("ai.input.")
             .and_then(crate::models::AiInputField::from_input_key)
@@ -263,6 +265,18 @@ impl NyaTermApp {
             self.apply_docker_search(text, cx);
         } else if id.as_ref() == "remote.process.filter" {
             self.apply_process_search(text, cx);
+        } else if id.as_ref() == "settings.interaction.word-separators" {
+            self.apply_interaction_word_separators(text, cx);
+        } else if id.as_ref() == "settings.terminal.x11-display" {
+            self.apply_terminal_x11_display(text, cx);
+        } else if id.as_ref() == "settings.security.master-password" {
+            self.apply_settings_master_password(text, cx);
+        } else if id.as_ref() == "settings.recording.path" {
+            self.apply_recording_path(text, cx);
+        } else if id.as_ref() == "settings.transfer.download-path" {
+            self.apply_transfer_download_path(text, cx);
+        } else if id.as_ref() == "settings.transfer.default-editor" {
+            self.apply_transfer_default_editor(text, cx);
         }
     }
 

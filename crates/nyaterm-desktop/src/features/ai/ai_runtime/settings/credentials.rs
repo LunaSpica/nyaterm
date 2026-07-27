@@ -95,115 +95,51 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::features) fn handle_ai_credential_key_down(
+    /// Apply an edit from one of a credential's inputs.
+    ///
+    /// `rest` is what follows `ai.credential.` in the field id: the credential
+    /// id, then the field.
+    pub(in crate::features) fn apply_ai_credential_input(
         &mut self,
-        event: &KeyDownEvent,
+        rest: &str,
+        text: String,
         cx: &mut Context<Self>,
     ) {
-        self.mark_user_activity();
-        let Some((credential_id, field)) = self.ai.settings.credential_edit.clone() else {
+        let Some((credential_id, field)) = rest.rsplit_once('.') else {
             return;
         };
-        let keystroke = &event.keystroke;
-        if keystroke.modifiers.platform || keystroke.modifiers.alt || keystroke.modifiers.control {
-            return;
-        }
-        let builtin = is_builtin_ai_provider_id(&credential_id);
-        match keystroke.key.as_str() {
-            "backspace" => {
-                match field {
-                    AiCredentialEditorField::ApiKey => {
-                        self.ai
-                            .settings
-                            .credential_secret_drafts
-                            .entry(credential_id.clone())
-                            .or_default()
-                            .pop();
-                    }
-                    AiCredentialEditorField::Name | AiCredentialEditorField::BaseUrl => {
-                        if let Some(credential) = self
-                            .ai
-                            .settings
-                            .config
-                            .provider_credentials
-                            .iter_mut()
-                            .find(|credential| credential.id == credential_id)
-                        {
-                            match field {
-                                AiCredentialEditorField::Name => {
-                                    credential.name.pop();
-                                }
-                                AiCredentialEditorField::BaseUrl => {
-                                    if let Some(base_url) = credential.base_url.as_mut() {
-                                        base_url.pop();
-                                        if base_url.is_empty() {
-                                            credential.base_url = None;
-                                        }
-                                    }
-                                }
-                                AiCredentialEditorField::ApiKey => {}
-                            }
-                        }
-                    }
-                }
-                self.ai.panel.status = "AI credential edited".to_string();
-                cx.notify();
+        let credential_id = credential_id.to_string();
+        match field {
+            "api-key" => {
+                self.ai
+                    .settings
+                    .credential_secret_drafts
+                    .insert(credential_id.clone(), text);
             }
-            "tab" => {
-                self.ai.settings.credential_edit = Some((credential_id, field.next(builtin)));
-                cx.notify();
-            }
-            "enter" => {
-                self.persist_ai_credential_edits(&credential_id, cx);
-            }
-            "escape" => {
-                self.ai.settings.credential_edit = None;
-                self.ai.panel.status = "AI credential input blurred".to_string();
-                cx.notify();
-            }
-            _ => {
-                if let Some(input) = keystroke
-                    .key_char
-                    .as_deref()
-                    .filter(|input| !input.is_empty())
-                {
-                    match field {
-                        AiCredentialEditorField::ApiKey => {
-                            self.ai
-                                .settings
-                                .credential_secret_drafts
-                                .entry(credential_id)
-                                .or_default()
-                                .push_str(input);
-                        }
-                        AiCredentialEditorField::Name | AiCredentialEditorField::BaseUrl => {
-                            if let Some(credential) = self
-                                .ai
-                                .settings
-                                .config
-                                .provider_credentials
-                                .iter_mut()
-                                .find(|credential| credential.id == credential_id)
-                            {
-                                match field {
-                                    AiCredentialEditorField::Name => {
-                                        credential.name.push_str(input);
-                                    }
-                                    AiCredentialEditorField::BaseUrl => {
-                                        let base =
-                                            credential.base_url.get_or_insert_with(String::new);
-                                        base.push_str(input);
-                                    }
-                                    AiCredentialEditorField::ApiKey => {}
-                                }
-                            }
-                        }
-                    }
-                    self.ai.panel.status = "AI credential edited".to_string();
-                    cx.notify();
+            "name" | "base-url" => {
+                let Some(credential) = self
+                    .ai
+                    .settings
+                    .config
+                    .provider_credentials
+                    .iter_mut()
+                    .find(|credential| credential.id == credential_id)
+                else {
+                    return;
+                };
+                if field == "name" {
+                    credential.name = text;
+                } else {
+                    // An empty base URL means "use the provider default", which
+                    // the config spells as absent rather than blank.
+                    credential.base_url = (!text.trim().is_empty()).then_some(text);
                 }
             }
+            _ => return,
         }
+        self.ai.settings.credential_edit = None;
+        self.ai.panel.status = "AI credential edited".to_string();
+        cx.notify();
     }
 
     pub(in crate::features) fn persist_ai_credential_edits(

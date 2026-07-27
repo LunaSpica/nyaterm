@@ -7,7 +7,16 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         let encoding = self.settings.interaction_default_encoding.clone();
-        let word_separators = truncate_preview(&self.settings.interaction_word_separators, 40);
+        // Built before the form, which reads `self` throughout: creating the
+        // box needs it mutably.
+        let word_separators_input = self
+            .text_input_box(
+                "settings.interaction.word-separators",
+                &self.settings.interaction_word_separators.clone(),
+                TextInputSetup::default(),
+                cx,
+            )
+            .into_any_element();
         let double_action = self.settings.interaction_tab_double_click_action.clone();
         let middle_action = self.settings.interaction_tab_middle_click_action.clone();
         let right_action = self.settings.interaction_tab_right_click_action.clone();
@@ -128,32 +137,7 @@ impl NyaTermApp {
                                 self.tr("settings.wordSeparators"),
                                 self.tr("settings.wordSeparatorsDesc"),
                             ))
-                            .child(
-                                transfer_input(
-                                    "interaction-word-separators",
-                                    self.tr("settings.wordSeparators"),
-                                    if word_separators.is_empty() {
-                                        " ".to_string()
-                                    } else {
-                                        word_separators
-                                    },
-                                    true,
-                                    palette,
-                                )
-                                .w_full()
-                                .max_w(px(640.))
-                                .track_focus(&self.interaction_word_separators_focus)
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    window.focus(&this.interaction_word_separators_focus);
-                                    cx.notify();
-                                }))
-                                .on_key_down(cx.listener(
-                                    |this, event: &KeyDownEvent, _, cx| {
-                                        cx.stop_propagation();
-                                        this.handle_interaction_word_separators_key_down(event, cx);
-                                    },
-                                )),
-                            ),
+                            .child(div().w_full().max_w(px(640.)).child(word_separators_input)),
                     )
                     .child(settings_form_row(
                         palette,

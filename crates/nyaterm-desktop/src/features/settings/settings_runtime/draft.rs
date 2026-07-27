@@ -429,36 +429,16 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::features) fn handle_settings_master_password_key_down(
+    /// Apply an edit from the master password box.
+    pub(in crate::features) fn apply_settings_master_password(
         &mut self,
-        event: &KeyDownEvent,
+        text: String,
         cx: &mut Context<Self>,
     ) {
-        cx.stop_propagation();
         if !self.settings_master_password_enabled {
             return;
         }
-        let keystroke = &event.keystroke;
-        if keystroke.modifiers.platform || keystroke.modifiers.alt || keystroke.modifiers.control {
-            return;
-        }
-        match keystroke.key.as_str() {
-            "backspace" => {
-                self.settings_master_password_draft.pop();
-            }
-            "escape" => {
-                self.settings_master_password_draft.clear();
-            }
-            _ => {
-                if let Some(input) = keystroke
-                    .key_char
-                    .as_deref()
-                    .filter(|input| !input.is_empty())
-                {
-                    self.settings_master_password_draft.push_str(input);
-                }
-            }
-        }
+        self.settings_master_password_draft = text;
         self.terminal.view.status = "master password edited; apply to persist".to_string();
         cx.notify();
     }

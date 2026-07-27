@@ -214,105 +214,34 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::features) fn handle_transfer_default_editor_key_down(
+    /// Apply an edit from the default editor command box.
+    pub(in crate::features) fn apply_transfer_default_editor(
         &mut self,
-        event: &KeyDownEvent,
+        text: String,
         cx: &mut Context<Self>,
     ) {
-        self.mark_user_activity();
-        let keystroke = &event.keystroke;
-        if keystroke.modifiers.platform || keystroke.modifiers.alt || keystroke.modifiers.control {
-            return;
-        }
-
-        match keystroke.key.as_str() {
-            "backspace" => {
-                self.settings.transfer_default_editor.pop();
-                self.terminal.view.status = "transfer editor command edited".to_string();
-                cx.notify();
-            }
-            "enter" => {
-                self.save_transfer_settings("transfer editor command saved", cx);
-            }
-            "escape" => {
-                self.terminal.view.status = "transfer editor command input blurred".to_string();
-                cx.notify();
-            }
-            _ => {
-                if let Some(input) = keystroke
-                    .key_char
-                    .as_deref()
-                    .filter(|input| !input.is_empty())
-                {
-                    self.settings.transfer_default_editor.push_str(input);
-                    self.terminal.view.status = "transfer editor command edited".to_string();
-                    cx.notify();
-                }
-            }
-        }
+        self.settings.transfer_default_editor = text;
+        self.terminal.view.status = "transfer editor command edited".to_string();
+        cx.notify();
     }
 
-    pub(in crate::features) fn handle_transfer_download_path_key_down(
+    /// Apply an edit from the download path box.
+    pub(in crate::features) fn apply_transfer_download_path(
         &mut self,
-        event: &KeyDownEvent,
+        text: String,
         cx: &mut Context<Self>,
     ) {
-        self.mark_user_activity();
-        let keystroke = &event.keystroke;
-        if keystroke.modifiers.platform || keystroke.modifiers.alt || keystroke.modifiers.control {
-            return;
-        }
-
-        match keystroke.key.as_str() {
-            "backspace" => {
-                self.settings.transfer_download_path.pop();
-                cx.notify();
-            }
-            "enter" => {
-                self.save_transfer_settings("transfer download path saved", cx);
-            }
-            "escape" => cx.notify(),
-            _ => {
-                if let Some(input) = keystroke
-                    .key_char
-                    .as_deref()
-                    .filter(|input| !input.is_empty())
-                {
-                    self.settings.transfer_download_path.push_str(input);
-                    cx.notify();
-                }
-            }
-        }
+        self.settings.transfer_download_path = text;
+        cx.notify();
     }
 
-    pub(in crate::features) fn handle_recording_path_key_down(
+    /// Apply an edit from the recording path box.
+    pub(in crate::features) fn apply_recording_path(
         &mut self,
-        event: &KeyDownEvent,
+        text: String,
         cx: &mut Context<Self>,
     ) {
-        self.mark_user_activity();
-        let keystroke = &event.keystroke;
-        if keystroke.modifiers.platform || keystroke.modifiers.alt || keystroke.modifiers.control {
-            return;
-        }
-
-        match keystroke.key.as_str() {
-            "backspace" => {
-                self.settings.recording_path.pop();
-                cx.notify();
-            }
-            "enter" => self.save_recording_settings(cx),
-            "escape" => cx.notify(),
-            _ => {
-                if let Some(input) = keystroke
-                    .key_char
-                    .as_deref()
-                    .filter(|input| !input.is_empty())
-                {
-                    self.settings.recording_path.push_str(input);
-                    cx.notify();
-                }
-            }
-        }
+        self.settings.recording_path = text;
+        cx.notify();
     }
 }

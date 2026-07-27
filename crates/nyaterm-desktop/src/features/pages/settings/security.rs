@@ -6,11 +6,14 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let master_password_display = if self.settings_master_password_draft.is_empty() {
-            " ".to_string()
-        } else {
-            "*".repeat(self.settings_master_password_draft.chars().count().min(24))
-        };
+        let master_password_input = self
+            .text_input_box(
+                "settings.security.master-password",
+                &self.settings_master_password_draft.clone(),
+                TextInputSetup::masked(),
+                cx,
+            )
+            .into_any_element();
         let master_password_enabled = self.settings_master_password_enabled;
         let master_password_switch_enabled = !self.cloud_sync_settings.enabled;
         let has_stored_master_password = self.settings.has_master_password;
@@ -95,25 +98,9 @@ impl NyaTermApp {
                         palette,
                         master_input_label,
                         Some(SharedString::from(master_input_desc)),
-                        transfer_input(
-                            "settings-master-password-input",
-                            master_input_placeholder,
-                            master_password_display,
-                            master_password_enabled
-                                && !self.settings_master_password_draft.is_empty(),
-                            palette,
-                        )
-                        .opacity(if master_password_enabled { 1.0 } else { 0.45 })
-                        .when(master_password_enabled, |this| {
-                            this.track_focus(&self.settings_master_password_focus)
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    window.focus(&this.settings_master_password_focus);
-                                    cx.notify();
-                                }))
-                                .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-                                    this.handle_settings_master_password_key_down(event, cx);
-                                }))
-                        }),
+                        div()
+                            .opacity(if master_password_enabled { 1.0 } else { 0.45 })
+                            .child(master_password_input),
                     )),
             ))
             .child(settings_form_section(

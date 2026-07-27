@@ -16,12 +16,11 @@ impl NyaTermApp {
         let delete_label = self.tr("common.delete");
         let save_label = self.tr("common.save");
 
-        self.ai
-            .settings
-            .config
-            .provider_credentials
-            .iter()
-            .cloned()
+        // Cloned up front so the fold can borrow `self` mutably: each row builds
+        // three real inputs, and creating one needs the app.
+        let credentials = self.ai.settings.config.provider_credentials.clone();
+        credentials
+            .into_iter()
             .fold(div().flex().flex_col().gap_4(), |rows, credential| {
                 let credential_id = credential.id.clone();
                 let credential_id_toggle = credential.id.clone();
@@ -47,17 +46,30 @@ impl NyaTermApp {
                     .get(&credential.id)
                     .cloned()
                     .unwrap_or_default();
-                let api_key_display = cloud_secret_display(&secret_draft, &credential.api_key);
-                let base_url_display = credential
-                    .base_url
-                    .clone()
-                    .filter(|value| !value.trim().is_empty())
-                    .unwrap_or_else(|| " ".to_string());
-                let name_display = if credential.name.trim().is_empty() {
-                    " ".to_string()
-                } else {
-                    credential.name.clone()
-                };
+                let name_input = self
+                    .text_input_box(
+                        format!("ai.credential.{}.name", credential.id),
+                        &credential.name,
+                        TextInputSetup::placeholder(profile_name_label),
+                        cx,
+                    )
+                    .into_any_element();
+                let base_url_input = self
+                    .text_input_box(
+                        format!("ai.credential.{}.base-url", credential.id),
+                        credential.base_url.as_deref().unwrap_or(""),
+                        TextInputSetup::placeholder(base_url_label),
+                        cx,
+                    )
+                    .into_any_element();
+                let api_key_input = self
+                    .text_input_box(
+                        format!("ai.credential.{}.api-key", credential.id),
+                        &secret_draft,
+                        TextInputSetup::masked(),
+                        cx,
+                    )
+                    .into_any_element();
 
                 rows.child(
                     div()
@@ -73,11 +85,16 @@ impl NyaTermApp {
                         .flex()
                         .flex_col()
                         .gap_4()
-                        .track_focus(&self.ai.settings.credential_focus)
-                        .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-                            cx.stop_propagation();
-                            this.handle_ai_credential_key_down(event, cx);
-                        }))
+                        // Enter saves the row; the boxes own everything else.
+                        .on_key_down({
+                            let credential_id = credential.id.clone();
+                            cx.listener(move |this, event: &KeyDownEvent, _, cx| {
+                                if event.keystroke.key.as_str() == "enter" {
+                                    cx.stop_propagation();
+                                    this.persist_ai_credential_edits(&credential_id, cx);
+                                }
+                            })
+                        })
                         .child(
                             div()
                                 .flex()
@@ -133,66 +150,11 @@ impl NyaTermApp {
                                     .grid()
                                     .grid_cols(2)
                                     .gap_2()
-                                    .child(
-                                        transfer_input(
-                                            format!("ai-cred-name-{}", credential_id),
-                                            profile_name_label,
-                                            name_display.clone(),
-                                            active_field == Some(AiCredentialEditorField::Name),
-                                            palette,
-                                        )
-                                        .on_click(
-                                            cx.listener(move |this, _, window, cx| {
-                                                this.focus_ai_credential_field(
-                                                    cred_name.clone(),
-                                                    AiCredentialEditorField::Name,
-                                                    window,
-                                                    cx,
-                                                );
-                                            }),
-                                        ),
-                                    )
-                                    .child(
-                                        transfer_input(
-                                            format!("ai-cred-base-{}", credential_id),
-                                            base_url_label,
-                                            base_url_display.clone(),
-                                            active_field == Some(AiCredentialEditorField::BaseUrl),
-                                            palette,
-                                        )
-                                        .on_click(
-                                            cx.listener(move |this, _, window, cx| {
-                                                this.focus_ai_credential_field(
-                                                    cred_base.clone(),
-                                                    AiCredentialEditorField::BaseUrl,
-                                                    window,
-                                                    cx,
-                                                );
-                                            }),
-                                        ),
-                                    ),
+                                    .child(name_input)
+                                    .child(base_url_input),
                             )
                         })
-                        .child({
-                            let cred_key = credential_id.clone();
-                            transfer_input(
-                                format!("ai-cred-key-{}", credential_id),
-                                api_key_label,
-                                api_key_display,
-                                active_field == Some(AiCredentialEditorField::ApiKey),
-                                palette,
-                            )
-                            .on_click(cx.listener(
-                                move |this, _, window, cx| {
-                                    this.focus_ai_credential_field(
-                                        cred_key.clone(),
-                                        AiCredentialEditorField::ApiKey,
-                                        window,
-                                        cx,
-                                    );
-                                },
-                            ))
-                        })
+                        .child(api_key_input)
                         .child(div().flex().justify_end().child(small_button(
                             palette,
                             format!("ai-cred-save-{}", credential_id),

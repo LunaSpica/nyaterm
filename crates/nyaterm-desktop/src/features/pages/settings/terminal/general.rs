@@ -6,11 +6,14 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let x11_display = if self.settings.x11_display.is_empty() {
-            " ".to_string()
-        } else {
-            truncate_preview(&self.settings.x11_display, 48)
-        };
+        let x11_display_input = self
+            .text_input_box(
+                "settings.terminal.x11-display",
+                &self.settings.x11_display.clone(),
+                TextInputSetup::placeholder(self.tr("settings.x11DisplayPlaceholder")),
+                cx,
+            )
+            .into_any_element();
         let action_links_enabled = self.settings.terminal_action_links_enabled;
 
         div()
@@ -71,28 +74,7 @@ impl NyaTermApp {
                                 self.tr("settings.x11Display"),
                                 self.tr("settings.x11DisplayDesc"),
                             ))
-                            .child(
-                                transfer_input(
-                                    "terminal-x11-display",
-                                    self.tr("settings.x11DisplayPlaceholder"),
-                                    x11_display,
-                                    true,
-                                    palette,
-                                )
-                                .w_full()
-                                .max_w(px(520.))
-                                .track_focus(&self.terminal.input.x11_display_focus)
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    window.focus(&this.terminal.input.x11_display_focus);
-                                    cx.notify();
-                                }))
-                                .on_key_down(cx.listener(
-                                    |this, event: &KeyDownEvent, _, cx| {
-                                        cx.stop_propagation();
-                                        this.handle_terminal_x11_display_key_down(event, cx);
-                                    },
-                                )),
-                            ),
+                            .child(div().w_full().max_w(px(520.)).child(x11_display_input)),
                     )
                     .child(settings_form_row(
                         palette,

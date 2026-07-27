@@ -6,11 +6,16 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let recording_path_value = if self.settings.recording_path.is_empty() {
-            " ".to_string()
-        } else {
-            truncate_preview(&self.settings.recording_path, 34)
-        };
+        // Built before the form, which reads `self` throughout: creating the
+        // box needs it mutably.
+        let recording_path_input = self
+            .text_input_box(
+                "settings.recording.path",
+                &self.settings.recording_path.clone(),
+                TextInputSetup::placeholder(self.tr("settings.recordingPath")),
+                cx,
+            )
+            .into_any_element();
         let memory_mib = (self.settings.recording_memory_limit_bytes / (1024 * 1024)).max(1);
 
         div().flex().flex_col().gap_3().child(settings_form_section(
@@ -31,26 +36,7 @@ impl NyaTermApp {
                         .flex()
                         .flex_col()
                         .gap_1()
-                        .child(
-                            transfer_input(
-                                "settings-recording-path-input",
-                                self.tr("settings.recordingPath"),
-                                recording_path_value,
-                                true,
-                                palette,
-                            )
-                            .track_focus(&self.recording_path_focus)
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                window.focus(&this.recording_path_focus);
-                                cx.notify();
-                            }))
-                            .on_key_down(cx.listener(
-                                |this, event: &KeyDownEvent, _, cx| {
-                                    cx.stop_propagation();
-                                    this.handle_recording_path_key_down(event, cx);
-                                },
-                            )),
-                        )
+                        .child(recording_path_input)
                         .child(small_button(
                             palette,
                             "settings-recording-path-browse",

@@ -7,11 +7,14 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         let editor_type = self.settings.transfer_editor_type.clone();
-        let default_editor_value = if self.settings.transfer_default_editor.is_empty() {
-            " ".to_string()
-        } else {
-            truncate_preview(&self.settings.transfer_default_editor, 34)
-        };
+        let default_editor_input = self
+            .text_input_box(
+                "settings.transfer.default-editor",
+                &self.settings.transfer_default_editor.clone(),
+                TextInputSetup::placeholder(self.tr("settings.defaultEditor")),
+                cx,
+            )
+            .into_any_element();
         let editor_type_label = if editor_type == "internal" {
             self.tr("settings.editorTypeInternal")
         } else {
@@ -60,26 +63,7 @@ impl NyaTermApp {
                         .flex()
                         .flex_col()
                         .gap_1()
-                        .child(
-                            transfer_input(
-                                "settings-transfer-default-editor",
-                                self.tr("settings.defaultEditor"),
-                                default_editor_value,
-                                true,
-                                palette,
-                            )
-                            .track_focus(&self.transfer.editor.default_editor_focus)
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                window.focus(&this.transfer.editor.default_editor_focus);
-                                cx.notify();
-                            }))
-                            .on_key_down(cx.listener(
-                                |this, event: &KeyDownEvent, _, cx| {
-                                    cx.stop_propagation();
-                                    this.handle_transfer_default_editor_key_down(event, cx);
-                                },
-                            )),
-                        )
+                        .child(default_editor_input)
                         .child(small_button(
                             palette,
                             "settings-transfer-editor-browse",
