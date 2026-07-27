@@ -72,39 +72,14 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::features) fn handle_quick_command_search_key_down(
+    pub(in crate::features) fn apply_quick_command_search(
         &mut self,
-        event: &KeyDownEvent,
+        text: String,
         cx: &mut Context<Self>,
     ) {
         self.mark_user_activity();
-        let keystroke = &event.keystroke;
-        if keystroke.modifiers.platform || keystroke.modifiers.alt || keystroke.modifiers.control {
-            return;
-        }
-
-        match keystroke.key.as_str() {
-            "backspace" => {
-                self.quick_command_state.list.search_draft.pop();
-                cx.notify();
-            }
-            "escape" => {
-                self.quick_command_state.list.search_draft.clear();
-                self.quick_command_state.list.selected_category = "all".to_string();
-                self.terminal.view.status = "quick command filters cleared".to_string();
-                cx.notify();
-            }
-            _ => {
-                if let Some(input) = keystroke
-                    .key_char
-                    .as_deref()
-                    .filter(|input| !input.is_empty())
-                {
-                    self.quick_command_state.list.search_draft.push_str(input);
-                    cx.notify();
-                }
-            }
-        }
+        self.quick_command_state.list.search_draft = text;
+        cx.notify();
     }
 
     pub(in crate::features) fn toggle_quick_command_ai_popover(

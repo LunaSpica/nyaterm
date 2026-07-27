@@ -47,39 +47,13 @@ impl NyaTermApp {
         self.persist_ai_settings_now(cx);
     }
 
-    pub(in crate::features) fn handle_ai_settings_model_search_key_down(
+    pub(in crate::features) fn apply_ai_settings_model_search(
         &mut self,
-        event: &KeyDownEvent,
+        text: String,
         cx: &mut Context<Self>,
     ) {
-        cx.stop_propagation();
-        if event.keystroke.modifiers.platform
-            || event.keystroke.modifiers.control
-            || event.keystroke.modifiers.alt
-        {
-            return;
-        }
-        match event.keystroke.key.as_str() {
-            "escape" => {
-                self.ai.settings.model_query.clear();
-                cx.notify();
-            }
-            "backspace" => {
-                self.ai.settings.model_query.pop();
-                cx.notify();
-            }
-            _ => {
-                if let Some(input) = event
-                    .keystroke
-                    .key_char
-                    .as_deref()
-                    .filter(|value| !value.is_empty())
-                {
-                    self.ai.settings.model_query.push_str(input);
-                    cx.notify();
-                }
-            }
-        }
+        self.ai.settings.model_query = text;
+        cx.notify();
     }
 
     pub(in crate::features) fn set_ai_default_model(

@@ -86,7 +86,6 @@ pub struct NyaTermApp {
     /// Suppress command suggestions while a password/username prompt is active.
     pub(in crate::features) credential_prompt_input_until_ms: u64,
 
-    pub(in crate::features) command_search_focus: FocusHandle,
     pub(in crate::features) active_sessions_search_draft: String,
     /// Root-level reconnect/disconnect overflow menu (Tauri ActiveSessions DropdownMenu).
     pub(in crate::features) active_session_menu: Option<ActiveSessionMenuState>,
@@ -137,7 +136,6 @@ pub struct NyaTermApp {
     pub(in crate::features) keybinding_recording_id: Option<String>,
     pub(in crate::features) keybinding_pending_keys: Option<String>,
     pub(in crate::features) keybinding_search_draft: String,
-    pub(in crate::features) keybinding_search_focus: FocusHandle,
     pub(in crate::features) keybindings_focus: FocusHandle,
     pub(in crate::features) store_status: StoreStatus,
     pub(in crate::features) session_manager: Arc<SessionManager>,
@@ -149,7 +147,6 @@ pub struct NyaTermApp {
     pub(in crate::features) pending_auto_recording_session: Option<(String, String)>,
     pub(in crate::features) recording_write_pipeline: RecordingWritePipeline,
     pub(in crate::features) recording_search_draft: String,
-    pub(in crate::features) recording_search_focus: FocusHandle,
     /// Per-session recording panel busy state ("record" | "save").
     pub(in crate::features) recording_busy_actions: HashMap<String, String>,
     pub(in crate::features) session_start_tx: mpsc::Sender<SessionStartResult>,

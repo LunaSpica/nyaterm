@@ -73,7 +73,16 @@ impl NyaTermApp {
                                 show_commands,
                                 cx.listener(|this, _, window, cx| {
                                     this.set_bottom_panel_mode(BottomPanelMode::QuickCommands);
-                                    window.focus(&this.command_search_focus);
+                                    let search = this.quick_command_state.list.search_draft.clone();
+                                    let field = this.text_input(
+                                        "quick-command.search",
+                                        &search,
+                                        TextInputSetup::placeholder(
+                                            this.tr("quickCommands.search"),
+                                        ),
+                                        cx,
+                                    );
+                                    window.focus(&field.read(cx).focus_handle());
                                     this.terminal.view.status = "quick commands opened".to_string();
                                     cx.notify();
                                 }),

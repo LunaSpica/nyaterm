@@ -591,8 +591,21 @@ impl NyaTermApp {
                                                             this.ai.discovery.query.clear();
                                                             this.ai.discovery.index =
                                                                 this.ai_selected_model_index();
+                                                            this.reset_text_input(
+                                                                "ai.model-search",
+                                                                "",
+                                                                cx,
+                                                            );
+                                                            let field = this.text_input(
+                                                                "ai.model-search",
+                                                                "",
+                                                                TextInputSetup::placeholder(
+                                                                    "Search models",
+                                                                ),
+                                                                cx,
+                                                            );
                                                             window.focus(
-                                                                &this.ai.discovery.search_focus,
+                                                                &field.read(cx).focus_handle(),
                                                             );
                                                         }
                                                         this.ai.history.open = false;

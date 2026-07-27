@@ -1,4 +1,5 @@
 use super::*;
+use gpui::MouseButton;
 
 impl NyaTermApp {
     pub(in crate::features) fn keybindings_settings_section(
@@ -8,11 +9,13 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         let overrides = self.settings.keybindings.len();
         let search = self.keybinding_search_draft.clone();
-        let search_display = if search.is_empty() {
-            self.tr("settings.keybindingsSearch").to_string()
-        } else {
-            search.clone()
-        };
+        let search_field = self.text_input(
+            "settings.keybindings.search",
+            &search,
+            TextInputSetup::placeholder(self.tr("settings.keybindingsSearch")),
+            cx,
+        );
+        let search_focus = search_field.read(cx).focus_handle();
         let mut groups = div().flex().flex_col().gap_3();
         for category in SHORTCUT_CATEGORIES {
             groups = groups.child(self.shortcut_category_group(category, &search, cx));
@@ -50,21 +53,21 @@ impl NyaTermApp {
                             .flex()
                             .items_center()
                             .text_size(px(12.))
-                            .text_color(if search.is_empty() {
-                                rgb(palette.text_dimmed)
-                            } else {
-                                rgb(palette.text)
+                            .text_color(rgb(palette.text))
+                            .cursor_text()
+                            .on_mouse_down(MouseButton::Left, move |_, window, _| {
+                                window.focus(&search_focus);
                             })
-                            .track_focus(&self.keybinding_search_focus)
-                            .cursor_pointer()
-                            .child(search_display)
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                window.focus(&this.keybinding_search_focus);
-                                cx.notify();
-                            }))
+                            .on_click(|_, _, cx| cx.stop_propagation())
                             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-                                this.handle_keybinding_search_key_down(event, cx);
-                            })),
+                                if event.keystroke.key == "escape" {
+                                    cx.stop_propagation();
+                                    this.keybinding_search_draft.clear();
+                                    this.reset_text_input("settings.keybindings.search", "", cx);
+                                    cx.notify();
+                                }
+                            }))
+                            .child(search_field),
                     )
                     .when(overrides > 0, |this| {
                         this.child(small_button(

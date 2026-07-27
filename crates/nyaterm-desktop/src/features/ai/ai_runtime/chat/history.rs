@@ -215,36 +215,13 @@ impl NyaTermApp {
         .detach();
     }
 
-    pub(in crate::features) fn handle_ai_history_search_key_down(
+    pub(in crate::features) fn apply_ai_history_search(
         &mut self,
-        event: &KeyDownEvent,
+        text: String,
         cx: &mut Context<Self>,
     ) {
-        let keystroke = &event.keystroke;
-        if keystroke.modifiers.platform || keystroke.modifiers.alt || keystroke.modifiers.control {
-            return;
-        }
-        match keystroke.key.as_str() {
-            "escape" => {
-                self.ai.history.open = false;
-                self.ai.history.query.clear();
-                cx.notify();
-            }
-            "backspace" => {
-                self.ai.history.query.pop();
-                cx.notify();
-            }
-            _ => {
-                if let Some(input) = keystroke
-                    .key_char
-                    .as_deref()
-                    .filter(|input| !input.is_empty())
-                {
-                    self.ai.history.query.push_str(input);
-                    cx.notify();
-                }
-            }
-        }
+        self.ai.history.query = text;
+        cx.notify();
     }
 
     pub(in crate::features) fn refresh_ai_usage_counts(&mut self, cx: &mut Context<Self>) {

@@ -42,6 +42,13 @@ impl NyaTermApp {
         let no_matches_label = self.tr("activeSessions.noMatches").to_string();
         let search_placeholder = self.tr("recording.searchPlaceholder").to_string();
         let recording_label = self.tr("recording.recording").to_string();
+        let search_field = self.text_input(
+            "recording.search",
+            &self.recording_search_draft.clone(),
+            TextInputSetup::placeholder(search_placeholder),
+            cx,
+        );
+        let search_focus = search_field.read(cx).focus_handle();
 
         let mut session_rows = div().flex().flex_col().gap_1().p_2();
         let mut visible_count = 0usize;
@@ -284,14 +291,18 @@ impl NyaTermApp {
                                 .items_center()
                                 .gap_1()
                                 .cursor_text()
-                                .track_focus(&self.recording_search_focus)
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    window.focus(&this.recording_search_focus);
-                                    cx.notify();
-                                }))
+                                .on_mouse_down(MouseButton::Left, move |_, window, _| {
+                                    window.focus(&search_focus);
+                                })
                                 .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-                                    cx.stop_propagation();
-                                    this.handle_recording_search_key_down(event, cx);
+                                    if event.keystroke.key == "escape" {
+                                        cx.stop_propagation();
+                                        this.recording_search_draft.clear();
+                                        this.reset_text_input("recording.search", "", cx);
+                                        this.terminal.view.status =
+                                            "recording search cleared".to_string();
+                                        cx.notify();
+                                    }
                                 }))
                                 .child(
                                     svg()
@@ -305,16 +316,8 @@ impl NyaTermApp {
                                         .min_w_0()
                                         .flex_1()
                                         .text_size(px(12.))
-                                        .text_color(if self.recording_search_draft.is_empty() {
-                                            rgb(palette.text_dimmed)
-                                        } else {
-                                            rgb(palette.text)
-                                        })
-                                        .child(if self.recording_search_draft.is_empty() {
-                                            search_placeholder
-                                        } else {
-                                            self.recording_search_draft.clone()
-                                        }),
+                                        .text_color(rgb(palette.text))
+                                        .child(search_field),
                                 ),
                         ),
                     ),

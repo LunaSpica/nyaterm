@@ -665,9 +665,18 @@ impl NyaTermApp {
                                 this.ai.history.open = !this.ai.history.open;
                                 if this.ai.history.open {
                                     this.refresh_ai_session_list(cx);
-                                    window.focus(&this.ai.history.search_focus);
+                                    let query = this.ai.history.query.clone();
+                                    this.reset_text_input("ai.history-search", &query, cx);
+                                    let field = this.text_input(
+                                        "ai.history-search",
+                                        &query,
+                                        TextInputSetup::placeholder("Search history..."),
+                                        cx,
+                                    );
+                                    window.focus(&field.read(cx).focus_handle());
                                 } else {
                                     this.ai.history.query.clear();
+                                    this.forget_text_inputs("ai.history-search");
                                 }
                                 cx.notify();
                             }),

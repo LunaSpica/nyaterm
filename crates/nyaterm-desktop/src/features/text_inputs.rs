@@ -259,6 +259,16 @@ impl NyaTermApp {
             self.apply_ai_prompt(text, cx);
         } else if id.as_ref() == "ai.model-search" {
             self.apply_ai_model_search(text, cx);
+        } else if id.as_ref() == "ai.history-search" {
+            self.apply_ai_history_search(text, cx);
+        } else if id.as_ref() == "ai.settings.model-search" {
+            self.apply_ai_settings_model_search(text, cx);
+        } else if id.as_ref() == "quick-command.search" {
+            self.apply_quick_command_search(text, cx);
+        } else if id.as_ref() == "recording.search" {
+            self.apply_recording_search(text, cx);
+        } else if id.as_ref() == "settings.keybindings.search" {
+            self.apply_keybinding_search(text, cx);
         } else if let Some(rest) = id.strip_prefix("ai.credential.") {
             self.apply_ai_credential_input(rest, text, cx);
         } else if let Some(field) = id

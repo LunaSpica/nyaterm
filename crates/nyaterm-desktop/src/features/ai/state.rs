@@ -33,12 +33,9 @@ pub(in crate::features) struct AiFeatureState {
 /// Focus handles the AI feature needs at construction time.
 pub(in crate::features) struct AiFeatureFocus {
     pub chat: FocusHandle,
-    pub history_search: FocusHandle,
     pub clear_history_confirm: FocusHandle,
     pub auto_execution_confirm: FocusHandle,
-    pub model_search: FocusHandle,
     pub action: FocusHandle,
-    pub settings_model_search: FocusHandle,
     pub manual_model: FocusHandle,
     pub credential: FocusHandle,
 }
@@ -51,7 +48,6 @@ pub(in crate::features) struct AiSettingsState {
     pub secret_draft: String,
     pub model_collapsed_groups: HashSet<String>,
     pub model_query: String,
-    pub model_search_focus: FocusHandle,
     pub manual_model_drafts: HashMap<String, String>,
     pub manual_model_focus: FocusHandle,
     pub manual_model_edit_group: Option<String>,
@@ -91,7 +87,6 @@ pub(in crate::features) struct AiChatState {
 pub(in crate::features) struct AiHistoryState {
     pub open: bool,
     pub query: String,
-    pub search_focus: FocusHandle,
     pub job_id: u64,
     pub pending: bool,
     pub sessions: Vec<AiSession>,
@@ -112,7 +107,6 @@ pub(in crate::features) struct AiDiscoveryState {
     pub menu_open: bool,
     pub query: String,
     pub index: usize,
-    pub search_focus: FocusHandle,
 }
 
 /// Agent loop: the running task, its steps and their disclosure state.
@@ -158,7 +152,6 @@ impl AiFeatureState {
                 secret_draft: String::new(),
                 model_collapsed_groups: HashSet::new(),
                 model_query: String::new(),
-                model_search_focus: focus.settings_model_search,
                 manual_model_drafts: HashMap::new(),
                 manual_model_focus: focus.manual_model,
                 manual_model_edit_group: None,
@@ -193,7 +186,6 @@ impl AiFeatureState {
             history: AiHistoryState {
                 open: false,
                 query: String::new(),
-                search_focus: focus.history_search,
                 job_id: 0,
                 pending: false,
                 sessions: Vec::new(),
@@ -212,7 +204,6 @@ impl AiFeatureState {
                 menu_open: false,
                 query: String::new(),
                 index: 0,
-                search_focus: focus.model_search,
             },
             agent: AiAgentState {
                 task_prompt: None,

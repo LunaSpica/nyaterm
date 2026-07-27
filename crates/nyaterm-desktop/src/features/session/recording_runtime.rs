@@ -268,37 +268,13 @@ impl NyaTermApp {
             .cleanup_session(session_id.to_string());
     }
 
-    pub(in crate::features) fn handle_recording_search_key_down(
+    pub(in crate::features) fn apply_recording_search(
         &mut self,
-        event: &KeyDownEvent,
+        text: String,
         cx: &mut Context<Self>,
     ) {
         self.mark_user_activity();
-        let keystroke = &event.keystroke;
-        if keystroke.modifiers.platform || keystroke.modifiers.alt || keystroke.modifiers.control {
-            return;
-        }
-
-        match keystroke.key.as_str() {
-            "backspace" => {
-                self.recording_search_draft.pop();
-                cx.notify();
-            }
-            "escape" => {
-                self.recording_search_draft.clear();
-                self.terminal.view.status = "recording search cleared".to_string();
-                cx.notify();
-            }
-            _ => {
-                if let Some(input) = keystroke
-                    .key_char
-                    .as_deref()
-                    .filter(|input| !input.is_empty())
-                {
-                    self.recording_search_draft.push_str(input);
-                    cx.notify();
-                }
-            }
-        }
+        self.recording_search_draft = text;
+        cx.notify();
     }
 }

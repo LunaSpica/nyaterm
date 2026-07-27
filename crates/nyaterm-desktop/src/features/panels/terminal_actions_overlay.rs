@@ -1,6 +1,6 @@
 use super::*;
 
-use crate::models::{BottomPanelMode, RightFocus};
+use crate::models::{BottomPanelMode, RightFocus, TerminalSearchMode};
 
 impl NyaTermApp {
     pub(in crate::features) fn terminal_actions_overlay(
@@ -317,10 +317,10 @@ impl NyaTermApp {
                                 self.tr("terminalActions.commandHistory"),
                                 cx.listener(|this, _, window, cx| {
                                     this.terminal.menus.actions_open = false;
-                                    window.focus(&this.command_search_focus);
+                                    this.terminal.search.mode = TerminalSearchMode::History;
+                                    this.open_terminal_search(window, cx);
                                     this.terminal.view.status =
                                         "command history search focused".to_string();
-                                    cx.notify();
                                 }),
                             ))
                             .child(tab_action_button(

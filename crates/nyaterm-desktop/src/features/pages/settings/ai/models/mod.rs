@@ -1,4 +1,5 @@
 use super::*;
+use gpui::MouseButton;
 
 mod credential_rows;
 mod model_groups;
@@ -11,6 +12,13 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         let query = self.ai.settings.model_query.clone();
         let query_placeholder = self.tr("ai.searchModels");
+        let search_field = self.text_input(
+            "ai.settings.model-search",
+            &query,
+            TextInputSetup::placeholder(query_placeholder),
+            cx,
+        );
+        let search_focus = search_field.read(cx).focus_handle();
         let has_enabled_custom_credential = self
             .ai
             .settings
@@ -77,28 +85,26 @@ impl NyaTermApp {
                                     .items_center()
                                     .font_family(crate::features::gpui_code_font_family())
                                     .text_size(px(12.))
-                                    .text_color(rgb(if query.is_empty() {
-                                        palette.text_dimmed
-                                    } else {
-                                        palette.text
-                                    }))
-                                    .child(if query.is_empty() {
-                                        query_placeholder.to_string()
-                                    } else {
-                                        query
+                                    .text_color(rgb(palette.text))
+                                    .cursor_text()
+                                    .on_mouse_down(MouseButton::Left, move |_, window, _| {
+                                        window.focus(&search_focus);
                                     })
-                                    .track_focus(&self.ai.settings.model_search_focus)
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        window.focus(&this.ai.settings.model_search_focus);
-                                        cx.notify();
-                                    }))
                                     .on_key_down(cx.listener(
                                         |this, event: &KeyDownEvent, _, cx| {
-                                            this.handle_ai_settings_model_search_key_down(
-                                                event, cx,
-                                            );
+                                            if event.keystroke.key == "escape" {
+                                                cx.stop_propagation();
+                                                this.ai.settings.model_query.clear();
+                                                this.reset_text_input(
+                                                    "ai.settings.model-search",
+                                                    "",
+                                                    cx,
+                                                );
+                                                cx.notify();
+                                            }
                                         },
-                                    )),
+                                    ))
+                                    .child(search_field),
                             )
                             .child(
                                 div()

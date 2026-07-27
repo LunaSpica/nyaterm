@@ -33,6 +33,13 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         let popover_bg = self.shell_surface_color(palette.surface);
         let input_bg = self.shell_surface_color(palette.bg);
+        let search_field = self.text_input(
+            "quick-command.search",
+            &self.quick_command_state.list.search_draft.clone(),
+            TextInputSetup::placeholder(self.tr("quickCommands.search")),
+            cx,
+        );
+        let search_focus = search_field.read(cx).focus_handle();
         let view_icon = match self.quick_command_state.list.view_mode {
             QuickCommandViewMode::List => "icons/view-list.svg",
             QuickCommandViewMode::Compact => "icons/view-compact.svg",
@@ -203,15 +210,29 @@ impl NyaTermApp {
                             .items_center()
                             .gap_1()
                             .cursor_text()
-                            .track_focus(&self.quick_command_state.list.search_focus)
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.close_quick_command_toolbar_popovers();
-                                window.focus(&this.quick_command_state.list.search_focus);
-                                cx.notify();
-                            }))
+                            .on_mouse_down(
+                                MouseButton::Left,
+                                cx.listener(move |this, _, window, cx| {
+                                    this.close_quick_command_toolbar_popovers();
+                                    window.focus(&search_focus);
+                                    cx.notify();
+                                }),
+                            )
                             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-                                cx.stop_propagation();
-                                this.handle_quick_command_search_key_down(event, cx);
+                                if event.keystroke.key == "escape" {
+                                    cx.stop_propagation();
+                                    this.quick_command_state.list.search_draft.clear();
+                                    this.quick_command_state.list.selected_category =
+                                        "all".to_string();
+                                    this.reset_text_input("quick-command.search", "", cx);
+                                    this.terminal.view.status =
+                                        "quick command filters cleared".to_string();
+                                    cx.notify();
+                                }
+                            }))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.close_quick_command_toolbar_popovers();
+                                cx.notify();
                             }))
                             .child(
                                 svg()
@@ -225,23 +246,8 @@ impl NyaTermApp {
                                     .min_w_0()
                                     .flex_1()
                                     .text_size(px(11.))
-                                    .text_color(
-                                        if self.quick_command_state.list.search_draft.is_empty() {
-                                            rgb(palette.text_dimmed)
-                                        } else {
-                                            rgb(palette.text)
-                                        },
-                                    )
-                                    .child(
-                                        if self.quick_command_state.list.search_draft.is_empty() {
-                                            self.tr("quickCommands.search").to_string()
-                                        } else {
-                                            truncate_preview(
-                                                &self.quick_command_state.list.search_draft,
-                                                18,
-                                            )
-                                        },
-                                    ),
+                                    .text_color(rgb(palette.text))
+                                    .child(search_field),
                             ),
                     )
                     .child(quick_command_toolbar_divider(palette))

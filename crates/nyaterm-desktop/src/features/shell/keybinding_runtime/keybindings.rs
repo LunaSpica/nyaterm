@@ -191,28 +191,12 @@ impl NyaTermApp {
         None
     }
 
-    pub(in crate::features) fn handle_keybinding_search_key_down(
+    pub(in crate::features) fn apply_keybinding_search(
         &mut self,
-        event: &KeyDownEvent,
+        text: String,
         cx: &mut Context<Self>,
     ) {
-        cx.stop_propagation();
-        match event.keystroke.key.as_str() {
-            "escape" => {
-                self.keybinding_search_draft.clear();
-                cx.notify();
-                return;
-            }
-            "backspace" => {
-                self.keybinding_search_draft.pop();
-                cx.notify();
-                return;
-            }
-            _ => {}
-        }
-        if let Some(input) = event.keystroke.key_char.as_deref() {
-            self.keybinding_search_draft.push_str(input);
-            cx.notify();
-        }
+        self.keybinding_search_draft = text;
+        cx.notify();
     }
 }

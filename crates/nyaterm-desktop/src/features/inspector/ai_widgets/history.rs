@@ -467,6 +467,13 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
+        let search_field = self.text_input(
+            "ai.history-search",
+            &self.ai.history.query.clone(),
+            TextInputSetup::placeholder("Search history..."),
+            cx,
+        );
+        let search_focus = search_field.read(cx).focus_handle();
         // Tauri AIAssistantPanel history card: search + Clear All + date-grouped sessions.
         let query = self.ai.history.query.trim().to_ascii_lowercase();
         let filtered: Vec<_> = self
@@ -490,12 +497,6 @@ impl NyaTermApp {
             || self.ai.chat.pending
             || self.ai.agent.loop_state.is_some();
         let grouped = group_ai_sessions_by_date(&filtered);
-        let search_display = if self.ai.history.query.is_empty() {
-            "Search history...".to_string()
-        } else {
-            self.ai.history.query.clone()
-        };
-
         let mut rows = div().flex().flex_col().gap_1().p_2();
         if filtered_count == 0 {
             rows = rows.child(
@@ -609,15 +610,18 @@ impl NyaTermApp {
                             .flex()
                             .items_center()
                             .gap_2()
-                            .cursor_pointer()
-                            .track_focus(&self.ai.history.search_focus)
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                window.focus(&this.ai.history.search_focus);
-                                cx.notify();
-                            }))
+                            .cursor_text()
+                            .on_mouse_down(MouseButton::Left, move |_, window, _| {
+                                window.focus(&search_focus);
+                            })
                             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-                                cx.stop_propagation();
-                                this.handle_ai_history_search_key_down(event, cx);
+                                if event.keystroke.key == "escape" {
+                                    cx.stop_propagation();
+                                    this.ai.history.open = false;
+                                    this.ai.history.query.clear();
+                                    this.forget_text_inputs("ai.history-search");
+                                    cx.notify();
+                                }
                             }))
                             .child(
                                 svg()
@@ -631,12 +635,8 @@ impl NyaTermApp {
                                     .min_w_0()
                                     .flex_1()
                                     .text_size(px(12.))
-                                    .text_color(if self.ai.history.query.is_empty() {
-                                        rgb(palette.text_dimmed)
-                                    } else {
-                                        rgb(palette.text)
-                                    })
-                                    .child(search_display),
+                                    .text_color(rgb(palette.text))
+                                    .child(search_field),
                             )
                             .when(!self.ai.history.query.is_empty(), |this| {
                                 this.child(
@@ -654,9 +654,9 @@ impl NyaTermApp {
                                             this.bg(rgb(palette.surface_elevated))
                                                 .text_color(rgb(palette.text))
                                         })
-                                        .on_click(cx.listener(|this, _, window, cx| {
+                                        .on_click(cx.listener(|this, _, _, cx| {
                                             this.ai.history.query.clear();
-                                            window.focus(&this.ai.history.search_focus);
+                                            this.reset_text_input("ai.history-search", "", cx);
                                             cx.notify();
                                         }))
                                         .child(

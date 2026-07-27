@@ -24,7 +24,6 @@ pub(in crate::features) struct QuickCommandFeatureState {
 
 /// Focus handles the quick command state needs at construction time.
 pub(in crate::features) struct QuickCommandFeatureFocus {
-    pub search: FocusHandle,
     pub editor: FocusHandle,
     pub details: FocusHandle,
     pub category_rename: FocusHandle,
@@ -36,7 +35,6 @@ pub(in crate::features) struct QuickCommandFeatureFocus {
 /// Panel list state: search, category filter, sort/view mode and their menus.
 pub(in crate::features) struct QuickCommandListState {
     pub search_draft: String,
-    pub search_focus: FocusHandle,
     pub selected_category: String,
     pub sort_mode: QuickCommandSortMode,
     pub view_mode: QuickCommandViewMode,
@@ -91,7 +89,6 @@ impl QuickCommandFeatureState {
         Self {
             list: QuickCommandListState {
                 search_draft: String::new(),
-                search_focus: focus.search,
                 selected_category: "all".to_string(),
                 sort_mode,
                 view_mode,
