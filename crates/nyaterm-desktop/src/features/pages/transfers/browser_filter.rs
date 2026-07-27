@@ -50,57 +50,84 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::features::pages::transfers) fn handle_transfer_browser_search_key_down(
+    pub(in crate::features) fn apply_transfer_browser_search_input(
         &mut self,
-        event: &KeyDownEvent,
+        text: String,
         cx: &mut Context<Self>,
     ) {
         self.mark_user_activity();
-        let keystroke = &event.keystroke;
-        if keystroke.modifiers.platform || keystroke.modifiers.alt || keystroke.modifiers.control {
-            return;
-        }
-
-        match keystroke.key.as_str() {
-            "backspace" => {
-                self.transfer.browser.search.pop();
-                self.transfer.browser.list_offset = 0;
-                self.transfer.browser.status = transfer_browser_search_status(
-                    self.transfer.browser.search.as_str(),
-                    self.visible_transfer_browser_entries().len(),
-                    self.transfer.browser.entries.len(),
-                );
-                cx.notify();
-            }
-            "escape" => {
-                if self.transfer.browser.search.is_empty() {
-                    self.transfer.browser.search_expanded = false;
-                    self.transfer.browser.status = "file search closed".to_string();
-                } else {
-                    self.transfer.browser.search.clear();
-                    self.transfer.browser.list_offset = 0;
-                    self.transfer.browser.status = "file search cleared".to_string();
-                }
-                cx.notify();
-            }
-            _ => {
-                if let Some(input) = keystroke
-                    .key_char
-                    .as_deref()
-                    .filter(|input| !input.is_empty())
-                {
-                    self.transfer.browser.search.push_str(input);
-                    self.transfer.browser.list_offset = 0;
-                    self.transfer.browser.status = transfer_browser_search_status(
-                        self.transfer.browser.search.as_str(),
-                        self.visible_transfer_browser_entries().len(),
-                        self.transfer.browser.entries.len(),
-                    );
-                    cx.notify();
-                }
-            }
-        }
+        self.transfer.browser.search = text;
+        self.transfer.browser.list_offset = 0;
+        self.transfer.browser.status = transfer_browser_search_status(
+            self.transfer.browser.search.as_str(),
+            self.visible_transfer_browser_entries().len(),
+            self.transfer.browser.entries.len(),
+        );
+        cx.notify();
     }
+
+    pub(in crate::features::pages::transfers) fn focus_transfer_browser_search(
+        &mut self,
+        initial_text: Option<String>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(text) = initial_text {
+            self.transfer.browser.search = text;
+            self.transfer.browser.list_offset = 0;
+            self.forget_text_inputs("transfer.browser.search");
+        }
+        self.transfer.browser.search_expanded = true;
+        let field = self.text_input(
+            "transfer.browser.search",
+            &self.transfer.browser.search.clone(),
+            TextInputSetup::placeholder(self.tr("fileExplorer.searchPlaceholder")),
+            cx,
+        );
+        window.focus(&field.read(cx).focus_handle());
+        self.transfer.browser.status = transfer_browser_search_status(
+            self.transfer.browser.search.as_str(),
+            self.visible_transfer_browser_entries().len(),
+            self.transfer.browser.entries.len(),
+        );
+        cx.notify();
+    }
+
+    pub(in crate::features::pages::transfers) fn clear_or_close_transfer_browser_search(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.transfer.browser.search.is_empty() {
+            self.transfer.browser.search_expanded = false;
+            self.forget_text_inputs("transfer.browser.search");
+            self.transfer.browser.status = "file search closed".to_string();
+            window.focus(&self.transfer.browser.focus);
+        } else {
+            self.transfer.browser.search.clear();
+            self.transfer.browser.list_offset = 0;
+            self.reset_text_input("transfer.browser.search", "", cx);
+            self.transfer.browser.status = "file search cleared".to_string();
+        }
+        cx.notify();
+    }
+}
+
+pub(super) fn transfer_browser_search_text_for_key(event: &KeyDownEvent) -> Option<String> {
+    let keystroke = &event.keystroke;
+    if keystroke.modifiers.alt
+        || keystroke.modifiers.control
+        || keystroke.modifiers.platform
+        || keystroke.modifiers.function
+    {
+        return None;
+    }
+    keystroke
+        .key_char
+        .as_deref()
+        .filter(|text| !text.is_empty() && !text.chars().any(char::is_control))
+        .map(str::to_string)
+        .or_else(|| (keystroke.key == "space").then(|| " ".to_string()))
 }
 
 fn transfer_browser_entry_is_visible(
@@ -114,7 +141,8 @@ fn transfer_browser_entry_is_visible(
 
 #[cfg(test)]
 mod tests {
-    use super::transfer_browser_entry_is_visible;
+    use super::{transfer_browser_entry_is_visible, transfer_browser_search_text_for_key};
+    use gpui::{KeyDownEvent, Keystroke, Modifiers};
     use nyaterm_transport::{SftpFileEntry, SftpFileType};
 
     fn entry(name: &str) -> SftpFileEntry {
@@ -147,5 +175,48 @@ mod tests {
         assert!(!transfer_browser_entry_is_visible(
             &visible, "archive", true
         ));
+    }
+
+    fn key_event(key: &str, key_char: Option<&str>, modifiers: Modifiers) -> KeyDownEvent {
+        KeyDownEvent {
+            keystroke: Keystroke {
+                modifiers,
+                key: key.to_string(),
+                key_char: key_char.map(str::to_string),
+            },
+            is_held: false,
+        }
+    }
+
+    #[test]
+    fn plain_text_keys_can_start_file_search() {
+        assert_eq!(
+            transfer_browser_search_text_for_key(&key_event("a", Some("A"), Modifiers::default())),
+            Some("A".to_string())
+        );
+        assert_eq!(
+            transfer_browser_search_text_for_key(&key_event("space", None, Modifiers::default())),
+            Some(" ".to_string())
+        );
+    }
+
+    #[test]
+    fn shortcuts_and_control_characters_do_not_start_file_search() {
+        let control = Modifiers {
+            control: true,
+            ..Modifiers::default()
+        };
+        assert_eq!(
+            transfer_browser_search_text_for_key(&key_event("l", Some("l"), control)),
+            None
+        );
+        assert_eq!(
+            transfer_browser_search_text_for_key(&key_event(
+                "tab",
+                Some("\t"),
+                Modifiers::default()
+            )),
+            None
+        );
     }
 }

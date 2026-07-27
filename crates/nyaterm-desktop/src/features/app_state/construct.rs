@@ -389,7 +389,6 @@ impl NyaTermApp {
                     job_delete: cx.focus_handle(),
                     download_path: cx.focus_handle(),
                     browser: cx.focus_handle(),
-                    browser_search: cx.focus_handle(),
                     rename: cx.focus_handle(),
                     move_to: cx.focus_handle(),
                     delete: cx.focus_handle(),

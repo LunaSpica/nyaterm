@@ -42,7 +42,6 @@ pub(in crate::features) struct TransferFeatureFocus {
     pub job_delete: FocusHandle,
     pub download_path: FocusHandle,
     pub browser: FocusHandle,
-    pub browser_search: FocusHandle,
     pub rename: FocusHandle,
     pub move_to: FocusHandle,
     pub delete: FocusHandle,
@@ -114,7 +113,6 @@ pub(in crate::features) struct TransferBrowserState {
     pub path_menu: Option<TransferBrowserPathMenuState>,
     pub upload_menu: Option<TransferBrowserUploadMenuState>,
     pub focus: FocusHandle,
-    pub search_focus: FocusHandle,
 }
 
 /// Rename/move/delete/create/properties dialogs over browser entries.
@@ -224,7 +222,6 @@ impl TransferFeatureState {
                 path_menu: None,
                 upload_menu: None,
                 focus: focus.browser,
-                search_focus: focus.browser_search,
             },
             file_ops: TransferFileOpsState {
                 rename: None,

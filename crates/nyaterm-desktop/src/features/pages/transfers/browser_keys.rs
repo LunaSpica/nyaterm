@@ -1,3 +1,4 @@
+use super::browser_filter::transfer_browser_search_text_for_key;
 use super::*;
 
 impl NyaTermApp {
@@ -7,7 +8,25 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.mark_user_activity();
         let keystroke = &event.keystroke;
+        let modified_for_location = (keystroke.modifiers.platform || keystroke.modifiers.control)
+            && !keystroke.modifiers.alt
+            && !keystroke.modifiers.shift;
+        if modified_for_location && keystroke.key.eq_ignore_ascii_case("l") {
+            cx.stop_propagation();
+            self.begin_transfer_browser_path_edit(window, cx);
+            return;
+        }
+
+        if self.transfer.file_ops.rename.is_none()
+            && let Some(text) = transfer_browser_search_text_for_key(event)
+        {
+            cx.stop_propagation();
+            self.focus_transfer_browser_search(Some(text), window, cx);
+            return;
+        }
+
         let modified_for_select_all = (keystroke.modifiers.platform || keystroke.modifiers.control)
             && !keystroke.modifiers.alt
             && !keystroke.modifiers.shift;

@@ -126,11 +126,43 @@ impl NyaTermApp {
         let search_active = !self.transfer.browser.search.trim().is_empty();
         let search_expanded = self.transfer.browser.search_expanded || search_active;
         let show_hidden_files = self.settings.ui_file_explorer_show_hidden_files;
-        let search_value = if self.transfer.browser.search.is_empty() {
-            self.tr("fileExplorer.searchPlaceholder").to_string()
-        } else {
-            self.transfer.browser.search.clone()
-        };
+        let search_input = search_expanded.then(|| {
+            let field = self.text_input(
+                "transfer.browser.search",
+                &self.transfer.browser.search.clone(),
+                TextInputSetup::placeholder(self.tr("fileExplorer.searchPlaceholder")),
+                cx,
+            );
+            let focus = field.read(cx).focus_handle();
+            div()
+                .id(SharedString::from("transfer-browser-search"))
+                .h_full()
+                .flex_1()
+                .min_w_0()
+                .px_1()
+                .flex()
+                .items_center()
+                .cursor_text()
+                .on_mouse_down(MouseButton::Left, move |_, window, _| {
+                    window.focus(&focus);
+                })
+                .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
+                    if event.keystroke.key == "escape" {
+                        cx.stop_propagation();
+                        this.clear_or_close_transfer_browser_search(window, cx);
+                    }
+                }))
+                .child(
+                    div()
+                        .min_w_0()
+                        .flex_1()
+                        .font_family(crate::features::gpui_code_font_family())
+                        .text_size(px(12.))
+                        .text_color(rgb(palette.text))
+                        .child(field),
+                )
+                .into_any_element()
+        });
         let current_browser_path = normalized_transfer_browser_path(&self.transfer.browser.path);
         let has_parent_entry =
             can_transfer && current_browser_path != "/" && current_browser_path != ".";
@@ -385,10 +417,7 @@ impl NyaTermApp {
                             self.tr("fileExplorer.search"),
                             search_active || search_expanded,
                             cx.listener(|this, _, window, cx| {
-                                this.transfer.browser.search_expanded = true;
-                                this.transfer.browser.status = "file search focused".to_string();
-                                window.focus(&this.transfer.browser.search_focus);
-                                cx.notify();
+                                this.focus_transfer_browser_search(None, window, cx);
                             }),
                         ))
                         .child(compact_transfer_toolbar_button_active(
@@ -429,45 +458,7 @@ impl NyaTermApp {
                                             .path("icons/fe/search.svg")
                                             .text_color(rgb(palette.link)),
                                     )
-                                    .child(
-                                        div()
-                                            .id(SharedString::from("transfer-browser-search"))
-                                            .h_full()
-                                            .flex_1()
-                                            .min_w_0()
-                                            .px_1()
-                                            .flex()
-                                            .items_center()
-                                            .cursor_text()
-                                            .track_focus(&self.transfer.browser.search_focus)
-                                            .on_click(cx.listener(|this, _, window, cx| {
-                                                window.focus(&this.transfer.browser.search_focus);
-                                                cx.notify();
-                                            }))
-                                            .on_key_down(cx.listener(
-                                                |this, event: &KeyDownEvent, _, cx| {
-                                                    cx.stop_propagation();
-                                                    this.handle_transfer_browser_search_key_down(
-                                                        event, cx,
-                                                    );
-                                                },
-                                            ))
-                                            .child(
-                                                div()
-                                                    .min_w_0()
-                                                    .flex_1()
-                                                    .font_family(
-                                                        crate::features::gpui_code_font_family(),
-                                                    )
-                                                    .text_size(px(12.))
-                                                    .text_color(if search_active {
-                                                        rgb(palette.text)
-                                                    } else {
-                                                        rgb(palette.text_dimmed)
-                                                    })
-                                                    .child(truncate_preview(&search_value, 96)),
-                                            ),
-                                    )
+                                    .children(search_input)
                                     .child(
                                         div()
                                             .id(SharedString::from("transfer-browser-clear-search"))
@@ -489,18 +480,10 @@ impl NyaTermApp {
                                                     .path("icons/window/close.svg")
                                                     .text_color(rgb(palette.text_muted)),
                                             )
-                                            .on_click(cx.listener(|this, _, _, cx| {
-                                                if this.transfer.browser.search.is_empty() {
-                                                    this.transfer.browser.search_expanded = false;
-                                                    this.transfer.browser.status =
-                                                        "file search closed".to_string();
-                                                } else {
-                                                    this.transfer.browser.search.clear();
-                                                    this.transfer.browser.list_offset = 0;
-                                                    this.transfer.browser.status =
-                                                        "file search cleared".to_string();
-                                                }
-                                                cx.notify();
+                                            .on_click(cx.listener(|this, _, window, cx| {
+                                                this.clear_or_close_transfer_browser_search(
+                                                    window, cx,
+                                                );
                                             })),
                                     ),
                             )
