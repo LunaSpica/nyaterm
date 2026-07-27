@@ -621,7 +621,7 @@ impl NyaTermApp {
                             context,
                             source_label: format!("{action_name} · {remote_path}"),
                         });
-                        self.ai.chat.prompt_draft = prompt;
+                        self.set_ai_prompt_draft(prompt, cx);
                         self.ai.chat.response_preview = format!(
                             "Loaded {} byte(s) from {remote_path} for AI action {action_name}",
                             file.size

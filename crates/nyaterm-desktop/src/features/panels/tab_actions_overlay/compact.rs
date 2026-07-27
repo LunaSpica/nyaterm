@@ -217,10 +217,10 @@ impl NyaTermApp {
                                     this.ai.panel.status =
                                         "terminal visible screen is empty".to_string();
                                 } else {
-                                    this.ai.chat.prompt_draft = format!(
+                                    this.set_ai_prompt_draft(format!(
                                         "Explain this terminal output:\n\n{}",
                                         visible_for_ai
-                                    );
+                                    ), cx);
                                     this.ai.panel.status =
                                         "terminal output loaded into AI prompt".to_string();
                                     window.focus(&this.ai.chat.focus);
@@ -249,10 +249,10 @@ impl NyaTermApp {
                                 if buffer_for_ai.trim().is_empty() {
                                     this.ai.panel.status = "terminal buffer is empty".to_string();
                                 } else {
-                                    this.ai.chat.prompt_draft = format!(
+                                    this.set_ai_prompt_draft(format!(
                                         "Analyze this terminal buffer for errors, risks, and next actions:\n\n{}",
                                         buffer_for_ai
-                                    );
+                                    ), cx);
                                     this.ai.panel.status =
                                         "terminal buffer loaded into AI prompt".to_string();
                                     window.focus(&this.ai.chat.focus);

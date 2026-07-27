@@ -38,7 +38,7 @@ impl NyaTermApp {
                 .target_session_ids
                 .push(detected.session_id.clone());
         }
-        self.ai.chat.prompt_draft = "Analyze detected error".to_string();
+        self.set_ai_prompt_draft("Analyze detected error", cx);
         self.ai.history.open = false;
         self.ai.panel.execution_menu_open = false;
         self.ai.discovery.menu_open = false;

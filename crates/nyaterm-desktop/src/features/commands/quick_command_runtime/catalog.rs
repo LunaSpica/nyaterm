@@ -136,7 +136,7 @@ impl NyaTermApp {
 
         self.quick_command_state.ai.prompt_draft.clear();
         self.close_quick_command_toolbar_popovers();
-        self.ai.chat.prompt_draft = format!("Generate a shell command for: {prompt}");
+        self.set_ai_prompt_draft(format!("Generate a shell command for: {prompt}"), cx);
         self.ai.chat.response_preview = "Quick command generation ready".to_string();
         self.ai.panel.status = "quick command AI assist".to_string();
         self.ensure_panel_open(NavItem::AiAssistant);

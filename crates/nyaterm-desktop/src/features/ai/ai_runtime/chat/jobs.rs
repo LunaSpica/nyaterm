@@ -191,6 +191,7 @@ impl NyaTermApp {
             reasoning_content: None,
             command_cards: Vec::new(),
         });
+        self.reset_text_input("ai.chat.prompt", "", cx);
         self.ai.chat.prompt_draft.clear();
         self.ai.chat.quoted_text = None;
         self.ai.chat.message_menu = None;
@@ -692,6 +693,22 @@ impl NyaTermApp {
         }
     }
 
+    /// Put text into the prompt, from somewhere other than the box.
+    ///
+    /// The box owns its own buffer, so a caller that only wrote the draft would
+    /// leave the two showing different things.
+    pub(in crate::features) fn set_ai_prompt_draft(
+        &mut self,
+        text: impl Into<String>,
+        cx: &mut Context<Self>,
+    ) {
+        let text = text.into();
+        self.reset_text_input("ai.chat.prompt", &text, cx);
+        self.ai.chat.prompt_draft = text;
+        self.sync_ai_mention_from_prompt();
+        cx.notify();
+    }
+
     /// Apply an edit from the AI prompt box.
     pub(in crate::features) fn apply_ai_prompt(&mut self, text: String, cx: &mut Context<Self>) {
         if self.ai.chat.pending
@@ -928,6 +945,7 @@ impl NyaTermApp {
                             self.store_status.message =
                                 format!("AI session {} updated", event.session_id);
                             self.store_status.ready = true;
+                            self.reset_text_input("ai.chat.prompt", "", cx);
                             self.ai.chat.prompt_draft.clear();
                             self.refresh_ai_usage_counts(cx);
                             if output.mode == AiMode::Agent {

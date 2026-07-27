@@ -14,16 +14,6 @@ pub(super) fn clamp_menu_position(
     (x.clamp(margin, max_x), y.clamp(margin, max_y))
 }
 
-pub(super) fn terminal_ctx_item(
-    palette: crate::theme::ThemePalette,
-    id: impl Into<String>,
-    label: impl Into<String>,
-    shortcut: Option<String>,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    terminal_ctx_item_with_icon(palette, id, label, None, shortcut, on_click)
-}
-
 pub(super) fn terminal_ctx_item_with_icon(
     palette: crate::theme::ThemePalette,
     id: impl Into<String>,
@@ -37,13 +27,14 @@ pub(super) fn terminal_ctx_item_with_icon(
         .flex()
         .items_center()
         .gap_2()
-        .when_some(icon, |this, def| {
-            this.child(crate::features::mono_icon(
+        // A row with no icon still reserves the column, so labels line up.
+        .child(div().size(px(14.)).flex_none().children(icon.map(|def| {
+            crate::features::mono_icon(
                 def.path,
-                rgb(def.tint(palette).unwrap_or(palette.text)).into(),
+                rgb(def.tint(palette).unwrap_or(palette.text_muted)).into(),
                 14.,
-            ))
-        })
+            )
+        })))
         .child(label);
     let mut row = div()
         .id(SharedString::from(id.into()))
@@ -74,6 +65,7 @@ pub(super) fn terminal_ctx_submenu_item(
     palette: crate::theme::ThemePalette,
     id: impl Into<String>,
     label: impl Into<String>,
+    icon_path: &'static str,
     active: bool,
     on_hover: impl Fn(&bool, &mut Window, &mut App) + 'static,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
@@ -93,7 +85,18 @@ pub(super) fn terminal_ctx_submenu_item(
         .hover(|this| this.bg(rgb(palette.hover)))
         .on_hover(on_hover)
         .on_click(on_click)
-        .child(div().child(label.into()))
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .gap_2()
+                .child(crate::features::mono_icon(
+                    icon_path,
+                    rgb(palette.text_muted).into(),
+                    14.,
+                ))
+                .child(label.into()),
+        )
         .child(
             svg()
                 .size(px(12.))

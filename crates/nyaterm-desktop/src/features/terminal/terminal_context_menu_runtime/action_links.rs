@@ -65,10 +65,18 @@ impl NyaTermApp {
             } else {
                 action.label.clone()
             };
-            items = items.child(terminal_ctx_item(
+            items = items.child(terminal_ctx_item_with_icon(
                 palette,
                 format!("action-link-menu-{}", action.id),
                 label,
+                Some(crate::features::IconDef::mono(
+                    if open_url.is_some() {
+                        "icons/conn/connect.svg"
+                    } else {
+                        "icons/fe/forward.svg"
+                    },
+                    palette.text_muted,
+                )),
                 None,
                 cx.listener(move |this, _, _, cx| {
                     this.close_action_link_menu(cx);

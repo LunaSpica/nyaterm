@@ -44,6 +44,8 @@ impl NyaTermApp {
 
     pub(in crate::features) fn start_new_ai_chat(&mut self, cx: &mut Context<Self>) {
         self.ai.start_new_chat();
+        // The composer keeps its own buffer, so clearing the draft is not enough.
+        self.reset_text_input("ai.chat.prompt", "", cx);
         cx.notify();
     }
 

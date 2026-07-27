@@ -161,10 +161,14 @@ impl NyaTermApp {
 
         if has_selection {
             items = items
-                .child(terminal_ctx_item(
+                .child(terminal_ctx_item_with_icon(
                     palette,
                     "term-ctx-copy",
                     self.tr("terminalCtx.copy"),
+                    Some(crate::features::IconDef::mono(
+                        "icons/copy.svg",
+                        palette.text_muted,
+                    )),
                     Some(copy_sc),
                     cx.listener(|this, _, _, cx| {
                         this.close_terminal_context_menu(cx);
@@ -173,10 +177,14 @@ impl NyaTermApp {
                 ))
                 .when_some(selection_as_openable_url(&selected), |this, url| {
                     let open_url = url.clone();
-                    this.child(terminal_ctx_item(
+                    this.child(terminal_ctx_item_with_icon(
                         palette,
                         "term-ctx-open-url",
                         self.tr("terminalCtx.openLink"),
+                        Some(crate::features::IconDef::mono(
+                            "icons/conn/connect.svg",
+                            palette.text_muted,
+                        )),
                         None,
                         cx.listener(move |this, _, _, cx| {
                             this.close_terminal_context_menu(cx);
@@ -197,10 +205,14 @@ impl NyaTermApp {
                     let label = format!("{kind} · {}", action.label);
                     let command = action.command.clone();
                     let open_url = action.open_url.clone();
-                    terminal_ctx_item(
+                    terminal_ctx_item_with_icon(
                         palette,
                         format!("term-ctx-action-link-{}", action.id),
                         label,
+                        Some(crate::features::IconDef::mono(
+                            "icons/fe/forward.svg",
+                            palette.text_muted,
+                        )),
                         None,
                         cx.listener(move |this, _, _, cx| {
                             this.close_terminal_context_menu(cx);
@@ -223,10 +235,14 @@ impl NyaTermApp {
                         }),
                     )
                 }))
-                .child(terminal_ctx_item(
+                .child(terminal_ctx_item_with_icon(
                     palette,
                     "term-ctx-find-selection",
                     self.tr("terminalCtx.find"),
+                    Some(crate::features::IconDef::mono(
+                        "icons/fe/search.svg",
+                        palette.text_muted,
+                    )),
                     Some(find_sc),
                     cx.listener(move |this, _, window, cx| {
                         this.close_terminal_context_menu(cx);
@@ -240,6 +256,7 @@ impl NyaTermApp {
                     palette,
                     "term-ctx-search-online",
                     self.tr("terminalCtx.searchOnline"),
+                    "icons/menu/travel-explore.svg",
                     menu.submenu == Some(TerminalContextSubmenu::SearchOnline),
                     cx.listener(|this, hovered: &bool, _, cx| {
                         if *hovered {
@@ -261,6 +278,7 @@ impl NyaTermApp {
                         palette,
                         "term-ctx-ai",
                         self.tr("ai.title"),
+                        "icons/ai.svg",
                         menu.submenu == Some(TerminalContextSubmenu::Ai),
                         cx.listener(|this, hovered: &bool, _, cx| {
                             if *hovered {
@@ -277,6 +295,7 @@ impl NyaTermApp {
                         palette,
                         "term-ctx-translate",
                         self.tr("terminalCtx.translate"),
+                        "icons/translation.svg",
                         menu.submenu == Some(TerminalContextSubmenu::Translate),
                         cx.listener(|this, hovered: &bool, _, cx| {
                             if *hovered {
@@ -295,20 +314,28 @@ impl NyaTermApp {
                     ))
                 })
                 .child(terminal_ctx_separator(palette))
-                .child(terminal_ctx_item(
+                .child(terminal_ctx_item_with_icon(
                     palette,
                     "term-ctx-paste",
                     self.tr("terminalCtx.paste"),
+                    Some(crate::features::IconDef::mono(
+                        "icons/menu/paste.svg",
+                        palette.text_muted,
+                    )),
                     Some(paste_sc),
                     cx.listener(|this, _, window, cx| {
                         this.close_terminal_context_menu(cx);
                         this.paste_from_clipboard(window, cx);
                     }),
                 ))
-                .child(terminal_ctx_item(
+                .child(terminal_ctx_item_with_icon(
                     palette,
                     "term-ctx-paste-selected",
                     self.tr("terminalCtx.pasteSelectedText"),
+                    Some(crate::features::IconDef::mono(
+                        "icons/menu/paste-go.svg",
+                        palette.text_muted,
+                    )),
                     Some(paste_sel_sc),
                     cx.listener(move |this, _, window, cx| {
                         this.close_terminal_context_menu(cx);
@@ -317,20 +344,28 @@ impl NyaTermApp {
                 ));
         } else {
             items = items
-                .child(terminal_ctx_item(
+                .child(terminal_ctx_item_with_icon(
                     palette,
                     "term-ctx-paste",
                     self.tr("terminalCtx.paste"),
+                    Some(crate::features::IconDef::mono(
+                        "icons/menu/paste.svg",
+                        palette.text_muted,
+                    )),
                     Some(paste_sc),
                     cx.listener(|this, _, window, cx| {
                         this.close_terminal_context_menu(cx);
                         this.paste_from_clipboard(window, cx);
                     }),
                 ))
-                .child(terminal_ctx_item(
+                .child(terminal_ctx_item_with_icon(
                     palette,
                     "term-ctx-find",
                     self.tr("terminalCtx.find"),
+                    Some(crate::features::IconDef::mono(
+                        "icons/fe/search.svg",
+                        palette.text_muted,
+                    )),
                     Some(find_sc),
                     cx.listener(|this, _, window, cx| {
                         this.close_terminal_context_menu(cx);
@@ -341,20 +376,28 @@ impl NyaTermApp {
 
         items = items
             .child(terminal_ctx_separator(palette))
-            .child(terminal_ctx_item(
+            .child(terminal_ctx_item_with_icon(
                 palette,
                 "term-ctx-clear-screen",
                 self.tr("terminalCtx.clearScreen"),
+                Some(crate::features::IconDef::mono(
+                    "icons/menu/clear-all.svg",
+                    palette.text_muted,
+                )),
                 Some(clear_sc),
                 cx.listener(|this, _, _, cx| {
                     this.close_terminal_context_menu(cx);
                     this.send_terminal_clear_screen(cx);
                 }),
             ))
-            .child(terminal_ctx_item(
+            .child(terminal_ctx_item_with_icon(
                 palette,
                 "term-ctx-clear-all",
                 self.tr("terminalCtx.clearAll"),
+                Some(crate::features::IconDef::mono(
+                    "icons/menu/delete-sweep.svg",
+                    palette.text_muted,
+                )),
                 None,
                 cx.listener(|this, _, _, cx| {
                     this.close_terminal_context_menu(cx);
@@ -362,20 +405,28 @@ impl NyaTermApp {
                 }),
             ))
             .child(terminal_ctx_separator(palette))
-            .child(terminal_ctx_item(
+            .child(terminal_ctx_item_with_icon(
                 palette,
                 "term-ctx-select-all",
                 self.tr("terminalCtx.selectAll"),
+                Some(crate::features::IconDef::mono(
+                    "icons/menu/select-all.svg",
+                    palette.text_muted,
+                )),
                 Some(select_all_sc),
                 cx.listener(|this, _, _, cx| {
                     this.close_terminal_context_menu(cx);
                     this.select_all_terminal(cx);
                 }),
             ))
-            .child(terminal_ctx_item(
+            .child(terminal_ctx_item_with_icon(
                 palette,
                 "term-ctx-more-actions",
                 self.tr("terminalCtx.moreActions"),
+                Some(crate::features::IconDef::mono(
+                    "icons/session/more.svg",
+                    palette.text_muted,
+                )),
                 None,
                 cx.listener(|this, _, window, cx| {
                     this.close_terminal_context_menu(cx);
@@ -445,10 +496,14 @@ impl NyaTermApp {
                     panel = panel.children(terminal_ai_actions.into_iter().map(
                         |(id, name, prompt)| {
                             let query = selected.clone();
-                            terminal_ctx_item(
+                            terminal_ctx_item_with_icon(
                                 palette,
                                 format!("term-ctx-ai-action-{id}"),
                                 name.clone(),
+                                Some(crate::features::IconDef::mono(
+                                    "icons/ai.svg",
+                                    palette.text_muted,
+                                )),
                                 None,
                                 cx.listener(move |this, _, window, cx| {
                                     this.close_terminal_context_menu(cx);
@@ -459,7 +514,7 @@ impl NyaTermApp {
                                     } else {
                                         query.clone()
                                     };
-                                    this.ai.chat.prompt_draft = format!("{prompt}\n\n{body}");
+                                    this.set_ai_prompt_draft(format!("{prompt}\n\n{body}"), cx);
                                     this.ai.panel.status = format!("AI action loaded: {name}");
                                     window.focus(&this.ai.chat.focus);
                                     cx.notify();
@@ -471,10 +526,14 @@ impl NyaTermApp {
                 TerminalContextSubmenu::Translate => {
                     panel = panel.children(translation_providers.into_iter().map(|(id, label)| {
                         let selected = selected.clone();
-                        terminal_ctx_item(
+                        terminal_ctx_item_with_icon(
                             palette,
                             format!("term-ctx-translate-{id}"),
                             label.clone(),
+                            Some(crate::features::IconDef::mono(
+                                "icons/translation.svg",
+                                palette.text_muted,
+                            )),
                             None,
                             cx.listener(move |this, _, window, cx| {
                                 this.close_terminal_context_menu(cx);
