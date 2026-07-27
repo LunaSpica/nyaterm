@@ -3,7 +3,7 @@ use nyaterm_transport::{
     SftpFileEntry, SftpFileProperties, SftpRemoteTextFile, SftpTransferControl,
     SftpTransferProgress, SftpTransferSummary, SftpWriteTextResult,
 };
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -308,6 +308,22 @@ pub(crate) struct TransferBrowserSessionCacheState {
     pub(crate) history: VecDeque<String>,
     pub(crate) history_index: usize,
     pub(crate) visited_history: VecDeque<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct TransferBrowserNavigationSnapshot {
+    pub(crate) remote_path: String,
+    pub(crate) browser_path: String,
+    pub(crate) entries: Vec<SftpFileEntry>,
+    pub(crate) loading: bool,
+    pub(crate) error: Option<String>,
+    pub(crate) status: String,
+    pub(crate) history: VecDeque<String>,
+    pub(crate) history_index: usize,
+    pub(crate) visited_history: VecDeque<String>,
+    pub(crate) selected_path: Option<String>,
+    pub(crate) selected_paths: HashSet<String>,
+    pub(crate) list_offset: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

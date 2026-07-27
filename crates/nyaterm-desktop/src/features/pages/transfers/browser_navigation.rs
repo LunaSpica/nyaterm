@@ -114,13 +114,17 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.open_transfer_browser_directory_with_history(path, true, window, cx);
+        let rollback = self.prepare_transfer_browser_navigation();
+        self.open_transfer_browser_directory_with_history_and_rollback(
+            path, true, rollback, window, cx,
+        );
     }
 
-    pub(in crate::features::pages::transfers) fn open_transfer_browser_directory_with_history(
+    fn open_transfer_browser_directory_with_history_and_rollback(
         &mut self,
         path: String,
         record_history: bool,
+        rollback: TransferBrowserNavigationSnapshot,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -138,7 +142,7 @@ impl NyaTermApp {
         self.transfer.browser.status = "Loading remote directory...".to_string();
         self.transfer.browser.loading = true;
         self.transfer.browser.error = None;
-        self.start_sftp_list_job(window, cx);
+        self.start_sftp_list_job(None, rollback, window, cx);
     }
 
     pub(in crate::features) fn open_transfer_browser_history(
@@ -147,6 +151,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let rollback = self.prepare_transfer_browser_navigation();
         if self.transfer.browser.history.is_empty() {
             self.transfer.browser.status = "directory history is empty".to_string();
             cx.notify();
@@ -175,7 +180,9 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        self.open_transfer_browser_directory_with_history(path, false, window, cx);
+        self.open_transfer_browser_directory_with_history_and_rollback(
+            path, false, rollback, window, cx,
+        );
     }
 
     pub(in crate::features::pages::transfers) fn record_transfer_browser_history(
@@ -186,13 +193,11 @@ impl NyaTermApp {
         if path.is_empty() {
             return;
         }
-        self.transfer
-            .browser
-            .history
-            .retain(|existing| existing != &path);
-        self.transfer.browser.history.push_front(path.clone());
-        self.transfer.browser.history.truncate(12);
-        self.transfer.browser.history_index = 0;
+        record_transfer_browser_history_entry(
+            &mut self.transfer.browser.history,
+            &mut self.transfer.browser.history_index,
+            path.clone(),
+        );
         self.record_transfer_browser_visited_history(path);
     }
 
@@ -448,6 +453,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let rollback = self.prepare_transfer_browser_navigation();
         let current_path = normalized_transfer_browser_path(&self.transfer.browser.path);
         if current_path == "/" || current_path == "." {
             self.transfer.browser.status = "already at the top remote directory".to_string();
@@ -468,7 +474,7 @@ impl NyaTermApp {
         self.transfer.browser.status = "Loading parent directory...".to_string();
         self.transfer.browser.loading = true;
         self.transfer.browser.error = None;
-        self.start_sftp_list_job_with_select_after(Some(current_path), window, cx);
+        self.start_sftp_list_job(Some(current_path), rollback, window, cx);
     }
 
     pub(in crate::features::pages::transfers) fn refresh_transfer_browser(
@@ -482,5 +488,118 @@ impl NyaTermApp {
             self.transfer.browser.path.clone()
         };
         self.open_transfer_browser_directory(path, window, cx);
+    }
+}
+
+fn record_transfer_browser_history_entry(
+    history: &mut VecDeque<String>,
+    history_index: &mut usize,
+    path: String,
+) {
+    if history.get(*history_index) == Some(&path) {
+        return;
+    }
+    if !history.is_empty() {
+        let current_index = (*history_index).min(history.len() - 1);
+        history.drain(..current_index);
+    }
+    history.push_front(path);
+    *history_index = 0;
+}
+
+impl NyaTermApp {
+    fn prepare_transfer_browser_navigation(&mut self) -> TransferBrowserNavigationSnapshot {
+        let session_key = self.active_session_id.clone().unwrap_or_default();
+        let pending_job_id = self.transfer.browser.navigation_jobs.remove(&session_key);
+        let stable_snapshot = pending_job_id
+            .and_then(|job_id| self.transfer.browser.pending_navigations.remove(&job_id));
+        if let Some(snapshot) = stable_snapshot {
+            self.restore_transfer_browser_navigation(snapshot.clone());
+            return snapshot;
+        }
+        self.capture_transfer_browser_navigation()
+    }
+
+    fn capture_transfer_browser_navigation(&self) -> TransferBrowserNavigationSnapshot {
+        TransferBrowserNavigationSnapshot {
+            remote_path: self.transfer.paths.remote.clone(),
+            browser_path: self.transfer.browser.path.clone(),
+            entries: self.transfer.browser.entries.clone(),
+            loading: self.transfer.browser.loading,
+            error: self.transfer.browser.error.clone(),
+            status: self.transfer.browser.status.clone(),
+            history: self.transfer.browser.history.clone(),
+            history_index: self.transfer.browser.history_index,
+            visited_history: self.transfer.browser.visited_history.clone(),
+            selected_path: self.transfer.browser.selected_remote_path.clone(),
+            selected_paths: self.transfer.browser.selected_remote_paths.clone(),
+            list_offset: self.transfer.browser.list_offset,
+        }
+    }
+
+    pub(in crate::features) fn restore_transfer_browser_navigation(
+        &mut self,
+        snapshot: TransferBrowserNavigationSnapshot,
+    ) {
+        self.transfer.paths.remote = snapshot.remote_path;
+        self.transfer.browser.path = snapshot.browser_path;
+        self.transfer.browser.entries = snapshot.entries;
+        self.transfer.browser.loading = snapshot.loading;
+        self.transfer.browser.error = snapshot.error;
+        self.transfer.browser.status = snapshot.status;
+        self.transfer.browser.history = snapshot.history;
+        self.transfer.browser.history_index = snapshot.history_index;
+        self.transfer.browser.visited_history = snapshot.visited_history;
+        self.transfer.browser.selected_remote_path = snapshot.selected_path;
+        self.transfer.browser.selected_remote_paths = snapshot.selected_paths;
+        self.transfer.browser.list_offset = snapshot.list_offset;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::record_transfer_browser_history_entry;
+    use std::collections::VecDeque;
+
+    #[test]
+    fn new_navigation_after_back_discards_forward_branch() {
+        let mut history =
+            VecDeque::from(["/three".to_string(), "/two".to_string(), "/one".to_string()]);
+        let mut index = 1;
+
+        record_transfer_browser_history_entry(&mut history, &mut index, "/four".to_string());
+
+        assert_eq!(
+            history,
+            VecDeque::from(["/four".to_string(), "/two".to_string(), "/one".to_string(),])
+        );
+        assert_eq!(index, 0);
+    }
+
+    #[test]
+    fn refreshing_current_history_entry_preserves_forward_navigation() {
+        let original =
+            VecDeque::from(["/three".to_string(), "/two".to_string(), "/one".to_string()]);
+        let mut history = original.clone();
+        let mut index = 1;
+
+        record_transfer_browser_history_entry(&mut history, &mut index, "/two".to_string());
+
+        assert_eq!(history, original);
+        assert_eq!(index, 1);
+    }
+
+    #[test]
+    fn revisiting_a_path_keeps_chronological_history() {
+        let mut history = VecDeque::from(["/two".to_string(), "/one".to_string()]);
+        let mut index = 0;
+
+        record_transfer_browser_history_entry(&mut history, &mut index, "/one".to_string());
+
+        assert_eq!(
+            history,
+            VecDeque::from(["/one".to_string(), "/two".to_string(), "/one".to_string(),])
+        );
+        assert_eq!(index, 0);
     }
 }

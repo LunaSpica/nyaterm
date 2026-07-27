@@ -1,21 +1,17 @@
 use super::*;
 
+use crate::models::TransferBrowserNavigationSnapshot;
+
 impl NyaTermApp {
     pub(in crate::features) fn start_sftp_list_job(
         &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.start_sftp_list_job_with_select_after(None, window, cx);
-    }
-
-    pub(in crate::features) fn start_sftp_list_job_with_select_after(
-        &mut self,
         select_after: Option<String>,
+        rollback: TransferBrowserNavigationSnapshot,
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(config) = self.active_ssh_config.clone() else {
+            self.restore_transfer_browser_navigation(rollback);
             self.terminal.view.status = "start an SSH session first".to_string();
             self.ensure_panel_open(NavItem::Transfers);
             cx.notify();
@@ -34,6 +30,10 @@ impl NyaTermApp {
             .browser
             .navigation_jobs
             .insert(job_session_id.clone().unwrap_or_default(), id.clone());
+        self.transfer
+            .browser
+            .pending_navigations
+            .insert(id.clone(), rollback);
         self.transfer.queue.jobs.push(TransferJobState {
             id: id.clone(),
             session_id: job_session_id,

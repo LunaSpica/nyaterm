@@ -16,12 +16,13 @@ use crate::features::{TransferExternalSyncWindow, TransferJobResult};
 use crate::models::{
     TransferBrowserColumnResizeState, TransferBrowserColumnWidths, TransferBrowserContextMenuState,
     TransferBrowserDragSelectionState, TransferBrowserFavoritesMenuState,
-    TransferBrowserPendingRenameState, TransferBrowserSessionCacheState, TransferBrowserSortColumn,
-    TransferBrowserSortDirection, TransferBrowserUploadMenuState, TransferDeleteState,
-    TransferEditorWorkspaceState, TransferExternalSyncPromptState, TransferHeightResizeState,
-    TransferInputField, TransferJobDeleteState, TransferJobMenuState, TransferJobState,
-    TransferMoveState, TransferNewFileState, TransferNewFolderState, TransferNewSymlinkState,
-    TransferPathPromptKind, TransferPropertiesState, TransferRenameState, TransferUnknownFileState,
+    TransferBrowserNavigationSnapshot, TransferBrowserPendingRenameState,
+    TransferBrowserSessionCacheState, TransferBrowserSortColumn, TransferBrowserSortDirection,
+    TransferBrowserUploadMenuState, TransferDeleteState, TransferEditorWorkspaceState,
+    TransferExternalSyncPromptState, TransferHeightResizeState, TransferInputField,
+    TransferJobDeleteState, TransferJobMenuState, TransferJobState, TransferMoveState,
+    TransferNewFileState, TransferNewFolderState, TransferNewSymlinkState, TransferPathPromptKind,
+    TransferPropertiesState, TransferRenameState, TransferUnknownFileState,
 };
 
 pub(in crate::features) struct TransferFeatureState {
@@ -97,6 +98,7 @@ pub(in crate::features) struct TransferBrowserState {
     pub session_cache: HashMap<String, TransferBrowserSessionCacheState>,
     /// Latest SFTP navigation job per session; older results must not rewind the browser.
     pub navigation_jobs: HashMap<String, String>,
+    pub pending_navigations: HashMap<String, TransferBrowserNavigationSnapshot>,
     pub auto_sync_cwd_last_at: Option<Instant>,
     pub favorites: VecDeque<String>,
     pub sort_column: TransferBrowserSortColumn,
@@ -206,6 +208,7 @@ impl TransferFeatureState {
                 visited_history: VecDeque::new(),
                 session_cache: HashMap::new(),
                 navigation_jobs: HashMap::new(),
+                pending_navigations: HashMap::new(),
                 auto_sync_cwd_last_at: None,
                 favorites: VecDeque::new(),
                 sort_column: TransferBrowserSortColumn::Name,

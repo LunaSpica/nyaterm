@@ -132,6 +132,7 @@ impl NyaTermApp {
                 navigation_job_key.as_deref(),
                 &event_id,
             ) {
+                self.transfer.browser.pending_navigations.remove(&event_id);
                 self.transfer.queue.jobs.remove(job_index);
                 continue;
             }
@@ -155,6 +156,7 @@ impl NyaTermApp {
             let mut external_sync_prompt_to_open: Option<String> = None;
             let mut zmodem_upload_after_probe: Option<(String, Vec<PathBuf>)> = None;
             let mut open_after_create: Option<SftpFileEntry> = None;
+            let mut browser_navigation_rollback = None;
             let event_finished = matches!(&event.event, TransferJobEvent::Finished(_));
             let event_failed = matches!(&event.event, TransferJobEvent::Finished(Err(_)));
             let cleanup_internal_job_id = (event_finished
@@ -823,6 +825,14 @@ impl NyaTermApp {
                     }
                 }
                 TransferJobEvent::Finished(Err(error)) => {
+                    if matches!(&job.kind, TransferJobKind::ListDir { .. }) {
+                        browser_navigation_rollback = self
+                            .transfer
+                            .browser
+                            .pending_navigations
+                            .remove(&event_id)
+                            .map(|snapshot| (snapshot, error.clone()));
+                    }
                     let browser_load_failed = matches!(
                         &job.kind,
                         TransferJobKind::ListDir { .. }
@@ -881,6 +891,13 @@ impl NyaTermApp {
                     job.control = None;
                 }
             }
+            if let Some((snapshot, error)) = browser_navigation_rollback {
+                self.restore_transfer_browser_navigation(snapshot);
+                self.transfer.browser.status = format!("directory load failed: {error}");
+                if self.transfer.browser.entries.is_empty() {
+                    self.transfer.browser.error = Some(error);
+                }
+            }
             if let Some((session_id, job_id, remote_path, local_path)) = external_sync_to_start {
                 self.spawn_external_editor_sync_upload(session_id, job_id, remote_path, local_path);
             }
@@ -909,6 +926,9 @@ impl NyaTermApp {
                     .is_some_and(|latest_id| latest_id == &event_id)
             {
                 self.transfer.browser.navigation_jobs.remove(&key);
+            }
+            if event_finished {
+                self.transfer.browser.pending_navigations.remove(&event_id);
             }
             if let Some(job_id) = cleanup_internal_job_id {
                 self.transfer.queue.jobs.retain(|job| job.id != job_id);
