@@ -59,7 +59,6 @@ pub(in crate::features) struct SecurityUnlockState {
     pub prompt_open: bool,
     pub master_required_prompt_open: bool,
     pub draft: String,
-    pub marked_text: String,
     pub error: Option<String>,
     pub pending_action: Option<SecurityUnlockAction>,
     pub focus: FocusHandle,
@@ -96,7 +95,6 @@ impl SecurityFeatureState {
                 prompt_open: false,
                 master_required_prompt_open: false,
                 draft: String::new(),
-                marked_text: String::new(),
                 error: None,
                 pending_action: None,
                 focus: focus.unlock,
@@ -147,7 +145,6 @@ impl SecurityFeatureState {
     pub(in crate::features) fn close_unlock_prompt(&mut self) {
         self.unlock.prompt_open = false;
         self.unlock.draft.clear();
-        self.unlock.marked_text.clear();
         self.unlock.error = None;
     }
 

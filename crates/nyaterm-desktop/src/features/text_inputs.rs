@@ -15,7 +15,7 @@
 use std::collections::HashMap;
 
 use gpui::{
-    App, AppContext as _, Context, Entity, InteractiveElement as _, IntoElement, MouseButton,
+    AppContext, Context, Entity, InteractiveElement as _, IntoElement, MouseButton,
     ParentElement as _, SharedString, Styled as _, Subscription, div, prelude::FluentBuilder as _,
     px, rgb,
 };
@@ -197,7 +197,12 @@ impl NyaTermApp {
     }
 
     /// Push a value the runtime changed back into its input.
-    pub(in crate::features) fn reset_text_input(&mut self, id: &str, text: &str, cx: &mut App) {
+    pub(in crate::features) fn reset_text_input(
+        &mut self,
+        id: &str,
+        text: &str,
+        cx: &mut impl AppContext,
+    ) {
         if let Some(field) = self.text_inputs.fields.get(id) {
             field.update(cx, |field, cx| field.set_content(text, cx));
         }
@@ -277,6 +282,10 @@ impl NyaTermApp {
             self.apply_temporary_ssh_link(text, cx);
         } else if let Some(field) = id.strip_prefix("session.") {
             self.apply_session_text_input(field, text, cx);
+        } else if id.as_ref() == "lock-screen.password" {
+            self.apply_lock_password_input(text, cx);
+        } else if id.as_ref() == "security.unlock.password" {
+            self.apply_security_unlock_password_input(text, cx);
         } else if let Some(rest) = id.strip_prefix("ai.credential.") {
             self.apply_ai_credential_input(rest, text, cx);
         } else if let Some(field) = id

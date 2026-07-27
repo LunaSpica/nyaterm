@@ -266,7 +266,6 @@ pub struct NyaTermApp {
     pub(in crate::features) multi_line_paste_focus: FocusHandle,
     pub(in crate::features) lock_focus: FocusHandle,
     pub(in crate::features) lock_password_draft: String,
-    pub(in crate::features) lock_password_marked_text: String,
     pub(in crate::features) lock_status: String,
     pub(in crate::features) pending_terminal_frame_events: VecDeque<TerminalFrameEvent>,
     pub(in crate::features) pending_session_events: VecDeque<SessionEvent>,

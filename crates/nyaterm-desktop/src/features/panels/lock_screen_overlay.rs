@@ -7,13 +7,17 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let input_entity = cx.entity();
-        let password_length = self.lock_password_draft.chars().count()
-            + self.lock_password_marked_text.chars().count();
-        let password_display = if password_length == 0 {
-            " ".to_string()
+        let password_input = self.text_input(
+            "lock-screen.password",
+            &self.lock_password_draft.clone(),
+            TextInputSetup::masked(),
+            cx,
+        );
+        let password_focus = password_input.read(cx).focus_handle();
+        let overlay_focus = if self.settings.has_master_password {
+            password_focus.clone()
         } else {
-            "•".repeat(password_length.min(32))
+            self.lock_focus.clone()
         };
         let lock_status = if self.lock_status.trim().is_empty() {
             if self.settings.has_master_password {
@@ -39,10 +43,7 @@ impl NyaTermApp {
             .bg(rgba(0x000000d9))
             .text_color(rgb(0xffffff))
             .track_focus(&self.lock_focus)
-            .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(&this.lock_focus);
-                cx.notify();
-            }))
+            .on_click(move |_, window, _| window.focus(&overlay_focus))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
                 cx.stop_propagation();
                 this.handle_lock_key_down(event, cx);
@@ -98,10 +99,12 @@ impl NyaTermApp {
                     .justify_center()
                     .child(
                         div()
+                            .id("lock-screen-content")
                             .flex()
                             .flex_col()
                             .items_center()
                             .gap_5()
+                            .on_click(|_, _, cx| cx.stop_propagation())
                             .child(
                                 div()
                                     .relative()
@@ -185,33 +188,19 @@ impl NyaTermApp {
                                                 )
                                                 .text_sm()
                                                 .text_color(rgb(palette.text))
-                                                .cursor_pointer()
-                                                .track_focus(&self.lock_focus)
-                                                .on_click(cx.listener(|this, _, window, cx| {
-                                                    window.focus(&this.lock_focus);
-                                                    cx.notify();
-                                                }))
-                                                .child(password_display)
+                                                .cursor_text()
+                                                .on_mouse_down(
+                                                    MouseButton::Left,
+                                                    move |_, window, _| {
+                                                        window.focus(&password_focus);
+                                                    },
+                                                )
                                                 .child(
-                                                    gpui::canvas(
-                                                        |_bounds, _window, _cx| {},
-                                                        move |bounds, _state, window, cx| {
-                                                            let focus = input_entity
-                                                                .read(cx)
-                                                                .lock_focus
-                                                                .clone();
-                                                            window.handle_input(
-                                                                &focus,
-                                                                gpui::ElementInputHandler::new(
-                                                                    bounds,
-                                                                    input_entity.clone(),
-                                                                ),
-                                                                cx,
-                                                            );
-                                                        },
-                                                    )
-                                                    .absolute()
-                                                    .inset_0(),
+                                                    div()
+                                                        .min_w_0()
+                                                        .flex_1()
+                                                        .overflow_hidden()
+                                                        .child(password_input),
                                                 ),
                                         )
                                         .child(

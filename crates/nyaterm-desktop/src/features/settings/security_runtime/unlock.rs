@@ -31,7 +31,7 @@ impl NyaTermApp {
             self.security.unlock.prompt_open = false;
             self.security.unlock.master_required_prompt_open = true;
             self.security.unlock.draft.clear();
-            self.security.unlock.marked_text.clear();
+            self.forget_text_inputs("security.unlock.password");
             self.security.unlock.error = None;
             self.security.status = "master password required".to_string();
             cx.notify();
@@ -40,15 +40,17 @@ impl NyaTermApp {
         self.security.unlock.master_required_prompt_open = false;
         self.security.unlock.prompt_open = true;
         self.security.unlock.draft.clear();
-        self.security.unlock.marked_text.clear();
+        self.forget_text_inputs("security.unlock.password");
+        let field = self.text_input("security.unlock.password", "", TextInputSetup::masked(), cx);
         self.security.unlock.error = None;
         self.security.status = "enter master password to unlock secrets".to_string();
-        window.focus(&self.security.unlock.focus);
+        window.focus(&field.read(cx).focus_handle());
         cx.notify();
     }
 
     pub(in crate::features) fn close_security_unlock_prompt(&mut self, cx: &mut Context<Self>) {
         self.security.close_unlock_prompt();
+        self.forget_text_inputs("security.unlock.password");
         cx.notify();
     }
 
@@ -78,6 +80,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn lock_security_secrets(&mut self, cx: &mut Context<Self>) {
         self.security.lock_secrets();
+        self.forget_text_inputs("security.unlock.password");
         cx.notify();
     }
 
@@ -91,7 +94,7 @@ impl NyaTermApp {
             self.security.unlock.prompt_open = false;
             self.security.unlock.master_required_prompt_open = true;
             self.security.unlock.draft.clear();
-            self.security.unlock.marked_text.clear();
+            self.forget_text_inputs("security.unlock.password");
             self.security.unlock.error = None;
             self.security.status = "master password required".to_string();
             cx.notify();
@@ -114,7 +117,7 @@ impl NyaTermApp {
             }
             Ok(false) => {
                 self.security.unlock.draft.clear();
-                self.security.unlock.marked_text.clear();
+                self.reset_text_input("security.unlock.password", "", cx);
                 self.security.unlock.error =
                     Some(self.tr("secretUnlock.wrongPassword").to_string());
                 self.security.status = "unlock rejected".to_string();
@@ -122,7 +125,7 @@ impl NyaTermApp {
             }
             Err(error) => {
                 self.security.unlock.draft.clear();
-                self.security.unlock.marked_text.clear();
+                self.reset_text_input("security.unlock.password", "", cx);
                 self.security.unlock.error = Some(error.to_string());
                 self.security.status = "unlock failed".to_string();
                 cx.notify();
@@ -144,28 +147,18 @@ impl NyaTermApp {
         match keystroke.key.as_str() {
             "enter" => self.submit_security_unlock(window, cx),
             "escape" => self.cancel_security_unlock_prompt(cx),
-            "backspace" => {
-                if self.security.unlock.marked_text.is_empty() {
-                    self.security.unlock.draft.pop();
-                } else {
-                    self.security.unlock.marked_text.clear();
-                }
-                self.security.unlock.error = None;
-                cx.notify();
-            }
-            _ => {
-                if let Some(value) = keystroke
-                    .key_char
-                    .as_deref()
-                    .filter(|value| !value.is_empty())
-                {
-                    self.security.unlock.marked_text.clear();
-                    self.security.unlock.draft.push_str(value);
-                    self.security.unlock.error = None;
-                    cx.notify();
-                }
-            }
+            _ => {}
         }
+    }
+
+    pub(in crate::features) fn apply_security_unlock_password_input(
+        &mut self,
+        text: String,
+        cx: &mut Context<Self>,
+    ) {
+        self.security.unlock.draft = text;
+        self.security.unlock.error = None;
+        cx.notify();
     }
 
     fn execute_security_unlock_action(

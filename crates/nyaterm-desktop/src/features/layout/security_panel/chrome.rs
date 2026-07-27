@@ -88,14 +88,13 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let draft_length = self.security.unlock.draft.chars().count()
-            + self.security.unlock.marked_text.chars().count();
-        let draft = if draft_length == 0 {
-            " ".to_string()
-        } else {
-            "•".repeat(draft_length.min(32))
-        };
-        let input_entity = cx.entity();
+        let password_input = self.text_input(
+            "security.unlock.password",
+            &self.security.unlock.draft.clone(),
+            TextInputSetup::masked(),
+            cx,
+        );
+        let password_focus = password_input.read(cx).focus_handle();
         div()
             .absolute()
             .inset_0()
@@ -146,25 +145,16 @@ impl NyaTermApp {
                             .font_family(crate::features::gpui_code_font_family())
                             .text_xs()
                             .text_color(rgb(palette.text))
-                            .child(draft)
+                            .cursor_text()
+                            .on_mouse_down(MouseButton::Left, move |_, window, _| {
+                                window.focus(&password_focus);
+                            })
                             .child(
-                                gpui::canvas(
-                                    |_bounds, _window, _cx| {},
-                                    move |bounds, _state, window, cx| {
-                                        let focus =
-                                            input_entity.read(cx).security.unlock.focus.clone();
-                                        window.handle_input(
-                                            &focus,
-                                            gpui::ElementInputHandler::new(
-                                                bounds,
-                                                input_entity.clone(),
-                                            ),
-                                            cx,
-                                        );
-                                    },
-                                )
-                                .absolute()
-                                .inset_0(),
+                                div()
+                                    .min_w_0()
+                                    .flex_1()
+                                    .overflow_hidden()
+                                    .child(password_input),
                             ),
                     )
                     .when_some(self.security.unlock.error.clone(), |this, error| {

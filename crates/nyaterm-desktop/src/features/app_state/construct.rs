@@ -581,7 +581,6 @@ impl NyaTermApp {
             multi_line_paste_focus: cx.focus_handle(),
             lock_focus: cx.focus_handle(),
             lock_password_draft: String::new(),
-            lock_password_marked_text: String::new(),
             lock_status: String::new(),
             pending_terminal_frame_events: VecDeque::new(),
             pending_session_events: VecDeque::new(),

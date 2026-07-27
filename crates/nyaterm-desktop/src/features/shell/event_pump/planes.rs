@@ -644,7 +644,7 @@ impl NyaTermApp {
         result.remote_refresh = stage_started_at.elapsed();
 
         let stage_started_at = Instant::now();
-        dirty |= self.drive_idle_lock();
+        dirty |= self.drive_idle_lock(window, cx);
         result.idle_lock = stage_started_at.elapsed();
         result.dirty = dirty;
         result

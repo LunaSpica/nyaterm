@@ -86,14 +86,6 @@ impl EntityInputHandler for NyaTermApp {
             *adjusted_range = Some(utf16_range_from_bytes(text, &byte_range));
             return Some(text[byte_range].to_string());
         }
-        if self.security.unlock.prompt_open && !self.security.unlock.marked_text.is_empty() {
-            let marked = &self.security.unlock.marked_text;
-            let len = marked.encode_utf16().count();
-            let start = range.start.min(len);
-            let end = range.end.min(len).max(start);
-            *adjusted_range = Some(start..end);
-            return Some(marked.clone());
-        }
         let quick_switch = self.quick_switch_state(cx);
         if quick_switch.is_open() && !quick_switch.marked_text().is_empty() {
             let marked = quick_switch.marked_text();
@@ -102,14 +94,6 @@ impl EntityInputHandler for NyaTermApp {
             let end = range.end.min(len).max(start);
             *adjusted_range = Some(start..end);
             return Some(marked.to_string());
-        }
-        if self.is_locked && !self.lock_password_marked_text.is_empty() {
-            let marked = &self.lock_password_marked_text;
-            let len = marked.encode_utf16().count();
-            let start = range.start.min(len);
-            let end = range.end.min(len).max(start);
-            *adjusted_range = Some(start..end);
-            return Some(marked.clone());
         }
         if self.terminal.input.ime_marked_text.is_empty() {
             return None;
@@ -127,23 +111,9 @@ impl EntityInputHandler for NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Option<UTF16Selection> {
-        if self.security.unlock.prompt_open {
-            let cursor = self.security.unlock.draft.encode_utf16().count();
-            return Some(UTF16Selection {
-                range: cursor..cursor,
-                reversed: false,
-            });
-        }
         let quick_switch = self.quick_switch_state(cx);
         if quick_switch.is_open() {
             let cursor = quick_switch.query().encode_utf16().count();
-            return Some(UTF16Selection {
-                range: cursor..cursor,
-                reversed: false,
-            });
-        }
-        if self.is_locked {
-            let cursor = self.lock_password_draft.encode_utf16().count();
             return Some(UTF16Selection {
                 range: cursor..cursor,
                 reversed: false,
@@ -171,17 +141,9 @@ impl EntityInputHandler for NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Option<Range<usize>> {
-        if self.security.unlock.prompt_open {
-            let len = self.security.unlock.marked_text.encode_utf16().count();
-            return (len > 0).then_some(0..len);
-        }
         let quick_switch = self.quick_switch_state(cx);
         if quick_switch.is_open() {
             let len = quick_switch.marked_text().encode_utf16().count();
-            return (len > 0).then_some(0..len);
-        }
-        if self.is_locked {
-            let len = self.lock_password_marked_text.encode_utf16().count();
             return (len > 0).then_some(0..len);
         }
         if self.multi_line_paste.is_some() && self.multi_line_paste_focus.is_focused(window) {
@@ -195,16 +157,8 @@ impl EntityInputHandler for NyaTermApp {
     }
 
     fn unmark_text(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.security.unlock.prompt_open {
-            self.security.unlock.marked_text.clear();
-            return;
-        }
         if self.quick_switch_open(cx) {
             self.update_quick_switch_state(cx, |store| store.clear_quick_switch_marked_text());
-            return;
-        }
-        if self.is_locked {
-            self.lock_password_marked_text.clear();
             return;
         }
         if self.multi_line_paste.is_some() && self.multi_line_paste_focus.is_focused(window) {
@@ -222,24 +176,8 @@ impl EntityInputHandler for NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.security.unlock.prompt_open {
-            self.security.unlock.marked_text.clear();
-            self.security.unlock.draft.push_str(text);
-            self.security.unlock.error = None;
-            cx.notify();
-            return;
-        }
         if self.quick_switch_open(cx) {
             self.update_quick_switch_state(cx, |store| store.replace_quick_switch_text(text));
-            cx.notify();
-            return;
-        }
-        if self.is_locked {
-            self.lock_password_marked_text.clear();
-            if !text.is_empty() {
-                self.lock_password_draft.push_str(text);
-                self.lock_status = self.tr("lockScreen.passwordPlaceholder").to_string();
-            }
             cx.notify();
             return;
         }
@@ -278,20 +216,10 @@ impl EntityInputHandler for NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.security.unlock.prompt_open {
-            self.security.unlock.marked_text = new_text.to_string();
-            cx.notify();
-            return;
-        }
         if self.quick_switch_open(cx) {
             self.update_quick_switch_state(cx, |store| {
                 store.set_quick_switch_marked_text(new_text)
             });
-            cx.notify();
-            return;
-        }
-        if self.is_locked {
-            self.lock_password_marked_text = new_text.to_string();
             cx.notify();
             return;
         }
@@ -326,23 +254,8 @@ impl EntityInputHandler for NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Option<Bounds<Pixels>> {
-        if self.security.unlock.prompt_open {
-            return Some(gpui::bounds(
-                Point {
-                    x: element_bounds.left(),
-                    y: element_bounds.bottom() - px(18.),
-                },
-                Size {
-                    width: px(1.),
-                    height: px(18.),
-                },
-            ));
-        }
         if self.quick_switch_open(cx)
-            || self.is_locked
             || (self.multi_line_paste.is_some() && self.multi_line_paste_focus.is_focused(window))
-            || (self.rename_session_id.is_some() && self.rename_focus.is_focused(window))
-            || (self.startup_command_open && self.startup_command_focus.is_focused(window))
         {
             return Some(element_bounds);
         }
@@ -384,27 +297,15 @@ impl EntityInputHandler for NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Option<usize> {
-        if self.security.unlock.prompt_open {
-            return Some(self.security.unlock.draft.encode_utf16().count());
-        }
         let quick_switch = self.quick_switch_state(cx);
         if quick_switch.is_open() {
             return Some(quick_switch.query().encode_utf16().count());
-        }
-        if self.is_locked {
-            return Some(self.lock_password_draft.encode_utf16().count());
         }
         if self.multi_line_paste.is_some() && self.multi_line_paste_focus.is_focused(window) {
             return Some(utf16_offset_for_byte(
                 self.multi_line_paste_text(),
                 self.multi_line_paste_cursor,
             ));
-        }
-        if self.rename_session_id.is_some() && self.rename_focus.is_focused(window) {
-            return Some(self.rename_draft.encode_utf16().count());
-        }
-        if self.startup_command_open && self.startup_command_focus.is_focused(window) {
-            return Some(self.startup_command_draft.encode_utf16().count());
         }
         Some(0)
     }

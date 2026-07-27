@@ -243,7 +243,11 @@ impl NyaTermApp {
             })
     }
 
-    pub(in crate::features) fn drive_idle_lock(&mut self) -> bool {
+    pub(in crate::features) fn drive_idle_lock(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
         if self.is_locked
             || !self.settings.enable_screen_lock
             || self.settings.idle_lock_minutes == 0
@@ -257,6 +261,7 @@ impl NyaTermApp {
         }
         self.is_locked = true;
         self.lock_password_draft.clear();
+        self.forget_text_inputs("lock-screen.password");
         self.lock_status = if self.settings.has_master_password {
             "Enter the master password to unlock.".to_string()
         } else {
@@ -266,6 +271,12 @@ impl NyaTermApp {
             "screen locked after {} minute(s) idle",
             self.settings.idle_lock_minutes
         );
+        if self.settings.has_master_password {
+            let field = self.text_input("lock-screen.password", "", TextInputSetup::masked(), cx);
+            window.focus(&field.read(cx).focus_handle());
+        } else {
+            window.focus(&self.lock_focus);
+        }
         true
     }
 
