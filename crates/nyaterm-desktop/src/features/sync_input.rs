@@ -10,8 +10,8 @@ impl NyaTermApp {
     ) {
         self.sync_groups_open = true;
         self.sync_groups_search_draft.clear();
-        self.sync_groups_search_marked_text.clear();
-        self.sync_groups_name_marked_text.clear();
+        self.forget_text_inputs("sync.groups.search");
+        self.forget_text_inputs("sync.group-name.");
         self.sync_groups_delete_pending = None;
         if self.sync_groups_selected_id.is_none() {
             self.sync_groups_selected_id = self.sync_groups.first().map(|group| group.id.clone());
@@ -24,8 +24,8 @@ impl NyaTermApp {
     pub(in crate::features) fn close_sync_groups(&mut self, cx: &mut Context<Self>) {
         self.sync_groups_open = false;
         self.sync_groups_search_draft.clear();
-        self.sync_groups_search_marked_text.clear();
-        self.sync_groups_name_marked_text.clear();
+        self.forget_text_inputs("sync.groups.search");
+        self.forget_text_inputs("sync.group-name.");
         self.sync_groups_delete_pending = None;
         self.terminal.view.status = "sync groups closed".to_string();
         cx.notify();
@@ -86,22 +86,24 @@ impl NyaTermApp {
         self.delete_selected_sync_group(cx);
     }
 
-    pub(in crate::features) fn set_selected_sync_group_name(
+    pub(in crate::features) fn apply_sync_groups_search(
         &mut self,
-        name: String,
+        text: String,
         cx: &mut Context<Self>,
     ) {
-        let Some(group_id) = self.sync_groups_selected_id.clone() else {
-            return;
-        };
-        if let Some(group) = self
-            .sync_groups
-            .iter_mut()
-            .find(|group| group.id == group_id)
-        {
-            group.name = name;
-        }
+        self.sync_groups_search_draft = text;
         cx.notify();
+    }
+
+    pub(in crate::features) fn apply_sync_group_name(
+        &mut self,
+        group_id: &str,
+        text: String,
+        cx: &mut Context<Self>,
+    ) {
+        if update_sync_group_name(&mut self.sync_groups, group_id, text) {
+            cx.notify();
+        }
     }
 
     pub(in crate::features) fn select_all_sync_group_sessions(&mut self, cx: &mut Context<Self>) {
@@ -232,70 +234,6 @@ impl NyaTermApp {
             self.terminal.view.status = "sync group selected".to_string();
             cx.notify();
         }
-    }
-
-    pub(in crate::features) fn handle_sync_groups_key_down(
-        &mut self,
-        event: &KeyDownEvent,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> bool {
-        if self.sync_groups_delete_pending.is_some() {
-            match event.keystroke.key.as_str() {
-                "escape" => self.cancel_delete_sync_group(cx),
-                "enter" => self.confirm_delete_sync_group(cx),
-                _ => {}
-            }
-            return true;
-        }
-        let search_focused = self.sync_groups_search_focus.is_focused(window);
-        let name_focused = self.sync_groups_name_focus.is_focused(window);
-        if !search_focused && !name_focused {
-            return false;
-        }
-        if event.keystroke.modifiers.platform
-            || event.keystroke.modifiers.alt
-            || event.keystroke.modifiers.control
-        {
-            return true;
-        }
-        match event.keystroke.key.as_str() {
-            "escape" => self.close_sync_groups(cx),
-            "backspace" => {
-                if search_focused {
-                    self.sync_groups_search_draft.pop();
-                    self.sync_groups_search_marked_text.clear();
-                } else if let Some(group) = self.selected_sync_group_mut() {
-                    group.name.pop();
-                    self.sync_groups_name_marked_text.clear();
-                }
-                cx.notify();
-            }
-            "delete" => {
-                if search_focused {
-                    self.sync_groups_search_draft.pop();
-                    self.sync_groups_search_marked_text.clear();
-                    cx.notify();
-                }
-            }
-            "enter" => {}
-            _ => {
-                if let Some(input) = event
-                    .keystroke
-                    .key_char
-                    .as_deref()
-                    .filter(|text| !text.is_empty())
-                {
-                    if search_focused {
-                        self.sync_groups_search_draft.push_str(input);
-                    } else if let Some(group) = self.selected_sync_group_mut() {
-                        group.name.push_str(input);
-                    }
-                    cx.notify();
-                }
-            }
-        }
-        true
     }
 
     pub(in crate::features) fn toggle_selected_sync_group_enabled(
@@ -556,5 +494,48 @@ impl NyaTermApp {
             .copied()
             .find(|color| self.sync_groups.iter().all(|group| group.color != *color))
             .unwrap_or(SYNC_GROUP_COLORS[self.sync_groups.len() % SYNC_GROUP_COLORS.len()])
+    }
+}
+
+fn update_sync_group_name(groups: &mut [SyncInputGroup], group_id: &str, text: String) -> bool {
+    let Some(group) = groups.iter_mut().find(|group| group.id == group_id) else {
+        return false;
+    };
+    group.name = text;
+    true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::update_sync_group_name;
+    use crate::models::SyncInputGroup;
+
+    fn group(id: &str, name: &str) -> SyncInputGroup {
+        SyncInputGroup {
+            id: id.to_string(),
+            name: name.to_string(),
+            color: 0,
+            session_ids: Vec::new(),
+            paused_session_ids: Vec::new(),
+            enabled: true,
+        }
+    }
+
+    #[test]
+    fn group_name_input_updates_only_its_addressed_group() {
+        let mut groups = vec![group("one", "One"), group("two", "Two")];
+
+        assert!(update_sync_group_name(
+            &mut groups,
+            "two",
+            "Renamed".to_string()
+        ));
+        assert_eq!(groups[0].name, "One");
+        assert_eq!(groups[1].name, "Renamed");
+        assert!(!update_sync_group_name(
+            &mut groups,
+            "missing",
+            "Ignored".to_string()
+        ));
     }
 }

@@ -10,24 +10,27 @@ impl NyaTermApp {
         let dialog_width = (viewport_w - 24.).clamp(280., 900.);
         let dialog_height = (viewport_h - 56.).clamp(280., 500.);
         let groups_width = (dialog_width * 0.23).clamp(160., 208.);
-        let search_input_entity = cx.entity();
-        let name_input_entity = search_input_entity.clone();
         let selected_group = self.selected_sync_group().cloned();
         let selected_group_id = selected_group.as_ref().map(|group| group.id.clone());
-        let selected_group_name = selected_group
-            .as_ref()
-            .map(|group| format!("{}{}", group.name, self.sync_groups_name_marked_text))
-            .unwrap_or_default();
-        let search_display = if self.sync_groups_search_draft.is_empty()
-            && self.sync_groups_search_marked_text.is_empty()
-        {
-            self.tr("syncGroup.searchPlaceholder").to_string()
+        let (group_name_input, group_name_focus) = if let Some(group) = selected_group.as_ref() {
+            let field = self.text_input(
+                format!("sync.group-name.{}", group.id),
+                &group.name,
+                TextInputSetup::default(),
+                cx,
+            );
+            let focus = field.read(cx).focus_handle();
+            (Some(field), Some(focus))
         } else {
-            format!(
-                "{}{}",
-                self.sync_groups_search_draft, self.sync_groups_search_marked_text
-            )
+            (None, None)
         };
+        let search_input = self.text_input(
+            "sync.groups.search",
+            &self.sync_groups_search_draft.clone(),
+            TextInputSetup::placeholder(self.tr("syncGroup.searchPlaceholder")),
+            cx,
+        );
+        let search_focus = search_input.read(cx).focus_handle();
         let pending_delete_name = self
             .sync_groups_delete_pending
             .as_deref()
@@ -327,9 +330,14 @@ impl NyaTermApp {
                 window.focus(&this.sync_groups_focus);
                 cx.notify();
             }))
-            .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
+            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
                 cx.stop_propagation();
-                if this.handle_sync_groups_key_down(event, window, cx) {
+                if this.sync_groups_delete_pending.is_some() {
+                    match event.keystroke.key.as_str() {
+                        "escape" => this.cancel_delete_sync_group(cx),
+                        "enter" => this.confirm_delete_sync_group(cx),
+                        _ => {}
+                    }
                     return;
                 }
                 match event.keystroke.key.as_str() {
@@ -457,7 +465,6 @@ impl NyaTermApp {
                                             .child(
                                                 div()
                                                     .id(SharedString::from("sync-group-name-input"))
-                                                    .relative()
                                                     .h(px(34.))
                                                     .flex_1()
                                                     .min_w_0()
@@ -470,31 +477,19 @@ impl NyaTermApp {
                                                     .bg(rgb(palette.input))
                                                     .text_sm()
                                                     .text_color(rgb(palette.text))
-                                                    .track_focus(&self.sync_groups_name_focus)
-                                                    .on_click(cx.listener(|this, _, window, cx| {
-                                                        window.focus(&this.sync_groups_name_focus);
-                                                        cx.notify();
-                                                    }))
-                                                    .child(selected_group_name)
-                                                    .child(
-                                                        gpui::canvas(
-                                                            |_bounds, _window, _cx| {},
-                                                            move |bounds, _state, window, cx| {
-                                                                window.handle_input(
-                                                                    &name_input_entity
-                                                                        .read(cx)
-                                                                        .sync_groups_name_focus,
-                                                                    gpui::ElementInputHandler::new(
-                                                                        bounds,
-                                                                        name_input_entity.clone(),
-                                                                    ),
-                                                                    cx,
-                                                                );
-                                                            },
-                                                        )
-                                                        .absolute()
-                                                        .inset_0(),
-                                                    ),
+                                                    .cursor_text()
+                                                    .when_some(
+                                                        group_name_focus,
+                                                        |this, focus| {
+                                                            this.on_mouse_down(
+                                                                MouseButton::Left,
+                                                                move |_, window, _| {
+                                                                    window.focus(&focus);
+                                                                },
+                                                            )
+                                                        },
+                                                    )
+                                                    .children(group_name_input),
                                             ),
                                     )
                                     .child(
@@ -520,9 +515,8 @@ impl NyaTermApp {
                                                             .id(SharedString::from(
                                                                 "sync-group-search-input",
                                                             ))
-                                                            .relative()
-                                            .flex_1()
-                                            .min_w(px(140.))
+                                                            .flex_1()
+                                                            .min_w(px(140.))
                                                             .h(px(30.))
                                                             .px_2()
                                                             .flex()
@@ -532,46 +526,15 @@ impl NyaTermApp {
                                                             .border_color(rgb(palette.border))
                                                             .bg(rgb(palette.input))
                                                             .text_xs()
-                                                            .text_color(if self
-                                                                .sync_groups_search_draft
-                                                                .is_empty()
-                                                            {
-                                                                rgb(palette.text_muted)
-                                                            } else {
-                                                                rgb(palette.text)
-                                                            })
-                                                            .track_focus(
-                                                                &self.sync_groups_search_focus,
-                                                            )
-                                                            .on_click(cx.listener(
-                                                                |this, _, window, cx| {
-                                                                    window.focus(
-                                                                        &this.sync_groups_search_focus,
-                                                                    );
-                                                                    cx.notify();
+                                                            .text_color(rgb(palette.text))
+                                                            .cursor_text()
+                                                            .on_mouse_down(
+                                                                MouseButton::Left,
+                                                                move |_, window, _| {
+                                                                    window.focus(&search_focus);
                                                                 },
-                                                            ))
-                                                            .child(search_display)
-                                                            .child(
-                                                                gpui::canvas(
-                                                                    |_bounds, _window, _cx| {},
-                                                                    move |bounds, _state, window, cx| {
-                                                                        window.handle_input(
-                                                                            &search_input_entity
-                                                                                .read(cx)
-                                                                                .sync_groups_search_focus,
-                                                                            gpui::ElementInputHandler::new(
-                                                                                bounds,
-                                                                                search_input_entity
-                                                                                    .clone(),
-                                                                            ),
-                                                                            cx,
-                                                                        );
-                                                                    },
-                                                                )
-                                                                .absolute()
-                                                                .inset_0(),
-                                                            ),
+                                                            )
+                                                            .child(search_input),
                                                     ),
                                             )
                                             .child(

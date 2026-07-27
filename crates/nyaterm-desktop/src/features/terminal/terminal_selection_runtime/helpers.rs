@@ -122,28 +122,6 @@ impl EntityInputHandler for NyaTermApp {
             *adjusted_range = Some(start..end);
             return Some(marked.clone());
         }
-        if self.sync_groups_open
-            && self.sync_groups_search_focus.is_focused(window)
-            && !self.sync_groups_search_marked_text.is_empty()
-        {
-            let marked = &self.sync_groups_search_marked_text;
-            let len = marked.encode_utf16().count();
-            let start = range.start.min(len);
-            let end = range.end.min(len).max(start);
-            *adjusted_range = Some(start..end);
-            return Some(marked.clone());
-        }
-        if self.sync_groups_open
-            && self.sync_groups_name_focus.is_focused(window)
-            && !self.sync_groups_name_marked_text.is_empty()
-        {
-            let marked = &self.sync_groups_name_marked_text;
-            let len = marked.encode_utf16().count();
-            let start = range.start.min(len);
-            let end = range.end.min(len).max(start);
-            *adjusted_range = Some(start..end);
-            return Some(marked.clone());
-        }
         if self.rename_session_id.is_some()
             && self.rename_focus.is_focused(window)
             && !self.rename_marked_text.is_empty()
@@ -211,23 +189,6 @@ impl EntityInputHandler for NyaTermApp {
                 reversed: false,
             });
         }
-        if self.sync_groups_open && self.sync_groups_search_focus.is_focused(window) {
-            let cursor = self.sync_groups_search_draft.encode_utf16().count();
-            return Some(UTF16Selection {
-                range: cursor..cursor,
-                reversed: false,
-            });
-        }
-        if self.sync_groups_open && self.sync_groups_name_focus.is_focused(window) {
-            let cursor = self
-                .selected_sync_group()
-                .map(|group| group.name.encode_utf16().count())
-                .unwrap_or_default();
-            return Some(UTF16Selection {
-                range: cursor..cursor,
-                reversed: false,
-            });
-        }
         if self.multi_line_paste_focus.is_focused(window) {
             let text = self.multi_line_paste_text();
             let range = self.multi_line_paste_selected_byte_range();
@@ -277,14 +238,6 @@ impl EntityInputHandler for NyaTermApp {
             let len = self.lock_password_marked_text.encode_utf16().count();
             return (len > 0).then_some(0..len);
         }
-        if self.sync_groups_open && self.sync_groups_search_focus.is_focused(window) {
-            let len = self.sync_groups_search_marked_text.encode_utf16().count();
-            return (len > 0).then_some(0..len);
-        }
-        if self.sync_groups_open && self.sync_groups_name_focus.is_focused(window) {
-            let len = self.sync_groups_name_marked_text.encode_utf16().count();
-            return (len > 0).then_some(0..len);
-        }
         if self.multi_line_paste.is_some() && self.multi_line_paste_focus.is_focused(window) {
             return self
                 .multi_line_paste_marked_range
@@ -318,14 +271,6 @@ impl EntityInputHandler for NyaTermApp {
         }
         if self.is_locked {
             self.lock_password_marked_text.clear();
-            return;
-        }
-        if self.sync_groups_open && self.sync_groups_search_focus.is_focused(window) {
-            self.sync_groups_search_marked_text.clear();
-            return;
-        }
-        if self.sync_groups_open && self.sync_groups_name_focus.is_focused(window) {
-            self.sync_groups_name_marked_text.clear();
             return;
         }
         if self.multi_line_paste.is_some() && self.multi_line_paste_focus.is_focused(window) {
@@ -374,26 +319,6 @@ impl EntityInputHandler for NyaTermApp {
                 self.lock_status = self.tr("lockScreen.passwordPlaceholder").to_string();
             }
             cx.notify();
-            return;
-        }
-        if self.sync_groups_open && self.sync_groups_search_focus.is_focused(window) {
-            self.sync_groups_search_marked_text.clear();
-            if !text.is_empty() {
-                self.sync_groups_search_draft.push_str(text);
-            }
-            cx.notify();
-            return;
-        }
-        if self.sync_groups_open && self.sync_groups_name_focus.is_focused(window) {
-            self.sync_groups_name_marked_text.clear();
-            if !text.is_empty() {
-                let mut name = self
-                    .selected_sync_group()
-                    .map(|group| group.name.clone())
-                    .unwrap_or_default();
-                name.push_str(text);
-                self.set_selected_sync_group_name(name, cx);
-            }
             return;
         }
         if self.multi_line_paste.is_some() && self.multi_line_paste_focus.is_focused(window) {
@@ -474,16 +399,6 @@ impl EntityInputHandler for NyaTermApp {
             cx.notify();
             return;
         }
-        if self.sync_groups_open && self.sync_groups_search_focus.is_focused(window) {
-            self.sync_groups_search_marked_text = new_text.to_string();
-            cx.notify();
-            return;
-        }
-        if self.sync_groups_open && self.sync_groups_name_focus.is_focused(window) {
-            self.sync_groups_name_marked_text = new_text.to_string();
-            cx.notify();
-            return;
-        }
         if self.multi_line_paste.is_some() && self.multi_line_paste_focus.is_focused(window) {
             let range = range
                 .as_ref()
@@ -544,9 +459,6 @@ impl EntityInputHandler for NyaTermApp {
         }
         if self.quick_switch_open(cx)
             || self.is_locked
-            || (self.sync_groups_open
-                && (self.sync_groups_search_focus.is_focused(window)
-                    || self.sync_groups_name_focus.is_focused(window)))
             || (self.multi_line_paste.is_some() && self.multi_line_paste_focus.is_focused(window))
             || (self.rename_session_id.is_some() && self.rename_focus.is_focused(window))
             || (self.startup_command_open && self.startup_command_focus.is_focused(window))
@@ -600,16 +512,6 @@ impl EntityInputHandler for NyaTermApp {
         }
         if self.is_locked {
             return Some(self.lock_password_draft.encode_utf16().count());
-        }
-        if self.sync_groups_open && self.sync_groups_search_focus.is_focused(window) {
-            return Some(self.sync_groups_search_draft.encode_utf16().count());
-        }
-        if self.sync_groups_open && self.sync_groups_name_focus.is_focused(window) {
-            return Some(
-                self.selected_sync_group()
-                    .map(|group| group.name.encode_utf16().count())
-                    .unwrap_or_default(),
-            );
         }
         if self.multi_line_paste.is_some() && self.multi_line_paste_focus.is_focused(window) {
             return Some(utf16_offset_for_byte(

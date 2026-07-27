@@ -114,10 +114,6 @@ pub struct NyaTermApp {
     pub(in crate::features) sync_groups_open: bool,
     pub(in crate::features) sync_groups_focus: FocusHandle,
     pub(in crate::features) sync_groups_search_draft: String,
-    pub(in crate::features) sync_groups_search_marked_text: String,
-    pub(in crate::features) sync_groups_name_marked_text: String,
-    pub(in crate::features) sync_groups_search_focus: FocusHandle,
-    pub(in crate::features) sync_groups_name_focus: FocusHandle,
     pub(in crate::features) sync_groups_selected_id: Option<String>,
     pub(in crate::features) sync_groups_delete_pending: Option<String>,
     /// Broadcast keyboard input to every live session (Tauri broadcastToAll).
