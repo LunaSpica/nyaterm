@@ -338,6 +338,9 @@ impl NyaTermApp {
     }
 
     fn window_runtime_quiet_tick_has_due_work(&self, now: Instant) -> bool {
+        if self.header_status_clock_refresh_due() {
+            return true;
+        }
         if self.ai.chat.focus_pending
             || self.transfer.file_ops.rename_focus_pending
             || self.credential_prompt_focus_pending
@@ -527,7 +530,7 @@ impl NyaTermApp {
         let left_panel = self.current_left_panel();
         let right_panel = self.current_right_panel();
 
-        if right_panel == Some(NavItem::Stats)
+        if (right_panel == Some(NavItem::Stats) || self.header_status_needs_remote_stats())
             && self.settings.ui_show_remote_stats
             && !self.remote_ops.stats.pending
             && remote_refresh_due(

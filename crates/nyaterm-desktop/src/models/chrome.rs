@@ -2,6 +2,73 @@ use gpui::Pixels;
 use nyaterm_core::{AiAction, AiContext, QuickCommand};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum HeaderStatusMode {
+    Session,
+    Resources,
+    Host,
+    DateTime,
+}
+
+impl HeaderStatusMode {
+    pub(crate) const ALL: [Self; 4] = [Self::Session, Self::Resources, Self::Host, Self::DateTime];
+
+    pub(crate) fn from_setting(value: &str) -> Self {
+        match value.trim() {
+            "resources" => Self::Resources,
+            "host" => Self::Host,
+            "datetime" => Self::DateTime,
+            _ => Self::Session,
+        }
+    }
+
+    pub(crate) const fn persistence_id(self) -> &'static str {
+        match self {
+            Self::Session => "session",
+            Self::Resources => "resources",
+            Self::Host => "host",
+            Self::DateTime => "datetime",
+        }
+    }
+
+    pub(crate) const fn i18n_key(self) -> &'static str {
+        match self {
+            Self::Session => "headerStatus.session",
+            Self::Resources => "headerStatus.resources",
+            Self::Host => "headerStatus.host",
+            Self::DateTime => "headerStatus.datetime",
+        }
+    }
+
+    pub(crate) const fn icon_path(self) -> &'static str {
+        match self {
+            Self::Session => "icons/sessions.svg",
+            Self::Resources => "icons/resources.svg",
+            Self::Host => "icons/conn/server.svg",
+            Self::DateTime => "icons/history.svg",
+        }
+    }
+
+    pub(crate) const fn needs_remote_stats(self) -> bool {
+        matches!(self, Self::Resources | Self::Host)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct HeaderStatusState {
+    pub(crate) menu_open: bool,
+    pub(crate) rendered_minute: i64,
+}
+
+impl Default for HeaderStatusState {
+    fn default() -> Self {
+        Self {
+            menu_open: false,
+            rendered_minute: -1,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum RightFocus {
     Default,
     Recording,

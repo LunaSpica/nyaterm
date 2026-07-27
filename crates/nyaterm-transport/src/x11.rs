@@ -4,6 +4,9 @@
 //! rules and the per-platform error messages are unchanged; this only moves
 //! the code.
 
+#[cfg(unix)]
+use std::path::PathBuf;
+
 use russh::{ChannelMsg, client};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::sync::mpsc as tokio_mpsc;

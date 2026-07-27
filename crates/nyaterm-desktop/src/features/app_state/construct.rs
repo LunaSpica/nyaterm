@@ -636,6 +636,7 @@ impl NyaTermApp {
             activity_bar_context_menu: None,
             title_menu_open: None,
             title_menu_submenu: None,
+            header_status: HeaderStatusState::default(),
             open_tabs_menu_open: false,
             new_session_menu_open: false,
             new_session_all_sessions_open: false,

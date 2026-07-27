@@ -906,6 +906,15 @@
     "serialSend": "命令发送",
     "syncBackupHistory": "云同步"
   },
+  "headerStatus": {
+    "datetime": "日期时间",
+    "hidden": "不显示",
+    "hide": "关闭显示",
+    "host": "主机概览",
+    "resources": "资源监控",
+    "select": "选择顶部显示信息",
+    "session": "会话信息"
+  },
   "passwordManager": {
     "add": "添加密码",
     "deleteConfirm": "确定要删除密码「{{name}}」吗？",
@@ -1549,6 +1558,8 @@
     "keywordHighlightingExperimentalDesc": "在终端匹配文本上叠加颜色。已启用的内置规则会生效；自定义规则优先级更高。此为还未完善的实验性功能，请谨慎启用。",
     "language": "语言",
     "languageDesc": "选择应用程序界面的显示语言。",
+    "headerStatus": "顶部信息栏",
+    "headerStatusDesc": "选择应用顶部居中显示的信息。",
     "lastSyncAt": "上次同步",
     "lastSyncCheck": "上次检查",
     "loadingSystemFonts": "正在加载系统字体...",

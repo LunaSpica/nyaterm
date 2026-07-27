@@ -1,5 +1,22 @@
-use super::*;
-use crate::models::{TitleMenu, TitleMenuSubmenu};
+use gpui::{
+    Context, IntoElement, MouseButton, SharedString, Window, WindowControlArea, div, prelude::*,
+    px, rgb, rgba, svg,
+};
+use nyaterm_transport::SessionKind;
+use time::{OffsetDateTime, UtcOffset, Weekday, macros::format_description};
+
+use crate::features::{
+    ChromeTooltip, NyaTermApp, format_file_size, format_rate, format_uptime, logo_mark, short_id,
+    window_control_button,
+};
+use crate::models::{HeaderStatusMode, TitleMenu, TitleMenuSubmenu};
+
+use super::super::{session_kind_icon_path, title_menu_item, title_menu_separator};
+
+struct HeaderStatusContent {
+    icon_path: &'static str,
+    label: String,
+}
 
 impl NyaTermApp {
     pub(in crate::features) fn title_bar(
@@ -12,8 +29,8 @@ impl NyaTermApp {
         let compact_layout = !cfg!(target_os = "macos");
         let narrow_left = compact_layout && self.last_viewport_size.0 < 1024.;
         let narrow_right = compact_layout && self.last_viewport_size.0 < 768.;
-        let context_icon = self.title_context_icon();
-        let context_label = self.title_context_label();
+        let header_status_visible = self.settings.ui_header_status_visible;
+        let header_status = self.header_status_content();
         // Match Tauri Header: h-10.
         div()
             .h(px(40.))
@@ -98,26 +115,9 @@ impl NyaTermApp {
                             cx.notify();
                         }),
                     )
-                    .child(
-                        div()
-                            .max_w(px(520.))
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .overflow_hidden()
-                            .text_xs()
-                            .text_color(rgb(palette.text_muted))
-                            .when_some(context_icon, |this, icon_path| {
-                                this.child(
-                                    svg()
-                                        .size(px(14.))
-                                        .flex_none()
-                                        .path(icon_path)
-                                        .text_color(rgb(palette.text_muted)),
-                                )
-                            })
-                            .child(div().min_w_0().overflow_hidden().child(context_label)),
-                    ),
+                    .when(header_status_visible, |this| {
+                        this.child(self.header_status_control(header_status, cx))
+                    }),
             )
             .child(
                 div()
@@ -198,6 +198,277 @@ impl NyaTermApp {
                         ))
                     }),
             )
+    }
+
+    fn header_status_control(
+        &self,
+        content: HeaderStatusContent,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let palette = self.theme_palette();
+        let menu_open = self.header_status.menu_open;
+        let select_label = self.tr("headerStatus.select");
+
+        div()
+            .relative()
+            .max_w(px(520.))
+            .flex()
+            .items_center()
+            .gap_0()
+            .rounded_sm()
+            .text_xs()
+            .text_color(rgb(palette.text_muted))
+            .when(menu_open, |this| this.bg(rgb(palette.hover)))
+            .child(
+                div()
+                    .min_w_0()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .overflow_hidden()
+                    .px_2()
+                    .py_1()
+                    .window_control_area(WindowControlArea::Drag)
+                    .on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(|this, _, _, cx| {
+                            this.mark_title_drag_activity();
+                            cx.notify();
+                        }),
+                    )
+                    .child(
+                        svg()
+                            .size(px(14.))
+                            .flex_none()
+                            .path(content.icon_path)
+                            .text_color(rgb(palette.text_muted)),
+                    )
+                    .child(div().min_w_0().overflow_hidden().child(content.label)),
+            )
+            .child(
+                div()
+                    .id("header-status-menu-trigger")
+                    .size(px(24.))
+                    .flex_none()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .rounded_sm()
+                    .cursor_pointer()
+                    .hover(move |this| this.bg(rgb(palette.hover)).text_color(rgb(palette.text)))
+                    .on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(|_, _, _, cx| cx.stop_propagation()),
+                    )
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.toggle_header_status_menu(cx);
+                    }))
+                    .tooltip(move |_, cx| cx.new(|_| ChromeTooltip::new(select_label)).into())
+                    .child(
+                        svg()
+                            .size(px(14.))
+                            .path("icons/chevron-down.svg")
+                            .text_color(rgb(palette.text_muted)),
+                    ),
+            )
+            .when(menu_open, |this| {
+                this.child(self.header_status_dropdown(cx))
+            })
+    }
+
+    fn header_status_dropdown(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let palette = self.theme_palette();
+        let selected = HeaderStatusMode::from_setting(&self.settings.ui_header_status_mode);
+        let mut menu = div()
+            .id("header-status-menu")
+            .absolute()
+            .top(px(30.))
+            .right_0()
+            .w(px(196.))
+            .rounded_md()
+            .border_1()
+            .border_color(rgb(palette.border))
+            .bg(self.shell_surface_color(palette.surface))
+            .shadow_lg()
+            .py_1()
+            .flex()
+            .flex_col()
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|_, _, _, cx| cx.stop_propagation()),
+            );
+
+        for mode in HeaderStatusMode::ALL {
+            menu = menu.child(title_menu_item(
+                palette,
+                format!("header-status-mode-{}", mode.persistence_id()),
+                Some(mode.icon_path()),
+                selected == mode,
+                self.tr(mode.i18n_key()),
+                None,
+                cx.listener(move |this, _, _, cx| {
+                    this.set_header_status_mode(mode, cx);
+                }),
+            ));
+        }
+
+        menu.child(title_menu_separator(palette))
+            .child(title_menu_item(
+                palette,
+                "header-status-hide",
+                Some("icons/close.svg"),
+                false,
+                self.tr("headerStatus.hide"),
+                None,
+                cx.listener(|this, _, _, cx| {
+                    this.set_header_status_visible(false, cx);
+                }),
+            ))
+    }
+
+    fn header_status_content(&self) -> HeaderStatusContent {
+        let mode = HeaderStatusMode::from_setting(&self.settings.ui_header_status_mode);
+        match mode {
+            HeaderStatusMode::Session => HeaderStatusContent {
+                icon_path: self.title_context_icon().unwrap_or(mode.icon_path()),
+                label: self.title_context_label(),
+            },
+            HeaderStatusMode::DateTime => HeaderStatusContent {
+                icon_path: mode.icon_path(),
+                label: format_header_datetime(local_now(), &self.settings.language),
+            },
+            HeaderStatusMode::Resources | HeaderStatusMode::Host => {
+                let label = self
+                    .remote_stats_header_label(mode)
+                    .unwrap_or_else(|| self.remote_stats_header_fallback());
+                HeaderStatusContent {
+                    icon_path: mode.icon_path(),
+                    label,
+                }
+            }
+        }
+    }
+
+    fn remote_stats_header_label(&self, mode: HeaderStatusMode) -> Option<String> {
+        if self.active_ssh_config.is_none() || !self.settings.ui_show_remote_stats {
+            return None;
+        }
+        let stats = self.remote_ops.stats.data.as_ref()?;
+        if mode == HeaderStatusMode::Host {
+            let hostname = stats.system.hostname.trim();
+            return Some(format!(
+                "{} - {}/{} - {}",
+                if hostname.is_empty() {
+                    "remote host"
+                } else {
+                    hostname
+                },
+                stats.system.os,
+                stats.system.arch,
+                format_uptime(stats.system.uptime_sec),
+            ));
+        }
+
+        let memory_total = stats.memory.used.saturating_add(stats.memory.available);
+        let tx = stats
+            .networks
+            .iter()
+            .map(|network| network.tx_bytes_per_sec.max(0.))
+            .sum::<f64>();
+        let rx = stats
+            .networks
+            .iter()
+            .map(|network| network.rx_bytes_per_sec.max(0.))
+            .sum::<f64>();
+        Some(format!(
+            "CPU {:.0}% - RAM {}/{} - TX {} - RX {}",
+            stats.cpu.usage.clamp(0., 100.),
+            format_file_size(Some(stats.memory.used)),
+            format_file_size(Some(memory_total)),
+            format_rate(tx),
+            format_rate(rx),
+        ))
+    }
+
+    fn remote_stats_header_fallback(&self) -> String {
+        if self.active_ssh_config.is_none() {
+            self.tr("panel.resourceMonitorNoSession").to_string()
+        } else if !self.settings.ui_show_remote_stats {
+            self.tr("panel.resourceMonitorDisabled").to_string()
+        } else if self.remote_ops.stats.consecutive_refresh_failures > 0
+            && self.remote_ops.stats.data.is_none()
+        {
+            self.tr("panel.resourceMonitorError").to_string()
+        } else {
+            self.tr("common.loading").to_string()
+        }
+    }
+
+    pub(in crate::features) fn toggle_header_status_menu(&mut self, cx: &mut Context<Self>) {
+        self.header_status.menu_open = !self.header_status.menu_open;
+        if self.header_status.menu_open {
+            self.title_menu_open = None;
+            self.title_menu_submenu = None;
+            self.open_tabs_menu_open = false;
+            self.new_session_menu_open = false;
+            self.new_session_all_sessions_open = false;
+            self.new_session_group_menu_path.clear();
+        }
+        cx.notify();
+    }
+
+    pub(in crate::features) fn set_header_status_mode(
+        &mut self,
+        mode: HeaderStatusMode,
+        cx: &mut Context<Self>,
+    ) {
+        self.settings.ui_header_status_mode = mode.persistence_id().to_string();
+        self.settings.ui_header_status_visible = true;
+        self.header_status.menu_open = false;
+        self.header_status.rendered_minute = current_unix_minute();
+        self.persist_header_status_settings();
+        cx.notify();
+    }
+
+    pub(in crate::features) fn set_header_status_visible(
+        &mut self,
+        visible: bool,
+        cx: &mut Context<Self>,
+    ) {
+        self.settings.ui_header_status_visible = visible;
+        self.header_status.menu_open = false;
+        self.persist_header_status_settings();
+        cx.notify();
+    }
+
+    fn persist_header_status_settings(&mut self) {
+        if self.settings_draft_snapshot.is_some() {
+            self.terminal.view.status =
+                "header status changed; apply settings to persist".to_string();
+        } else {
+            self.persist_ui_layout();
+        }
+    }
+
+    pub(in crate::features) fn header_status_needs_remote_stats(&self) -> bool {
+        self.settings.ui_header_status_visible
+            && HeaderStatusMode::from_setting(&self.settings.ui_header_status_mode)
+                .needs_remote_stats()
+    }
+
+    pub(in crate::features) fn header_status_clock_refresh_due(&self) -> bool {
+        self.settings.ui_header_status_visible
+            && HeaderStatusMode::from_setting(&self.settings.ui_header_status_mode)
+                == HeaderStatusMode::DateTime
+            && self.header_status.rendered_minute != current_unix_minute()
+    }
+
+    pub(in crate::features) fn refresh_header_status_clock(&mut self) -> bool {
+        if !self.header_status_clock_refresh_due() {
+            return false;
+        }
+        self.header_status.rendered_minute = current_unix_minute();
+        true
     }
 
     pub(in crate::features) fn title_context_label(&self) -> String {
@@ -319,6 +590,7 @@ impl NyaTermApp {
         };
         self.title_menu_submenu = None;
         if self.title_menu_open.is_some() {
+            self.header_status.menu_open = false;
             self.open_tabs_menu_open = false;
             self.new_session_menu_open = false;
             self.new_session_all_sessions_open = false;
@@ -342,6 +614,87 @@ impl NyaTermApp {
         if self.title_menu_submenu != Some(submenu) {
             self.title_menu_submenu = Some(submenu);
             cx.notify();
+        }
+    }
+}
+
+fn current_unix_minute() -> i64 {
+    OffsetDateTime::now_utc().unix_timestamp().div_euclid(60)
+}
+
+fn local_now() -> OffsetDateTime {
+    let now = OffsetDateTime::now_utc();
+    UtcOffset::current_local_offset().map_or(now, |offset| now.to_offset(offset))
+}
+
+fn format_header_datetime(datetime: OffsetDateTime, language: &str) -> String {
+    let date_time = datetime
+        .format(format_description!("[year]-[month]-[day] [hour]:[minute]"))
+        .unwrap_or_default();
+    let weekday = localized_weekday(datetime.weekday(), language);
+    if language.trim().to_ascii_lowercase().starts_with("zh") {
+        format!("{date_time} {weekday}")
+    } else {
+        format!("{weekday}, {date_time}")
+    }
+}
+
+fn localized_weekday(weekday: Weekday, language: &str) -> &'static str {
+    let chinese = language.trim().to_ascii_lowercase().starts_with("zh");
+    match (chinese, weekday) {
+        (true, Weekday::Monday) => "周一",
+        (true, Weekday::Tuesday) => "周二",
+        (true, Weekday::Wednesday) => "周三",
+        (true, Weekday::Thursday) => "周四",
+        (true, Weekday::Friday) => "周五",
+        (true, Weekday::Saturday) => "周六",
+        (true, Weekday::Sunday) => "周日",
+        (false, Weekday::Monday) => "Mon",
+        (false, Weekday::Tuesday) => "Tue",
+        (false, Weekday::Wednesday) => "Wed",
+        (false, Weekday::Thursday) => "Thu",
+        (false, Weekday::Friday) => "Fri",
+        (false, Weekday::Saturday) => "Sat",
+        (false, Weekday::Sunday) => "Sun",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use time::{Date, Month, Time, UtcOffset};
+
+    use super::{format_header_datetime, localized_weekday};
+
+    #[test]
+    fn formats_header_datetime_for_supported_languages() {
+        let datetime = Date::from_calendar_date(2026, Month::July, 27)
+            .expect("date")
+            .with_time(Time::from_hms(9, 5, 0).expect("time"))
+            .assume_offset(UtcOffset::from_hms(8, 0, 0).expect("offset"));
+
+        assert_eq!(
+            format_header_datetime(datetime, "en"),
+            "Mon, 2026-07-27 09:05"
+        );
+        assert_eq!(
+            format_header_datetime(datetime, "zh-CN"),
+            "2026-07-27 09:05 周一"
+        );
+    }
+
+    #[test]
+    fn localizes_every_weekday_without_falling_back() {
+        for weekday in [
+            time::Weekday::Monday,
+            time::Weekday::Tuesday,
+            time::Weekday::Wednesday,
+            time::Weekday::Thursday,
+            time::Weekday::Friday,
+            time::Weekday::Saturday,
+            time::Weekday::Sunday,
+        ] {
+            assert!(!localized_weekday(weekday, "en").is_empty());
+            assert!(!localized_weekday(weekday, "zh-CN").is_empty());
         }
     }
 }

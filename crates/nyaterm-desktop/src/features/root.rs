@@ -79,6 +79,7 @@ impl NyaTermApp {
                 MouseButton::Left,
                 cx.listener(|this, _, _, cx| {
                     let changed = this.title_menu_open.is_some()
+                        || this.header_status.menu_open
                         || this.open_tabs_menu_open
                         || this.new_session_menu_open
                         || this.new_session_all_sessions_open
@@ -89,6 +90,7 @@ impl NyaTermApp {
                     if changed {
                         this.title_menu_open = None;
                         this.title_menu_submenu = None;
+                        this.header_status.menu_open = false;
                         this.open_tabs_menu_open = false;
                         this.new_session_menu_open = false;
                         this.new_session_all_sessions_open = false;

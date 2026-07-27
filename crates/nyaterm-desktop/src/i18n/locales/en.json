@@ -906,6 +906,15 @@
     "serialSend": "Command Send",
     "syncBackupHistory": "Cloud Sync"
   },
+  "headerStatus": {
+    "datetime": "Date and time",
+    "hidden": "Do not show",
+    "hide": "Hide",
+    "host": "Host overview",
+    "resources": "Resources",
+    "select": "Choose header status",
+    "session": "Session"
+  },
   "passwordManager": {
     "add": "Add Password",
     "deleteConfirm": "Delete password '{{name}}'?",
@@ -1549,6 +1558,8 @@
     "keywordHighlightingExperimentalDesc": "Overlay colors on matching text. Enabled built-in rules apply; your rules take priority. This is an unfinished experimental feature, please enable with caution.",
     "language": "Language",
     "languageDesc": "Select the app language.",
+    "headerStatus": "Header status",
+    "headerStatusDesc": "Choose what appears in the center of the app header.",
     "lastSyncAt": "Last Synced",
     "lastSyncCheck": "Last Checked",
     "loadingSystemFonts": "Loading system fonts...",

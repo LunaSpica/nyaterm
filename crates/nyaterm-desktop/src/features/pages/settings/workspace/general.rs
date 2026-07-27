@@ -1,4 +1,5 @@
 use super::*;
+use crate::models::HeaderStatusMode;
 
 impl NyaTermApp {
     pub(in crate::features) fn general_settings_section(
@@ -18,6 +19,9 @@ impl NyaTermApp {
         let diagnostics_level = self.settings.diagnostics_level.clone();
         let retention = self.settings.diagnostics_retention_days;
         let days_unit = self.tr("common.days");
+        let header_status_mode =
+            HeaderStatusMode::from_setting(&self.settings.ui_header_status_mode);
+        let header_status_visible = self.settings.ui_header_status_visible;
 
         div()
             .flex()
@@ -27,39 +31,73 @@ impl NyaTermApp {
                 palette,
                 None,
                 None,
-                settings_form_row(
-                    palette,
-                    self.tr("settings.language"),
-                    Some(SharedString::from(self.tr("settings.languageDesc"))),
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap_1()
-                        .child(settings_choice_chip(
-                            palette,
-                            "general-lang-en",
-                            "English",
-                            matches!(language.as_str(), "en" | "en-US"),
-                            cx.listener(|this, _, _, cx| {
-                                this.update_ui_language("en", cx);
-                            }),
-                        ))
-                        .child(settings_choice_chip(
-                            palette,
-                            "general-lang-zh",
-                            "中文",
-                            matches!(language.as_str(), "zh-CN" | "zh"),
-                            cx.listener(|this, _, _, cx| {
-                                this.update_ui_language("zh-CN", cx);
-                            }),
-                        ))
-                        .child(
-                            div()
-                                .text_size(px(10.))
-                                .text_color(rgb(palette.text_dimmed))
-                                .child(language_label.to_string()),
-                        ),
-                ),
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_3()
+                    .child(settings_form_row(
+                        palette,
+                        self.tr("settings.language"),
+                        Some(SharedString::from(self.tr("settings.languageDesc"))),
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_1()
+                            .child(settings_choice_chip(
+                                palette,
+                                "general-lang-en",
+                                "English",
+                                matches!(language.as_str(), "en" | "en-US"),
+                                cx.listener(|this, _, _, cx| {
+                                    this.update_ui_language("en", cx);
+                                }),
+                            ))
+                            .child(settings_choice_chip(
+                                palette,
+                                "general-lang-zh",
+                                "中文",
+                                matches!(language.as_str(), "zh-CN" | "zh"),
+                                cx.listener(|this, _, _, cx| {
+                                    this.update_ui_language("zh-CN", cx);
+                                }),
+                            ))
+                            .child(
+                                div()
+                                    .text_size(px(10.))
+                                    .text_color(rgb(palette.text_dimmed))
+                                    .child(language_label.to_string()),
+                            ),
+                    ))
+                    .child(settings_form_row(
+                        palette,
+                        self.tr("settings.headerStatus"),
+                        Some(SharedString::from(self.tr("settings.headerStatusDesc"))),
+                        div()
+                            .flex()
+                            .flex_wrap()
+                            .items_center()
+                            .gap_1()
+                            .child(settings_choice_chip(
+                                palette,
+                                "general-header-status-hidden",
+                                self.tr("headerStatus.hidden"),
+                                !header_status_visible,
+                                cx.listener(|this, _, _, cx| {
+                                    this.set_header_status_visible(false, cx);
+                                }),
+                            ))
+                            .children(HeaderStatusMode::ALL.into_iter().map(|mode| {
+                                settings_choice_chip(
+                                    palette,
+                                    format!("general-header-status-{}", mode.persistence_id()),
+                                    self.tr(mode.i18n_key()),
+                                    header_status_visible && header_status_mode == mode,
+                                    cx.listener(move |this, _, _, cx| {
+                                        this.set_header_status_mode(mode, cx);
+                                    }),
+                                )
+                            })),
+                    )),
             ))
             .child(settings_form_section(
                 palette,

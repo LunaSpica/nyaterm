@@ -117,6 +117,7 @@ impl NyaTermApp {
         let tick_started_at = Instant::now();
         let stage_started_at = Instant::now();
         let mut dirty = self.refresh_window_render_inputs(window, cx);
+        dirty |= self.refresh_header_status_clock();
         let render_input_duration = stage_started_at.elapsed();
 
         // Skip full planes when the compositor is moving/resizing the window, or
@@ -149,12 +150,12 @@ impl NyaTermApp {
         }
         // Ultra-light idle: focus + optional blink only. Used for pure window drag
         // (viewport often unchanged) and quiet connected sessions with no sideband.
-        // Remote auto-refresh only matters when Stats/Processes/Docker/Transfers is open.
+        // Remote auto-refresh also feeds the title bar's resource and host modes.
         let remote_panels_need_poll = (self.active_ssh_config.is_some()
-            && matches!(
+            && (matches!(
                 self.current_right_panel(),
                 Some(NavItem::Stats | NavItem::Processes | NavItem::Docker)
-            ))
+            ) || self.header_status_needs_remote_stats()))
             || self.current_left_panel() == Some(NavItem::Transfers);
         if calm_tick
             && !remote_panels_need_poll

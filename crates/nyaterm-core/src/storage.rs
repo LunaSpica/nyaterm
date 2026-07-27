@@ -2671,6 +2671,56 @@ mod tests {
     }
 
     #[test]
+    fn legacy_settings_default_header_status_to_visible_session() {
+        let dir = unique_temp_dir("settings-header-status-legacy-defaults");
+        let store = ConnectionStore::open(&dir).expect("store");
+
+        let summary = store.load_app_settings_summary().expect("load");
+        assert_eq!(summary.ui_header_status_mode, "session");
+        assert!(summary.ui_header_status_visible);
+
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn header_status_settings_roundtrip_and_preserve_unknown_ui_fields() {
+        let dir = unique_temp_dir("settings-header-status-roundtrip");
+        let store = ConnectionStore::open(&dir).expect("store");
+        store
+            .save_settings_value(&serde_json::json!({
+                "ui": {
+                    "header_status_mode": "host",
+                    "header_status_visible": false,
+                    "future_header_option": { "keep": true }
+                }
+            }))
+            .expect("seed settings");
+
+        let mut summary = store.load_app_settings_summary().expect("load");
+        assert_eq!(summary.ui_header_status_mode, "host");
+        assert!(!summary.ui_header_status_visible);
+
+        summary.ui_header_status_mode = "resources".to_string();
+        summary.ui_header_status_visible = true;
+        let saved = store.save_ui_layout_settings(&summary).expect("save");
+        assert_eq!(saved.ui_header_status_mode, "resources");
+        assert!(saved.ui_header_status_visible);
+
+        let raw = store.load_settings_value().expect("raw");
+        assert_eq!(raw["ui"]["header_status_mode"], "resources");
+        assert_eq!(raw["ui"]["header_status_visible"], true);
+        assert_eq!(raw["ui"]["future_header_option"]["keep"], true);
+
+        summary.ui_header_status_mode = "unsupported".to_string();
+        let normalized = store
+            .save_ui_layout_settings(&summary)
+            .expect("save normalized");
+        assert_eq!(normalized.ui_header_status_mode, "session");
+
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
     fn app_settings_summary_reads_and_updates_host_key_policy() {
         let dir = unique_temp_dir("settings-summary");
         let store = ConnectionStore::open(&dir).expect("store");

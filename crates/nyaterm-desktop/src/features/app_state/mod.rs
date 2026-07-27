@@ -5,12 +5,13 @@ use crate::models::{
     ActivityBarContextMenuState, ActivityBarLayoutState, BottomPanelMode, BottomPanelResizeState,
     CloudSyncConflictState, CloudSyncSecretDraft, CommandSuggestionState, ConfigPathPromptKind,
     CredentialSuggestionState, DiagnosticsPathPromptKind, GithubGistAuthJobEvent,
-    GithubGistAuthState, KeywordHighlightEditorField, KeywordHighlightPathPromptKind, MainMode,
-    MultiLinePasteDraft, PanelResizeState, PanelStackResizeState, PendingCredentialAutofill,
-    RecordingPathPromptKind, RecordingWritePipeline, RightFocus, SearchEngineEditorField,
-    SessionEventBridge, SessionRuntimeMetadata, SettingsTab, SnapshotPasswordPromptState,
-    StartupCommandAction, StartupCommandRequest, StoreStatus, SyncInputGroup, TabActionsSubmenu,
-    TerminalFrameEvent, TitleMenu, TitleMenuSubmenu, TranslateInputField, TranslationDialogState,
+    GithubGistAuthState, HeaderStatusState, KeywordHighlightEditorField,
+    KeywordHighlightPathPromptKind, MainMode, MultiLinePasteDraft, PanelResizeState,
+    PanelStackResizeState, PendingCredentialAutofill, RecordingPathPromptKind,
+    RecordingWritePipeline, RightFocus, SearchEngineEditorField, SessionEventBridge,
+    SessionRuntimeMetadata, SettingsTab, SnapshotPasswordPromptState, StartupCommandAction,
+    StartupCommandRequest, StoreStatus, SyncInputGroup, TabActionsSubmenu, TerminalFrameEvent,
+    TitleMenu, TitleMenuSubmenu, TranslateInputField, TranslationDialogState,
     TranslationSecretDraft, WorkspacePaneNode, WorkspaceSplitDirection, WorkspaceSplitResizeState,
     WorkspaceSplitState,
 };
@@ -325,6 +326,7 @@ pub struct NyaTermApp {
     pub(in crate::features) activity_bar_context_menu: Option<ActivityBarContextMenuState>,
     pub(in crate::features) title_menu_open: Option<TitleMenu>,
     pub(in crate::features) title_menu_submenu: Option<TitleMenuSubmenu>,
+    pub(in crate::features) header_status: HeaderStatusState,
     /// Open-tabs overflow menu (Tauri TabBar expand-more when many tabs).
     pub(in crate::features) open_tabs_menu_open: bool,
     /// New-session menu next to the tab strip + control.
