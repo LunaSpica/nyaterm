@@ -303,38 +303,14 @@ impl NyaTermApp {
         }
     }
 
-    pub(in crate::features) fn handle_active_sessions_search_key_down(
+    /// Apply an edit from the active sessions filter box.
+    pub(in crate::features) fn apply_active_sessions_search(
         &mut self,
-        event: &KeyDownEvent,
+        text: String,
         cx: &mut Context<Self>,
     ) {
-        self.mark_user_activity();
-        let keystroke = &event.keystroke;
-        if keystroke.modifiers.platform || keystroke.modifiers.alt || keystroke.modifiers.control {
-            return;
-        }
-
-        match keystroke.key.as_str() {
-            "escape" => {
-                self.active_sessions_search_draft.clear();
-                self.terminal.view.status = "active sessions search cleared".to_string();
-                cx.notify();
-            }
-            "backspace" => {
-                self.active_sessions_search_draft.pop();
-                cx.notify();
-            }
-            _ => {
-                if let Some(input) = keystroke
-                    .key_char
-                    .as_deref()
-                    .filter(|input| !input.is_empty())
-                {
-                    self.active_sessions_search_draft.push_str(input);
-                    cx.notify();
-                }
-            }
-        }
+        self.active_sessions_search_draft = text;
+        cx.notify();
     }
 }
 

@@ -95,47 +95,24 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::features) fn handle_cloud_sync_key_down(
+    /// Apply an edit from one of the cloud sync inputs.
+    pub(in crate::features) fn apply_cloud_sync_input(
         &mut self,
-        event: &KeyDownEvent,
+        field: CloudSyncInputField,
+        text: String,
         cx: &mut Context<Self>,
     ) {
         if !self.cloud_sync_form_enabled() {
             return;
         }
-        if self.github_gist_auth.pending
-            && self.cloud_sync_focused_field == CloudSyncInputField::GithubGistId
-        {
+        // A Gist id being fetched is not the user's to edit yet.
+        if self.github_gist_auth.pending && field == CloudSyncInputField::GithubGistId {
             return;
         }
-        self.mark_user_activity();
-        let keystroke = &event.keystroke;
-        if keystroke.modifiers.platform || keystroke.modifiers.alt || keystroke.modifiers.control {
-            return;
-        }
-
-        match keystroke.key.as_str() {
-            "backspace" => {
-                self.cloud_sync_input_value_mut().pop();
-                self.cloud_sync_status = "cloud sync settings edited".to_string();
-                cx.notify();
-            }
-            "escape" => {
-                self.cloud_sync_status = "cloud sync input blurred".to_string();
-                cx.notify();
-            }
-            _ => {
-                if let Some(input) = keystroke
-                    .key_char
-                    .as_deref()
-                    .filter(|input| !input.is_empty())
-                {
-                    self.cloud_sync_input_value_mut().push_str(input);
-                    self.cloud_sync_status = "cloud sync settings edited".to_string();
-                    cx.notify();
-                }
-            }
-        }
+        self.cloud_sync_focused_field = field;
+        *self.cloud_sync_input_value_mut() = text;
+        self.cloud_sync_status = "cloud sync settings edited".to_string();
+        cx.notify();
     }
 
     pub(in crate::features) fn cloud_sync_input_value_mut(&mut self) -> &mut String {

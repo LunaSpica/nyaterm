@@ -49,6 +49,16 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         let sessions = self.sorted_active_sessions();
         let query = self.active_sessions_search_draft.trim().to_lowercase();
+        // Built before the panel, which reads `self` throughout: creating the
+        // box needs it mutably.
+        let search_input = self
+            .text_input_box(
+                "sessions.filter",
+                &self.active_sessions_search_draft.clone(),
+                TextInputSetup::placeholder(self.tr("activeSessions.searchPlaceholder")),
+                cx,
+            )
+            .into_any_element();
         let mut rows = div().flex().flex_col().gap_1().p_2();
         let mut visible_count = 0usize;
         if sessions.is_empty() {
@@ -100,7 +110,6 @@ impl NyaTermApp {
                     .gap_2()
                     .child(
                         div()
-                            .id(SharedString::from("active-sessions-search-input"))
                             .h(px(28.))
                             .flex_1()
                             .min_w_0()
@@ -110,16 +119,6 @@ impl NyaTermApp {
                             .flex()
                             .items_center()
                             .gap_2()
-                            .cursor_text()
-                            .track_focus(&self.active_sessions_search_focus)
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                window.focus(&this.active_sessions_search_focus);
-                                cx.notify();
-                            }))
-                            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-                                cx.stop_propagation();
-                                this.handle_active_sessions_search_key_down(event, cx);
-                            }))
                             .child(
                                 svg()
                                     .size(px(14.))
@@ -127,23 +126,7 @@ impl NyaTermApp {
                                     .path("icons/fe/search.svg")
                                     .text_color(rgb(palette.text_dimmed)),
                             )
-                            .child(
-                                div()
-                                    .min_w_0()
-                                    .flex_1()
-                                    .overflow_hidden()
-                                    .text_size(px(12.))
-                                    .text_color(if self.active_sessions_search_draft.is_empty() {
-                                        rgb(palette.text_dimmed)
-                                    } else {
-                                        rgb(palette.text)
-                                    })
-                                    .child(if self.active_sessions_search_draft.is_empty() {
-                                        self.tr("activeSessions.searchPlaceholder").to_string()
-                                    } else {
-                                        self.active_sessions_search_draft.clone()
-                                    }),
-                            ),
+                            .child(div().min_w_0().flex_1().child(search_input)),
                     ),
             )
             .child(
@@ -168,6 +151,16 @@ impl NyaTermApp {
             .active_sessions_search_draft
             .trim()
             .to_ascii_lowercase();
+        // Built before the panel, which reads `self` throughout: creating the
+        // box needs it mutably.
+        let sessions_search_input = self
+            .text_input_box(
+                "sessions.filter",
+                &self.active_sessions_search_draft.clone(),
+                TextInputSetup::placeholder("Search sessions"),
+                cx,
+            )
+            .into_any_element();
         let mut active_session_rows = div().mt_3().flex().flex_col().gap_2();
         let mut visible_count = 0usize;
         if sessions.is_empty() {
@@ -275,26 +268,7 @@ impl NyaTermApp {
                                     }),
                             ),
                     )
-                    .child(
-                        transfer_input(
-                            "active-sessions-search-input",
-                            "Search sessions",
-                            self.active_sessions_search_draft.clone(),
-                            true,
-                            self.theme_palette(),
-                        )
-                        .mt_3()
-                        .track_focus(&self.active_sessions_search_focus)
-                        .on_click(cx.listener(|this, _, window, cx| {
-                            window.focus(&this.active_sessions_search_focus);
-                            cx.notify();
-                        }))
-                        .on_key_down(cx.listener(
-                            |this, event: &KeyDownEvent, _, cx| {
-                                this.handle_active_sessions_search_key_down(event, cx);
-                            },
-                        )),
-                    )
+                    .child(div().mt_3().child(sessions_search_input))
                     .child(active_session_rows),
             )
             .child(

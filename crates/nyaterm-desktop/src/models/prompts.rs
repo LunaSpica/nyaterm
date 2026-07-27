@@ -79,6 +79,170 @@ pub(crate) enum AiInputField {
     RequestUserAgent,
 }
 
+impl CloudSyncInputField {
+    /// Every variant, so a text-input id can be mapped back to its field.
+    pub(crate) const ALL: [Self; 33] = [
+        Self::RemoteRoot,
+        Self::DeviceName,
+        Self::WebdavEndpoint,
+        Self::WebdavRoot,
+        Self::WebdavUsername,
+        Self::WebdavPassword,
+        Self::S3Endpoint,
+        Self::S3Bucket,
+        Self::S3Region,
+        Self::S3Root,
+        Self::S3AccessKeyId,
+        Self::S3SecretAccessKey,
+        Self::S3SessionToken,
+        Self::GoogleDriveRoot,
+        Self::GoogleDriveAccessToken,
+        Self::GoogleDriveRefreshToken,
+        Self::GoogleDriveClientId,
+        Self::GoogleDriveClientSecret,
+        Self::OneDriveRoot,
+        Self::OneDriveAccessToken,
+        Self::OneDriveRefreshToken,
+        Self::OneDriveClientId,
+        Self::OneDriveClientSecret,
+        Self::AliyunDriveRoot,
+        Self::AliyunDriveType,
+        Self::AliyunDriveAccessToken,
+        Self::AliyunDriveRefreshToken,
+        Self::AliyunDriveClientId,
+        Self::AliyunDriveClientSecret,
+        Self::GiteeEndpoint,
+        Self::GiteeGistId,
+        Self::GiteeToken,
+        Self::GithubGistId,
+    ];
+
+    /// The stable part of this field's text-input id.
+    pub(crate) fn input_key(self) -> &'static str {
+        match self {
+            Self::RemoteRoot => "remote-root",
+            Self::DeviceName => "device-name",
+            Self::WebdavEndpoint => "webdav-endpoint",
+            Self::WebdavRoot => "webdav-root",
+            Self::WebdavUsername => "webdav-username",
+            Self::WebdavPassword => "webdav-password",
+            Self::S3Endpoint => "s3-endpoint",
+            Self::S3Bucket => "s3-bucket",
+            Self::S3Region => "s3-region",
+            Self::S3Root => "s3-root",
+            Self::S3AccessKeyId => "s3-access-key-id",
+            Self::S3SecretAccessKey => "s3-secret-access-key",
+            Self::S3SessionToken => "s3-session-token",
+            Self::GoogleDriveRoot => "google-drive-root",
+            Self::GoogleDriveAccessToken => "google-drive-access-token",
+            Self::GoogleDriveRefreshToken => "google-drive-refresh-token",
+            Self::GoogleDriveClientId => "google-drive-client-id",
+            Self::GoogleDriveClientSecret => "google-drive-client-secret",
+            Self::OneDriveRoot => "one-drive-root",
+            Self::OneDriveAccessToken => "one-drive-access-token",
+            Self::OneDriveRefreshToken => "one-drive-refresh-token",
+            Self::OneDriveClientId => "one-drive-client-id",
+            Self::OneDriveClientSecret => "one-drive-client-secret",
+            Self::AliyunDriveRoot => "aliyun-drive-root",
+            Self::AliyunDriveType => "aliyun-drive-type",
+            Self::AliyunDriveAccessToken => "aliyun-drive-access-token",
+            Self::AliyunDriveRefreshToken => "aliyun-drive-refresh-token",
+            Self::AliyunDriveClientId => "aliyun-drive-client-id",
+            Self::AliyunDriveClientSecret => "aliyun-drive-client-secret",
+            Self::GiteeEndpoint => "gitee-endpoint",
+            Self::GiteeGistId => "gitee-gist-id",
+            Self::GiteeToken => "gitee-token",
+            Self::GithubGistId => "github-gist-id",
+        }
+    }
+
+    /// The field an input id names, or `None` if it names no field here.
+    pub(crate) fn from_input_key(key: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|field| field.input_key() == key)
+    }
+
+    /// Whether this field holds a secret, and so is masked and never shown back.
+    pub(crate) fn is_secret(self) -> bool {
+        let key = self.input_key();
+        key.contains("password")
+            || key.contains("token")
+            || key.contains("secret")
+            || key.contains("access-key-id")
+    }
+}
+
+impl AiInputField {
+    /// Every variant, so a text-input id can be mapped back to its field.
+    pub(crate) const ALL: [Self; 4] = [
+        Self::Model,
+        Self::BaseUrl,
+        Self::ApiKey,
+        Self::RequestUserAgent,
+    ];
+
+    /// The stable part of this field's text-input id.
+    pub(crate) fn input_key(self) -> &'static str {
+        match self {
+            Self::Model => "model",
+            Self::BaseUrl => "base-url",
+            Self::ApiKey => "api-key",
+            Self::RequestUserAgent => "request-user-agent",
+        }
+    }
+
+    /// The field an input id names, or `None` if it names no field here.
+    pub(crate) fn from_input_key(key: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|field| field.input_key() == key)
+    }
+
+    /// Whether this field holds a secret, and so is masked and never shown back.
+    pub(crate) fn is_secret(self) -> bool {
+        let key = self.input_key();
+        key.contains("api-key")
+    }
+}
+
+impl TranslateInputField {
+    /// Every variant, so a text-input id can be mapped back to its field.
+    pub(crate) const ALL: [Self; 9] = [
+        Self::TargetLanguage,
+        Self::Text,
+        Self::DeeplApiKey,
+        Self::BaiduAppId,
+        Self::BaiduAppKey,
+        Self::AliAppId,
+        Self::AliAppKey,
+        Self::YoudaoAppId,
+        Self::YoudaoAppKey,
+    ];
+
+    /// The stable part of this field's text-input id.
+    pub(crate) fn input_key(self) -> &'static str {
+        match self {
+            Self::TargetLanguage => "target-language",
+            Self::Text => "text",
+            Self::DeeplApiKey => "deepl-api-key",
+            Self::BaiduAppId => "baidu-app-id",
+            Self::BaiduAppKey => "baidu-app-key",
+            Self::AliAppId => "ali-app-id",
+            Self::AliAppKey => "ali-app-key",
+            Self::YoudaoAppId => "youdao-app-id",
+            Self::YoudaoAppKey => "youdao-app-key",
+        }
+    }
+
+    /// The field an input id names, or `None` if it names no field here.
+    pub(crate) fn from_input_key(key: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|field| field.input_key() == key)
+    }
+
+    /// Whether this field holds a secret, and so is masked and never shown back.
+    pub(crate) fn is_secret(self) -> bool {
+        let key = self.input_key();
+        key.contains("api-key") || key.contains("app-key")
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum AiActionListKind {
     Terminal,

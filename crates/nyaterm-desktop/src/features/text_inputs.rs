@@ -58,6 +58,18 @@ impl TextInputSetup {
     }
 }
 
+/// The setup for a settings field, masked when it holds a secret.
+///
+/// A stored secret is never read back into its box: the box holds the draft
+/// that replaces it, and the panel badges whether one is stored at all.
+pub(in crate::features) fn secret_input_setup(secret: bool) -> TextInputSetup {
+    if secret {
+        TextInputSetup::masked()
+    } else {
+        TextInputSetup::default()
+    }
+}
+
 #[derive(Default)]
 pub(in crate::features) struct TextInputRegistry {
     fields: HashMap<SharedString, Entity<TextField>>,
@@ -230,6 +242,27 @@ impl NyaTermApp {
             self.apply_send_command_draft(text, cx);
         } else if let Some(field) = id.strip_prefix("security.editor.") {
             self.apply_security_editor_input(field, text, cx);
+        } else if let Some(field) = id
+            .strip_prefix("ai.input.")
+            .and_then(crate::models::AiInputField::from_input_key)
+        {
+            self.apply_ai_input(field, text, cx);
+        } else if let Some(field) = id
+            .strip_prefix("translation.input.")
+            .and_then(crate::models::TranslateInputField::from_input_key)
+        {
+            self.apply_translate_input(field, text, cx);
+        } else if let Some(field) = id
+            .strip_prefix("cloud-sync.input.")
+            .and_then(crate::models::CloudSyncInputField::from_input_key)
+        {
+            self.apply_cloud_sync_input(field, text, cx);
+        } else if id.as_ref() == "sessions.filter" {
+            self.apply_active_sessions_search(text, cx);
+        } else if id.as_ref() == "remote.docker.filter" {
+            self.apply_docker_search(text, cx);
+        } else if id.as_ref() == "remote.process.filter" {
+            self.apply_process_search(text, cx);
         }
     }
 

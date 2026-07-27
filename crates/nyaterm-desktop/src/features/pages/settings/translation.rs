@@ -3,33 +3,26 @@ use super::*;
 impl NyaTermApp {
     fn translation_input(
         &mut self,
-        id: &'static str,
+        _id: &'static str,
         label: &'static str,
         value: String,
         field: TranslateInputField,
         cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        transfer_input(
-            id,
+    ) -> AnyElement {
+        // The text being translated is a paragraph, not a line.
+        let setup = if field == TranslateInputField::Text {
+            TextInputSetup::multi_line("")
+        } else {
+            secret_input_setup(field.is_secret())
+        };
+        self.text_input_field(
+            format!("translation.input.{}", field.input_key()),
             label,
-            if value.is_empty() {
-                " ".to_string()
-            } else {
-                value
-            },
-            self.translate_focused_field == field,
-            self.theme_palette(),
+            &value,
+            setup,
+            cx,
         )
-        .track_focus(&self.translate_focus)
-        .on_click(cx.listener(move |this, _, window, cx| {
-            this.translate_focused_field = field;
-            window.focus(&this.translate_focus);
-            cx.notify();
-        }))
-        .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-            cx.stop_propagation();
-            this.handle_translate_key_down(event, cx);
-        }))
+        .into_any_element()
     }
 
     pub(in crate::features) fn translation_settings_section(
@@ -37,25 +30,13 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let deepl_key_value = cloud_secret_display(
-            &self.translation_secret_draft.deepl_api_key,
-            &none_if_blank(&self.translation_settings.deepl_api_key),
-        );
+        let deepl_key_value = self.translation_secret_draft.deepl_api_key.clone();
         let baidu_app_id_value = self.translation_settings.baidu_app_id.clone();
-        let baidu_key_value = cloud_secret_display(
-            &self.translation_secret_draft.baidu_app_key,
-            &none_if_blank(&self.translation_settings.baidu_app_key),
-        );
+        let baidu_key_value = self.translation_secret_draft.baidu_app_key.clone();
         let ali_app_id_value = self.translation_settings.ali_app_id.clone();
-        let ali_key_value = cloud_secret_display(
-            &self.translation_secret_draft.ali_app_key,
-            &none_if_blank(&self.translation_settings.ali_app_key),
-        );
+        let ali_key_value = self.translation_secret_draft.ali_app_key.clone();
         let youdao_app_id_value = self.translation_settings.youdao_app_id.clone();
-        let youdao_key_value = cloud_secret_display(
-            &self.translation_secret_draft.youdao_app_key,
-            &none_if_blank(&self.translation_settings.youdao_app_key),
-        );
+        let youdao_key_value = self.translation_secret_draft.youdao_app_key.clone();
 
         let deepl_configured = !self.translation_settings.deepl_api_key.trim().is_empty()
             || !self.translation_secret_draft.deepl_api_key.is_empty();

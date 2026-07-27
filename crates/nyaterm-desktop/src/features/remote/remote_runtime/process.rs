@@ -33,87 +33,31 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::features) fn handle_docker_search_key_down(
+    /// Apply an edit from the Docker filter box.
+    pub(in crate::features) fn apply_docker_search(
         &mut self,
-        event: &KeyDownEvent,
+        text: String,
         cx: &mut Context<Self>,
     ) {
-        self.mark_user_activity();
-        let keystroke = &event.keystroke;
-        if keystroke.modifiers.platform || keystroke.modifiers.alt || keystroke.modifiers.control {
-            return;
-        }
-
-        match keystroke.key.as_str() {
-            "backspace" => {
-                self.remote_ops.docker.search_draft.pop();
-                self.remote_ops.docker.list_offset = 0;
-                self.remote_ops.docker.resource_list_offset = 0;
-                self.remote_ops.docker.status = "Docker search updated".to_string();
-                cx.notify();
-            }
-            "escape" => {
-                self.remote_ops.docker.search_draft.clear();
-                self.remote_ops.docker.list_offset = 0;
-                self.remote_ops.docker.resource_list_offset = 0;
-                self.remote_ops.docker.status = "Docker search cleared".to_string();
-                cx.notify();
-            }
-            _ => {
-                if let Some(input) = keystroke
-                    .key_char
-                    .as_deref()
-                    .filter(|input| !input.is_empty())
-                {
-                    self.remote_ops.docker.search_draft.push_str(input);
-                    self.remote_ops.docker.list_offset = 0;
-                    self.remote_ops.docker.resource_list_offset = 0;
-                    self.remote_ops.docker.status = "Docker search updated".to_string();
-                    cx.notify();
-                }
-            }
-        }
+        self.remote_ops.docker.search_draft = text;
+        // A new filter means a different list, so paging starts over.
+        self.remote_ops.docker.list_offset = 0;
+        self.remote_ops.docker.resource_list_offset = 0;
+        self.remote_ops.docker.status = "Docker search updated".to_string();
+        cx.notify();
     }
 
-    pub(in crate::features) fn handle_process_search_key_down(
+    /// Apply an edit from the process filter box.
+    pub(in crate::features) fn apply_process_search(
         &mut self,
-        event: &KeyDownEvent,
+        text: String,
         cx: &mut Context<Self>,
     ) {
-        self.mark_user_activity();
-        let keystroke = &event.keystroke;
-        if keystroke.modifiers.alt || keystroke.modifiers.function {
-            return;
-        }
-
-        match keystroke.key.as_str() {
-            "escape" => {
-                self.remote_ops.process.search_draft.clear();
-                self.remote_ops.process.selected_pid = None;
-                self.remote_ops.process.list_offset = 0;
-                self.remote_ops.process.status = "process search cleared".to_string();
-                cx.notify();
-            }
-            "backspace" if !keystroke.modifiers.platform && !keystroke.modifiers.control => {
-                self.remote_ops.process.search_draft.pop();
-                self.remote_ops.process.selected_pid = None;
-                self.remote_ops.process.list_offset = 0;
-                cx.notify();
-            }
-            _ if !keystroke.modifiers.platform && !keystroke.modifiers.control => {
-                if let Some(input) = keystroke
-                    .key_char
-                    .as_deref()
-                    .filter(|input| !input.is_empty())
-                {
-                    self.remote_ops.process.search_draft.push_str(input);
-                    self.remote_ops.process.selected_pid = None;
-                    self.remote_ops.process.list_offset = 0;
-                    cx.notify();
-                }
-            }
-            _ => {}
-        }
+        self.remote_ops.process.search_draft = text;
+        // The selected row may not survive the new filter, and paging restarts.
+        self.remote_ops.process.selected_pid = None;
+        self.remote_ops.process.list_offset = 0;
+        cx.notify();
     }
 
     pub(in crate::features) fn toggle_process_sort(

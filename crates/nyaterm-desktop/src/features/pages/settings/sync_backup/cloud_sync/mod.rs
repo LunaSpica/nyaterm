@@ -111,37 +111,25 @@ impl NyaTermApp {
 
     pub(in crate::features) fn cloud_sync_input(
         &mut self,
-        id: &'static str,
+        _id: &'static str,
         label: &'static str,
         value: String,
         field: CloudSyncInputField,
         cx: &mut Context<Self>,
-    ) -> impl IntoElement {
+    ) -> AnyElement {
         let enabled = self.cloud_sync_form_enabled();
-        transfer_input(
-            id,
+        let setup = secret_input_setup(field.is_secret());
+        let input = self.text_input_field(
+            format!("cloud-sync.input.{}", field.input_key()),
             label,
-            if value.is_empty() {
-                " ".to_string()
-            } else {
-                value
-            },
-            self.cloud_sync_focused_field == field,
-            self.theme_palette(),
-        )
-        .opacity(if enabled { 1.0 } else { 0.45 })
-        .track_focus(&self.cloud_sync_focus)
-        .when(enabled, |this| {
-            this.on_click(cx.listener(move |this, _, window, cx| {
-                this.cloud_sync_focused_field = field;
-                window.focus(&this.cloud_sync_focus);
-                cx.notify();
-            }))
-            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-                cx.stop_propagation();
-                this.handle_cloud_sync_key_down(event, cx);
-            }))
-        })
+            &value,
+            setup,
+            cx,
+        );
+        div()
+            .opacity(if enabled { 1.0 } else { 0.45 })
+            .child(input)
+            .into_any_element()
     }
 
     pub(in crate::features) fn cloud_sync_conflict_banner(
@@ -303,62 +291,41 @@ impl NyaTermApp {
             .last_synced_at_ms
             .map(format_history_timestamp_ms)
             .unwrap_or_else(|| self.tr("settings.never").to_string());
-        let webdav_password_value = cloud_secret_display(
-            &self.cloud_sync_secret_draft.webdav_password,
-            &self.cloud_sync_settings.webdav.password,
-        );
-        let s3_access_key_value = cloud_secret_display(
-            &self.cloud_sync_secret_draft.s3_access_key_id,
-            &self.cloud_sync_settings.s3.access_key_id,
-        );
-        let s3_secret_key_value = cloud_secret_display(
-            &self.cloud_sync_secret_draft.s3_secret_access_key,
-            &self.cloud_sync_settings.s3.secret_access_key,
-        );
-        let s3_session_token_value = cloud_secret_display(
-            &self.cloud_sync_secret_draft.s3_session_token,
-            &self.cloud_sync_settings.s3.session_token,
-        );
-        let google_drive_access_token_value = cloud_secret_display(
-            &self.cloud_sync_secret_draft.google_drive_access_token,
-            &self.cloud_sync_settings.google_drive.access_token,
-        );
-        let google_drive_refresh_token_value = cloud_secret_display(
-            &self.cloud_sync_secret_draft.google_drive_refresh_token,
-            &self.cloud_sync_settings.google_drive.refresh_token,
-        );
-        let google_drive_client_secret_value = cloud_secret_display(
-            &self.cloud_sync_secret_draft.google_drive_client_secret,
-            &self.cloud_sync_settings.google_drive.client_secret,
-        );
-        let onedrive_access_token_value = cloud_secret_display(
-            &self.cloud_sync_secret_draft.onedrive_access_token,
-            &self.cloud_sync_settings.onedrive.access_token,
-        );
-        let onedrive_refresh_token_value = cloud_secret_display(
-            &self.cloud_sync_secret_draft.onedrive_refresh_token,
-            &self.cloud_sync_settings.onedrive.refresh_token,
-        );
-        let onedrive_client_secret_value = cloud_secret_display(
-            &self.cloud_sync_secret_draft.onedrive_client_secret,
-            &self.cloud_sync_settings.onedrive.client_secret,
-        );
-        let aliyun_drive_access_token_value = cloud_secret_display(
-            &self.cloud_sync_secret_draft.aliyun_drive_access_token,
-            &self.cloud_sync_settings.aliyun_drive.access_token,
-        );
-        let aliyun_drive_refresh_token_value = cloud_secret_display(
-            &self.cloud_sync_secret_draft.aliyun_drive_refresh_token,
-            &self.cloud_sync_settings.aliyun_drive.refresh_token,
-        );
-        let aliyun_drive_client_secret_value = cloud_secret_display(
-            &self.cloud_sync_secret_draft.aliyun_drive_client_secret,
-            &self.cloud_sync_settings.aliyun_drive.client_secret,
-        );
-        let gitee_token_value = cloud_secret_display(
-            &self.cloud_sync_secret_draft.gitee_token,
-            &self.cloud_sync_settings.gitee_snippet.access_token,
-        );
+        let webdav_password_value = self.cloud_sync_secret_draft.webdav_password.clone();
+        let s3_access_key_value = self.cloud_sync_secret_draft.s3_access_key_id.clone();
+        let s3_secret_key_value = self.cloud_sync_secret_draft.s3_secret_access_key.clone();
+        let s3_session_token_value = self.cloud_sync_secret_draft.s3_session_token.clone();
+        let google_drive_access_token_value = self
+            .cloud_sync_secret_draft
+            .google_drive_access_token
+            .clone();
+        let google_drive_refresh_token_value = self
+            .cloud_sync_secret_draft
+            .google_drive_refresh_token
+            .clone();
+        let google_drive_client_secret_value = self
+            .cloud_sync_secret_draft
+            .google_drive_client_secret
+            .clone();
+        let onedrive_access_token_value =
+            self.cloud_sync_secret_draft.onedrive_access_token.clone();
+        let onedrive_refresh_token_value =
+            self.cloud_sync_secret_draft.onedrive_refresh_token.clone();
+        let onedrive_client_secret_value =
+            self.cloud_sync_secret_draft.onedrive_client_secret.clone();
+        let aliyun_drive_access_token_value = self
+            .cloud_sync_secret_draft
+            .aliyun_drive_access_token
+            .clone();
+        let aliyun_drive_refresh_token_value = self
+            .cloud_sync_secret_draft
+            .aliyun_drive_refresh_token
+            .clone();
+        let aliyun_drive_client_secret_value = self
+            .cloud_sync_secret_draft
+            .aliyun_drive_client_secret
+            .clone();
+        let gitee_token_value = self.cloud_sync_secret_draft.gitee_token.clone();
         let provider_fields = match active_cloud_provider.as_str() {
             "webdav" => self.cloud_sync_webdav_provider_fields(webdav_password_value, cx),
             "s3" => self.cloud_sync_s3_provider_fields(

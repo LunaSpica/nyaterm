@@ -68,6 +68,16 @@ impl NyaTermApp {
             state_running: self.tr("dockerManager.stateLabels.running"),
             state_unknown: self.tr("dockerManager.stateLabels.unknown"),
         };
+        // Built before the view, which reads `self` throughout: creating the
+        // box needs it mutably.
+        let docker_search_input = self
+            .text_input_box(
+                "remote.docker.filter",
+                &self.remote_ops.docker.search_draft.clone(),
+                TextInputSetup::placeholder(labels.search),
+                cx,
+            )
+            .into_any_element();
         if self.active_ssh_config.is_none() {
             return div()
                 .size_full()
@@ -254,29 +264,7 @@ impl NyaTermApp {
                     .flex()
                     .items_center()
                     .gap_1()
-                    .child(
-                        div().flex_1().min_w_0().child(
-                            transfer_input(
-                                "docker-search-input",
-                                labels.search,
-                                self.remote_ops.docker.search_draft.clone(),
-                                true,
-                                self.theme_palette(),
-                            )
-                            .h(px(32.))
-                            .track_focus(&self.remote_ops.docker.search_focus)
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                window.focus(&this.remote_ops.docker.search_focus);
-                                cx.notify();
-                            }))
-                            .on_key_down(cx.listener(
-                                |this, event: &KeyDownEvent, _, cx| {
-                                    cx.stop_propagation();
-                                    this.handle_docker_search_key_down(event, cx);
-                                },
-                            )),
-                        ),
-                    ),
+                    .child(div().flex_1().min_w_0().child(docker_search_input)),
             )
             .child(docker_tab_bar(
                 palette,

@@ -5,33 +5,25 @@ use crate::models::AiInputField;
 impl NyaTermApp {
     pub(in crate::features) fn ai_input(
         &mut self,
-        id: &'static str,
+        _id: &'static str,
         label: &'static str,
         value: String,
         field: AiInputField,
         cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        transfer_input(
-            id,
+    ) -> AnyElement {
+        let setup = if field == AiInputField::ApiKey {
+            TextInputSetup::masked()
+        } else {
+            TextInputSetup::default()
+        };
+        self.text_input_field(
+            format!("ai.input.{}", field.input_key()),
             label,
-            if value.is_empty() {
-                " ".to_string()
-            } else {
-                value
-            },
-            self.ai.panel.focused_field == field,
-            self.theme_palette(),
+            &value,
+            setup,
+            cx,
         )
-        .track_focus(&self.ai.panel.focus)
-        .on_click(cx.listener(move |this, _, window, cx| {
-            this.ai.panel.focused_field = field;
-            window.focus(&this.ai.panel.focus);
-            cx.notify();
-        }))
-        .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-            cx.stop_propagation();
-            this.handle_ai_key_down(event, cx);
-        }))
+        .into_any_element()
     }
 
     pub(in crate::features) fn ai_settings_section(

@@ -97,57 +97,21 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::features) fn handle_translate_key_down(
+    /// Apply an edit from one of the translation inputs.
+    pub(in crate::features) fn apply_translate_input(
         &mut self,
-        event: &KeyDownEvent,
+        field: TranslateInputField,
+        text: String,
         cx: &mut Context<Self>,
     ) {
-        self.mark_user_activity();
-        let keystroke = &event.keystroke;
-        if keystroke.modifiers.platform || keystroke.modifiers.alt || keystroke.modifiers.control {
-            return;
-        }
-        let settings_field = self.translate_focused_field.is_settings_field();
-
-        match keystroke.key.as_str() {
-            "backspace" => {
-                self.translate_input_value_mut().pop();
-                self.translate_status = if settings_field {
-                    "translation settings edited".to_string()
-                } else {
-                    "translation input edited".to_string()
-                };
-                cx.notify();
-            }
-            "enter" if self.translate_focused_field == TranslateInputField::Text => {
-                self.translate_input.push('\n');
-                self.translate_status = "translation input edited".to_string();
-                cx.notify();
-            }
-            "escape" => {
-                self.translate_status = if settings_field {
-                    "translation settings input blurred".to_string()
-                } else {
-                    "translation input blurred".to_string()
-                };
-                cx.notify();
-            }
-            _ => {
-                if let Some(input) = keystroke
-                    .key_char
-                    .as_deref()
-                    .filter(|input| !input.is_empty())
-                {
-                    self.translate_input_value_mut().push_str(input);
-                    self.translate_status = if settings_field {
-                        "translation settings edited".to_string()
-                    } else {
-                        "translation input edited".to_string()
-                    };
-                    cx.notify();
-                }
-            }
-        }
+        self.translate_focused_field = field;
+        *self.translate_input_value_mut() = text;
+        self.translate_status = if field.is_settings_field() {
+            "translation settings edited".to_string()
+        } else {
+            "translation input edited".to_string()
+        };
+        cx.notify();
     }
 
     fn translate_input_value_mut(&mut self) -> &mut String {

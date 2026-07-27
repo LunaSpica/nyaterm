@@ -13,9 +13,9 @@ use crate::theme::ThemePalette;
 use crate::widgets::{small_button, status_pill};
 
 use super::super::{
-    ChromeTooltip, NyaTermApp, TAB_MOUSE_ACTIONS, TabMouseActionTarget, cloud_secret_display,
-    compact_id, configured_cloud_sync_provider, format_history_timestamp_ms, none_if_blank,
-    transfer_input, truncate_preview,
+    ChromeTooltip, NyaTermApp, TAB_MOUSE_ACTIONS, TabMouseActionTarget, TextInputSetup,
+    cloud_secret_display, compact_id, configured_cloud_sync_provider, format_history_timestamp_ms,
+    none_if_blank, secret_input_setup, transfer_input, truncate_preview,
 };
 
 mod ai;

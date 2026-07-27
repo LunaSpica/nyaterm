@@ -3,50 +3,22 @@ use super::*;
 use crate::models::{AiInputField, TransferInputField};
 
 impl NyaTermApp {
-    pub(in crate::features) fn handle_ai_key_down(
+    /// Apply an edit from one of the AI settings inputs.
+    pub(in crate::features) fn apply_ai_input(
         &mut self,
-        event: &KeyDownEvent,
+        field: AiInputField,
+        text: String,
         cx: &mut Context<Self>,
     ) {
-        self.mark_user_activity();
-        let keystroke = &event.keystroke;
-        if keystroke.modifiers.platform || keystroke.modifiers.alt || keystroke.modifiers.control {
-            return;
-        }
-
-        match keystroke.key.as_str() {
-            "backspace" => {
-                self.ai_input_value_mut().pop();
-                self.ai.panel.status = "AI settings edited".to_string();
-                if self.ai.panel.focused_field == AiInputField::RequestUserAgent {
-                    self.persist_ai_settings_now(cx);
-                } else {
-                    cx.notify();
-                }
-            }
-            "escape" => {
-                self.ai.panel.status = "AI input blurred".to_string();
-                cx.notify();
-            }
-            "enter" if self.ai.panel.focused_field == AiInputField::RequestUserAgent => {
-                self.ai.panel.status = "AI request user-agent updated".to_string();
-                self.persist_ai_settings_now(cx);
-            }
-            _ => {
-                if let Some(input) = keystroke
-                    .key_char
-                    .as_deref()
-                    .filter(|input| !input.is_empty())
-                {
-                    self.ai_input_value_mut().push_str(input);
-                    self.ai.panel.status = "AI settings edited".to_string();
-                    if self.ai.panel.focused_field == AiInputField::RequestUserAgent {
-                        self.persist_ai_settings_now(cx);
-                    } else {
-                        cx.notify();
-                    }
-                }
-            }
+        self.ai.panel.focused_field = field;
+        *self.ai_input_value_mut() = text;
+        self.ai.panel.status = "AI settings edited".to_string();
+        // The user-agent is a live setting rather than a draft, so it is saved
+        // as it is typed the way it always was.
+        if field == AiInputField::RequestUserAgent {
+            self.persist_ai_settings_now(cx);
+        } else {
+            cx.notify();
         }
     }
 
