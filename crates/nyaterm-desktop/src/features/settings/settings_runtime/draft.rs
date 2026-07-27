@@ -447,8 +447,10 @@ impl NyaTermApp {
         self.cancel_github_gist_auth(cx);
         self.ai.settings.action_edit = None;
         self.ai.settings.manual_model_edit_group = None;
+        self.keyword_highlight_edit_id = None;
         self.forget_text_inputs("ai.settings.action.");
         self.forget_text_inputs("ai.settings.manual-model.");
+        self.forget_text_inputs("keyword.highlight.");
         self.settings_window = None;
         self.settings_window_open_pending = false;
         if self.main_mode == MainMode::Page && self.selected_nav == NavItem::Settings {

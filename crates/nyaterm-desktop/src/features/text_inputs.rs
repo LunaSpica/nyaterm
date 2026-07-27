@@ -302,6 +302,8 @@ impl NyaTermApp {
             self.apply_snapshot_password_input(text, cx);
         } else if id.as_ref() == "terminal.search.query" {
             self.apply_terminal_search_query(text, cx);
+        } else if let Some(field_id) = id.strip_prefix("keyword.highlight.") {
+            self.apply_keyword_highlight_input(field_id, text, cx);
         } else if let Some(field_id) = id.strip_prefix("ai.settings.action.") {
             self.apply_ai_action_input(field_id, text, cx);
         } else if let Some(group_key) = id.strip_prefix("ai.settings.manual-model.") {

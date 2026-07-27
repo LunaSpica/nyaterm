@@ -12,8 +12,6 @@ impl NyaTermApp {
         let rules = self.keyword_highlights.rules.clone();
         let keyword_highlighting_enabled = self.keyword_highlights.enabled;
         let expanded = self.keyword_highlight_expanded_id.clone();
-        let edit_id = self.keyword_highlight_edit_id.clone();
-        let edit_field = self.keyword_highlight_edit_field;
         let builtin_ids = nyaterm_core::builtin_keyword_rule_ids();
         let pattern_count_template = self.tr("settings.keywordHighlightPatternCount");
         let untitled_rule_label = self.tr("settings.keywordHighlightNewRule");
@@ -252,34 +250,160 @@ impl NyaTermApp {
                                 let rule_id = rule.id.clone();
                                 let rule_id_toggle = rule.id.clone();
                                 let rule_id_delete = rule.id.clone();
-                                let name_active = edit_id.as_deref() == Some(rule.id.as_str())
-                                    && edit_field == KeywordHighlightEditorField::Name;
-                                let patterns_active = edit_id.as_deref()
-                                    == Some(rule.id.as_str())
-                                    && edit_field == KeywordHighlightEditorField::Patterns;
-                                let dark_active = edit_id.as_deref() == Some(rule.id.as_str())
-                                    && edit_field == KeywordHighlightEditorField::ColorDark;
-                                let light_active = edit_id.as_deref() == Some(rule.id.as_str())
-                                    && edit_field == KeywordHighlightEditorField::ColorLight;
-                                let name_value = if rule.name.is_empty() {
-                                    " ".to_string()
+                                let patterns_value = rule.patterns.join("\n");
+                                let name_control = if is_open && keyword_highlighting_enabled {
+                                    let input = self.text_input_box(
+                                        Self::keyword_highlight_text_input_id(
+                                            &rule.id,
+                                            KeywordHighlightEditorField::Name,
+                                        ),
+                                        &rule.name,
+                                        TextInputSetup::placeholder(untitled_rule_label),
+                                        cx,
+                                    );
+                                    div()
+                                        .id(SharedString::from(format!(
+                                            "settings-keyword-rule-name-{}",
+                                            rule.id
+                                        )))
+                                        .min_w(px(160.))
+                                        .on_click(cx.listener({
+                                            let rule_id = rule_id.clone();
+                                            move |this, _, window, cx| {
+                                                this.focus_keyword_highlight_field(
+                                                    rule_id.clone(),
+                                                    KeywordHighlightEditorField::Name,
+                                                    window,
+                                                    cx,
+                                                );
+                                            }
+                                        }))
+                                        .child(input)
+                                        .into_any_element()
                                 } else {
-                                    rule.name.clone()
+                                    keyword_highlight_static_input(
+                                        palette,
+                                        &rule.name,
+                                        false,
+                                        false,
+                                        160.,
+                                    )
                                 };
-                                let patterns_value = if rule.patterns.is_empty() {
-                                    " ".to_string()
+                                let patterns_control = if is_open && keyword_highlighting_enabled {
+                                    let input = self.text_input_box(
+                                        Self::keyword_highlight_text_input_id(
+                                            &rule.id,
+                                            KeywordHighlightEditorField::Patterns,
+                                        ),
+                                        &patterns_value,
+                                        TextInputSetup::multi_line(""),
+                                        cx,
+                                    );
+                                    div()
+                                        .id(SharedString::from(format!(
+                                            "settings-keyword-rule-patterns-{}",
+                                            rule.id
+                                        )))
+                                        .font_family(crate::features::gpui_code_font_family())
+                                        .on_click(cx.listener({
+                                            let rule_id = rule_id.clone();
+                                            move |this, _, window, cx| {
+                                                this.focus_keyword_highlight_field(
+                                                    rule_id.clone(),
+                                                    KeywordHighlightEditorField::Patterns,
+                                                    window,
+                                                    cx,
+                                                );
+                                            }
+                                        }))
+                                        .child(input)
+                                        .into_any_element()
                                 } else {
-                                    rule.patterns.join("\n")
+                                    keyword_highlight_static_input(
+                                        palette,
+                                        &patterns_value,
+                                        true,
+                                        true,
+                                        0.,
+                                    )
                                 };
-                                let dark_value = if rule.color_dark.is_empty() {
-                                    " ".to_string()
+                                let dark_control = if is_open && keyword_highlighting_enabled {
+                                    let input = self.text_input_box(
+                                        Self::keyword_highlight_text_input_id(
+                                            &rule.id,
+                                            KeywordHighlightEditorField::ColorDark,
+                                        ),
+                                        &rule.color_dark,
+                                        TextInputSetup::placeholder("#rrggbb"),
+                                        cx,
+                                    );
+                                    div()
+                                        .id(SharedString::from(format!(
+                                            "settings-keyword-rule-dark-{}",
+                                            rule.id
+                                        )))
+                                        .w(px(96.))
+                                        .font_family(crate::features::gpui_code_font_family())
+                                        .on_click(cx.listener({
+                                            let rule_id = rule_id.clone();
+                                            move |this, _, window, cx| {
+                                                this.focus_keyword_highlight_field(
+                                                    rule_id.clone(),
+                                                    KeywordHighlightEditorField::ColorDark,
+                                                    window,
+                                                    cx,
+                                                );
+                                            }
+                                        }))
+                                        .child(input)
+                                        .into_any_element()
                                 } else {
-                                    rule.color_dark.clone()
+                                    keyword_highlight_static_input(
+                                        palette,
+                                        &rule.color_dark,
+                                        false,
+                                        true,
+                                        96.,
+                                    )
                                 };
-                                let light_value = if rule.color_light.is_empty() {
-                                    " ".to_string()
+                                let light_control = if is_open && keyword_highlighting_enabled {
+                                    let input = self.text_input_box(
+                                        Self::keyword_highlight_text_input_id(
+                                            &rule.id,
+                                            KeywordHighlightEditorField::ColorLight,
+                                        ),
+                                        &rule.color_light,
+                                        TextInputSetup::placeholder("#rrggbb"),
+                                        cx,
+                                    );
+                                    div()
+                                        .id(SharedString::from(format!(
+                                            "settings-keyword-rule-light-{}",
+                                            rule.id
+                                        )))
+                                        .w(px(96.))
+                                        .font_family(crate::features::gpui_code_font_family())
+                                        .on_click(cx.listener({
+                                            let rule_id = rule_id.clone();
+                                            move |this, _, window, cx| {
+                                                this.focus_keyword_highlight_field(
+                                                    rule_id.clone(),
+                                                    KeywordHighlightEditorField::ColorLight,
+                                                    window,
+                                                    cx,
+                                                );
+                                            }
+                                        }))
+                                        .child(input)
+                                        .into_any_element()
                                 } else {
-                                    rule.color_light.clone()
+                                    keyword_highlight_static_input(
+                                        palette,
+                                        &rule.color_light,
+                                        false,
+                                        true,
+                                        96.,
+                                    )
                                 };
                                 let palette_dark = nyaterm_core::keyword_highlight_color_palette(true);
                                 let palette_light =
@@ -417,10 +541,10 @@ impl NyaTermApp {
                                                     .on_key_down(cx.listener(
                                                         |this,
                                                          event: &KeyDownEvent,
-                                                         _,
+                                                         window,
                                                          cx| {
                                                             this.handle_keyword_highlight_key_down(
-                                                                event, cx,
+                                                                event, window, cx,
                                                             );
                                                         },
                                                     ))
@@ -431,49 +555,7 @@ impl NyaTermApp {
                                                         "settings.keywordHighlightRuleName",
                                                     ),
                                                     None,
-                                                    div()
-                                                        .id(SharedString::from(format!(
-                                                            "settings-keyword-rule-name-{}",
-                                                            rule.id
-                                                        )))
-                                                        .min_w(px(160.))
-                                                        .h(px(28.))
-                                                        .px_2()
-                                                        .rounded_md()
-                                                        .border_1()
-                                                        .border_color(if name_active {
-                                                            rgb(palette.link)
-                                                        } else {
-                                                            rgb(palette.border)
-                                                        })
-                                                        .bg(rgb(palette.input))
-                                                        .flex()
-                                                        .items_center()
-                                                        .text_size(px(12.))
-                                                        .text_color(rgb(palette.text))
-                                                        .child(name_value)
-                                                        .when(
-                                                            keyword_highlighting_enabled,
-                                                            |this| {
-                                                                this.cursor_pointer().on_click(
-                                                                    cx.listener({
-                                                                        let rule_id =
-                                                                            rule_id.clone();
-                                                                        move |this,
-                                                                              _,
-                                                                              window,
-                                                                              cx| {
-                                                                            this.focus_keyword_highlight_field(
-                                                                                rule_id.clone(),
-                                                                                KeywordHighlightEditorField::Name,
-                                                                                window,
-                                                                                cx,
-                                                                            );
-                                                                        }
-                                                                    }),
-                                                                )
-                                                            },
-                                                        ),
+                                                    name_control,
                                                 ))
                                                 .child(
                                                     div()
@@ -490,46 +572,7 @@ impl NyaTermApp {
                                                                     "settings.keywordHighlightRulePatterns",
                                                                 )),
                                                         )
-                                                        .child(
-                                                            div()
-                                                                .id(SharedString::from(format!(
-                                                                    "settings-keyword-rule-patterns-{}",
-                                                                    rule.id
-                                                                )))
-                                                                .min_h(px(72.))
-                                                                .px_2()
-                                                                .py_2()
-                                                                .rounded_md()
-                                                                .border_1()
-                                                                .border_color(if patterns_active {
-                                                                    rgb(palette.link)
-                                                                } else {
-                                                                    rgb(palette.border)
-                                                                })
-                                                                .bg(rgb(palette.input))
-                                                                .font_family(crate::features::gpui_code_font_family())
-                                                                .text_size(px(11.))
-                                                                .text_color(rgb(palette.text))
-                                                                .line_height(px(16.))
-                                                                .child(patterns_value)
-                                                                .when(
-                                                                    keyword_highlighting_enabled,
-                                                                    |this| {
-                                                                        this.cursor_pointer()
-                                                                            .on_click(cx.listener({
-                                                                                let rule_id = rule_id.clone();
-                                                                                move |this, _, window, cx| {
-                                                                                    this.focus_keyword_highlight_field(
-                                                                                        rule_id.clone(),
-                                                                                        KeywordHighlightEditorField::Patterns,
-                                                                                        window,
-                                                                                        cx,
-                                                                                    );
-                                                                                }
-                                                                            }))
-                                                                    },
-                                                                ),
-                                                        ),
+                                                        .child(patterns_control),
                                                 )
                                                 .child(
                                                     div()
@@ -561,54 +604,7 @@ impl NyaTermApp {
                                                                             palette.border,
                                                                         )),
                                                                 )
-                                                                .child(
-                                                                    div()
-                                                                        .id(SharedString::from(
-                                                                            format!(
-                                                                                "settings-keyword-rule-dark-{}",
-                                                                                rule.id
-                                                                            ),
-                                                                        ))
-                                                                        .min_w(px(88.))
-                                                                        .h(px(28.))
-                                                                        .px_2()
-                                                                        .rounded_md()
-                                                                        .border_1()
-                                                                        .border_color(
-                                                                            if dark_active {
-                                                                                rgb(palette.link)
-                                                                            } else {
-                                                                                rgb(palette.border)
-                                                                            },
-                                                                        )
-                                                                        .bg(rgb(palette.input))
-                                                                        .font_family(
-                                                                            crate::features::gpui_code_font_family(),
-                                                                        )
-                                                                        .text_size(px(11.))
-                                                                        .text_color(rgb(
-                                                                            palette.text,
-                                                                        ))
-                                                                        .flex()
-                                                                        .items_center()
-                                                                        .child(dark_value)
-                                                                        .when(
-                                                                            keyword_highlighting_enabled,
-                                                                            |this| {
-                                                                                this.cursor_pointer().on_click(cx.listener({
-                                                                                    let rule_id = rule_id.clone();
-                                                                                    move |this, _, window, cx| {
-                                                                                        this.focus_keyword_highlight_field(
-                                                                                            rule_id.clone(),
-                                                                                            KeywordHighlightEditorField::ColorDark,
-                                                                                            window,
-                                                                                            cx,
-                                                                                        );
-                                                                                    }
-                                                                                }))
-                                                                            },
-                                                                        ),
-                                                                ),
+                                                                .child(dark_control),
                                                         ))
                                                         .child(
                                                             div()
@@ -678,54 +674,7 @@ impl NyaTermApp {
                                                                             palette.border,
                                                                         )),
                                                                 )
-                                                                .child(
-                                                                    div()
-                                                                        .id(SharedString::from(
-                                                                            format!(
-                                                                                "settings-keyword-rule-light-{}",
-                                                                                rule.id
-                                                                            ),
-                                                                        ))
-                                                                        .min_w(px(88.))
-                                                                        .h(px(28.))
-                                                                        .px_2()
-                                                                        .rounded_md()
-                                                                        .border_1()
-                                                                        .border_color(
-                                                                            if light_active {
-                                                                                rgb(palette.link)
-                                                                            } else {
-                                                                                rgb(palette.border)
-                                                                            },
-                                                                        )
-                                                                        .bg(rgb(palette.input))
-                                                                        .font_family(
-                                                                            crate::features::gpui_code_font_family(),
-                                                                        )
-                                                                        .text_size(px(11.))
-                                                                        .text_color(rgb(
-                                                                            palette.text,
-                                                                        ))
-                                                                        .flex()
-                                                                        .items_center()
-                                                                        .child(light_value)
-                                                                        .when(
-                                                                            keyword_highlighting_enabled,
-                                                                            |this| {
-                                                                                this.cursor_pointer().on_click(cx.listener({
-                                                                                    let rule_id = rule_id.clone();
-                                                                                    move |this, _, window, cx| {
-                                                                                        this.focus_keyword_highlight_field(
-                                                                                            rule_id.clone(),
-                                                                                            KeywordHighlightEditorField::ColorLight,
-                                                                                            window,
-                                                                                            cx,
-                                                                                        );
-                                                                                    }
-                                                                                }))
-                                                                            },
-                                                                        ),
-                                                                ),
+                                                                .child(light_control),
                                                         ))
                                                         .child(
                                                             div()
@@ -789,6 +738,35 @@ impl NyaTermApp {
                 ),
         )
     }
+}
+
+fn keyword_highlight_static_input(
+    palette: ThemePalette,
+    value: &str,
+    multi_line: bool,
+    code_font: bool,
+    min_width: f32,
+) -> AnyElement {
+    div()
+        .when(min_width > 0., |this| this.min_w(px(min_width)))
+        .when_else(
+            multi_line,
+            |this| this.h(px(88.)).py_2().items_start(),
+            |this| this.h(px(30.)).items_center(),
+        )
+        .px_2()
+        .rounded_sm()
+        .border_1()
+        .border_color(rgb(palette.border))
+        .bg(rgb(palette.input))
+        .flex()
+        .text_xs()
+        .text_color(rgb(palette.text_muted))
+        .when(code_font, |this| {
+            this.font_family(crate::features::gpui_code_font_family())
+        })
+        .child(if value.is_empty() { " " } else { value }.to_string())
+        .into_any_element()
 }
 
 fn keyword_highlight_action_button(

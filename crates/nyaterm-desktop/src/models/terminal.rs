@@ -1080,6 +1080,25 @@ impl KeywordHighlightEditorField {
             Self::ColorLight => Self::Name,
         }
     }
+
+    pub(crate) fn input_key(self) -> &'static str {
+        match self {
+            Self::Name => "name",
+            Self::Patterns => "patterns",
+            Self::ColorDark => "color-dark",
+            Self::ColorLight => "color-light",
+        }
+    }
+
+    pub(crate) fn from_input_key(key: &str) -> Option<Self> {
+        match key {
+            "name" => Some(Self::Name),
+            "patterns" => Some(Self::Patterns),
+            "color-dark" => Some(Self::ColorDark),
+            "color-light" => Some(Self::ColorLight),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]

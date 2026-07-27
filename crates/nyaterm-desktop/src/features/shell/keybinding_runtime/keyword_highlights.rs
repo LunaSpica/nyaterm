@@ -10,6 +10,10 @@ const MAX_KEYWORD_HIGHLIGHT_IMPORT_BYTES: u64 = 4 * 1024 * 1024;
 impl NyaTermApp {
     pub(in crate::features) fn toggle_keyword_highlights(&mut self, cx: &mut Context<Self>) {
         self.keyword_highlights.enabled = !self.keyword_highlights.enabled;
+        if !self.keyword_highlights.enabled {
+            self.keyword_highlight_edit_id = None;
+            self.forget_text_inputs("keyword.highlight.");
+        }
         self.save_keyword_highlights(cx);
     }
 
@@ -152,6 +156,7 @@ impl NyaTermApp {
         ) {
             if let Ok(config) = store.load_keyword_highlights() {
                 self.keyword_highlights = config;
+                self.forget_text_inputs("keyword.highlight.");
             }
         }
     }
@@ -197,8 +202,13 @@ impl NyaTermApp {
         if self.keyword_highlight_expanded_id.as_deref() == Some(rule_id.as_str()) {
             self.keyword_highlight_expanded_id = None;
             self.keyword_highlight_edit_id = None;
+            self.forget_text_inputs(&keyword_highlight_text_input_prefix(&rule_id));
         } else {
+            if let Some(previous_id) = self.keyword_highlight_expanded_id.take() {
+                self.forget_text_inputs(&keyword_highlight_text_input_prefix(&previous_id));
+            }
             self.keyword_highlight_expanded_id = Some(rule_id);
+            self.keyword_highlight_edit_id = None;
         }
         cx.notify();
     }
@@ -224,9 +234,15 @@ impl NyaTermApp {
             enabled: true,
         });
         self.keyword_highlight_expanded_id = Some(id.clone());
-        self.keyword_highlight_edit_id = Some(id);
+        self.keyword_highlight_edit_id = Some(id.clone());
         self.keyword_highlight_edit_field = KeywordHighlightEditorField::Name;
-        window.focus(&self.keyword_highlight_focus);
+        let input = self.text_input(
+            keyword_highlight_text_input_id(&id, KeywordHighlightEditorField::Name),
+            "New rule",
+            TextInputSetup::placeholder(self.tr("settings.keywordHighlightNewRule")),
+            cx,
+        );
+        window.focus(&input.read(cx).focus_handle());
         self.save_keyword_highlights(cx);
     }
 
@@ -244,6 +260,7 @@ impl NyaTermApp {
         if self.keyword_highlight_edit_id.as_deref() == Some(rule_id.as_str()) {
             self.keyword_highlight_edit_id = None;
         }
+        self.forget_text_inputs(&keyword_highlight_text_input_prefix(&rule_id));
         self.save_keyword_highlights(cx);
     }
 
@@ -254,27 +271,11 @@ impl NyaTermApp {
         color: &str,
         cx: &mut Context<Self>,
     ) {
-        let color = color.trim();
-        if !(color.starts_with('#') && (color.len() == 4 || color.len() == 7))
-            && !color.is_empty()
-            && color != "#"
-        {
-            // allow progressive hex entry only when matching /^#[0-9a-fA-F]{0,6}$/
-        }
-        if !color.is_empty()
-            && !color.chars().enumerate().all(|(i, ch)| {
-                if i == 0 {
-                    ch == '#'
-                } else {
-                    ch.is_ascii_hexdigit()
-                }
-            })
-        {
-            return;
-        }
-        if color.len() > 7 {
-            return;
-        }
+        let color = if color.trim().is_empty() {
+            if dark { "#79c0ff" } else { "#0969da" }.to_string()
+        } else {
+            normalize_keyword_highlight_color(color)
+        };
         if let Some(rule) = self
             .keyword_highlights
             .rules
@@ -282,18 +283,20 @@ impl NyaTermApp {
             .find(|rule| rule.id == rule_id)
         {
             if dark {
-                rule.color_dark = if color.is_empty() {
-                    "#79c0ff".into()
-                } else {
-                    color.to_string()
-                };
+                rule.color_dark = color.clone();
             } else {
-                rule.color_light = if color.is_empty() {
-                    "#0969da".into()
-                } else {
-                    color.to_string()
-                };
+                rule.color_light = color.clone();
             }
+            let field = if dark {
+                KeywordHighlightEditorField::ColorDark
+            } else {
+                KeywordHighlightEditorField::ColorLight
+            };
+            self.reset_text_input(
+                &keyword_highlight_text_input_id(&rule_id, field),
+                &color,
+                cx,
+            );
             self.save_keyword_highlights(cx);
         }
     }
@@ -305,16 +308,44 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let value = self
+            .keyword_highlights
+            .rules
+            .iter()
+            .find(|rule| rule.id == rule_id)
+            .map(|rule| match field {
+                KeywordHighlightEditorField::Name => rule.name.clone(),
+                KeywordHighlightEditorField::Patterns => rule.patterns.join("\n"),
+                KeywordHighlightEditorField::ColorDark => rule.color_dark.clone(),
+                KeywordHighlightEditorField::ColorLight => rule.color_light.clone(),
+            })
+            .unwrap_or_default();
+        let setup = match field {
+            KeywordHighlightEditorField::Name => {
+                TextInputSetup::placeholder(self.tr("settings.keywordHighlightNewRule"))
+            }
+            KeywordHighlightEditorField::Patterns => TextInputSetup::multi_line(""),
+            KeywordHighlightEditorField::ColorDark | KeywordHighlightEditorField::ColorLight => {
+                TextInputSetup::placeholder("#rrggbb")
+            }
+        };
+        let input = self.text_input(
+            keyword_highlight_text_input_id(&rule_id, field),
+            &value,
+            setup,
+            cx,
+        );
         self.keyword_highlight_expanded_id = Some(rule_id.clone());
         self.keyword_highlight_edit_id = Some(rule_id);
         self.keyword_highlight_edit_field = field;
-        window.focus(&self.keyword_highlight_focus);
+        window.focus(&input.read(cx).focus_handle());
         cx.notify();
     }
 
     pub(in crate::features) fn handle_keyword_highlight_key_down(
         &mut self,
         event: &KeyDownEvent,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         cx.stop_propagation();
@@ -325,133 +356,139 @@ impl NyaTermApp {
         match event.keystroke.key.as_str() {
             "escape" => {
                 self.keyword_highlight_edit_id = None;
+                window.focus(&self.keyword_highlight_focus);
                 self.terminal.view.status = "keyword rule edit cancelled".to_string();
                 cx.notify();
                 return;
             }
             "tab" => {
-                self.keyword_highlight_edit_field = field.next();
-                cx.notify();
+                self.focus_keyword_highlight_field(rule_id, field.next(), window, cx);
                 return;
             }
-            "enter" if field == KeywordHighlightEditorField::Patterns => {
-                if let Some(rule) = self
-                    .keyword_highlights
-                    .rules
-                    .iter_mut()
-                    .find(|rule| rule.id == rule_id)
-                {
-                    rule.patterns.push(String::new());
-                    self.save_keyword_highlights(cx);
-                }
+            "enter" if field == KeywordHighlightEditorField::Name => {
+                self.focus_keyword_highlight_field(
+                    rule_id,
+                    KeywordHighlightEditorField::Patterns,
+                    window,
+                    cx,
+                );
                 return;
             }
             "enter" => {
                 self.keyword_highlight_edit_id = None;
+                window.focus(&self.keyword_highlight_focus);
                 self.save_keyword_highlights(cx);
-                return;
-            }
-            "backspace" => {
-                if let Some(rule) = self
-                    .keyword_highlights
-                    .rules
-                    .iter_mut()
-                    .find(|rule| rule.id == rule_id)
-                {
-                    match field {
-                        KeywordHighlightEditorField::Name => {
-                            rule.name.pop();
-                        }
-                        KeywordHighlightEditorField::Patterns => {
-                            if let Some(last) = rule.patterns.last_mut() {
-                                if last.is_empty() {
-                                    rule.patterns.pop();
-                                } else {
-                                    last.pop();
-                                }
-                            }
-                        }
-                        KeywordHighlightEditorField::ColorDark => {
-                            if rule.color_dark.len() > 1 {
-                                rule.color_dark.pop();
-                            }
-                        }
-                        KeywordHighlightEditorField::ColorLight => {
-                            if rule.color_light.len() > 1 {
-                                rule.color_light.pop();
-                            }
-                        }
-                    }
-                    self.save_keyword_highlights(cx);
-                }
                 return;
             }
             _ => {}
         }
+    }
 
-        let Some(input) = event.keystroke.key_char.as_deref() else {
+    pub(in crate::features) fn apply_keyword_highlight_input(
+        &mut self,
+        field_id: &str,
+        text: String,
+        cx: &mut Context<Self>,
+    ) {
+        let Some((rule_id, field)) = parse_keyword_highlight_text_input_id(field_id) else {
             return;
         };
-        if input.is_empty() {
-            return;
-        }
-        if let Some(rule) = self
+        let normalized_color = matches!(
+            field,
+            KeywordHighlightEditorField::ColorDark | KeywordHighlightEditorField::ColorLight
+        )
+        .then(|| normalize_keyword_highlight_color(&text));
+        let Some(rule) = self
             .keyword_highlights
             .rules
             .iter_mut()
             .find(|rule| rule.id == rule_id)
-        {
-            match field {
-                KeywordHighlightEditorField::Name => {
-                    rule.name.push_str(input);
-                }
-                KeywordHighlightEditorField::Patterns => {
-                    if input == "\n" || event.keystroke.key.as_str() == "enter" {
-                        rule.patterns.push(String::new());
-                    } else {
-                        if rule.patterns.is_empty() {
-                            rule.patterns.push(String::new());
-                        }
-                        if let Some(last) = rule.patterns.last_mut() {
-                            last.push_str(input);
-                        }
-                    }
-                }
-                KeywordHighlightEditorField::ColorDark => {
-                    for ch in input.chars() {
-                        if rule.color_dark.len() >= 7 {
-                            break;
-                        }
-                        if rule.color_dark.is_empty() {
-                            rule.color_dark.push('#');
-                        }
-                        if ch == '#' && rule.color_dark == "#" {
-                            continue;
-                        }
-                        if ch.is_ascii_hexdigit() {
-                            rule.color_dark.push(ch.to_ascii_lowercase());
-                        }
-                    }
-                }
-                KeywordHighlightEditorField::ColorLight => {
-                    for ch in input.chars() {
-                        if rule.color_light.len() >= 7 {
-                            break;
-                        }
-                        if rule.color_light.is_empty() {
-                            rule.color_light.push('#');
-                        }
-                        if ch == '#' && rule.color_light == "#" {
-                            continue;
-                        }
-                        if ch.is_ascii_hexdigit() {
-                            rule.color_light.push(ch.to_ascii_lowercase());
-                        }
-                    }
-                }
+        else {
+            return;
+        };
+        match field {
+            KeywordHighlightEditorField::Name => rule.name = text,
+            KeywordHighlightEditorField::Patterns => {
+                rule.patterns = text.split('\n').map(ToOwned::to_owned).collect();
             }
-            self.save_keyword_highlights(cx);
+            KeywordHighlightEditorField::ColorDark => {
+                rule.color_dark = normalized_color.clone().unwrap_or_default();
+            }
+            KeywordHighlightEditorField::ColorLight => {
+                rule.color_light = normalized_color.clone().unwrap_or_default();
+            }
         }
+        self.keyword_highlight_edit_id = Some(rule_id.to_string());
+        self.keyword_highlight_edit_field = field;
+        if let Some(color) = normalized_color {
+            self.reset_text_input(&keyword_highlight_text_input_id(rule_id, field), &color, cx);
+        }
+        self.save_keyword_highlights(cx);
+    }
+
+    pub(in crate::features) fn keyword_highlight_text_input_id(
+        rule_id: &str,
+        field: KeywordHighlightEditorField,
+    ) -> String {
+        keyword_highlight_text_input_id(rule_id, field)
+    }
+}
+
+fn keyword_highlight_text_input_id(rule_id: &str, field: KeywordHighlightEditorField) -> String {
+    format!("keyword.highlight.{rule_id}.{}", field.input_key())
+}
+
+fn keyword_highlight_text_input_prefix(rule_id: &str) -> String {
+    format!("keyword.highlight.{rule_id}.")
+}
+
+fn parse_keyword_highlight_text_input_id(
+    field_id: &str,
+) -> Option<(&str, KeywordHighlightEditorField)> {
+    let (rule_id, field) = field_id.rsplit_once('.')?;
+    if rule_id.is_empty() {
+        return None;
+    }
+    Some((rule_id, KeywordHighlightEditorField::from_input_key(field)?))
+}
+
+fn normalize_keyword_highlight_color(value: &str) -> String {
+    let value = value.trim();
+    let digits = value.strip_prefix('#').unwrap_or(value);
+    let mut normalized = String::from("#");
+    normalized.extend(
+        digits
+            .chars()
+            .filter(char::is_ascii_hexdigit)
+            .take(6)
+            .map(|ch| ch.to_ascii_lowercase()),
+    );
+    normalized
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_keyword_highlight_rule_ids_containing_dots() {
+        assert_eq!(
+            parse_keyword_highlight_text_input_id("custom.rule.color-dark"),
+            Some(("custom.rule", KeywordHighlightEditorField::ColorDark))
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_keyword_highlight_text_input_ids() {
+        for field_id in ["rule", ".name", "rule.unknown"] {
+            assert_eq!(parse_keyword_highlight_text_input_id(field_id), None);
+        }
+    }
+
+    #[test]
+    fn normalizes_progressive_keyword_highlight_colors() {
+        assert_eq!(normalize_keyword_highlight_color("A2-c4_FF9"), "#a2c4ff");
+        assert_eq!(normalize_keyword_highlight_color(""), "#");
     }
 }
 
