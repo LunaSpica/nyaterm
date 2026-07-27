@@ -202,9 +202,7 @@ impl TextField {
             }
             "v" if accel => {
                 if let Some(text) = cx.read_from_clipboard().and_then(|item| item.text()) {
-                    // A single-line field: paste the first line only, rather
-                    // than silently storing a newline nothing can display.
-                    let text = text.replace(['\n', '\r'], " ");
+                    let text = prepare_pasted_text(&text, self.multi_line);
                     self.edit.insert(&text);
                     self.emit_changed(window, cx);
                 }
@@ -286,6 +284,15 @@ fn motion(base: CursorMotion, word: bool) -> CursorMotion {
         (CursorMotion::Left, true) => CursorMotion::WordLeft,
         (CursorMotion::Right, true) => CursorMotion::WordRight,
         (base, _) => base,
+    }
+}
+
+fn prepare_pasted_text(text: &str, multi_line: bool) -> String {
+    let normalized = text.replace("\r\n", "\n").replace('\r', "\n");
+    if multi_line {
+        normalized
+    } else {
+        normalized.replace('\n', " ")
     }
 }
 
@@ -998,7 +1005,9 @@ fn utf16_offset_for_byte(text: &str, offset: usize) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use super::{buffer_offset, display_offset, display_text, utf16_offset_for_byte};
+    use super::{
+        buffer_offset, display_offset, display_text, prepare_pasted_text, utf16_offset_for_byte,
+    };
     use nyaterm_core::TextEdit;
 
     #[test]
@@ -1030,5 +1039,21 @@ mod tests {
         // An emoji is one char but two UTF-16 units, which is what the IME counts.
         assert_eq!(utf16_offset_for_byte("a🙂b", 5), 3);
         assert_eq!(utf16_offset_for_byte("a🙂b", 1), 1);
+    }
+
+    #[test]
+    fn single_line_paste_flattens_normalized_line_endings() {
+        assert_eq!(
+            prepare_pasted_text("first\r\nsecond\rthird\nfourth", false),
+            "first second third fourth"
+        );
+    }
+
+    #[test]
+    fn multi_line_paste_preserves_normalized_line_endings() {
+        assert_eq!(
+            prepare_pasted_text("first\r\nsecond\rthird\nfourth", true),
+            "first\nsecond\nthird\nfourth"
+        );
     }
 }
