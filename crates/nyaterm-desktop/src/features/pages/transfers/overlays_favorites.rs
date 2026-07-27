@@ -7,6 +7,8 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.transfer.browser.upload_menu = None;
+        self.transfer.browser.path_menu = None;
+        self.transfer.browser.context_menu = None;
         self.transfer.browser.favorites_menu = Some(TransferBrowserFavoritesMenuState {
             x: event.position.x,
             y: event.position.y + px(18.),

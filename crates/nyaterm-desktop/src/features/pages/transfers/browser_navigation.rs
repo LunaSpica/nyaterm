@@ -77,6 +77,7 @@ impl NyaTermApp {
         self.cancel_transfer_browser_pending_rename_without_notify();
         self.transfer.browser.context_menu = None;
         self.transfer.browser.favorites_menu = None;
+        self.transfer.browser.path_menu = None;
         self.transfer.browser.upload_menu = None;
         true
     }
@@ -105,6 +106,7 @@ impl NyaTermApp {
         self.cancel_transfer_browser_pending_rename_without_notify();
         self.transfer.browser.context_menu = None;
         self.transfer.browser.favorites_menu = None;
+        self.transfer.browser.path_menu = None;
         self.transfer.browser.upload_menu = None;
     }
 
@@ -133,6 +135,7 @@ impl NyaTermApp {
         self.transfer.browser.path = path.clone();
         self.transfer.browser.path_draft.clear();
         self.transfer.browser.path_editing = false;
+        self.transfer.browser.path_menu = None;
         self.transfer.browser.selected_remote_path = None;
         if record_history {
             self.record_transfer_browser_history(path);

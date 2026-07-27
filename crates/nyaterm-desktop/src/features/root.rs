@@ -543,6 +543,9 @@ impl NyaTermApp {
             .when(self.transfer.browser.favorites_menu.is_some(), |this| {
                 this.child(self.transfer_browser_favorites_menu_overlay(cx))
             })
+            .when(self.transfer.browser.path_menu.is_some(), |this| {
+                this.child(self.transfer_browser_path_menu_overlay(cx))
+            })
             .when(self.transfer.browser.upload_menu.is_some(), |this| {
                 this.child(self.transfer_browser_upload_menu_overlay(cx))
             })

@@ -29,6 +29,12 @@ impl NyaTermApp {
         } else {
             format!("{}|", self.transfer.browser.path_draft)
         };
+        let breadcrumbs = build_transfer_browser_breadcrumbs(
+            &current_browser_path,
+            &self.transfer.browser.home_dir,
+        );
+        let (visible_breadcrumbs, overflow_breadcrumbs) =
+            collapse_transfer_browser_breadcrumbs(&breadcrumbs);
 
         // Tauri FileExplorerPathBar: minHeight ~26px, mono path, favorites on the right.
         let palette = self.theme_palette();
@@ -83,25 +89,17 @@ impl NyaTermApp {
                         )
                     })
                     .when(!self.transfer.browser.path_editing, |this| {
-                        this.child(
-                            div()
-                                .id(SharedString::from("transfer-browser-path-display"))
-                                .min_w_0()
-                                .flex_1()
-                                .rounded_sm()
-                                .px_0()
-                                .py_0()
-                                .font_family(crate::features::gpui_code_font_family())
-                                .text_size(px(10.))
-                                .text_color(rgb(palette.text_muted))
-                                .overflow_hidden()
-                                .cursor_pointer()
-                                .hover(|this| this.text_color(rgb(palette.text)))
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    this.begin_transfer_browser_path_edit(window, cx);
-                                }))
-                                .child(truncate_preview(&display_browser_path, 120)),
-                        )
+                        this.child(transfer_browser_breadcrumb_row(
+                            palette,
+                            display_browser_path.clone(),
+                            current_browser_path.clone(),
+                            breadcrumbs.clone(),
+                            visible_breadcrumbs.clone(),
+                            overflow_breadcrumbs.clone(),
+                            self.tr("fileExplorer.breadcrumbOverflow").to_string(),
+                            self.tr("fileExplorer.showChildDirectories").to_string(),
+                            cx,
+                        ))
                     })
                     .child(
                         div()
@@ -176,6 +174,229 @@ impl NyaTermApp {
         self.terminal.view.status = "copied current remote directory".to_string();
         self.transfer.browser.status = truncate_preview(&path, 92);
         cx.notify();
+    }
+
+    pub(in crate::features) fn close_transfer_browser_path_menu(&mut self, cx: &mut Context<Self>) {
+        self.transfer.browser.path_menu = None;
+        cx.notify();
+    }
+
+    fn open_transfer_browser_breadcrumb_overflow(
+        &mut self,
+        segments: Vec<TransferBrowserBreadcrumbSegment>,
+        event: &MouseDownEvent,
+        cx: &mut Context<Self>,
+    ) {
+        self.transfer.browser.context_menu = None;
+        self.transfer.browser.favorites_menu = None;
+        self.transfer.browser.upload_menu = None;
+        self.transfer.browser.path_menu = Some(TransferBrowserPathMenuState {
+            session_id: self.active_session_id.clone(),
+            x: event.position.x,
+            y: event.position.y,
+            kind: TransferBrowserPathMenuKind::Overflow { segments },
+        });
+        cx.notify();
+    }
+
+    fn open_transfer_browser_children_menu(
+        &mut self,
+        path: String,
+        branch_child_path: Option<String>,
+        event: &MouseDownEvent,
+        cx: &mut Context<Self>,
+    ) {
+        let path = normalized_transfer_browser_path(&path);
+        let current_path = normalized_transfer_browser_path(&self.transfer.browser.path);
+        let status = if path == current_path {
+            TransferBrowserChildrenMenuStatus::Ready(transfer_browser_child_directories(
+                &self.transfer.browser.entries,
+                self.settings.ui_file_explorer_show_hidden_files,
+            ))
+        } else {
+            TransferBrowserChildrenMenuStatus::Loading
+        };
+        self.transfer.browser.context_menu = None;
+        self.transfer.browser.favorites_menu = None;
+        self.transfer.browser.upload_menu = None;
+        self.transfer.browser.path_menu = Some(TransferBrowserPathMenuState {
+            session_id: self.active_session_id.clone(),
+            x: event.position.x,
+            y: event.position.y,
+            kind: TransferBrowserPathMenuKind::Children {
+                path: path.clone(),
+                branch_child_path,
+                request_id: None,
+                status,
+            },
+        });
+        if path != current_path {
+            self.start_transfer_browser_children_job(path, cx);
+        } else {
+            cx.notify();
+        }
+    }
+
+    fn retry_transfer_browser_children_menu(&mut self, cx: &mut Context<Self>) {
+        let path = self
+            .transfer
+            .browser
+            .path_menu
+            .as_ref()
+            .and_then(|menu| match &menu.kind {
+                TransferBrowserPathMenuKind::Children { path, .. } => Some(path.clone()),
+                TransferBrowserPathMenuKind::Overflow { .. } => None,
+            });
+        if let Some(path) = path {
+            self.start_transfer_browser_children_job(path, cx);
+        }
+    }
+
+    pub(in crate::features) fn transfer_browser_path_menu_overlay(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let palette = self.theme_palette();
+        let menu =
+            self.transfer
+                .browser
+                .path_menu
+                .clone()
+                .unwrap_or(TransferBrowserPathMenuState {
+                    session_id: None,
+                    x: px(8.),
+                    y: px(8.),
+                    kind: TransferBrowserPathMenuKind::Overflow {
+                        segments: Vec::new(),
+                    },
+                });
+        let preferred_height = match &menu.kind {
+            TransferBrowserPathMenuKind::Overflow { segments } => 16. + segments.len() as f32 * 28.,
+            TransferBrowserPathMenuKind::Children { status, .. } => match status {
+                TransferBrowserChildrenMenuStatus::Ready(entries) => {
+                    16. + entries.len().min(11) as f32 * 28.
+                }
+                TransferBrowserChildrenMenuStatus::Loading => 56.,
+                TransferBrowserChildrenMenuStatus::Error(_) => 112.,
+            },
+        };
+        let (viewport_w, viewport_h) = self.last_viewport_size;
+        let (menu_x, menu_y, menu_max_height) = transfer_menu_position(
+            f32::from(menu.x),
+            f32::from(menu.y),
+            280.,
+            preferred_height,
+            viewport_w,
+            viewport_h,
+        );
+
+        let content = match menu.kind {
+            TransferBrowserPathMenuKind::Overflow { segments } => {
+                transfer_browser_path_menu_entries(palette, segments, None, cx).into_any_element()
+            }
+            TransferBrowserPathMenuKind::Children {
+                branch_child_path,
+                status,
+                ..
+            } => match status {
+                TransferBrowserChildrenMenuStatus::Loading => div()
+                    .px_2()
+                    .py_2()
+                    .text_xs()
+                    .text_color(rgb(palette.text_muted))
+                    .child(self.tr("fileExplorer.loadingChildDirectories"))
+                    .into_any_element(),
+                TransferBrowserChildrenMenuStatus::Error(error) => div()
+                    .px_2()
+                    .py_2()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(palette.danger))
+                            .child(self.tr("fileExplorer.childDirectoriesFailed")),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(palette.text_muted))
+                            .child(truncate_preview(&error, 120)),
+                    )
+                    .child(
+                        div()
+                            .id(SharedString::from("transfer-browser-path-menu-retry"))
+                            .h(px(26.))
+                            .px_2()
+                            .rounded_sm()
+                            .flex()
+                            .items_center()
+                            .text_xs()
+                            .text_color(rgb(palette.link))
+                            .cursor_pointer()
+                            .hover(|this| this.bg(rgb(palette.hover)))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.retry_transfer_browser_children_menu(cx);
+                            }))
+                            .child(self.tr("common.retry")),
+                    )
+                    .into_any_element(),
+                TransferBrowserChildrenMenuStatus::Ready(entries) if entries.is_empty() => div()
+                    .px_2()
+                    .py_2()
+                    .text_xs()
+                    .text_color(rgb(palette.text_muted))
+                    .child(self.tr("fileExplorer.noChildDirectories"))
+                    .into_any_element(),
+                TransferBrowserChildrenMenuStatus::Ready(entries) => {
+                    let segments = entries
+                        .into_iter()
+                        .map(|entry| TransferBrowserBreadcrumbSegment {
+                            label: entry.name,
+                            path: entry.path,
+                        })
+                        .collect();
+                    transfer_browser_path_menu_entries(
+                        palette,
+                        segments,
+                        branch_child_path.as_deref(),
+                        cx,
+                    )
+                    .into_any_element()
+                }
+            },
+        };
+
+        div()
+            .id(SharedString::from("transfer-browser-path-menu-overlay"))
+            .absolute()
+            .top_0()
+            .bottom_0()
+            .left_0()
+            .right_0()
+            .on_click(cx.listener(|this, _, _, cx| {
+                this.close_transfer_browser_path_menu(cx);
+            }))
+            .child(
+                div()
+                    .id(SharedString::from("transfer-browser-path-menu"))
+                    .absolute()
+                    .top(px(menu_y))
+                    .left(px(menu_x))
+                    .w(px(280.))
+                    .max_h(px(menu_max_height.min(324.)))
+                    .overflow_y_scroll()
+                    .scrollbar_width(px(6.))
+                    .rounded_md()
+                    .border_1()
+                    .border_color(rgb(palette.border))
+                    .bg(self.shell_surface_color(palette.bg))
+                    .shadow_lg()
+                    .p_1()
+                    .on_click(|_, _, cx| cx.stop_propagation())
+                    .child(content),
+            )
     }
 
     pub(super) fn send_current_transfer_browser_path_to_terminal(
@@ -281,6 +502,308 @@ impl NyaTermApp {
     }
 }
 
+fn transfer_browser_breadcrumb_row(
+    palette: crate::theme::ThemePalette,
+    display_path: String,
+    current_path: String,
+    all_segments: Vec<TransferBrowserBreadcrumbSegment>,
+    visible_segments: Vec<TransferBrowserBreadcrumbSegment>,
+    overflow_segments: Vec<TransferBrowserBreadcrumbSegment>,
+    breadcrumb_overflow_label: String,
+    show_child_directories_label: String,
+    cx: &mut Context<NyaTermApp>,
+) -> impl IntoElement {
+    let mut row = div()
+        .id(SharedString::from("transfer-browser-path-display"))
+        .min_w_0()
+        .flex_1()
+        .flex()
+        .items_center()
+        .overflow_hidden()
+        .font_family(crate::features::gpui_code_font_family())
+        .text_size(px(10.))
+        .tooltip(move |_, cx| {
+            cx.new(|_| crate::features::ChromeTooltip::new(display_path.clone()))
+                .into()
+        });
+
+    if !overflow_segments.is_empty() {
+        let open_segments = overflow_segments.clone();
+        row = row.child(
+            div()
+                .id(SharedString::from("transfer-browser-breadcrumb-overflow"))
+                .size(px(20.))
+                .flex_none()
+                .flex()
+                .items_center()
+                .justify_center()
+                .rounded_sm()
+                .text_color(rgb(palette.text_muted))
+                .cursor_pointer()
+                .hover(|this| {
+                    this.bg(rgb(palette.surface_elevated))
+                        .text_color(rgb(palette.text))
+                })
+                .tooltip(move |_, cx| {
+                    cx.new(|_| {
+                        crate::features::ChromeTooltip::new(breadcrumb_overflow_label.clone())
+                    })
+                    .into()
+                })
+                .on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(move |this, event: &MouseDownEvent, _, cx| {
+                        cx.stop_propagation();
+                        this.open_transfer_browser_breadcrumb_overflow(
+                            open_segments.clone(),
+                            event,
+                            cx,
+                        );
+                    }),
+                )
+                .child(
+                    svg()
+                        .size(px(14.))
+                        .path("icons/session/more.svg")
+                        .text_color(rgb(palette.text_muted)),
+                ),
+        );
+    }
+
+    for segment in visible_segments {
+        let is_current = segment.path == current_path;
+        let branch_child_path = all_segments
+            .iter()
+            .position(|candidate| candidate.path == segment.path)
+            .and_then(|index| all_segments.get(index + 1))
+            .map(|candidate| candidate.path.clone());
+        let label_path = segment.path.clone();
+        let children_path = segment.path.clone();
+        let children_branch = branch_child_path.clone();
+        let children_tooltip = show_child_directories_label.replace("{{path}}", &segment.path);
+        row = row.child(
+            div()
+                .flex()
+                .flex_none()
+                .items_center()
+                .child(
+                    div()
+                        .id(SharedString::from(format!(
+                            "transfer-browser-breadcrumb-label-{}",
+                            segment.path
+                        )))
+                        .h(px(20.))
+                        .max_w(px(128.))
+                        .px_1()
+                        .flex()
+                        .items_center()
+                        .overflow_hidden()
+                        .rounded_l_sm()
+                        .text_color(if is_current {
+                            rgb(palette.text)
+                        } else {
+                            rgb(palette.text_muted)
+                        })
+                        .cursor_pointer()
+                        .hover(|this| {
+                            this.bg(rgb(palette.surface_elevated))
+                                .text_color(rgb(palette.text))
+                        })
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            if is_current {
+                                this.begin_transfer_browser_path_edit(window, cx);
+                            } else {
+                                this.open_transfer_browser_directory(
+                                    label_path.clone(),
+                                    window,
+                                    cx,
+                                );
+                            }
+                        }))
+                        .child(truncate_preview(&segment.label, 18)),
+                )
+                .child(
+                    div()
+                        .id(SharedString::from(format!(
+                            "transfer-browser-breadcrumb-children-{}",
+                            segment.path
+                        )))
+                        .h(px(20.))
+                        .w(px(16.))
+                        .flex_none()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .rounded_r_sm()
+                        .text_color(rgb(palette.text_muted))
+                        .cursor_pointer()
+                        .hover(|this| {
+                            this.bg(rgb(palette.surface_elevated))
+                                .text_color(rgb(palette.text))
+                        })
+                        .tooltip(move |_, cx| {
+                            cx.new(|_| {
+                                crate::features::ChromeTooltip::new(children_tooltip.clone())
+                            })
+                            .into()
+                        })
+                        .on_mouse_down(
+                            MouseButton::Left,
+                            cx.listener(move |this, event: &MouseDownEvent, _, cx| {
+                                cx.stop_propagation();
+                                this.open_transfer_browser_children_menu(
+                                    children_path.clone(),
+                                    children_branch.clone(),
+                                    event,
+                                    cx,
+                                );
+                            }),
+                        )
+                        .child(
+                            svg()
+                                .size(px(11.))
+                                .path("icons/chevron-down.svg")
+                                .text_color(rgb(palette.text_muted)),
+                        ),
+                ),
+        );
+    }
+    row
+}
+
+fn transfer_browser_path_menu_entries(
+    palette: crate::theme::ThemePalette,
+    segments: Vec<TransferBrowserBreadcrumbSegment>,
+    branch_child_path: Option<&str>,
+    cx: &mut Context<NyaTermApp>,
+) -> impl IntoElement {
+    let mut list = div().flex().flex_col();
+    for segment in segments {
+        let is_branch = branch_child_path == Some(segment.path.as_str());
+        let open_path = segment.path.clone();
+        list = list.child(
+            div()
+                .id(SharedString::from(format!(
+                    "transfer-browser-path-menu-entry-{}",
+                    segment.path
+                )))
+                .h(px(28.))
+                .w_full()
+                .px_2()
+                .flex()
+                .items_center()
+                .gap_2()
+                .rounded_sm()
+                .text_xs()
+                .text_color(rgb(palette.text))
+                .cursor_pointer()
+                .hover(|this| this.bg(rgb(palette.hover)))
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    this.close_transfer_browser_path_menu(cx);
+                    this.open_transfer_browser_directory(open_path.clone(), window, cx);
+                }))
+                .child(
+                    div()
+                        .min_w_0()
+                        .flex_1()
+                        .overflow_hidden()
+                        .child(truncate_preview(&segment.label, 44)),
+                )
+                .when(is_branch, |this| {
+                    this.child(
+                        svg()
+                            .size(px(13.))
+                            .flex_none()
+                            .path("icons/check.svg")
+                            .text_color(rgb(palette.link)),
+                    )
+                }),
+        );
+    }
+    list
+}
+
+fn transfer_browser_child_directories(
+    entries: &[SftpFileEntry],
+    show_hidden_files: bool,
+) -> Vec<SftpFileEntry> {
+    let mut directories = entries
+        .iter()
+        .filter(|entry| {
+            entry.file_type == SftpFileType::Directory
+                && entry.name != "."
+                && entry.name != ".."
+                && (show_hidden_files || !entry.name.starts_with('.'))
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    directories.sort_by(|left, right| {
+        natural_compare_ascii(&left.name, &right.name).then_with(|| left.name.cmp(&right.name))
+    });
+    directories
+}
+
+fn build_transfer_browser_breadcrumbs(
+    current_path: &str,
+    home_dir: &str,
+) -> Vec<TransferBrowserBreadcrumbSegment> {
+    let current_path = normalized_transfer_browser_path(current_path);
+    if current_path == "." || !current_path.starts_with('/') {
+        let mut path = String::new();
+        return current_path
+            .split('/')
+            .filter(|part| !part.is_empty())
+            .map(|part| {
+                path = remote_child_path(&path, part);
+                TransferBrowserBreadcrumbSegment {
+                    label: part.to_string(),
+                    path: path.clone(),
+                }
+            })
+            .collect();
+    }
+
+    let home_dir = normalized_transfer_browser_path(home_dir);
+    let use_home = home_dir.starts_with('/')
+        && (current_path == home_dir
+            || current_path
+                .strip_prefix(&home_dir)
+                .is_some_and(|suffix| suffix.starts_with('/')));
+    let root_path = if use_home { home_dir.as_str() } else { "/" };
+    let mut segments = vec![TransferBrowserBreadcrumbSegment {
+        label: if use_home { "~" } else { "/" }.to_string(),
+        path: root_path.to_string(),
+    }];
+    let suffix = current_path
+        .strip_prefix(root_path)
+        .unwrap_or(current_path.as_str());
+    let mut path = root_path.to_string();
+    for part in suffix.split('/').filter(|part| !part.is_empty()) {
+        path = remote_child_path(&path, part);
+        segments.push(TransferBrowserBreadcrumbSegment {
+            label: part.to_string(),
+            path: path.clone(),
+        });
+    }
+    segments
+}
+
+fn collapse_transfer_browser_breadcrumbs(
+    segments: &[TransferBrowserBreadcrumbSegment],
+) -> (
+    Vec<TransferBrowserBreadcrumbSegment>,
+    Vec<TransferBrowserBreadcrumbSegment>,
+) {
+    if segments.len() <= 4 {
+        return (segments.to_vec(), Vec::new());
+    }
+    let split = segments.len() - 2;
+    let mut visible = Vec::with_capacity(3);
+    visible.push(segments[0].clone());
+    visible.extend_from_slice(&segments[split..]);
+    (visible, segments[1..split].to_vec())
+}
+
 fn transfer_browser_path_history_list(
     palette: crate::theme::ThemePalette,
     popup_bg: gpui::Rgba,
@@ -366,4 +889,109 @@ fn expand_transfer_browser_home_path(path: &str, home_dir: &str) -> String {
         return normalized_transfer_browser_path(&remote_child_path(&home_dir, suffix));
     }
     normalized_transfer_browser_path(trimmed)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn entry(name: &str, path: &str, file_type: SftpFileType) -> SftpFileEntry {
+        SftpFileEntry {
+            name: name.to_string(),
+            path: path.to_string(),
+            file_type,
+            size: None,
+            permissions: None,
+            owner: String::new(),
+            group: String::new(),
+            modified_at: None,
+        }
+    }
+
+    #[test]
+    fn breadcrumbs_use_home_as_root_for_descendants() {
+        let segments = build_transfer_browser_breadcrumbs("/home/nya/work/src", "/home/nya");
+        let labels = segments
+            .iter()
+            .map(|segment| segment.label.as_str())
+            .collect::<Vec<_>>();
+        let paths = segments
+            .iter()
+            .map(|segment| segment.path.as_str())
+            .collect::<Vec<_>>();
+
+        assert_eq!(labels, vec!["~", "work", "src"]);
+        assert_eq!(
+            paths,
+            vec!["/home/nya", "/home/nya/work", "/home/nya/work/src"]
+        );
+    }
+
+    #[test]
+    fn breadcrumbs_use_filesystem_root_outside_home() {
+        let segments = build_transfer_browser_breadcrumbs("/var/log", "/home/nya");
+        let values = segments
+            .into_iter()
+            .map(|segment| (segment.label, segment.path))
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            values,
+            vec![
+                ("/".to_string(), "/".to_string()),
+                ("var".to_string(), "/var".to_string()),
+                ("log".to_string(), "/var/log".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn long_breadcrumbs_keep_root_and_last_two_segments_visible() {
+        let segments = build_transfer_browser_breadcrumbs("/a/b/c/d/e", "");
+        let (visible, overflow) = collapse_transfer_browser_breadcrumbs(&segments);
+
+        assert_eq!(
+            visible
+                .iter()
+                .map(|item| item.label.as_str())
+                .collect::<Vec<_>>(),
+            vec!["/", "d", "e"]
+        );
+        assert_eq!(
+            overflow
+                .iter()
+                .map(|item| item.label.as_str())
+                .collect::<Vec<_>>(),
+            vec!["a", "b", "c"]
+        );
+    }
+
+    #[test]
+    fn child_directory_menu_filters_files_and_hidden_entries() {
+        let entries = vec![
+            entry("dir10", "/dir10", SftpFileType::Directory),
+            entry("file", "/file", SftpFileType::File),
+            entry(".hidden", "/.hidden", SftpFileType::Directory),
+            entry("dir2", "/dir2", SftpFileType::Directory),
+            entry("..", "/..", SftpFileType::Directory),
+        ];
+
+        let visible = transfer_browser_child_directories(&entries, false);
+        assert_eq!(
+            visible
+                .iter()
+                .map(|entry| entry.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["dir2", "dir10"]
+        );
+
+        let with_hidden = transfer_browser_child_directories(&entries, true);
+        assert_eq!(
+            with_hidden
+                .iter()
+                .map(|entry| entry.name.as_str())
+                .collect::<Vec<_>>(),
+            vec![".hidden", "dir2", "dir10"]
+        );
+    }
 }

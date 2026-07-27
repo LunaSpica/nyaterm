@@ -12,6 +12,9 @@ pub(crate) enum TransferJobKind {
         remote_path: String,
         select_after: Option<String>,
     },
+    ListChildren {
+        remote_path: String,
+    },
     ResolveHome,
     SyncCwd,
     Download {
@@ -211,6 +214,10 @@ pub(crate) enum TransferJobEvent {
 #[derive(Debug)]
 pub(crate) enum TransferJobOutput {
     Entries(Vec<SftpFileEntry>),
+    ChildEntries {
+        remote_path: String,
+        entries: Vec<SftpFileEntry>,
+    },
     HomeDir(String),
     CwdSynced {
         remote_path: String,

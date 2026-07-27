@@ -36,6 +36,40 @@ pub(crate) struct TransferBrowserFavoritesMenuState {
     pub(crate) y: Pixels,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct TransferBrowserBreadcrumbSegment {
+    pub(crate) label: String,
+    pub(crate) path: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct TransferBrowserPathMenuState {
+    pub(crate) session_id: Option<String>,
+    pub(crate) x: Pixels,
+    pub(crate) y: Pixels,
+    pub(crate) kind: TransferBrowserPathMenuKind,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum TransferBrowserPathMenuKind {
+    Overflow {
+        segments: Vec<TransferBrowserBreadcrumbSegment>,
+    },
+    Children {
+        path: String,
+        branch_child_path: Option<String>,
+        request_id: Option<String>,
+        status: TransferBrowserChildrenMenuStatus,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum TransferBrowserChildrenMenuStatus {
+    Loading,
+    Ready(Vec<SftpFileEntry>),
+    Error(String),
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct TransferBrowserUploadMenuState {
     pub(crate) x: Pixels,

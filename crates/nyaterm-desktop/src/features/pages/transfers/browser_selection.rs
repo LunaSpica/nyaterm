@@ -258,6 +258,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.transfer.browser.path_menu = None;
         self.select_transfer_browser_entry_from_context(path.clone(), window, cx);
         let Some(entry) = self
             .transfer
@@ -292,6 +293,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.transfer.browser.path_menu = None;
         window.focus(&self.transfer.browser.focus);
         self.transfer.browser.drag_selection = None;
         self.transfer.browser.selected_remote_path = None;
@@ -315,6 +317,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.transfer.browser.path_menu = None;
         window.focus(&self.transfer.browser.focus);
         self.transfer.browser.drag_selection = None;
         self.transfer.browser.selected_remote_path = None;

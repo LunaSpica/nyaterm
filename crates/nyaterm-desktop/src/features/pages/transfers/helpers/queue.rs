@@ -51,6 +51,7 @@ pub(in crate::features::pages::transfers) fn transfer_direction_label(
 ) -> &'static str {
     match kind {
         TransferJobKind::ListDir { .. } => "LIST",
+        TransferJobKind::ListChildren { .. } => "LIST",
         TransferJobKind::ResolveHome => "HOME",
         TransferJobKind::SyncCwd => "CWD",
         TransferJobKind::Download { .. } => "DOWN",

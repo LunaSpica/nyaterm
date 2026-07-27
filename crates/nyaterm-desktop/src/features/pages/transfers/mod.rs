@@ -14,17 +14,18 @@ use std::collections::{HashSet, VecDeque};
 use std::time::Duration;
 
 use crate::models::{
+    TransferBrowserBreadcrumbSegment, TransferBrowserChildrenMenuStatus,
     TransferBrowserColumnWidths, TransferBrowserContextMenuState,
     TransferBrowserDragSelectionState, TransferBrowserFavoritesMenuState,
-    TransferBrowserNavigationSnapshot, TransferBrowserPendingRenameState,
-    TransferBrowserSessionCacheState, TransferBrowserSortColumn, TransferBrowserSortDirection,
-    TransferBrowserUploadMenuState, TransferDeleteState, TransferEditorField, TransferEditorState,
-    TransferEditorWorkspaceState, TransferExternalSyncPromptState, TransferInputField,
-    TransferJobEvent, TransferJobKind, TransferJobOutput, TransferJobResult, TransferJobState,
-    TransferJobStatus, TransferMoveState, TransferNewFileState, TransferNewFolderState,
-    TransferNewSymlinkState, TransferPathPromptKind, TransferPermissionTarget,
-    TransferPropertiesField, TransferPropertiesState, TransferRenameState, TransferSymlinkField,
-    TransferUnknownFileState,
+    TransferBrowserNavigationSnapshot, TransferBrowserPathMenuKind, TransferBrowserPathMenuState,
+    TransferBrowserPendingRenameState, TransferBrowserSessionCacheState, TransferBrowserSortColumn,
+    TransferBrowserSortDirection, TransferBrowserUploadMenuState, TransferDeleteState,
+    TransferEditorField, TransferEditorState, TransferEditorWorkspaceState,
+    TransferExternalSyncPromptState, TransferInputField, TransferJobEvent, TransferJobKind,
+    TransferJobOutput, TransferJobResult, TransferJobState, TransferJobStatus, TransferMoveState,
+    TransferNewFileState, TransferNewFolderState, TransferNewSymlinkState, TransferPathPromptKind,
+    TransferPermissionTarget, TransferPropertiesField, TransferPropertiesState,
+    TransferRenameState, TransferSymlinkField, TransferUnknownFileState,
 };
 use crate::widgets::{small_button, status_pill};
 use nyaterm_core::{AiCustomActionConfig, ConnectionStore};

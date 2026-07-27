@@ -16,13 +16,13 @@ use crate::features::{TransferExternalSyncWindow, TransferJobResult};
 use crate::models::{
     TransferBrowserColumnResizeState, TransferBrowserColumnWidths, TransferBrowserContextMenuState,
     TransferBrowserDragSelectionState, TransferBrowserFavoritesMenuState,
-    TransferBrowserNavigationSnapshot, TransferBrowserPendingRenameState,
-    TransferBrowserSessionCacheState, TransferBrowserSortColumn, TransferBrowserSortDirection,
-    TransferBrowserUploadMenuState, TransferDeleteState, TransferEditorWorkspaceState,
-    TransferExternalSyncPromptState, TransferHeightResizeState, TransferInputField,
-    TransferJobDeleteState, TransferJobMenuState, TransferJobState, TransferMoveState,
-    TransferNewFileState, TransferNewFolderState, TransferNewSymlinkState, TransferPathPromptKind,
-    TransferPropertiesState, TransferRenameState, TransferUnknownFileState,
+    TransferBrowserNavigationSnapshot, TransferBrowserPathMenuState,
+    TransferBrowserPendingRenameState, TransferBrowserSessionCacheState, TransferBrowserSortColumn,
+    TransferBrowserSortDirection, TransferBrowserUploadMenuState, TransferDeleteState,
+    TransferEditorWorkspaceState, TransferExternalSyncPromptState, TransferHeightResizeState,
+    TransferInputField, TransferJobDeleteState, TransferJobMenuState, TransferJobState,
+    TransferMoveState, TransferNewFileState, TransferNewFolderState, TransferNewSymlinkState,
+    TransferPathPromptKind, TransferPropertiesState, TransferRenameState, TransferUnknownFileState,
 };
 
 pub(in crate::features) struct TransferFeatureState {
@@ -112,6 +112,7 @@ pub(in crate::features) struct TransferBrowserState {
     pub pending_rename_token: u64,
     pub context_menu: Option<TransferBrowserContextMenuState>,
     pub favorites_menu: Option<TransferBrowserFavoritesMenuState>,
+    pub path_menu: Option<TransferBrowserPathMenuState>,
     pub upload_menu: Option<TransferBrowserUploadMenuState>,
     pub focus: FocusHandle,
     pub path_focus: FocusHandle,
@@ -222,6 +223,7 @@ impl TransferFeatureState {
                 pending_rename_token: 0,
                 context_menu: None,
                 favorites_menu: None,
+                path_menu: None,
                 upload_menu: None,
                 focus: focus.browser,
                 path_focus: focus.browser_path,

@@ -1,7 +1,10 @@
 use super::*;
 use std::collections::{HashSet, VecDeque};
 
-use crate::models::{AiPreparedRequest, TransferExternalSyncPromptState};
+use crate::models::{
+    AiPreparedRequest, TransferBrowserChildrenMenuStatus, TransferBrowserPathMenuKind,
+    TransferBrowserPathMenuState, TransferExternalSyncPromptState,
+};
 use nyaterm_transport::{SFTP_TRANSFER_CANCELLED, SftpFileType};
 
 const TRANSFER_EVENT_DRAIN_LIMIT: usize = 256;
@@ -80,6 +83,7 @@ impl NyaTermApp {
             self.transfer.browser.visited_history.clear();
             self.transfer.browser.selected_remote_path = None;
             self.transfer.browser.selected_remote_paths.clear();
+            self.transfer.browser.path_menu = None;
             return;
         };
 
@@ -96,6 +100,7 @@ impl NyaTermApp {
         self.transfer.browser.visited_history = cache.visited_history;
         self.transfer.browser.selected_remote_path = None;
         self.transfer.browser.selected_remote_paths.clear();
+        self.transfer.browser.path_menu = None;
     }
 
     pub(in crate::features) fn drain_transfer_events(
@@ -144,7 +149,12 @@ impl NyaTermApp {
             let inactive_browser_snapshot = job_session_id
                 .as_deref()
                 .filter(|session_id| self.active_session_id.as_deref() != Some(*session_id))
-                .filter(|_| transfer_event_needs_browser_context(&event.event))
+                .filter(|_| {
+                    transfer_event_needs_browser_context(
+                        &self.transfer.queue.jobs[job_index].kind,
+                        &event.event,
+                    )
+                })
                 .map(|session_id| {
                     let snapshot = self.transfer.browser_event_snapshot();
                     self.load_transfer_browser_event_session(session_id);
@@ -245,6 +255,54 @@ impl NyaTermApp {
                     job.progress = None;
                     job.control = None;
                     self.terminal.view.status = format!("SFTP list completed: {}", job.detail);
+                }
+                TransferJobEvent::Finished(Ok(TransferJobOutput::ChildEntries {
+                    remote_path,
+                    mut entries,
+                })) => {
+                    entries.retain(|entry| {
+                        entry.file_type == SftpFileType::Directory
+                            && entry.name != "."
+                            && entry.name != ".."
+                            && (self.settings.ui_file_explorer_show_hidden_files
+                                || !entry.name.starts_with('.'))
+                    });
+                    entries.sort_by(|left, right| {
+                        left.name
+                            .to_lowercase()
+                            .cmp(&right.name.to_lowercase())
+                            .then_with(|| left.name.cmp(&right.name))
+                    });
+                    job.status = TransferJobStatus::Completed;
+                    job.detail = if entries.len() == 1 {
+                        "1 child directory".to_string()
+                    } else {
+                        format!("{} child directories", entries.len())
+                    };
+                    job.entries = entries.clone();
+                    job.summary = None;
+                    job.progress = None;
+                    job.control = None;
+
+                    if job_session_id == self.active_session_id
+                        && let Some(TransferBrowserPathMenuState {
+                            session_id,
+                            kind:
+                                TransferBrowserPathMenuKind::Children {
+                                    path,
+                                    request_id,
+                                    status,
+                                    ..
+                                },
+                            ..
+                        }) = self.transfer.browser.path_menu.as_mut()
+                        && *session_id == job_session_id
+                        && path == &remote_path
+                        && request_id.as_deref() == Some(event_id.as_str())
+                    {
+                        *request_id = None;
+                        *status = TransferBrowserChildrenMenuStatus::Ready(entries);
+                    }
                 }
                 TransferJobEvent::Finished(Ok(TransferJobOutput::HomeDir(home_dir))) => {
                     job.status = TransferJobStatus::Completed;
@@ -850,6 +908,26 @@ impl NyaTermApp {
                         }
                         _ => None,
                     };
+                    if let TransferJobKind::ListChildren { remote_path } = &job.kind
+                        && job_session_id == self.active_session_id
+                        && let Some(TransferBrowserPathMenuState {
+                            session_id,
+                            kind:
+                                TransferBrowserPathMenuKind::Children {
+                                    path,
+                                    request_id,
+                                    status,
+                                    ..
+                                },
+                            ..
+                        }) = self.transfer.browser.path_menu.as_mut()
+                        && *session_id == job_session_id
+                        && path == remote_path
+                        && request_id.as_deref() == Some(event_id.as_str())
+                    {
+                        *request_id = None;
+                        *status = TransferBrowserChildrenMenuStatus::Error(error.clone());
+                    }
                     if error == SFTP_TRANSFER_CANCELLED {
                         job.status = TransferJobStatus::Cancelled;
                         job.detail = "Cancelled".to_string();
@@ -945,8 +1023,9 @@ fn transfer_event_paths_match(left: &str, right: &str) -> bool {
     transfer_event_normalized_path(left) == transfer_event_normalized_path(right)
 }
 
-fn transfer_event_needs_browser_context(event: &TransferJobEvent) -> bool {
+fn transfer_event_needs_browser_context(kind: &TransferJobKind, event: &TransferJobEvent) -> bool {
     matches!(event, TransferJobEvent::Finished(_))
+        && !matches!(kind, TransferJobKind::ListChildren { .. })
 }
 
 fn transfer_event_needs_ui_refresh(
@@ -1029,6 +1108,10 @@ mod tests {
     #[test]
     fn transfer_progress_does_not_swap_inactive_browser_context() {
         assert!(!transfer_event_needs_browser_context(
+            &TransferJobKind::Download {
+                remote_path: "/tmp/file".to_string(),
+                local_path: PathBuf::from("/tmp/file"),
+            },
             &TransferJobEvent::Progress(SftpTransferProgress {
                 remote_path: "/tmp/file".to_string(),
                 local_path: PathBuf::from("/tmp/file"),
@@ -1039,6 +1122,10 @@ mod tests {
             },)
         ));
         assert!(transfer_event_needs_browser_context(
+            &TransferJobKind::Upload {
+                local_path: PathBuf::from("/tmp/file"),
+                remote_path: "/tmp/file".to_string(),
+            },
             &TransferJobEvent::Finished(Ok(TransferJobOutput::Uploaded {
                 summary: nyaterm_transport::SftpTransferSummary {
                     remote_path: "/tmp/file".to_string(),
@@ -1049,6 +1136,19 @@ mod tests {
                 parent_path: "/tmp".to_string(),
                 entries: Vec::new(),
             }))
+        ));
+    }
+
+    #[test]
+    fn child_directory_results_do_not_swap_browser_session_context() {
+        assert!(!transfer_event_needs_browser_context(
+            &TransferJobKind::ListChildren {
+                remote_path: "/tmp".to_string(),
+            },
+            &TransferJobEvent::Finished(Ok(TransferJobOutput::ChildEntries {
+                remote_path: "/tmp".to_string(),
+                entries: Vec::new(),
+            })),
         ));
     }
 

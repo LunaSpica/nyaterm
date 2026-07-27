@@ -1,8 +1,79 @@
 use super::*;
 
-use crate::models::TransferBrowserNavigationSnapshot;
+use crate::models::{
+    TransferBrowserChildrenMenuStatus, TransferBrowserNavigationSnapshot,
+    TransferBrowserPathMenuKind, TransferBrowserPathMenuState,
+};
 
 impl NyaTermApp {
+    pub(in crate::features) fn start_transfer_browser_children_job(
+        &mut self,
+        remote_path: String,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(config) = self.active_ssh_config.clone() else {
+            if let Some(TransferBrowserPathMenuState {
+                kind: TransferBrowserPathMenuKind::Children { status, .. },
+                ..
+            }) = self.transfer.browser.path_menu.as_mut()
+            {
+                *status = TransferBrowserChildrenMenuStatus::Error(
+                    "start an SSH session first".to_string(),
+                );
+            }
+            cx.notify();
+            return;
+        };
+        let id = self.next_transfer_id("sftp-children");
+        if let Some(TransferBrowserPathMenuState {
+            kind:
+                TransferBrowserPathMenuKind::Children {
+                    path,
+                    request_id,
+                    status,
+                    ..
+                },
+            ..
+        }) = self.transfer.browser.path_menu.as_mut()
+        {
+            if path != &remote_path {
+                return;
+            }
+            *request_id = Some(id.clone());
+            *status = TransferBrowserChildrenMenuStatus::Loading;
+        } else {
+            return;
+        }
+        self.transfer.queue.jobs.push(TransferJobState {
+            id: id.clone(),
+            session_id: self.active_session_id.clone(),
+            kind: TransferJobKind::ListChildren {
+                remote_path: remote_path.clone(),
+            },
+            status: TransferJobStatus::Running,
+            detail: format!("Listing child directories in {remote_path}"),
+            entries: Vec::new(),
+            summary: None,
+            progress: None,
+            control: None,
+        });
+        let transfer_tx = self.transfer.queue.tx.clone();
+        std::thread::spawn(move || {
+            let result = SftpService::new(config)
+                .list_dir(&remote_path)
+                .map(|entries| TransferJobOutput::ChildEntries {
+                    remote_path,
+                    entries,
+                })
+                .map_err(|error| error.to_string());
+            let _ = transfer_tx.send(TransferJobResult {
+                id,
+                event: TransferJobEvent::Finished(result),
+            });
+        });
+        cx.notify();
+    }
+
     pub(in crate::features) fn start_sftp_list_job(
         &mut self,
         select_after: Option<String>,
