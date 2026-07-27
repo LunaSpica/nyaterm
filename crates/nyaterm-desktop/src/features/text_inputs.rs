@@ -1,16 +1,14 @@
 //! A registry of real text inputs, keyed by an id the caller picks.
 //!
-//! Most panels still draw their "inputs" as a label div over a draft string,
-//! with a focus handle per box and a hand-written key handler. That pattern has
-//! no caret, no selection, no IME and no clipboard, and every panel reimplements
-//! a little of it.
+//! Ordinary form, prompt and search inputs use [`TextField`] entities instead
+//! of label divs with hand-written character handling. Full editing surfaces
+//! such as the terminal, paste review and remote file editor keep their own
+//! input handlers because their selection and command semantics are different.
 //!
-//! The connection editor solved this by owning one [`TextField`] entity per
-//! field. Doing the same everywhere would mean threading a map through every
-//! panel's state. Instead the fields live here, keyed by a string id, and are
-//! created the first time a panel renders one. A panel needs no state of its
-//! own beyond the value it already keeps, and edits arrive as one event with the
-//! id attached.
+//! The connection editor owns one [`TextField`] entity per field. For smaller
+//! panels, the fields live here instead, keyed by a string id and created the
+//! first time a panel renders one. A panel needs no state of its own beyond the
+//! value it already keeps, and edits arrive as one event with the id attached.
 
 use std::collections::HashMap;
 

@@ -3,16 +3,16 @@
 This document records the current GPUI migration boundaries and debt in
 `nyaterm-desktop`. Keep dynamic counts here instead of in `AGENTS.md`.
 
-Last updated from the working tree on 2026-07-26.
+Last updated from the working tree on 2026-07-27.
 
 ## Current Metrics
 
 | Metric | Current value | Notes |
 | --- | ---: | --- |
-| `NyaTermApp` fields | 279 | Counted from `features/app_state/mod.rs`; down from 585, still transitional. |
-| `impl NyaTermApp` blocks | 236 | Spread across 233 files under `crates/nyaterm-desktop/src`. |
+| `NyaTermApp` fields | 262 | Counted from `features/app_state/mod.rs`; down from 585, still transitional. |
+| `impl NyaTermApp` blocks | 240 | Spread across 235 files under `crates/nyaterm-desktop/src`. |
 | `#[path = "..."]` declarations in desktop | 0 | Cleared. Every directory is a real module; the boundary script fails on any new occurrence. |
-| `use super::*` imports in desktop | 355 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
+| `use super::*` imports in desktop | 372 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
 | `features/prelude.rs` rough exported-token count | 230 | Still a broad shared prelude; two hundred fifteen low-frequency transport/core/http/model exports are now explicit imports. |
 | Entity Store structs | 4 | `Runtime`, `WindowRuntime`, `StartupRestore`, `Overlay`. Each owns state the app does not. |
 | Snapshot structs | 0 | Cleared. No store is a projection of `NyaTermApp` any more. |
@@ -23,10 +23,10 @@ Large files currently over 4,000 lines:
 
 | File | Lines | Status |
 | --- | ---: | --- |
-| `crates/nyaterm-desktop/src/models/terminal.rs` | 4995 | Split candidate; coordinate with terminal render/runtime ownership. |
-| `crates/nyaterm-desktop/src/features/terminal/terminal_surface_entity.rs` | 4528 | Split candidate; avoid hot-path regressions. |
-| `crates/nyaterm-transport/src/lib.rs` | 4423 | Split by domain: SFTP, X11 forwarding, SSH tunnels and SSH authentication are out. What remains is the session manager, the four `TerminalTransport` impls and the SSH/serial/telnet session lifecycle. |
-| `crates/nyaterm-core/src/storage.rs` | 4020 | Split by domain: config backup, keyword highlights, command history, known hosts, AI history, the secret vault, portable snapshots, app settings and cloud sync are out. About 1,450 lines of that are code; the rest is the test module. Schema compatibility is public contract. |
+| `crates/nyaterm-desktop/src/models/terminal.rs` | 4964 | Split candidate; coordinate with terminal render/runtime ownership. |
+| `crates/nyaterm-desktop/src/features/terminal/terminal_surface_entity.rs` | 4516 | Split candidate; avoid hot-path regressions. |
+| `crates/nyaterm-transport/src/lib.rs` | 4539 | Split by domain: SFTP, X11 forwarding, SSH tunnels and SSH authentication are out. What remains is the session manager, the four `TerminalTransport` impls and the SSH/serial/telnet session lifecycle. |
+| `crates/nyaterm-core/src/storage.rs` | 4089 | Split by domain: config backup, keyword highlights, command history, known hosts, AI history, the secret vault, portable snapshots, app settings and cloud sync are out. About 1,450 lines of that are code; the rest is the test module. Schema compatibility is public contract. |
 
 `core/ai.rs` was on this list at 4,032 lines; it is now 1,554 after being split
 into `providers`, `agent`, `risk` and `settings`.
@@ -37,18 +37,21 @@ these as staged extraction candidates, not as formatting-only refactor targets.
 
 ## Completed
 
-- Text inputs are real widgets, not label divs. `nyaterm-ui::TextField` owns the
-  caret, selection, IME composition and clipboard for a box; `nyaterm-core`'s
-  `TextEdit` owns the editing model behind it. Panels reach it either by holding
-  their own entities (the connection editor) or through the id-keyed registry in
-  `features/text_inputs.rs`, which creates a field the first time a panel renders
-  one and routes edits back by id prefix. Converted so far: the connection
-  editor, every settings page, all three network dialogs, the quick command
-  editor and its overlays, the command send box, the four security-auth editors,
-  the AI ask panel and credential rows, the three filter boxes and the SFTP
-  new-folder dialog. **The `transfer_input` helper is gone**, and with it the
-  focus handle each fake input needed: `NyaTermApp` and the feature states lost
-  fourteen of them.
+- Ordinary form, prompt and search inputs are real widgets, not label divs.
+  `nyaterm-ui::TextField` owns the caret, selection, IME composition and
+  clipboard for a box; `nyaterm-core::TextEdit` owns its editing model. Panels
+  either own entities directly (the connection editor) or use the id-keyed
+  registry in `features/text_inputs.rs`. Coverage includes settings and network
+  editors, quick commands and send-command controls, security and SSH prompts,
+  AI and sync fields, session overlays and filters, SFTP paths/search/dialogs/
+  properties, terminal search, and keyword-highlight rules. The removed
+  `transfer_input` helper is not a compatibility path.
+
+  Full editing surfaces are separate by design: the terminal and paste review
+  use terminal input routing, and `RemoteTextEditor` owns editor-specific
+  selection, undo and command handling. The built-in transfer editor remains a
+  dedicated editor-surface migration, not a registry form field. None of these
+  should be replaced mechanically with a single-line registry field.
 
   Four GPUI behaviours make this migration go wrong in ways that are invisible
   until you drive the UI:
@@ -161,6 +164,13 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   `editor`, and `external_sync` for handing a file to an outside editor, plus
   manual `paths` and `panel` chrome. Their lifetimes are unrelated, which the
   flat `transfer_*` prefix hid completely.
+- The SFTP browser parity pass covers the six Tauri file-manager areas: toolbar
+  commands and state, editable path/history/breadcrumb navigation, resizable
+  sortable columns, range/additive selection and context actions, transfer
+  progress and queue controls, and keyboard handling. The desktop state and
+  pure helpers are covered by `nyaterm-desktop` tests. A real remote SFTP E2E
+  pass is still required on a machine with a reachable SSH server; it was not
+  possible in the current environment.
 - AI state is grouped into `AiFeatureState`: provider `settings`, the `chat`
   composer and transcript, session `history`, model `discovery`, the agent
   `loop`, and `panel` chrome. Note that `SettingsDraftSnapshot` deliberately
