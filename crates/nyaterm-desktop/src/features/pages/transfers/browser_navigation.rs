@@ -130,6 +130,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.forget_text_inputs("transfer.browser.path");
         self.transfer.browser.list_offset = 0;
         self.transfer.paths.remote = path.clone();
         self.transfer.browser.path = path.clone();

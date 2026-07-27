@@ -290,6 +290,16 @@ pub(in crate::features) fn terminal_resize_geometry_for_bounds(
     )
 }
 
+fn terminal_should_apply_session_cwd(
+    changed: bool,
+    active_session: bool,
+    auto_sync_enabled: bool,
+    path_editing: bool,
+    cwd: &str,
+) -> bool {
+    changed && active_session && auto_sync_enabled && !path_editing && !cwd.trim().is_empty()
+}
+
 impl NyaTermApp {
     pub(in crate::features) fn active_terminal_scroll_offset(&self) -> usize {
         if let Some(session_id) = self.active_session_id.as_deref() {
@@ -1118,11 +1128,13 @@ impl NyaTermApp {
         self.session_cwds
             .insert(session_id.to_string(), cwd.clone());
         // Auto-sync the transfer browser path when enabled for the active SSH session.
-        if changed
-            && self.active_session_id.as_deref() == Some(session_id)
-            && self.transfer_browser_auto_sync_cwd_enabled()
-            && !cwd.trim().is_empty()
-        {
+        if terminal_should_apply_session_cwd(
+            changed,
+            self.active_session_id.as_deref() == Some(session_id),
+            self.transfer_browser_auto_sync_cwd_enabled(),
+            self.transfer.browser.path_editing,
+            &cwd,
+        ) {
             if self.transfer.browser.path != cwd {
                 self.transfer.browser.path = cwd.clone();
                 self.transfer.browser.path_draft = cwd.clone();
@@ -1694,6 +1706,52 @@ impl NyaTermApp {
 mod tests {
     use super::*;
     use gpui::{Bounds, point, px, size};
+
+    #[test]
+    fn terminal_cwd_sync_applies_only_to_an_active_enabled_session() {
+        assert!(terminal_should_apply_session_cwd(
+            true,
+            true,
+            true,
+            false,
+            "/home/nya"
+        ));
+        assert!(!terminal_should_apply_session_cwd(
+            false,
+            true,
+            true,
+            false,
+            "/home/nya"
+        ));
+        assert!(!terminal_should_apply_session_cwd(
+            true,
+            false,
+            true,
+            false,
+            "/home/nya"
+        ));
+        assert!(!terminal_should_apply_session_cwd(
+            true,
+            true,
+            false,
+            false,
+            "/home/nya"
+        ));
+        assert!(!terminal_should_apply_session_cwd(
+            true, true, true, false, "   "
+        ));
+    }
+
+    #[test]
+    fn terminal_cwd_sync_does_not_replace_a_path_being_edited() {
+        assert!(!terminal_should_apply_session_cwd(
+            true,
+            true,
+            true,
+            true,
+            "/home/nya"
+        ));
+    }
 
     #[test]
     fn terminal_scroll_track_ratio_uses_bounds_origin_and_clamps() {

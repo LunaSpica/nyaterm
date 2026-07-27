@@ -236,6 +236,8 @@ impl NyaTermApp {
             );
         } else if id.as_ref() == "transfer.move.path" {
             self.apply_transfer_move_path(text, cx);
+        } else if id.as_ref() == "transfer.browser.path" {
+            self.apply_transfer_browser_path_input(text, cx);
         } else if id.starts_with("transfer.rename.") {
             self.apply_transfer_rename_input(text, cx);
         } else if let Some(field) = id.strip_prefix("quick-command.editor.") {

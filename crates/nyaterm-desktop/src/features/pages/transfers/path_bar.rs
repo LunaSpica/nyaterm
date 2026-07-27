@@ -24,11 +24,38 @@ impl NyaTermApp {
             .cloned()
             .take(5)
             .collect::<Vec<_>>();
-        let path_draft_value = if self.transfer.browser.path_draft.is_empty() {
-            self.tr("fileExplorer.editPath").to_string()
-        } else {
-            format!("{}|", self.transfer.browser.path_draft)
-        };
+        let palette = self.theme_palette();
+        let path_input = self.transfer.browser.path_editing.then(|| {
+            let field = self.text_input(
+                "transfer.browser.path",
+                &self.transfer.browser.path_draft.clone(),
+                TextInputSetup::placeholder(self.tr("fileExplorer.editPath")),
+                cx,
+            );
+            let focus = field.read(cx).focus_handle();
+            div()
+                .h(px(20.))
+                .min_w_0()
+                .flex_1()
+                .px_1()
+                .flex()
+                .items_center()
+                .rounded_sm()
+                .bg(rgb(palette.input))
+                .cursor_text()
+                .on_mouse_down(MouseButton::Left, move |_, window, _| {
+                    window.focus(&focus);
+                })
+                .child(
+                    div()
+                        .min_w_0()
+                        .flex_1()
+                        .text_size(px(10.))
+                        .text_color(rgb(palette.text))
+                        .child(field),
+                )
+                .into_any_element()
+        });
         let breadcrumbs = build_transfer_browser_breadcrumbs(
             &current_browser_path,
             &self.transfer.browser.home_dir,
@@ -37,7 +64,6 @@ impl NyaTermApp {
             collapse_transfer_browser_breadcrumbs(&breadcrumbs);
 
         // Tauri FileExplorerPathBar: minHeight ~26px, mono path, favorites on the right.
-        let palette = self.theme_palette();
         div()
             .flex()
             .flex_col()
@@ -61,31 +87,27 @@ impl NyaTermApp {
                                 .h_full()
                                 .flex_1()
                                 .min_w_0()
-                                .px_0()
-                                .py_0()
                                 .flex()
                                 .items_center()
                                 .font_family(crate::features::gpui_code_font_family())
                                 .text_size(px(10.))
-                                .text_color(if self.transfer.browser.path_draft.is_empty() {
-                                    rgb(palette.text_muted)
-                                } else {
-                                    rgb(palette.text)
-                                })
-                                .track_focus(&self.transfer.browser.path_focus)
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    window.focus(&this.transfer.browser.path_focus);
-                                    cx.notify();
-                                }))
                                 .on_key_down(cx.listener(
                                     |this, event: &KeyDownEvent, window, cx| {
-                                        cx.stop_propagation();
-                                        this.handle_transfer_browser_path_key_down(
-                                            event, window, cx,
-                                        );
+                                        this.mark_user_activity();
+                                        match event.keystroke.key.as_str() {
+                                            "enter" => {
+                                                cx.stop_propagation();
+                                                this.submit_transfer_browser_path_edit(window, cx);
+                                            }
+                                            "escape" => {
+                                                cx.stop_propagation();
+                                                this.cancel_transfer_browser_path_edit(cx);
+                                            }
+                                            _ => {}
+                                        }
                                     },
                                 ))
-                                .child(truncate_preview(&path_draft_value, 120)),
+                                .children(path_input),
                         )
                     })
                     .when(!self.transfer.browser.path_editing, |this| {
@@ -424,14 +446,37 @@ impl NyaTermApp {
         self.transfer.browser.path_draft =
             normalized_transfer_browser_path(&self.transfer.browser.path);
         self.transfer.browser.path_editing = true;
+        self.forget_text_inputs("transfer.browser.path");
         self.transfer.browser.status = "editing remote directory path".to_string();
         self.start_transfer_browser_home_dir_job(cx);
-        window.focus(&self.transfer.browser.path_focus);
+        let field = self.text_input(
+            "transfer.browser.path",
+            &self.transfer.browser.path_draft.clone(),
+            TextInputSetup::placeholder(self.tr("fileExplorer.editPath")),
+            cx,
+        );
+        window.focus(&field.read(cx).focus_handle());
+        field.update(cx, |field, cx| field.select_all(window, cx));
         cx.notify();
     }
 
     pub(super) fn cancel_transfer_browser_path_edit(&mut self, cx: &mut Context<Self>) {
         self.transfer.browser.cancel_path_edit();
+        self.forget_text_inputs("transfer.browser.path");
+        cx.notify();
+    }
+
+    pub(in crate::features) fn apply_transfer_browser_path_input(
+        &mut self,
+        text: String,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.transfer.browser.path_editing {
+            return;
+        }
+        self.mark_user_activity();
+        self.transfer.browser.path_draft = text;
+        self.transfer.browser.status = "editing remote directory path".to_string();
         cx.notify();
     }
 
@@ -460,45 +505,8 @@ impl NyaTermApp {
         }
         self.transfer.browser.path_draft.clear();
         self.transfer.browser.path_editing = false;
+        self.forget_text_inputs("transfer.browser.path");
         self.open_transfer_browser_directory(path, window, cx);
-    }
-
-    pub(super) fn handle_transfer_browser_path_key_down(
-        &mut self,
-        event: &KeyDownEvent,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.mark_user_activity();
-        let keystroke = &event.keystroke;
-        if keystroke.modifiers.platform || keystroke.modifiers.alt || keystroke.modifiers.control {
-            return;
-        }
-
-        match keystroke.key.as_str() {
-            "enter" => {
-                self.submit_transfer_browser_path_edit(window, cx);
-            }
-            "escape" => {
-                self.cancel_transfer_browser_path_edit(cx);
-            }
-            "backspace" => {
-                self.transfer.browser.path_draft.pop();
-                self.transfer.browser.status = "editing remote directory path".to_string();
-                cx.notify();
-            }
-            _ => {
-                if let Some(input) = keystroke
-                    .key_char
-                    .as_deref()
-                    .filter(|input| !input.is_empty())
-                {
-                    self.transfer.browser.path_draft.push_str(input);
-                    self.transfer.browser.status = "editing remote directory path".to_string();
-                    cx.notify();
-                }
-            }
-        }
     }
 }
 
