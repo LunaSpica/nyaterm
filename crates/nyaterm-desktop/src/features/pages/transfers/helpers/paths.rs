@@ -32,9 +32,10 @@ pub(in crate::features::pages::transfers) fn remote_child_path(
     parent: &str,
     child_name: &str,
 ) -> String {
-    match parent.trim_end_matches('/') {
+    let trimmed = parent.trim_end_matches('/');
+    match trimmed {
+        "" if parent.starts_with('/') => format!("/{child_name}"),
         "" | "." => child_name.to_string(),
-        "/" => format!("/{child_name}"),
         parent => format!("{parent}/{child_name}"),
     }
 }
@@ -103,4 +104,17 @@ pub(in crate::features::pages::transfers) fn format_sftp_modified(value: Option<
         .to_offset(offset)
         .format(&format)
         .unwrap_or_else(|_| "-".to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::remote_child_path;
+
+    #[test]
+    fn remote_child_path_preserves_filesystem_root() {
+        assert_eq!(remote_child_path("/", "var"), "/var");
+        assert_eq!(remote_child_path("///", "var"), "/var");
+        assert_eq!(remote_child_path("/var/", "log"), "/var/log");
+        assert_eq!(remote_child_path(".", "relative"), "relative");
+    }
 }
