@@ -110,6 +110,7 @@ impl NyaTermApp {
     pub(in crate::features) fn start_snapshot_password_prompt(
         &mut self,
         kind: SnapshotPasswordPromptKind,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         if self.config_path_prompt.is_some() {
@@ -117,10 +118,13 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
+        self.forget_text_inputs("snapshot-password.");
         self.active_snapshot_password_prompt = Some(SnapshotPasswordPromptState {
             kind,
             value: String::new(),
         });
+        let field = self.text_input("snapshot-password.value", "", TextInputSetup::masked(), cx);
+        window.focus(&field.read(cx).focus_handle());
         self.terminal.view.status = match kind {
             SnapshotPasswordPromptKind::Export => "enter password for encrypted .nya export",
             SnapshotPasswordPromptKind::Import => "enter password for encrypted .nya import",
@@ -172,11 +176,13 @@ impl NyaTermApp {
                 kind: state.kind,
                 value: String::new(),
             });
+            self.reset_text_input("snapshot-password.value", "", cx);
             self.terminal.view.status =
                 "master password is required for encrypted .nya".to_string();
             cx.notify();
             return;
         }
+        self.forget_text_inputs("snapshot-password.");
 
         match state.kind {
             SnapshotPasswordPromptKind::Export => {
@@ -216,6 +222,7 @@ impl NyaTermApp {
         let Some(state) = self.active_snapshot_password_prompt.take() else {
             return;
         };
+        self.forget_text_inputs("snapshot-password.");
         self.terminal.view.status = match state.kind {
             SnapshotPasswordPromptKind::Export => "encrypted .nya export cancelled".to_string(),
             SnapshotPasswordPromptKind::Import => "encrypted .nya import cancelled".to_string(),
@@ -250,9 +257,9 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.mark_user_activity();
-        let Some(state) = self.active_snapshot_password_prompt.as_mut() else {
+        if self.active_snapshot_password_prompt.is_none() {
             return;
-        };
+        }
         let keystroke = &event.keystroke;
         if keystroke.modifiers.platform || keystroke.modifiers.alt || keystroke.modifiers.control {
             return;
@@ -261,21 +268,21 @@ impl NyaTermApp {
         match keystroke.key.as_str() {
             "enter" => self.submit_snapshot_password_prompt(cx),
             "escape" => self.cancel_snapshot_password_prompt(cx),
-            "backspace" => {
-                state.value.pop();
-                cx.notify();
-            }
-            _ => {
-                if let Some(value) = keystroke
-                    .key_char
-                    .as_deref()
-                    .filter(|value| !value.is_empty())
-                {
-                    state.value.push_str(value);
-                    cx.notify();
-                }
-            }
+            _ => {}
         }
+    }
+
+    pub(in crate::features) fn apply_snapshot_password_input(
+        &mut self,
+        text: String,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(state) = self.active_snapshot_password_prompt.as_mut() else {
+            return;
+        };
+        state.value = text;
+        self.mark_user_activity();
+        cx.notify();
     }
 
     fn prompt_encrypted_portable_snapshot_export_path(

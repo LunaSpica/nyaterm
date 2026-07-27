@@ -213,7 +213,6 @@ pub struct NyaTermApp {
         Option<KeyboardInteractivePromptState>,
     pub(in crate::features) credential_prompt_focus_pending: bool,
     pub(in crate::features) credential_focus: FocusHandle,
-    pub(in crate::features) snapshot_password_focus: FocusHandle,
     pub(in crate::features) otp_provider: Arc<NativeOtpProvider>,
     pub(in crate::features) active_session_id: Option<String>,
     pub(in crate::features) active_ssh_config: Option<SshSessionConfig>,

@@ -692,19 +692,25 @@ impl NyaTermApp {
             }
             _ => self.tr("runtimePrompt.localSnapshotDescription"),
         };
-        let masked = if prompt.value.is_empty() {
-            " ".to_string()
-        } else {
-            "*".repeat(prompt.value.chars().count())
-        };
+        let password_input = self.text_input_box(
+            "snapshot-password.value",
+            &prompt.value,
+            TextInputSetup::masked(),
+            cx,
+        );
 
         div()
+            .id("snapshot-password-prompt")
             .mt_3()
             .rounded_md()
             .border_1()
             .border_color(rgb(palette.link))
             .bg(rgb(palette.input))
             .p_3()
+            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+                cx.stop_propagation();
+                this.handle_snapshot_password_key_down(event, cx);
+            }))
             .child(
                 div()
                     .flex()
@@ -724,33 +730,7 @@ impl NyaTermApp {
                                     .child(description),
                             ),
                     )
-                    .child(
-                        div()
-                            .id(SharedString::from("snapshot-password-input"))
-                            .w(px(240.))
-                            .h(px(32.))
-                            .px_3()
-                            .flex()
-                            .items_center()
-                            .rounded_sm()
-                            .border_1()
-                            .border_color(rgb(palette.link))
-                            .bg(rgb(palette.bg))
-                            .font_family(crate::features::gpui_code_font_family())
-                            .text_sm()
-                            .track_focus(&self.snapshot_password_focus)
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                window.focus(&this.snapshot_password_focus);
-                                this.terminal.view.status =
-                                    "snapshot password prompt focused".to_string();
-                                cx.notify();
-                            }))
-                            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-                                cx.stop_propagation();
-                                this.handle_snapshot_password_key_down(event, cx);
-                            }))
-                            .child(masked),
-                    )
+                    .child(div().w(px(240.)).child(password_input))
                     .child(
                         div()
                             .flex()

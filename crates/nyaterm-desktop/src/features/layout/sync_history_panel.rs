@@ -275,8 +275,12 @@ impl NyaTermApp {
                                     self.tr("settings.downloadRemoteVersion"),
                                     cx.listener({
                                         let provider_action = conflict.provider_action;
-                                        move |this, _, _, cx| {
-                                            this.prompt_cloud_sync_force_pull(provider_action, cx);
+                                        move |this, _, window, cx| {
+                                            this.prompt_cloud_sync_force_pull(
+                                                provider_action,
+                                                window,
+                                                cx,
+                                            );
                                         }
                                     }),
                                 ))
@@ -287,8 +291,12 @@ impl NyaTermApp {
                                     false,
                                     cx.listener({
                                         let provider_action = conflict.provider_action;
-                                        move |this, _, _, cx| {
-                                            this.prompt_cloud_sync_force_push(provider_action, cx);
+                                        move |this, _, window, cx| {
+                                            this.prompt_cloud_sync_force_push(
+                                                provider_action,
+                                                window,
+                                                cx,
+                                            );
                                         }
                                     }),
                                 )),

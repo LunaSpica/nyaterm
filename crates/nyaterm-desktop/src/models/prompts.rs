@@ -402,10 +402,20 @@ pub(crate) enum SnapshotPasswordPromptKind {
     CloudProviderForcePull,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub(crate) struct SnapshotPasswordPromptState {
     pub(crate) kind: SnapshotPasswordPromptKind,
     pub(crate) value: String,
+}
+
+impl std::fmt::Debug for SnapshotPasswordPromptState {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("SnapshotPasswordPromptState")
+            .field("kind", &self.kind)
+            .field("value", &"[REDACTED]")
+            .finish()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -473,4 +483,21 @@ pub(crate) enum QuickCommandImportPathPromptResult {
     Cancelled,
     Failed(String),
     Closed,
+}
+
+#[cfg(test)]
+mod snapshot_password_prompt_tests {
+    use super::{SnapshotPasswordPromptKind, SnapshotPasswordPromptState};
+
+    #[test]
+    fn snapshot_password_prompt_debug_redacts_the_password() {
+        let state = SnapshotPasswordPromptState {
+            kind: SnapshotPasswordPromptKind::CloudProviderPush,
+            value: "snapshot-secret".to_string(),
+        };
+
+        let debug = format!("{state:?}");
+        assert!(!debug.contains("snapshot-secret"));
+        assert!(debug.contains("[REDACTED]"));
+    }
 }

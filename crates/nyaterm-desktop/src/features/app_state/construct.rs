@@ -534,7 +534,6 @@ impl NyaTermApp {
             active_keyboard_interactive_prompt: None,
             credential_prompt_focus_pending: false,
             credential_focus: cx.focus_handle(),
-            snapshot_password_focus: cx.focus_handle(),
             otp_provider,
             active_session_id: None,
             active_ssh_config: None,

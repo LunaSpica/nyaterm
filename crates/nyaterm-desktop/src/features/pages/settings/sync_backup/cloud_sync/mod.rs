@@ -216,8 +216,8 @@ impl NyaTermApp {
                         palette,
                         "cloud-conflict-force-pull",
                         self.tr("settings.downloadRemoteVersion"),
-                        cx.listener(move |this, _, _, cx| {
-                            this.prompt_cloud_sync_force_pull(provider_action, cx);
+                        cx.listener(move |this, _, window, cx| {
+                            this.prompt_cloud_sync_force_pull(provider_action, window, cx);
                         }),
                     ))
                     .child(dialog_action_button(
@@ -225,8 +225,8 @@ impl NyaTermApp {
                         "cloud-conflict-force-push",
                         self.tr("settings.uploadLocalVersion"),
                         false,
-                        cx.listener(move |this, _, _, cx| {
-                            this.prompt_cloud_sync_force_push(provider_action, cx);
+                        cx.listener(move |this, _, window, cx| {
+                            this.prompt_cloud_sync_force_push(provider_action, window, cx);
                         }),
                     )),
             )
@@ -609,8 +609,8 @@ impl NyaTermApp {
                                 "settings-provider-cloud-sync-push",
                                 self.tr("settings.syncPushNow"),
                                 can_run_enabled_actions,
-                                cx.listener(|this, _, _, cx| {
-                                    this.prompt_provider_cloud_sync_push(cx);
+                                cx.listener(|this, _, window, cx| {
+                                    this.prompt_provider_cloud_sync_push(window, cx);
                                 }),
                             ))
                             .child(cloud_sync_action_button(
@@ -618,8 +618,8 @@ impl NyaTermApp {
                                 "settings-provider-cloud-sync-pull",
                                 self.tr("settings.syncPullNow"),
                                 can_run_enabled_actions,
-                                cx.listener(|this, _, _, cx| {
-                                    this.prompt_provider_cloud_sync_pull(cx);
+                                cx.listener(|this, _, window, cx| {
+                                    this.prompt_provider_cloud_sync_pull(window, cx);
                                 }),
                             )),
                     ),
