@@ -955,6 +955,8 @@ pub struct AppSettingsSummary {
     pub ui_header_status_mode: String,
     #[serde(default = "default_true")]
     pub ui_header_status_visible: bool,
+    #[serde(default = "default_true")]
+    pub ui_file_explorer_show_hidden_files: bool,
     #[serde(default)]
     pub ui_file_explorer_auto_sync_cwd_connection_ids: Vec<String>,
     #[serde(default)]
@@ -1141,6 +1143,7 @@ impl Default for AppSettingsSummary {
             ui_saved_connections_sort_mode: default_saved_connections_sort_mode(),
             ui_header_status_mode: default_header_status_mode(),
             ui_header_status_visible: true,
+            ui_file_explorer_show_hidden_files: true,
             ui_file_explorer_auto_sync_cwd_connection_ids: Vec::new(),
             ui_file_explorer_favorite_dirs_by_connection_id: HashMap::new(),
             ui_left_panel_width: 256,

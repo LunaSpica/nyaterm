@@ -319,6 +319,37 @@ impl NyaTermApp {
         }
     }
 
+    pub(in crate::features::pages::transfers) fn toggle_transfer_browser_hidden_files(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        self.settings.ui_file_explorer_show_hidden_files =
+            !self.settings.ui_file_explorer_show_hidden_files;
+        if !self.settings.ui_file_explorer_show_hidden_files {
+            self.transfer
+                .browser
+                .selected_remote_paths
+                .retain(|path| !remote_file_name(path).starts_with('.'));
+            if self
+                .transfer
+                .browser
+                .selected_remote_path
+                .as_deref()
+                .is_some_and(|path| remote_file_name(path).starts_with('.'))
+            {
+                self.transfer.browser.selected_remote_path = None;
+            }
+        }
+        self.transfer.browser.list_offset = 0;
+        self.transfer.browser.status = if self.settings.ui_file_explorer_show_hidden_files {
+            "hidden files shown".to_string()
+        } else {
+            "hidden files hidden".to_string()
+        };
+        self.persist_transfer_browser_ui_settings();
+        cx.notify();
+    }
+
     pub(in crate::features) fn transfer_browser_auto_sync_cwd_enabled(&self) -> bool {
         let Some(connection_id) = self.active_transfer_browser_connection_id() else {
             return false;

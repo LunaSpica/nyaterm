@@ -193,6 +193,11 @@ impl ConnectionStore {
                 "session",
             )),
             ui_header_status_visible: json_bool(&value, &["ui", "header_status_visible"], true),
+            ui_file_explorer_show_hidden_files: json_bool(
+                &value,
+                &["ui", "file_explorer_show_hidden_files"],
+                true,
+            ),
             ui_file_explorer_auto_sync_cwd_connection_ids: json_string_vec(
                 &value,
                 &["ui", "file_explorer_auto_sync_cwd_connection_ids"],
@@ -587,6 +592,11 @@ impl ConnectionStore {
         settings: &AppSettingsSummary,
     ) -> Result<AppSettingsSummary, StorageError> {
         let mut value = self.load_settings_value()?;
+        set_nested_json_value(
+            &mut value,
+            &["ui", "file_explorer_show_hidden_files"],
+            serde_json::Value::Bool(settings.ui_file_explorer_show_hidden_files),
+        );
         set_nested_json_value(
             &mut value,
             &["ui", "file_explorer_auto_sync_cwd_connection_ids"],

@@ -125,6 +125,7 @@ impl NyaTermApp {
             .sum();
         let search_active = !self.transfer.browser.search.trim().is_empty();
         let search_expanded = self.transfer.browser.search_expanded || search_active;
+        let show_hidden_files = self.settings.ui_file_explorer_show_hidden_files;
         let search_value = if self.transfer.browser.search.is_empty() {
             self.tr("fileExplorer.searchPlaceholder").to_string()
         } else {
@@ -388,6 +389,20 @@ impl NyaTermApp {
                                 this.transfer.browser.status = "file search focused".to_string();
                                 window.focus(&this.transfer.browser.search_focus);
                                 cx.notify();
+                            }),
+                        ))
+                        .child(compact_transfer_toolbar_button_active(
+                            palette,
+                            "transfer-browser-toggle-hidden-files",
+                            "icons/eye.svg",
+                            if show_hidden_files {
+                                self.tr("fileExplorer.hideHiddenFiles")
+                            } else {
+                                self.tr("fileExplorer.showHiddenFiles")
+                            },
+                            show_hidden_files,
+                            cx.listener(|this, _, _, cx| {
+                                this.toggle_transfer_browser_hidden_files(cx);
                             }),
                         ))
                         .when(search_expanded, |toolbar| {

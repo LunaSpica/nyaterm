@@ -10,7 +10,13 @@ impl NyaTermApp {
             .browser
             .entries
             .iter()
-            .filter(|entry| query.is_empty() || entry.name.to_lowercase().contains(&query))
+            .filter(|entry| {
+                transfer_browser_entry_is_visible(
+                    entry,
+                    &query,
+                    self.settings.ui_file_explorer_show_hidden_files,
+                )
+            })
             .cloned()
             .collect::<Vec<_>>();
         entries.sort_by(|left, right| {
@@ -94,5 +100,52 @@ impl NyaTermApp {
                 }
             }
         }
+    }
+}
+
+fn transfer_browser_entry_is_visible(
+    entry: &SftpFileEntry,
+    normalized_query: &str,
+    show_hidden_files: bool,
+) -> bool {
+    (show_hidden_files || !entry.name.starts_with('.'))
+        && (normalized_query.is_empty() || entry.name.to_lowercase().contains(normalized_query))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::transfer_browser_entry_is_visible;
+    use nyaterm_transport::{SftpFileEntry, SftpFileType};
+
+    fn entry(name: &str) -> SftpFileEntry {
+        SftpFileEntry {
+            name: name.to_string(),
+            path: format!("/tmp/{name}"),
+            file_type: SftpFileType::File,
+            size: Some(0),
+            permissions: None,
+            owner: String::new(),
+            group: String::new(),
+            modified_at: None,
+        }
+    }
+
+    #[test]
+    fn hidden_entries_follow_visibility_setting_before_search() {
+        let hidden = entry(".env");
+
+        assert!(!transfer_browser_entry_is_visible(&hidden, "", false));
+        assert!(!transfer_browser_entry_is_visible(&hidden, "env", false));
+        assert!(transfer_browser_entry_is_visible(&hidden, "env", true));
+    }
+
+    #[test]
+    fn visible_entries_still_follow_case_insensitive_search() {
+        let visible = entry("ReleaseNotes.txt");
+
+        assert!(transfer_browser_entry_is_visible(&visible, "notes", false));
+        assert!(!transfer_browser_entry_is_visible(
+            &visible, "archive", true
+        ));
     }
 }
