@@ -29,7 +29,6 @@ pub(in crate::features) struct QuickCommandFeatureFocus {
     pub category_rename: FocusHandle,
     pub variable: FocusHandle,
     pub import: FocusHandle,
-    pub ai: FocusHandle,
 }
 
 /// Panel list state: search, category filter, sort/view mode and their menus.
@@ -77,7 +76,6 @@ pub(in crate::features) struct QuickCommandImportState {
 pub(in crate::features) struct QuickCommandAiState {
     pub popover_open: bool,
     pub prompt_draft: String,
-    pub focus: FocusHandle,
 }
 
 impl QuickCommandFeatureState {
@@ -121,7 +119,6 @@ impl QuickCommandFeatureState {
             ai: QuickCommandAiState {
                 popover_open: false,
                 prompt_draft: String::new(),
-                focus: focus.ai,
             },
         }
     }

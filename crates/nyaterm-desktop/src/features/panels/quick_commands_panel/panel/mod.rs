@@ -40,6 +40,14 @@ impl NyaTermApp {
             cx,
         );
         let search_focus = search_field.read(cx).focus_handle();
+        let ai_prompt_input = self
+            .text_input_box(
+                "quick-command.ai-prompt",
+                &self.quick_command_state.ai.prompt_draft.clone(),
+                TextInputSetup::placeholder(self.tr("ai.placeholder")),
+                cx,
+            )
+            .into_any_element();
         let view_icon = match self.quick_command_state.list.view_mode {
             QuickCommandViewMode::List => "icons/view-list.svg",
             QuickCommandViewMode::Compact => "icons/view-compact.svg",
@@ -301,12 +309,10 @@ impl NyaTermApp {
                     .child(quick_command_ai_popover_button(
                         palette,
                         popover_bg,
-                        input_bg,
                         self.quick_command_state.ai.popover_open,
                         self.quick_command_state.ai.prompt_draft.clone(),
-                        self.quick_command_state.ai.focus.clone(),
+                        ai_prompt_input,
                         self.tr("ai.generateCommand"),
-                        self.tr("ai.placeholder"),
                         self.tr("ai.generate"),
                         cx,
                     )),
@@ -484,12 +490,10 @@ fn quick_command_view_menu_button(
 fn quick_command_ai_popover_button(
     palette: crate::theme::ThemePalette,
     popover_bg: gpui::Rgba,
-    input_bg: gpui::Rgba,
     open: bool,
     prompt: String,
-    focus: FocusHandle,
+    prompt_input: AnyElement,
     button_label: &'static str,
-    placeholder: &'static str,
     generate_label: &'static str,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
@@ -536,40 +540,11 @@ fn quick_command_ai_popover_button(
                     .child(
                         div()
                             .id(SharedString::from("quick-command-ai-input"))
-                            .h(px(32.))
-                            .rounded_md()
-                            .border_1()
-                            .border_color(rgb(palette.border))
-                            .bg(input_bg)
-                            .px_2()
-                            .flex()
-                            .items_center()
-                            .cursor_text()
-                            .track_focus(&focus)
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                window.focus(&this.quick_command_state.ai.focus);
-                                cx.notify();
-                            }))
                             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                                 cx.stop_propagation();
                                 this.handle_quick_command_ai_prompt_key_down(event, window, cx);
                             }))
-                            .child(
-                                div()
-                                    .min_w_0()
-                                    .flex_1()
-                                    .text_size(px(12.))
-                                    .text_color(if prompt.trim().is_empty() {
-                                        rgb(palette.text_dimmed)
-                                    } else {
-                                        rgb(palette.text)
-                                    })
-                                    .child(if prompt.trim().is_empty() {
-                                        placeholder.to_string()
-                                    } else {
-                                        truncate_preview(&prompt, 44)
-                                    }),
-                            ),
+                            .child(prompt_input),
                     )
                     .child(
                         div().flex().justify_end().child(

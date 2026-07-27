@@ -92,8 +92,24 @@ impl NyaTermApp {
         self.quick_command_state.list.row_menu = None;
         self.quick_command_state.ai.popover_open = next;
         if next {
-            window.focus(&self.quick_command_state.ai.focus);
+            let input = self.text_input(
+                "quick-command.ai-prompt",
+                &self.quick_command_state.ai.prompt_draft.clone(),
+                TextInputSetup::placeholder(self.tr("ai.placeholder")),
+                cx,
+            );
+            window.focus(&input.read(cx).focus_handle());
         }
+        cx.notify();
+    }
+
+    pub(in crate::features) fn apply_quick_command_ai_prompt(
+        &mut self,
+        text: String,
+        cx: &mut Context<Self>,
+    ) {
+        self.mark_user_activity();
+        self.quick_command_state.ai.prompt_draft = text;
         cx.notify();
     }
 
@@ -110,6 +126,7 @@ impl NyaTermApp {
         }
 
         self.quick_command_state.ai.prompt_draft.clear();
+        self.reset_text_input("quick-command.ai-prompt", "", cx);
         self.close_quick_command_toolbar_popovers();
         self.set_ai_prompt_draft(format!("Generate a shell command for: {prompt}"), cx);
         self.ai.chat.response_preview = "Quick command generation ready".to_string();
@@ -125,33 +142,13 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.mark_user_activity();
-        let keystroke = &event.keystroke;
-        if keystroke.modifiers.alt || keystroke.modifiers.control {
-            return;
-        }
-
-        match keystroke.key.as_str() {
+        match event.keystroke.key.as_str() {
             "enter" => {
                 self.submit_quick_command_ai_prompt(window, cx);
-            }
-            "backspace" if !keystroke.modifiers.platform => {
-                self.quick_command_state.ai.prompt_draft.pop();
-                cx.notify();
             }
             "escape" => {
                 self.quick_command_state.ai.popover_open = false;
                 cx.notify();
-            }
-            _ if !keystroke.modifiers.platform => {
-                if let Some(input) = keystroke
-                    .key_char
-                    .as_deref()
-                    .filter(|input| !input.is_empty())
-                {
-                    self.quick_command_state.ai.prompt_draft.push_str(input);
-                    cx.notify();
-                }
             }
             _ => {}
         }

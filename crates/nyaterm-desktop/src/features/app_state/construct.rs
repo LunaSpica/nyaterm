@@ -336,7 +336,6 @@ impl NyaTermApp {
                     category_rename: cx.focus_handle(),
                     variable: cx.focus_handle(),
                     import: cx.focus_handle(),
-                    ai: cx.focus_handle(),
                 },
             ),
             send_command: SendCommandFeatureState::new(SendCommandFeatureFocus {

@@ -270,6 +270,8 @@ impl NyaTermApp {
             self.apply_ai_settings_model_search(text, cx);
         } else if id.as_ref() == "quick-command.search" {
             self.apply_quick_command_search(text, cx);
+        } else if id.as_ref() == "quick-command.ai-prompt" {
+            self.apply_quick_command_ai_prompt(text, cx);
         } else if id.as_ref() == "recording.search" {
             self.apply_recording_search(text, cx);
         } else if id.as_ref() == "settings.keybindings.search" {
