@@ -354,6 +354,7 @@ impl NyaTermApp {
             self.mark_startup_restore_complete(cx);
             return;
         };
+        drop(store);
         if tabs.is_empty() {
             self.mark_startup_restore_complete(cx);
             return;
