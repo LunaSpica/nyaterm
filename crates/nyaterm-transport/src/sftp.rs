@@ -208,20 +208,14 @@ impl SftpService {
     ) -> anyhow::Result<SftpFileProperties> {
         let remote_path = remote_path.as_ref().to_string();
         let config = self.config.clone();
+        let identity_config = config.clone();
         let multiplex = self.multiplex.clone();
-        self.run_operation(async move {
+        let identity_multiplex = multiplex.clone();
+        let mut properties = self.run_operation(async move {
             let session = open_sftp_session(&config, multiplex.as_ref()).await?;
             let result = async {
                 let attrs = session.sftp.symlink_metadata(remote_path.clone()).await?;
                 let file_type = attrs_to_sftp_file_type(&attrs);
-                let owner = resolve_remote_user_name(&config, multiplex.clone(), attrs.uid)
-                    .unwrap_or_else(|| {
-                        attrs.uid.map(|value| value.to_string()).unwrap_or_default()
-                    });
-                let group = resolve_remote_group_name(&config, multiplex.clone(), attrs.gid)
-                    .unwrap_or_else(|| {
-                        attrs.gid.map(|value| value.to_string()).unwrap_or_default()
-                    });
                 let permissions = attrs.permissions;
                 Ok(SftpFileProperties {
                     name: remote_file_name(&remote_path),
@@ -232,8 +226,8 @@ impl SftpService {
                     permissions_symbolic: permissions
                         .map(|mode| format_sftp_permissions(file_type, mode))
                         .unwrap_or_else(|| "-".to_string()),
-                    owner,
-                    group,
+                    owner: attrs.uid.map(|value| value.to_string()).unwrap_or_default(),
+                    group: attrs.gid.map(|value| value.to_string()).unwrap_or_default(),
                     uid: attrs.uid,
                     gid: attrs.gid,
                     modified_at: attrs.mtime,
@@ -243,7 +237,21 @@ impl SftpService {
             .await;
             close_sftp_session(session).await;
             result
-        })
+        })?;
+
+        // Identity lookup opens an SSH exec operation. Keep it outside the
+        // SFTP runtime so the synchronous service does not nest Tokio runtimes.
+        if let Some(owner) =
+            resolve_remote_user_name(&identity_config, identity_multiplex.clone(), properties.uid)
+        {
+            properties.owner = owner;
+        }
+        if let Some(group) =
+            resolve_remote_group_name(&identity_config, identity_multiplex, properties.gid)
+        {
+            properties.group = group;
+        }
+        Ok(properties)
     }
 
     pub fn update_path_attributes(
