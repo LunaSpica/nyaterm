@@ -227,19 +227,15 @@ impl NyaTermApp {
         &mut self,
         group_key: &str,
         event: &KeyDownEvent,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         cx.stop_propagation();
         self.ai.settings.manual_model_edit_group = Some(group_key.to_string());
-        let draft = self
-            .ai
-            .settings
-            .manual_model_drafts
-            .entry(group_key.to_string())
-            .or_default();
         match event.keystroke.key.as_str() {
             "escape" => {
                 self.ai.settings.manual_model_edit_group = None;
+                window.focus(&self.ai.settings.manual_model_focus);
                 cx.notify();
                 return;
             }
@@ -253,30 +249,80 @@ impl NyaTermApp {
                     .find(|credential| credential.id == group_key)
                     .map(|credential| credential.id.clone())
                 {
-                    let name = draft.clone();
-                    self.add_ai_manual_model(credential_id, name, cx);
-                    self.ai
+                    let name = self
+                        .ai
                         .settings
                         .manual_model_drafts
-                        .insert(group_key.to_string(), String::new());
+                        .get(group_key)
+                        .cloned()
+                        .unwrap_or_default();
+                    self.add_ai_manual_model(credential_id, name, cx);
+                    self.clear_ai_manual_model_draft(group_key, cx);
                 }
-                return;
-            }
-            "backspace" => {
-                draft.pop();
-                cx.notify();
                 return;
             }
             _ => {}
         }
-        if let Some(input) = event
-            .keystroke
-            .key_char
-            .as_deref()
-            .filter(|value| !value.is_empty())
+    }
+
+    pub(in crate::features) fn apply_ai_manual_model_input(
+        &mut self,
+        group_key: &str,
+        text: String,
+        cx: &mut Context<Self>,
+    ) {
+        if !self
+            .ai
+            .settings
+            .config
+            .provider_credentials
+            .iter()
+            .any(|credential| credential.id == group_key)
         {
-            draft.push_str(input);
-            cx.notify();
+            return;
         }
+        self.ai
+            .settings
+            .manual_model_drafts
+            .insert(group_key.to_string(), text);
+        self.ai.settings.manual_model_edit_group = Some(group_key.to_string());
+        cx.notify();
+    }
+
+    pub(in crate::features) fn focus_ai_manual_model_input(
+        &mut self,
+        group_key: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let draft = self
+            .ai
+            .settings
+            .manual_model_drafts
+            .get(&group_key)
+            .cloned()
+            .unwrap_or_default();
+        let input = self.text_input(
+            format!("ai.settings.manual-model.{group_key}"),
+            &draft,
+            TextInputSetup::placeholder(self.tr("ai.manualModelPlaceholder")),
+            cx,
+        );
+        self.ai.settings.manual_model_edit_group = Some(group_key);
+        window.focus(&input.read(cx).focus_handle());
+        cx.notify();
+    }
+
+    pub(in crate::features) fn clear_ai_manual_model_draft(
+        &mut self,
+        group_key: &str,
+        cx: &mut Context<Self>,
+    ) {
+        self.ai
+            .settings
+            .manual_model_drafts
+            .insert(group_key.to_string(), String::new());
+        self.reset_text_input(&format!("ai.settings.manual-model.{group_key}"), "", cx);
+        cx.notify();
     }
 }

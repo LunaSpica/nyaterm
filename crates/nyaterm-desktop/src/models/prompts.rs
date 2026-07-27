@@ -249,6 +249,23 @@ pub(crate) enum AiActionListKind {
     File,
 }
 
+impl AiActionListKind {
+    pub(crate) fn input_key(self) -> &'static str {
+        match self {
+            Self::Terminal => "terminal",
+            Self::File => "file",
+        }
+    }
+
+    pub(crate) fn from_input_key(value: &str) -> Option<Self> {
+        match value {
+            "terminal" => Some(Self::Terminal),
+            "file" => Some(Self::File),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum AiActionEditorField {
     Name,
@@ -260,6 +277,21 @@ impl AiActionEditorField {
         match self {
             Self::Name => Self::Prompt,
             Self::Prompt => Self::Name,
+        }
+    }
+
+    pub(crate) fn input_key(self) -> &'static str {
+        match self {
+            Self::Name => "name",
+            Self::Prompt => "prompt",
+        }
+    }
+
+    pub(crate) fn from_input_key(value: &str) -> Option<Self> {
+        match value {
+            "name" => Some(Self::Name),
+            "prompt" => Some(Self::Prompt),
+            _ => None,
         }
     }
 }

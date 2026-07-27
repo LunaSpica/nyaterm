@@ -65,7 +65,6 @@ impl NyaTermApp {
 
         let collapsed = self.ai.settings.model_collapsed_groups.clone();
         let manual_drafts = self.ai.settings.manual_model_drafts.clone();
-        let manual_edit_group = self.ai.settings.manual_model_edit_group.clone();
         let manual_placeholder = self.tr("ai.manualModelPlaceholder");
         let manual_badge = self.tr("ai.manualModelBadge");
         let custom_provider = self.tr("ai.customProvider");
@@ -99,7 +98,24 @@ impl NyaTermApp {
                 let group_key_add = group_key.clone();
                 let credential_id = credential.id.clone();
                 let draft = manual_drafts.get(&group_key).cloned().unwrap_or_default();
-                let draft_active = manual_edit_group.as_deref() == Some(group_key.as_str());
+                let manual_click = cx.listener({
+                    let group = group_key.clone();
+                    move |this, _, window, cx| {
+                        this.focus_ai_manual_model_input(group.clone(), window, cx);
+                    }
+                });
+                let manual_key = cx.listener({
+                    let group = group_key.clone();
+                    move |this, event: &KeyDownEvent, window, cx| {
+                        this.handle_ai_manual_model_key_down(&group, event, window, cx);
+                    }
+                });
+                let manual_input = self.text_input_box(
+                    format!("ai.settings.manual-model.{group_key}"),
+                    &draft,
+                    TextInputSetup::placeholder(manual_placeholder),
+                    cx,
+                );
 
                 rows.child(
                     div()
@@ -163,54 +179,13 @@ impl NyaTermApp {
                                     .child(
                                         div()
                                             .id(SharedString::from(format!(
-                                                "ai-manual-model-{group_for_focus}"
+                                                "ai-manual-model-click-{group_for_focus}"
                                             )))
                                             .min_w_0()
                                             .flex_1()
-                                            .h(px(30.))
-                                            .px_3()
-                                            .rounded_sm()
-                                            .border_1()
-                                            .border_color(rgb(if draft_active {
-                                                palette.link
-                                            } else {
-                                                palette.border
-                                            }))
-                                            .bg(rgb(palette.input))
-                                            .flex()
-                                            .items_center()
-                                            .font_family(crate::features::gpui_code_font_family())
-                                            .text_size(px(12.))
-                                            .text_color(rgb(if draft.is_empty() {
-                                                palette.text_dimmed
-                                            } else {
-                                                palette.text
-                                            }))
-                                            .child(if draft.is_empty() {
-                                                manual_placeholder.to_string()
-                                            } else {
-                                                draft.clone()
-                                            })
-                                            .track_focus(&self.ai.settings.manual_model_focus)
-                                            .on_click(cx.listener({
-                                                let group = group_for_focus.clone();
-                                                move |this, _, window, cx| {
-                                                    this.ai.settings.manual_model_edit_group =
-                                                        Some(group.clone());
-                                                    window.focus(
-                                                        &this.ai.settings.manual_model_focus,
-                                                    );
-                                                    cx.notify();
-                                                }
-                                            }))
-                                            .on_key_down(cx.listener({
-                                                let group = group_for_focus.clone();
-                                                move |this, event: &KeyDownEvent, _, cx| {
-                                                    this.handle_ai_manual_model_key_down(
-                                                        &group, event, cx,
-                                                    );
-                                                }
-                                            })),
+                                            .on_click(manual_click)
+                                            .on_key_down(manual_key)
+                                            .child(manual_input),
                                     )
                                     .child(
                                         div()
@@ -240,13 +215,9 @@ impl NyaTermApp {
                                                                 name,
                                                                 cx,
                                                             );
-                                                            this.ai
-                                                                .settings
-                                                                .manual_model_drafts
-                                                                .insert(
-                                                                    group.clone(),
-                                                                    String::new(),
-                                                                );
+                                                            this.clear_ai_manual_model_draft(
+                                                                &group, cx,
+                                                            );
                                                         }
                                                     }
                                                 }),

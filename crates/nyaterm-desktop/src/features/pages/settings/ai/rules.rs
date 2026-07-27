@@ -61,7 +61,6 @@ impl NyaTermApp {
             AiActionListKind::Terminal => self.ai.settings.config.terminal_ai_actions.clone(),
             AiActionListKind::File => self.ai.settings.config.file_ai_actions.clone(),
         };
-        let edit = self.ai.settings.action_edit.clone();
         let add_label = self.tr("common.add");
         let delete_label = self.tr("common.delete");
         let name_placeholder = self.tr("ai.actionName");
@@ -84,17 +83,53 @@ impl NyaTermApp {
                     }),
                 )))
                 .children(actions.into_iter().map(|action| {
-                    let name_active = edit.as_ref().is_some_and(|(k, id, field)| {
-                        *k == kind && id == &action.id && *field == AiActionEditorField::Name
-                    });
-                    let prompt_active = edit.as_ref().is_some_and(|(k, id, field)| {
-                        *k == kind && id == &action.id && *field == AiActionEditorField::Prompt
-                    });
                     let action_id = action.id.clone();
                     let action_id_toggle = action.id.clone();
                     let action_id_delete = action.id.clone();
                     let name_empty = action.name.is_empty();
-                    let prompt_empty = action.prompt.is_empty();
+                    let name_input_id =
+                        Self::ai_action_text_input_id(kind, &action.id, AiActionEditorField::Name);
+                    let prompt_input_id = Self::ai_action_text_input_id(
+                        kind,
+                        &action.id,
+                        AiActionEditorField::Prompt,
+                    );
+                    let name_click = cx.listener({
+                        let action_id = action_id.clone();
+                        move |this, _, window, cx| {
+                            this.focus_ai_action_field(
+                                kind,
+                                action_id.clone(),
+                                AiActionEditorField::Name,
+                                window,
+                                cx,
+                            );
+                        }
+                    });
+                    let prompt_click = cx.listener({
+                        let action_id = action_id.clone();
+                        move |this, _, window, cx| {
+                            this.focus_ai_action_field(
+                                kind,
+                                action_id.clone(),
+                                AiActionEditorField::Prompt,
+                                window,
+                                cx,
+                            );
+                        }
+                    });
+                    let name_input = self.text_input_box(
+                        name_input_id,
+                        &action.name,
+                        TextInputSetup::placeholder(name_placeholder),
+                        cx,
+                    );
+                    let prompt_input = self.text_input_box(
+                        prompt_input_id,
+                        &action.prompt,
+                        TextInputSetup::multi_line(prompt_placeholder),
+                        cx,
+                    );
 
                     div()
                         .id(SharedString::from(format!(
@@ -114,8 +149,8 @@ impl NyaTermApp {
                         .flex_col()
                         .gap_3()
                         .track_focus(&self.ai.settings.action_focus)
-                        .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-                            this.handle_ai_action_key_down(event, cx);
+                        .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
+                            this.handle_ai_action_key_down(event, window, cx);
                         }))
                         .child(
                             div()
@@ -170,87 +205,21 @@ impl NyaTermApp {
                         )
                         .child(
                             div()
-                                .id(SharedString::from(format!("ai-action-name-{}", action.id)))
-                                .h(px(34.))
-                                .px_3()
-                                .rounded_sm()
-                                .border_1()
-                                .border_color(rgb(if name_active {
-                                    palette.link
-                                } else {
-                                    palette.border
-                                }))
-                                .bg(rgb(palette.input))
-                                .flex()
-                                .items_center()
-                                .text_size(px(12.))
-                                .text_color(rgb(if name_empty {
-                                    palette.text_dimmed
-                                } else {
-                                    palette.text
-                                }))
-                                .cursor_pointer()
-                                .child(if name_empty {
-                                    name_placeholder.to_string()
-                                } else {
-                                    action.name.clone()
-                                })
-                                .on_click(cx.listener({
-                                    let action_id = action_id.clone();
-                                    move |this, _, window, cx| {
-                                        this.focus_ai_action_field(
-                                            kind,
-                                            action_id.clone(),
-                                            AiActionEditorField::Name,
-                                            window,
-                                            cx,
-                                        );
-                                    }
-                                })),
+                                .id(SharedString::from(format!(
+                                    "ai-action-name-click-{}",
+                                    action.id
+                                )))
+                                .on_click(name_click)
+                                .child(name_input),
                         )
                         .child(
                             div()
                                 .id(SharedString::from(format!(
-                                    "ai-action-prompt-{}",
+                                    "ai-action-prompt-click-{}",
                                     action.id
                                 )))
-                                .min_h(px(80.))
-                                .px_3()
-                                .py_2()
-                                .rounded_sm()
-                                .border_1()
-                                .border_color(rgb(if prompt_active {
-                                    palette.link
-                                } else {
-                                    palette.border
-                                }))
-                                .bg(rgb(palette.input))
-                                .font_family(crate::features::gpui_code_font_family())
-                                .text_size(px(11.))
-                                .text_color(rgb(if prompt_empty {
-                                    palette.text_dimmed
-                                } else {
-                                    palette.text
-                                }))
-                                .line_height(px(16.))
-                                .cursor_pointer()
-                                .child(if prompt_empty {
-                                    prompt_placeholder.to_string()
-                                } else {
-                                    action.prompt.clone()
-                                })
-                                .on_click(cx.listener({
-                                    let action_id = action_id.clone();
-                                    move |this, _, window, cx| {
-                                        this.focus_ai_action_field(
-                                            kind,
-                                            action_id.clone(),
-                                            AiActionEditorField::Prompt,
-                                            window,
-                                            cx,
-                                        );
-                                    }
-                                })),
+                                .on_click(prompt_click)
+                                .child(prompt_input),
                         )
                 })),
         )

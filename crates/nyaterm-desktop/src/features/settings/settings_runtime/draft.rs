@@ -445,6 +445,10 @@ impl NyaTermApp {
 
     fn finish_settings_page(&mut self, cx: &mut Context<Self>) {
         self.cancel_github_gist_auth(cx);
+        self.ai.settings.action_edit = None;
+        self.ai.settings.manual_model_edit_group = None;
+        self.forget_text_inputs("ai.settings.action.");
+        self.forget_text_inputs("ai.settings.manual-model.");
         self.settings_window = None;
         self.settings_window_open_pending = false;
         if self.main_mode == MainMode::Page && self.selected_nav == NavItem::Settings {

@@ -141,8 +141,21 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let value = self
+            .ai_action_mut(kind, &action_id)
+            .map(|action| match field {
+                AiActionEditorField::Name => action.name.clone(),
+                AiActionEditorField::Prompt => action.prompt.clone(),
+            })
+            .unwrap_or_default();
+        let setup = match field {
+            AiActionEditorField::Name => TextInputSetup::placeholder(self.tr("ai.actionName")),
+            AiActionEditorField::Prompt => TextInputSetup::multi_line(self.tr("ai.actionPrompt")),
+        };
+        let input_id = Self::ai_action_text_input_id(kind, &action_id, field);
+        let input = self.text_input(input_id, &value, setup, cx);
         self.ai.settings.action_edit = Some((kind, action_id, field));
-        window.focus(&self.ai.settings.action_focus);
+        window.focus(&input.read(cx).focus_handle());
         cx.notify();
     }
 
@@ -182,8 +195,15 @@ impl NyaTermApp {
             AiActionListKind::Terminal => self.ai.settings.config.terminal_ai_actions.push(action),
             AiActionListKind::File => self.ai.settings.config.file_ai_actions.push(action),
         }
-        self.ai.settings.action_edit = Some((kind, id, AiActionEditorField::Name));
-        window.focus(&self.ai.settings.action_focus);
+        self.ai.settings.action_edit = Some((kind, id.clone(), AiActionEditorField::Name));
+        let input_id = Self::ai_action_text_input_id(kind, &id, AiActionEditorField::Name);
+        let input = self.text_input(
+            input_id,
+            "Custom AI action",
+            TextInputSetup::placeholder(self.tr("ai.actionName")),
+            cx,
+        );
+        window.focus(&input.read(cx).focus_handle());
         self.ai.panel.status = "AI action added".to_string();
         self.persist_ai_settings_now(cx);
     }
@@ -219,6 +239,10 @@ impl NyaTermApp {
         {
             self.ai.settings.action_edit = None;
         }
+        self.forget_text_inputs(&format!(
+            "ai.settings.action.{}.{action_id}.",
+            kind.input_key()
+        ));
         self.ai.panel.status = "AI action removed".to_string();
         self.persist_ai_settings_now(cx);
     }
@@ -226,6 +250,7 @@ impl NyaTermApp {
     pub(in crate::features) fn handle_ai_action_key_down(
         &mut self,
         event: &KeyDownEvent,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         cx.stop_propagation();
@@ -235,56 +260,58 @@ impl NyaTermApp {
         match event.keystroke.key.as_str() {
             "escape" => {
                 self.ai.settings.action_edit = None;
+                window.focus(&self.ai.settings.action_focus);
                 cx.notify();
                 return;
             }
             "tab" => {
-                self.ai.settings.action_edit = Some((kind, action_id, field.next()));
-                cx.notify();
+                self.focus_ai_action_field(kind, action_id, field.next(), window, cx);
                 return;
             }
             "enter" if field == AiActionEditorField::Name => {
-                self.ai.settings.action_edit = Some((kind, action_id, AiActionEditorField::Prompt));
-                cx.notify();
-                return;
-            }
-            "enter" if field == AiActionEditorField::Prompt => {
-                if let Some(action) = self.ai_action_mut(kind, &action_id) {
-                    action.prompt.push('\n');
-                    self.persist_ai_settings_now(cx);
-                }
-                return;
-            }
-            "backspace" => {
-                if let Some(action) = self.ai_action_mut(kind, &action_id) {
-                    match field {
-                        AiActionEditorField::Name => {
-                            action.name.pop();
-                        }
-                        AiActionEditorField::Prompt => {
-                            action.prompt.pop();
-                        }
-                    }
-                    self.persist_ai_settings_now(cx);
-                }
+                self.focus_ai_action_field(
+                    kind,
+                    action_id,
+                    AiActionEditorField::Prompt,
+                    window,
+                    cx,
+                );
                 return;
             }
             _ => {}
         }
-        if let Some(input) = event
-            .keystroke
-            .key_char
-            .as_deref()
-            .filter(|value| !value.is_empty())
-        {
-            if let Some(action) = self.ai_action_mut(kind, &action_id) {
-                match field {
-                    AiActionEditorField::Name => action.name.push_str(input),
-                    AiActionEditorField::Prompt => action.prompt.push_str(input),
-                }
-                self.persist_ai_settings_now(cx);
-            }
+    }
+
+    pub(in crate::features) fn apply_ai_action_input(
+        &mut self,
+        field_id: &str,
+        text: String,
+        cx: &mut Context<Self>,
+    ) {
+        let Some((kind, action_id, field)) = parse_ai_action_text_input_id(field_id) else {
+            return;
+        };
+        let Some(action) = self.ai_action_mut(kind, action_id) else {
+            return;
+        };
+        match field {
+            AiActionEditorField::Name => action.name = text,
+            AiActionEditorField::Prompt => action.prompt = text,
         }
+        self.ai.settings.action_edit = Some((kind, action_id.to_string(), field));
+        self.persist_ai_settings_now(cx);
+    }
+
+    pub(in crate::features) fn ai_action_text_input_id(
+        kind: AiActionListKind,
+        action_id: &str,
+        field: AiActionEditorField,
+    ) -> String {
+        format!(
+            "ai.settings.action.{}.{action_id}.{}",
+            kind.input_key(),
+            field.input_key()
+        )
     }
 
     pub(in crate::features) fn ai_action_mut(
@@ -307,6 +334,62 @@ impl NyaTermApp {
                 .file_ai_actions
                 .iter_mut()
                 .find(|action| action.id == action_id),
+        }
+    }
+}
+
+fn parse_ai_action_text_input_id(
+    field_id: &str,
+) -> Option<(AiActionListKind, &str, AiActionEditorField)> {
+    let (kind, rest) = field_id.split_once('.')?;
+    let (action_id, field) = rest.rsplit_once('.')?;
+    if action_id.is_empty() {
+        return None;
+    }
+    Some((
+        AiActionListKind::from_input_key(kind)?,
+        action_id,
+        AiActionEditorField::from_input_key(field)?,
+    ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_ai_action_text_input_id() {
+        assert_eq!(
+            parse_ai_action_text_input_id("terminal.some-action.name"),
+            Some((
+                AiActionListKind::Terminal,
+                "some-action",
+                AiActionEditorField::Name,
+            ))
+        );
+    }
+
+    #[test]
+    fn parses_ai_action_id_containing_dots() {
+        assert_eq!(
+            parse_ai_action_text_input_id("file.some.nested.action.prompt"),
+            Some((
+                AiActionListKind::File,
+                "some.nested.action",
+                AiActionEditorField::Prompt,
+            ))
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_ai_action_text_input_ids() {
+        for field_id in [
+            "terminal.action",
+            "terminal..name",
+            "unknown.action.name",
+            "file.action.unknown",
+        ] {
+            assert_eq!(parse_ai_action_text_input_id(field_id), None, "{field_id}");
         }
     }
 }
