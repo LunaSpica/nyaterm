@@ -2,7 +2,6 @@
 pub struct QuickSwitchState {
     open: bool,
     query: String,
-    marked_text: String,
     selected_index: usize,
 }
 
@@ -13,10 +12,6 @@ impl QuickSwitchState {
 
     pub fn query(&self) -> &str {
         &self.query
-    }
-
-    pub fn marked_text(&self) -> &str {
-        &self.marked_text
     }
 
     pub fn selected_index(&self) -> usize {
@@ -73,43 +68,11 @@ impl OverlayStore {
         self.set_quick_switch_selected_index(item_count - 1)
     }
 
-    pub fn push_quick_switch_query(&mut self, input: &str) -> bool {
-        if input.is_empty() {
-            return false;
-        }
-        self.quick_switch.query.push_str(input);
-        self.quick_switch.selected_index = 0;
-        true
-    }
-
-    pub fn pop_quick_switch_query(&mut self) -> bool {
-        let changed = self.quick_switch.query.pop().is_some();
+    pub fn set_quick_switch_query(&mut self, query: String) -> bool {
+        let changed = self.quick_switch.query != query;
         let selection_changed = self.quick_switch.selected_index != 0;
+        self.quick_switch.query = query;
         self.quick_switch.selected_index = 0;
         changed || selection_changed
-    }
-
-    pub fn set_quick_switch_marked_text(&mut self, marked_text: impl Into<String>) -> bool {
-        let marked_text = marked_text.into();
-        if self.quick_switch.marked_text == marked_text {
-            return false;
-        }
-        self.quick_switch.marked_text = marked_text;
-        true
-    }
-
-    pub fn clear_quick_switch_marked_text(&mut self) -> bool {
-        self.set_quick_switch_marked_text(String::new())
-    }
-
-    pub fn replace_quick_switch_text(&mut self, text: &str) -> bool {
-        let had_marked_text = !self.quick_switch.marked_text.is_empty();
-        self.quick_switch.marked_text.clear();
-        if text.is_empty() {
-            return had_marked_text;
-        }
-        self.quick_switch.query.push_str(text);
-        self.quick_switch.selected_index = 0;
-        true
     }
 }

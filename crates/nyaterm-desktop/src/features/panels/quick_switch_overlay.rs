@@ -7,7 +7,6 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let input_entity = cx.entity();
         let (viewport_w, viewport_h) = self.last_viewport_size;
         let items = self.filtered_quick_switch_items(cx);
         self.update_quick_switch_state(cx, |store| {
@@ -15,12 +14,13 @@ impl NyaTermApp {
         });
         let state = self.quick_switch_state(cx);
         let selected_index = state.selected_index();
-        let query_display = if state.query().is_empty() && state.marked_text().is_empty() {
-            self.tr("sessionQuickSwitcher.searchPlaceholder")
-                .to_string()
-        } else {
-            format!("{}{}", state.query(), state.marked_text())
-        };
+        let query_input = self.text_input(
+            "quick-switch.query",
+            state.query(),
+            TextInputSetup::placeholder(self.tr("sessionQuickSwitcher.searchPlaceholder")),
+            cx,
+        );
+        let query_focus = query_input.read(cx).focus_handle();
         let list_max_height = (self.last_viewport_size.1 * 0.55).clamp(160., 384.);
         let selected_row_bg = rgba((palette.primary << 8) | 0x26);
         let hover_row_bg = self.shell_surface_color(palette.hover);
@@ -150,7 +150,6 @@ impl NyaTermApp {
             .items_start()
             .justify_center()
             .pt(px(viewport_h * 0.18))
-            .track_focus(&self.quick_switch_focus)
             .on_click(cx.listener(|this, _, window, cx| {
                 this.close_quick_switch(cx);
                 window.focus(&this.terminal.input.focus);
@@ -183,6 +182,10 @@ impl NyaTermApp {
                             .border_b_1()
                             .border_color(rgb(palette.border))
                             .bg(rgba(0x00000000))
+                            .cursor_text()
+                            .on_mouse_down(MouseButton::Left, move |_, window, _| {
+                                window.focus(&query_focus);
+                            })
                             .child(
                                 svg()
                                     .size(px(16.))
@@ -195,31 +198,8 @@ impl NyaTermApp {
                                     .min_w_0()
                                     .flex_1()
                                     .text_sm()
-                                    .text_color(if state.query().is_empty() {
-                                        rgb(palette.text_muted)
-                                    } else {
-                                        rgb(palette.text)
-                                    })
-                                    .child(query_display),
-                            )
-                            .child(
-                                gpui::canvas(
-                                    |_bounds, _window, _cx| {},
-                                    move |bounds, _state, window, cx| {
-                                        let focus =
-                                            input_entity.read(cx).quick_switch_focus.clone();
-                                        window.handle_input(
-                                            &focus,
-                                            gpui::ElementInputHandler::new(
-                                                bounds,
-                                                input_entity.clone(),
-                                            ),
-                                            cx,
-                                        );
-                                    },
-                                )
-                                .absolute()
-                                .inset_0(),
+                                    .text_color(rgb(palette.text))
+                                    .child(query_input),
                             ),
                     )
                     .child(rows)
@@ -257,6 +237,7 @@ impl NyaTermApp {
                                         .hover(|this| this.bg(rgb(palette.primary_hover)))
                                         .child(self.tr("sessionQuickSwitcher.newSsh"))
                                         .on_click(cx.listener(|this, _, window, cx| {
+                                            this.forget_text_inputs("quick-switch.query");
                                             this.update_quick_switch_state(cx, |store| {
                                                 store.close_quick_switch()
                                             });

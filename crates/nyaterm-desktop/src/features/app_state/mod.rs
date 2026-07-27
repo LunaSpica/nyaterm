@@ -91,7 +91,6 @@ pub struct NyaTermApp {
     pub(in crate::features) active_session_menu: Option<ActiveSessionMenuState>,
     /// Per-session reconnect/disconnect busy state ("reconnect" | "disconnect").
     pub(in crate::features) active_session_busy_actions: HashMap<String, String>,
-    pub(in crate::features) quick_switch_focus: FocusHandle,
     /// Which search engine row is focused for name/url editing (Settings → Search).
     pub(in crate::features) search_engine_edit_index: Option<usize>,
     pub(in crate::features) search_engine_expanded_index: Option<usize>,

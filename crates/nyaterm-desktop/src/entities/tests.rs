@@ -46,17 +46,14 @@ fn overlay_store_owns_quick_switch_state() {
     assert!(store.open_quick_switch());
     assert!(!store.open_quick_switch());
     assert!(store.quick_switch().is_open());
-    assert!(store.push_quick_switch_query("ssh"));
+    assert!(store.set_quick_switch_query("ssh".to_string()));
     assert_eq!(store.quick_switch().query(), "ssh");
     assert!(!store.set_quick_switch_selected_index(0));
     assert!(store.set_quick_switch_selected_index(3));
     assert!(store.clamp_quick_switch_selected_index(2));
     assert_eq!(store.quick_switch().selected_index(), 1);
-    assert!(store.set_quick_switch_marked_text("host"));
-    assert_eq!(store.quick_switch().marked_text(), "host");
-    assert!(store.replace_quick_switch_text("A"));
-    assert_eq!(store.quick_switch().query(), "sshA");
-    assert!(store.quick_switch().marked_text().is_empty());
+    assert!(store.set_quick_switch_query("host".to_string()));
+    assert_eq!(store.quick_switch().query(), "host");
     assert!(store.close_quick_switch());
     assert_eq!(
         store.quick_switch(),

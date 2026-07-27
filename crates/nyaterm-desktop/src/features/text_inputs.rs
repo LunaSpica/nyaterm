@@ -286,6 +286,8 @@ impl NyaTermApp {
             self.apply_lock_password_input(text, cx);
         } else if id.as_ref() == "security.unlock.password" {
             self.apply_security_unlock_password_input(text, cx);
+        } else if id.as_ref() == "quick-switch.query" {
+            self.apply_quick_switch_query(text, cx);
         } else if let Some(rest) = id.strip_prefix("ai.credential.") {
             self.apply_ai_credential_input(rest, text, cx);
         } else if let Some(field) = id

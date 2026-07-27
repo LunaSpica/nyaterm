@@ -418,7 +418,6 @@ impl NyaTermApp {
             active_sessions_search_draft: String::new(),
             active_session_menu: None,
             active_session_busy_actions: HashMap::new(),
-            quick_switch_focus: cx.focus_handle(),
             search_engine_edit_index: None,
             search_engine_expanded_index: None,
             search_engine_icon_picker_index: None,

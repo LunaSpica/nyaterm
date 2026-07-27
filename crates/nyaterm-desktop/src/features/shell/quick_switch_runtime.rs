@@ -39,13 +39,21 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.update_quick_switch_state(cx, |store| store.open_quick_switch());
+        self.forget_text_inputs("quick-switch.query");
+        let field = self.text_input(
+            "quick-switch.query",
+            "",
+            TextInputSetup::placeholder(self.tr("sessionQuickSwitcher.searchPlaceholder")),
+            cx,
+        );
         self.terminal.view.status = "quick switch opened".to_string();
-        window.focus(&self.quick_switch_focus);
+        window.focus(&field.read(cx).focus_handle());
         cx.notify();
     }
 
     pub(in crate::features) fn close_quick_switch(&mut self, cx: &mut Context<Self>) {
         self.update_quick_switch_state(cx, |store| store.close_quick_switch());
+        self.forget_text_inputs("quick-switch.query");
         self.terminal.view.status = "quick switch closed".to_string();
         cx.notify();
     }
@@ -226,6 +234,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.update_quick_switch_state(cx, |store| store.reset_quick_switch_input_and_close());
+        self.forget_text_inputs("quick-switch.query");
         match item {
             QuickSwitchItem::Session { id, .. } => {
                 self.select_session(id, cx);
@@ -290,23 +299,16 @@ impl NyaTermApp {
                     self.select_quick_switch_item(item, window, cx);
                 }
             }
-            "backspace" => {
-                self.update_quick_switch_state(cx, |store| store.pop_quick_switch_query());
-                cx.notify();
-            }
-            _ => {
-                if let Some(input) = keystroke
-                    .key_char
-                    .as_deref()
-                    .filter(|input| !input.is_empty())
-                {
-                    self.update_quick_switch_state(cx, |store| {
-                        store.push_quick_switch_query(input)
-                    });
-                    cx.notify();
-                }
-            }
+            _ => {}
         }
+    }
+
+    pub(in crate::features) fn apply_quick_switch_query(
+        &mut self,
+        text: String,
+        cx: &mut Context<Self>,
+    ) {
+        self.update_quick_switch_state(cx, |store| store.set_quick_switch_query(text));
     }
 }
 
