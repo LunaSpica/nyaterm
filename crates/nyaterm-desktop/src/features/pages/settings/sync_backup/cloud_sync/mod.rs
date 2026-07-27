@@ -126,9 +126,13 @@ impl NyaTermApp {
             setup,
             cx,
         );
+        // A settings row's control slot is content-sized, and a box with nothing
+        // typed in it has no content — so the width comes from here.
         div()
+            .w(px(260.))
+            .flex()
             .opacity(if enabled { 1.0 } else { 0.45 })
-            .child(input)
+            .child(div().min_w_0().flex_1().child(input))
             .into_any_element()
     }
 

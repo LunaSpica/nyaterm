@@ -1,6 +1,6 @@
 use super::*;
 
-use crate::models::{AiInputField, TransferInputField};
+use crate::models::AiInputField;
 
 impl NyaTermApp {
     /// Apply an edit from one of the AI settings inputs.

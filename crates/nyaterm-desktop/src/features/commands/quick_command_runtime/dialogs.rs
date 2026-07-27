@@ -395,50 +395,33 @@ impl NyaTermApp {
     ) {
         self.mark_user_activity();
         let keystroke = &event.keystroke;
-        let primary = keystroke.modifiers.platform || keystroke.modifiers.control;
-        if primary && !keystroke.modifiers.alt && matches!(keystroke.key.as_str(), "v" | "V") {
-            if let Some(text) = cx.read_from_clipboard().and_then(|item| item.text()) {
-                if let Some(rename) = self.quick_command_state.dialogs.category_rename.as_mut() {
-                    rename.draft.push_str(&text);
-                    rename.error = None;
-                    cx.notify();
-                }
-            }
-            return;
-        }
-        if primary || keystroke.modifiers.alt || keystroke.modifiers.function {
+        if keystroke.modifiers.platform
+            || keystroke.modifiers.control
+            || keystroke.modifiers.alt
+            || keystroke.modifiers.function
+        {
             return;
         }
 
+        // The box owns the text; the dialog owns the keys that close or confirm.
         match keystroke.key.as_str() {
             "escape" => self.cancel_rename_quick_command_category(cx),
             "enter" => self.confirm_rename_quick_command_category(cx),
-            "backspace" => {
-                if let Some(rename) = self.quick_command_state.dialogs.category_rename.as_mut() {
-                    rename.draft.pop();
-                    rename.error = None;
-                    cx.notify();
-                }
-            }
-            "space" => {
-                if let Some(rename) = self.quick_command_state.dialogs.category_rename.as_mut() {
-                    rename.draft.push(' ');
-                    rename.error = None;
-                    cx.notify();
-                }
-            }
-            _ => {
-                if let Some(input) = keystroke
-                    .key_char
-                    .as_deref()
-                    .filter(|input| !input.is_empty())
-                    && let Some(rename) = self.quick_command_state.dialogs.category_rename.as_mut()
-                {
-                    rename.draft.push_str(input);
-                    rename.error = None;
-                    cx.notify();
-                }
-            }
+            _ => {}
         }
+    }
+
+    /// Apply an edit from the category rename box.
+    pub(in crate::features) fn apply_quick_command_category_rename(
+        &mut self,
+        text: String,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(rename) = self.quick_command_state.dialogs.category_rename.as_mut() else {
+            return;
+        };
+        rename.draft = text;
+        rename.error = None;
+        cx.notify();
     }
 }

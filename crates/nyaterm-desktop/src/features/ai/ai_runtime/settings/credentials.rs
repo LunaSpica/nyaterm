@@ -83,18 +83,6 @@ impl NyaTermApp {
         self.persist_ai_settings_now(cx);
     }
 
-    pub(in crate::features) fn focus_ai_credential_field(
-        &mut self,
-        credential_id: String,
-        field: AiCredentialEditorField,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.ai.settings.credential_edit = Some((credential_id, field));
-        window.focus(&self.ai.settings.credential_focus);
-        cx.notify();
-    }
-
     /// Apply an edit from one of a credential's inputs.
     ///
     /// `rest` is what follows `ai.credential.` in the field id: the credential

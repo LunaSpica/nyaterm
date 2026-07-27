@@ -6,16 +6,16 @@ use nyaterm_core::{CloudSyncSettings, RiskLevel};
 use nyaterm_transport::SftpDuplicatePolicy;
 
 use crate::models::{
-    CloudSyncConflictState, CloudSyncInputField, SearchEngineEditorField, SettingsTab,
-    SnapshotPasswordPromptKind, SnapshotPasswordPromptState, TranslateInputField,
+    CloudSyncConflictState, CloudSyncInputField, SettingsTab, SnapshotPasswordPromptKind,
+    SnapshotPasswordPromptState, TranslateInputField,
 };
 use crate::theme::ThemePalette;
 use crate::widgets::{small_button, status_pill};
 
 use super::super::{
-    ChromeTooltip, NyaTermApp, TAB_MOUSE_ACTIONS, TabMouseActionTarget, TextInputSetup,
-    cloud_secret_display, compact_id, configured_cloud_sync_provider, format_history_timestamp_ms,
-    none_if_blank, secret_input_setup, transfer_input, truncate_preview,
+    ChromeTooltip, NyaTermApp, TAB_MOUSE_ACTIONS, TabMouseActionTarget, TextInputSetup, compact_id,
+    configured_cloud_sync_provider, format_history_timestamp_ms, secret_input_setup,
+    truncate_preview,
 };
 
 mod ai;

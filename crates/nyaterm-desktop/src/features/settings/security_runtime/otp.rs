@@ -175,20 +175,6 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::features) fn focus_security_otp_field(
-        &mut self,
-        field: SecurityOtpEditorField,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(editor) = self.security.editors.otp.as_mut() {
-            editor.focused_field = field;
-            editor.error = None;
-        }
-        window.focus(&self.security.editors.otp_focus);
-        cx.notify();
-    }
-
     pub(in crate::features) fn set_security_otp_type(
         &mut self,
         otp_type: &'static str,

@@ -1,6 +1,6 @@
 use super::*;
 
-use crate::models::{SecurityCredentialEditorField, SecurityCredentialEditorState};
+use crate::models::SecurityCredentialEditorState;
 
 impl NyaTermApp {
     pub(in crate::features) fn security_credential_editor_view(

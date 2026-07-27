@@ -208,6 +208,31 @@ impl NyaTermApp {
             && (!enabled
                 || selected_model.is_none()
                 || self.ai.chat.prompt_draft.trim().is_empty());
+        // Built before the panel, which reads `self` throughout: creating a box
+        // needs it mutably. The prompt wraps, the way Tauri's composer does.
+        let prompt_placeholder = if !enabled {
+            "Go to Settings to enable AI"
+        } else if agent_mode {
+            "Describe a task for the agent…"
+        } else {
+            "Ask about the terminal or generate a command…"
+        };
+        let prompt_input = self
+            .text_input_box(
+                "ai.chat.prompt",
+                &self.ai.chat.prompt_draft.clone(),
+                TextInputSetup::multi_line(prompt_placeholder),
+                cx,
+            )
+            .into_any_element();
+        let model_search_input = self
+            .text_input_box(
+                "ai.model-search",
+                &self.ai.discovery.query.clone(),
+                TextInputSetup::placeholder("Search models"),
+                cx,
+            )
+            .into_any_element();
 
         div()
             .size_full()
@@ -478,38 +503,16 @@ impl NyaTermApp {
                         this.child(popover)
                     })
                     .child(
-                        transfer_input(
-                            "ai-ask-prompt",
-                            if !enabled {
-                                "Go to Settings to enable AI"
-                            } else if agent_mode {
-                                "Describe a task for the agent…"
-                            } else {
-                                "Ask about the terminal or generate a command…"
-                            },
-                            self.ai.chat.prompt_draft.clone(),
-                            !composer_disabled,
-                            self.theme_palette(),
-                        )
-                        .h(px(64.))
-                        .when(composer_disabled, |this| this.opacity(0.56))
-                        .track_focus(&self.ai.chat.focus)
-                        .on_click(cx.listener(|this, _, window, cx| {
-                            if this.ai.chat.pending
-                                || this.ai.agent.loop_state.is_some()
-                                || !this.ai.settings.config.enabled
-                            {
-                                return;
-                            }
-                            window.focus(&this.ai.chat.focus);
-                            cx.notify();
-                        }))
-                        .on_key_down(cx.listener(
-                            |this, event: &KeyDownEvent, _, cx| {
-                                cx.stop_propagation();
+                        div()
+                            // A flex row, so the box has a width to fill: the
+                            // composer's own children stretch, a block's do not.
+                            .w_full()
+                            .flex()
+                            .when(composer_disabled, |this| this.opacity(0.56))
+                            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
                                 this.handle_ai_prompt_key_down(event, cx);
-                            },
-                        )),
+                            }))
+                            .child(div().min_w_0().flex_1().child(prompt_input)),
                     )
                     .child(
                         div()
@@ -676,36 +679,20 @@ impl NyaTermApp {
                                                         );
                                                 } else {
                                                     menu = menu.child(
-                                                        transfer_input(
-                                                            "ai-model-search",
-                                                            "Search models",
-                                                            self.ai.discovery.query.clone(),
-                                                            true,
-                                                            self.theme_palette(),
-                                                        )
-                                                        .h(px(28.))
-                                                        .mb_1()
-                                                        .track_focus(&self.ai.discovery.search_focus)
-                                                        .on_click(cx.listener(
-                                                            |this, _, window, cx| {
-                                                                window.focus(
-                                                                    &this.ai.discovery.search_focus,
-                                                                );
-                                                                cx.notify();
-                                                            },
-                                                        ))
-                                                        .on_key_down(cx.listener(
-                                                            |this,
-                                                             event: &KeyDownEvent,
-                                                             _,
-                                                             cx| {
-                                                                cx.stop_propagation();
-                                                                this.handle_ai_model_search_key_down(
-                                                                    event,
-                                                                    cx,
-                                                                );
-                                                            },
-                                                        )),
+                                                        div()
+                                                            .mb_1()
+                                                            .on_key_down(cx.listener(
+                                                                |this,
+                                                                 event: &KeyDownEvent,
+                                                                 _,
+                                                                 cx| {
+                                                                    this
+                                                                        .handle_ai_model_search_key_down(
+                                                                            event, cx,
+                                                                        );
+                                                                },
+                                                            ))
+                                                            .child(model_search_input),
                                                     );
                                                     if model_choices.is_empty() {
                                                         menu = menu.child(

@@ -103,6 +103,16 @@ impl NyaTermApp {
                 draft: String::new(),
                 error: None,
             });
+        // Built before the overlay, which reads `self` throughout: creating the
+        // box needs it mutably.
+        let rename_input = self
+            .text_input_box(
+                "quick-command.category-rename",
+                &rename.draft,
+                TextInputSetup::placeholder(self.tr("quickCommands.categoryName")),
+                cx,
+            )
+            .into_any_element();
 
         div()
             .id(SharedString::from("quick-command-category-rename-overlay"))
@@ -112,6 +122,9 @@ impl NyaTermApp {
             .left_0()
             .right_0()
             .bg(rgba(0x00000080))
+            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+                this.handle_quick_command_category_rename_key_down(event, cx);
+            }))
             .flex()
             .items_center()
             .justify_center()
@@ -132,27 +145,7 @@ impl NyaTermApp {
                             .text_color(rgb(palette.text))
                             .child(self.tr("quickCommands.renameCategory")),
                     )
-                    .child(
-                        transfer_input(
-                            "quick-command-category-rename-input",
-                            self.tr("quickCommands.categoryName"),
-                            rename.draft,
-                            true,
-                            self.theme_palette(),
-                        )
-                        .mt_4()
-                        .track_focus(&self.quick_command_state.dialogs.category_rename_focus)
-                        .on_click(cx.listener(|this, _, window, cx| {
-                            window.focus(&this.quick_command_state.dialogs.category_rename_focus);
-                            cx.notify();
-                        }))
-                        .on_key_down(cx.listener(
-                            |this, event: &KeyDownEvent, _, cx| {
-                                cx.stop_propagation();
-                                this.handle_quick_command_category_rename_key_down(event, cx);
-                            },
-                        )),
-                    )
+                    .child(div().mt_4().child(rename_input))
                     .when(rename.error.is_some(), |this| {
                         this.child(
                             div()

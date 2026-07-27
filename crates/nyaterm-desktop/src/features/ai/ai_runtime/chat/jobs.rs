@@ -332,20 +332,17 @@ impl NyaTermApp {
             return;
         }
 
+        // The box owns the text; the menu owns the keys that walk and pick.
         let choice_count = self.ai_filtered_model_choices().len();
         match keystroke.key.as_str() {
             "escape" => {
                 if self.ai.discovery.query.is_empty() {
                     self.ai.discovery.menu_open = false;
                 } else {
+                    self.reset_text_input("ai.model-search", "", cx);
                     self.ai.discovery.query.clear();
                     self.ai.discovery.index = self.ai_selected_model_index();
                 }
-                cx.notify();
-            }
-            "backspace" => {
-                self.ai.discovery.query.pop();
-                self.ai.discovery.index = 0;
                 cx.notify();
             }
             "up" => {
@@ -368,18 +365,20 @@ impl NyaTermApp {
                     cx.notify();
                 }
             }
-            _ => {
-                if let Some(input) = keystroke
-                    .key_char
-                    .as_deref()
-                    .filter(|input| !input.is_empty())
-                {
-                    self.ai.discovery.query.push_str(input);
-                    self.ai.discovery.index = 0;
-                    cx.notify();
-                }
-            }
+            _ => {}
         }
+    }
+
+    /// Apply an edit from the model search box.
+    pub(in crate::features) fn apply_ai_model_search(
+        &mut self,
+        text: String,
+        cx: &mut Context<Self>,
+    ) {
+        self.ai.discovery.query = text;
+        // A new filter means a different list, so the highlight starts over.
+        self.ai.discovery.index = 0;
+        cx.notify();
     }
 
     pub(in crate::features) fn ai_effective_target_session_id(&self) -> Option<String> {
@@ -643,6 +642,8 @@ impl NyaTermApp {
             return;
         }
 
+        // While the @-mention list is open it owns the keys that walk and pick;
+        // the box keeps the text either way.
         if self.ai.chat.mention_open {
             let candidate_count = self.ai_mention_candidates().len();
             match keystroke.key.as_str() {
@@ -677,36 +678,31 @@ impl NyaTermApp {
             }
         }
 
+        // Shift+Enter is a newline, which the box takes itself; a bare Enter
+        // sends.
         match keystroke.key.as_str() {
-            "enter" if keystroke.modifiers.shift => {
-                self.ai.chat.prompt_draft.push('\n');
-                self.sync_ai_mention_from_prompt();
-                cx.notify();
-            }
-            "enter" => self.start_ai_ask(cx),
-            "backspace" => {
-                self.ai.chat.prompt_draft.pop();
-                self.sync_ai_mention_from_prompt();
-                cx.notify();
-            }
+            "enter" if !keystroke.modifiers.shift => self.start_ai_ask(cx),
             "escape" => {
                 self.ai.chat.mention_open = false;
                 self.ai.chat.mention_query.clear();
                 self.ai.chat.response_preview = "AI prompt blurred".to_string();
                 cx.notify();
             }
-            _ => {
-                if let Some(input) = keystroke
-                    .key_char
-                    .as_deref()
-                    .filter(|input| !input.is_empty())
-                {
-                    self.ai.chat.prompt_draft.push_str(input);
-                    self.sync_ai_mention_from_prompt();
-                    cx.notify();
-                }
-            }
+            _ => {}
         }
+    }
+
+    /// Apply an edit from the AI prompt box.
+    pub(in crate::features) fn apply_ai_prompt(&mut self, text: String, cx: &mut Context<Self>) {
+        if self.ai.chat.pending
+            || self.ai.agent.loop_state.is_some()
+            || !self.ai.settings.config.enabled
+        {
+            return;
+        }
+        self.ai.chat.prompt_draft = text;
+        self.sync_ai_mention_from_prompt();
+        cx.notify();
     }
 
     pub(in crate::features) fn drain_ai_chat_events(&mut self, cx: &mut Context<Self>) -> bool {

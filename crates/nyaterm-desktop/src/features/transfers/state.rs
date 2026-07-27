@@ -74,7 +74,6 @@ pub(in crate::features) struct TransferPathState {
     pub local: String,
     pub duplicate_policy: SftpDuplicatePolicy,
     pub prompt: Option<TransferPathPromptKind>,
-    pub download_focus: FocusHandle,
 }
 
 /// SFTP browser: current listing, navigation history, selection and menus.
@@ -143,7 +142,6 @@ pub(in crate::features) struct TransferEditorState {
     pub workspace: Option<TransferEditorWorkspaceState>,
     pub tabs_menu_open: bool,
     pub focus: FocusHandle,
-    pub default_editor_focus: FocusHandle,
 }
 
 /// Handing a remote file to an external editor and syncing it back.
@@ -188,7 +186,6 @@ impl TransferFeatureState {
                 local: local_path,
                 duplicate_policy,
                 prompt: None,
-                download_focus: focus.download_path,
             },
             browser: TransferBrowserState {
                 path: ".".to_string(),
@@ -250,7 +247,6 @@ impl TransferFeatureState {
                 workspace: None,
                 tabs_menu_open: false,
                 focus: focus.editor,
-                default_editor_focus: focus.default_editor,
             },
             external_sync: TransferExternalSyncState {
                 prompts: HashMap::new(),

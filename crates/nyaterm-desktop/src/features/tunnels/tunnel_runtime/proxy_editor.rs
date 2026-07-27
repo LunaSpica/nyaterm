@@ -1,4 +1,4 @@
-use gpui::{Context, KeyDownEvent, Window};
+use gpui::{Context, Window};
 use nyaterm_core::{ConnectionStore, ProxyConfig, uuid};
 
 use super::helpers::parse_port;

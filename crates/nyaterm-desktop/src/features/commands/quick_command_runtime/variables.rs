@@ -83,44 +83,16 @@ impl NyaTermApp {
         self.mark_user_activity();
         let keystroke = &event.keystroke;
         let primary = keystroke.modifiers.platform || keystroke.modifiers.control;
-        if primary && !keystroke.modifiers.alt && matches!(keystroke.key.as_str(), "v" | "V") {
-            if let Some(text) = cx.read_from_clipboard().and_then(|item| item.text())
-                && let Some(prompt) = self.quick_command_state.dialogs.variable_prompt.as_mut()
-                && let Some(variable) = prompt.variables.get(prompt.focused_index)
-                && variable.options.is_empty()
-            {
-                let mut value = variable.value.clone();
-                value.push_str(&text);
-                sync_quick_command_variable_value(prompt, prompt.focused_index, value);
-                cx.notify();
-            }
-            return;
-        }
         if primary || keystroke.modifiers.alt || keystroke.modifiers.function {
             return;
         }
 
+        // The boxes own the text and the clipboard. What is left is the dialog's
+        // own keys, and the arrows that cycle an option list — a variable with
+        // options has no box of its own.
         match keystroke.key.as_str() {
             "escape" => self.cancel_quick_command_variable_prompt(cx),
             "enter" => self.submit_quick_command_variable_prompt(cx),
-            "tab" => {
-                if let Some(prompt) = self.quick_command_state.dialogs.variable_prompt.as_mut() {
-                    let len = prompt.variables.len().max(1);
-                    prompt.focused_index = (prompt.focused_index + 1) % len;
-                    cx.notify();
-                }
-            }
-            "backspace" => {
-                if let Some(prompt) = self.quick_command_state.dialogs.variable_prompt.as_mut()
-                    && let Some(variable) = prompt.variables.get(prompt.focused_index)
-                    && variable.options.is_empty()
-                {
-                    let mut value = variable.value.clone();
-                    value.pop();
-                    sync_quick_command_variable_value(prompt, prompt.focused_index, value);
-                    cx.notify();
-                }
-            }
             "left" | "up" => {
                 if let Some(prompt) = self.quick_command_state.dialogs.variable_prompt.as_ref() {
                     self.cycle_quick_command_variable_option(prompt.focused_index, -1, cx);
@@ -131,22 +103,26 @@ impl NyaTermApp {
                     self.cycle_quick_command_variable_option(prompt.focused_index, 1, cx);
                 }
             }
-            _ => {
-                if let Some(input) = keystroke
-                    .key_char
-                    .as_deref()
-                    .filter(|input| !input.is_empty())
-                    && let Some(prompt) = self.quick_command_state.dialogs.variable_prompt.as_mut()
-                    && let Some(variable) = prompt.variables.get(prompt.focused_index)
-                    && variable.options.is_empty()
-                {
-                    let mut value = variable.value.clone();
-                    value.push_str(input);
-                    sync_quick_command_variable_value(prompt, prompt.focused_index, value);
-                    cx.notify();
-                }
-            }
+            _ => {}
         }
+    }
+
+    /// Apply an edit from one of the variable prompt's boxes.
+    pub(in crate::features) fn apply_quick_command_variable(
+        &mut self,
+        index: usize,
+        text: String,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(prompt) = self.quick_command_state.dialogs.variable_prompt.as_mut() else {
+            return;
+        };
+        if index >= prompt.variables.len() {
+            return;
+        }
+        prompt.focused_index = index;
+        sync_quick_command_variable_value(prompt, index, text);
+        cx.notify();
     }
 }
 

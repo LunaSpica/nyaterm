@@ -74,7 +74,6 @@ pub(in crate::features) struct TerminalInputState {
     pub focus_active: bool,
     pub focus_subscriptions: Vec<Subscription>,
     pub ime_marked_text: String,
-    pub x11_display_focus: FocusHandle,
 }
 
 /// Text selection and mouse reporting.
@@ -158,7 +157,6 @@ impl TerminalFeatureState {
                 focus_active: false,
                 focus_subscriptions: Vec::new(),
                 ime_marked_text: String::new(),
-                x11_display_focus: focus.x11_display,
             },
             selection: TerminalSelectionState {
                 selection: None,

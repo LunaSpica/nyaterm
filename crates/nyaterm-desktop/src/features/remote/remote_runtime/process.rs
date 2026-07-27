@@ -105,60 +105,23 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::features) fn handle_process_nice_key_down(
+    /// Apply an edit from the nice value box.
+    ///
+    /// A nice value is a small signed number, so the draft keeps a leading
+    /// minus and up to three digits and drops everything else.
+    pub(in crate::features) fn apply_process_nice_input(
         &mut self,
-        event: &KeyDownEvent,
-        window: &mut Window,
+        text: String,
         cx: &mut Context<Self>,
     ) {
-        let keystroke = &event.keystroke;
-        if keystroke.modifiers.platform || keystroke.modifiers.alt || keystroke.modifiers.control {
-            return;
-        }
-
-        match keystroke.key.as_str() {
-            "enter" => {
-                cx.stop_propagation();
-                self.apply_process_nice_draft(window, cx);
-            }
-            "escape" => {
-                cx.stop_propagation();
-                self.remote_ops.process.nice_draft = "0".to_string();
-                cx.notify();
-            }
-            "backspace" => {
-                cx.stop_propagation();
-                self.remote_ops.process.nice_draft.pop();
-                cx.notify();
-            }
-            _ => {
-                if keystroke.modifiers.shift {
-                    return;
-                }
-                let Some(input) = keystroke
-                    .key_char
-                    .as_deref()
-                    .filter(|input| !input.is_empty())
-                else {
-                    return;
-                };
-                if self.remote_ops.process.nice_draft.is_empty() && input == "-" {
-                    cx.stop_propagation();
-                    self.remote_ops.process.nice_draft.push('-');
-                    cx.notify();
-                    return;
-                }
-                let digits = input
-                    .chars()
-                    .filter(|character| character.is_ascii_digit())
-                    .collect::<String>();
-                if !digits.is_empty() && self.remote_ops.process.nice_draft.len() < 3 {
-                    cx.stop_propagation();
-                    self.remote_ops.process.nice_draft.push_str(&digits);
-                    cx.notify();
-                }
-            }
-        }
+        let negative = text.starts_with('-');
+        let digits: String = text.chars().filter(char::is_ascii_digit).take(3).collect();
+        self.remote_ops.process.nice_draft = if negative {
+            format!("-{digits}")
+        } else {
+            digits
+        };
+        cx.notify();
     }
 
     pub(in crate::features) fn apply_process_nice_draft(

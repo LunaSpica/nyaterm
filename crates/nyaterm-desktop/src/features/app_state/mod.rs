@@ -87,7 +87,6 @@ pub struct NyaTermApp {
 
     pub(in crate::features) command_search_focus: FocusHandle,
     pub(in crate::features) active_sessions_search_draft: String,
-    pub(in crate::features) active_sessions_search_focus: FocusHandle,
     /// Root-level reconnect/disconnect overflow menu (Tauri ActiveSessions DropdownMenu).
     pub(in crate::features) active_session_menu: Option<ActiveSessionMenuState>,
     /// Per-session reconnect/disconnect busy state ("reconnect" | "disconnect").
@@ -131,8 +130,6 @@ pub struct NyaTermApp {
     pub(in crate::features) settings: AppSettingsSummary,
     pub(in crate::features) settings_master_password_enabled: bool,
     pub(in crate::features) settings_master_password_draft: String,
-    pub(in crate::features) settings_master_password_focus: FocusHandle,
-    pub(in crate::features) interaction_word_separators_focus: FocusHandle,
     pub(in crate::features) appearance_menu_open: Option<String>,
     pub(in crate::features) appearance_ui_font_options: Vec<String>,
     pub(in crate::features) appearance_terminal_font_options: Vec<String>,
@@ -170,7 +167,6 @@ pub struct NyaTermApp {
     pub(in crate::features) translate_result: Option<TranslateResult>,
     pub(in crate::features) translate_status: String,
     pub(in crate::features) translate_pending: bool,
-    pub(in crate::features) translate_focus: FocusHandle,
     pub(in crate::features) translate_focused_field: TranslateInputField,
     pub(in crate::features) update_tx: mpsc::Sender<UpdateJobResult>,
     pub(in crate::features) update_rx: mpsc::Receiver<UpdateJobResult>,
@@ -195,7 +191,6 @@ pub struct NyaTermApp {
     pub(in crate::features) cloud_sync_status: String,
     /// Prevent overlapping network jobs from applying cloud state out of order.
     pub(in crate::features) cloud_sync_job_running: bool,
-    pub(in crate::features) cloud_sync_focus: FocusHandle,
     pub(in crate::features) cloud_sync_focused_field: CloudSyncInputField,
     pub(in crate::features) cloud_sync_provider_menu_open: bool,
     pub(in crate::features) github_gist_auth: GithubGistAuthState,
@@ -203,7 +198,6 @@ pub struct NyaTermApp {
     pub(in crate::features) github_gist_auth_rx: mpsc::Receiver<GithubGistAuthJobEvent>,
     pub(in crate::features) github_gist_auth_job_id: u64,
     pub(in crate::features) github_gist_auth_cancel: Option<Arc<AtomicBool>>,
-    pub(in crate::features) recording_path_focus: FocusHandle,
     pub(in crate::features) duplicate_prompts: Arc<SftpDuplicatePromptBroker>,
     pub(in crate::features) active_duplicate_prompt: Option<SftpDuplicatePromptState>,
     pub(in crate::features) pending_session_starts: HashMap<String, PendingSessionStart>,

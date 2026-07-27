@@ -32,7 +32,6 @@ pub(in crate::features) struct AiFeatureState {
 
 /// Focus handles the AI feature needs at construction time.
 pub(in crate::features) struct AiFeatureFocus {
-    pub panel: FocusHandle,
     pub chat: FocusHandle,
     pub history_search: FocusHandle,
     pub clear_history_confirm: FocusHandle,
@@ -133,7 +132,6 @@ pub(in crate::features) struct AiAgentState {
 pub(in crate::features) struct AiPanelState {
     pub execution_menu_open: bool,
     pub status: String,
-    pub focus: FocusHandle,
     pub focused_field: AiInputField,
     pub detected_error: Option<AiDetectedErrorState>,
     pub error_notice_at: HashMap<String, Instant>,
@@ -230,7 +228,6 @@ impl AiFeatureState {
             panel: AiPanelState {
                 execution_menu_open: false,
                 status: "AI settings ready".to_string(),
-                focus: focus.panel,
                 focused_field: AiInputField::Model,
                 detected_error: None,
                 error_notice_at: HashMap::new(),

@@ -1,10 +1,6 @@
-use crate::theme::ThemePalette;
-use gpui::{FontWeight, IntoElement, SharedString, div, prelude::*, px, rgb};
-use nyaterm_core::truncate_preview;
 use nyaterm_transport::{SftpDuplicateDecision, SftpDuplicatePolicy, SftpTransferProgress};
 
-use crate::models::{TransferJobKind, TransferJobState, TransferJobStatus};
-use crate::widgets::status_pill;
+use crate::models::{TransferJobKind, TransferJobStatus};
 
 pub(in crate::features) fn duplicate_policy_label(policy: SftpDuplicatePolicy) -> &'static str {
     match policy {
@@ -13,45 +9,6 @@ pub(in crate::features) fn duplicate_policy_label(policy: SftpDuplicatePolicy) -
         SftpDuplicatePolicy::Skip => "skip",
         SftpDuplicatePolicy::Rename => "rename",
     }
-}
-
-pub(in crate::features) fn transfer_input(
-    id: impl Into<String>,
-    label: &'static str,
-    value: String,
-    active: bool,
-    palette: ThemePalette,
-) -> gpui::Stateful<gpui::Div> {
-    div()
-        .id(SharedString::from(id.into()))
-        .h(px(36.))
-        .px_3()
-        .py_1()
-        .flex()
-        .flex_col()
-        .gap_0()
-        .rounded_sm()
-        .border_1()
-        .border_color(if active {
-            rgb(palette.link)
-        } else {
-            rgb(palette.border)
-        })
-        .bg(rgb(palette.input))
-        .cursor_pointer()
-        .child(
-            div()
-                .text_xs()
-                .text_color(rgb(palette.text_muted))
-                .child(label),
-        )
-        .child(
-            div()
-                .font_family(crate::features::gpui_code_font_family())
-                .text_xs()
-                .text_color(rgb(palette.text))
-                .child(value),
-        )
 }
 
 pub(in crate::features) fn transfer_job_title(kind: &TransferJobKind) -> String {

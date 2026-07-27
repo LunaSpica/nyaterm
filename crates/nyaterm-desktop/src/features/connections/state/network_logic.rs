@@ -174,29 +174,6 @@ pub(super) fn clear_network_tunnel_editor(tunnel_editor: &mut Option<NetworkTunn
     *tunnel_editor = None;
 }
 
-pub(super) fn focus_network_tunnel_editor_field(
-    tunnel_editor: &mut Option<NetworkTunnelEditorState>,
-    field: NetworkTunnelEditorField,
-) -> bool {
-    let Some(editor) = tunnel_editor.as_mut() else {
-        return false;
-    };
-    editor.focused_field = field;
-    editor.error = None;
-    true
-}
-
-pub(super) fn advance_network_tunnel_editor_focus(
-    tunnel_editor: &mut Option<NetworkTunnelEditorState>,
-) -> bool {
-    let Some(editor) = tunnel_editor.as_mut() else {
-        return false;
-    };
-    editor.focused_field = editor.focused_field.next(editor.is_dynamic());
-    editor.error = None;
-    true
-}
-
 /// Write one field of the tunnel draft.
 ///
 /// A port field keeps only digits: the boxes accept anything typed, and the
@@ -311,43 +288,6 @@ pub(super) fn set_network_tunnel_editor_error(
 
 pub(super) fn clear_network_proxy_editor(proxy_editor: &mut Option<NetworkProxyEditorState>) {
     *proxy_editor = None;
-}
-
-pub(super) fn focus_network_proxy_editor_field(
-    proxy_editor: &mut Option<NetworkProxyEditorState>,
-    field: NetworkProxyEditorField,
-) -> bool {
-    let Some(editor) = proxy_editor.as_mut() else {
-        return false;
-    };
-    editor.focused_field = field;
-    editor.error = None;
-    true
-}
-
-pub(super) fn insert_network_proxy_command_newline(
-    proxy_editor: &mut Option<NetworkProxyEditorState>,
-) -> bool {
-    let Some(editor) = proxy_editor.as_mut() else {
-        return false;
-    };
-    if editor.focused_field != NetworkProxyEditorField::Command {
-        return false;
-    }
-    editor.command.push('\n');
-    editor.error = None;
-    true
-}
-
-pub(super) fn advance_network_proxy_editor_focus(
-    proxy_editor: &mut Option<NetworkProxyEditorState>,
-) -> bool {
-    let Some(editor) = proxy_editor.as_mut() else {
-        return false;
-    };
-    editor.focused_field = editor.focused_field.next(editor.is_proxy_command());
-    editor.error = None;
-    true
 }
 
 /// Write one field of the proxy draft.

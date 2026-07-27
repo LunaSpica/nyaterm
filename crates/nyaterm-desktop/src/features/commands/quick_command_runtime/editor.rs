@@ -261,19 +261,4 @@ impl NyaTermApp {
         editor.error = None;
         cx.notify();
     }
-
-    pub(in crate::features) fn quick_command_editor_value_mut(&mut self) -> &mut String {
-        let editor = self
-            .quick_command_state
-            .editor
-            .draft
-            .as_mut()
-            .expect("quick command editor should be open while editing");
-        match editor.focused_field {
-            QuickCommandEditorField::Label => &mut editor.label,
-            QuickCommandEditorField::Command => &mut editor.command,
-            QuickCommandEditorField::Category => &mut editor.category_draft,
-            QuickCommandEditorField::Description => &mut editor.description,
-        }
-    }
 }

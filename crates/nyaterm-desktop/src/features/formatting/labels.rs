@@ -151,19 +151,6 @@ pub(in crate::features) fn recent_terminal_output(output: &str, max_lines: usize
     lines[start..].join("\n")
 }
 
-pub(in crate::features) fn cloud_secret_display(draft: &str, current: &Option<String>) -> String {
-    if !draft.is_empty() {
-        "*".repeat(draft.chars().count())
-    } else if current
-        .as_deref()
-        .is_some_and(|value| !value.trim().is_empty())
-    {
-        "set".to_string()
-    } else {
-        " ".to_string()
-    }
-}
-
 pub(in crate::features) fn compact_id(value: &str) -> String {
     let trimmed = value.trim();
     if trimmed.chars().count() <= 12 {

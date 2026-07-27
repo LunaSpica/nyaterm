@@ -196,6 +196,9 @@ impl NyaTermApp {
                             .flex_1()
                             .min_w_0()
                             .font_family(crate::features::gpui_code_font_family())
+                            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+                                this.handle_send_command_key_down(event, cx);
+                            }))
                             .child(send_input),
                     ),
             )

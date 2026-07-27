@@ -100,7 +100,7 @@ pub(in crate::features) use text_inputs::{TextInputRegistry, TextInputSetup, sec
 pub(in crate::features) use transfer_external_sync_window::TransferExternalSyncWindow;
 pub(in crate::features) use transfers::{
     TransferFeatureFocus, TransferFeatureState, duplicate_decision_label, duplicate_policy_label,
-    format_file_size, transfer_input, transfer_job_title, transfer_status_label,
+    format_file_size, transfer_job_title, transfer_status_label,
 };
 pub(in crate::features) use view_widgets::*;
 

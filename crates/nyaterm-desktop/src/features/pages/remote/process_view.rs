@@ -153,6 +153,17 @@ impl NyaTermApp {
                     .find(|process| process.pid == pid)
             })
             .cloned();
+        // Built before the rows, which borrow `self`: the nice box is a real
+        // input and creating one needs the app mutably.
+        let mut nice_input = selected_process.as_ref().map(|process| {
+            self.text_input_box(
+                format!("remote.process.{}.nice", process.pid),
+                &self.remote_ops.process.nice_draft.clone(),
+                TextInputSetup::default(),
+                cx,
+            )
+            .into_any_element()
+        });
 
         let mut rows = div().flex().flex_col();
         if filtered_processes.is_empty() {
@@ -238,8 +249,7 @@ impl NyaTermApp {
                                     selected_process,
                                     mode,
                                     detail_labels,
-                                    self.remote_ops.process.nice_draft.clone(),
-                                    &self.remote_ops.process.nice_focus,
+                                    nice_input.take(),
                                     cx.listener({
                                         let value =
                                             if selected_process.command_line.trim().is_empty() {

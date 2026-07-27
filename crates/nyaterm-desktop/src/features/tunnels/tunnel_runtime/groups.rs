@@ -1,4 +1,4 @@
-use gpui::{Context, KeyDownEvent};
+use gpui::Context;
 use nyaterm_core::{ConnectionStore, ProxyGroup, TunnelGroup, uuid};
 
 use crate::features::NyaTermApp;

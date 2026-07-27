@@ -99,8 +99,12 @@ impl NyaTermApp {
                         master_input_label,
                         Some(SharedString::from(master_input_desc)),
                         div()
+                            // The row's control slot is content-sized, and a box
+                            // with nothing typed in it has no content.
+                            .w(px(260.))
+                            .flex()
                             .opacity(if master_password_enabled { 1.0 } else { 0.45 })
-                            .child(master_password_input),
+                            .child(div().min_w_0().flex_1().child(master_password_input)),
                     )),
             ))
             .child(settings_form_section(

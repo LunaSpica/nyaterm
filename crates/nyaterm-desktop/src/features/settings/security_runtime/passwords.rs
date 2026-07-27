@@ -69,20 +69,6 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::features) fn focus_security_password_field(
-        &mut self,
-        field: SecurityPasswordEditorField,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(editor) = self.security.editors.password.as_mut() {
-            editor.focused_field = field;
-            editor.error = None;
-        }
-        window.focus(&self.security.editors.password_focus);
-        cx.notify();
-    }
-
     pub(in crate::features) fn handle_security_password_editor_key_down(
         &mut self,
         event: &KeyDownEvent,

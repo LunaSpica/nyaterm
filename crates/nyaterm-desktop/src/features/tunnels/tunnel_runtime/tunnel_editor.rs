@@ -1,4 +1,4 @@
-use gpui::{Context, KeyDownEvent, Window};
+use gpui::{Context, Window};
 use nyaterm_core::{ConnectionStore, ConnectionType, TunnelConfig, uuid};
 
 use super::helpers::{network_section_key, parse_port};

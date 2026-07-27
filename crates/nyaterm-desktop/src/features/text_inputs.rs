@@ -238,10 +238,21 @@ impl NyaTermApp {
             self.apply_transfer_new_folder_name(text, cx);
         } else if let Some(field) = id.strip_prefix("quick-command.editor.") {
             self.apply_quick_command_editor_input(field, text, cx);
+        } else if let Some(index) = id
+            .strip_prefix("quick-command.variable.")
+            .and_then(|index| index.parse::<usize>().ok())
+        {
+            self.apply_quick_command_variable(index, text, cx);
+        } else if id.as_ref() == "quick-command.category-rename" {
+            self.apply_quick_command_category_rename(text, cx);
         } else if id.as_ref() == "send-command.draft" {
             self.apply_send_command_draft(text, cx);
         } else if let Some(field) = id.strip_prefix("security.editor.") {
             self.apply_security_editor_input(field, text, cx);
+        } else if id.as_ref() == "ai.chat.prompt" {
+            self.apply_ai_prompt(text, cx);
+        } else if id.as_ref() == "ai.model-search" {
+            self.apply_ai_model_search(text, cx);
         } else if let Some(rest) = id.strip_prefix("ai.credential.") {
             self.apply_ai_credential_input(rest, text, cx);
         } else if let Some(field) = id
@@ -265,6 +276,8 @@ impl NyaTermApp {
             self.apply_docker_search(text, cx);
         } else if id.as_ref() == "remote.process.filter" {
             self.apply_process_search(text, cx);
+        } else if id.starts_with("remote.process.") && id.ends_with(".nice") {
+            self.apply_process_nice_input(text, cx);
         } else if id.as_ref() == "settings.interaction.word-separators" {
             self.apply_interaction_word_separators(text, cx);
         } else if id.as_ref() == "settings.terminal.x11-display" {

@@ -43,16 +43,14 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   their own entities (the connection editor) or through the id-keyed registry in
   `features/text_inputs.rs`, which creates a field the first time a panel renders
   one and routes edits back by id prefix. Converted so far: the connection
-  editor, the saved-connections filter, the settings search-engine editor, all
-  three network dialogs, the quick command editor, the command send box, the
-  four security-auth editors and the SFTP new-folder dialog. **20
-  `transfer_input(..)` call sites remain** — AI settings and the ask panel,
-  translation, the transfer settings pages, cloud sync, the remaining quick
-  command overlays, the sessions sidebar and the remote process/docker filters.
-  Each is a label div over a draft string with a hand-written key handler, and
-  each still needs the same treatment.
+  editor, every settings page, all three network dialogs, the quick command
+  editor and its overlays, the command send box, the four security-auth editors,
+  the AI ask panel and credential rows, the three filter boxes and the SFTP
+  new-folder dialog. **The `transfer_input` helper is gone**, and with it the
+  focus handle each fake input needed: `NyaTermApp` and the feature states lost
+  fourteen of them.
 
-  Three GPUI behaviours make this migration go wrong in ways that are invisible
+  Four GPUI behaviours make this migration go wrong in ways that are invisible
   until you drive the UI:
 
   - A surface that grabs focus on click (`.on_click(|| window.focus(&own))`)
@@ -68,6 +66,14 @@ these as staged extraction candidates, not as formatting-only refactor targets.
     Without `whitespace_nowrap()` a one-row label lays itself out as a column
     and shows whichever line lands in the row — a session tab read "ste", out of
     the middle of "System32".
+  - A box has to be handed a width. It is content-sized by default, and an empty
+    field's content is nothing, so it renders as a ~30px square that wraps its
+    placeholder one or two characters per line. A flex column stretches its
+    children, so most callers are fine; a `flex_none` slot (every
+    `settings_form_row` control) and a plain block parent are not, and those
+    call sites give the box an explicit width or a `flex_1` row of its own. A
+    percentage width does not resolve against a block parent here — flex
+    distribution does.
 
 - Icon assets are no longer hand-drawn approximations. The migration had redrawn
   ~113 SVGs by hand in a thin-stroke style, while the pre-GPUI UI was

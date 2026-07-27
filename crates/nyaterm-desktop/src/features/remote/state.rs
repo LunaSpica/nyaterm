@@ -27,11 +27,7 @@ pub(in crate::features) struct RemoteOpsFeatureState {
 }
 
 /// Focus handles the Remote page needs at construction time.
-pub(in crate::features) struct RemoteOpsFeatureFocus {
-    pub docker_search: FocusHandle,
-    pub process_search: FocusHandle,
-    pub process_nice: FocusHandle,
-}
+pub(in crate::features) struct RemoteOpsFeatureFocus {}
 
 pub(in crate::features) struct DockerPaneState {
     pub tx: mpsc::Sender<DockerJobResult>,
@@ -53,7 +49,6 @@ pub(in crate::features) struct DockerPaneState {
     pub tab_menu_open: bool,
     pub header_menu_open: bool,
     pub search_draft: String,
-    pub search_focus: FocusHandle,
     pub compose_expanded: HashSet<String>,
     pub compose_services: HashMap<String, Vec<DockerComposeService>>,
     pub compose_service_errors: HashMap<String, String>,
@@ -73,14 +68,12 @@ pub(in crate::features) struct ProcessPaneState {
     pub consecutive_refresh_failures: u8,
     pub last_refresh_at: Option<Instant>,
     pub search_draft: String,
-    pub search_focus: FocusHandle,
     pub sort_key: RemoteProcessSortKey,
     pub sort_direction: RemoteProcessSortDirection,
     pub list_offset: usize,
     pub selected_pid: Option<u32>,
     pub menu_pid: Option<u32>,
     pub nice_draft: String,
-    pub nice_focus: FocusHandle,
     pub signal_confirm: Option<RemoteProcessSignalConfirmState>,
 }
 
@@ -123,7 +116,6 @@ impl RemoteOpsFeatureState {
                 tab_menu_open: false,
                 header_menu_open: false,
                 search_draft: String::new(),
-                search_focus: focus.docker_search,
                 compose_expanded: HashSet::new(),
                 compose_services: HashMap::new(),
                 compose_service_errors: HashMap::new(),
@@ -142,14 +134,12 @@ impl RemoteOpsFeatureState {
                 consecutive_refresh_failures: 0,
                 last_refresh_at: None,
                 search_draft: String::new(),
-                search_focus: focus.process_search,
                 sort_key: RemoteProcessSortKey::Cpu,
                 sort_direction: RemoteProcessSortDirection::Descending,
                 list_offset: 0,
                 selected_pid: None,
                 menu_pid: None,
                 nice_draft: "0".to_string(),
-                nice_focus: focus.process_nice,
                 signal_confirm: None,
             },
             stats: StatsPaneState {

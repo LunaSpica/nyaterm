@@ -75,20 +75,6 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::features) fn focus_security_credential_field(
-        &mut self,
-        field: SecurityCredentialEditorField,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(editor) = self.security.editors.credential.as_mut() {
-            editor.focused_field = field;
-            editor.error = None;
-        }
-        window.focus(&self.security.editors.credential_focus);
-        cx.notify();
-    }
-
     pub(in crate::features) fn toggle_security_credential_enabled(
         &mut self,
         cx: &mut Context<Self>,

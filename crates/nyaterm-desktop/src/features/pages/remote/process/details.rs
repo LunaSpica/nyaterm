@@ -24,8 +24,7 @@ pub(in crate::features::pages::remote) fn process_details(
     process: &RemoteProcess,
     mode: ProcessDisplayMode,
     labels: ProcessDetailLabels,
-    nice_draft: String,
-    nice_focus: &gpui::FocusHandle,
+    nice_input: Option<gpui::AnyElement>,
     on_copy_command: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     cx: &mut Context<NyaTermApp>,
 ) -> gpui::AnyElement {
@@ -186,31 +185,20 @@ pub(in crate::features::pages::remote) fn process_details(
                 .items_center()
                 .gap_2()
                 .child(
-                    transfer_input(
-                        "process-nice-input",
-                        labels.nice_value,
-                        nice_draft,
-                        true,
-                        palette,
-                    )
-                    .min_w_0()
-                    .w(px(if mode == ProcessDisplayMode::Compact {
-                        140.
-                    } else {
-                        80.
-                    }))
-                    .h(px(28.))
-                    .track_focus(nice_focus)
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        window.focus(&this.remote_ops.process.nice_focus);
-                        cx.notify();
-                    }))
-                    .on_key_down(cx.listener(
-                        |this, event: &KeyDownEvent, window, cx| {
-                            cx.stop_propagation();
-                            this.handle_process_nice_key_down(event, window, cx);
-                        },
-                    )),
+                    div()
+                        .min_w_0()
+                        .w(px(if mode == ProcessDisplayMode::Compact {
+                            140.
+                        } else {
+                            80.
+                        }))
+                        .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
+                            if event.keystroke.key.as_str() == "enter" {
+                                cx.stop_propagation();
+                                this.apply_process_nice_draft(window, cx);
+                            }
+                        }))
+                        .children(nice_input),
                 )
                 .child(small_button(
                     palette,

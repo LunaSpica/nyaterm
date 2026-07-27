@@ -49,11 +49,9 @@ use self::list_logic::{
 #[cfg(test)]
 use self::network_logic::remove_network_group_references;
 use self::network_logic::{
-    advance_network_proxy_editor_focus, advance_network_tunnel_editor_focus,
     clear_network_proxy_editor, clear_network_tunnel_editor, cycle_network_proxy_group,
     cycle_network_proxy_protocol, cycle_network_tunnel_connection, cycle_network_tunnel_group,
-    cycle_network_tunnel_type, focus_network_proxy_editor_field, focus_network_tunnel_editor_field,
-    insert_network_proxy_command_newline, remove_network_group_and_item_references,
+    cycle_network_tunnel_type, remove_network_group_and_item_references,
     remove_network_item_references, set_network_group_editor_error, set_network_group_editor_name,
     set_network_proxy_editor_error, set_network_proxy_editor_field,
     set_network_tunnel_bind_localhost, set_network_tunnel_editor_error,
@@ -167,7 +165,6 @@ pub(in crate::features) struct NetworkFeatureState {
     expanded_sections: HashSet<String>,
     tunnel_editor: Option<NetworkTunnelEditorState>,
     proxy_editor: Option<NetworkProxyEditorState>,
-    group_editor_focus: FocusHandle,
     tunnel_editor_focus: FocusHandle,
     proxy_editor_focus: FocusHandle,
 }
@@ -256,7 +253,6 @@ impl ConnectionFeatureState {
                 expanded_sections: HashSet::new(),
                 tunnel_editor: None,
                 proxy_editor: None,
-                group_editor_focus: focus.network_group_editor,
                 tunnel_editor_focus: focus.network_tunnel_editor,
                 proxy_editor_focus: focus.network_proxy_editor,
             },
@@ -1122,10 +1118,6 @@ impl NetworkFeatureState {
         self.proxy_editor.clone()
     }
 
-    pub fn group_editor_focus_handle(&self) -> FocusHandle {
-        self.group_editor_focus.clone()
-    }
-
     pub fn tunnel_editor_focus_handle(&self) -> FocusHandle {
         self.tunnel_editor_focus.clone()
     }
@@ -1310,7 +1302,6 @@ mod tests {
     use std::collections::HashSet;
 
     use super::{
-        advance_network_proxy_editor_focus, advance_network_tunnel_editor_focus,
         apply_connection_editor_shell_path, apply_connection_editor_text_key,
         apply_connection_editor_working_dir, apply_connection_group_editor_name_key,
         clear_connection_editor_group_menu_draft, clear_connection_editor_runtime_state,
@@ -1320,18 +1311,16 @@ mod tests {
         connection_editor_inline_panel_draft, connection_editor_window_open_or_pending,
         cycle_connection_sort_mode, cycle_network_proxy_group, cycle_network_proxy_protocol,
         cycle_network_tunnel_connection, cycle_network_tunnel_group, cycle_network_tunnel_type,
-        finish_connection_editor_save_state, focus_network_proxy_editor_field,
-        focus_network_tunnel_editor_field, insert_connection_editor_description_newline,
-        insert_network_proxy_command_newline, remove_connection_list_references,
-        remove_group_list_references, remove_network_group_and_item_references,
-        remove_network_group_references, remove_network_item_references,
-        retain_loaded_connection_list_references, select_connection_ids,
-        set_connection_drop_target_if_changed, set_connection_editor_advanced_tab,
-        set_connection_editor_error, set_connection_editor_field_text, set_connection_editor_icon,
-        set_connection_editor_kind, set_connection_editor_menu_value,
-        set_connection_editor_password_source, set_connection_editor_telnet_tab,
-        set_connection_group_editor_error, set_connection_group_hover,
-        set_network_group_editor_error, set_network_group_editor_name,
+        finish_connection_editor_save_state, insert_connection_editor_description_newline,
+        remove_connection_list_references, remove_group_list_references,
+        remove_network_group_and_item_references, remove_network_group_references,
+        remove_network_item_references, retain_loaded_connection_list_references,
+        select_connection_ids, set_connection_drop_target_if_changed,
+        set_connection_editor_advanced_tab, set_connection_editor_error,
+        set_connection_editor_field_text, set_connection_editor_icon, set_connection_editor_kind,
+        set_connection_editor_menu_value, set_connection_editor_password_source,
+        set_connection_editor_telnet_tab, set_connection_group_editor_error,
+        set_connection_group_hover, set_network_group_editor_error, set_network_group_editor_name,
         set_network_proxy_editor_error, set_network_proxy_editor_field,
         set_network_tunnel_bind_localhost, set_network_tunnel_editor_error,
         set_network_tunnel_editor_field, stepped_menu_highlight, sync_connection_search_expansion,
@@ -2402,22 +2391,6 @@ mod tests {
     }
 
     #[test]
-    fn network_tunnel_focus_advances_with_dynamic_rules() {
-        let mut tunnel_editor = Some(NetworkTunnelEditorState {
-            tunnel_type: "dynamic".to_string(),
-            focused_field: NetworkTunnelEditorField::ListenPort,
-            error: Some("stale validation".to_string()),
-            ..network_tunnel_editor("tunnel-a")
-        });
-
-        assert!(advance_network_tunnel_editor_focus(&mut tunnel_editor));
-
-        let editor = tunnel_editor.expect("tunnel editor remains open");
-        assert_eq!(editor.focused_field, NetworkTunnelEditorField::Name);
-        assert_eq!(editor.error, None);
-    }
-
-    #[test]
     fn network_proxy_editor_field_filters_port_and_preserves_password_draft() {
         let mut proxy_editor = Some(NetworkProxyEditorState {
             focused_field: NetworkProxyEditorField::Port,
@@ -2445,34 +2418,6 @@ mod tests {
     }
 
     #[test]
-    fn network_proxy_command_newline_only_when_command_is_focused() {
-        let mut proxy_editor = Some(NetworkProxyEditorState {
-            focused_field: NetworkProxyEditorField::Name,
-            command: "ssh -W".to_string(),
-            error: Some("keep validation".to_string()),
-            ..network_proxy_editor("proxy-a")
-        });
-
-        assert!(!insert_network_proxy_command_newline(&mut proxy_editor));
-        assert_eq!(
-            proxy_editor
-                .as_ref()
-                .and_then(|editor| editor.error.as_deref()),
-            Some("keep validation")
-        );
-
-        proxy_editor
-            .as_mut()
-            .expect("proxy editor remains open")
-            .focused_field = NetworkProxyEditorField::Command;
-        assert!(insert_network_proxy_command_newline(&mut proxy_editor));
-
-        let editor = proxy_editor.expect("proxy editor remains open");
-        assert_eq!(editor.command, "ssh -W\n");
-        assert_eq!(editor.error, None);
-    }
-
-    #[test]
     fn network_proxy_protocol_cycle_resets_hidden_focus() {
         let mut proxy_editor = Some(NetworkProxyEditorState {
             protocol: "http".to_string(),
@@ -2489,25 +2434,6 @@ mod tests {
         let editor = proxy_editor.expect("proxy editor remains open");
         assert_eq!(editor.protocol, "proxycommand");
         assert_eq!(editor.focused_field, NetworkProxyEditorField::Command);
-        assert_eq!(editor.error, None);
-    }
-
-    #[test]
-    fn network_proxy_focus_and_group_cycle_use_editor_rules() {
-        let mut proxy_editor = Some(NetworkProxyEditorState {
-            protocol: "proxycommand".to_string(),
-            focused_field: NetworkProxyEditorField::Command,
-            group_id: None,
-            error: Some("stale validation".to_string()),
-            ..network_proxy_editor("proxy-a")
-        });
-
-        assert!(advance_network_proxy_editor_focus(&mut proxy_editor));
-        assert!(cycle_network_proxy_group(&mut proxy_editor, ["group-a"]));
-
-        let editor = proxy_editor.expect("proxy editor remains open");
-        assert_eq!(editor.focused_field, NetworkProxyEditorField::Name);
-        assert_eq!(editor.group_id.as_deref(), Some("group-a"));
         assert_eq!(editor.error, None);
     }
 
@@ -2715,23 +2641,6 @@ mod tests {
     }
 
     #[test]
-    fn focus_network_tunnel_editor_field_clears_existing_error() {
-        let mut tunnel_editor = Some(NetworkTunnelEditorState {
-            error: Some("stale validation".to_string()),
-            ..network_tunnel_editor("tunnel-a")
-        });
-
-        assert!(focus_network_tunnel_editor_field(
-            &mut tunnel_editor,
-            NetworkTunnelEditorField::TargetPort
-        ));
-
-        let editor = tunnel_editor.expect("tunnel editor remains open");
-        assert_eq!(editor.focused_field, NetworkTunnelEditorField::TargetPort);
-        assert_eq!(editor.error, None);
-    }
-
-    #[test]
     fn set_network_tunnel_editor_error_updates_active_editor() {
         let mut tunnel_editor = Some(network_tunnel_editor("tunnel-a"));
 
@@ -2753,23 +2662,6 @@ mod tests {
         clear_network_proxy_editor(&mut proxy_editor);
 
         assert_eq!(proxy_editor, None);
-    }
-
-    #[test]
-    fn focus_network_proxy_editor_field_clears_existing_error() {
-        let mut proxy_editor = Some(NetworkProxyEditorState {
-            error: Some("stale validation".to_string()),
-            ..network_proxy_editor("proxy-a")
-        });
-
-        assert!(focus_network_proxy_editor_field(
-            &mut proxy_editor,
-            NetworkProxyEditorField::Password
-        ));
-
-        let editor = proxy_editor.expect("proxy editor remains open");
-        assert_eq!(editor.focused_field, NetworkProxyEditorField::Password);
-        assert_eq!(editor.error, None);
     }
 
     #[test]

@@ -37,14 +37,12 @@ impl NyaTermApp {
             let variable_name = variable.name.clone();
             let field_id = format!("quick-command-variable-{index}");
             let field = if variable.options.is_empty() {
-                transfer_input(
-                    field_id.clone(),
-                    self.tr("quickCommands.command"),
-                    variable.value.clone(),
-                    focused,
-                    self.theme_palette(),
+                self.text_input_box(
+                    format!("quick-command.variable.{index}"),
+                    &variable.value,
+                    TextInputSetup::default(),
+                    cx,
                 )
-                .track_focus(&self.quick_command_state.dialogs.variable_focus)
                 .into_any_element()
             } else {
                 div()
