@@ -65,6 +65,7 @@ impl NyaTermApp {
         };
         let host = credential_prompt_target(&state.prompt);
         let _ = state.response_tx.send(Some(state.value));
+        self.forget_text_inputs("ssh.credential.");
         self.credential_prompt_focus_pending = false;
         self.terminal.view.status = format!("submitted SSH credential for {host}");
         cx.notify();
@@ -76,6 +77,7 @@ impl NyaTermApp {
         };
         let host = credential_prompt_target(&state.prompt);
         let _ = state.response_tx.send(None);
+        self.forget_text_inputs("ssh.credential.");
         self.credential_prompt_focus_pending = false;
         self.terminal.view.status = format!("cancelled SSH credential prompt for {host}");
         cx.notify();
@@ -90,6 +92,7 @@ impl NyaTermApp {
         };
         let target = keyboard_interactive_prompt_target(&state.request);
         let _ = state.response_tx.send(Some(state.responses));
+        self.forget_text_inputs("ssh.keyboard-interactive.");
         self.credential_prompt_focus_pending = false;
         self.terminal.view.status = format!("submitted SSH verification for {target}");
         cx.notify();
@@ -104,6 +107,7 @@ impl NyaTermApp {
         };
         let target = keyboard_interactive_prompt_target(&state.request);
         let _ = state.response_tx.send(None);
+        self.forget_text_inputs("ssh.keyboard-interactive.");
         self.credential_prompt_focus_pending = false;
         self.terminal.view.status = format!("cancelled SSH verification for {target}");
         cx.notify();
@@ -155,6 +159,9 @@ impl NyaTermApp {
         if let Some(response) = state.responses.first_mut() {
             *response = code;
             state.focused_index = 0;
+            let input_id = keyboard_interactive_text_input_id(&state.id, 0);
+            let response = response.clone();
+            self.reset_text_input(&input_id, &response, cx);
             self.terminal.view.status = "OTP code sent to verification input".to_string();
             cx.notify();
         }
@@ -182,9 +189,9 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.mark_user_activity();
-        let Some(state) = self.active_credential_prompt.as_mut() else {
+        if self.active_credential_prompt.is_none() {
             return;
-        };
+        }
         let keystroke = &event.keystroke;
         if keystroke.modifiers.platform || keystroke.modifiers.alt || keystroke.modifiers.control {
             return;
@@ -197,32 +204,20 @@ impl NyaTermApp {
             "escape" => {
                 self.cancel_credential_prompt(cx);
             }
-            "backspace" => {
-                state.value.pop();
-                cx.notify();
-            }
-            _ => {
-                if let Some(value) = keystroke
-                    .key_char
-                    .as_deref()
-                    .filter(|value| !value.is_empty())
-                {
-                    state.value.push_str(value);
-                    cx.notify();
-                }
-            }
+            _ => {}
         }
     }
 
     pub(in crate::features) fn handle_keyboard_interactive_key_down(
         &mut self,
         event: &KeyDownEvent,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         self.mark_user_activity();
-        let Some(state) = self.active_keyboard_interactive_prompt.as_mut() else {
+        if self.active_keyboard_interactive_prompt.is_none() {
             return;
-        };
+        }
         let keystroke = &event.keystroke;
         if keystroke.modifiers.platform || keystroke.modifiers.alt || keystroke.modifiers.control {
             return;
@@ -232,37 +227,122 @@ impl NyaTermApp {
             "enter" => self.submit_keyboard_interactive_prompt(cx),
             "escape" => self.cancel_keyboard_interactive_prompt(cx),
             "tab" => {
-                let prompt_count = state.responses.len();
-                if prompt_count > 0 {
-                    state.focused_index = if keystroke.modifiers.shift {
-                        state
-                            .focused_index
-                            .checked_sub(1)
-                            .unwrap_or(prompt_count - 1)
-                    } else {
-                        (state.focused_index + 1) % prompt_count
-                    };
-                    cx.notify();
-                }
+                let Some((input_id, seed, setup)) = self
+                    .active_keyboard_interactive_prompt
+                    .as_mut()
+                    .and_then(|state| {
+                        let prompt_count = state.responses.len();
+                        if prompt_count == 0 {
+                            return None;
+                        }
+                        state.focused_index = if keystroke.modifiers.shift {
+                            state
+                                .focused_index
+                                .checked_sub(1)
+                                .unwrap_or(prompt_count - 1)
+                        } else {
+                            (state.focused_index + 1) % prompt_count
+                        };
+                        let index = state.focused_index;
+                        let setup = if state.request.prompts[index].echo {
+                            TextInputSetup::default()
+                        } else {
+                            TextInputSetup::masked()
+                        };
+                        Some((
+                            keyboard_interactive_text_input_id(&state.id, index),
+                            state.responses[index].clone(),
+                            setup,
+                        ))
+                    })
+                else {
+                    return;
+                };
+                let field = self.text_input(input_id, &seed, setup, cx);
+                window.focus(&field.read(cx).focus_handle());
+                cx.notify();
             }
-            "backspace" => {
-                if let Some(response) = state.responses.get_mut(state.focused_index) {
-                    response.pop();
-                    cx.notify();
-                }
-            }
-            _ => {
-                if let Some(value) = keystroke
-                    .key_char
-                    .as_deref()
-                    .filter(|value| !value.is_empty())
-                    && let Some(response) = state.responses.get_mut(state.focused_index)
-                {
-                    response.push_str(value);
-                    cx.notify();
-                }
-            }
+            _ => {}
         }
+    }
+
+    pub(in crate::features) fn apply_ssh_credential_input(
+        &mut self,
+        prompt_id: &str,
+        text: String,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(state) = self.active_credential_prompt.as_mut() else {
+            return;
+        };
+        if state.id != prompt_id {
+            return;
+        }
+        state.value = text;
+        self.mark_user_activity();
+        cx.notify();
+    }
+
+    pub(in crate::features) fn apply_keyboard_interactive_input(
+        &mut self,
+        field_id: &str,
+        text: String,
+        cx: &mut Context<Self>,
+    ) {
+        let Some((prompt_id, index)) = parse_keyboard_interactive_text_input_id(field_id) else {
+            return;
+        };
+        let Some(state) = self.active_keyboard_interactive_prompt.as_mut() else {
+            return;
+        };
+        if state.id != prompt_id {
+            return;
+        }
+        let Some(response) = state.responses.get_mut(index) else {
+            return;
+        };
+        *response = text;
+        state.focused_index = index;
+        self.mark_user_activity();
+        cx.notify();
+    }
+
+    pub(in crate::features) fn focus_active_ssh_prompt_input(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if let Some(state) = self.active_credential_prompt.as_ref() {
+            let input_id = credential_text_input_id(&state.id);
+            let seed = state.value.clone();
+            let setup = if state.prompt.echo {
+                TextInputSetup::default()
+            } else {
+                TextInputSetup::masked()
+            };
+            let field = self.text_input(input_id, &seed, setup, cx);
+            window.focus(&field.read(cx).focus_handle());
+            return true;
+        }
+
+        let Some(state) = self.active_keyboard_interactive_prompt.as_ref() else {
+            return false;
+        };
+        let Some(index) = (!state.responses.is_empty())
+            .then_some(state.focused_index.min(state.responses.len() - 1))
+        else {
+            return false;
+        };
+        let input_id = keyboard_interactive_text_input_id(&state.id, index);
+        let seed = state.responses[index].clone();
+        let setup = if state.request.prompts[index].echo {
+            TextInputSetup::default()
+        } else {
+            TextInputSetup::masked()
+        };
+        let field = self.text_input(input_id, &seed, setup, cx);
+        window.focus(&field.read(cx).focus_handle());
+        true
     }
 
     pub(in crate::features) fn drain_host_key_prompts(&mut self) -> bool {
@@ -296,6 +376,7 @@ impl NyaTermApp {
                     prompt,
                     response_tx,
                 } => {
+                    self.forget_text_inputs("ssh.credential.");
                     self.terminal.view.status = format!(
                         "SSH credential required for {}",
                         credential_prompt_target(&prompt)
@@ -312,6 +393,7 @@ impl NyaTermApp {
                     request,
                     response_tx,
                 } => {
+                    self.forget_text_inputs("ssh.keyboard-interactive.");
                     self.terminal.view.status = format!(
                         "SSH verification required for {}",
                         keyboard_interactive_prompt_target(&request)
@@ -448,6 +530,22 @@ pub(in crate::features) fn credential_prompt_id(prompt: &SshCredentialPrompt) ->
     format!("cred-{:016x}", hasher.finish())
 }
 
+pub(in crate::features) fn credential_text_input_id(prompt_id: &str) -> String {
+    format!("ssh.credential.{prompt_id}")
+}
+
+pub(in crate::features) fn keyboard_interactive_text_input_id(
+    prompt_id: &str,
+    index: usize,
+) -> String {
+    format!("ssh.keyboard-interactive.{prompt_id}.{index}")
+}
+
+fn parse_keyboard_interactive_text_input_id(field_id: &str) -> Option<(&str, usize)> {
+    let (prompt_id, index) = field_id.rsplit_once('.')?;
+    Some((prompt_id, index.parse().ok()?))
+}
+
 pub(in crate::features) fn keyboard_interactive_prompt_id(
     request: &SshKeyboardInteractiveRequest,
 ) -> String {
@@ -479,5 +577,31 @@ pub(in crate::features) fn keyboard_interactive_prompt_target(
         format!("{}@{}:{}", request.username, request.host, request.port)
     } else {
         request.connection_name.clone()
+    }
+}
+
+#[cfg(test)]
+mod text_input_id_tests {
+    use super::{keyboard_interactive_text_input_id, parse_keyboard_interactive_text_input_id};
+
+    #[test]
+    fn keyboard_interactive_input_ids_keep_prompt_and_index_separate() {
+        let id = keyboard_interactive_text_input_id("keyboard-interactive.abc", 3);
+
+        assert_eq!(
+            parse_keyboard_interactive_text_input_id(
+                id.strip_prefix("ssh.keyboard-interactive.").unwrap()
+            ),
+            Some(("keyboard-interactive.abc", 3))
+        );
+    }
+
+    #[test]
+    fn keyboard_interactive_input_ids_reject_missing_or_invalid_indexes() {
+        assert_eq!(parse_keyboard_interactive_text_input_id("prompt"), None);
+        assert_eq!(
+            parse_keyboard_interactive_text_input_id("prompt.not-a-number"),
+            None
+        );
     }
 }

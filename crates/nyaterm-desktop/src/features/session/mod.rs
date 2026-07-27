@@ -23,8 +23,9 @@ pub(in crate::features) use auth_runtime::{
     SftpDuplicatePromptState, unix_seconds_now,
 };
 pub(in crate::features) use prompt_runtime::{
-    credential_prompt_id, credential_prompt_target, keyboard_interactive_prompt_id,
-    keyboard_interactive_prompt_target, sftp_duplicate_prompt_id, uuid_like_prompt_id,
+    credential_prompt_id, credential_prompt_target, credential_text_input_id,
+    keyboard_interactive_prompt_id, keyboard_interactive_prompt_target,
+    keyboard_interactive_text_input_id, sftp_duplicate_prompt_id, uuid_like_prompt_id,
 };
 pub(in crate::features) use trzsz_runtime::TrzszSessionState;
 pub(in crate::features) use zmodem_runtime::ZmodemSessionState;

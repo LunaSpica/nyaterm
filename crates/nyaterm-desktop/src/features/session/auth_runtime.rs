@@ -437,7 +437,7 @@ pub(in crate::features) enum CredentialPromptRequest {
     },
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub(in crate::features) struct CredentialPromptState {
     pub(in crate::features) id: String,
     pub(in crate::features) prompt: SshCredentialPrompt,
@@ -445,7 +445,18 @@ pub(in crate::features) struct CredentialPromptState {
     pub(in crate::features) value: String,
 }
 
-#[derive(Debug, Clone)]
+impl std::fmt::Debug for CredentialPromptState {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("CredentialPromptState")
+            .field("id", &self.id)
+            .field("prompt", &self.prompt)
+            .field("value", &"[REDACTED]")
+            .finish_non_exhaustive()
+    }
+}
+
+#[derive(Clone)]
 pub(in crate::features) struct KeyboardInteractivePromptState {
     pub(in crate::features) id: String,
     pub(in crate::features) request: SshKeyboardInteractiveRequest,
@@ -457,6 +468,22 @@ pub(in crate::features) struct KeyboardInteractivePromptState {
     pub(in crate::features) otp_period: u64,
     pub(in crate::features) otp_time_step: Option<u64>,
     pub(in crate::features) otp_error: Option<String>,
+}
+
+impl std::fmt::Debug for KeyboardInteractivePromptState {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("KeyboardInteractivePromptState")
+            .field("id", &self.id)
+            .field("request", &self.request)
+            .field("response_count", &self.responses.len())
+            .field("focused_index", &self.focused_index)
+            .field("otp_type", &self.otp_type)
+            .field("otp_period", &self.otp_period)
+            .field("otp_time_step", &self.otp_time_step)
+            .field("otp_error", &self.otp_error)
+            .finish_non_exhaustive()
+    }
 }
 
 #[derive(Debug, Default)]
@@ -527,5 +554,75 @@ impl SshCredentialProvider for CredentialPromptBroker {
         request: &SshKeyboardInteractiveRequest,
     ) -> Result<Option<Vec<String>>, String> {
         CredentialPromptBroker::request_keyboard_interactive(self, request.clone())
+    }
+}
+
+#[cfg(test)]
+mod prompt_state_debug_tests {
+    use super::{CredentialPromptState, KeyboardInteractivePromptState};
+    use nyaterm_transport::{
+        SshCredentialPrompt, SshCredentialPromptKind, SshCredentialPromptReason,
+        SshKeyboardInteractivePrompt, SshKeyboardInteractiveRequest,
+    };
+    use std::sync::mpsc;
+
+    #[test]
+    fn credential_prompt_debug_redacts_the_response() {
+        let (response_tx, _) = mpsc::channel();
+        let state = CredentialPromptState {
+            id: "credential-1".to_string(),
+            prompt: SshCredentialPrompt {
+                host: "example.com".to_string(),
+                port: 22,
+                username: "alice".to_string(),
+                connection_name: "Example".to_string(),
+                kind: SshCredentialPromptKind::Password,
+                reason: SshCredentialPromptReason::MissingPassword,
+                attempt: 1,
+                prompt_text: None,
+                echo: false,
+            },
+            response_tx,
+            value: "credential-secret".to_string(),
+        };
+
+        let debug = format!("{state:?}");
+        assert!(!debug.contains("credential-secret"));
+        assert!(debug.contains("[REDACTED]"));
+    }
+
+    #[test]
+    fn keyboard_interactive_debug_redacts_responses_and_otp_codes() {
+        let (response_tx, _) = mpsc::channel();
+        let state = KeyboardInteractivePromptState {
+            id: "interactive-1".to_string(),
+            request: SshKeyboardInteractiveRequest {
+                host: "example.com".to_string(),
+                port: 22,
+                username: "alice".to_string(),
+                connection_name: "Example".to_string(),
+                name: "Verification".to_string(),
+                instructions: String::new(),
+                round: 1,
+                prompts: vec![SshKeyboardInteractivePrompt {
+                    prompt: "Code:".to_string(),
+                    echo: false,
+                }],
+                otp_id: None,
+            },
+            response_tx,
+            responses: vec!["interactive-secret".to_string()],
+            focused_index: 0,
+            otp_code: Some("otp-secret".to_string()),
+            otp_type: Some("totp".to_string()),
+            otp_period: 30,
+            otp_time_step: Some(42),
+            otp_error: None,
+        };
+
+        let debug = format!("{state:?}");
+        assert!(!debug.contains("interactive-secret"));
+        assert!(!debug.contains("otp-secret"));
+        assert!(debug.contains("response_count: 1"));
     }
 }

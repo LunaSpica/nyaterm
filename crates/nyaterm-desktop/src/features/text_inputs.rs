@@ -116,13 +116,13 @@ impl NyaTermApp {
     ///
     /// The box is the hit target, so clicking anywhere in it takes the caret —
     /// the text itself is only one line tall inside it.
-    pub(in crate::features) fn text_input_box(
+    pub(in crate::features) fn text_input_box<I: Into<SharedString>>(
         &mut self,
-        id: impl Into<SharedString>,
+        id: I,
         seed: &str,
         setup: TextInputSetup,
         cx: &mut Context<Self>,
-    ) -> impl IntoElement {
+    ) -> impl IntoElement + use<I> {
         let id = id.into();
         let palette = self.theme_palette();
         let multi_line = setup.multi_line;
@@ -169,14 +169,14 @@ impl NyaTermApp {
     ///
     /// The caption goes above rather than inside the box, so the whole width is
     /// what was typed — the same shape the connection editor settled on.
-    pub(in crate::features) fn text_input_field(
+    pub(in crate::features) fn text_input_field<I: Into<SharedString>, C: Into<SharedString>>(
         &mut self,
-        id: impl Into<SharedString>,
-        caption: impl Into<SharedString>,
+        id: I,
+        caption: C,
         seed: &str,
         setup: TextInputSetup,
         cx: &mut Context<Self>,
-    ) -> impl IntoElement {
+    ) -> impl IntoElement + use<I, C> {
         let palette = self.theme_palette();
         let caption = caption.into();
         let input = self.text_input_box(id, seed, setup, cx);
@@ -288,6 +288,10 @@ impl NyaTermApp {
             self.apply_security_unlock_password_input(text, cx);
         } else if id.as_ref() == "quick-switch.query" {
             self.apply_quick_switch_query(text, cx);
+        } else if let Some(prompt_id) = id.strip_prefix("ssh.credential.") {
+            self.apply_ssh_credential_input(prompt_id, text, cx);
+        } else if let Some(field_id) = id.strip_prefix("ssh.keyboard-interactive.") {
+            self.apply_keyboard_interactive_input(field_id, text, cx);
         } else if let Some(rest) = id.strip_prefix("ai.credential.") {
             self.apply_ai_credential_input(rest, text, cx);
         } else if let Some(field) = id

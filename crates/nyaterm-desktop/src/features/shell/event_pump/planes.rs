@@ -17,7 +17,7 @@ impl NyaTermApp {
         true
     }
 
-    fn drive_pending_focus(&mut self, window: &mut Window) -> bool {
+    fn drive_pending_focus(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
         if !self.ai.chat.focus_pending
             && !self.transfer.file_ops.rename_focus_pending
             && !self.credential_prompt_focus_pending
@@ -39,7 +39,7 @@ impl NyaTermApp {
             && (self.active_credential_prompt.is_some()
                 || self.active_keyboard_interactive_prompt.is_some())
         {
-            window.focus(&self.credential_focus);
+            self.focus_active_ssh_prompt_input(window, cx);
             self.credential_prompt_focus_pending = false;
             dirty = true;
         }
@@ -133,7 +133,7 @@ impl NyaTermApp {
             self.terminal.view.runtime.connect_settle_until = None;
         }
         if self.title_drag_active(now) {
-            dirty |= self.drive_pending_focus(window);
+            dirty |= self.drive_pending_focus(window, cx);
             if dirty {
                 cx.notify();
             }
@@ -142,7 +142,7 @@ impl NyaTermApp {
         let geometry_churn = window_geometry_churn_active(self.last_viewport_change_at, now);
         let calm_tick = self.runtime_quiet_tick_allowed();
         if geometry_churn && calm_tick {
-            dirty |= self.drive_pending_focus(window);
+            dirty |= self.drive_pending_focus(window, cx);
             if dirty {
                 cx.notify();
             }
@@ -170,7 +170,7 @@ impl NyaTermApp {
             && !self.ai.discovery.pending
             && self.command_persistence_pending == 0
         {
-            dirty |= self.drive_pending_focus(window);
+            dirty |= self.drive_pending_focus(window, cx);
             // During connect settle, skip blink notifies so first frames stay free.
             if !connect_settle_active(self.terminal.view.runtime.connect_settle_until, now) {
                 let visual = self.drive_runtime_visual_plane(cx);
@@ -586,7 +586,7 @@ impl NyaTermApp {
 
         // Focus transitions remain latency-sensitive even under pressure.
         let stage_started_at = Instant::now();
-        dirty |= self.drive_pending_focus(window);
+        dirty |= self.drive_pending_focus(window, cx);
         result.pending_focus = stage_started_at.elapsed();
 
         if !runtime_idle_plane_allowed(demote_idle) {

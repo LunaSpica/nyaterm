@@ -80,7 +80,8 @@ pub(in crate::features) use session::{
     CredentialPromptBroker, CredentialPromptState, HostKeyPromptBroker, HostKeyPromptChoice,
     HostKeyPromptIssue, HostKeyPromptRequest, KeyboardInteractivePromptState, NativeOtpProvider,
     SftpDuplicatePromptBroker, SftpDuplicatePromptState, credential_prompt_target,
-    keyboard_interactive_prompt_target, unix_seconds_now,
+    credential_text_input_id, keyboard_interactive_prompt_target,
+    keyboard_interactive_text_input_id, unix_seconds_now,
 };
 pub(in crate::features) use settings::{SecurityFeatureFocus, SecurityFeatureState};
 pub(in crate::features) use settings_window::SettingsWindow;

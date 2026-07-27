@@ -716,7 +716,9 @@ impl NyaTermApp {
             .p_3()
             .track_focus(&self.credential_focus)
             .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(&this.credential_focus);
+                if !this.focus_active_ssh_prompt_input(window, cx) {
+                    window.focus(&this.credential_focus);
+                }
                 cx.notify();
             }))
             .child(

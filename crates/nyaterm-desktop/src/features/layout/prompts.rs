@@ -290,13 +290,13 @@ impl NyaTermApp {
                 self.tr("runtimePrompt.keyboardInteractive")
             }
         };
-        let display_value = if prompt.value.is_empty() {
-            " ".to_string()
-        } else if prompt.prompt.echo {
-            prompt.value.clone()
+        let input_id = credential_text_input_id(&prompt.id);
+        let input_setup = if prompt.prompt.echo {
+            TextInputSetup::default()
         } else {
-            "*".repeat(prompt.value.chars().count())
+            TextInputSetup::masked()
         };
+        let input = self.text_input_box(input_id, &prompt.value, input_setup, cx);
         let mut details = div()
             .flex()
             .flex_col()
@@ -330,6 +330,10 @@ impl NyaTermApp {
         }
 
         div()
+            .id(SharedString::from(format!(
+                "credential-dialog-{}",
+                prompt.id
+            )))
             .w_full()
             .rounded_md()
             .border_1()
@@ -340,36 +344,13 @@ impl NyaTermApp {
             .flex()
             .flex_col()
             .gap_4()
+            .on_click(|_, _, cx| cx.stop_propagation())
+            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+                cx.stop_propagation();
+                this.handle_credential_key_down(event, cx);
+            }))
             .child(details)
-            .child(
-                div()
-                    .id(SharedString::from(format!(
-                        "credential-input-{}",
-                        prompt.id
-                    )))
-                    .w_full()
-                    .h(px(36.))
-                    .px_3()
-                    .flex()
-                    .items_center()
-                    .rounded_sm()
-                    .border_1()
-                    .border_color(rgb(palette.border))
-                    .bg(rgb(palette.input))
-                    .font_family(crate::features::gpui_code_font_family())
-                    .text_sm()
-                    .track_focus(&self.credential_focus)
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        window.focus(&this.credential_focus);
-                        this.terminal.view.status = "credential prompt focused".to_string();
-                        cx.notify();
-                    }))
-                    .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-                        cx.stop_propagation();
-                        this.handle_credential_key_down(event, cx);
-                    }))
-                    .child(display_value),
-            )
+            .child(input)
             .child(
                 div()
                     .flex()
@@ -445,17 +426,24 @@ impl NyaTermApp {
         }
 
         for (index, field) in prompt.request.prompts.iter().enumerate() {
-            let focused = prompt.focused_index == index;
             let value = prompt.responses.get(index).cloned().unwrap_or_default();
-            let display_value = if value.is_empty() {
-                " ".to_string()
-            } else if field.echo {
-                value
+            let setup = if field.echo {
+                TextInputSetup::default()
             } else {
-                "*".repeat(value.chars().count())
+                TextInputSetup::masked()
             };
             let request_id = prompt.id.clone();
-            let field_id = format!("keyboard-interactive-input-{request_id}-{index}");
+            let field_id = keyboard_interactive_text_input_id(&request_id, index);
+            let click_listener = cx.listener(move |this, _, _, cx| {
+                cx.stop_propagation();
+                if let Some(state) = this.active_keyboard_interactive_prompt.as_mut()
+                    && state.id == request_id
+                {
+                    state.focused_index = index;
+                }
+                cx.notify();
+            });
+            let input = self.text_input_box(field_id.clone(), &value, setup, cx);
             fields = fields.child(
                 div()
                     .min_w_0()
@@ -467,41 +455,10 @@ impl NyaTermApp {
                     )
                     .child(
                         div()
-                            .id(SharedString::from(field_id))
+                            .id(SharedString::from(format!("{field_id}.click-target")))
                             .mt_1()
-                            .w_full()
-                            .h(px(36.))
-                            .px_3()
-                            .flex()
-                            .items_center()
-                            .rounded_sm()
-                            .border_1()
-                            .border_color(rgb(if focused {
-                                palette.focus_ring
-                            } else {
-                                palette.border
-                            }))
-                            .bg(rgb(palette.input))
-                            .font_family(crate::features::gpui_code_font_family())
-                            .text_sm()
-                            .cursor_text()
-                            .when(focused, |this| this.track_focus(&self.credential_focus))
-                            .on_click(cx.listener(move |this, _, window, cx| {
-                                cx.stop_propagation();
-                                if let Some(state) =
-                                    this.active_keyboard_interactive_prompt.as_mut()
-                                    && state.id == request_id
-                                {
-                                    state.focused_index = index;
-                                }
-                                window.focus(&this.credential_focus);
-                                cx.notify();
-                            }))
-                            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-                                cx.stop_propagation();
-                                this.handle_keyboard_interactive_key_down(event, cx);
-                            }))
-                            .child(display_value),
+                            .on_click(click_listener)
+                            .child(input),
                     ),
             );
         }
@@ -653,6 +610,10 @@ impl NyaTermApp {
             .flex_col()
             .gap_4()
             .on_click(|_, _, cx| cx.stop_propagation())
+            .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
+                cx.stop_propagation();
+                this.handle_keyboard_interactive_key_down(event, window, cx);
+            }))
             .child(
                 div()
                     .flex()
