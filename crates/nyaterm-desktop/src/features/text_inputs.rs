@@ -273,6 +273,8 @@ impl NyaTermApp {
             self.apply_sync_groups_search(text, cx);
         } else if let Some(group_id) = id.strip_prefix("sync.group-name.") {
             self.apply_sync_group_name(group_id, text, cx);
+        } else if id.as_ref() == "temporary-ssh.link" {
+            self.apply_temporary_ssh_link(text, cx);
         } else if let Some(rest) = id.strip_prefix("ai.credential.") {
             self.apply_ai_credential_input(rest, text, cx);
         } else if let Some(field) = id

@@ -15,9 +15,15 @@ impl NyaTermApp {
         }
         self.temporary_ssh_link_open = true;
         self.temporary_ssh_link_error = None;
-        self.temporary_ssh_link_marked_text.clear();
+        self.forget_text_inputs("temporary-ssh.link");
+        let field = self.text_input(
+            "temporary-ssh.link",
+            &self.temporary_ssh_link_draft.clone(),
+            TextInputSetup::placeholder(self.tr("temporarySsh.placeholder")),
+            cx,
+        );
         self.terminal.view.status = "temporary SSH link opened".to_string();
-        window.focus(&self.temporary_ssh_link_focus);
+        window.focus(&field.read(cx).focus_handle());
         cx.notify();
     }
 
@@ -25,7 +31,7 @@ impl NyaTermApp {
         self.temporary_ssh_link_open = false;
         self.temporary_ssh_link_draft.clear();
         self.temporary_ssh_link_error = None;
-        self.temporary_ssh_link_marked_text.clear();
+        self.forget_text_inputs("temporary-ssh.link");
         self.terminal.view.status = "temporary SSH link cancelled".to_string();
         cx.notify();
     }
@@ -56,7 +62,7 @@ impl NyaTermApp {
         self.temporary_ssh_link_open = false;
         self.temporary_ssh_link_draft.clear();
         self.temporary_ssh_link_error = None;
-        self.temporary_ssh_link_marked_text.clear();
+        self.forget_text_inputs("temporary-ssh.link");
         self.begin_background_ssh_start(
             parsed.name,
             config,
@@ -80,48 +86,21 @@ impl NyaTermApp {
     ) {
         self.mark_user_activity();
         let keystroke = &event.keystroke;
-        let primary = keystroke.modifiers.control || keystroke.modifiers.platform;
-        if primary && !keystroke.modifiers.alt && matches!(keystroke.key.as_str(), "v" | "V") {
-            if let Some(text) = cx.read_from_clipboard().and_then(|item| item.text()) {
-                self.temporary_ssh_link_draft.push_str(text.trim());
-                self.temporary_ssh_link_error = None;
-                self.temporary_ssh_link_marked_text.clear();
-                cx.notify();
-            }
-            return;
-        }
-        if primary || keystroke.modifiers.alt || keystroke.modifiers.function {
-            return;
-        }
-
         match keystroke.key.as_str() {
             "escape" => self.close_temporary_ssh_link_dialog(cx),
             "enter" => self.submit_temporary_ssh_link_dialog(window, cx),
-            "backspace" => {
-                self.temporary_ssh_link_draft.pop();
-                self.temporary_ssh_link_error = None;
-                self.temporary_ssh_link_marked_text.clear();
-                cx.notify();
-            }
-            "space" => {
-                self.temporary_ssh_link_draft.push(' ');
-                self.temporary_ssh_link_error = None;
-                self.temporary_ssh_link_marked_text.clear();
-                cx.notify();
-            }
-            _ => {
-                if let Some(input) = keystroke
-                    .key_char
-                    .as_deref()
-                    .filter(|input| !input.is_empty())
-                {
-                    self.temporary_ssh_link_draft.push_str(input);
-                    self.temporary_ssh_link_error = None;
-                    self.temporary_ssh_link_marked_text.clear();
-                    cx.notify();
-                }
-            }
+            _ => {}
         }
+    }
+
+    pub(in crate::features) fn apply_temporary_ssh_link(
+        &mut self,
+        text: String,
+        cx: &mut Context<Self>,
+    ) {
+        self.temporary_ssh_link_draft = text;
+        self.temporary_ssh_link_error = None;
+        cx.notify();
     }
 
     fn temporary_ssh_session_config(&self, parsed: TemporarySshLinkConfig) -> SshSessionConfig {

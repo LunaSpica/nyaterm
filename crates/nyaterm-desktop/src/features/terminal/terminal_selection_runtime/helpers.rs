@@ -86,17 +86,6 @@ impl EntityInputHandler for NyaTermApp {
             *adjusted_range = Some(utf16_range_from_bytes(text, &byte_range));
             return Some(text[byte_range].to_string());
         }
-        if self.temporary_ssh_link_open
-            && self.temporary_ssh_link_focus.is_focused(window)
-            && !self.temporary_ssh_link_marked_text.is_empty()
-        {
-            let marked = &self.temporary_ssh_link_marked_text;
-            let len = marked.encode_utf16().count();
-            let start = range.start.min(len);
-            let end = range.end.min(len).max(start);
-            *adjusted_range = Some(start..end);
-            return Some(marked.clone());
-        }
         if self.security.unlock.prompt_open && !self.security.unlock.marked_text.is_empty() {
             let marked = &self.security.unlock.marked_text;
             let len = marked.encode_utf16().count();
@@ -162,13 +151,6 @@ impl EntityInputHandler for NyaTermApp {
     ) -> Option<UTF16Selection> {
         if self.security.unlock.prompt_open {
             let cursor = self.security.unlock.draft.encode_utf16().count();
-            return Some(UTF16Selection {
-                range: cursor..cursor,
-                reversed: false,
-            });
-        }
-        if self.temporary_ssh_link_open && self.temporary_ssh_link_focus.is_focused(window) {
-            let cursor = self.temporary_ssh_link_draft.encode_utf16().count();
             return Some(UTF16Selection {
                 range: cursor..cursor,
                 reversed: false,
@@ -244,10 +226,6 @@ impl EntityInputHandler for NyaTermApp {
                 .as_ref()
                 .map(|range| utf16_range_from_bytes(self.multi_line_paste_text(), range));
         }
-        if self.temporary_ssh_link_open && self.temporary_ssh_link_focus.is_focused(window) {
-            let len = self.temporary_ssh_link_marked_text.encode_utf16().count();
-            return (len > 0).then_some(0..len);
-        }
         if self.rename_session_id.is_some() && self.rename_focus.is_focused(window) {
             let len = self.rename_marked_text.encode_utf16().count();
             return (len > 0).then_some(0..len);
@@ -276,10 +254,6 @@ impl EntityInputHandler for NyaTermApp {
         if self.multi_line_paste.is_some() && self.multi_line_paste_focus.is_focused(window) {
             self.multi_line_paste_marked_text.clear();
             self.multi_line_paste_marked_range = None;
-            return;
-        }
-        if self.temporary_ssh_link_open && self.temporary_ssh_link_focus.is_focused(window) {
-            self.temporary_ssh_link_marked_text.clear();
             return;
         }
         if self.rename_session_id.is_some() && self.rename_focus.is_focused(window) {
@@ -328,15 +302,6 @@ impl EntityInputHandler for NyaTermApp {
                 .or_else(|| self.multi_line_paste_marked_range.clone())
                 .unwrap_or_else(|| self.multi_line_paste_selected_byte_range());
             self.replace_multi_line_paste_range(range, text, cx);
-            return;
-        }
-        if self.temporary_ssh_link_open && self.temporary_ssh_link_focus.is_focused(window) {
-            self.temporary_ssh_link_marked_text.clear();
-            if !text.is_empty() {
-                self.temporary_ssh_link_draft.push_str(text);
-                self.temporary_ssh_link_error = None;
-            }
-            cx.notify();
             return;
         }
         if self.rename_session_id.is_some() && self.rename_focus.is_focused(window) {
@@ -416,11 +381,6 @@ impl EntityInputHandler for NyaTermApp {
                     (selected.start != selected.end).then_some(start + selected.start);
                 self.multi_line_paste_cursor = start + selected.end;
             }
-            cx.notify();
-            return;
-        }
-        if self.temporary_ssh_link_open && self.temporary_ssh_link_focus.is_focused(window) {
-            self.temporary_ssh_link_marked_text = new_text.to_string();
             cx.notify();
             return;
         }

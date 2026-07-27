@@ -7,14 +7,14 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let input_entity = cx.entity();
         let draft = self.temporary_ssh_link_draft.clone();
-        let marked = self.temporary_ssh_link_marked_text.clone();
-        let input_display = if draft.is_empty() && marked.is_empty() {
-            self.tr("temporarySsh.placeholder").to_string()
-        } else {
-            format!("{draft}{marked}")
-        };
+        let input = self.text_input(
+            "temporary-ssh.link",
+            &draft,
+            TextInputSetup::placeholder(self.tr("temporarySsh.placeholder")),
+            cx,
+        );
+        let input_focus = input.read(cx).focus_handle();
         let parsed = parse_temporary_ssh_link(&draft);
         let can_submit = draft.trim().len() > 0 && parsed.is_ok();
         let error_key = self.temporary_ssh_link_error.or_else(|| {
@@ -101,7 +101,6 @@ impl NyaTermApp {
                             .child(
                                 div()
                                     .id(SharedString::from("temporary-ssh-link-input"))
-                                    .relative()
                                     .h(px(36.))
                                     .rounded_md()
                                     .border_1()
@@ -116,33 +115,12 @@ impl NyaTermApp {
                                     .items_center()
                                     .font_family(crate::features::gpui_code_font_family())
                                     .text_sm()
-                                    .text_color(if draft.is_empty() && marked.is_empty() {
-                                        rgb(palette.text_muted)
-                                    } else {
-                                        rgb(palette.text)
+                                    .text_color(rgb(palette.text))
+                                    .cursor_text()
+                                    .on_mouse_down(MouseButton::Left, move |_, window, _| {
+                                        window.focus(&input_focus);
                                     })
-                                    .child(div().min_w_0().overflow_hidden().child(input_display))
-                                    .child(
-                                        gpui::canvas(
-                                            |_bounds, _window, _cx| {},
-                                            move |bounds, _state, window, cx| {
-                                                let focus = input_entity
-                                                    .read(cx)
-                                                    .temporary_ssh_link_focus
-                                                    .clone();
-                                                window.handle_input(
-                                                    &focus,
-                                                    gpui::ElementInputHandler::new(
-                                                        bounds,
-                                                        input_entity.clone(),
-                                                    ),
-                                                    cx,
-                                                );
-                                            },
-                                        )
-                                        .absolute()
-                                        .inset_0(),
-                                    ),
+                                    .child(div().min_w_0().flex_1().overflow_hidden().child(input)),
                             )
                             .when_some(error_key, |this, key| {
                                 this.child(
