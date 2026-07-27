@@ -8,12 +8,14 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let input_entity = cx.entity();
-        let draft_display = if self.rename_draft.is_empty() {
-            self.tr("tabCtx.renamePlaceholder").to_string()
-        } else {
-            format!("{}{}", self.rename_draft, self.rename_marked_text)
-        };
+        let rename_input = self
+            .text_input_box(
+                "session.rename",
+                &self.rename_draft.clone(),
+                TextInputSetup::placeholder(self.tr("tabCtx.renamePlaceholder")),
+                cx,
+            )
+            .into_any_element();
         let can_save = !self.rename_draft.trim().is_empty();
         let dialog_width = (self.last_viewport_size.0 - 32.).clamp(280., 320.);
 
@@ -47,6 +49,7 @@ impl NyaTermApp {
                     .bg(self.shell_surface_color(palette.bg))
                     .shadow_lg()
                     .p_6()
+                    .on_click(|_, _, cx| cx.stop_propagation())
                     .child(
                         div()
                             .text_sm()
@@ -56,43 +59,10 @@ impl NyaTermApp {
                     )
                     .child(
                         div()
-                            .id(SharedString::from("rename-tab-input"))
-                            .relative()
                             .mt_3()
-                            .h(px(36.))
-                            .rounded_sm()
-                            .border_1()
-                            .border_color(rgb(palette.border))
-                            .bg(rgb(palette.input))
-                            .px_3()
-                            .flex()
-                            .items_center()
                             .font_family(crate::features::gpui_code_font_family())
                             .text_sm()
-                            .text_color(if self.rename_draft.is_empty() {
-                                rgb(palette.text_muted)
-                            } else {
-                                rgb(palette.text)
-                            })
-                            .child(draft_display)
-                            .child(
-                                gpui::canvas(
-                                    |_bounds, _window, _cx| {},
-                                    move |bounds, _state, window, cx| {
-                                        let focus = input_entity.read(cx).rename_focus.clone();
-                                        window.handle_input(
-                                            &focus,
-                                            gpui::ElementInputHandler::new(
-                                                bounds,
-                                                input_entity.clone(),
-                                            ),
-                                            cx,
-                                        );
-                                    },
-                                )
-                                .absolute()
-                                .inset_0(),
-                            ),
+                            .child(rename_input),
                     )
                     .child(
                         div()
@@ -358,20 +328,19 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let input_entity = cx.entity();
         let action = self.startup_command_action;
         let action_title = self.tr(match action {
             StartupCommandAction::Duplicate => "tabCtx.runCommandTitle",
             StartupCommandAction::Multiplex => "tabCtx.multiplexSshWithCommand",
         });
-        let command_display = if self.startup_command_draft.is_empty() {
-            self.tr("tabCtx.commandRequired").to_string()
-        } else {
-            format!(
-                "{}{}",
-                self.startup_command_draft, self.startup_command_marked_text
+        let command_input = self
+            .text_input_box(
+                "session.startup-command",
+                &self.startup_command_draft.clone(),
+                TextInputSetup::placeholder(self.tr("tabCtx.commandRequired")),
+                cx,
             )
-        };
+            .into_any_element();
         let can_submit = !self.startup_command_draft.trim().is_empty();
         let delay_label = format!("{} ms", self.startup_command_delay_ms);
         let dialog_width = (self.last_viewport_size.0 - 32.).clamp(280., 448.);
@@ -406,6 +375,7 @@ impl NyaTermApp {
                     .bg(self.shell_surface_color(palette.bg))
                     .shadow_lg()
                     .p_6()
+                    .on_click(|_, _, cx| cx.stop_propagation())
                     .child(
                         div()
                             .text_sm()
@@ -423,44 +393,10 @@ impl NyaTermApp {
                     )
                     .child(
                         div()
-                            .id(SharedString::from("startup-command-input"))
-                            .relative()
                             .mt_1()
-                            .h(px(38.))
-                            .rounded_sm()
-                            .border_1()
-                            .border_color(rgb(palette.border))
-                            .bg(rgb(palette.input))
-                            .px_3()
-                            .flex()
-                            .items_center()
                             .font_family(crate::features::gpui_code_font_family())
                             .text_sm()
-                            .text_color(if self.startup_command_draft.is_empty() {
-                                rgb(palette.text_muted)
-                            } else {
-                                rgb(palette.text)
-                            })
-                            .child(truncate_preview(&command_display, 76))
-                            .child(
-                                gpui::canvas(
-                                    |_bounds, _window, _cx| {},
-                                    move |bounds, _state, window, cx| {
-                                        let focus =
-                                            input_entity.read(cx).startup_command_focus.clone();
-                                        window.handle_input(
-                                            &focus,
-                                            gpui::ElementInputHandler::new(
-                                                bounds,
-                                                input_entity.clone(),
-                                            ),
-                                            cx,
-                                        );
-                                    },
-                                )
-                                .absolute()
-                                .inset_0(),
-                            ),
+                            .child(command_input),
                     )
                     .child(
                         div()

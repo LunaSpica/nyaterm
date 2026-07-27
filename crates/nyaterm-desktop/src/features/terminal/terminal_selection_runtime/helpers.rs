@@ -111,28 +111,6 @@ impl EntityInputHandler for NyaTermApp {
             *adjusted_range = Some(start..end);
             return Some(marked.clone());
         }
-        if self.rename_session_id.is_some()
-            && self.rename_focus.is_focused(window)
-            && !self.rename_marked_text.is_empty()
-        {
-            let marked = &self.rename_marked_text;
-            let len = marked.encode_utf16().count();
-            let start = range.start.min(len);
-            let end = range.end.min(len).max(start);
-            *adjusted_range = Some(start..end);
-            return Some(marked.clone());
-        }
-        if self.startup_command_open
-            && self.startup_command_focus.is_focused(window)
-            && !self.startup_command_marked_text.is_empty()
-        {
-            let marked = &self.startup_command_marked_text;
-            let len = marked.encode_utf16().count();
-            let start = range.start.min(len);
-            let end = range.end.min(len).max(start);
-            *adjusted_range = Some(start..end);
-            return Some(marked.clone());
-        }
         if self.terminal.input.ime_marked_text.is_empty() {
             return None;
         }
@@ -182,20 +160,6 @@ impl EntityInputHandler for NyaTermApp {
                 reversed,
             });
         }
-        if self.rename_session_id.is_some() && self.rename_focus.is_focused(window) {
-            let cursor = self.rename_draft.encode_utf16().count();
-            return Some(UTF16Selection {
-                range: cursor..cursor,
-                reversed: false,
-            });
-        }
-        if self.startup_command_open && self.startup_command_focus.is_focused(window) {
-            let cursor = self.startup_command_draft.encode_utf16().count();
-            return Some(UTF16Selection {
-                range: cursor..cursor,
-                reversed: false,
-            });
-        }
         // GPUI's IME contract needs a valid insertion range even when there is
         // no marked text. This is also what lets CJK candidate windows anchor to
         // the terminal cursor instead of treating the surface as non-editable.
@@ -226,14 +190,6 @@ impl EntityInputHandler for NyaTermApp {
                 .as_ref()
                 .map(|range| utf16_range_from_bytes(self.multi_line_paste_text(), range));
         }
-        if self.rename_session_id.is_some() && self.rename_focus.is_focused(window) {
-            let len = self.rename_marked_text.encode_utf16().count();
-            return (len > 0).then_some(0..len);
-        }
-        if self.startup_command_open && self.startup_command_focus.is_focused(window) {
-            let len = self.startup_command_marked_text.encode_utf16().count();
-            return (len > 0).then_some(0..len);
-        }
         let len = self.terminal.input.ime_marked_text.encode_utf16().count();
         (len > 0).then_some(0..len)
     }
@@ -254,14 +210,6 @@ impl EntityInputHandler for NyaTermApp {
         if self.multi_line_paste.is_some() && self.multi_line_paste_focus.is_focused(window) {
             self.multi_line_paste_marked_text.clear();
             self.multi_line_paste_marked_range = None;
-            return;
-        }
-        if self.rename_session_id.is_some() && self.rename_focus.is_focused(window) {
-            self.rename_marked_text.clear();
-            return;
-        }
-        if self.startup_command_open && self.startup_command_focus.is_focused(window) {
-            self.startup_command_marked_text.clear();
             return;
         }
         self.terminal.input.ime_marked_text.clear();
@@ -302,23 +250,6 @@ impl EntityInputHandler for NyaTermApp {
                 .or_else(|| self.multi_line_paste_marked_range.clone())
                 .unwrap_or_else(|| self.multi_line_paste_selected_byte_range());
             self.replace_multi_line_paste_range(range, text, cx);
-            return;
-        }
-        if self.rename_session_id.is_some() && self.rename_focus.is_focused(window) {
-            self.rename_marked_text.clear();
-            if !text.is_empty() {
-                let remaining = 64usize.saturating_sub(self.rename_draft.chars().count());
-                self.rename_draft.extend(text.chars().take(remaining));
-            }
-            cx.notify();
-            return;
-        }
-        if self.startup_command_open && self.startup_command_focus.is_focused(window) {
-            self.startup_command_marked_text.clear();
-            if !text.is_empty() {
-                self.startup_command_draft.push_str(text);
-            }
-            cx.notify();
             return;
         }
         self.terminal.input.ime_marked_text.clear();
@@ -381,16 +312,6 @@ impl EntityInputHandler for NyaTermApp {
                     (selected.start != selected.end).then_some(start + selected.start);
                 self.multi_line_paste_cursor = start + selected.end;
             }
-            cx.notify();
-            return;
-        }
-        if self.rename_session_id.is_some() && self.rename_focus.is_focused(window) {
-            self.rename_marked_text = new_text.chars().take(64).collect();
-            cx.notify();
-            return;
-        }
-        if self.startup_command_open && self.startup_command_focus.is_focused(window) {
-            self.startup_command_marked_text = new_text.to_string();
             cx.notify();
             return;
         }

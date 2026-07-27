@@ -16,16 +16,23 @@ impl NyaTermApp {
         };
         self.rename_session_id = Some(session_id);
         self.rename_draft = current_name.chars().take(64).collect();
-        self.rename_marked_text.clear();
+        self.forget_text_inputs("session.rename");
+        let field = self.text_input(
+            "session.rename",
+            &self.rename_draft.clone(),
+            TextInputSetup::placeholder(self.tr("tabCtx.renamePlaceholder")),
+            cx,
+        );
         self.terminal.view.status = "rename tab opened".to_string();
-        window.focus(&self.rename_focus);
+        window.focus(&field.read(cx).focus_handle());
+        field.update(cx, |field, cx| field.select_all(window, cx));
         cx.notify();
     }
 
     pub(in crate::features) fn close_rename_session(&mut self, cx: &mut Context<Self>) {
         self.rename_session_id = None;
         self.rename_draft.clear();
-        self.rename_marked_text.clear();
+        self.forget_text_inputs("session.rename");
         self.terminal.view.status = "rename tab cancelled".to_string();
         cx.notify();
     }
@@ -43,13 +50,13 @@ impl NyaTermApp {
             .take(64)
             .collect::<String>();
         self.rename_draft.clear();
-        self.rename_marked_text.clear();
         if trimmed.is_empty() {
             self.terminal.view.status = "tab name cannot be empty".to_string();
             self.rename_session_id = Some(session_id);
             cx.notify();
             return;
         }
+        self.forget_text_inputs("session.rename");
         self.session_custom_names
             .insert(session_id.clone(), trimmed.clone());
         self.terminal.view.status = format!("renamed tab to {trimmed}");
@@ -66,30 +73,10 @@ impl NyaTermApp {
         if keystroke.modifiers.platform || keystroke.modifiers.alt || keystroke.modifiers.control {
             return;
         }
-
         match keystroke.key.as_str() {
             "escape" => self.close_rename_session(cx),
             "enter" => self.submit_rename_session(cx),
-            "backspace" => {
-                self.rename_draft.pop();
-                self.rename_marked_text.clear();
-                cx.notify();
-            }
-            _ => {
-                if self.rename_draft.chars().count() >= 64 {
-                    return;
-                }
-                if let Some(input) = keystroke
-                    .key_char
-                    .as_deref()
-                    .filter(|input| !input.is_empty())
-                {
-                    let remaining = 64usize.saturating_sub(self.rename_draft.chars().count());
-                    self.rename_draft.extend(input.chars().take(remaining));
-                    self.rename_marked_text.clear();
-                    cx.notify();
-                }
-            }
+            _ => {}
         }
     }
 
@@ -136,14 +123,20 @@ impl NyaTermApp {
         self.startup_command_open = true;
         self.startup_command_action = action;
         self.startup_command_draft.clear();
-        self.startup_command_marked_text.clear();
+        self.forget_text_inputs("session.startup-command");
+        let field = self.text_input(
+            "session.startup-command",
+            "",
+            TextInputSetup::placeholder(self.tr("tabCtx.commandRequired")),
+            cx,
+        );
         self.startup_command_delay_ms = u64::from(
             self.settings
                 .interaction_duplicate_session_command_delay_ms
                 .min(60_000),
         );
         self.terminal.view.status = action.status_opened().to_string();
-        window.focus(&self.startup_command_focus);
+        window.focus(&field.read(cx).focus_handle());
         cx.notify();
     }
 
@@ -152,7 +145,7 @@ impl NyaTermApp {
         self.startup_command_open = false;
         self.startup_command_action = StartupCommandAction::Duplicate;
         self.startup_command_draft.clear();
-        self.startup_command_marked_text.clear();
+        self.forget_text_inputs("session.startup-command");
         self.startup_command_delay_ms = DEFAULT_DUPLICATE_STARTUP_DELAY_MS;
         self.terminal.view.status = action.status_cancelled().to_string();
         cx.notify();
@@ -187,7 +180,7 @@ impl NyaTermApp {
         self.startup_command_open = false;
         self.startup_command_action = StartupCommandAction::Duplicate;
         self.startup_command_draft.clear();
-        self.startup_command_marked_text.clear();
+        self.forget_text_inputs("session.startup-command");
         match action {
             StartupCommandAction::Duplicate => {
                 self.duplicate_active_session_with_startup(Some(startup_command), window, cx);
@@ -209,29 +202,27 @@ impl NyaTermApp {
         if keystroke.modifiers.platform || keystroke.modifiers.alt || keystroke.modifiers.control {
             return;
         }
-
         match keystroke.key.as_str() {
             "escape" => self.close_startup_command_dialog(cx),
             "enter" => self.submit_startup_command_dialog(window, cx),
-            "backspace" => {
-                self.startup_command_draft.pop();
-                self.startup_command_marked_text.clear();
-                cx.notify();
-            }
             "up" => self.adjust_startup_command_delay(100, cx),
             "down" => self.adjust_startup_command_delay(-100, cx),
-            _ => {
-                if let Some(input) = keystroke
-                    .key_char
-                    .as_deref()
-                    .filter(|input| !input.is_empty())
-                {
-                    self.startup_command_draft.push_str(input);
-                    self.startup_command_marked_text.clear();
-                    cx.notify();
-                }
-            }
+            _ => {}
         }
+    }
+
+    pub(in crate::features) fn apply_session_text_input(
+        &mut self,
+        field: &str,
+        text: String,
+        cx: &mut Context<Self>,
+    ) {
+        match field {
+            "rename" => self.rename_draft = text,
+            "startup-command" => self.startup_command_draft = text,
+            _ => return,
+        }
+        cx.notify();
     }
 
     pub(in crate::features) fn remove_session_state(&mut self, session_id: &str) {

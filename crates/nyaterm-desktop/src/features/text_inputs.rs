@@ -275,6 +275,8 @@ impl NyaTermApp {
             self.apply_sync_group_name(group_id, text, cx);
         } else if id.as_ref() == "temporary-ssh.link" {
             self.apply_temporary_ssh_link(text, cx);
+        } else if let Some(field) = id.strip_prefix("session.") {
+            self.apply_session_text_input(field, text, cx);
         } else if let Some(rest) = id.strip_prefix("ai.credential.") {
             self.apply_ai_credential_input(rest, text, cx);
         } else if let Some(field) = id
