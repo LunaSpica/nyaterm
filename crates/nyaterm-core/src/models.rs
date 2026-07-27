@@ -949,6 +949,12 @@ pub struct AppSettingsSummary {
     pub ui_quick_cmd_sort_mode: String,
     #[serde(default = "default_saved_connections_sort_mode")]
     pub ui_saved_connections_sort_mode: String,
+    /// Which reading the title bar's centre shows: `session`, `resources`,
+    /// `host` or `datetime`.
+    #[serde(default = "default_header_status_mode")]
+    pub ui_header_status_mode: String,
+    #[serde(default = "default_true")]
+    pub ui_header_status_visible: bool,
     #[serde(default)]
     pub ui_file_explorer_auto_sync_cwd_connection_ids: Vec<String>,
     #[serde(default)]
@@ -1133,6 +1139,8 @@ impl Default for AppSettingsSummary {
             ui_quick_cmd_view_mode: default_quick_cmd_view_mode(),
             ui_quick_cmd_sort_mode: default_quick_cmd_sort_mode(),
             ui_saved_connections_sort_mode: default_saved_connections_sort_mode(),
+            ui_header_status_mode: default_header_status_mode(),
+            ui_header_status_visible: true,
             ui_file_explorer_auto_sync_cwd_connection_ids: Vec::new(),
             ui_file_explorer_favorite_dirs_by_connection_id: HashMap::new(),
             ui_left_panel_width: 256,
@@ -1259,6 +1267,10 @@ fn default_quick_cmd_view_mode() -> String {
 
 fn default_quick_cmd_sort_mode() -> String {
     "created".to_string()
+}
+
+fn default_header_status_mode() -> String {
+    "session".to_string()
 }
 
 fn default_saved_connections_sort_mode() -> String {

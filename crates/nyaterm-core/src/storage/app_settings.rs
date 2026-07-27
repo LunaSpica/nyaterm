@@ -187,6 +187,12 @@ impl ConnectionStore {
                 &["ui", "saved_connections_sort_mode"],
                 "default",
             )),
+            ui_header_status_mode: normalize_header_status_mode(&json_string(
+                &value,
+                &["ui", "header_status_mode"],
+                "session",
+            )),
+            ui_header_status_visible: json_bool(&value, &["ui", "header_status_visible"], true),
             ui_file_explorer_auto_sync_cwd_connection_ids: json_string_vec(
                 &value,
                 &["ui", "file_explorer_auto_sync_cwd_connection_ids"],
@@ -742,6 +748,16 @@ impl ConnectionStore {
             &mut value,
             &["ui", "saved_connections_sort_mode"],
             normalize_saved_connections_sort_mode(&settings.ui_saved_connections_sort_mode),
+        );
+        set_nested_json_string(
+            &mut value,
+            &["ui", "header_status_mode"],
+            normalize_header_status_mode(&settings.ui_header_status_mode),
+        );
+        set_nested_json_bool(
+            &mut value,
+            &["ui", "header_status_visible"],
+            settings.ui_header_status_visible,
         );
         self.save_settings_value(&value)?;
         self.load_app_settings_summary()
@@ -1595,6 +1611,18 @@ fn search_engines_to_json(engines: &[SearchEngineConfig]) -> serde_json::Value {
 
 fn set_nested_json_string(value: &mut serde_json::Value, path: &[&str], new_value: String) {
     set_nested_json_value(value, path, serde_json::Value::String(new_value));
+}
+
+fn set_nested_json_bool(value: &mut serde_json::Value, path: &[&str], new_value: bool) {
+    set_nested_json_value(value, path, serde_json::Value::Bool(new_value));
+}
+
+/// The title bar's centre reading, defaulting to the session it always showed.
+fn normalize_header_status_mode(value: &str) -> String {
+    match value.trim() {
+        "resources" | "host" | "datetime" => value.trim().to_string(),
+        _ => "session".to_string(),
+    }
 }
 
 fn string_vec_json_value(values: &[String], limit: usize) -> serde_json::Value {
