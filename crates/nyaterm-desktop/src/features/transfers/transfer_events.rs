@@ -167,6 +167,8 @@ impl NyaTermApp {
             let mut zmodem_upload_after_probe: Option<(String, Vec<PathBuf>)> = None;
             let mut open_after_create: Option<SftpFileEntry> = None;
             let mut browser_navigation_rollback = None;
+            let mut sync_properties_inputs = false;
+            let mut forget_properties_inputs = false;
             let event_finished = matches!(&event.event, TransferJobEvent::Finished(_));
             let event_failed = matches!(&event.event, TransferJobEvent::Finished(Err(_)));
             let cleanup_internal_job_id = (event_finished
@@ -558,6 +560,7 @@ impl NyaTermApp {
                         };
                         state.properties = Some(properties);
                         state.error = None;
+                        sync_properties_inputs = true;
                     }
                     self.transfer.browser.status = format!("properties loaded for {remote_path}");
                     self.terminal.view.status = format!("SFTP properties loaded: {remote_path}");
@@ -623,6 +626,7 @@ impl NyaTermApp {
                         })
                     {
                         self.transfer.file_ops.properties = None;
+                        forget_properties_inputs = true;
                     }
                     self.terminal.view.status =
                         format!("SFTP properties updated in {parent_path}: {remote_path}");
@@ -968,6 +972,12 @@ impl NyaTermApp {
                     job.summary = None;
                     job.control = None;
                 }
+            }
+            if sync_properties_inputs {
+                self.sync_transfer_properties_inputs(cx);
+            }
+            if forget_properties_inputs {
+                self.forget_text_inputs("transfer.properties.");
             }
             if let Some((snapshot, error)) = browser_navigation_rollback {
                 self.restore_transfer_browser_navigation(snapshot);

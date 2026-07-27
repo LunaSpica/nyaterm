@@ -74,8 +74,7 @@ pub(in crate::features::pages::transfers) fn property_input_row(
     palette: crate::theme::ThemePalette,
     id: &'static str,
     label: &'static str,
-    value: &str,
-    focused: bool,
+    input: gpui::AnyElement,
     disabled: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
@@ -93,38 +92,11 @@ pub(in crate::features::pages::transfers) fn property_input_row(
         .child(
             div()
                 .id(SharedString::from(id))
-                .h(px(34.))
                 .flex_1()
                 .min_w_0()
-                .rounded_sm()
-                .border_1()
-                .border_color(if focused {
-                    rgb(palette.success)
-                } else {
-                    rgb(palette.border)
-                })
-                .bg(if disabled {
-                    rgb(palette.surface)
-                } else {
-                    rgb(palette.input)
-                })
-                .px_3()
-                .flex()
-                .items_center()
-                .font_family(crate::features::gpui_code_font_family())
-                .text_xs()
-                .text_color(if value.is_empty() {
-                    rgb(palette.text_muted)
-                } else {
-                    rgb(palette.text)
-                })
-                .cursor_pointer()
+                .when(disabled, |this| this.opacity(0.65))
                 .on_click(on_click)
-                .child(if value.is_empty() {
-                    SharedString::from("-")
-                } else {
-                    SharedString::from(value.to_string())
-                }),
+                .child(input),
         )
 }
 

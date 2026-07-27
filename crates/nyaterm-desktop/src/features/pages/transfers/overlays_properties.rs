@@ -67,6 +67,30 @@ impl NyaTermApp {
             .unwrap_or(0o644);
         let dialog_width = (self.last_viewport_size.0 - 32.).min(460.).max(280.);
         let dialog_max_height = (self.last_viewport_size.1 * 0.75).clamp(320., 720.);
+        let owner_input = self
+            .text_input_box(
+                "transfer.properties.owner",
+                &state.owner_value,
+                TextInputSetup::placeholder(self.tr("fileExplorer.owner")),
+                cx,
+            )
+            .into_any_element();
+        let group_input = self
+            .text_input_box(
+                "transfer.properties.group",
+                &state.group_value,
+                TextInputSetup::placeholder(self.tr("fileExplorer.group")),
+                cx,
+            )
+            .into_any_element();
+        let mode_input = self
+            .text_input_box(
+                "transfer.properties.mode",
+                &state.mode_value,
+                TextInputSetup::placeholder("0644"),
+                cx,
+            )
+            .into_any_element();
 
         div()
             .id(SharedString::from("transfer-properties-overlay"))
@@ -80,10 +104,6 @@ impl NyaTermApp {
             .items_center()
             .justify_center()
             .track_focus(&self.transfer.file_ops.properties_focus)
-            .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(&this.transfer.file_ops.properties_focus);
-                cx.notify();
-            }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 cx.stop_propagation();
                 this.handle_transfer_properties_key_down(event, window, cx);
@@ -197,42 +217,30 @@ impl NyaTermApp {
                                         .gap_3()
                                         .child(property_input_row(
                                             palette,
-                                            "transfer-properties-owner-input",
+                                            "transfer-properties-owner-row",
                                             self.tr("fileExplorer.owner"),
-                                            &state.owner_value,
-                                            state.focused_field == TransferPropertiesField::Owner,
+                                            owner_input,
                                             loading || state.saving,
                                             cx.listener(|this, _, window, cx| {
-                                                if let Some(state) =
-                                                    this.transfer.file_ops.properties.as_mut()
-                                                {
-                                                    state.focused_field =
-                                                        TransferPropertiesField::Owner;
-                                                }
-                                                window.focus(
-                                                    &this.transfer.file_ops.properties_focus,
+                                                this.focus_transfer_properties_field(
+                                                    TransferPropertiesField::Owner,
+                                                    window,
+                                                    cx,
                                                 );
-                                                cx.notify();
                                             }),
                                         ))
                                         .child(property_input_row(
                                             palette,
-                                            "transfer-properties-group-input",
+                                            "transfer-properties-group-row",
                                             self.tr("fileExplorer.group"),
-                                            &state.group_value,
-                                            state.focused_field == TransferPropertiesField::Group,
+                                            group_input,
                                             loading || state.saving,
                                             cx.listener(|this, _, window, cx| {
-                                                if let Some(state) =
-                                                    this.transfer.file_ops.properties.as_mut()
-                                                {
-                                                    state.focused_field =
-                                                        TransferPropertiesField::Group;
-                                                }
-                                                window.focus(
-                                                    &this.transfer.file_ops.properties_focus,
+                                                this.focus_transfer_properties_field(
+                                                    TransferPropertiesField::Group,
+                                                    window,
+                                                    cx,
                                                 );
-                                                cx.notify();
                                             }),
                                         ))
                                         .child(
@@ -254,22 +262,16 @@ impl NyaTermApp {
                                         ))
                                         .child(property_input_row(
                                             palette,
-                                            "transfer-properties-mode-input",
+                                            "transfer-properties-mode-row",
                                             self.tr("fileExplorer.octal"),
-                                            &state.mode_value,
-                                            state.focused_field == TransferPropertiesField::Mode,
+                                            mode_input,
                                             loading || state.saving,
                                             cx.listener(|this, _, window, cx| {
-                                                if let Some(state) =
-                                                    this.transfer.file_ops.properties.as_mut()
-                                                {
-                                                    state.focused_field =
-                                                        TransferPropertiesField::Mode;
-                                                }
-                                                window.focus(
-                                                    &this.transfer.file_ops.properties_focus,
+                                                this.focus_transfer_properties_field(
+                                                    TransferPropertiesField::Mode,
+                                                    window,
+                                                    cx,
                                                 );
-                                                cx.notify();
                                             }),
                                         ))
                                         .when(entry.file_type == SftpFileType::Directory, |this| {

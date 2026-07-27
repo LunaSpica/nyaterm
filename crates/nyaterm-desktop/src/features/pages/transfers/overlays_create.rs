@@ -683,6 +683,7 @@ impl NyaTermApp {
                         .unwrap_or(0o644);
                     state.mode_value = format_permissions_octal(current ^ bit);
                 }
+                self.sync_transfer_properties_inputs(cx);
             }
         }
         cx.notify();

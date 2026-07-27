@@ -36,6 +36,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
+        self.forget_text_inputs("transfer.properties.");
         self.transfer.file_ops.properties = Some(transfer_properties_state_from_entry(
             entry.clone(),
             self.active_session_id.clone(),
@@ -54,6 +55,7 @@ impl NyaTermApp {
     ) {
         self.transfer.browser.selected_remote_path = Some(entry.path.clone());
         self.transfer.paths.remote = entry.path.clone();
+        self.forget_text_inputs("transfer.properties.");
         self.transfer.file_ops.properties = Some(transfer_properties_state_from_entry(
             entry.clone(),
             self.active_session_id.clone(),
@@ -66,6 +68,7 @@ impl NyaTermApp {
 
     pub(super) fn close_transfer_properties(&mut self, cx: &mut Context<Self>) {
         self.transfer.file_ops.properties = None;
+        self.forget_text_inputs("transfer.properties.");
         self.terminal.view.status = "remote properties closed".to_string();
         cx.notify();
     }
@@ -85,55 +88,91 @@ impl NyaTermApp {
             "escape" => self.close_transfer_properties(cx),
             "enter" => self.submit_transfer_properties(window, cx),
             "tab" => {
-                if let Some(state) = self.transfer.file_ops.properties.as_mut() {
-                    state.focused_field = match state.focused_field {
+                if let Some(field) = self.transfer.file_ops.properties.as_ref().map(|state| {
+                    match state.focused_field {
                         TransferPropertiesField::Mode => TransferPropertiesField::Owner,
                         TransferPropertiesField::Owner => TransferPropertiesField::Group,
                         TransferPropertiesField::Group => TransferPropertiesField::Mode,
-                    };
-                }
-                cx.notify();
-            }
-            "backspace" => {
-                if let Some(state) = self.transfer.file_ops.properties.as_mut() {
-                    match state.focused_field {
-                        TransferPropertiesField::Mode => {
-                            state.mode_value.pop();
-                        }
-                        TransferPropertiesField::Owner => {
-                            state.owner_value.pop();
-                        }
-                        TransferPropertiesField::Group => {
-                            state.group_value.pop();
-                        }
                     }
-                    state.error = None;
-                }
-                cx.notify();
-            }
-            _ => {
-                if let Some(input) = keystroke
-                    .key_char
-                    .as_deref()
-                    .filter(|input| !input.is_empty())
-                    && let Some(state) = self.transfer.file_ops.properties.as_mut()
-                {
-                    match state.focused_field {
-                        TransferPropertiesField::Mode => {
-                            if input.chars().all(|value| ('0'..='7').contains(&value))
-                                && state.mode_value.len() < 4
-                            {
-                                state.mode_value.push_str(input);
-                            }
-                        }
-                        TransferPropertiesField::Owner => state.owner_value.push_str(input),
-                        TransferPropertiesField::Group => state.group_value.push_str(input),
-                    }
-                    state.error = None;
-                    cx.notify();
+                }) {
+                    self.focus_transfer_properties_field(field, window, cx);
                 }
             }
+            _ => {}
         }
+    }
+
+    pub(super) fn focus_transfer_properties_field(
+        &mut self,
+        field: TransferPropertiesField,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(state) = self.transfer.file_ops.properties.as_mut() else {
+            return;
+        };
+        state.focused_field = field;
+        let (id, value, placeholder) = match field {
+            TransferPropertiesField::Mode => {
+                ("transfer.properties.mode", state.mode_value.clone(), "0644")
+            }
+            TransferPropertiesField::Owner => (
+                "transfer.properties.owner",
+                state.owner_value.clone(),
+                self.tr("fileExplorer.owner"),
+            ),
+            TransferPropertiesField::Group => (
+                "transfer.properties.group",
+                state.group_value.clone(),
+                self.tr("fileExplorer.group"),
+            ),
+        };
+        let input = self.text_input(id, &value, TextInputSetup::placeholder(placeholder), cx);
+        window.focus(&input.read(cx).focus_handle());
+        cx.notify();
+    }
+
+    pub(in crate::features) fn apply_transfer_properties_input(
+        &mut self,
+        field_id: &str,
+        text: String,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(field) = (match field_id {
+            "mode" => Some(TransferPropertiesField::Mode),
+            "owner" => Some(TransferPropertiesField::Owner),
+            "group" => Some(TransferPropertiesField::Group),
+            _ => None,
+        }) else {
+            return;
+        };
+        let filtered = normalize_transfer_properties_input(field, &text);
+        let Some(state) = self.transfer.file_ops.properties.as_mut() else {
+            return;
+        };
+        match field {
+            TransferPropertiesField::Mode => state.mode_value = filtered.clone(),
+            TransferPropertiesField::Owner => state.owner_value = filtered.clone(),
+            TransferPropertiesField::Group => state.group_value = filtered.clone(),
+        }
+        state.focused_field = field;
+        state.error = None;
+        if filtered != text {
+            self.reset_text_input(&format!("transfer.properties.{field_id}"), &filtered, cx);
+        }
+        cx.notify();
+    }
+
+    pub(in crate::features) fn sync_transfer_properties_inputs(&mut self, cx: &mut Context<Self>) {
+        let Some(state) = self.transfer.file_ops.properties.as_ref() else {
+            return;
+        };
+        let mode = state.mode_value.clone();
+        let owner = state.owner_value.clone();
+        let group = state.group_value.clone();
+        self.reset_text_input("transfer.properties.mode", &mode, cx);
+        self.reset_text_input("transfer.properties.owner", &owner, cx);
+        self.reset_text_input("transfer.properties.group", &group, cx);
     }
 
     pub(super) fn start_sftp_properties_load_job(
@@ -294,5 +333,41 @@ impl NyaTermApp {
             });
         });
         cx.notify();
+    }
+}
+
+fn normalize_transfer_properties_input(field: TransferPropertiesField, text: &str) -> String {
+    if field == TransferPropertiesField::Mode {
+        text.chars()
+            .filter(|value| ('0'..='7').contains(value))
+            .take(4)
+            .collect()
+    } else {
+        text.to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn properties_mode_input_keeps_four_octal_digits() {
+        assert_eq!(
+            normalize_transfer_properties_input(TransferPropertiesField::Mode, "09a7555"),
+            "0755"
+        );
+    }
+
+    #[test]
+    fn properties_owner_and_group_input_are_not_filtered() {
+        assert_eq!(
+            normalize_transfer_properties_input(TransferPropertiesField::Owner, "dev team"),
+            "dev team"
+        );
+        assert_eq!(
+            normalize_transfer_properties_input(TransferPropertiesField::Group, "release-team"),
+            "release-team"
+        );
     }
 }
