@@ -1,5 +1,7 @@
 use super::*;
 
+use gpui::AppContext;
+
 use crate::send_command::{
     SendCommandControlFocus, SendCommandDataType, SendCommandLineEnding, SendCommandMode,
     SendCommandTarget,
@@ -14,12 +16,16 @@ impl NyaTermApp {
             .unwrap_or_else(|| "∞".to_string())
     }
 
-    fn sync_send_command_count_input(&mut self) {
+    fn sync_send_command_count_input(&mut self, cx: &mut impl AppContext) {
         self.send_command.options.count_input = self.send_command_count_label();
+        let value = self.send_command.options.count_input.clone();
+        self.reset_text_input("send-command.count", &value, cx);
     }
 
-    fn sync_send_command_interval_input(&mut self) {
+    fn sync_send_command_interval_input(&mut self, cx: &mut impl AppContext) {
         self.send_command.options.sync_interval_input();
+        let value = self.send_command.options.interval_input.clone();
+        self.reset_text_input("send-command.interval", &value, cx);
     }
 
     pub(in crate::features) fn close_send_command_menus(&mut self) {
@@ -37,33 +43,52 @@ impl NyaTermApp {
         }
         self.close_send_command_menus();
         self.send_command.composer.control_focus = Some(control);
-        match control {
-            SendCommandControlFocus::Count => self.sync_send_command_count_input(),
-            SendCommandControlFocus::Interval => self.sync_send_command_interval_input(),
-        }
-        window.focus(&self.send_command.composer.controls_focus);
+        let (id, value) = match control {
+            SendCommandControlFocus::Count => {
+                self.sync_send_command_count_input(cx);
+                (
+                    "send-command.count",
+                    self.send_command.options.count_input.clone(),
+                )
+            }
+            SendCommandControlFocus::Interval => {
+                self.sync_send_command_interval_input(cx);
+                (
+                    "send-command.interval",
+                    self.send_command.options.interval_input.clone(),
+                )
+            }
+        };
+        let input = self.text_input(id, &value, TextInputSetup::default(), cx);
+        window.focus(&input.read(cx).focus_handle());
         cx.notify();
     }
 
-    pub(in crate::features) fn blur_send_command_control(&mut self, cx: &mut Context<Self>) {
+    pub(in crate::features) fn blur_send_command_control(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         match self.send_command.composer.control_focus {
             Some(SendCommandControlFocus::Count) => {
                 self.apply_send_command_count_input(false);
-                self.sync_send_command_count_input();
+                self.sync_send_command_count_input(cx);
             }
             Some(SendCommandControlFocus::Interval) => {
-                self.apply_send_command_interval_input(false);
-                self.sync_send_command_interval_input();
+                self.apply_send_command_interval_input(false, cx);
+                self.sync_send_command_interval_input(cx);
             }
             None => {}
         }
         self.send_command.composer.control_focus = None;
+        window.focus(&self.send_command.composer.focus);
         cx.notify();
     }
 
     pub(in crate::features) fn handle_send_command_control_key_down(
         &mut self,
         event: &KeyDownEvent,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         self.mark_user_activity();
@@ -76,81 +101,82 @@ impl NyaTermApp {
         }
 
         match keystroke.key.as_str() {
-            "enter" | "tab" => {
-                self.blur_send_command_control(cx);
+            "enter" => {
+                self.blur_send_command_control(window, cx);
             }
+            "tab" => match control {
+                SendCommandControlFocus::Count => {
+                    self.apply_send_command_count_input(false);
+                    self.sync_send_command_count_input(cx);
+                    self.focus_send_command_control(SendCommandControlFocus::Interval, window, cx);
+                }
+                SendCommandControlFocus::Interval => {
+                    self.apply_send_command_interval_input(false, cx);
+                    self.sync_send_command_interval_input(cx);
+                    self.focus_send_command_control(SendCommandControlFocus::Count, window, cx);
+                }
+            },
             "escape" => {
                 self.send_command.composer.control_focus = None;
-                self.sync_send_command_count_input();
-                self.sync_send_command_interval_input();
-                cx.notify();
-            }
-            "backspace" if !keystroke.modifiers.platform && !keystroke.modifiers.control => {
-                match control {
-                    SendCommandControlFocus::Count => {
-                        self.send_command.options.count_input.pop();
-                        self.apply_send_command_count_input(true);
-                    }
-                    SendCommandControlFocus::Interval => {
-                        self.send_command.options.interval_input.pop();
-                        self.apply_send_command_interval_input(true);
-                    }
-                }
-                cx.notify();
-            }
-            _ if !keystroke.modifiers.platform && !keystroke.modifiers.control => {
-                let Some(input) = keystroke
-                    .key_char
-                    .as_deref()
-                    .filter(|input| !input.is_empty())
-                else {
-                    return;
-                };
-                match control {
-                    SendCommandControlFocus::Count => {
-                        let filtered: String = input
-                            .chars()
-                            .filter(|ch| {
-                                ch.is_ascii_digit()
-                                    || matches!(ch, 'i' | 'n' | 'f' | 'I' | 'N' | 'F' | '∞')
-                            })
-                            .collect();
-                        if filtered.is_empty() {
-                            return;
-                        }
-                        self.send_command.options.count_input.push_str(&filtered);
-                        self.apply_send_command_count_input(true);
-                    }
-                    SendCommandControlFocus::Interval => {
-                        let filtered: String = input
-                            .chars()
-                            .filter(|ch| ch.is_ascii_digit() || *ch == '.')
-                            .collect();
-                        if filtered.is_empty() {
-                            return;
-                        }
-                        self.send_command.options.interval_input.push_str(&filtered);
-                        self.apply_send_command_interval_input(true);
-                    }
-                }
+                self.sync_send_command_count_input(cx);
+                self.sync_send_command_interval_input(cx);
+                window.focus(&self.send_command.composer.focus);
                 cx.notify();
             }
             _ => {}
         }
     }
 
+    pub(in crate::features) fn apply_send_command_control_input(
+        &mut self,
+        control_id: &str,
+        text: String,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(control) = (match control_id {
+            "count" => Some(SendCommandControlFocus::Count),
+            "interval" => Some(SendCommandControlFocus::Interval),
+            _ => None,
+        }) else {
+            return;
+        };
+        let filtered = normalize_send_command_control_input(control, &text);
+        if self.send_command.progress.sending {
+            match control {
+                SendCommandControlFocus::Count => self.sync_send_command_count_input(cx),
+                SendCommandControlFocus::Interval => self.sync_send_command_interval_input(cx),
+            }
+            return;
+        }
+        self.send_command.composer.control_focus = Some(control);
+        match control {
+            SendCommandControlFocus::Count => {
+                self.send_command.options.count_input = filtered.clone();
+                self.apply_send_command_count_input(true);
+            }
+            SendCommandControlFocus::Interval => {
+                self.send_command.options.interval_input = filtered.clone();
+                self.apply_send_command_interval_input(true, cx);
+            }
+        }
+        if filtered != text {
+            self.reset_text_input(&format!("send-command.{control_id}"), &filtered, cx);
+        }
+        cx.notify();
+    }
+
     fn apply_send_command_count_input(&mut self, live: bool) {
         self.send_command.options.apply_count_input(live);
     }
 
-    fn apply_send_command_interval_input(&mut self, live: bool) {
+    fn apply_send_command_interval_input(&mut self, live: bool, cx: &mut impl AppContext) {
         let trimmed = self.send_command.options.interval_input.trim();
         if let Ok(value) = trimmed.parse::<f64>() {
             if value.is_finite() && value >= 0.0 {
                 self.send_command.options.interval_seconds = value.clamp(0.0, 60.0);
             }
         } else if !live {
-            self.apply_send_command_default_interval();
+            self.apply_send_command_default_interval(cx);
         }
     }
 
@@ -614,12 +640,15 @@ impl NyaTermApp {
             (Some(1), d) if d < 0 => None,
             (Some(n), d) => Some((n as i32 + d).clamp(1, 9999) as u32),
         };
-        self.sync_send_command_count_input();
+        self.sync_send_command_count_input(cx);
         cx.notify();
     }
 
     /// Tauri defaults: line=1.00s, char/byte=0.02s, packet=0.
-    pub(in crate::features) fn apply_send_command_default_interval(&mut self) {
+    pub(in crate::features) fn apply_send_command_default_interval(
+        &mut self,
+        cx: &mut impl AppContext,
+    ) {
         self.send_command.options.interval_seconds = match (
             self.send_command.options.data_type,
             self.send_command.options.mode,
@@ -629,7 +658,7 @@ impl NyaTermApp {
             (SendCommandDataType::Text, SendCommandMode::Line) => 1.0,
             (SendCommandDataType::Text, _) => 0.02,
         };
-        self.sync_send_command_interval_input();
+        self.sync_send_command_interval_input(cx);
     }
 
     pub(in crate::features) fn set_send_command_data_type(
@@ -657,7 +686,7 @@ impl NyaTermApp {
                 }
             }
         }
-        self.apply_send_command_default_interval();
+        self.apply_send_command_default_interval(cx);
         self.send_command.composer.hex_scroll_x = 0.;
         self.send_command.composer.hex_scroll_y = 0.;
         self.terminal.view.status = format!(
@@ -677,7 +706,7 @@ impl NyaTermApp {
     ) {
         self.send_command.options.mode = mode;
         self.close_send_command_menus();
-        self.apply_send_command_default_interval();
+        self.apply_send_command_default_interval(cx);
         cx.notify();
     }
 
@@ -693,5 +722,41 @@ impl NyaTermApp {
 
     pub(in crate::features) fn clamp_send_command_hex_scroll(&mut self) {
         self.send_command.composer.clamp_hex_scroll();
+    }
+}
+
+fn normalize_send_command_control_input(control: SendCommandControlFocus, text: &str) -> String {
+    match control {
+        SendCommandControlFocus::Count => text
+            .chars()
+            .filter(|ch| {
+                ch.is_ascii_digit() || matches!(ch, 'i' | 'n' | 'f' | 'I' | 'N' | 'F' | '∞')
+            })
+            .collect(),
+        SendCommandControlFocus::Interval => text
+            .chars()
+            .filter(|ch| ch.is_ascii_digit() || *ch == '.')
+            .collect(),
+    }
+}
+
+#[cfg(test)]
+mod control_input_tests {
+    use super::*;
+
+    #[test]
+    fn count_input_keeps_numbers_and_infinity_spellings() {
+        assert_eq!(
+            normalize_send_command_control_input(SendCommandControlFocus::Count, "12 x INF ∞"),
+            "12INF∞"
+        );
+    }
+
+    #[test]
+    fn interval_input_keeps_decimal_characters() {
+        assert_eq!(
+            normalize_send_command_control_input(SendCommandControlFocus::Interval, "1s.25"),
+            "1.25"
+        );
     }
 }

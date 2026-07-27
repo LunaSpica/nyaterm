@@ -10,8 +10,6 @@ pub(super) struct SendCommandBarViewState {
     pub(super) validation_error: bool,
     pub(super) preview: String,
     pub(super) input_hint: &'static str,
-    pub(super) count_label: String,
-    pub(super) interval_label: String,
     pub(super) line_ending_label: &'static str,
     pub(super) is_sending: bool,
     pub(super) progress_ratio: f32,
@@ -52,13 +50,6 @@ impl NyaTermApp {
         } else {
             self.tr("serialSend.textPlaceholder")
         };
-        let count_label = self
-            .send_command
-            .options
-            .count
-            .map(|n| n.to_string())
-            .unwrap_or_else(|| "∞".to_string());
-        let interval_label = format!("{:.2}", self.send_command.options.interval_seconds);
         let line_ending_label = match self.send_command.options.line_ending {
             SendCommandLineEnding::None => self.tr("serialSend.noLineEnding"),
             SendCommandLineEnding::Cr => "CR",
@@ -120,8 +111,6 @@ impl NyaTermApp {
             validation_error,
             preview,
             input_hint,
-            count_label,
-            interval_label,
             line_ending_label,
             is_sending,
             progress_ratio,

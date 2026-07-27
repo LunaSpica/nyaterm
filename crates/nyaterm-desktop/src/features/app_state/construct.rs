@@ -340,7 +340,6 @@ impl NyaTermApp {
             ),
             send_command: SendCommandFeatureState::new(SendCommandFeatureFocus {
                 editor: cx.focus_handle(),
-                controls: cx.focus_handle(),
             }),
             terminal: TerminalFeatureState::new(
                 terminal_screen,

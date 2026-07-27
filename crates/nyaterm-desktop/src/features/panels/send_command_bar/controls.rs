@@ -15,20 +15,20 @@ impl NyaTermApp {
         let palette = state.palette;
         let is_sending = state.is_sending;
         let is_serial = matches!(self.active_session_kind(), Some(SessionKind::Serial));
-        let count_focused =
-            self.send_command.composer.control_focus == Some(SendCommandControlFocus::Count);
-        let interval_focused =
-            self.send_command.composer.control_focus == Some(SendCommandControlFocus::Interval);
-        let count_label = if count_focused {
-            self.send_command.options.count_input.clone()
-        } else {
-            state.count_label.clone()
-        };
-        let interval_label = if interval_focused {
-            self.send_command.options.interval_input.clone()
-        } else {
-            state.interval_label.clone()
-        };
+        let count_input = self.text_input(
+            "send-command.count",
+            &self.send_command.options.count_input.clone(),
+            TextInputSetup::default(),
+            cx,
+        );
+        let count_focused = count_input.read(cx).has_focus();
+        let interval_input = self.text_input(
+            "send-command.interval",
+            &self.send_command.options.interval_input.clone(),
+            TextInputSetup::default(),
+            cx,
+        );
+        let interval_focused = interval_input.read(cx).has_focus();
         let data_label = match self.send_command.options.data_type {
             SendCommandDataType::Text => self.tr("serialSend.text"),
             SendCommandDataType::Hex => self.tr("serialSend.hex"),
@@ -273,9 +273,8 @@ impl NyaTermApp {
                             } else {
                                 palette.text
                             }))
-                            .when(!is_sending, |this| this.cursor_pointer())
-                            .child(count_label)
-                            .track_focus(&self.send_command.composer.controls_focus)
+                            .when(!is_sending, |this| this.cursor_text())
+                            .child(div().min_w(px(36.)).flex_1().child(count_input))
                             .on_click(cx.listener(|this, _, window, cx| {
                                 this.focus_send_command_control(
                                     SendCommandControlFocus::Count,
@@ -283,9 +282,9 @@ impl NyaTermApp {
                                     cx,
                                 );
                             }))
-                            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+                            .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                                 cx.stop_propagation();
-                                this.handle_send_command_control_key_down(event, cx);
+                                this.handle_send_command_control_key_down(event, window, cx);
                             })),
                     )
                     .child(send_command_stepper_button(
@@ -324,8 +323,8 @@ impl NyaTermApp {
                         } else {
                             palette.text
                         }))
-                        .when(!is_sending, |this| this.cursor_pointer())
-                        .child(interval_label)
+                        .when(!is_sending, |this| this.cursor_text())
+                        .child(div().min_w(px(42.)).flex_1().child(interval_input))
                         .child(
                             div()
                                 .text_size(px(10.))
@@ -333,7 +332,6 @@ impl NyaTermApp {
                                 .text_color(rgb(palette.text_dimmed))
                                 .child(self.tr("serialSend.seconds")),
                         )
-                        .track_focus(&self.send_command.composer.controls_focus)
                         .on_click(cx.listener(|this, _, window, cx| {
                             this.focus_send_command_control(
                                 SendCommandControlFocus::Interval,
@@ -341,9 +339,9 @@ impl NyaTermApp {
                                 cx,
                             );
                         }))
-                        .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+                        .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                             cx.stop_propagation();
-                            this.handle_send_command_control_key_down(event, cx);
+                            this.handle_send_command_control_key_down(event, window, cx);
                         })),
                 ),
             ))

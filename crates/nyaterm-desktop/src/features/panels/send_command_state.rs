@@ -23,14 +23,12 @@ pub(in crate::features) struct SendCommandFeatureState {
 /// Focus handles the send-command bar needs at construction time.
 pub(in crate::features) struct SendCommandFeatureFocus {
     pub editor: FocusHandle,
-    pub controls: FocusHandle,
 }
 
 /// The payload being composed and where the caret is.
 pub(in crate::features) struct SendCommandComposerState {
     pub draft: String,
     pub focus: FocusHandle,
-    pub controls_focus: FocusHandle,
     pub control_focus: Option<SendCommandControlFocus>,
     pub hex_scroll_x: f32,
     pub hex_scroll_y: f32,
@@ -68,7 +66,6 @@ impl SendCommandFeatureState {
             composer: SendCommandComposerState {
                 draft: String::new(),
                 focus: focus.editor,
-                controls_focus: focus.controls,
                 control_focus: None,
                 hex_scroll_x: 0.,
                 hex_scroll_y: 0.,
