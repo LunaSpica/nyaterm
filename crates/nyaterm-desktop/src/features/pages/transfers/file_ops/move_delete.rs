@@ -7,6 +7,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.forget_text_inputs("transfer.move.");
         let name = remote_file_name(&old_path);
         if old_path.trim().is_empty() || old_path == "/" || name == "." || name == ".." {
             self.terminal.view.status = format!("cannot move {old_path}");
@@ -24,6 +25,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn close_transfer_move_dialog(&mut self, cx: &mut Context<Self>) {
+        self.forget_text_inputs("transfer.move.");
         self.transfer.file_ops.move_to = None;
         self.terminal.view.status = "SFTP move cancelled".to_string();
         cx.notify();
@@ -67,33 +69,25 @@ impl NyaTermApp {
             return;
         }
 
+        // The box owns the text; the dialog owns the keys that close or submit.
         match keystroke.key.as_str() {
             "escape" => self.close_transfer_move_dialog(cx),
             "enter" => self.submit_transfer_move(window, cx),
-            "backspace" => {
-                if let Some(state) = self.transfer.file_ops.move_to.as_mut() {
-                    state.value.pop();
-                    cx.notify();
-                }
-            }
-            _ => {
-                let Some(state) = self.transfer.file_ops.move_to.as_mut() else {
-                    return;
-                };
-                if state.value.chars().count() >= 1024 {
-                    return;
-                }
-                if let Some(input) = keystroke
-                    .key_char
-                    .as_deref()
-                    .filter(|input| !input.is_empty())
-                {
-                    let remaining = 1024usize.saturating_sub(state.value.chars().count());
-                    state.value.extend(input.chars().take(remaining));
-                    cx.notify();
-                }
-            }
+            _ => {}
         }
+    }
+
+    /// Apply an edit from the move dialog's path box.
+    pub(in crate::features) fn apply_transfer_move_path(
+        &mut self,
+        text: String,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(state) = self.transfer.file_ops.move_to.as_mut() else {
+            return;
+        };
+        state.value = text;
+        cx.notify();
     }
 
     pub(in crate::features) fn start_sftp_move_job(

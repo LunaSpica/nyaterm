@@ -17,6 +17,7 @@ impl NyaTermApp {
             target: String::new(),
             focused_field: TransferSymlinkField::Name,
         });
+        self.forget_text_inputs("transfer.new-symlink.");
         self.terminal.view.status = "SFTP new symlink opened".to_string();
         window.focus(&self.transfer.file_ops.new_symlink_focus);
         cx.notify();
@@ -27,6 +28,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.transfer.file_ops.new_symlink = None;
+        self.forget_text_inputs("transfer.new-symlink.");
         self.terminal.view.status = "SFTP new symlink cancelled".to_string();
         cx.notify();
     }
@@ -70,55 +72,33 @@ impl NyaTermApp {
             return;
         }
 
+        // The boxes own the text; the dialog owns the keys that close or submit.
         match keystroke.key.as_str() {
             "escape" => self.close_transfer_new_symlink_dialog(cx),
             "enter" => self.submit_transfer_new_symlink(window, cx),
-            "tab" => {
-                if let Some(state) = self.transfer.file_ops.new_symlink.as_mut() {
-                    state.focused_field = match state.focused_field {
-                        TransferSymlinkField::Name => TransferSymlinkField::Target,
-                        TransferSymlinkField::Target => TransferSymlinkField::Name,
-                    };
-                    cx.notify();
-                }
-            }
-            "backspace" => {
-                if let Some(state) = self.transfer.file_ops.new_symlink.as_mut() {
-                    match state.focused_field {
-                        TransferSymlinkField::Name => {
-                            state.name.pop();
-                        }
-                        TransferSymlinkField::Target => {
-                            state.target.pop();
-                        }
-                    }
-                    cx.notify();
-                }
-            }
-            _ => {
-                let Some(state) = self.transfer.file_ops.new_symlink.as_mut() else {
-                    return;
-                };
-                if let Some(input) = keystroke
-                    .key_char
-                    .as_deref()
-                    .filter(|input| !input.is_empty())
-                {
-                    match state.focused_field {
-                        TransferSymlinkField::Name if state.name.chars().count() < 255 => {
-                            let remaining = 255usize.saturating_sub(state.name.chars().count());
-                            state.name.extend(input.chars().take(remaining));
-                        }
-                        TransferSymlinkField::Target if state.target.chars().count() < 1024 => {
-                            let remaining = 1024usize.saturating_sub(state.target.chars().count());
-                            state.target.extend(input.chars().take(remaining));
-                        }
-                        _ => {}
-                    }
-                    cx.notify();
-                }
-            }
+            _ => {}
         }
+    }
+
+    /// Apply an edit from one of the symlink dialog's boxes.
+    ///
+    /// A remote name and a link target have different length limits, and both
+    /// are enforced here rather than by the box.
+    pub(in crate::features) fn apply_transfer_new_symlink_input(
+        &mut self,
+        field: TransferSymlinkField,
+        text: String,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(state) = self.transfer.file_ops.new_symlink.as_mut() else {
+            return;
+        };
+        state.focused_field = field;
+        match field {
+            TransferSymlinkField::Name => state.name = text.chars().take(255).collect(),
+            TransferSymlinkField::Target => state.target = text.chars().take(1024).collect(),
+        }
+        cx.notify();
     }
 
     pub(in crate::features) fn start_sftp_symlink_job(
@@ -178,6 +158,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.forget_text_inputs("transfer.rename.");
         self.ensure_panel_open(crate::models::NavItem::Transfers);
         let Some(old_path) = self.transfer.browser.selected_remote_path.clone() else {
             self.terminal.view.status = "select an SFTP list entry before renaming".to_string();
@@ -207,6 +188,7 @@ impl NyaTermApp {
         old_path: String,
         cx: &mut Context<Self>,
     ) -> bool {
+        self.forget_text_inputs("transfer.rename.");
         let initial_name = remote_file_name(&old_path);
         if initial_name.is_empty() || initial_name == "." || initial_name == ".." {
             self.terminal.view.status = format!("cannot rename {old_path}");
@@ -223,6 +205,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn close_transfer_rename_dialog(&mut self, cx: &mut Context<Self>) {
+        self.forget_text_inputs("transfer.rename.");
         self.transfer.file_ops.rename = None;
         self.transfer.file_ops.rename_focus_pending = false;
         self.terminal.view.status = "SFTP rename cancelled".to_string();
@@ -274,33 +257,31 @@ impl NyaTermApp {
             return;
         }
 
+        // The box owns the text; the row owns the keys that cancel or commit.
         match keystroke.key.as_str() {
-            "escape" => self.close_transfer_rename_dialog(cx),
-            "enter" => self.submit_transfer_rename(window, cx),
-            "backspace" => {
-                if let Some(state) = self.transfer.file_ops.rename.as_mut() {
-                    state.value.pop();
-                    cx.notify();
-                }
+            "escape" => {
+                cx.stop_propagation();
+                self.close_transfer_rename_dialog(cx);
             }
-            _ => {
-                let Some(state) = self.transfer.file_ops.rename.as_mut() else {
-                    return;
-                };
-                if state.value.chars().count() >= 255 {
-                    return;
-                }
-                if let Some(input) = keystroke
-                    .key_char
-                    .as_deref()
-                    .filter(|input| !input.is_empty())
-                {
-                    let remaining = 255usize.saturating_sub(state.value.chars().count());
-                    state.value.extend(input.chars().take(remaining));
-                    cx.notify();
-                }
+            "enter" => {
+                cx.stop_propagation();
+                self.submit_transfer_rename(window, cx);
             }
+            _ => {}
         }
+    }
+
+    /// Apply an edit from the inline rename box.
+    pub(in crate::features) fn apply_transfer_rename_input(
+        &mut self,
+        text: String,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(state) = self.transfer.file_ops.rename.as_mut() else {
+            return;
+        };
+        state.value = text.chars().take(255).collect();
+        cx.notify();
     }
 
     pub(in crate::features) fn start_sftp_rename_job(

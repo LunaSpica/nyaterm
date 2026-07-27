@@ -82,7 +82,7 @@ pub(super) fn transfer_browser_entry_row(
     selected_remote_paths: &HashSet<String>,
     column_widths: TransferBrowserColumnWidths,
     rename_state: Option<TransferRenameState>,
-    rename_focus: gpui::FocusHandle,
+    rename_input: Option<gpui::AnyElement>,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
     let entry_path = entry.path.clone();
@@ -97,15 +97,7 @@ pub(super) fn transfer_browser_entry_row(
         && selected_remote_paths.len() == 1
         && selected_remote_paths.contains(&entry.path);
     let name_click_path = entry.path.clone();
-    let rename_value = inline_rename
-        .as_ref()
-        .map(|state| state.value.clone())
-        .unwrap_or_default();
-    let rename_display = if rename_value.is_empty() {
-        "Remote name".to_string()
-    } else {
-        format!("{rename_value}|")
-    };
+    let mut rename_input = rename_input;
     let rename_has_error = inline_rename.as_ref().is_some_and(|state| {
         let trimmed = state.value.trim();
         trimmed.is_empty() || trimmed.contains('/') || trimmed == "." || trimmed == ".."
@@ -199,42 +191,19 @@ pub(super) fn transfer_browser_entry_row(
                 .when(is_renaming, |this| {
                     this.child(
                         div()
-                            .id(SharedString::from(format!(
-                                "transfer-inline-rename-{}",
-                                entry.path
-                            )))
-                            .h(px(28.))
                             .min_w_0()
                             .flex_1()
-                            .rounded_sm()
-                            .border_1()
-                            .border_color(if rename_has_error {
-                                rgb(0x7f1d1d)
-                            } else {
-                                rgb(0x256d3f)
-                            })
-                            .bg(rgb(palette.input))
-                            .px_2()
-                            .flex()
-                            .items_center()
                             .font_family(crate::features::gpui_code_font_family())
-                            .text_xs()
-                            .text_color(if rename_value.is_empty() {
-                                rgb(palette.text_muted)
-                            } else {
-                                rgb(palette.text)
+                            // A name that cannot be saved reddens the box.
+                            .when(rename_has_error, |this| {
+                                this.rounded_sm().border_1().border_color(rgb(0x7f1d1d))
                             })
-                            .track_focus(&rename_focus)
-                            .on_click(cx.listener(|this, _: &ClickEvent, window, cx| {
-                                cx.stop_propagation();
-                                window.focus(&this.transfer.file_ops.rename_focus);
-                                cx.notify();
-                            }))
+                            // Escape and Enter belong to the row, which the box
+                            // leaves unconsumed.
                             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
-                                cx.stop_propagation();
                                 this.handle_transfer_rename_key_down(event, window, cx);
                             }))
-                            .child(truncate_preview(&rename_display, 42)),
+                            .children(rename_input.take()),
                     )
                 })
                 .when(!is_renaming, |this| {

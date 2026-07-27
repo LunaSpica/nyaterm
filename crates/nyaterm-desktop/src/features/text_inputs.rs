@@ -196,22 +196,6 @@ impl NyaTermApp {
             .child(input)
     }
 
-    /// What the input for `id` currently holds, if it exists.
-    pub(in crate::features) fn text_input_value(&self, id: &str, cx: &App) -> Option<String> {
-        self.text_inputs
-            .fields
-            .get(id)
-            .map(|field| field.read(cx).content().to_string())
-    }
-
-    /// Whether the input for `id` has the caret, as of the last frame.
-    pub(in crate::features) fn text_input_focused(&self, id: &str, cx: &App) -> bool {
-        self.text_inputs
-            .fields
-            .get(id)
-            .is_some_and(|field| field.read(cx).has_focus())
-    }
-
     /// Push a value the runtime changed back into its input.
     pub(in crate::features) fn reset_text_input(&mut self, id: &str, text: &str, cx: &mut App) {
         if let Some(field) = self.text_inputs.fields.get(id) {
@@ -236,6 +220,24 @@ impl NyaTermApp {
             self.apply_network_group_editor_name(text, cx);
         } else if id.as_ref() == "transfer.new-folder.name" {
             self.apply_transfer_new_folder_name(text, cx);
+        } else if id.as_ref() == "transfer.new-file.name" {
+            self.apply_transfer_new_file_name(text, cx);
+        } else if id.as_ref() == "transfer.new-symlink.name" {
+            self.apply_transfer_new_symlink_input(
+                crate::models::TransferSymlinkField::Name,
+                text,
+                cx,
+            );
+        } else if id.as_ref() == "transfer.new-symlink.target" {
+            self.apply_transfer_new_symlink_input(
+                crate::models::TransferSymlinkField::Target,
+                text,
+                cx,
+            );
+        } else if id.as_ref() == "transfer.move.path" {
+            self.apply_transfer_move_path(text, cx);
+        } else if id.starts_with("transfer.rename.") {
+            self.apply_transfer_rename_input(text, cx);
         } else if let Some(field) = id.strip_prefix("quick-command.editor.") {
             self.apply_quick_command_editor_input(field, text, cx);
         } else if let Some(index) = id

@@ -151,11 +151,14 @@ impl NyaTermApp {
                 name: String::new(),
                 value: String::new(),
             });
-        let input_display = if state.value.is_empty() {
-            self.tr("fileExplorer.location").to_string()
-        } else {
-            state.value.clone()
-        };
+        let path_input = self
+            .text_input_box(
+                "transfer.move.path",
+                &state.value,
+                TextInputSetup::placeholder(self.tr("fileExplorer.location")),
+                cx,
+            )
+            .into_any_element();
         let dialog_width = transfer_dialog_width(self.last_viewport_size.0, 384.);
 
         div()
@@ -170,10 +173,6 @@ impl NyaTermApp {
             .items_center()
             .justify_center()
             .track_focus(&self.transfer.file_ops.move_focus)
-            .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(&this.transfer.file_ops.move_focus);
-                cx.notify();
-            }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 cx.stop_propagation();
                 this.handle_transfer_move_key_down(event, window, cx);
@@ -200,24 +199,9 @@ impl NyaTermApp {
                     )
                     .child(
                         div()
-                            .id(SharedString::from("transfer-move-input"))
                             .mt_3()
-                            .h(px(36.))
-                            .rounded_sm()
-                            .border_1()
-                            .border_color(rgb(palette.border))
-                            .bg(rgb(palette.input))
-                            .px_3()
-                            .flex()
-                            .items_center()
                             .font_family(crate::features::gpui_code_font_family())
-                            .text_sm()
-                            .text_color(if state.value.is_empty() {
-                                rgb(palette.text_muted)
-                            } else {
-                                rgb(palette.text)
-                            })
-                            .child(truncate_preview(&input_display, 92)),
+                            .child(path_input),
                     )
                     .child(
                         div()

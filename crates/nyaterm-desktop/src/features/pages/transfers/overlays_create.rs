@@ -225,11 +225,14 @@ impl NyaTermApp {
             });
         let name = state.value.trim();
         let has_error = !name.is_empty() && !valid_remote_child_name(name);
-        let input_display = if state.value.is_empty() {
-            self.tr("fileExplorer.newFileName").to_string()
-        } else {
-            state.value.clone()
-        };
+        let name_input = self
+            .text_input_box(
+                "transfer.new-file.name",
+                &state.value,
+                TextInputSetup::placeholder(self.tr("fileExplorer.newFileName")),
+                cx,
+            )
+            .into_any_element();
 
         div()
             .id(SharedString::from("transfer-new-file-overlay"))
@@ -243,10 +246,6 @@ impl NyaTermApp {
             .items_center()
             .justify_center()
             .track_focus(&self.transfer.file_ops.new_file_focus)
-            .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(&this.transfer.file_ops.new_file_focus);
-                cx.notify();
-            }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 cx.stop_propagation();
                 this.handle_transfer_new_file_key_down(event, window, cx);
@@ -295,28 +294,7 @@ impl NyaTermApp {
                                             .text_color(rgb(palette.text_muted))
                                             .child(self.tr("fileExplorer.newFileName")),
                                     )
-                                    .child(
-                                        div()
-                                            .id(SharedString::from("transfer-new-file-input"))
-                                            .h(px(32.))
-                                            .flex_1()
-                                            .min_w_0()
-                                            .rounded_sm()
-                                            .border_1()
-                                            .border_color(rgb(palette.border))
-                                            .bg(rgb(palette.input))
-                                            .px_3()
-                                            .flex()
-                                            .items_center()
-                                            .font_family(crate::features::gpui_code_font_family())
-                                            .text_sm()
-                                            .text_color(if state.value.is_empty() {
-                                                rgb(palette.text_muted)
-                                            } else {
-                                                rgb(palette.text)
-                                            })
-                                            .child(truncate_preview(&input_display, 80)),
-                                    ),
+                                    .child(div().flex_1().min_w_0().child(name_input)),
                             )
                             .child(
                                 div()
@@ -452,6 +430,22 @@ impl NyaTermApp {
         let target = state.target.trim();
         let name_invalid = !name.is_empty() && !valid_remote_child_name(name);
         let has_error = name.is_empty() || target.is_empty() || name_invalid;
+        let symlink_name_input = self
+            .text_input_box(
+                "transfer.new-symlink.name",
+                &state.name,
+                TextInputSetup::placeholder(self.tr("fileExplorer.symlinkName")),
+                cx,
+            )
+            .into_any_element();
+        let symlink_target_input = self
+            .text_input_box(
+                "transfer.new-symlink.target",
+                &state.target,
+                TextInputSetup::placeholder("/path/to/target"),
+                cx,
+            )
+            .into_any_element();
 
         div()
             .id(SharedString::from("transfer-new-symlink-overlay"))
@@ -465,10 +459,6 @@ impl NyaTermApp {
             .items_center()
             .justify_center()
             .track_focus(&self.transfer.file_ops.new_symlink_focus)
-            .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(&this.transfer.file_ops.new_symlink_focus);
-                cx.notify();
-            }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 cx.stop_propagation();
                 this.handle_transfer_new_symlink_key_down(event, window, cx);
@@ -506,43 +496,15 @@ impl NyaTermApp {
                             .gap_4()
                             .child(symlink_input_row(
                                 palette,
-                                "transfer-new-symlink-name",
                                 self.tr("fileExplorer.symlinkName"),
-                                if state.name.is_empty() {
-                                    self.tr("fileExplorer.symlinkName")
-                                } else {
-                                    &state.name
-                                },
-                                state.focused_field == TransferSymlinkField::Name,
                                 name_invalid,
-                                cx.listener(|this, _, window, cx| {
-                                    if let Some(state) = this.transfer.file_ops.new_symlink.as_mut()
-                                    {
-                                        state.focused_field = TransferSymlinkField::Name;
-                                    }
-                                    window.focus(&this.transfer.file_ops.new_symlink_focus);
-                                    cx.notify();
-                                }),
+                                symlink_name_input,
                             ))
                             .child(symlink_input_row(
                                 palette,
-                                "transfer-new-symlink-target",
                                 self.tr("fileExplorer.symlinkTarget"),
-                                if state.target.is_empty() {
-                                    "/path/to/target"
-                                } else {
-                                    &state.target
-                                },
-                                state.focused_field == TransferSymlinkField::Target,
                                 false,
-                                cx.listener(|this, _, window, cx| {
-                                    if let Some(state) = this.transfer.file_ops.new_symlink.as_mut()
-                                    {
-                                        state.focused_field = TransferSymlinkField::Target;
-                                    }
-                                    window.focus(&this.transfer.file_ops.new_symlink_focus);
-                                    cx.notify();
-                                }),
+                                symlink_target_input,
                             )),
                     )
                     .child(

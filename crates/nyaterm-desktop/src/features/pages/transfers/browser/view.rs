@@ -251,6 +251,18 @@ impl NyaTermApp {
             // padding would only work with a real scroll container.
             let window_start = scroll_row;
             let window_end = (window_start + window_capacity).min(total_entries);
+            // Only one row renames at a time, so its box is built once here: the
+            // loop below borrows `self` and cannot create one.
+            let renaming = self.transfer.file_ops.rename.clone();
+            let mut rename_input = renaming.as_ref().map(|state| {
+                self.text_input_box(
+                    format!("transfer.rename.{}", state.old_path),
+                    &state.value,
+                    TextInputSetup::placeholder("Remote name"),
+                    cx,
+                )
+                .into_any_element()
+            });
             for index in window_start..window_end {
                 if has_parent_entry && index == 0 {
                     rows = rows.child(transfer_browser_parent_entry_row(
@@ -267,8 +279,11 @@ impl NyaTermApp {
                         self.transfer.browser.selected_remote_path.clone(),
                         &self.transfer.browser.selected_remote_paths,
                         column_widths,
-                        self.transfer.file_ops.rename.clone(),
-                        self.transfer.file_ops.rename_focus.clone(),
+                        renaming.clone(),
+                        (renaming.as_ref().map(|state| state.old_path.as_str())
+                            == Some(entry.path.as_str()))
+                        .then(|| rename_input.take())
+                        .flatten(),
                         cx,
                     ));
                 }

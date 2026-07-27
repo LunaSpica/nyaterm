@@ -2,12 +2,9 @@ use super::*;
 
 pub(in crate::features::pages::transfers) fn symlink_input_row(
     palette: crate::theme::ThemePalette,
-    id: &'static str,
     label: &'static str,
-    value: &str,
-    focused: bool,
     invalid: bool,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    input: gpui::AnyElement,
 ) -> impl IntoElement {
     div()
         .flex()
@@ -23,35 +20,15 @@ pub(in crate::features::pages::transfers) fn symlink_input_row(
         )
         .child(
             div()
-                .id(SharedString::from(id))
-                .h(px(32.))
                 .flex_1()
                 .min_w_0()
-                .rounded_sm()
-                .border_1()
-                .border_color(if invalid {
-                    rgb(palette.danger)
-                } else if focused {
-                    rgb(palette.success)
-                } else {
-                    rgb(palette.border)
+                // The box draws its own border; a bad name reddens it from here.
+                .when(invalid, |this| {
+                    this.rounded_sm()
+                        .border_1()
+                        .border_color(rgb(palette.danger))
                 })
-                .bg(rgb(palette.input))
-                .px_3()
-                .flex()
-                .items_center()
-                .font_family(crate::features::gpui_code_font_family())
-                .text_sm()
-                .text_color(
-                    if value.is_empty() || value == "Symlink name" || value == "/path/to/target" {
-                        rgb(palette.text_muted)
-                    } else {
-                        rgb(palette.text)
-                    },
-                )
-                .cursor_pointer()
-                .on_click(on_click)
-                .child(truncate_preview(value, 88)),
+                .child(input),
         )
 }
 
