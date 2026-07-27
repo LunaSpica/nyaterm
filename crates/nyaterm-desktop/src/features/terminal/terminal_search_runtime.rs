@@ -15,8 +15,16 @@ impl NyaTermApp {
         self.terminal.search.open = true;
         self.terminal.search.active_index = 0;
         self.terminal.view.status = "terminal search opened".to_string();
+        self.forget_text_inputs("terminal.search.");
+        let query = self.terminal.search.query.clone();
+        let field = self.text_input(
+            "terminal.search.query",
+            &query,
+            TextInputSetup::placeholder("Find"),
+            cx,
+        );
         self.refresh_terminal_search_state(cx);
-        window.focus(&self.terminal.search.focus);
+        window.focus(&field.read(cx).focus_handle());
     }
 
     pub(in crate::features) fn close_terminal_search(
@@ -26,6 +34,7 @@ impl NyaTermApp {
     ) {
         self.terminal.search.open = false;
         self.terminal.search.active_index = 0;
+        self.forget_text_inputs("terminal.search.");
         self.terminal.view.status = "terminal search closed".to_string();
         window.focus(&self.terminal.input.focus);
         self.notify_active_terminal_surface(cx);
@@ -36,6 +45,17 @@ impl NyaTermApp {
         self.request_active_terminal_search();
         self.notify_active_terminal_surface(cx);
         cx.notify();
+    }
+
+    pub(in crate::features) fn apply_terminal_search_query(
+        &mut self,
+        text: String,
+        cx: &mut Context<Self>,
+    ) {
+        self.mark_user_activity();
+        self.terminal.search.query = text;
+        self.terminal.search.active_index = 0;
+        self.refresh_terminal_search_state(cx);
     }
 
     pub(in crate::features) fn terminal_search_key(&self) -> Option<TerminalFrameSearchKey> {
@@ -274,11 +294,6 @@ impl NyaTermApp {
                     self.navigate_terminal_search(1, cx);
                 }
             }
-            "backspace" => {
-                self.terminal.search.query.pop();
-                self.terminal.search.active_index = 0;
-                self.refresh_terminal_search_state(cx);
-            }
             "tab" => {
                 self.terminal.search.mode =
                     if self.terminal.search.mode == TerminalSearchMode::Buffer {
@@ -289,17 +304,7 @@ impl NyaTermApp {
                 self.terminal.search.active_index = 0;
                 self.refresh_terminal_search_state(cx);
             }
-            _ => {
-                if let Some(input) = keystroke
-                    .key_char
-                    .as_deref()
-                    .filter(|input| !input.is_empty())
-                {
-                    self.terminal.search.query.push_str(input);
-                    self.terminal.search.active_index = 0;
-                    self.refresh_terminal_search_state(cx);
-                }
-            }
+            _ => {}
         }
     }
 

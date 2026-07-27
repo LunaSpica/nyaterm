@@ -122,10 +122,19 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn terminal_search_bar(
-        &self,
+        &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
+        let query = self.terminal.search.query.clone();
+        let search_input = self.text_input(
+            "terminal.search.query",
+            &query,
+            TextInputSetup::placeholder("Find"),
+            cx,
+        );
+        let search_focus = search_input.read(cx).focus_handle();
+        let search_focused = search_input.read(cx).has_focus();
         let buffer_matches = self.terminal_buffer_matches();
         let history_results = self.terminal_history_search_results();
         let history_pending = self.terminal_history_search_pending_for_current_query();
@@ -173,11 +182,6 @@ impl NyaTermApp {
                 ),
                 Err(error) => (truncate_preview(error, 40), true),
             },
-        };
-        let input_display = if self.terminal.search.query.is_empty() {
-            "Find".to_string()
-        } else {
-            self.terminal.search.query.clone()
         };
         let show_history_results = self.terminal.search.mode == TerminalSearchMode::History
             && !self.terminal.search.query.trim().is_empty();
@@ -303,11 +307,6 @@ impl NyaTermApp {
             .shadow_lg()
             .px_2()
             .py_1()
-            .track_focus(&self.terminal.search.focus)
-            .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(&this.terminal.search.focus);
-                cx.notify();
-            }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 cx.stop_propagation();
                 this.handle_terminal_search_key_down(event, window, cx);
@@ -373,18 +372,22 @@ impl NyaTermApp {
                             .flex_1()
                             .rounded_sm()
                             .border_1()
-                            .border_color(rgb(palette.border))
+                            .border_color(rgb(if search_focused {
+                                palette.primary
+                            } else {
+                                palette.border
+                            }))
                             .bg(rgb(palette.input))
                             .px_2()
                             .flex()
                             .items_center()
+                            .cursor_text()
                             .text_xs()
-                            .text_color(if self.terminal.search.query.is_empty() {
-                                rgb(palette.text_muted)
-                            } else {
-                                rgb(palette.text)
+                            .text_color(rgb(palette.text))
+                            .on_mouse_down(MouseButton::Left, move |_, window, _| {
+                                window.focus(&search_focus);
                             })
-                            .child(input_display),
+                            .child(div().min_w_0().flex_1().h_full().child(search_input)),
                     )
                     .child(terminal_search_flag_button(
                         "terminal-search-case",

@@ -29,7 +29,6 @@ pub(in crate::features) struct TerminalFeatureState {
 
 /// Focus handles the terminal feature needs at construction time.
 pub(in crate::features) struct TerminalFeatureFocus {
-    pub search: FocusHandle,
     pub actions: FocusHandle,
     pub x11_display: FocusHandle,
     pub terminal: FocusHandle,
@@ -39,7 +38,6 @@ pub(in crate::features) struct TerminalFeatureFocus {
 pub(in crate::features) struct TerminalSearchState {
     pub open: bool,
     pub query: String,
-    pub focus: FocusHandle,
     pub mode: TerminalSearchMode,
     pub case_sensitive: bool,
     pub regex: bool,
@@ -127,7 +125,6 @@ impl TerminalFeatureState {
             search: TerminalSearchState {
                 open: false,
                 query: String::new(),
-                focus: focus.search,
                 mode: TerminalSearchMode::Buffer,
                 case_sensitive: false,
                 regex: false,

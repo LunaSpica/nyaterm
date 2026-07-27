@@ -349,7 +349,6 @@ impl NyaTermApp {
                 "idle".to_string(),
                 1.0,
                 TerminalFeatureFocus {
-                    search: cx.focus_handle(),
                     actions: cx.focus_handle(),
                     x11_display: cx.focus_handle(),
                     terminal: cx.focus_handle(),
