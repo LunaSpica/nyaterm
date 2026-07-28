@@ -1,6 +1,16 @@
-use super::*;
+use gpui::{
+    AnyElement, App, ClickEvent, Context, FontWeight, IntoElement, KeyDownEvent, SharedString,
+    Window, div, prelude::*, px, rgb, rgba, svg,
+};
 
+use crate::features::{ChromeTooltip, NyaTermApp, TextInputSetup};
 use crate::models::KeywordHighlightEditorField;
+use crate::theme::ThemePalette;
+
+use super::super::{
+    settings_form_row, settings_form_section, settings_switch, settings_switch_with_enabled,
+};
+use super::helpers::parse_keyword_swatch;
 
 impl NyaTermApp {
     pub(in crate::features) fn keyword_highlights_settings_section(

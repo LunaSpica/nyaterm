@@ -1,5 +1,13 @@
-use super::*;
-use gpui::MouseButton;
+use gpui::{Context, FontWeight, IntoElement, KeyDownEvent, MouseButton, div, prelude::*, px, rgb};
+
+use crate::features::{NyaTermApp, TextInputSetup, gpui_code_font_family};
+use crate::shortcuts::{
+    SHORTCUT_CATEGORIES, SHORTCUT_REGISTRY, ShortcutCategory, ShortcutDefinition,
+    ShortcutNativeStatus, format_hotkey_for_display, shortcut_keys_for,
+};
+use crate::widgets::small_button;
+
+use super::super::settings_form_section;
 
 impl NyaTermApp {
     pub(in crate::features) fn keybindings_settings_section(
@@ -226,7 +234,7 @@ impl NyaTermApp {
                             .h(px(24.))
                             .flex()
                             .items_center()
-                            .font_family(crate::features::gpui_code_font_family())
+                            .font_family(gpui_code_font_family())
                             .text_size(px(10.))
                             .font_weight(FontWeight(700.))
                             .text_color(if conflict.is_some() {

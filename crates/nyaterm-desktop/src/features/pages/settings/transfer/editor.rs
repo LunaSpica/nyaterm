@@ -1,4 +1,9 @@
-use super::*;
+use gpui::{Context, IntoElement, SharedString, div, prelude::*, px};
+
+use crate::features::{NyaTermApp, TextInputSetup};
+use crate::widgets::small_button;
+
+use super::super::{settings_choice_chip, settings_form_row};
 
 impl NyaTermApp {
     pub(in crate::features::pages::settings) fn transfer_editor_settings_rows(

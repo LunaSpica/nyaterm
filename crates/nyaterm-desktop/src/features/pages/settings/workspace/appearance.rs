@@ -1,5 +1,14 @@
-use super::*;
-use crate::features::appearance_font_stack;
+use gpui::{
+    App, ClickEvent, Context, FontWeight, IntoElement, SharedString, Window, div, prelude::*, px,
+    rgb, rgba, svg,
+};
+
+use crate::features::{
+    ChromeTooltip, NyaTermApp, appearance_font_stack, gpui_code_font_family, truncate_preview,
+};
+use crate::theme::{APPEARANCE_THEME_IDS, ThemePalette, appearance_theme_label};
+
+use super::super::{settings_form_row, settings_form_section, settings_switch};
 
 impl NyaTermApp {
     pub(in crate::features) fn appearance_settings_section(
@@ -1104,7 +1113,7 @@ fn appearance_number_stepper(
             div()
                 .flex_1()
                 .text_center()
-                .font_family(crate::features::gpui_code_font_family())
+                .font_family(gpui_code_font_family())
                 .text_size(px(12.))
                 .font_weight(FontWeight(600.))
                 .text_color(rgb(palette.text))

@@ -551,6 +551,20 @@ declare -A SUPER_BASELINE=(
   [crates/nyaterm-desktop/src/features/pages/remote/process/resources.rs]=0
   [crates/nyaterm-desktop/src/features/pages/remote/process/table.rs]=0
   [crates/nyaterm-desktop/src/features/pages/remote/process_view.rs]=0
+  [crates/nyaterm-desktop/src/features/pages/settings/transfer/advanced.rs]=0
+  [crates/nyaterm-desktop/src/features/pages/settings/transfer/editor.rs]=0
+  [crates/nyaterm-desktop/src/features/pages/settings/transfer/files.rs]=0
+  [crates/nyaterm-desktop/src/features/pages/settings/transfer/mod.rs]=0
+  [crates/nyaterm-desktop/src/features/pages/settings/transfer/recording.rs]=0
+  [crates/nyaterm-desktop/src/features/pages/settings/terminal/general.rs]=0
+  [crates/nyaterm-desktop/src/features/pages/settings/terminal/keywords.rs]=0
+  [crates/nyaterm-desktop/src/features/pages/settings/terminal/mod.rs]=0
+  [crates/nyaterm-desktop/src/features/pages/settings/terminal/search.rs]=0
+  [crates/nyaterm-desktop/src/features/pages/settings/workspace/appearance.rs]=0
+  [crates/nyaterm-desktop/src/features/pages/settings/workspace/general.rs]=0
+  [crates/nyaterm-desktop/src/features/pages/settings/workspace/interaction.rs]=0
+  [crates/nyaterm-desktop/src/features/pages/settings/workspace/keybindings.rs]=0
+  [crates/nyaterm-desktop/src/features/pages/settings/workspace/mod.rs]=0
   [crates/nyaterm-desktop/src/features/pages/transfers/helpers/browser.rs]=0
   [crates/nyaterm-desktop/src/features/pages/transfers/helpers/editor.rs]=0
   [crates/nyaterm-desktop/src/features/pages/transfers/helpers/job_row.rs]=0
@@ -602,6 +616,9 @@ done < <(rg -n --path-separator / '^[[:space:]]*use super::\*;' \
   crates/nyaterm-desktop/src/features/pages/transfers \
   crates/nyaterm-desktop/src/features/pages/remote/process \
   crates/nyaterm-desktop/src/features/pages/remote/process_view.rs \
+  crates/nyaterm-desktop/src/features/pages/settings/transfer \
+  crates/nyaterm-desktop/src/features/pages/settings/terminal \
+  crates/nyaterm-desktop/src/features/pages/settings/workspace \
   crates/nyaterm-desktop/src/features/shell/mod.rs \
   crates/nyaterm-desktop/src/features/shell/activity_bar_runtime.rs \
   crates/nyaterm-desktop/src/features/shell/appearance.rs \

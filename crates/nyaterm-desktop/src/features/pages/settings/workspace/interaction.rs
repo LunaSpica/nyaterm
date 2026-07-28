@@ -1,4 +1,17 @@
-use super::*;
+use gpui::{
+    App, ClickEvent, Context, FontWeight, IntoElement, SharedString, Window, div, prelude::*, px,
+    rgb,
+};
+
+use crate::features::{
+    NyaTermApp, TAB_MOUSE_ACTIONS, TabMouseActionTarget, TextInputSetup, gpui_code_font_family,
+};
+use crate::theme::ThemePalette;
+use crate::widgets::small_button;
+
+use super::super::{
+    settings_choice_chip, settings_form_row, settings_form_section, settings_switch,
+};
 
 impl NyaTermApp {
     pub(in crate::features) fn interaction_settings_section(
@@ -161,7 +174,7 @@ impl NyaTermApp {
                                 div()
                                     .min_w(px(64.))
                                     .text_center()
-                                    .font_family(crate::features::gpui_code_font_family())
+                                    .font_family(gpui_code_font_family())
                                     .text_size(px(11.))
                                     .text_color(rgb(palette.text))
                                     .child(format!("{delay_ms} ms")),
@@ -334,7 +347,7 @@ fn interaction_number_stepper(
             div()
                 .min_w(px(42.))
                 .text_center()
-                .font_family(crate::features::gpui_code_font_family())
+                .font_family(gpui_code_font_family())
                 .text_size(px(11.))
                 .text_color(rgb(palette.text))
                 .child(value.to_string()),

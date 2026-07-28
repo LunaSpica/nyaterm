@@ -1,4 +1,9 @@
-use super::*;
+use gpui::{Context, FontWeight, IntoElement, SharedString, div, prelude::*, px, rgb};
+
+use crate::features::{NyaTermApp, TextInputSetup, gpui_code_font_family};
+use crate::widgets::small_button;
+
+use super::super::{settings_form_row, settings_form_section, settings_switch};
 
 impl NyaTermApp {
     pub(in crate::features) fn recording_settings_section(
@@ -113,7 +118,7 @@ impl NyaTermApp {
                             div()
                                 .min_w(px(42.))
                                 .text_center()
-                                .font_family(crate::features::gpui_code_font_family())
+                                .font_family(gpui_code_font_family())
                                 .text_size(px(12.))
                                 .font_weight(FontWeight(700.))
                                 .text_color(rgb(palette.text))

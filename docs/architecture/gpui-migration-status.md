@@ -12,7 +12,7 @@ Last updated from the working tree on 2026-07-28.
 | `NyaTermApp` fields | 261 | Counted from `features/app_state/mod.rs`; down from 585, still transitional. |
 | `impl NyaTermApp` blocks | 240 | Spread across 235 files under `crates/nyaterm-desktop/src`. |
 | `#[path = "..."]` declarations in desktop | 0 | Cleared. Every directory is a real module; the boundary script fails on any new occurrence. |
-| `use super::*` imports in desktop | 304 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
+| `use super::*` imports in desktop | 290 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
 | `features/prelude.rs` rough exported-token count | 229 | Still a broad shared prelude; two hundred sixteen low-frequency transport/core/http/model/helper exports are now explicit imports. |
 | Entity Store structs | 4 | `Runtime`, `WindowRuntime`, `StartupRestore`, `Overlay`. Each owns state the app does not. |
 | Snapshot structs | 0 | Cleared. No store is a projection of `NyaTermApp` any more. |
@@ -410,6 +410,13 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   names the page API it re-exports instead of flattening every child symbol,
   and the remote page parent no longer carries process-only models or GPUI
   input types.
+- The settings `transfer`, `terminal` and `workspace` subtrees no longer use
+  wildcard imports. Fourteen module boundaries across roughly 4,773 lines now
+  name their GPUI traits, settings form helpers, text-input setup, shortcut,
+  theme and transport model dependencies directly. Their `mod.rs` files are
+  module entry points rather than implicit child preludes, and `settings/mod.rs`
+  no longer carries the SFTP duplicate policy or tab-mouse models used only by
+  those children. The boundary script governs all three complete subtrees.
 - `connection_runtime/helpers.rs` no longer depends on the connection runtime
   wildcard import; its GPUI, app, model, and core dependencies are explicit.
 - `connection_runtime/actions.rs` no longer depends on the connection runtime

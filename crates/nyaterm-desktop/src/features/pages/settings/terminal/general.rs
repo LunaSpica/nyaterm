@@ -1,4 +1,15 @@
-use super::*;
+use gpui::{
+    App, ClickEvent, Context, FontWeight, IntoElement, SharedString, Window, div, prelude::*, px,
+    rgb,
+};
+
+use crate::features::{NyaTermApp, TextInputSetup};
+use crate::theme::ThemePalette;
+use crate::widgets::small_button;
+
+use super::super::{
+    settings_form_row, settings_form_section, settings_switch, settings_switch_with_enabled,
+};
 
 impl NyaTermApp {
     pub(in crate::features) fn terminal_general_settings_section(

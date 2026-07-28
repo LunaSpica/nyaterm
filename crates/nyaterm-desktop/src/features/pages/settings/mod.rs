@@ -3,7 +3,6 @@ use gpui::{
     Window, div, prelude::*, px, rgb, rgba, svg,
 };
 use nyaterm_core::{CloudSyncSettings, RiskLevel};
-use nyaterm_transport::SftpDuplicatePolicy;
 
 use crate::models::{
     CloudSyncConflictState, CloudSyncInputField, SettingsTab, SnapshotPasswordPromptKind,
@@ -13,9 +12,8 @@ use crate::theme::ThemePalette;
 use crate::widgets::{small_button, status_pill};
 
 use super::super::{
-    ChromeTooltip, NyaTermApp, TAB_MOUSE_ACTIONS, TabMouseActionTarget, TextInputSetup, compact_id,
-    configured_cloud_sync_provider, format_history_timestamp_ms, secret_input_setup,
-    truncate_preview,
+    ChromeTooltip, NyaTermApp, TextInputSetup, compact_id, configured_cloud_sync_provider,
+    format_history_timestamp_ms, secret_input_setup, truncate_preview,
 };
 
 mod ai;

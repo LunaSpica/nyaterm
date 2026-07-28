@@ -1,5 +1,15 @@
-use super::*;
-use crate::features::{SEARCH_ENGINE_ICON_IDS, TextInputSetup, mono_icon, search_engine_icon};
+use gpui::{
+    App, ClickEvent, Context, FontWeight, IntoElement, SharedString, Window, div, prelude::*, px,
+    rgb, rgba, svg,
+};
+
+use crate::features::{
+    ChromeTooltip, NyaTermApp, SEARCH_ENGINE_ICON_IDS, TextInputSetup, mono_icon,
+    search_engine_icon, truncate_preview,
+};
+use crate::theme::ThemePalette;
+
+use super::super::settings_switch;
 
 impl NyaTermApp {
     pub(in crate::features) fn terminal_search_settings_section(

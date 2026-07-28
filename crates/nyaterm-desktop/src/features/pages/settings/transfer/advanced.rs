@@ -1,4 +1,11 @@
-use super::*;
+use gpui::{Context, FontWeight, IntoElement, SharedString, div, prelude::*, px, rgb};
+
+use crate::features::{NyaTermApp, gpui_code_font_family};
+use crate::widgets::small_button;
+
+use super::super::{
+    settings_choice_chip, settings_form_row, settings_form_section, settings_switch,
+};
 
 impl NyaTermApp {
     pub(in crate::features::pages::settings) fn transfer_advanced_settings_section(
@@ -38,7 +45,7 @@ impl NyaTermApp {
                             div()
                                 .min_w(px(28.))
                                 .text_center()
-                                .font_family(crate::features::gpui_code_font_family())
+                                .font_family(gpui_code_font_family())
                                 .text_size(px(12.))
                                 .font_weight(FontWeight(700.))
                                 .text_color(rgb(palette.text))
@@ -75,7 +82,7 @@ impl NyaTermApp {
                             div()
                                 .min_w(px(28.))
                                 .text_center()
-                                .font_family(crate::features::gpui_code_font_family())
+                                .font_family(gpui_code_font_family())
                                 .text_size(px(12.))
                                 .font_weight(FontWeight(700.))
                                 .text_color(rgb(palette.text))
@@ -112,7 +119,7 @@ impl NyaTermApp {
                             div()
                                 .min_w(px(28.))
                                 .text_center()
-                                .font_family(crate::features::gpui_code_font_family())
+                                .font_family(gpui_code_font_family())
                                 .text_size(px(12.))
                                 .font_weight(FontWeight(700.))
                                 .text_color(rgb(palette.text))
@@ -149,7 +156,7 @@ impl NyaTermApp {
                             div()
                                 .min_w(px(36.))
                                 .text_center()
-                                .font_family(crate::features::gpui_code_font_family())
+                                .font_family(gpui_code_font_family())
                                 .text_size(px(12.))
                                 .font_weight(FontWeight(700.))
                                 .text_color(rgb(palette.text))

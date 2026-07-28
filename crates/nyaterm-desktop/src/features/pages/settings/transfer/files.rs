@@ -1,4 +1,12 @@
-use super::*;
+use gpui::{Context, IntoElement, SharedString, div, prelude::*, px};
+use nyaterm_transport::SftpDuplicatePolicy;
+
+use crate::features::{NyaTermApp, TextInputSetup};
+use crate::widgets::small_button;
+
+use super::super::{
+    settings_choice_chip, settings_form_row, settings_form_section, settings_switch,
+};
 
 impl NyaTermApp {
     pub(in crate::features) fn transfer_settings_section(

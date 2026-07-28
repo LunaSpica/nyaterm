@@ -1,5 +1,12 @@
-use super::*;
+use gpui::{Context, IntoElement, SharedString, div, prelude::*, px, rgb};
+
+use crate::features::NyaTermApp;
 use crate::models::HeaderStatusMode;
+use crate::widgets::small_button;
+
+use super::super::{
+    settings_choice_chip, settings_form_row, settings_form_section, settings_switch,
+};
 
 impl NyaTermApp {
     pub(in crate::features) fn general_settings_section(

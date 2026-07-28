@@ -1,9 +1,4 @@
-use super::*;
-use gpui::{App, ClickEvent, SharedString, Window};
-
-mod helpers;
-use helpers::*;
-
 mod general;
+mod helpers;
 mod keywords;
 mod search;
