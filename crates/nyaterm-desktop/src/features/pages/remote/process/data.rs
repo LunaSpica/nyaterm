@@ -1,4 +1,6 @@
-use super::*;
+use nyaterm_transport::RemoteProcess;
+
+use crate::models::{RemoteProcessSortDirection, RemoteProcessSortKey};
 
 pub(in crate::features::pages::remote) fn process_matches(
     process: &RemoteProcess,

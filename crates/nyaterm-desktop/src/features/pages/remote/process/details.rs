@@ -1,4 +1,17 @@
-use super::*;
+use gpui::{
+    App, ClickEvent, Context, FontWeight, IntoElement, KeyDownEvent, Window, div, prelude::*, px,
+    rgb,
+};
+use nyaterm_core::truncate_preview;
+use nyaterm_transport::RemoteProcess;
+
+use crate::features::{NyaTermApp, format_file_size, modal_dialog_shell};
+use crate::models::RemoteProcessSignalConfirmState;
+use crate::theme::ThemePalette;
+use crate::widgets::small_button;
+
+use super::data::{ProcessDisplayMode, process_details_height_px};
+use super::resources::usage_color;
 
 #[derive(Clone, Copy)]
 pub(in crate::features::pages::remote) struct ProcessDetailLabels {

@@ -1,5 +1,19 @@
-use super::*;
-use gpui::{SharedString, rgba};
+use gpui::{
+    Context, IntoElement, ScrollDelta, ScrollWheelEvent, SharedString, div, prelude::*, px, rgb,
+    rgba,
+};
+use nyaterm_transport::{PROCESS_LIST_UNSUPPORTED_ERROR, RemoteProcess};
+
+use crate::features::{NyaTermApp, TextInputSetup};
+use crate::models::RemoteProcessSortKey;
+use crate::widgets::empty_panel;
+
+use super::process::{
+    ProcessDetailLabels, ProcessDisplayMode, ProcessSignalLabels, ProcessTableLabels,
+    process_details, process_details_height_px, process_display_mode, process_matches,
+    process_row_height_px, process_signal_confirm_panel, process_sort_button, process_table_row,
+    sort_processes,
+};
 
 impl NyaTermApp {
     pub(in crate::features) fn processes_view(
@@ -32,7 +46,7 @@ impl NyaTermApp {
                 .remote_ops
                 .process
                 .status
-                .contains(nyaterm_transport::PROCESS_LIST_UNSUPPORTED_ERROR)
+                .contains(PROCESS_LIST_UNSUPPORTED_ERROR)
             {
                 self.tr("processManager.unsupported")
             } else {

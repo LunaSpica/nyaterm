@@ -1,4 +1,12 @@
-use super::*;
+use gpui::{App, ClickEvent, FontWeight, IntoElement, Window, div, prelude::*, px, rgb};
+use nyaterm_core::truncate_preview;
+use nyaterm_transport::RemoteProcess;
+
+use crate::models::RemoteProcessSortDirection;
+use crate::theme::ThemePalette;
+
+use super::data::{ProcessDisplayMode, process_row_height_px};
+use super::resources::{compact_remote_svg_button, usage_color};
 
 pub(in crate::features::pages::remote) fn process_sort_button(
     palette: ThemePalette,

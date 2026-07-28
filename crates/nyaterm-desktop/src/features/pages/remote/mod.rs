@@ -1,12 +1,9 @@
 use gpui::{
-    App, ClickEvent, Context, FontWeight, IntoElement, KeyDownEvent, MouseButton, ScrollDelta,
-    ScrollWheelEvent, Window, div, prelude::*, px, rgb, svg,
+    App, ClickEvent, Context, FontWeight, IntoElement, MouseButton, ScrollDelta, ScrollWheelEvent,
+    Window, div, prelude::*, px, rgb, svg,
 };
 
-use crate::models::{
-    DockerConfirmAction, DockerConfirmState, DockerTab, RemoteProcessSignalConfirmState,
-    RemoteProcessSortDirection, RemoteProcessSortKey,
-};
+use crate::models::{DockerConfirmAction, DockerConfirmState, DockerTab};
 use crate::widgets::{empty_panel, small_button, status_pill, svg_icon_button};
 use std::collections::{HashMap, HashSet};
 
@@ -18,7 +15,7 @@ use super::super::{
 use nyaterm_core::truncate_preview;
 use nyaterm_transport::{
     DockerComposeProject, DockerComposeService, DockerContainer, DockerContainerDetails,
-    DockerImage, DockerNetwork, DockerVolume, RemoteProcess,
+    DockerImage, DockerNetwork, DockerVolume,
 };
 
 mod docker;

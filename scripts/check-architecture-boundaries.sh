@@ -545,6 +545,12 @@ declare -A SUPER_BASELINE=(
   [crates/nyaterm-desktop/src/features/pages/transfers/path_bar.rs]=0
   [crates/nyaterm-desktop/src/features/pages/transfers/properties.rs]=0
   [crates/nyaterm-desktop/src/features/pages/transfers/queue.rs]=0
+  [crates/nyaterm-desktop/src/features/pages/remote/process/data.rs]=0
+  [crates/nyaterm-desktop/src/features/pages/remote/process/details.rs]=0
+  [crates/nyaterm-desktop/src/features/pages/remote/process/mod.rs]=0
+  [crates/nyaterm-desktop/src/features/pages/remote/process/resources.rs]=0
+  [crates/nyaterm-desktop/src/features/pages/remote/process/table.rs]=0
+  [crates/nyaterm-desktop/src/features/pages/remote/process_view.rs]=0
   [crates/nyaterm-desktop/src/features/pages/transfers/helpers/browser.rs]=0
   [crates/nyaterm-desktop/src/features/pages/transfers/helpers/editor.rs]=0
   [crates/nyaterm-desktop/src/features/pages/transfers/helpers/job_row.rs]=0
@@ -594,6 +600,8 @@ done < <(rg -n --path-separator / '^[[:space:]]*use super::\*;' \
   crates/nyaterm-desktop/src/features/pages/connections \
   crates/nyaterm-desktop/src/features/pages/tunnels \
   crates/nyaterm-desktop/src/features/pages/transfers \
+  crates/nyaterm-desktop/src/features/pages/remote/process \
+  crates/nyaterm-desktop/src/features/pages/remote/process_view.rs \
   crates/nyaterm-desktop/src/features/shell/mod.rs \
   crates/nyaterm-desktop/src/features/shell/activity_bar_runtime.rs \
   crates/nyaterm-desktop/src/features/shell/appearance.rs \
