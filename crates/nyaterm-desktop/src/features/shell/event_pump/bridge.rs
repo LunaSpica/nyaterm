@@ -1,4 +1,4 @@
-use super::*;
+use crate::features::NyaTermApp;
 
 impl NyaTermApp {
     pub(in crate::features) fn sync_session_event_bridge_config(&self) {
