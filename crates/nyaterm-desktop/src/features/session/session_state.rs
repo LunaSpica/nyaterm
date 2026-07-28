@@ -319,38 +319,7 @@ impl NyaTermApp {
     }
 
     fn reset_remote_runtime_for_session_switch(&mut self) {
-        self.remote_ops.process.items.clear();
-        self.remote_ops.process.snapshot_loaded = false;
-        self.remote_ops.process.pending = false;
-        self.remote_ops.process.job_session_id = None;
-        self.remote_ops.process.consecutive_refresh_failures = 0;
-        self.remote_ops.process.last_refresh_at = None;
-        self.remote_ops.process.selected_pid = None;
-        self.remote_ops.process.menu_pid = None;
-        self.remote_ops.process.signal_confirm = None;
-        self.remote_ops.process.status = "ready".to_string();
-
-        self.remote_ops.stats.data = None;
-        self.remote_ops.stats.pending = false;
-        self.remote_ops.stats.job_session_id = None;
-        self.remote_ops.stats.consecutive_refresh_failures = 0;
-        self.remote_ops.stats.last_refresh_at = None;
-        self.remote_ops.stats.status = "start an SSH session to inspect remote stats".to_string();
-
-        self.remote_ops.docker.overview = None;
-        self.remote_ops.docker.pending = false;
-        self.remote_ops.docker.job_session_id = None;
-        self.remote_ops.docker.consecutive_refresh_failures = 0;
-        self.remote_ops.docker.last_refresh_at = None;
-        self.remote_ops.docker.details = None;
-        self.remote_ops.docker.details_container_id = None;
-        self.remote_ops.docker.details_last_refresh_at = None;
-        self.remote_ops.docker.confirm = None;
-        self.remote_ops.docker.container_menu_id = None;
-        self.remote_ops.docker.compose_menu_id = None;
-        self.remote_ops.docker.compose_services.clear();
-        self.remote_ops.docker.compose_service_errors.clear();
-        self.remote_ops.docker.status = "start an SSH session to inspect Docker".to_string();
+        self.remote_ops.reset_for_session_switch();
     }
 
     pub(in crate::features) fn activate_session_id_with_surface_sync(

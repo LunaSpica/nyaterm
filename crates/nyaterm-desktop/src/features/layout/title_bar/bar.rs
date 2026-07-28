@@ -396,7 +396,7 @@ impl NyaTermApp {
             self.tr("panel.resourceMonitorNoSession").to_string()
         } else if !self.settings.summary.ui_show_remote_stats {
             self.tr("panel.resourceMonitorDisabled").to_string()
-        } else if self.remote_ops.stats.consecutive_refresh_failures > 0
+        } else if self.remote_ops.stats.consecutive_refresh_failures() > 0
             && self.remote_ops.stats.data.is_none()
         {
             self.tr("panel.resourceMonitorError").to_string()

@@ -725,7 +725,7 @@ impl NyaTermApp {
             NavItem::Stats => {
                 let palette = self.theme_palette();
                 let can_refresh =
-                    self.session.active_ssh_config.is_some() && !self.remote_ops.stats.pending;
+                    self.session.active_ssh_config.is_some() && !self.remote_ops.stats.is_pending();
                 Some(
                     header_svg_icon_button(
                         palette,
@@ -742,8 +742,8 @@ impl NyaTermApp {
             }
             NavItem::Processes => {
                 let palette = self.theme_palette();
-                let can_refresh =
-                    self.session.active_ssh_config.is_some() && !self.remote_ops.process.pending;
+                let can_refresh = self.session.active_ssh_config.is_some()
+                    && !self.remote_ops.process.is_pending();
                 Some(
                     header_svg_icon_button(
                         palette,
@@ -760,8 +760,8 @@ impl NyaTermApp {
             }
             NavItem::Docker => {
                 let palette = self.theme_palette();
-                let can_refresh =
-                    self.session.active_ssh_config.is_some() && !self.remote_ops.docker.pending;
+                let can_refresh = self.session.active_ssh_config.is_some()
+                    && !self.remote_ops.docker.is_pending();
                 let can_prune = can_refresh
                     && self
                         .remote_ops

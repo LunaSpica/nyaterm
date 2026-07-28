@@ -225,15 +225,6 @@ pub(in crate::features) enum ActivitySide {
     Right,
 }
 
-pub(in crate::features) fn remote_job_event_matches(
-    current_job_id: u64,
-    current_session_id: Option<&str>,
-    event_job_id: u64,
-    event_session_id: &str,
-) -> bool {
-    current_job_id == event_job_id && current_session_id == Some(event_session_id)
-}
-
 pub(in crate::features) fn spawn_command_persistence_worker(
     config_dir: PathBuf,
     portable_key_path: Option<PathBuf>,
@@ -279,32 +270,4 @@ pub(in crate::features) fn spawn_command_persistence_worker(
             }
         });
     (request_tx, result_rx)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::remote_job_event_matches;
-
-    #[test]
-    fn remote_job_event_must_match_job_and_session() {
-        assert!(remote_job_event_matches(
-            3,
-            Some("session-a"),
-            3,
-            "session-a"
-        ));
-        assert!(!remote_job_event_matches(
-            3,
-            Some("session-a"),
-            2,
-            "session-a"
-        ));
-        assert!(!remote_job_event_matches(
-            3,
-            Some("session-a"),
-            3,
-            "session-b"
-        ));
-        assert!(!remote_job_event_matches(3, None, 3, "session-a"));
-    }
 }

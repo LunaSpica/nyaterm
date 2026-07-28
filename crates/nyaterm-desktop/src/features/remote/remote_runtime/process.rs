@@ -1,44 +1,20 @@
-use std::time::Instant;
-
 use gpui::{ClipboardItem, Context, Window};
-use nyaterm_transport::{RemoteProcess, SshProcessService};
+use nyaterm_transport::SshProcessService;
 
 use crate::features::NyaTermApp;
-use crate::features::runtime_jobs::{ProcessJobOutput, ProcessJobResult, remote_job_event_matches};
-use crate::models::{
-    DockerTab, RemoteProcessSignalConfirmState, RemoteProcessSortDirection, RemoteProcessSortKey,
-};
+use crate::features::runtime_jobs::{ProcessJobOutput, ProcessJobResult};
+use crate::models::{DockerTab, RemoteProcessSortKey};
 
 const PROCESS_EVENT_DRAIN_LIMIT: usize = 8;
 
 impl NyaTermApp {
     pub(in crate::features) fn set_docker_tab(&mut self, tab: DockerTab, cx: &mut Context<Self>) {
-        self.remote_ops.docker.container_menu_id = None;
-        self.remote_ops.docker.compose_menu_id = None;
-        self.remote_ops.docker.tab_menu_open = false;
-        self.remote_ops.docker.header_menu_open = false;
-        if tab == DockerTab::Compose
-            && self
-                .remote_ops
-                .docker
-                .overview
-                .as_ref()
-                .is_some_and(|overview| !overview.compose_available)
-        {
-            self.remote_ops.docker.status =
-                "Docker Compose is not available on this host".to_string();
-            cx.notify();
-            return;
-        }
-        self.remote_ops.docker.tab = tab;
-        self.remote_ops.docker.list_offset = 0;
-        self.remote_ops.docker.resource_list_offset = 0;
-        self.remote_ops.docker.status = format!("Docker tab: {}", tab.label());
+        self.remote_ops.docker.set_tab(tab);
         cx.notify();
     }
 
     pub(in crate::features) fn toggle_docker_tab_menu(&mut self, cx: &mut Context<Self>) {
-        self.remote_ops.docker.tab_menu_open = !self.remote_ops.docker.tab_menu_open;
+        self.remote_ops.docker.toggle_tab_menu();
         cx.notify();
     }
 
@@ -48,11 +24,7 @@ impl NyaTermApp {
         text: String,
         cx: &mut Context<Self>,
     ) {
-        self.remote_ops.docker.search_draft = text;
-        // A new filter means a different list, so paging starts over.
-        self.remote_ops.docker.list_offset = 0;
-        self.remote_ops.docker.resource_list_offset = 0;
-        self.remote_ops.docker.status = "Docker search updated".to_string();
+        self.remote_ops.docker.apply_search(text);
         cx.notify();
     }
 
@@ -62,10 +34,7 @@ impl NyaTermApp {
         text: String,
         cx: &mut Context<Self>,
     ) {
-        self.remote_ops.process.search_draft = text;
-        // The selected row may not survive the new filter, and paging restarts.
-        self.remote_ops.process.selected_pid = None;
-        self.remote_ops.process.list_offset = 0;
+        self.remote_ops.process.apply_search(text);
         cx.notify();
     }
 
@@ -74,26 +43,7 @@ impl NyaTermApp {
         key: RemoteProcessSortKey,
         cx: &mut Context<Self>,
     ) {
-        if self.remote_ops.process.sort_key == key {
-            self.remote_ops.process.sort_direction =
-                self.remote_ops.process.sort_direction.reversed();
-        } else {
-            self.remote_ops.process.sort_key = key;
-            self.remote_ops.process.sort_direction = match key {
-                RemoteProcessSortKey::Cpu | RemoteProcessSortKey::Memory => {
-                    RemoteProcessSortDirection::Descending
-                }
-                RemoteProcessSortKey::Pid
-                | RemoteProcessSortKey::User
-                | RemoteProcessSortKey::Command => RemoteProcessSortDirection::Ascending,
-            };
-        }
-        self.remote_ops.process.list_offset = 0;
-        self.remote_ops.process.status = format!(
-            "sorted processes by {} {}",
-            self.remote_ops.process.sort_key.label(),
-            self.remote_ops.process.sort_direction.marker()
-        );
+        self.remote_ops.process.toggle_sort(key);
         cx.notify();
     }
 
@@ -102,15 +52,7 @@ impl NyaTermApp {
         pid: u32,
         cx: &mut Context<Self>,
     ) {
-        self.remote_ops.process.menu_pid = None;
-        self.remote_ops.process.selected_pid = if self.remote_ops.process.selected_pid == Some(pid)
-        {
-            self.remote_ops.process.nice_draft = "0".to_string();
-            None
-        } else {
-            self.remote_ops.process.nice_draft = "0".to_string();
-            Some(pid)
-        };
+        self.remote_ops.process.toggle_selection(pid);
         cx.notify();
     }
 
@@ -123,13 +65,7 @@ impl NyaTermApp {
         text: String,
         cx: &mut Context<Self>,
     ) {
-        let negative = text.starts_with('-');
-        let digits: String = text.chars().filter(char::is_ascii_digit).take(3).collect();
-        self.remote_ops.process.nice_draft = if negative {
-            format!("-{digits}")
-        } else {
-            digits
-        };
+        self.remote_ops.process.apply_nice_input(text);
         cx.notify();
     }
 
@@ -138,21 +74,10 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(pid) = self.remote_ops.process.selected_pid else {
-            self.remote_ops.process.status = "select a process before applying nice".to_string();
+        let Some((pid, nice)) = self.remote_ops.process.validated_nice_draft() else {
             cx.notify();
             return;
         };
-        let Ok(nice) = self.remote_ops.process.nice_draft.trim().parse::<i32>() else {
-            self.remote_ops.process.status = "nice must be an integer from -20 to 19".to_string();
-            cx.notify();
-            return;
-        };
-        if !(-20..=19).contains(&nice) {
-            self.remote_ops.process.status = "nice must be between -20 and 19".to_string();
-            cx.notify();
-            return;
-        }
         self.renice_process(pid, nice, window, cx);
     }
 
@@ -187,30 +112,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if signal == "KILL" {
-            let command = self
-                .remote_ops
-                .process
-                .items
-                .iter()
-                .find(|process| process.pid == pid)
-                .map(|process| process.command_line.clone())
-                .filter(|command| !command.trim().is_empty())
-                .or_else(|| {
-                    self.remote_ops
-                        .process
-                        .items
-                        .iter()
-                        .find(|process| process.pid == pid)
-                        .map(|process| process.command.clone())
-                })
-                .unwrap_or_else(|| "unknown process".to_string());
-            self.remote_ops.process.signal_confirm = Some(RemoteProcessSignalConfirmState {
-                pid,
-                signal,
-                command,
-            });
-            self.remote_ops.process.status = format!("confirm {signal} for pid {pid}");
+        if self.remote_ops.process.request_signal(pid, signal) {
             cx.notify();
         } else {
             self.signal_process(pid, signal, window, cx);
@@ -218,8 +120,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn cancel_process_signal_confirm(&mut self, cx: &mut Context<Self>) {
-        self.remote_ops.process.signal_confirm = None;
-        self.remote_ops.process.status = "process signal cancelled".to_string();
+        self.remote_ops.process.cancel_signal_confirm();
         cx.notify();
     }
 
@@ -228,8 +129,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(confirm) = self.remote_ops.process.signal_confirm.take() else {
-            self.remote_ops.process.status = "no process signal pending".to_string();
+        let Some(confirm) = self.remote_ops.process.take_signal_confirm() else {
             cx.notify();
             return;
         };
@@ -254,26 +154,23 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        if self.remote_ops.process.pending
-            && self.remote_ops.process.job_session_id.as_deref() == Some(job_session_id.as_str())
-        {
+        if self.remote_ops.process.is_pending_for(&job_session_id) {
             self.remote_ops.process.status = "process operation already running".to_string();
             cx.notify();
             return;
         }
 
-        let job_id = self.begin_process_job(job_session_id.clone());
+        let ticket = self.remote_ops.process.begin_job(job_session_id.clone());
         self.remote_ops.process.menu_pid = None;
-        self.remote_ops.process.last_refresh_at = Some(Instant::now());
+        self.remote_ops.process.mark_refresh_started();
         self.remote_ops.process.status = "listing remote processes".to_string();
-        let tx = self.remote_ops.process.tx.clone();
         std::thread::spawn(move || {
             let result = SshProcessService::new(config)
                 .list_processes()
                 .map(ProcessJobOutput::Listed)
                 .map_err(|error| error.to_string());
-            let _ = tx.send(ProcessJobResult {
-                job_id,
+            let _ = ticket.tx.send(ProcessJobResult {
+                job_id: ticket.job_id,
                 session_id: job_session_id,
                 result,
             });
@@ -301,17 +198,14 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        if self.remote_ops.process.pending
-            && self.remote_ops.process.job_session_id.as_deref() == Some(job_session_id.as_str())
-        {
+        if self.remote_ops.process.is_pending_for(&job_session_id) {
             self.remote_ops.process.status = "process operation already running".to_string();
             cx.notify();
             return;
         }
 
-        let job_id = self.begin_process_job(job_session_id.clone());
+        let ticket = self.remote_ops.process.begin_job(job_session_id.clone());
         self.remote_ops.process.status = format!("sending {signal} to pid {pid}");
-        let tx = self.remote_ops.process.tx.clone();
         std::thread::spawn(move || {
             let result = (|| {
                 let service = SshProcessService::new(config);
@@ -324,8 +218,8 @@ impl NyaTermApp {
                 })
             })()
             .map_err(|error: anyhow::Error| error.to_string());
-            let _ = tx.send(ProcessJobResult {
-                job_id,
+            let _ = ticket.tx.send(ProcessJobResult {
+                job_id: ticket.job_id,
                 session_id: job_session_id,
                 result,
             });
@@ -353,17 +247,14 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        if self.remote_ops.process.pending
-            && self.remote_ops.process.job_session_id.as_deref() == Some(job_session_id.as_str())
-        {
+        if self.remote_ops.process.is_pending_for(&job_session_id) {
             self.remote_ops.process.status = "process operation already running".to_string();
             cx.notify();
             return;
         }
 
-        let job_id = self.begin_process_job(job_session_id.clone());
+        let ticket = self.remote_ops.process.begin_job(job_session_id.clone());
         self.remote_ops.process.status = format!("renicing pid {pid} to {nice}");
-        let tx = self.remote_ops.process.tx.clone();
         std::thread::spawn(move || {
             let result = (|| {
                 let service = SshProcessService::new(config);
@@ -376,8 +267,8 @@ impl NyaTermApp {
                 })
             })()
             .map_err(|error: anyhow::Error| error.to_string());
-            let _ = tx.send(ProcessJobResult {
-                job_id,
+            let _ = ticket.tx.send(ProcessJobResult {
+                job_id: ticket.job_id,
                 session_id: job_session_id,
                 result,
             });
@@ -388,31 +279,28 @@ impl NyaTermApp {
     pub(in crate::features) fn drain_process_events(&mut self) -> bool {
         let mut dirty = false;
         for _ in 0..PROCESS_EVENT_DRAIN_LIMIT {
-            let Ok(event) = self.remote_ops.process.rx.try_recv() else {
+            let Some(event) = self.remote_ops.process.next_event() else {
                 break;
             };
-            if !remote_job_event_matches(
-                self.remote_ops.process.job_id,
-                self.remote_ops.process.job_session_id.as_deref(),
-                event.job_id,
-                &event.session_id,
-            ) {
+            if !self
+                .remote_ops
+                .process
+                .complete_event(event.job_id, &event.session_id)
+            {
                 continue;
             }
             dirty = true;
-            self.remote_ops.process.pending = false;
-            self.remote_ops.process.job_session_id = None;
             if self.session.active_id.as_deref() != Some(event.session_id.as_str()) {
                 continue;
             }
             let was_list_refresh = self.remote_ops.process.status == "listing remote processes";
             match event.result {
                 Ok(ProcessJobOutput::Listed(processes)) => {
-                    self.remote_ops.process.consecutive_refresh_failures = 0;
+                    self.remote_ops.process.reset_refresh_failures();
                     self.remote_ops.process.status =
                         format!("loaded {} remote process(es)", processes.len());
                     self.terminal.view.status = self.remote_ops.process.status.clone();
-                    self.apply_processes(processes);
+                    self.remote_ops.process.apply_processes(processes);
                 }
                 Ok(ProcessJobOutput::Signalled {
                     pid,
@@ -422,7 +310,7 @@ impl NyaTermApp {
                     self.remote_ops.process.status = format!("sent {signal} to pid {pid}");
                     self.terminal.view.status = self.remote_ops.process.status.clone();
                     self.remote_ops.process.signal_confirm = None;
-                    self.apply_processes(processes);
+                    self.remote_ops.process.apply_processes(processes);
                 }
                 Ok(ProcessJobOutput::Reniced {
                     pid,
@@ -431,20 +319,13 @@ impl NyaTermApp {
                 }) => {
                     self.remote_ops.process.status = format!("reniced pid {pid} to {nice}");
                     self.terminal.view.status = self.remote_ops.process.status.clone();
-                    self.apply_processes(processes);
+                    self.remote_ops.process.apply_processes(processes);
                 }
                 Err(error) => {
                     if was_list_refresh {
-                        self.remote_ops.process.consecutive_refresh_failures =
-                            if error.contains(nyaterm_transport::PROCESS_LIST_UNSUPPORTED_ERROR) {
-                                3
-                            } else {
-                                self.remote_ops
-                                    .process
-                                    .consecutive_refresh_failures
-                                    .saturating_add(1)
-                            };
-                        if self.remote_ops.process.consecutive_refresh_failures >= 3 {
+                        let terminal =
+                            error.contains(nyaterm_transport::PROCESS_LIST_UNSUPPORTED_ERROR);
+                        if self.remote_ops.process.record_refresh_failure(terminal) >= 3 {
                             self.remote_ops.process.items.clear();
                             self.remote_ops.process.snapshot_loaded = false;
                         }
@@ -455,26 +336,5 @@ impl NyaTermApp {
             }
         }
         dirty
-    }
-
-    fn begin_process_job(&mut self, session_id: String) -> u64 {
-        self.remote_ops.process.job_id = self.remote_ops.process.job_id.wrapping_add(1).max(1);
-        self.remote_ops.process.job_session_id = Some(session_id);
-        self.remote_ops.process.pending = true;
-        self.remote_ops.process.job_id
-    }
-
-    pub(in crate::features) fn apply_processes(&mut self, processes: Vec<RemoteProcess>) {
-        if self
-            .remote_ops
-            .process
-            .selected_pid
-            .is_some_and(|pid| !processes.iter().any(|process| process.pid == pid))
-        {
-            self.remote_ops.process.selected_pid = None;
-            self.remote_ops.process.nice_draft = "0".to_string();
-        }
-        self.remote_ops.process.items = processes;
-        self.remote_ops.process.snapshot_loaded = true;
     }
 }

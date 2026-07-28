@@ -3,7 +3,7 @@
 This document records the current GPUI migration boundaries and debt in
 `nyaterm-desktop`. Keep dynamic counts here instead of in `AGENTS.md`.
 
-Last updated from the working tree on 2026-07-28.
+Last updated from the working tree on 2026-07-29.
 
 ## Current Metrics
 
@@ -190,6 +190,15 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   streak, last refresh instant), which the fifty-four prefixed `NyaTermApp`
   fields hid. Their job channels are created inside
   `RemoteOpsFeatureState::new` because construction was their only other use.
+  A later ownership pass replaced the twenty-one repeated channel/lifecycle
+  fields with three typed `RemoteJobState<Event>` values. Job admission now
+  couples id/session ownership with `pending`, stale completion matching cannot
+  clear a newer job, refresh failures and timestamps reset together on session
+  switches, and the channels are private to the state module. Docker tab/search/
+  confirm/details transitions, process filter/sort/selection/nice/signal state,
+  Stats expansion, result collection and session-switch cleanup also execute on
+  the pane owners. `NyaTermApp` retains SSH service launch, terminal status
+  mirroring, active-session policy and GPUI notification.
 - Security panel state is grouped into `SecurityFeatureState`: the four editors
   and their focus handles in `editors`, revealed passwords/credentials and
   generated OTP codes in `revealed`, and the master password prompt in
@@ -1487,8 +1496,11 @@ honest remaining list.
    dashboard and its unused runtime store. The settings-catalog convergence
    batch then folded the last five direct compatibility settings/status fields
    into `SettingsFeatureState`, including pure tested ownership of staged
-   master-password transitions. What remains at the composition root is stores,
-   runtime and focused feature owners.
+   master-password transitions. The remote-runtime convergence batch then
+   unified Docker, process and host-stats job identity/channel/failure timing in
+   typed state owned by each pane instead of twenty-one independently writable
+   fields. What remains at the composition root is stores, runtime and focused
+   feature owners.
    Group by cohesion where a cluster exists; do not force the count down for
    its own sake.
    Method ownership is now moving too, which is what grouping the fields alone
@@ -1511,7 +1523,9 @@ honest remaining list.
    ownership rebuilding now have the same property. Translation and native
    update job admission/event completion now also stay coupled to their own
    pending/status/result state, and translation settings replacement cannot
-   desynchronize the secret draft or active target language. Those are the
+   desynchronize the secret draft or active target language. The three remote
+   panes now share the same typed job lifecycle, so a stale Docker/process/stats
+   event cannot clear the pending owner of a newer session job. Those are the
    kinds of signals to look for.
    Two caveats worth keeping. Render helpers stay on the view even when they
    read one state — moving element construction onto a data struct trades one

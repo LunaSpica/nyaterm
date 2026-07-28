@@ -22,7 +22,7 @@ impl NyaTermApp {
                 ));
         }
         let Some(stats) = self.remote_ops.stats.data.clone() else {
-            let message = if self.remote_ops.stats.pending {
+            let message = if self.remote_ops.stats.is_pending() {
                 self.tr("common.loading")
             } else if self.remote_ops.stats.status.contains("failed") {
                 self.tr("panel.resourceMonitorError")

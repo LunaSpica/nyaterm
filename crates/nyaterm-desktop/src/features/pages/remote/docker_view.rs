@@ -96,7 +96,7 @@ impl NyaTermApp {
                 .child(empty_panel(labels.no_session, palette));
         }
         let Some(overview) = self.remote_ops.docker.overview.clone() else {
-            let message = if self.remote_ops.docker.pending
+            let message = if self.remote_ops.docker.is_pending()
                 || !self.remote_ops.docker.status.contains("failed")
             {
                 labels.loading

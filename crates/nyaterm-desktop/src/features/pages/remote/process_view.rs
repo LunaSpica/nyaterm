@@ -38,7 +38,7 @@ impl NyaTermApp {
                 .child(empty_panel(self.tr("processManager.noSession"), palette));
         }
         if !self.remote_ops.process.snapshot_loaded {
-            let message = if self.remote_ops.process.pending
+            let message = if self.remote_ops.process.is_pending()
                 || !self.remote_ops.process.status.contains("failed")
             {
                 self.tr("common.loading")
