@@ -36,25 +36,26 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let deepl_key_value = self.translation.secret_draft.deepl_api_key.clone();
-        let baidu_app_id_value = self.translation.settings.baidu_app_id.clone();
-        let baidu_key_value = self.translation.secret_draft.baidu_app_key.clone();
-        let ali_app_id_value = self.translation.settings.ali_app_id.clone();
-        let ali_key_value = self.translation.secret_draft.ali_app_key.clone();
-        let youdao_app_id_value = self.translation.settings.youdao_app_id.clone();
-        let youdao_key_value = self.translation.secret_draft.youdao_app_key.clone();
+        let (translation_settings, secret_draft) = self.translation.settings_draft_snapshot();
+        let deepl_key_value = secret_draft.deepl_api_key.clone();
+        let baidu_app_id_value = translation_settings.baidu_app_id.clone();
+        let baidu_key_value = secret_draft.baidu_app_key.clone();
+        let ali_app_id_value = translation_settings.ali_app_id.clone();
+        let ali_key_value = secret_draft.ali_app_key.clone();
+        let youdao_app_id_value = translation_settings.youdao_app_id.clone();
+        let youdao_key_value = secret_draft.youdao_app_key.clone();
 
-        let deepl_configured = !self.translation.settings.deepl_api_key.trim().is_empty()
-            || !self.translation.secret_draft.deepl_api_key.is_empty();
-        let baidu_configured = !self.translation.settings.baidu_app_id.trim().is_empty()
-            && (!self.translation.settings.baidu_app_key.trim().is_empty()
-                || !self.translation.secret_draft.baidu_app_key.is_empty());
-        let ali_configured = !self.translation.settings.ali_app_id.trim().is_empty()
-            && (!self.translation.settings.ali_app_key.trim().is_empty()
-                || !self.translation.secret_draft.ali_app_key.is_empty());
-        let youdao_configured = !self.translation.settings.youdao_app_id.trim().is_empty()
-            && (!self.translation.settings.youdao_app_key.trim().is_empty()
-                || !self.translation.secret_draft.youdao_app_key.is_empty());
+        let deepl_configured = !translation_settings.deepl_api_key.trim().is_empty()
+            || !secret_draft.deepl_api_key.is_empty();
+        let baidu_configured = !translation_settings.baidu_app_id.trim().is_empty()
+            && (!translation_settings.baidu_app_key.trim().is_empty()
+                || !secret_draft.baidu_app_key.is_empty());
+        let ali_configured = !translation_settings.ali_app_id.trim().is_empty()
+            && (!translation_settings.ali_app_key.trim().is_empty()
+                || !secret_draft.ali_app_key.is_empty());
+        let youdao_configured = !translation_settings.youdao_app_id.trim().is_empty()
+            && (!translation_settings.youdao_app_key.trim().is_empty()
+                || !secret_draft.youdao_app_key.is_empty());
 
         let target_language_label = self.tr("settings.targetLanguage");
         let target_language_desc = self.tr("settings.targetLanguageDesc");
@@ -102,9 +103,7 @@ impl NyaTermApp {
                         translation_target_languages().iter().map(|(code, label)| {
                             let code = *code;
                             let label = *label;
-                            let selected = self
-                                .translation
-                                .settings
+                            let selected = translation_settings
                                 .target_language
                                 .eq_ignore_ascii_case(code);
                             settings_choice_chip(

@@ -13,11 +13,11 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let update_info = self.update.info.clone();
-        let checking = self.update.pending;
+        let update_info = self.update.info().cloned();
+        let checking = self.update.is_pending();
         let failed = !checking
             && update_info.is_none()
-            && self.update.status.starts_with("update check failed:");
+            && self.update.status().starts_with("update check failed:");
         let available =
             !checking && !failed && update_info.as_ref().is_some_and(|info| info.available);
         let portable = self.runtime.mode() == RuntimeMode::Portable;
@@ -137,7 +137,7 @@ impl NyaTermApp {
                                         .text_xs()
                                         .line_height(px(18.))
                                         .text_color(rgb(palette.danger))
-                                        .child(self.update.status.clone()),
+                                        .child(self.update.status().to_string()),
                                 )
                             })
                             .when(available && portable, |this| {

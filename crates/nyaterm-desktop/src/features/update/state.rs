@@ -5,7 +5,13 @@ use std::sync::mpsc;
 use nyaterm_core::NativeUpdateInfo;
 
 pub(super) struct UpdateJobResult {
-    pub result: Result<NativeUpdateInfo, String>,
+    result: Result<NativeUpdateInfo, String>,
+}
+
+impl UpdateJobResult {
+    pub(super) fn new(result: Result<NativeUpdateInfo, String>) -> Self {
+        Self { result }
+    }
 }
 
 const UPDATE_EVENT_DRAIN_LIMIT: usize = 4;
@@ -13,10 +19,10 @@ const UPDATE_EVENT_DRAIN_LIMIT: usize = 4;
 pub(in crate::features) struct UpdateFeatureState {
     tx: mpsc::Sender<UpdateJobResult>,
     rx: mpsc::Receiver<UpdateJobResult>,
-    pub status: String,
-    pub info: Option<NativeUpdateInfo>,
-    pub pending: bool,
-    pub dialog_open: bool,
+    status: String,
+    info: Option<NativeUpdateInfo>,
+    pending: bool,
+    dialog_open: bool,
 }
 
 impl UpdateFeatureState {
@@ -38,6 +44,22 @@ impl UpdateFeatureState {
 
     pub(super) fn close_dialog(&mut self) {
         self.dialog_open = false;
+    }
+
+    pub(in crate::features) fn dialog_is_open(&self) -> bool {
+        self.dialog_open
+    }
+
+    pub(in crate::features) fn status(&self) -> &str {
+        &self.status
+    }
+
+    pub(in crate::features) fn info(&self) -> Option<&NativeUpdateInfo> {
+        self.info.as_ref()
+    }
+
+    pub(in crate::features) fn is_pending(&self) -> bool {
+        self.pending
     }
 
     pub(super) fn begin_check(&mut self) -> Option<mpsc::Sender<UpdateJobResult>> {
@@ -92,16 +114,16 @@ mod tests {
     fn update_state_owns_job_channel_and_initial_status() {
         let mut state = UpdateFeatureState::new();
 
-        assert!(state.status.contains(env!("CARGO_PKG_VERSION")));
+        assert!(state.status().contains(env!("CARGO_PKG_VERSION")));
         assert!(state.rx.try_recv().is_err());
-        assert!(state.info.is_none());
-        assert!(!state.pending);
-        assert!(!state.dialog_open);
+        assert!(state.info().is_none());
+        assert!(!state.is_pending());
+        assert!(!state.dialog_is_open());
 
         state.open_dialog();
-        assert!(state.dialog_open);
+        assert!(state.dialog_is_open());
         state.close_dialog();
-        assert!(!state.dialog_open);
+        assert!(!state.dialog_is_open());
     }
 
     #[test]
@@ -109,24 +131,22 @@ mod tests {
         let mut state = UpdateFeatureState::new();
 
         assert!(state.begin_check().is_some());
-        assert!(state.pending);
-        assert_eq!(state.status, "checking GitHub releases...");
+        assert!(state.is_pending());
+        assert_eq!(state.status(), "checking GitHub releases...");
         assert!(state.begin_check().is_none());
-        assert_eq!(state.status, "update check already running");
+        assert_eq!(state.status(), "update check already running");
     }
 
     #[test]
     fn update_event_drain_completes_failed_job() {
         let mut state = UpdateFeatureState::new();
         let tx = state.begin_check().expect("first check should start");
-        tx.send(UpdateJobResult {
-            result: Err("offline".to_string()),
-        })
-        .expect("state should retain its event receiver");
+        tx.send(UpdateJobResult::new(Err("offline".to_string())))
+            .expect("state should retain its event receiver");
 
         assert!(state.drain_events());
-        assert!(!state.pending);
-        assert_eq!(state.status, "update check failed: offline");
-        assert!(state.info.is_none());
+        assert!(!state.is_pending());
+        assert_eq!(state.status(), "update check failed: offline");
+        assert!(state.info().is_none());
     }
 }

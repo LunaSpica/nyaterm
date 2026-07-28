@@ -206,9 +206,9 @@ impl NyaTermApp {
                     ));
             }
             TitleMenu::Help => {
-                let update_label = if self.update.pending {
+                let update_label = if self.update.is_pending() {
                     tr("updater.checking")
-                } else if self.update.info.as_ref().is_some_and(|info| info.available) {
+                } else if self.update.info().is_some_and(|info| info.available) {
                     tr("updater.newVersionAvailable")
                 } else {
                     tr("menu.checkForUpdates")

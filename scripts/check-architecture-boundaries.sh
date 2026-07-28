@@ -192,6 +192,19 @@ check_no_matches \
   crates/nyaterm-desktop/src/features/runtime_jobs.rs
 
 check_no_matches \
+  "TranslationFeatureState and its job payloads must expose methods, not writable fields" \
+  '^[[:space:]]*pub([[:space:]]|\([^)]*\))[[:space:]]+[[:alnum:]_]+[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/translation/state.rs
+check_no_matches \
+  "translation target language must have one authoritative field" \
+  '^    target_language[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/translation/state.rs
+check_no_matches \
+  "UpdateFeatureState and its job payloads must expose methods, not writable fields" \
+  '^[[:space:]]*pub([[:space:]]|\([^)]*\))[[:space:]]+[[:alnum:]_]+[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/update/state.rs
+
+check_no_matches \
   "translation job lifecycle must mutate through TranslationFeatureState" \
   '(self|this)\.translation\.(tx|rx|pending|result|dialog|focused_field)[[:space:]]*=' \
   crates/nyaterm-desktop/src/features

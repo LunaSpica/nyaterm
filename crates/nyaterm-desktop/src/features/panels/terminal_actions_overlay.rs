@@ -217,7 +217,8 @@ impl NyaTermApp {
                                                 this.terminal.view.status =
                                                     "terminal visible screen is empty".to_string();
                                             } else {
-                                                let provider = this.translation.provider.clone();
+                                                let provider =
+                                                    this.translation.provider().to_string();
                                                 let provider_label = match provider.as_str() {
                                                     "google" => this.tr("translation.google"),
                                                     "microsoft" => {

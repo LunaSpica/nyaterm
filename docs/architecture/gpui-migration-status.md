@@ -228,7 +228,11 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   translation input/secret routing, and the settings/secret-draft/target-language
   synchronization invariant onto those owners. `NyaTermApp` now retains the
   native HTTP/thread launch, persistence and clipboard adapters, terminal-status
-  mirroring and GPUI notification only.
+  mirroring and GPUI notification only. The later encapsulation pass made every
+  surviving field on both feature states and their job payloads private, moved
+  persistence-time secret-draft merging behind `TranslationFeatureState`, and
+  removed the duplicate translation `target_language` field so
+  `TranslationSettings::target_language` is the only writable source.
 - Cloud-sync configuration, compatibility state, history, conflicts, secret
   drafts and GitHub device-flow runtime now have one authoritative
   `CloudSyncFeatureState` owner with a focused `github` child. Fifteen app
@@ -1541,8 +1545,10 @@ honest remaining list.
    Shell viewport timing, panel drags, mutually-exclusive tab menus and pane
    ownership rebuilding now have the same property. Translation and native
    update job admission/event completion now also stay coupled to their own
-   pending/status/result state, and translation settings replacement cannot
-   desynchronize the secret draft or active target language. The three remote
+   pending/status/result state. Their fields and job payloads are private, and
+   translation settings replacement cannot desynchronize the secret draft or
+   active target language because the duplicate target-language field is gone.
+   The three remote
    panes now share the same typed job lifecycle, so a stale Docker/process/stats
    event cannot clear the pending owner of a newer session job. Session dialogs
    now expose no writable fields at all: close-all confirmation clears tab menu

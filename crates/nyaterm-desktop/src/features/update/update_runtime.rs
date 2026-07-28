@@ -23,7 +23,7 @@ impl NyaTermApp {
         };
         std::thread::spawn(move || {
             let result = check_native_update();
-            let _ = tx.send(UpdateJobResult { result });
+            let _ = tx.send(UpdateJobResult::new(result));
         });
         cx.notify();
     }
@@ -31,7 +31,7 @@ impl NyaTermApp {
     pub(in crate::features) fn drain_update_events(&mut self) -> bool {
         let dirty = self.update.drain_events();
         if dirty {
-            self.terminal.view.status = self.update.status.clone();
+            self.terminal.view.status = self.update.status().to_string();
         }
         dirty
     }

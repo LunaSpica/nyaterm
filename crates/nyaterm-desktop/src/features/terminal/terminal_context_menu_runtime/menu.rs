@@ -100,7 +100,7 @@ impl NyaTermApp {
             Vec::new()
         };
         let translation_providers: Vec<(String, String)> =
-            available_translation_providers(&self.translation.settings)
+            available_translation_providers(self.translation.settings())
                 .into_iter()
                 .map(|(id, _)| {
                     let label = self

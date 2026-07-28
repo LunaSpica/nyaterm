@@ -576,10 +576,10 @@ impl NyaTermApp {
                 overlay.action_link_tooltip_open
                     && !overlay.action_link_menu_open
                     && !overlay.terminal_context_menu_open
-                    && self.translation.dialog.is_none(),
+                    && !self.translation.dialog_is_open(),
                 |this| this.child(self.action_link_tooltip_overlay(cx)),
             )
-            .when(self.translation.dialog.is_some(), |this| {
+            .when(self.translation.dialog_is_open(), |this| {
                 this.child(self.translation_dialog_overlay(cx))
             })
             .when(overlay.command_suggestions_open, |this| {
@@ -650,7 +650,7 @@ impl NyaTermApp {
             .when(self.shell.chrome.about_open, |this| {
                 this.child(self.about_overlay(cx))
             })
-            .when(self.update.dialog_open, |this| {
+            .when(self.update.dialog_is_open(), |this| {
                 this.child(self.update_overlay(cx))
             })
             .when(self.modal_child_window_open(), |this| {

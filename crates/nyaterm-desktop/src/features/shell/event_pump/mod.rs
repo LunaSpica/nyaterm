@@ -487,8 +487,8 @@ impl NyaTermApp {
             && !self.remote_ops.stats.is_pending()
             && !self.remote_ops.process.is_pending()
             && !self.remote_ops.docker.is_pending()
-            && !self.translation.pending
-            && !self.update.pending
+            && !self.translation.is_pending()
+            && !self.update.is_pending()
             && !self.ai.chat.focus_pending
             && !self.transfer.file_ops.rename_focus_pending
             && !self.session.prompts.credential_focus_is_pending()

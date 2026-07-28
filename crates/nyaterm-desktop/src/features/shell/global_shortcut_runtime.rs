@@ -16,7 +16,7 @@ impl NyaTermApp {
         }
 
         if event.keystroke.key.as_str() == "escape" {
-            if self.update.dialog_open {
+            if self.update.dialog_is_open() {
                 self.close_update_dialog(cx);
                 return true;
             }
@@ -24,7 +24,7 @@ impl NyaTermApp {
                 self.close_about(cx);
                 return true;
             }
-            if self.translation.dialog.is_some() {
+            if self.translation.dialog_is_open() {
                 self.close_translation_dialog(cx);
                 return true;
             }

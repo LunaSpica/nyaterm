@@ -21,20 +21,16 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
+        let (tx, provider, target_language, text, settings) = request.into_parts();
         std::thread::spawn(move || {
-            let result = translate_text(
-                &request.provider,
-                &request.text,
-                &request.target_language,
-                &request.settings,
-            );
-            let _ = request.tx.send(TranslateJobResult { result });
+            let result = translate_text(&provider, &text, &target_language, &settings);
+            let _ = tx.send(TranslateJobResult::new(result));
         });
         cx.notify();
     }
 
     pub(in crate::features) fn save_translation_settings(&mut self, cx: &mut Context<Self>) {
-        let next = self.pending_translation_settings();
+        let next = self.translation.pending_settings();
         if self.defer_settings_persistence(cx) {
             self.translation.settings_staged(next);
             return;
@@ -53,7 +49,7 @@ impl NyaTermApp {
             }
             Err(error) => {
                 self.translation.settings_save_failed(error);
-                self.settings.store_status.message = self.translation.status.clone();
+                self.settings.store_status.message = self.translation.status().to_string();
                 self.settings.store_status.ready = false;
             }
         }
@@ -93,7 +89,7 @@ impl NyaTermApp {
             return;
         }
         // Kick off immediately (Tauri TranslationDialog behavior).
-        if !self.translation.pending {
+        if !self.translation.is_pending() {
             self.run_translation(window, cx);
         } else {
             cx.notify();
@@ -111,13 +107,13 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let Some(dialog) = self.translation.dialog.clone() else {
+        let Some(dialog) = self.translation.dialog_snapshot() else {
             return div().into_any_element();
         };
         let provider_label = dialog.provider_label.clone();
         let source = dialog.source_text.clone();
-        let pending = self.translation.pending;
-        let status = self.translation.status.clone();
+        let pending = self.translation.is_pending();
+        let status = self.translation.status().to_string();
         let title_label = self.tr("translation.title");
         let source_label = self.tr("translation.sourceText");
         let translated_label = self.tr("translation.translatedText");
@@ -126,7 +122,7 @@ impl NyaTermApp {
         let copy_label = self.tr("translation.copy");
         let close_label = self.tr("translation.close");
         let copied_label = self.tr("translation.copied");
-        let result = self.translation.result.clone();
+        let result = self.translation.result_snapshot();
         let detected = result
             .as_ref()
             .map(|item| item.detected_language.clone())
@@ -289,11 +285,12 @@ impl NyaTermApp {
                                     "translation-dialog-copy",
                                     copy_label,
                                     cx.listener(|this, _, _, cx| {
-                                        if let Some(result) = this.translation.result.clone() {
+                                        if let Some(result) = this.translation.result_snapshot() {
                                             cx.write_to_clipboard(ClipboardItem::new_string(
                                                 result.translated,
                                             ));
-                                            this.translation.status = copied_label.to_string();
+                                            this.translation
+                                                .mark_result_copied(copied_label.to_string());
                                             cx.notify();
                                         }
                                     }),
@@ -315,7 +312,7 @@ impl NyaTermApp {
     pub(in crate::features) fn drain_translate_events(&mut self) -> bool {
         let dirty = self.translation.drain_events();
         if dirty {
-            self.terminal.view.status = self.translation.status.clone();
+            self.terminal.view.status = self.translation.status().to_string();
         }
         dirty
     }

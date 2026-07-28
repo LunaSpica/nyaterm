@@ -1,5 +1,5 @@
 use gpui::Context;
-use nyaterm_core::{CloudSyncSettings, ConnectionStore, TranslationSettings};
+use nyaterm_core::{CloudSyncSettings, ConnectionStore};
 use nyaterm_transport::SftpDuplicatePolicy;
 
 use crate::features::NyaTermApp;
@@ -11,6 +11,8 @@ impl NyaTermApp {
         if self.shell.navigation.settings.draft_snapshot.is_some() {
             return;
         }
+        let (translation_settings, translation_secret_draft) =
+            self.translation.settings_draft_snapshot();
         self.shell.navigation.settings.draft_snapshot = Some(SettingsDraftSnapshot {
             settings: self.settings.summary.clone(),
             ai_settings: self.ai.settings.config.clone(),
@@ -19,8 +21,8 @@ impl NyaTermApp {
             ai_secret_draft: self.ai.settings.secret_draft.clone(),
             cloud_sync_settings: self.cloud_sync.settings.clone(),
             cloud_sync_secret_draft: self.cloud_sync.secret_draft.clone(),
-            translation_settings: self.translation.settings.clone(),
-            translation_secret_draft: self.translation.secret_draft.clone(),
+            translation_settings,
+            translation_secret_draft,
             keyword_highlights: self.settings.keyword_config.clone(),
             master_password_enabled: self.settings.master_password.enabled,
             master_password_draft: self.settings.master_password.draft.clone(),
@@ -38,8 +40,10 @@ impl NyaTermApp {
             || snapshot.ai_secret_draft != self.ai.settings.secret_draft
             || snapshot.cloud_sync_settings != self.cloud_sync.settings
             || snapshot.cloud_sync_secret_draft != self.cloud_sync.secret_draft
-            || snapshot.translation_settings != self.translation.settings
-            || snapshot.translation_secret_draft != self.translation.secret_draft
+            || !self.translation.settings_draft_matches(
+                &snapshot.translation_settings,
+                &snapshot.translation_secret_draft,
+            )
             || snapshot.keyword_highlights != self.settings.keyword_config
             || snapshot.master_password_enabled != self.settings.master_password.enabled
             || snapshot.master_password_draft != self.settings.master_password.draft
@@ -58,23 +62,6 @@ impl NyaTermApp {
         self.terminal.view.status = "settings draft changed; apply to persist".to_string();
         cx.notify();
         true
-    }
-
-    pub(in crate::features) fn pending_translation_settings(&self) -> TranslationSettings {
-        let mut next = self.translation.settings.clone();
-        if !self.translation.secret_draft.deepl_api_key.is_empty() {
-            next.deepl_api_key = self.translation.secret_draft.deepl_api_key.clone();
-        }
-        if !self.translation.secret_draft.baidu_app_key.is_empty() {
-            next.baidu_app_key = self.translation.secret_draft.baidu_app_key.clone();
-        }
-        if !self.translation.secret_draft.ali_app_key.is_empty() {
-            next.ali_app_key = self.translation.secret_draft.ali_app_key.clone();
-        }
-        if !self.translation.secret_draft.youdao_app_key.is_empty() {
-            next.youdao_app_key = self.translation.secret_draft.youdao_app_key.clone();
-        }
-        next
     }
 
     pub(in crate::features) fn pending_cloud_sync_settings(&self) -> CloudSyncSettings {
@@ -273,7 +260,7 @@ impl NyaTermApp {
         let settings = self.settings.summary.clone();
         let ai_settings = self.pending_ai_settings();
         let cloud_sync_settings = self.pending_cloud_sync_settings();
-        let translation_settings = self.pending_translation_settings();
+        let translation_settings = self.translation.pending_settings();
         let keyword_highlights = self.settings.keyword_config.clone();
         let master_password_update = if self.settings.master_password.draft.is_empty() {
             (self.settings.summary.has_master_password && !self.settings.master_password.enabled)
