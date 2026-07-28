@@ -1368,7 +1368,11 @@ fn utf16_to_utf8(content: &str, offset: usize) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{
+        byte_offset_for_char_column, is_close_bracket, line_end, line_number_visual_rows,
+        line_start, matching_bracket_ranges, matching_close_bracket, nearest_char_boundary,
+        next_char_boundary, previous_char_boundary, should_auto_close, utf16_to_utf8, word_bounds,
+    };
 
     #[test]
     fn editor_boundaries_preserve_utf8_characters() {

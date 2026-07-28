@@ -1,4 +1,7 @@
-use super::*;
+use super::{
+    SmartSplitMode, SplitEdge, TabDockEdge, TabDockZone, TerminalWindowNode, WorkspacePaneNode,
+    WorkspaceSplitDirection,
+};
 
 #[cfg(test)]
 mod workspace_pane_tests {

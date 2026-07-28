@@ -159,7 +159,12 @@ pub(crate) fn build_send_command_units_for(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use nyaterm_transport::SessionKind;
+
+    use super::{
+        SendCommandDataType, SendCommandLineEnding, SendCommandMode, build_send_command_units_for,
+        format_send_command_hex_display, parse_send_command_hex,
+    };
 
     #[test]
     fn parses_hex_send_input_with_spacing() {

@@ -1,10 +1,14 @@
-use super::*;
-use crate::models::{MainMode, PanelResizeSide};
+use std::time::{Duration, Instant};
+
+use crate::models::{MainMode, NavItem, PanelResizeSide};
 use gpui::{
     AnyElement, Context, Div, ImageSource, IntoElement, KeyDownEvent, MouseButton, MouseMoveEvent,
     MouseUpEvent, NavigationDirection, ObjectFit, Render, SharedString, Stateful, Window, div, img,
-    rgb, rgba,
+    prelude::*, px, rgb, rgba, svg,
 };
+
+use super::terminal::{FULL_SHELL_PAINT_COUNT, terminal_surface_paint_count};
+use super::{ActivitySide, NyaTermApp, ThemePalette};
 
 const WALLPAPER_TILE_ELEMENT_LIMIT: usize = 8192;
 const WALLPAPER_TILE_MIN_SIZE: f32 = 8.;

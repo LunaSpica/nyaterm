@@ -2,8 +2,9 @@ use gpui::{
     AnyElement, App, ClickEvent, Context, Entity, FontWeight, IntoElement, KeyDownEvent,
     MouseButton, SharedString, Window, div, prelude::*, px, rgb, rgba, svg,
 };
+use nyaterm_core::truncate_preview;
 
-use crate::features::{NyaTermApp, RemoteTextEditor, dialog_action_button, truncate_preview};
+use crate::features::{NyaTermApp, RemoteTextEditor, dialog_action_button};
 use crate::models::{
     TransferEditorField, TransferEditorState, TransferEditorWorkspaceState,
     TransferExternalSyncPromptState,

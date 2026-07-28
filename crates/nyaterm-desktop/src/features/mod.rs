@@ -1,5 +1,4 @@
-mod prelude;
-use prelude::*;
+use std::time::Duration;
 
 mod ai;
 mod app_state;
@@ -72,22 +71,19 @@ pub(in crate::features) use icons::{
 pub(in crate::features) use panels::{SendCommandFeatureFocus, SendCommandFeatureState};
 pub(in crate::features) use quick_command_window::QuickCommandWindow;
 pub(in crate::features) use remote::{RemoteOpsFeatureFocus, RemoteOpsFeatureState};
-pub(in crate::features) use remote_editor_window::RemoteFileEditorWindow;
 pub(in crate::features) use remote_text_editor::RemoteTextEditor;
 pub(in crate::features) use runtime_jobs::{
     ActivitySide, AiAgentBackgroundTarget, AiAgentLoopState, AiAgentStepStatus, AiAgentStepView,
     AiChatJobOutput, AiChatJobResult, AiChatWorkerEvent, AiDiscoveryJobResult,
     CommandPersistenceRequest, CommandPersistenceResult, DockerJobResult, ProcessJobResult,
-    SessionStartResult, SessionStartSuccess, StatsJobResult, TranslateJobResult, TunnelJobOutput,
-    TunnelJobResult, UpdateJobResult, spawn_command_persistence_worker,
+    SessionStartResult, SessionStartSuccess, StatsJobResult, TunnelJobOutput, TunnelJobResult,
+    UpdateJobResult, spawn_command_persistence_worker,
 };
 pub(in crate::features) use session::{
-    CredentialPromptBroker, CredentialPromptState, HostKeyPromptBroker, HostKeyPromptRequest,
-    KeyboardInteractivePromptState, NativeOtpProvider, SftpDuplicatePromptBroker,
-    SftpDuplicatePromptState, credential_prompt_target, keyboard_interactive_prompt_target,
+    CredentialPromptBroker, HostKeyPromptBroker, NativeOtpProvider, SftpDuplicatePromptBroker,
+    credential_prompt_target, keyboard_interactive_prompt_target,
 };
 pub(in crate::features) use settings::{SecurityFeatureFocus, SecurityFeatureState};
-pub(in crate::features) use settings_window::SettingsWindow;
 pub(in crate::features) use shell::{
     ChromeTooltip, SessionTabDragPayload, SessionTabDragPreview, SessionTabTooltip,
     TAB_MOUSE_ACTIONS, TabMouseActionTarget,
@@ -96,7 +92,7 @@ pub(in crate::features) use shell::{
     appearance_font_options, appearance_font_stack, gpui_code_font_family,
 };
 pub(in crate::features) use terminal::{
-    FULL_SHELL_PAINT_COUNT, TerminalFeatureFocus, TerminalFeatureState, full_shell_paint_count,
+    TerminalFeatureFocus, TerminalFeatureState, full_shell_paint_count,
     terminal_surface_paint_count,
 };
 pub(in crate::features) use text_inputs::{TextInputRegistry, TextInputSetup, secret_input_setup};

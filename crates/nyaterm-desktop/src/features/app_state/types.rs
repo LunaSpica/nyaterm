@@ -1,7 +1,15 @@
-use super::*;
+use std::collections::HashSet;
+use std::time::{Duration, Instant};
 
-use crate::models::TranslationSecretDraft;
-use nyaterm_core::TranslationSettings;
+use nyaterm_core::{
+    AiExecutionProfile, AiSettings, AppSettingsSummary, CloudSyncSettings, KeywordHighlightConfig,
+    SavedConnection, TranslationSettings,
+};
+use nyaterm_transport::SessionKind;
+
+use crate::models::{
+    CloudSyncSecretDraft, SessionLaunchConfig, StartupCommandRequest, TranslationSecretDraft,
+};
 
 #[derive(Debug, Clone)]
 pub(in crate::features) struct SettingsDraftSnapshot {

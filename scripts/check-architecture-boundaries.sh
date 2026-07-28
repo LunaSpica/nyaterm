@@ -563,6 +563,14 @@ check_no_matches 'desktop #[path] debt' '#\[path\s*=' \
 check_no_matches 'terminal-gpui #[path] debt' '#\[path\s*=' \
   crates/nyaterm-terminal-gpui/src
 
+# Parent-module wildcard imports and the shared feature prelude are fully
+# cleared. Keep both debts at zero across the complete desktop crate.
+check_no_matches 'desktop use super::* debt' '^[[:space:]]*use super::\*;' \
+  crates/nyaterm-desktop/src
+if [[ -e crates/nyaterm-desktop/src/features/prelude.rs ]]; then
+  fail 'features/prelude.rs must not be reintroduced'
+fi
+
 # Baseline-friendly checks for areas under active governance. Existing debt is
 # allowed, but new files or additional occurrences fail. As files are cleaned,
 # lower these counts so the debt cannot return.

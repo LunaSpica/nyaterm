@@ -2,9 +2,10 @@ use gpui::{
     ClipboardItem, Context, IntoElement, KeyDownEvent, MouseButton, MouseDownEvent, SharedString,
     Window, div, prelude::*, px, rgb, svg,
 };
+use nyaterm_core::truncate_preview;
 use nyaterm_transport::{SftpFileEntry, SftpFileType};
 
-use crate::features::{NyaTermApp, TextInputSetup, truncate_preview};
+use crate::features::{NyaTermApp, TextInputSetup};
 use crate::models::{
     TransferBrowserBreadcrumbSegment, TransferBrowserChildrenMenuStatus,
     TransferBrowserPathMenuKind, TransferBrowserPathMenuState,

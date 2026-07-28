@@ -439,7 +439,7 @@ pub(crate) fn panel_collapsed_from_persistence(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{ActivityBarLayoutState, NavItem, PanelSide, panel_collapsed_from_persistence};
 
     #[test]
     fn activity_bar_entry_side_follows_current_layout() {

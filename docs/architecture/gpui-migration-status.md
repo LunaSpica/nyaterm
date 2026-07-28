@@ -12,8 +12,8 @@ Last updated from the working tree on 2026-07-28.
 | `NyaTermApp` fields | 261 | Counted from `features/app_state/mod.rs`; down from 585, still transitional. |
 | `impl NyaTermApp` blocks | 238 | Spread across 233 files under `crates/nyaterm-desktop/src`. |
 | `#[path = "..."]` declarations in desktop | 0 | Cleared. Every directory is a real module; the boundary script fails on any new occurrence. |
-| `use super::*` imports in desktop | 25 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
-| `features/prelude.rs` rough exported-token count | 99 | Still a broad shared prelude; three hundred forty-six low-frequency GPUI/transport/core/http/model/helper/widget exports are now explicit imports. |
+| `use super::*` imports in desktop | 0 | Cleared in production and test modules; guarded crate-wide. |
+| `features/prelude.rs` rough exported-token count | 0 | The transitional shared prelude is removed and guarded against reintroduction. |
 | Entity Store structs | 4 | `Runtime`, `WindowRuntime`, `StartupRestore`, `Overlay`. Each owns state the app does not. |
 | Snapshot structs | 0 | Cleared. No store is a projection of `NyaTermApp` any more. |
 | `replace_snapshot` methods | 0 | Cleared. |
@@ -161,6 +161,16 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   formatting façade re-exports. This is desktop GPUI import-boundary cleanup:
   terminal parsing, snapshots and protocol handling in `nyaterm-terminal` are
   unchanged.
+- The final twenty-five desktop `use super::*` imports are gone from the app
+  composition root, construction/runtime-job modules, workspace views,
+  workspace-tab implementation files and the remaining focused unit-test
+  modules. The cleanup exposed the last consumers of `features/prelude.rs`;
+  they now import their GPUI, core, transport, model and widget dependencies
+  directly, so the transitional prelude was deleted rather than kept as an
+  empty compatibility layer. A crate-wide guard now keeps both wildcard-import
+  and shared-prelude debt at zero. Application construction, workspace layout,
+  recording, credential matching, terminal frame processing, send-command and
+  temporary-SSH-link behavior are unchanged.
 - `#[path = "..."]` is gone from `nyaterm-desktop` and `nyaterm-terminal-gpui`.
   The `pages` tree, `http/cloud_sync` and `models/workspace_tabs` were the last
   holdouts; `pages/remote/docker` also stopped aliasing six sibling files and
@@ -1214,11 +1224,8 @@ use the existing behavior.
 
 ## Architecture Debt
 
-- `features/prelude.rs` still exports many business models, services, transport
-  types, terminal helpers, and widgets. New or substantially edited modules
-  should prefer explicit imports instead of relying on this prelude.
-- `#[path = "..."]` is cleared. `use super::*` remains as historical debt and
-  should be removed from each coherent area as that area is edited.
+- `features/prelude.rs`, desktop `#[path = "..."]`, and desktop `use super::*`
+  debt are cleared and guarded against reintroduction.
 - `NyaTermApp` remains the dominant state owner. New state should move into a
   focused FeatureState or a deliberately authoritative Entity, not into new
   unrelated top-level fields.
@@ -1245,11 +1252,11 @@ use the existing behavior.
 - Undeclared persistence migrations, table/key renames, encryption prefix
   changes, or backup format changes.
 
-Run `scripts/check-architecture-boundaries.sh` before review. The script is
-baseline-friendly: current historical debt is allowed, but additional
-occurrences in governed feature subtrees, including the complete session and
-terminal trees, fail. The GitHub Actions `Architecture Boundaries` workflow
-runs this script for pull requests and pushes to `main`.
+Run `scripts/check-architecture-boundaries.sh` before review. The script keeps
+historical baselines for the remaining governed rules, while desktop
+`#[path]`, `use super::*`, and the shared feature prelude are enforced
+crate-wide at zero. The GitHub Actions `Architecture Boundaries` workflow runs
+this script for pull requests and pushes to `main`.
 
 ## Entity Ownership Migration
 
@@ -1317,18 +1324,15 @@ while `features/mod.rs` still flattened every feature directory through
 still sit in the same crate-wide namespace, reachable from everywhere. Build the
 real module tree first, then the remaining steps actually enforce something.
 
-Items 1, 3 and 4 are done. What follows is the honest remaining list.
+Items 1 through 4 are done. What follows is the honest remaining list.
 
 1. Done. `#[path = "..."]` no longer appears in `nyaterm-desktop` or
    `nyaterm-terminal-gpui`, and a crate-wide guard keeps it that way.
-2. Drop the `use super::*` chain in favor of explicit imports, working from the
-   leaf files of a coherent directory up to its `mod.rs`. Now that each
-   directory is a real module, this is what actually narrows visibility; before
-   the module tree existed it only moved names between two flat namespaces.
-   Batch complete subtrees where the behavior and validation surface are
-   cohesive, while still resolving each file's dependency set explicitly with
-   compiler guidance. Run formatting, boundary checks, compilation and tests
-   once for the completed batch rather than committing one file at a time.
+2. Done. Desktop production modules and nested tests contain no
+   `use super::*`; the crate-wide guard prevents the chain from returning. The
+   compiler-confirmed final pass also removed `features/prelude.rs`, so modules
+   cannot regain the same implicit dependency surface through a shared import
+   bucket.
 3. Largely done. `NyaTermApp` is down from 585 fields to 261, across eight
    feature-state structs. What is left is a long tail — the biggest remaining
    domain is eighteen fields, and much of the rest is genuinely app-level

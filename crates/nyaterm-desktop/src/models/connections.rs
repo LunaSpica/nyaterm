@@ -665,7 +665,14 @@ const CREDENTIAL_AUTOFILL_MATCH_EVENT_CAP: usize = 128;
 
 #[cfg(test)]
 mod credential_autofill_match_tests {
-    use super::*;
+    use std::collections::HashMap;
+
+    use super::{
+        CredentialAutofillMatchEvent, CredentialAutofillMatchEventQueue,
+        CredentialAutofillMatchOutcome, CredentialAutofillMatchRequest,
+        CredentialAutofillMatchRequestKey, CredentialPromptKind, PendingCredentialAutofill,
+        SavedCredential, credential_autofill_match_outcome,
+    };
 
     fn credential(
         id: &str,

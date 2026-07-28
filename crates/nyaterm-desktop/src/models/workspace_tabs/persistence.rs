@@ -1,4 +1,6 @@
-use super::*;
+use nyaterm_core::RestorableTerminalWindowNode;
+
+use super::{TerminalWindowNode, WorkspacePaneNode, WorkspaceSplitDirection, uuid_v4_like};
 
 impl TerminalWindowNode {
     /// Serialize to Tauri `ui.terminal_window_layout` using ordered tab indexes.

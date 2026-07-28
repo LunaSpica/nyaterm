@@ -675,7 +675,17 @@ fn bridge_consume_sideband_probe(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use std::collections::{HashMap, HashSet};
+    use std::time::{Duration, Instant};
+
+    use super::{
+        SESSION_EVENT_BRIDGE_DIRECT_OUTPUT_BACKPRESSURE,
+        SESSION_EVENT_BRIDGE_SIDEBAND_PROBE_EVENTS, SESSION_EVENT_BRIDGE_SIDEBAND_PROBE_WINDOW,
+        SessionEventBridgeControlSnapshot, bridge_arm_sideband_probe,
+        bridge_consume_sideband_probe, bridge_output_can_go_direct, bridge_output_is_backpressured,
+        bridge_output_may_contain_sideband_trigger, bridge_should_pause_source_drain,
+        bridge_sideband_probe_active,
+    };
 
     #[test]
     fn bridge_direct_policy_rejects_sideband_triggers() {

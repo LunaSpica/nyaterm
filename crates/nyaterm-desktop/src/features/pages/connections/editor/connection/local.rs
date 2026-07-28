@@ -4,8 +4,9 @@ use gpui::{
     px, rgb, svg,
 };
 
-use crate::features::{NyaTermApp, small_button};
+use crate::features::NyaTermApp;
 use crate::models::{ConnectionEditorField, ConnectionEditorMenu, ConnectionEditorState};
+use crate::widgets::small_button;
 
 use super::super::super::list::{
     ConnectionEditorChoice, ConnectionEditorFields, connection_editor_select, editor_field,

@@ -1,6 +1,14 @@
-use super::*;
-use gpui::AnimationExt;
 use std::time::Duration;
+
+use gpui::{
+    AnimationExt, Context, FontWeight, IntoElement, SharedString, div, prelude::*, px, relative,
+    rgb, svg,
+};
+
+use super::super::super::{NyaTermApp, short_id};
+use crate::models::{WorkspacePaneNode, WorkspaceSplitDirection};
+use crate::widgets::small_button;
+use nyaterm_core::truncate_preview;
 
 impl NyaTermApp {
     fn workspace_reconnect_pending_state(&self, session_id: &str) -> impl IntoElement {

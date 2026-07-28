@@ -1,14 +1,7 @@
-use gpui::{
-    Context, FontWeight, IntoElement, SharedString, div, prelude::*, px, relative, rgb, rgba, svg,
-};
+use gpui::{Context, IntoElement, div, prelude::*};
 
-use super::super::{
-    NyaTermApp, SessionTabDragPayload, SessionTabDragPreview, SessionTabTooltip, ThemePalette,
-    session_kind_label, short_id, small_button, truncate_preview,
-};
-use crate::models::{
-    TabDockEdge, TabDockZone, TerminalWindowNode, WorkspacePaneNode, WorkspaceSplitDirection,
-};
+use super::super::NyaTermApp;
+use crate::models::{TerminalWindowNode, WorkspacePaneNode};
 
 mod panes;
 mod terminal_windows;

@@ -12,7 +12,7 @@ use std::time::Instant;
 use gpui::{FocusHandle, Pixels, WindowHandle};
 use nyaterm_transport::{SftpDuplicatePolicy, SftpFileEntry};
 
-use crate::features::{TransferExternalSyncWindow, TransferJobResult};
+use crate::features::TransferExternalSyncWindow;
 use crate::models::{
     TransferBrowserColumnResizeState, TransferBrowserColumnWidths, TransferBrowserContextMenuState,
     TransferBrowserDragSelectionState, TransferBrowserFavoritesMenuState,
@@ -20,9 +20,10 @@ use crate::models::{
     TransferBrowserPendingRenameState, TransferBrowserSessionCacheState, TransferBrowserSortColumn,
     TransferBrowserSortDirection, TransferBrowserUploadMenuState, TransferDeleteState,
     TransferEditorWorkspaceState, TransferExternalSyncPromptState, TransferHeightResizeState,
-    TransferInputField, TransferJobDeleteState, TransferJobMenuState, TransferJobState,
-    TransferMoveState, TransferNewFileState, TransferNewFolderState, TransferNewSymlinkState,
-    TransferPathPromptKind, TransferPropertiesState, TransferRenameState, TransferUnknownFileState,
+    TransferInputField, TransferJobDeleteState, TransferJobMenuState, TransferJobResult,
+    TransferJobState, TransferMoveState, TransferNewFileState, TransferNewFolderState,
+    TransferNewSymlinkState, TransferPathPromptKind, TransferPropertiesState, TransferRenameState,
+    TransferUnknownFileState,
 };
 
 pub(in crate::features) struct TransferFeatureState {

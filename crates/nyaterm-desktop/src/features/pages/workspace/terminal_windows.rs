@@ -1,4 +1,15 @@
-use super::*;
+use gpui::{
+    Context, FontWeight, IntoElement, SharedString, div, prelude::*, px, relative, rgb, rgba, svg,
+};
+use nyaterm_core::truncate_preview;
+
+use super::super::super::{
+    NyaTermApp, SessionTabDragPayload, SessionTabDragPreview, SessionTabTooltip, ThemePalette,
+    session_kind_label, short_id,
+};
+use crate::models::{
+    TabDockEdge, TabDockZone, TerminalWindowNode, WorkspacePaneNode, WorkspaceSplitDirection,
+};
 
 impl NyaTermApp {
     pub(super) fn render_terminal_window_node(

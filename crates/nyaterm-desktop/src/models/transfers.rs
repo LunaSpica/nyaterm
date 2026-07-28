@@ -145,7 +145,9 @@ impl TransferJobState {
 
 #[cfg(test)]
 mod transfer_job_state_tests {
-    use super::*;
+    use std::path::PathBuf;
+
+    use super::{TransferJobKind, TransferJobState, TransferJobStatus};
 
     fn job(kind: TransferJobKind, session_id: Option<&str>) -> TransferJobState {
         TransferJobState {

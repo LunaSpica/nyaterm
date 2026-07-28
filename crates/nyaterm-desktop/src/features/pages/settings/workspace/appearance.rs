@@ -2,10 +2,9 @@ use gpui::{
     App, ClickEvent, Context, FontWeight, IntoElement, SharedString, Window, div, prelude::*, px,
     rgb, rgba, svg,
 };
+use nyaterm_core::truncate_preview;
 
-use crate::features::{
-    ChromeTooltip, NyaTermApp, appearance_font_stack, gpui_code_font_family, truncate_preview,
-};
+use crate::features::{ChromeTooltip, NyaTermApp, appearance_font_stack, gpui_code_font_family};
 use crate::theme::{APPEARANCE_THEME_IDS, ThemePalette, appearance_theme_label};
 
 use super::super::{settings_form_row, settings_form_section, settings_switch};

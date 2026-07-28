@@ -391,7 +391,7 @@ fn percent_decode_basic(value: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{TemporarySshLinkError, parse_temporary_ssh_link};
 
     #[test]
     fn parses_ssh_url() {

@@ -285,7 +285,7 @@ pub(crate) enum TransferEditorField {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{TransferEditorField, TransferEditorState, TransferEditorWorkspaceState};
 
     fn editor_tab(session_id: &str, remote_path: &str) -> TransferEditorState {
         TransferEditorState {

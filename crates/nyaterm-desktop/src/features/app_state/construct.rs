@@ -1,12 +1,41 @@
-use super::*;
+use std::collections::{HashMap, HashSet, VecDeque};
+use std::sync::{Arc, mpsc};
+use std::time::Instant;
 
 use crate::models::{
-    ActivityBarLayoutState, BottomPanelMode, GithubGistAuthState, KeywordHighlightEditorField,
-    MainMode, RecordingWritePipeline, RightFocus, SearchEngineEditorField, SettingsTab,
-    StartupCommandAction, StoreStatus, TerminalFramePipeline, TranslateInputField,
-    TranslationSecretDraft,
+    ActivityBarLayoutState, BottomPanelMode, CloudSyncInputField, CloudSyncSecretDraft,
+    CredentialAutofillMatchPipeline, GithubGistAuthState, HeaderStatusState,
+    KeywordHighlightEditorField, MainMode, NavItem, PanelSide, RecordingWritePipeline, RightFocus,
+    SearchEngineEditorField, SessionEventBridge, SettingsTab, StartupCommandAction, StoreStatus,
+    TerminalFramePipeline, TranslateInputField, TranslationSecretDraft,
 };
-use nyaterm_core::{CLOUD_SYNC_HISTORY_LIMIT, TranslationSettings, read_cloud_sync_history};
+use crate::terminal::initial_terminal_screen;
+use gpui::{Context, ScrollHandle};
+use nyaterm_core::{
+    AiExecutionProfile, AiSettings, AppRuntime, AppSettingsSummary, CLOUD_SYNC_HISTORY_LIMIT,
+    CloudSyncSettings, CloudSyncState, ConnectionStore, KeywordHighlightConfig, NativeServices,
+    TerminalInputState, TranslationSettings, read_cloud_sync_history, uuid,
+};
+use nyaterm_terminal::TerminalOutputDecoder;
+use nyaterm_transport::{RecordingManager, SessionManager, SftpDuplicatePolicy, SshTunnelManager};
+
+use super::super::{
+    AiFeatureFocus, AiFeatureState, ConnectionFeatureFocus, ConnectionFeatureState,
+    CredentialPromptBroker, DEFAULT_DUPLICATE_STARTUP_DELAY_MS, HostKeyPromptBroker,
+    INITIAL_TERMINAL_BANNER, LEGACY_ROOT, NativeOtpProvider, QuickCommandFeatureFocus,
+    QuickCommandFeatureState, RemoteOpsFeatureFocus, RemoteOpsFeatureState, SecurityFeatureFocus,
+    SecurityFeatureState, SendCommandFeatureFocus, SendCommandFeatureState,
+    SftpDuplicatePromptBroker, TerminalFeatureFocus, TerminalFeatureState, TextInputRegistry,
+    TransferFeatureFocus, TransferFeatureState, ai_active_profile_drafts, ai_usage_counts,
+    appearance_font_options, quick_command_sort_mode_from_setting,
+    quick_command_view_mode_from_setting, spawn_command_persistence_worker,
+};
+use super::NyaTermApp;
+use crate::models::panel_collapsed_from_persistence;
+#[cfg(feature = "migration-dashboard")]
+use nyaterm_legacy::LegacyProject;
+#[cfg(not(feature = "migration-dashboard"))]
+use nyaterm_legacy::MigrationInventory;
 
 impl NyaTermApp {
     pub fn new(

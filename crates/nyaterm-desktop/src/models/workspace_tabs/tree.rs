@@ -1,4 +1,5 @@
-use super::*;
+use super::{SmartSplitMode, TerminalWindowNode, WorkspacePaneNode, WorkspaceSplitDirection};
+use crate::models::uuid_v4_like;
 
 impl TerminalWindowNode {
     pub(crate) fn leaf(tab_ids: Vec<String>, active_tab_id: Option<String>) -> Self {

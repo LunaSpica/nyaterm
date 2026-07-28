@@ -1,5 +1,10 @@
-use super::*;
+use std::collections::HashSet;
 
+use gpui::{Context, Window};
+use nyaterm_core::uuid;
+use nyaterm_transport::SessionInfo;
+
+use super::{NyaTermApp, SYNC_GROUP_COLORS};
 use crate::models::SyncInputGroup;
 
 impl NyaTermApp {

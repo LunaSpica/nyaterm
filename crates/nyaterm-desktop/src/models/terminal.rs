@@ -2570,7 +2570,36 @@ const TERMINAL_FRAME_OUTPUT_BURST_BYTE_LIMIT: usize = 128 * 1024;
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use std::collections::{HashMap, VecDeque};
+    use std::sync::Arc;
+    use std::time::{Duration, Instant};
+
+    use nyaterm_core::ActionLinksMatcherSettings;
+    use nyaterm_terminal::{
+        TerminalEffects, TerminalOutputDecoder, TerminalScreen, TerminalSnapshot,
+    };
+
+    use crate::terminal::{TerminalLineDecorations, terminal_screen_from_output};
+
+    use super::{
+        TERMINAL_FRAME_COMMAND_QUEUE_CAP, TERMINAL_FRAME_EVENT_WAKE_OUTPUT,
+        TERMINAL_FRAME_EVENT_WAKE_SNAPSHOT, TERMINAL_FRAME_OUTPUT_BURST_BYTE_LIMIT,
+        TERMINAL_FRAME_OUTPUT_CHUNK_SIZE, TERMINAL_FRAME_OUTPUT_COALESCE_BYTE_LIMIT,
+        TERMINAL_FRAME_VISIBLE_TEXT_TAIL_CAP, TERMINAL_OUTPUT_VISIBLE_BACKLOG_CAP,
+        TERMINAL_RENDER_DEGRADATION_RECOVERY_TICKS, TERMINAL_SCROLLBACK_SNAPSHOT_CACHE_LIMIT,
+        TERMINAL_UI_OUTPUT_TAIL_CAP, TerminalFrameActionLinks, TerminalFrameCommand,
+        TerminalFrameEvent, TerminalFrameEventQueue, TerminalFrameOutputBatch,
+        TerminalFrameOutputEvent, TerminalFrameOutputSubmission, TerminalFrameSearchKey,
+        TerminalFrameSearchResult, TerminalFrameSession, TerminalFrameSnapshotEvent,
+        TerminalPerformanceMode, TerminalPerformanceOverlay, TerminalProtocolState,
+        TerminalRenderCache, TerminalViewState, append_terminal_ui_output_tail,
+        coalesce_terminal_frame_output_command, compact_stale_terminal_frame_commands,
+        next_terminal_frame_command, prepare_terminal_frame_action_links,
+        process_terminal_frame_output_burst, protect_terminal_output_burst,
+        terminal_expensive_interactions_enabled, terminal_frame_command_channel,
+        terminal_frame_output_commands, terminal_frame_scroll_window_extra_rows,
+        terminal_frame_search_result_is_current, terminal_snapshot_matches_grid_geometry,
+    };
 
     /// A submission is handed over whole. Slicing it here would only be undone
     /// by the enqueue-side merge and the worker's burst coalescing.
@@ -4951,7 +4980,7 @@ impl TerminalSelection {
 
 #[cfg(test)]
 mod terminal_selection_tests {
-    use super::*;
+    use super::TerminalSelection;
 
     #[test]
     fn all_buffer_selection_covers_every_viewport_row() {

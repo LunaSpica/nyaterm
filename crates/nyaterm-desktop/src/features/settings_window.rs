@@ -173,7 +173,7 @@ fn open_settings_window_now_from_app(app: Entity<NyaTermApp>, cx: &mut App) {
             app.settings_window = None;
             app.settings_window_open_pending = false;
             app.main_mode = MainMode::Page;
-            app.selected_nav = super::NavItem::Settings;
+            app.selected_nav = crate::models::NavItem::Settings;
             app.left_sidebar_collapsed = true;
             app.right_inspector_collapsed = true;
             app.terminal.view.status = format!("failed to open settings window: {error}");

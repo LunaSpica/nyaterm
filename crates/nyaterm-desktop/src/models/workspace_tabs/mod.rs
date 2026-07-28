@@ -1,6 +1,3 @@
-use nyaterm_core::RestorableTerminalWindowNode;
-use std::collections::HashSet;
-
 use super::{SmartSplitMode, WorkspacePaneNode, WorkspaceSplitDirection, uuid_v4_like};
 
 /// In-window multi-leaf tab groups (Tauri `TerminalWindowNode` / TabWindowsWorkspace).

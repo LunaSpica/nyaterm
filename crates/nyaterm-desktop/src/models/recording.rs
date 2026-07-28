@@ -197,9 +197,13 @@ const RECORDING_WRITE_EVENT_CHANNEL_CAP: usize = 32;
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::fs;
+    use std::sync::Arc;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    use nyaterm_transport::RecordingManager;
+
+    use super::{RecordingHistorySearchKey, RecordingWriteEvent, RecordingWritePipeline};
 
     #[test]
     fn recording_pipeline_preserves_write_order_before_flush() {

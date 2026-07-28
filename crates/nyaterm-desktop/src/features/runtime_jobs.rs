@@ -1,6 +1,17 @@
-use super::*;
+use std::path::PathBuf;
+use std::sync::mpsc;
+use std::time::Instant;
 
-use nyaterm_core::{AiModelDiscovery, TranslateResult};
+use nyaterm_core::{
+    AiCommandCard, AiMode, AiModelDiscovery, CommandHistoryEntry, CommandObservation,
+    ConnectionStore, NativeUpdateInfo, TranslateResult,
+};
+use nyaterm_transport::{
+    DockerComposeService, DockerContainerDetails, RemoteDockerOverview, RemoteProcess, RemoteStats,
+    SessionInfo, SessionKind, SshMultiplexHandle, SshSessionConfig, SshTunnelInfo,
+};
+
+use crate::models::SessionLaunchConfig;
 
 pub(in crate::features) struct SessionStartResult {
     pub(in crate::features) request_id: String,

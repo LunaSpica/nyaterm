@@ -112,14 +112,12 @@ Do not add new `#[path = "..."]` declarations. This is especially strict in
 `nyaterm-desktop` and `nyaterm-terminal-gpui`, where the debt is cleared and
 guarded by `scripts/check-architecture-boundaries.sh`.
 
-Do not add new `use super::*` imports. Existing occurrences are historical
-migration debt; replace them with explicit imports when the surrounding code is
-substantially edited. Governed areas have baseline checks, so lowering a file's
-baseline should happen in the same change that cleans it.
+Do not add `use super::*` imports. The desktop debt is cleared and guarded
+crate-wide; every module and test should name its dependencies explicitly.
 
-Avoid broad exports from crate roots and from `features/prelude.rs`.
-`features/prelude.rs` is still a shared migration prelude, but many low-frequency
-models and helpers have been moved to explicit imports. Do not put those back.
+Avoid broad exports from crate roots. The transitional `features/prelude.rs`
+has been removed; do not recreate a shared feature prelude. Import models,
+services, GPUI types and helpers from their authoritative modules.
 
 ## UI and Input Rules
 

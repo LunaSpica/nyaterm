@@ -408,7 +408,9 @@ pub(crate) fn actions_for_match(item: &ActionLinkMatch) -> Vec<ActionLinkAction>
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use nyaterm_core::ActionLinksMatcherSettings;
+
+    use super::{ActionLinkKind, actions_for_match, find_action_links};
 
     #[test]
     fn detects_ip_and_actions() {

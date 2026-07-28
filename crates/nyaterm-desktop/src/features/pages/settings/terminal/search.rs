@@ -2,10 +2,11 @@ use gpui::{
     App, ClickEvent, Context, FontWeight, IntoElement, SharedString, Window, div, prelude::*, px,
     rgb, rgba, svg,
 };
+use nyaterm_core::truncate_preview;
 
 use crate::features::{
     ChromeTooltip, NyaTermApp, SEARCH_ENGINE_ICON_IDS, TextInputSetup, mono_icon,
-    search_engine_icon, truncate_preview,
+    search_engine_icon,
 };
 use crate::theme::ThemePalette;
 

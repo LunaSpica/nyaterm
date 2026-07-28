@@ -1,4 +1,5 @@
-use super::*;
+use super::{SplitEdge, TerminalWindowNode, WorkspacePaneNode, WorkspaceSplitDirection};
+use crate::models::uuid_v4_like;
 
 impl TerminalWindowNode {
     pub(crate) fn remove_tab(&mut self, tab_id: &str) -> Option<Self> {
