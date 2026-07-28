@@ -1,36 +1,12 @@
-use std::collections::HashSet;
-
 use gpui::Context;
-use nyaterm_core::{ConnectionStore, SavedConnection, natural_compare, uuid};
+use nyaterm_core::{ConnectionStore, SavedConnection, uuid};
 
 use crate::features::NyaTermApp;
 
 impl NyaTermApp {
     pub(in crate::features) fn selected_connections(&self) -> Vec<SavedConnection> {
-        let visible_ids = self
-            .connections
-            .iter()
-            .map(|connection| connection.id.as_str())
-            .collect::<HashSet<_>>();
-        self.connections
-            .iter()
-            .filter(|connection| {
-                self.connection_state
-                    .list_contains_selected_id(&connection.id)
-            })
-            .cloned()
-            .chain(
-                self.connection_state
-                    .list_selected_connection_ids()
-                    .filter(|id| !visible_ids.contains(*id))
-                    .filter_map(|id| {
-                        self.connections
-                            .iter()
-                            .find(|connection| connection.id == id)
-                            .cloned()
-                    }),
-            )
-            .collect()
+        self.connection_state
+            .selected_connections(&self.connections)
     }
 
     /// Tauri connection selection: plain click replaces, Ctrl/Cmd toggles, Shift ranges.
@@ -58,101 +34,8 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn visible_connection_ids(&self) -> Vec<String> {
-        let query = self.connection_state.list_search_query();
-        // Mirror `connection_sections` ordering for Shift-range selection.
-        let mut by_group: std::collections::HashMap<Option<String>, Vec<&SavedConnection>> =
-            std::collections::HashMap::new();
-        for connection in &self.connections {
-            if !query.is_empty() {
-                let haystack = format!(
-                    "{} {} {} {} {}",
-                    connection.name,
-                    connection.endpoint(),
-                    connection.kind_label(),
-                    connection.description.clone().unwrap_or_default(),
-                    connection.id
-                )
-                .to_ascii_lowercase();
-                if !haystack.contains(&query) {
-                    continue;
-                }
-            }
-            by_group
-                .entry(connection.group_id.clone())
-                .or_default()
-                .push(connection);
-        }
-        // Must order exactly like the rendered tree, or Shift-range selection and
-        // keyboard navigation walk a different list than the one on screen.
-        let sort_mode = self.connection_state.list_sort_mode();
-        for list in by_group.values_mut() {
-            list.sort_by(|left, right| match sort_mode {
-                crate::models::ConnectionSortMode::Default => left
-                    .sort_order
-                    .cmp(&right.sort_order)
-                    .then_with(|| natural_compare(&left.name, &right.name)),
-                crate::models::ConnectionSortMode::NameAsc => {
-                    natural_compare(&left.name, &right.name)
-                }
-                crate::models::ConnectionSortMode::NameDesc => {
-                    natural_compare(&right.name, &left.name)
-                }
-            });
-        }
-
-        let group_ids = self
-            .connection_groups
-            .iter()
-            .map(|group| group.id.clone())
-            .collect::<std::collections::HashSet<_>>();
-        let mut children_by_parent: std::collections::HashMap<
-            Option<String>,
-            Vec<nyaterm_core::Group>,
-        > = std::collections::HashMap::new();
-        for group in &self.connection_groups {
-            let parent_id = group
-                .parent_id
-                .clone()
-                .filter(|parent_id| group_ids.contains(parent_id));
-            let mut group = group.clone();
-            group.parent_id = parent_id.clone();
-            children_by_parent.entry(parent_id).or_default().push(group);
-        }
-        for groups in children_by_parent.values_mut() {
-            groups.sort_by(|left, right| match sort_mode {
-                crate::models::ConnectionSortMode::Default => left
-                    .sort_order
-                    .cmp(&right.sort_order)
-                    .then_with(|| natural_compare(&left.name, &right.name)),
-                crate::models::ConnectionSortMode::NameAsc => {
-                    natural_compare(&left.name, &right.name)
-                }
-                crate::models::ConnectionSortMode::NameDesc => {
-                    natural_compare(&right.name, &left.name)
-                }
-            });
-        }
-
-        let mut ids = Vec::new();
-        let mut visited = std::collections::HashSet::new();
-        let expanded = self.connection_state.list_expanded_group_ids().clone();
-        // Groups first, ungrouped last (matches connection_sections / Tauri).
-        for group in children_by_parent.get(&None).cloned().unwrap_or_default() {
-            append_visible_connection_ids(
-                group,
-                &children_by_parent,
-                &mut by_group,
-                &mut ids,
-                &mut visited,
-                &expanded,
-            );
-        }
-        if let Some(root) = by_group.remove(&None) {
-            for connection in root {
-                ids.push(connection.id.clone());
-            }
-        }
-        ids
+        self.connection_state
+            .visible_connection_ids(&self.connections, &self.connection_groups)
     }
 
     pub(in crate::features) fn clear_selected_connections(&mut self, cx: &mut Context<Self>) {
@@ -217,36 +100,5 @@ impl NyaTermApp {
         self.store_status.message = "saved connections copied".to_string();
         self.store_status.ready = true;
         Ok(connections.len())
-    }
-}
-
-fn append_visible_connection_ids<'a>(
-    group: nyaterm_core::Group,
-    children_by_parent: &std::collections::HashMap<Option<String>, Vec<nyaterm_core::Group>>,
-    by_group: &mut std::collections::HashMap<Option<String>, Vec<&'a SavedConnection>>,
-    ids: &mut Vec<String>,
-    visited: &mut std::collections::HashSet<String>,
-    expanded: &std::collections::HashSet<String>,
-) {
-    if !visited.insert(group.id.clone()) {
-        return;
-    }
-    // A collapsed folder's rows are not on screen, so they are not reachable by
-    // Shift-range or by the arrow keys either.
-    if !expanded.contains(&group.id) {
-        by_group.remove(&Some(group.id));
-        return;
-    }
-    for child in children_by_parent
-        .get(&Some(group.id.clone()))
-        .cloned()
-        .unwrap_or_default()
-    {
-        append_visible_connection_ids(child, children_by_parent, by_group, ids, visited, expanded);
-    }
-    if let Some(list) = by_group.remove(&Some(group.id)) {
-        for connection in list {
-            ids.push(connection.id.clone());
-        }
     }
 }

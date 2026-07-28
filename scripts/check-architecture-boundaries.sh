@@ -706,6 +706,10 @@ check_no_matches \
   'connection_state\.list\.(search_draft|sort_mode|selected_ids|last_selected_id|context_menu|group_context_menu|hover_pending|hovered_connection_id|hovered_group_id|drop_target|expanded_group_ids|more_menu_open)(\.|[[:space:]]|==|,|\)|$)' \
   crates/nyaterm-desktop/src/features/connections/connections/selection.rs
 check_no_matches \
+  "connection selection runtime derived queries must stay on ConnectionFeatureState" \
+  '(natural_compare|append_visible_connection_ids|children_by_parent|by_group)' \
+  crates/nyaterm-desktop/src/features/connections/connections/selection.rs
+check_no_matches \
   "connections page list reads must use ConnectionFeatureState methods" \
   'connection_state\.list\.(search_draft|sort_mode|selected_ids|last_selected_id|context_menu|group_context_menu|search_focus|hover_pending|hovered_connection_id|hovered_group_id|drop_target|expanded_group_ids|more_menu_open)(\.|[[:space:]]|==|,|\)|$)' \
   crates/nyaterm-desktop/src/features/pages/connections

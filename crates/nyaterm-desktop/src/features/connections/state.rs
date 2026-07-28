@@ -4,7 +4,7 @@ use gpui::{
     App, AppContext as _, Context, Entity, FocusHandle, Pixels, ScrollHandle, SharedString,
     Subscription, WindowHandle,
 };
-use nyaterm_core::AppSettingsSummary;
+use nyaterm_core::{AppSettingsSummary, Group, SavedConnection};
 
 use super::connections::{ConnectionDragKind, ConnectionDropPosition, ConnectionDropTarget};
 use crate::features::{ConnectionEditorToggle, ConnectionEditorWindow, NyaTermApp};
@@ -43,8 +43,9 @@ use self::list_logic::{
     connection_drop_position_for_target, cycle_connection_sort_mode,
     remove_connection_list_references, remove_group_list_references,
     retain_loaded_connection_list_references, select_connection_ids,
-    set_connection_drop_target_if_changed, set_connection_group_hover,
-    sync_connection_search_expansion,
+    selected_connections_for_list_state, set_connection_drop_target_if_changed,
+    set_connection_group_hover, sync_connection_search_expansion,
+    visible_connection_ids_for_list_state,
 };
 #[cfg(test)]
 use self::network_logic::remove_network_group_references;
@@ -290,8 +291,22 @@ impl ConnectionFeatureState {
         self.list.contains_selected_id(connection_id)
     }
 
-    pub fn list_selected_connection_ids(&self) -> impl Iterator<Item = &str> {
-        self.list.selected_connection_ids()
+    pub fn selected_connections(&self, connections: &[SavedConnection]) -> Vec<SavedConnection> {
+        selected_connections_for_list_state(connections, &self.list.selected_ids)
+    }
+
+    pub fn visible_connection_ids(
+        &self,
+        connections: &[SavedConnection],
+        groups: &[Group],
+    ) -> Vec<String> {
+        visible_connection_ids_for_list_state(
+            connections,
+            groups,
+            &self.list.search_query(),
+            self.list.sort_mode,
+            &self.list.expanded_group_ids,
+        )
     }
 
     pub fn list_context_menu_is_open(&self) -> bool {
@@ -1117,10 +1132,6 @@ impl ConnectionListState {
 
     pub fn contains_selected_id(&self, connection_id: &str) -> bool {
         self.selected_ids.contains(connection_id)
-    }
-
-    pub fn selected_connection_ids(&self) -> impl Iterator<Item = &str> {
-        self.selected_ids.iter().map(String::as_str)
     }
 
     pub fn context_menu_is_open(&self) -> bool {
@@ -2021,17 +2032,18 @@ mod tests {
         remove_group_list_references, remove_network_group_and_item_references,
         remove_network_group_references, remove_network_item_references,
         retain_loaded_connection_list_references, select_connection_ids,
-        set_connection_drop_target_if_changed, set_connection_editor_advanced_tab,
-        set_connection_editor_error, set_connection_editor_field_text, set_connection_editor_icon,
-        set_connection_editor_kind, set_connection_editor_menu_value,
-        set_connection_editor_password_source, set_connection_editor_telnet_tab,
-        set_connection_group_editor_error, set_connection_group_hover,
-        set_network_group_editor_error, set_network_group_editor_name,
+        selected_connections_for_list_state, set_connection_drop_target_if_changed,
+        set_connection_editor_advanced_tab, set_connection_editor_error,
+        set_connection_editor_field_text, set_connection_editor_icon, set_connection_editor_kind,
+        set_connection_editor_menu_value, set_connection_editor_password_source,
+        set_connection_editor_telnet_tab, set_connection_group_editor_error,
+        set_connection_group_hover, set_network_group_editor_error, set_network_group_editor_name,
         set_network_proxy_editor_error, set_network_proxy_editor_field,
         set_network_tunnel_bind_localhost, set_network_tunnel_editor_error,
         set_network_tunnel_editor_field, stepped_menu_highlight, sync_connection_search_expansion,
         toggle_connection_editor_flag, toggle_network_item_menu_state,
         toggle_network_move_picker_state, toggle_network_tunnel_auto_open,
+        visible_connection_ids_for_list_state,
     };
     use crate::features::{
         ConnectionDragKind, ConnectionDropPosition, ConnectionDropTarget, ConnectionEditorToggle,
@@ -2045,6 +2057,7 @@ mod tests {
         NetworkMovePickerState, NetworkProxyEditorField, NetworkProxyEditorState, NetworkTab,
         NetworkTunnelEditorField, NetworkTunnelEditorState,
     };
+    use nyaterm_core::{AiExecutionProfile, ConnectionType, Group, SavedConnection};
 
     #[test]
     fn search_expansion_opens_matches_and_restores_the_prior_tree() {
@@ -2332,6 +2345,56 @@ mod tests {
             HashSet::from(["two".to_string(), "three".to_string(), "four".to_string()])
         );
         assert_eq!(last_selected_id.as_deref(), Some("four"));
+    }
+
+    #[test]
+    fn selected_connections_for_list_state_follows_loaded_connection_order() {
+        let connections = vec![
+            saved_connection("first", "First", None, 0),
+            saved_connection("second", "Second", None, 1),
+            saved_connection("third", "Third", None, 2),
+        ];
+        let selected_ids = HashSet::from([
+            "third".to_string(),
+            "missing".to_string(),
+            "first".to_string(),
+        ]);
+
+        let selected = selected_connections_for_list_state(&connections, &selected_ids);
+
+        assert_eq!(
+            selected
+                .iter()
+                .map(|connection| connection.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["first", "third"]
+        );
+    }
+
+    #[test]
+    fn visible_connection_ids_for_list_state_tracks_expanded_tree_order() {
+        let connections = vec![
+            saved_connection("root", "Root", None, 0),
+            saved_connection("parent", "Parent", Some("parent-group"), 1),
+            saved_connection("child", "Child", Some("child-group"), 0),
+            saved_connection("closed", "Closed", Some("closed-group"), 0),
+        ];
+        let groups = vec![
+            group("parent-group", "Parent Group", None, 0),
+            group("child-group", "Child Group", Some("parent-group"), 0),
+            group("closed-group", "Closed Group", None, 1),
+        ];
+        let expanded = HashSet::from(["parent-group".to_string(), "child-group".to_string()]);
+
+        let visible = visible_connection_ids_for_list_state(
+            &connections,
+            &groups,
+            "",
+            ConnectionSortMode::Default,
+            &expanded,
+        );
+
+        assert_eq!(visible, vec!["child", "parent", "root"]);
     }
 
     #[test]
@@ -3383,6 +3446,46 @@ mod tests {
             proxy_editor.and_then(|editor| editor.error),
             Some("Proxy host is required".to_string())
         );
+    }
+
+    fn saved_connection(
+        id: &str,
+        name: &str,
+        group_id: Option<&str>,
+        sort_order: i32,
+    ) -> SavedConnection {
+        SavedConnection {
+            id: id.to_string(),
+            name: name.to_string(),
+            config: ConnectionType::LocalTerminal {
+                shell_path: String::new(),
+                shell_args: String::new(),
+                working_dir: None,
+                ai_execution_profile: AiExecutionProfile::Auto,
+            },
+            group_id: group_id.map(ToOwned::to_owned),
+            description: None,
+            sort_order,
+            icon: None,
+            icon_auto_detect: None,
+            auth: None,
+            network: None,
+            post_login: None,
+            created_at_ms: None,
+            updated_at_ms: None,
+            last_used_at_ms: None,
+        }
+    }
+
+    fn group(id: &str, name: &str, parent_id: Option<&str>, sort_order: i32) -> Group {
+        Group {
+            id: id.to_string(),
+            name: name.to_string(),
+            parent_id: parent_id.map(ToOwned::to_owned),
+            sort_order,
+            created_at_ms: None,
+            updated_at_ms: None,
+        }
     }
 
     fn connection_editor_state_with_secret_draft() -> ConnectionEditorState {
