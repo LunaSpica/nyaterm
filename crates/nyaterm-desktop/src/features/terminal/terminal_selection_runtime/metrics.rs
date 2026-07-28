@@ -1,7 +1,15 @@
-use super::*;
-use crate::models::TerminalCellPos;
+use gpui::{App, Bounds, Context, Pixels, Point, SharedString, px};
 
 use nyaterm_core::TerminalViewportInsets;
+
+use crate::features::NyaTermApp;
+use crate::features::terminal::terminal_surface_entity::{
+    TerminalSurfaceHitTestScrollGeometry, terminal_effective_visual_scroll_offset_px,
+    terminal_snapshot_anchor_row_for_display_offset,
+};
+use crate::models::TerminalCellPos;
+
+use super::{CELL_WIDTH_RATIO, LINE_HEIGHT_RATIO};
 
 impl NyaTermApp {
     pub(in crate::features) fn terminal_cell_size(&self) -> (f32, f32) {
@@ -477,7 +485,15 @@ pub(in crate::features) fn terminal_snapshot_row_for_viewport_row(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use gpui::{Point, Size, px};
+
+    use crate::models::TerminalCellPos;
+
+    use super::{
+        TerminalHitTestGeometry, terminal_cell_for_visual_geometry, terminal_gutter_metrics,
+        terminal_hit_test_visual_y_offset_px, terminal_line_number_digits_for_end,
+        terminal_snapshot_row_for_viewport_row,
+    };
 
     fn terminal_output_lines(count: usize) -> String {
         (0..count)

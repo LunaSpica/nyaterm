@@ -1,4 +1,9 @@
-use super::*;
+use std::time::{Duration, Instant};
+
+use gpui::{App, Bounds, ClickEvent, Context, MouseMoveEvent, Pixels, Point};
+
+use crate::action_links::{ActionLinkAction, ActionLinkMatch, actions_for_match, match_at_offset};
+use crate::features::NyaTermApp;
 use crate::features::terminal::terminal_runtime::{
     TERMINAL_INPUT_LATENCY_WINDOW, TERMINAL_USER_SCROLL_ACTIVE_WINDOW,
 };
@@ -6,6 +11,9 @@ use crate::models::{
     ActionLinkMenuAction, ActionLinkMenuState, ActionLinkTooltipState, TerminalPerformanceMode,
     TerminalWindowNode, terminal_action_link_matcher_key, terminal_expensive_interactions_enabled,
 };
+use crate::terminal::terminal_byte_index_for_cell_col;
+
+use super::helpers::open_external_url_for_action;
 
 fn action_link_hover_should_yield_to_terminal_latency(
     last_input_at: Option<Instant>,
@@ -454,7 +462,18 @@ impl NyaTermApp {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use std::time::{Duration, Instant};
+
+    use gpui::px;
+
+    use crate::features::terminal::terminal_runtime::{
+        TERMINAL_INPUT_LATENCY_WINDOW, TERMINAL_USER_SCROLL_ACTIVE_WINDOW,
+    };
+
+    use super::{
+        ActionLinkTooltipState, action_link_hover_should_yield_to_terminal_latency,
+        clear_action_link_tooltip_state,
+    };
 
     #[test]
     fn action_link_hover_yields_to_recent_input() {

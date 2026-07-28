@@ -1,8 +1,9 @@
-use super::*;
-use crate::models::{TerminalFrameActionLinks, TerminalSelection, TerminalViewState};
 use std::collections::HashMap;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
+
+use crate::models::{TerminalFrameActionLinks, TerminalSelection, TerminalViewState};
+use crate::terminal::TerminalLineDecorations;
 
 pub(in crate::features) fn terminal_snapshot_absolute_range(
     snapshot: &nyaterm_terminal::TerminalSnapshot,
@@ -265,8 +266,15 @@ pub(in crate::features) fn terminal_line_decorations_needed(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use std::collections::HashMap;
+
     use crate::models::TerminalCellPos;
+    use crate::models::{TerminalFrameActionLinks, TerminalSelection, TerminalViewState};
+
+    use super::{
+        build_terminal_line_decorations, terminal_action_links_for_paint_snapshot,
+        terminal_line_decorations_cache_key, terminal_snapshot_absolute_range,
+    };
 
     #[test]
     fn selection_decorations_map_viewport_rows_through_snapshot_anchor() {

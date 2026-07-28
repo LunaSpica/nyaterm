@@ -25,7 +25,7 @@ pub(super) fn terminal_plain_text_input_event(event: &gpui::KeyDownEvent) -> boo
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::terminal_plain_text_input_event;
 
     fn key_event(
         key: &str,

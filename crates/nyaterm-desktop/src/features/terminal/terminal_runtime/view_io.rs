@@ -1,10 +1,32 @@
-use super::*;
+use std::collections::HashMap;
+use std::time::{Duration, Instant};
 
 use crate::models::{
-    EffectiveTerminalPaintPolicy, TerminalPerformanceMode, TerminalProtocolState,
-    TerminalSearchMode, terminal_action_link_matcher_key, terminal_snapshot_matches_grid_geometry,
+    EffectiveTerminalPaintPolicy, TerminalFrameActionLinks, TerminalPerformanceMode,
+    TerminalProtocolState, TerminalSearchMode, TerminalViewState, terminal_action_link_matcher_key,
+    terminal_snapshot_matches_grid_geometry,
 };
-use nyaterm_core::{TerminalMouseReportEligibility, terminal_mouse_report_should_send};
+use gpui::{AppContext, ClipboardItem, Context, Entity, KeyDownEvent, KeyUpEvent, Window};
+use nyaterm_core::{
+    TerminalMouseReportEligibility, TerminalWireWriteKind, terminal_input_fanout_status,
+    terminal_mouse_report_should_send, terminal_wire_write_disposition,
+};
+#[cfg(test)]
+use nyaterm_terminal::TerminalScreen;
+use nyaterm_terminal::TerminalSnapshot;
+
+use crate::features::NyaTermApp;
+use crate::features::terminal::terminal_surface_entity::{
+    TerminalSurface, terminal_snapshot_covers_display_offset,
+};
+use crate::terminal::{
+    NyaTerminalLayoutCache, TerminalBufferMatch, TerminalKeyMode, TerminalLineDecorations,
+    terminal_key_bytes_with_mode, terminal_key_release_bytes_with_mode,
+};
+
+use super::{
+    TERMINAL_INPUT_LATENCY_WINDOW, TERMINAL_USER_SCROLL_ACTIVE_WINDOW, TerminalScrollVisualState,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum MouseReportWriteResult {
@@ -2779,7 +2801,28 @@ fn log_slow_terminal_input_diagnostic(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use std::time::{Duration, Instant};
+
+    use gpui::KeyDownEvent;
+    use nyaterm_terminal::TerminalScreen;
+
+    use crate::features::terminal::terminal_surface_entity::terminal_snapshot_anchor_row_for_display_offset;
+    use crate::models::{TerminalFrameActionLinks, TerminalViewState};
+    use crate::terminal::{TerminalBufferMatch, TerminalKeyMode};
+
+    use super::{
+        TERMINAL_INPUT_LATENCY_WINDOW, TERMINAL_USER_SCROLL_ACTIVE_WINDOW,
+        terminal_cursor_visible_for_display_offset, terminal_input_latency_active,
+        terminal_key_bytes_for_mode_and_settings, terminal_keyword_highlight_updates_allowed,
+        terminal_paint_snapshot_for_view, terminal_paint_window_snapshot_for_view,
+        terminal_retained_snapshot_matches_view, terminal_scroll_retained_window_extra_rows,
+        terminal_scroll_snapshot_request_offset, terminal_scroll_text_first_decorations,
+        terminal_session_write_failure_log,
+        terminal_should_defer_key_text_to_input_handler_for_state,
+        terminal_should_track_command_suggestion_input, terminal_snapshot_covers_display_offset,
+        terminal_snapshot_with_newer_edge_row, terminal_snapshot_with_retained_scroll_window,
+        terminal_status_changed, terminal_user_scroll_active, terminal_visual_display_offset,
+    };
 
     fn key_event(key: &str, key_char: Option<&str>, modifiers: gpui::Modifiers) -> KeyDownEvent {
         KeyDownEvent {

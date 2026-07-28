@@ -1,14 +1,28 @@
-use super::*;
+use gpui::{
+    Context, Entity, IntoElement, MouseButton, Render, ScrollDelta, ScrollWheelEvent, SharedString,
+    Timer, Window, div, prelude::*, px, rgb, rgba,
+};
+use nyaterm_terminal::{TerminalScreen, TerminalSnapshot};
+
+use crate::features::NyaTermApp;
+use crate::features::formatting::format_terminal_line_timestamp_ms;
 use crate::features::terminal::terminal_runtime::{
     TerminalScrollVisualState, terminal_display_offset_from_state,
     terminal_local_scroll_delta_lines_from_state, terminal_scroll_needs_text_first_repaint,
     terminal_scroll_track_ratio, terminal_visual_scroll_active_for_state,
 };
 use crate::features::terminal::terminal_selection_runtime::{
-    terminal_gutter_metrics, terminal_line_number_digits,
+    terminal_bounds_tracker, terminal_gutter_metrics, terminal_line_number_digits,
 };
 use crate::features::terminal::terminal_surface::TERMINAL_SCROLLBAR_COLUMN_WIDTH;
 use crate::models::{TerminalPerformanceOverlay, TerminalProtocolState, TerminalSelection};
+use crate::terminal::{
+    NyaTerminalElement, NyaTerminalLayoutCache, TerminalKeywordHighlightSnapshot,
+    TerminalKeywordHighlighter, TerminalLineDecorations, compile_terminal_keyword_highlighter,
+    precompute_terminal_keyword_highlights_for_rows, terminal_keyword_highlight_expanded_rows,
+    terminal_keyword_rules_key,
+};
+use crate::theme::ThemePalette;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeMap, BTreeSet};
 use std::hash::{Hash, Hasher};
@@ -2409,9 +2423,27 @@ impl Render for TerminalSurface {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use std::sync::Arc;
+
     use crate::models::TerminalCellPos;
+    use crate::models::{TerminalProtocolState, TerminalSelection};
+    use crate::terminal::{
+        TerminalLineDecorations, compile_terminal_keyword_highlighter, terminal_keyword_rules_key,
+    };
+    use nyaterm_terminal::{TerminalScreen, TerminalSnapshot};
     use nyaterm_terminal_gpui::precompute_terminal_keyword_highlights;
+
+    use super::{
+        TerminalKeywordHighlightRequestKey, TerminalScrollVisualState, TerminalSurface,
+        TerminalSurfaceLocalScrollResult, empty_terminal_keyword_rules,
+        terminal_effective_visual_scroll_offset_px, terminal_keyword_highlight_prefetch_rows,
+        terminal_keyword_highlight_request_key, terminal_keyword_highlight_visible_rows,
+        terminal_selection_visual_row_range, terminal_selection_visual_row_union,
+        terminal_snapshot_anchor_row_for_display_offset, terminal_snapshot_covers_display_offset,
+        terminal_surface_fractional_prefetch_offset,
+        terminal_surface_synthesized_window_extra_rows, terminal_surface_text_first_repaint_ready,
+        terminal_surface_visible_rows_for_viewport, terminal_visual_scroll_offset_px,
+    };
 
     fn terminal_test_output_lines(count: usize) -> String {
         (0..count)

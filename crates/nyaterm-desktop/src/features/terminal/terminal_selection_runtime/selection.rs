@@ -1,5 +1,18 @@
-use super::*;
+use std::collections::HashSet;
+use std::time::Duration;
+
+use gpui::{
+    ClipboardItem, Context, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Timer,
+};
+use nyaterm_terminal::TerminalSnapshot;
+
+use crate::features::NyaTermApp;
 use crate::models::{TerminalCellPos, TerminalSelection};
+use crate::terminal::{
+    TerminalTextCell, terminal_is_zero_width_mark, terminal_text_cell_slice, terminal_text_cells,
+};
+
+use super::metrics::terminal_cell_for_visual_geometry;
 
 const TERMINAL_SELECTION_DRAG_NOTIFY_DELAY: Duration = Duration::from_millis(8);
 
@@ -481,7 +494,15 @@ fn terminal_selection_drag_flush_sessions(pending_sessions: &mut HashSet<String>
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use std::collections::HashSet;
+    use std::time::Duration;
+
+    use crate::terminal::{TerminalTextCell, terminal_text_cell_slice, terminal_text_cells};
+
+    use super::{
+        TERMINAL_SELECTION_DRAG_NOTIFY_DELAY, terminal_all_lines_text,
+        terminal_selection_drag_flush_sessions, terminal_text_cell_is_word,
+    };
 
     #[test]
     fn terminal_selection_drag_flush_sessions_drains_sorted() {

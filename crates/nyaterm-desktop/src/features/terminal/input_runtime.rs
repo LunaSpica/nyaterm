@@ -1,5 +1,6 @@
-use super::*;
+use gpui::Context;
 
+use crate::features::NyaTermApp;
 use crate::models::AiInputField;
 
 impl NyaTermApp {

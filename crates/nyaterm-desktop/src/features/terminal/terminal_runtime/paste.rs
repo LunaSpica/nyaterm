@@ -1,6 +1,8 @@
-use super::*;
+use gpui::{Context, KeyDownEvent, Window};
+use nyaterm_core::terminal_input_fanout_status;
 
-use crate::models::MultiLinePasteDraft;
+use crate::features::NyaTermApp;
+use crate::models::{MultiLinePasteDraft, is_multi_line_paste, normalize_paste_newlines};
 
 impl NyaTermApp {
     pub(in crate::features) fn paste_from_clipboard(
@@ -468,7 +470,7 @@ fn line_end(text: &str, offset: usize) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::features::NyaTermApp;
 
     #[test]
     fn bracketed_paste_wraps_wire_bytes_without_reencoding_body() {

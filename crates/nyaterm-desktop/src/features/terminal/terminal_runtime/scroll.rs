@@ -1,11 +1,18 @@
-use super::*;
+use std::collections::HashSet;
+use std::time::{Duration, Instant};
 
+use gpui::{Context, KeyDownEvent, Timer};
 use nyaterm_core::{
-    TerminalResizeGeometry, TerminalViewportInsets, terminal_resize_geometry_for_size_with_insets,
+    TerminalInputState, TerminalResizeGeometry, TerminalViewportInsets,
+    terminal_resize_geometry_for_size_with_insets,
     terminal_resize_geometry_for_size_with_insets_and_scale, terminal_snapped_cell_height,
 };
+use nyaterm_transport::SessionKind;
 
+use crate::features::NyaTermApp;
 use crate::models::TerminalPerformanceOverlay;
+
+use super::view_io::terminal_visual_display_offset;
 
 pub(in crate::features) fn terminal_scroll_track_ratio(
     bounds: gpui::Bounds<gpui::Pixels>,
@@ -1704,8 +1711,28 @@ impl NyaTermApp {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use std::collections::HashSet;
+    use std::time::{Duration, Instant};
+
     use gpui::{Bounds, point, px, size};
+    use nyaterm_core::TerminalResizeGeometry;
+
+    use super::{
+        TERMINAL_SCROLL_POSITION_NOTIFY_DELAY, TERMINAL_SCROLLBAR_DRAG_NOTIFY_DELAY,
+        TerminalScrollVisualState, terminal_display_offset_from_state,
+        terminal_fractional_scroll_prefetch_offset, terminal_local_scroll_delta_lines_from_state,
+        terminal_resize_geometry_for_bounds, terminal_scroll_delta_lines_from_raw,
+        terminal_scroll_needs_text_first_repaint,
+        terminal_scroll_offset_reanchored_for_scrollback_growth,
+        terminal_scroll_offset_state_needs_update, terminal_scroll_position_flush_queued_sessions,
+        terminal_scroll_position_flush_repaint_sessions,
+        terminal_scroll_predictive_prefetch_offset, terminal_scroll_residual_clamped_for_offset,
+        terminal_scroll_should_consume_raw_lines,
+        terminal_scroll_should_request_immediate_text_snapshot,
+        terminal_scroll_to_bottom_state_needs_update, terminal_scroll_track_ratio,
+        terminal_scrollbar_drag_flush_sessions, terminal_should_apply_session_cwd,
+        terminal_user_scroll_idle_remaining_delay, terminal_visual_scroll_active_for_state,
+    };
 
     #[test]
     fn terminal_cwd_sync_applies_only_to_an_active_enabled_session() {

@@ -12,8 +12,8 @@ Last updated from the working tree on 2026-07-28.
 | `NyaTermApp` fields | 261 | Counted from `features/app_state/mod.rs`; down from 585, still transitional. |
 | `impl NyaTermApp` blocks | 238 | Spread across 233 files under `crates/nyaterm-desktop/src`. |
 | `#[path = "..."]` declarations in desktop | 0 | Cleared. Every directory is a real module; the boundary script fails on any new occurrence. |
-| `use super::*` imports in desktop | 65 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
-| `features/prelude.rs` rough exported-token count | 152 | Still a broad shared prelude; two hundred ninety-three low-frequency GPUI/transport/core/http/model/helper/widget exports are now explicit imports. |
+| `use super::*` imports in desktop | 25 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
+| `features/prelude.rs` rough exported-token count | 99 | Still a broad shared prelude; three hundred forty-six low-frequency GPUI/transport/core/http/model/helper/widget exports are now explicit imports. |
 | Entity Store structs | 4 | `Runtime`, `WindowRuntime`, `StartupRestore`, `Overlay`. Each owns state the app does not. |
 | Snapshot structs | 0 | Cleared. No store is a projection of `NyaTermApp` any more. |
 | `replace_snapshot` methods | 0 | Cleared. |
@@ -152,6 +152,15 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   exports and sixteen `crate::features` façade re-exports; activity-bar layout,
   prompt handling, session lists, sync-history actions, title menus, new-session
   menus, and tab interaction behavior are unchanged.
+- The complete twenty-seven-module desktop terminal adapter tree now uses
+  explicit imports, including its runtime, search, selection, context-menu,
+  surface and large test modules. Forty `use super::*` occurrences are gone,
+  all terminal files are guarded at zero, and the context-menu entry remains a
+  declaration-only module instead of a shared import bucket. Compiler-confirmed
+  cleanup also removed fifty-three shared-prelude exports and eleven terminal/
+  formatting façade re-exports. This is desktop GPUI import-boundary cleanup:
+  terminal parsing, snapshots and protocol handling in `nyaterm-terminal` are
+  unchanged.
 - `#[path = "..."]` is gone from `nyaterm-desktop` and `nyaterm-terminal-gpui`.
   The `pages` tree, `http/cloud_sync` and `models/workspace_tabs` were the last
   holdouts; `pages/remote/docker` also stopped aliasing six sibling files and
@@ -1238,9 +1247,9 @@ use the existing behavior.
 
 Run `scripts/check-architecture-boundaries.sh` before review. The script is
 baseline-friendly: current historical debt is allowed, but additional
-occurrences in governed feature subtrees, including the complete session tree,
-fail. The GitHub Actions `Architecture Boundaries` workflow runs this script
-for pull requests and pushes to `main`.
+occurrences in governed feature subtrees, including the complete session and
+terminal trees, fail. The GitHub Actions `Architecture Boundaries` workflow
+runs this script for pull requests and pushes to `main`.
 
 ## Entity Ownership Migration
 

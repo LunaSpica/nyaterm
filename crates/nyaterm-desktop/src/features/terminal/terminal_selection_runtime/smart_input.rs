@@ -1,4 +1,13 @@
-use super::*;
+use gpui::{App, Context, KeyDownEvent, MouseUpEvent, Pixels, Point};
+use nyaterm_core::{
+    InputSelectionRange, TerminalInputState, apply_terminal_input_data,
+    build_move_input_cursor_data, can_suggest_from_tracker, delete_terminal_input_range,
+};
+
+use crate::features::NyaTermApp;
+use crate::terminal::{TerminalTextCell, terminal_text_cells};
+
+use super::helpers::SmartSelectionEdge;
 
 impl NyaTermApp {
     pub(in crate::features) fn handle_smart_input_click(
@@ -389,7 +398,10 @@ fn byte_end_for_smart_input_cell_index(cells: &[SmartInputCell], cell_index: usi
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{
+        byte_end_for_smart_input_cell_index, byte_for_smart_input_cell_index,
+        find_smart_input_start_col, smart_input_cells,
+    };
 
     #[test]
     fn smart_input_cells_keep_combining_mark_with_previous_cell() {

@@ -1,6 +1,19 @@
-use super::*;
+use gpui::{
+    Context, IntoElement, MouseButton, MouseDownEvent, SharedString, div, prelude::*, px, rgb,
+};
 
-use crate::models::{TerminalContextMenuState, TerminalContextSubmenu, TerminalSearchMode};
+use crate::action_links::{ActionLinkAction, actions_for_match, find_action_links};
+use crate::features::NyaTermApp;
+
+use crate::models::{
+    NavItem, TerminalContextMenuState, TerminalContextSubmenu, TerminalSearchMode,
+};
+
+use super::helpers::{
+    available_translation_providers, clamp_menu_position, open_external_url, search_engine_url,
+    selection_as_openable_url, terminal_ctx_item_with_icon, terminal_ctx_separator,
+    terminal_ctx_submenu_item,
+};
 
 impl NyaTermApp {
     pub(in crate::features) fn open_terminal_context_menu(

@@ -1,7 +1,13 @@
-use super::*;
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, AtomicUsize, Ordering},
+};
+use std::time::Duration;
 
-use gpui::AppContext;
+use gpui::{AppContext, Context, KeyDownEvent, Timer, Window};
+use nyaterm_transport::SessionKind;
 
+use crate::features::{NyaTermApp, TextInputSetup};
 use crate::send_command::{
     SendCommandControlFocus, SendCommandDataType, SendCommandLineEnding, SendCommandMode,
     SendCommandTarget, build_send_command_units_for, format_send_command_hex_display,
@@ -742,7 +748,7 @@ fn normalize_send_command_control_input(control: SendCommandControlFocus, text: 
 
 #[cfg(test)]
 mod control_input_tests {
-    use super::*;
+    use super::{SendCommandControlFocus, normalize_send_command_control_input};
 
     #[test]
     fn count_input_keeps_numbers_and_infinity_spellings() {

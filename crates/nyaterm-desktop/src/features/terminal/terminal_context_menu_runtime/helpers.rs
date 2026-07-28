@@ -1,4 +1,7 @@
-use super::*;
+use gpui::{App, ClickEvent, IntoElement, SharedString, Window, div, prelude::*, px, rgb, svg};
+
+use crate::features::IconDef;
+use crate::features::view_widgets::mono_icon;
 
 pub(super) fn clamp_menu_position(
     x: f32,
@@ -18,7 +21,7 @@ pub(super) fn terminal_ctx_item_with_icon(
     palette: crate::theme::ThemePalette,
     id: impl Into<String>,
     label: impl Into<String>,
-    icon: Option<crate::features::IconDef>,
+    icon: Option<IconDef>,
     shortcut: Option<String>,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
@@ -29,7 +32,7 @@ pub(super) fn terminal_ctx_item_with_icon(
         .gap_2()
         // A row with no icon still reserves the column, so labels line up.
         .child(div().size(px(14.)).flex_none().children(icon.map(|def| {
-            crate::features::mono_icon(
+            mono_icon(
                 def.path,
                 rgb(def.tint(palette).unwrap_or(palette.text_muted)).into(),
                 14.,
@@ -90,11 +93,7 @@ pub(super) fn terminal_ctx_submenu_item(
                 .flex()
                 .items_center()
                 .gap_2()
-                .child(crate::features::mono_icon(
-                    icon_path,
-                    rgb(palette.text_muted).into(),
-                    14.,
-                ))
+                .child(mono_icon(icon_path, rgb(palette.text_muted).into(), 14.))
                 .child(label.into()),
         )
         .child(

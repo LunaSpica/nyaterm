@@ -568,6 +568,33 @@ check_no_matches 'terminal-gpui #[path] debt' '#\[path\s*=' \
 # lower these counts so the debt cannot return.
 
 declare -A SUPER_BASELINE=(
+  [crates/nyaterm-desktop/src/features/terminal/input_runtime.rs]=0
+  [crates/nyaterm-desktop/src/features/terminal/mod.rs]=0
+  [crates/nyaterm-desktop/src/features/terminal/send_command_runtime.rs]=0
+  [crates/nyaterm-desktop/src/features/terminal/state.rs]=0
+  [crates/nyaterm-desktop/src/features/terminal/terminal_context_menu_runtime/action_links.rs]=0
+  [crates/nyaterm-desktop/src/features/terminal/terminal_context_menu_runtime/helpers.rs]=0
+  [crates/nyaterm-desktop/src/features/terminal/terminal_context_menu_runtime/menu.rs]=0
+  [crates/nyaterm-desktop/src/features/terminal/terminal_context_menu_runtime/mod.rs]=0
+  [crates/nyaterm-desktop/src/features/terminal/terminal_runtime/buffer.rs]=0
+  [crates/nyaterm-desktop/src/features/terminal/terminal_runtime/mod.rs]=0
+  [crates/nyaterm-desktop/src/features/terminal/terminal_runtime/paste.rs]=0
+  [crates/nyaterm-desktop/src/features/terminal/terminal_runtime/scroll.rs]=0
+  [crates/nyaterm-desktop/src/features/terminal/terminal_runtime/sessions.rs]=0
+  [crates/nyaterm-desktop/src/features/terminal/terminal_runtime/view_io.rs]=0
+  [crates/nyaterm-desktop/src/features/terminal/terminal_search_runtime.rs]=0
+  [crates/nyaterm-desktop/src/features/terminal/terminal_selection_runtime/action_links.rs]=0
+  [crates/nyaterm-desktop/src/features/terminal/terminal_selection_runtime/helpers.rs]=0
+  [crates/nyaterm-desktop/src/features/terminal/terminal_selection_runtime/metrics.rs]=0
+  [crates/nyaterm-desktop/src/features/terminal/terminal_selection_runtime/mod.rs]=0
+  [crates/nyaterm-desktop/src/features/terminal/terminal_selection_runtime/selection.rs]=0
+  [crates/nyaterm-desktop/src/features/terminal/terminal_selection_runtime/smart_input.rs]=0
+  [crates/nyaterm-desktop/src/features/terminal/terminal_surface/canvas.rs]=0
+  [crates/nyaterm-desktop/src/features/terminal/terminal_surface/chrome.rs]=0
+  [crates/nyaterm-desktop/src/features/terminal/terminal_surface/decorations.rs]=0
+  [crates/nyaterm-desktop/src/features/terminal/terminal_surface/helpers.rs]=0
+  [crates/nyaterm-desktop/src/features/terminal/terminal_surface/mod.rs]=0
+  [crates/nyaterm-desktop/src/features/terminal/terminal_surface_entity.rs]=0
   [crates/nyaterm-desktop/src/features/transfers/mod.rs]=0
   [crates/nyaterm-desktop/src/features/transfers/state.rs]=0
   [crates/nyaterm-desktop/src/features/transfers/transfer_events.rs]=0
@@ -942,6 +969,7 @@ done < <(rg -n --path-separator / '^[[:space:]]*use super::\*;' \
   crates/nyaterm-desktop/src/features/session \
   crates/nyaterm-desktop/src/features/settings \
   crates/nyaterm-desktop/src/features/sync \
+  crates/nyaterm-desktop/src/features/terminal \
   crates/nyaterm-desktop/src/features/translation \
   crates/nyaterm-desktop/src/features/transfers \
   crates/nyaterm-desktop/src/features/view_widgets \
@@ -974,6 +1002,12 @@ check_no_matches 'layout module entries must not become shared import buckets' \
   crates/nyaterm-desktop/src/features/layout/title_bar/mod.rs \
   crates/nyaterm-desktop/src/features/layout/workspace/mod.rs \
   crates/nyaterm-desktop/src/features/layout/workspace/surface/mod.rs
+
+# The terminal context-menu entry is declaration-only. Leaf modules own their
+# GPUI and action-link dependencies directly.
+check_no_matches 'terminal context-menu entry must not become a shared import bucket' \
+  '^[[:space:]]*use[[:space:]]' \
+  crates/nyaterm-desktop/src/features/terminal/terminal_context_menu_runtime/mod.rs
 
 # Connection list selection invariants are owned by ConnectionFeatureState's
 # private list child. Keep

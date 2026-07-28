@@ -1,15 +1,28 @@
 use std::borrow::Cow;
+use std::collections::{HashMap, VecDeque};
 use std::fmt::Write as _;
+use std::time::{Duration, Instant};
 
-use super::*;
+use gpui::{ClipboardItem, Context, Timer};
+use nyaterm_terminal::{TerminalEffects, TerminalSnapshot};
+
+use crate::features::NyaTermApp;
+use crate::features::formatting::trim_terminal_output_to;
+use crate::features::terminal::terminal_surface::terminal_snapshot_absolute_range;
+use crate::features::terminal::terminal_surface_entity::{
+    terminal_snapshot_covers_display_offset, terminal_surface_paint_count,
+};
 use crate::models::{
-    MainMode, TERMINAL_UI_OUTPUT_TAIL_CAP, TerminalFrameBufferTextEvent, TerminalFrameEvent,
-    TerminalFrameOutputEvent, TerminalFrameOutputSubmission, TerminalFrameSearchEvent,
-    TerminalFrameSearchKey, TerminalFrameSnapshotEvent, TerminalSearchMode, TerminalWindowNode,
-    WorkspacePaneNode, append_terminal_ui_output_tail, terminal_action_link_matcher_key,
+    MainMode, TERMINAL_UI_OUTPUT_TAIL_CAP, TerminalFrameActionLinks, TerminalFrameBufferTextEvent,
+    TerminalFrameEvent, TerminalFrameOutputEvent, TerminalFrameOutputSubmission,
+    TerminalFrameSearchEvent, TerminalFrameSearchKey, TerminalFrameSnapshotEvent,
+    TerminalSearchMode, TerminalViewState, TerminalWindowNode, WorkspacePaneNode,
+    append_terminal_ui_output_tail, terminal_action_link_matcher_key,
     terminal_frame_scroll_window_extra_rows, terminal_frame_search_result_is_current,
     terminal_snapshot_matches_grid_geometry,
 };
+
+use super::view_io::terminal_visual_display_offset;
 
 const MAX_OSC52_REPLY_CHARS: usize = 1_048_576;
 const TERMINAL_LIVE_PREFETCH_IDLE_DELAY: Duration = Duration::from_millis(80);
@@ -1801,9 +1814,32 @@ fn collect_workspace_pane_node_visible_session_ids<'a>(
 
 #[cfg(test)]
 mod frame_event_queue_tests {
-    use super::*;
+    use std::collections::{HashMap, VecDeque};
+    use std::time::Duration;
+
+    use nyaterm_terminal::TerminalEffects;
+
     use crate::models::TerminalProtocolState;
+    use crate::models::{
+        TerminalFrameActionLinks, TerminalFrameBufferTextEvent, TerminalFrameEvent,
+        TerminalFrameOutputEvent, TerminalFrameSnapshotEvent, TerminalViewState,
+    };
     use nyaterm_core::ActionLinksMatcherSettings;
+
+    use super::{
+        TerminalSurfaceFrameNotify, pop_terminal_frame_events_for_apply,
+        push_unique_terminal_surface_notify, push_unique_terminal_surface_session,
+        terminal_action_link_matcher_key, terminal_action_links_current_for_offset,
+        terminal_frame_deferred_events_can_apply, terminal_frame_snapshot_request_candidates,
+        terminal_live_scrollback_prefetch_offset, terminal_live_scrollback_prefetch_request_offset,
+        terminal_scroll_enrichment_should_request, terminal_scroll_snapshot_ready_margin_rows,
+        terminal_scroll_snapshot_request_action_links_enabled,
+        terminal_scroll_snapshot_request_should_enqueue,
+        terminal_snapshot_frame_covers_scroll_target,
+        terminal_snapshot_frame_matches_scroll_target,
+        terminal_view_has_cached_scroll_snapshot_ready_for_user_scroll,
+        terminal_view_has_cached_scrollback_snapshot_covering_offset,
+    };
 
     fn output_frame(session_id: &str, revision: u64) -> TerminalFrameEvent {
         TerminalFrameEvent::Output(TerminalFrameOutputEvent {
@@ -2597,9 +2633,20 @@ fn collect_terminal_window_node_visible_tab_ids<'a>(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::models::WorkspaceSplitDirection;
+    use crate::models::{TerminalFrameSearchKey, TerminalSearchMode, TerminalWindowNode};
+    use nyaterm_terminal::TerminalEffects;
     use std::sync::Arc;
+
+    use super::{
+        MAX_OSC52_REPLY_CHARS, TERMINAL_FRAME_EVENT_DRAIN_BATCH,
+        TERMINAL_FRAME_EVENT_DRAIN_WALL_BUDGET, TERMINAL_FRAME_INPUT_WAKE_EVENT_DRAIN_BATCH,
+        TERMINAL_FRAME_INPUT_WAKE_EVENT_DRAIN_WALL_BUDGET, TerminalSurfaceFrameNotify,
+        limit_osc52_clipboard_reply_text, queue_osc52_clipboard_load_replies,
+        terminal_effects_need_ui_apply, terminal_local_log_text,
+        terminal_output_frame_needs_chrome_notify, terminal_output_frame_surface_notify,
+        terminal_search_frame_apply_result, terminal_window_node_visible_tab_ids,
+    };
 
     fn search_key(query: &str) -> TerminalFrameSearchKey {
         TerminalFrameSearchKey {

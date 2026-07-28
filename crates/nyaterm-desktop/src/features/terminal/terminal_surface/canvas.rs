@@ -1,11 +1,30 @@
-use super::*;
+use std::collections::HashMap;
+use std::time::{Duration, Instant};
+
+use gpui::{
+    ClickEvent, Context, FontWeight, IntoElement, KeyDownEvent, KeyUpEvent, MouseButton,
+    SharedString, div, prelude::*, px, rgb, rgba,
+};
+use nyaterm_terminal::{TerminalScreen, TerminalSnapshot};
+
+use crate::features::NyaTermApp;
+use crate::features::formatting::format_terminal_line_timestamp_ms;
 use crate::features::terminal::terminal_selection_runtime::{
-    terminal_gutter_metrics, terminal_line_number_digits,
+    terminal_bounds_tracker, terminal_gutter_metrics, terminal_line_number_digits,
 };
 use crate::models::{
-    TerminalPerformanceMode, TerminalPerformanceOverlay, TerminalSearchMode,
+    SessionLaunchConfig, TerminalPerformanceMode, TerminalPerformanceOverlay, TerminalSearchMode,
     terminal_action_link_matcher_key, terminal_expensive_interactions_enabled,
 };
+use crate::terminal::{NyaTerminalElement, TerminalLineDecorations};
+use crate::widgets::small_button;
+
+use super::decorations::{
+    build_terminal_line_decorations, terminal_action_links_for_paint_snapshot,
+    terminal_action_links_have_ranges_for_snapshot, terminal_line_decorations_cache_key,
+    terminal_line_decorations_needed, terminal_snapshot_absolute_range,
+};
+use super::helpers::{format_skipped_count, terminal_plain_text_input_event};
 
 fn terminal_shell_placeholder_snapshot() -> std::sync::Arc<TerminalSnapshot> {
     static SNAPSHOT: std::sync::OnceLock<std::sync::Arc<TerminalSnapshot>> =
@@ -1308,8 +1327,18 @@ const TERMINAL_RENDER_SLOW_TOTAL: Duration = Duration::from_millis(25);
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::models::{TerminalCellPos, TerminalSelection};
+    use std::collections::HashMap;
+
+    use nyaterm_terminal::TerminalScreen;
+
+    use crate::models::TerminalPerformanceMode;
+    use crate::models::{TerminalCellPos, TerminalFrameActionLinks, TerminalSelection};
+
+    use super::super::decorations::{
+        terminal_line_decorations_cache_key, terminal_line_decorations_needed,
+        terminal_snapshot_absolute_range,
+    };
+    use super::{TerminalRenderProfile, terminal_render_pressure_active, terminal_render_profile};
 
     #[test]
     fn terminal_line_decorations_skip_plain_viewport() {

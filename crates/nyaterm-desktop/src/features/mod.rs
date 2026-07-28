@@ -60,9 +60,8 @@ pub(in crate::features) use connections::{
 pub(in crate::features) use formatting::{
     compact_id, configured_cloud_sync_provider, docker_compose_project_key, docker_state_color,
     docker_state_label, docker_state_rank, format_cloud_provider, format_history_timestamp_ms,
-    format_last_used_ms, format_rate, format_terminal_line_timestamp_ms, format_uptime,
-    non_empty_string, none_if_blank, normalize_startup_command, recent_terminal_output,
-    session_kind_label, short_id, trim_terminal_output_to, tunnel_endpoint, tunnel_mode,
+    format_last_used_ms, format_rate, format_uptime, non_empty_string, none_if_blank,
+    recent_terminal_output, session_kind_label, short_id, tunnel_endpoint, tunnel_mode,
     tunnel_name,
 };
 pub(in crate::features) use icons::{

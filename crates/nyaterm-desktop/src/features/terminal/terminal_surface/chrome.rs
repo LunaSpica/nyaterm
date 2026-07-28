@@ -1,6 +1,15 @@
-use super::*;
+use gpui::{
+    App, ClickEvent, Context, FontWeight, IntoElement, KeyDownEvent, MouseButton, SharedString,
+    Window, div, prelude::*, px, rgb, rgba, svg,
+};
+use nyaterm_core::truncate_preview;
+
 use crate::features::terminal::terminal_runtime::terminal_scroll_track_ratio;
+use crate::features::{NyaTermApp, TextInputSetup};
 use crate::models::TerminalSearchMode;
+use crate::theme::ThemePalette;
+
+use super::TERMINAL_SCROLLBAR_COLUMN_WIDTH;
 
 impl NyaTermApp {
     pub(in crate::features) fn terminal_scrollbar_element(

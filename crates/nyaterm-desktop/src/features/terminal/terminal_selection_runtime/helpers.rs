@@ -1,5 +1,11 @@
-use super::*;
 use std::ops::Range;
+
+use gpui::{
+    Bounds, Context, ElementInputHandler, EntityInputHandler, IntoElement, Pixels, Point, Size,
+    UTF16Selection, Window, prelude::*, px,
+};
+
+use crate::features::NyaTermApp;
 
 fn terminal_input_selection() -> UTF16Selection {
     UTF16Selection {
@@ -269,7 +275,9 @@ impl EntityInputHandler for NyaTermApp {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use gpui::{Bounds, px};
+
+    use super::{terminal_input_selection, terminal_visible_surface_bounds};
 
     #[test]
     fn terminal_input_selection_keeps_a_valid_insertion_point() {

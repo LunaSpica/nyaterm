@@ -1,9 +1,11 @@
-use super::*;
+use gpui::{Context, KeyDownEvent, Window};
 
+use crate::features::{NyaTermApp, TextInputSetup};
 use crate::models::{
     RecordingHistorySearchKey, RecordingWriteEvent, TerminalFrameSearchKey, TerminalSearchMode,
     terminal_frame_search_result_is_current,
 };
+use crate::terminal::TerminalBufferMatch;
 
 impl NyaTermApp {
     pub(in crate::features) fn open_terminal_search(

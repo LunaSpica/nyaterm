@@ -1,4 +1,9 @@
-use super::*;
+use gpui::{Context, IntoElement, MouseButton, SharedString, div, prelude::*, px, rgb};
+use nyaterm_core::truncate_preview;
+
+use crate::features::NyaTermApp;
+
+use super::helpers::{clamp_menu_position, open_external_url, terminal_ctx_item_with_icon};
 
 impl NyaTermApp {
     pub(in crate::features) fn action_link_menu_overlay(

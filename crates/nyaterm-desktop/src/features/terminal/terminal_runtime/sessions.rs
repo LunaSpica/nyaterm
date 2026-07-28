@@ -1,6 +1,13 @@
-use super::*;
+use std::collections::HashSet;
+use std::time::Duration;
 
+use gpui::{Context, Timer, Window};
+use nyaterm_core::{AgentOutputCaptureProcessor, AiExecutionProfile};
+
+use crate::features::formatting::{normalize_startup_command, short_id};
+use crate::features::{INITIAL_TERMINAL_BANNER, NyaTermApp};
 use crate::models::StartupCommandRequest;
+use crate::terminal::initial_terminal_screen;
 
 impl NyaTermApp {
     pub(in crate::features) fn schedule_startup_command(

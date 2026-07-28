@@ -1,6 +1,5 @@
-use super::*;
-
-pub(in crate::features) const TERMINAL_INPUT_LATENCY_WINDOW: Duration = Duration::from_millis(80);
+pub(in crate::features) const TERMINAL_INPUT_LATENCY_WINDOW: std::time::Duration =
+    std::time::Duration::from_millis(80);
 
 mod buffer;
 mod paste;
@@ -13,4 +12,3 @@ pub(in crate::features) use scroll::{
 };
 mod sessions;
 mod view_io;
-pub(in crate::features) use view_io::terminal_visual_display_offset;
