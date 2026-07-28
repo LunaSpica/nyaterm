@@ -27,9 +27,9 @@ impl ConnectionEditorWindow {
 
 impl Render for ConnectionEditorWindow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let Some(editor) = self.app.read(cx).connection_state.editor.active_draft() else {
+        let Some(editor) = self.app.read(cx).connection_state.active_editor_draft() else {
             self.app.update(cx, |app, cx| {
-                app.connection_state.editor.clear_window();
+                app.connection_state.clear_editor_window();
                 cx.notify();
             });
             window.defer(cx, |window, _| window.remove_window());
@@ -91,7 +91,7 @@ impl Render for ConnectionEditorWindow {
 
 impl NyaTermApp {
     pub(in crate::features) fn connection_editor_title(&self) -> &'static str {
-        if self.connection_state.editor.is_editing_saved_connection() {
+        if self.connection_state.editor_is_editing_saved_connection() {
             self.tr("dialog.editConnection")
         } else {
             self.tr("dialog.newConnection")
@@ -102,7 +102,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> bool {
-        let Some(handle) = self.connection_state.editor.window_handle() else {
+        let Some(handle) = self.connection_state.editor_window_handle() else {
             return false;
         };
         let app = cx.entity();
@@ -112,7 +112,7 @@ impl NyaTermApp {
                 .is_err()
             {
                 let _ = app.update(cx, |app, cx| {
-                    if app.connection_state.editor.clear_window_if_current(handle) {
+                    if app.connection_state.clear_editor_window_if_current(handle) {
                         cx.notify();
                     }
                 });
@@ -128,15 +128,15 @@ impl NyaTermApp {
         if self.activate_connection_editor_window(cx) {
             return true;
         }
-        if self.connection_state.editor.window_open_pending() {
+        if self.connection_state.editor_window_open_pending() {
             return true;
         }
 
-        self.connection_state.editor.mark_window_pending();
+        self.connection_state.mark_editor_window_pending();
         cx.notify();
         let app = cx.entity();
         cx.defer(move |cx| {
-            let should_open = app.read(cx).connection_state.editor.window_open_pending();
+            let should_open = app.read(cx).connection_state.editor_window_open_pending();
             if should_open {
                 open_connection_editor_window_now_from_app(app, cx);
             }
@@ -146,17 +146,17 @@ impl NyaTermApp {
 }
 
 fn open_connection_editor_window_now_from_app(app: Entity<NyaTermApp>, cx: &mut App) {
-    if app.read(cx).connection_state.editor.has_window() {
+    if app.read(cx).connection_state.editor_has_window() {
         let _ = app.update(cx, |app, cx| {
-            app.connection_state.editor.clear_window_pending();
+            app.connection_state.clear_editor_window_pending();
             app.activate_connection_editor_window(cx);
             cx.notify();
         });
         return;
     }
-    if !app.read(cx).connection_state.editor.has_draft() {
+    if !app.read(cx).connection_state.editor_has_draft() {
         let _ = app.update(cx, |app, cx| {
-            app.connection_state.editor.clear_window_pending();
+            app.connection_state.clear_editor_window_pending();
             cx.notify();
         });
         return;
@@ -178,13 +178,13 @@ fn open_connection_editor_window_now_from_app(app: Entity<NyaTermApp>, cx: &mut 
         move |window, cx| {
             window.on_window_should_close(cx, move |_, cx| {
                 close_app.update(cx, |app, cx| {
-                    app.connection_state.editor.close();
+                    app.connection_state.close_editor();
                     app.terminal.view.status = "connection editor closed".to_string();
                     cx.notify();
                 });
                 true
             });
-            let editor_focus = view_app.read(cx).connection_state.editor.focus_handle();
+            let editor_focus = view_app.read(cx).connection_state.editor_focus_handle();
             window.focus(&editor_focus);
             cx.new(|cx| ConnectionEditorWindow::new(view_app, cx))
         },
@@ -192,11 +192,11 @@ fn open_connection_editor_window_now_from_app(app: Entity<NyaTermApp>, cx: &mut 
 
     let _ = app.update(cx, |app, cx| match result {
         Ok(handle) => {
-            app.connection_state.editor.attach_window(handle);
+            app.connection_state.attach_editor_window(handle);
             cx.notify();
         }
         Err(error) => {
-            app.connection_state.editor.clear_window();
+            app.connection_state.clear_editor_window();
             app.terminal.view.status = format!("failed to open connection editor window: {error}");
             cx.notify();
         }

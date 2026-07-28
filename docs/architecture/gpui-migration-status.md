@@ -300,23 +300,23 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   methods remain in `state.rs`, while editor lifecycle, menu, password source,
   tab, kind, toggle, keyboard input, path prompt, and group-name/error helpers
   are isolated behind the existing feature-state facade.
-- `ConnectionFeatureState` child state internals are private to the state module;
-  governed production code enters through semantic methods instead of accessing
-  list/import/editor/group/confirmation/network fields directly.
+- `ConnectionFeatureState` import, editor, group-editor, confirmation, and
+  network child state internals are private to the state module; governed
+  production code enters through semantic methods instead of accessing those
+  child fields directly. The list child is still a public transitional façade
+  because many list/tree/DnD rendering paths still call its semantic methods
+  directly.
 - Connection editor save-success UI cleanup now routes through
   `ConnectionFeatureState::finish_editor_save`. The runtime still owns
   validation, store persistence, reload, status text, and optional connection
   launch, while the feature state owns closing the editor, clearing popovers and
   pending window state, selecting the saved connection, and expanding its group.
-- Connection editor window and inline-overlay lifecycle checks now use
-  `ConnectionEditorFeatureState` façade methods for active draft, window handle,
-  pending state, modal ownership, title mode, and focus handle. The architecture
-  script guards the root/window files against reintroducing direct
-  `draft`/`window`/`window_open_pending` condition stitching.
-- Connection editor runtime focus changes and the editor panel focus tracker now
-  use `ConnectionEditorFeatureState::focus_handle()`. The architecture script
-  guards governed editor runtime/view/projection paths against direct `focus`
-  field reads.
+- Connection editor runtime, window, inline-overlay lifecycle, menu keyboard
+  handling, and editor panel rendering now use `ConnectionFeatureState` façade
+  methods for draft, window, popover, menu highlight, title mode, and focus
+  state. The `editor` child state and `ConnectionEditorFeatureState` type are
+  private to the state module, and the architecture script guards governed
+  features against reintroducing direct `connection_state.editor.*` access.
 - Connection import runtime, overlay, and root rendering now use
   `ConnectionFeatureState` façade methods for dialog visibility, active path
   prompts, and focus handle access. The `import` child state is private, and
@@ -841,7 +841,7 @@ Current ownership map:
 | Tunnel/proxy configs | `NyaTermApp.tunnels`, `tunnel_groups`, `proxies`, `proxy_groups` | Persisted network config | UI overlay state moved under `connection_state.network`; config collections remain persisted domain state. |
 | List search/sort/hover/selection/DnD | `NyaTermApp.connection_state.list` | Temporary UI state | State is not persisted except sort setting remains synced to settings as before. |
 | Connection import dialog | `NyaTermApp.connection_state` private import child | Temporary UI/runtime prompt state | File import still runs through existing runtime paths; runtime and rendering enter through `ConnectionFeatureState` methods. |
-| Connection editor | `NyaTermApp.connection_state.editor` | Editing draft/window UI state | Runtime key handling, window lifecycle, rendering popovers, and sideband projection use state methods; draft remains separate from saved connection data. |
+| Connection editor | `NyaTermApp.connection_state` private editor child | Editing draft/window UI state | Runtime key handling, window lifecycle, rendering popovers, and sideband projection use `ConnectionFeatureState` methods; draft remains separate from saved connection data. |
 | Group editor | `NyaTermApp.connection_state` private group-editor child | Editing draft UI state | Draft remains separate from saved groups; runtime and rendering enter through `ConnectionFeatureState` methods. |
 | Delete/open confirmations | `NyaTermApp.connection_state` private confirmations child | Temporary UI state | Rendering and runtime actions enter through `ConnectionFeatureState` methods; persisted data changes only after existing confirm actions run. |
 | Network page UI | `NyaTermApp.connection_state` private network child | Temporary UI/editor state | Page rendering, editor focus, confirm/editor draft reads, and panel-count projection use `ConnectionFeatureState` methods. Tunnel/proxy configs remain in top-level persisted collections. |

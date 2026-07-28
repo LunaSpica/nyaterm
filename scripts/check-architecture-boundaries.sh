@@ -608,19 +608,23 @@ check_no_matches \
   crates/nyaterm-desktop/src/features/shell/event_pump/publish.rs
 
 check_no_matches \
+  "connection editor child state must stay behind ConnectionFeatureState methods" \
+  'connection_state\.editor\.' \
+  crates/nyaterm-desktop/src/features
+check_no_matches \
   "connection editor draft mutations must go through ConnectionEditorFeatureState methods" \
   'connection_state\.editor\.draft\.as_mut\(' \
   crates/nyaterm-desktop/src/features/connections/connection_runtime/editor.rs
 check_no_matches \
-  "connection editor runtime reads must use ConnectionEditorFeatureState methods" \
+  "connection editor runtime reads must use ConnectionFeatureState methods" \
   'connection_state\.editor\.(draft|menu|icon_picker_open|focus)(\.|[[:space:]]|==|$)' \
   crates/nyaterm-desktop/src/features/connections/connection_runtime/editor.rs
 check_no_matches \
-  "connection editor view reads must use ConnectionEditorFeatureState methods" \
+  "connection editor view reads must use ConnectionFeatureState methods" \
   'connection_state\.editor\.(draft|menu|icon_picker_open|focus)(\.|[[:space:]]|==|$)' \
   crates/nyaterm-desktop/src/features/pages/connections/editor/connection/mod.rs
 check_no_matches \
-  "event pump editor projection must use ConnectionEditorFeatureState methods" \
+  "event pump editor projection must use ConnectionFeatureState methods" \
   'connection_state\.editor\.(draft|menu|icon_picker_open|focus)(\.|[[:space:]]|==|$)' \
   crates/nyaterm-desktop/src/features/shell/event_pump/publish.rs
 
@@ -631,11 +635,11 @@ check_no_matches_in_rust_fn \
   'connection_state[.](editor[.](close[(]|window|window_open_pending|icon_picker_open|menu)|list[.](select_only[(]|expand_group[(]|selected_ids|last_selected_id|expanded_group_ids))'
 
 check_no_matches \
-  "connection editor window lifecycle reads must use ConnectionEditorFeatureState methods" \
+  "connection editor window lifecycle reads must use ConnectionFeatureState methods" \
   'connection_state\.editor\.(draft|window)(\.|[[:space:]]|$)|connection_state\.editor\.window_open_pending([[:space:]]|[=!&|),;}]|$)' \
   crates/nyaterm-desktop/src/features/connection_editor_window.rs
 check_no_matches \
-  "root connection editor window lifecycle reads must use ConnectionEditorFeatureState methods" \
+  "root connection editor window lifecycle reads must use ConnectionFeatureState methods" \
   'connection_state\.editor\.(draft|window)(\.|[[:space:]]|$)|connection_state\.editor\.window_open_pending([[:space:]]|[=!&|),;}]|$)' \
   crates/nyaterm-desktop/src/features/root.rs
 

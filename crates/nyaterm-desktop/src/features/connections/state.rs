@@ -62,7 +62,7 @@ use self::network_logic::{
 pub(in crate::features) struct ConnectionFeatureState {
     pub list: ConnectionListState,
     import: ConnectionImportState,
-    pub editor: ConnectionEditorFeatureState,
+    editor: ConnectionEditorFeatureState,
     group_editor: ConnectionGroupEditorFeatureState,
     confirmations: ConnectionConfirmationState,
     network: NetworkFeatureState,
@@ -115,7 +115,7 @@ struct ConnectionImportState {
     import_focus: FocusHandle,
 }
 
-pub(in crate::features) struct ConnectionEditorFeatureState {
+struct ConnectionEditorFeatureState {
     draft: Option<ConnectionEditorState>,
     /// One editable field per text input, built when the editor opens.
     ///
@@ -323,6 +323,197 @@ impl ConnectionFeatureState {
         if let Some(draft) = self.editor.draft.as_mut() {
             set_connection_editor_field_text(draft, field, text);
         }
+    }
+
+    pub fn begin_editor(&mut self, draft: ConnectionEditorState) {
+        self.editor.begin_edit(draft);
+    }
+
+    pub fn active_editor_draft(&self) -> Option<ConnectionEditorState> {
+        self.editor.active_draft()
+    }
+
+    pub fn active_editor_menu(&self) -> Option<ConnectionEditorMenu> {
+        self.editor.active_menu()
+    }
+
+    pub fn editor_icon_picker_is_open(&self) -> bool {
+        self.editor.icon_picker_is_open()
+    }
+
+    pub fn editor_menu_is_open(&self) -> bool {
+        self.editor.menu_is_open()
+    }
+
+    pub fn editor_description_is_focused(&self) -> bool {
+        self.editor.description_is_focused()
+    }
+
+    pub fn editor_new_group_field_is_focused(&self, cx: &App) -> bool {
+        self.editor.new_group_field_is_focused(cx)
+    }
+
+    pub fn editor_new_group_name_focused_in_group_menu(&self) -> bool {
+        self.editor.new_group_name_focused_in_group_menu()
+    }
+
+    pub fn inline_editor_panel_draft(&self) -> Option<ConnectionEditorState> {
+        self.editor.inline_panel_draft()
+    }
+
+    pub fn editor_is_editing_saved_connection(&self) -> bool {
+        self.editor.is_editing_saved_connection()
+    }
+
+    pub fn editor_has_draft(&self) -> bool {
+        self.editor.has_draft()
+    }
+
+    pub fn editor_focus_handle(&self) -> FocusHandle {
+        self.editor.focus_handle()
+    }
+
+    pub fn editor_window_handle(&self) -> Option<WindowHandle<ConnectionEditorWindow>> {
+        self.editor.window_handle()
+    }
+
+    pub fn editor_has_window(&self) -> bool {
+        self.editor.has_window()
+    }
+
+    pub fn editor_window_open_pending(&self) -> bool {
+        self.editor.window_open_pending()
+    }
+
+    pub fn editor_modal_window_open_or_pending(&self) -> bool {
+        self.editor.modal_window_open_or_pending()
+    }
+
+    pub fn close_editor_popovers(&mut self) {
+        self.editor.close_popovers();
+    }
+
+    pub fn toggle_editor_icon_picker(&mut self) {
+        self.editor.toggle_icon_picker();
+    }
+
+    pub fn toggle_editor_menu(&mut self, menu: ConnectionEditorMenu) {
+        self.editor.toggle_menu(menu);
+    }
+
+    pub fn editor_menu_focus_handle(&self) -> FocusHandle {
+        self.editor.menu_focus_handle()
+    }
+
+    pub fn editor_menu_scroll_handle(&self) -> ScrollHandle {
+        self.editor.menu_scroll_handle()
+    }
+
+    pub fn editor_menu_highlight(&self) -> usize {
+        self.editor.menu_highlight()
+    }
+
+    pub fn set_editor_menu_highlight(&mut self, index: usize) {
+        self.editor.set_menu_highlight(index);
+    }
+
+    pub fn step_editor_menu_highlight(&mut self, delta: isize, len: usize) {
+        self.editor.step_menu_highlight(delta, len);
+    }
+
+    pub fn set_editor_icon(&mut self, icon: Option<&str>) -> bool {
+        self.editor.set_icon(icon)
+    }
+
+    pub fn set_editor_icon_auto_detect(&mut self, enabled: bool) -> bool {
+        self.editor.set_icon_auto_detect(enabled)
+    }
+
+    pub fn set_editor_menu_value(
+        &mut self,
+        menu: ConnectionEditorMenu,
+        value: Option<String>,
+    ) -> bool {
+        self.editor.set_menu_value(menu, value)
+    }
+
+    pub fn set_editor_password_source(&mut self, source: ConnectionEditorPasswordSource) -> bool {
+        self.editor.set_password_source(source)
+    }
+
+    pub fn set_editor_advanced_tab(&mut self, tab: ConnectionEditorAdvancedTab) -> bool {
+        self.editor.set_advanced_tab(tab)
+    }
+
+    pub fn set_editor_telnet_tab(&mut self, tab: ConnectionEditorTelnetTab) -> bool {
+        self.editor.set_telnet_tab(tab)
+    }
+
+    pub fn set_editor_kind(&mut self, kind: ConnectionKindTab) -> bool {
+        self.editor.set_kind(kind)
+    }
+
+    pub fn commit_editor_new_group(&mut self, required_message: String) -> bool {
+        self.editor.commit_new_group(required_message)
+    }
+
+    pub fn toggle_editor_flag(&mut self, flag: ConnectionEditorToggle) -> bool {
+        self.editor.toggle_flag(flag)
+    }
+
+    pub fn insert_editor_description_newline(&mut self) -> bool {
+        self.editor.insert_description_newline()
+    }
+
+    pub fn apply_editor_text_key(&mut self, key: &str, input: Option<&str>) -> bool {
+        self.editor.apply_text_key(key, input)
+    }
+
+    pub fn advance_editor_focus(&mut self) -> bool {
+        self.editor.advance_focus()
+    }
+
+    pub fn close_editor_popovers_and_cancel_group_draft(&mut self) {
+        self.editor.close_popovers_and_cancel_group_draft();
+    }
+
+    pub fn set_editor_error(&mut self, error: String) -> bool {
+        self.editor.set_error(error)
+    }
+
+    pub fn apply_editor_shell_path(&mut self, shell_path: String) -> bool {
+        self.editor.apply_shell_path(shell_path)
+    }
+
+    pub fn apply_editor_working_dir(&mut self, working_dir: String) -> bool {
+        self.editor.apply_working_dir(working_dir)
+    }
+
+    pub fn close_editor(&mut self) {
+        self.editor.close();
+    }
+
+    pub fn clear_editor_window_if_current(
+        &mut self,
+        window: WindowHandle<ConnectionEditorWindow>,
+    ) -> bool {
+        self.editor.clear_window_if_current(window)
+    }
+
+    pub fn mark_editor_window_pending(&mut self) {
+        self.editor.mark_window_pending();
+    }
+
+    pub fn clear_editor_window_pending(&mut self) {
+        self.editor.clear_window_pending();
+    }
+
+    pub fn attach_editor_window(&mut self, window: WindowHandle<ConnectionEditorWindow>) {
+        self.editor.attach_window(window);
+    }
+
+    pub fn clear_editor_window(&mut self) {
+        self.editor.clear_window();
     }
 
     pub fn group_editor_field(&self) -> Option<Entity<TextField>> {

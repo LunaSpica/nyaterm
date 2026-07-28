@@ -56,9 +56,9 @@ impl NyaTermApp {
         let language = self.settings.language.clone();
         let fields = ConnectionEditorFields::new(
             self.connection_state.editor_fields().clone(),
-            self.connection_state.editor.menu_focus_handle(),
-            self.connection_state.editor.menu_scroll_handle(),
-            self.connection_state.editor.menu_highlight(),
+            self.connection_state.editor_menu_focus_handle(),
+            self.connection_state.editor_menu_scroll_handle(),
+            self.connection_state.editor_menu_highlight(),
         );
         let title = if editor.id.is_some() {
             self.tr("dialog.editConnection")
@@ -380,8 +380,8 @@ impl NyaTermApp {
         .collect::<Vec<_>>();
         let icon_key = editor.icon.as_deref();
         let icon_def = resolve_connection_icon(icon_key, editor.kind.label());
-        let icon_picker_open = self.connection_state.editor.icon_picker_is_open();
-        let active_menu = self.connection_state.editor.active_menu();
+        let icon_picker_open = self.connection_state.editor_icon_picker_is_open();
+        let active_menu = self.connection_state.active_editor_menu();
         let icon_picker_bg = if native_window {
             rgb(palette.surface)
         } else {
@@ -389,7 +389,7 @@ impl NyaTermApp {
         };
         let validation_error = self.connection_editor_validation_error(&editor);
         let save_enabled = validation_error.is_none();
-        let editor_focus = self.connection_state.editor.focus_handle();
+        let editor_focus = self.connection_state.editor_focus_handle();
         let mut icon_grid = div().grid().grid_cols(7).gap_1();
         for icon_key in CONNECTION_ICON_OPTIONS.iter().copied() {
             let icon = resolve_connection_icon(Some(icon_key), editor.kind.label());

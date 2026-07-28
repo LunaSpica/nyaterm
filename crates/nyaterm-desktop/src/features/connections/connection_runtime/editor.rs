@@ -101,7 +101,7 @@ impl NyaTermApp {
             }
         };
 
-        self.connection_state.editor.begin_edit(editor);
+        self.connection_state.begin_editor(editor);
         // Fields mirror the draft, so they are rebuilt with it.
         self.connection_state.build_editor_fields(cx);
         self.terminal.view.status = "connection editor opened".to_string();
@@ -118,7 +118,7 @@ impl NyaTermApp {
                     field.update(cx, |field, cx| field.select_all(window, cx));
                 }
                 None => {
-                    let editor_focus = self.connection_state.editor.focus_handle();
+                    let editor_focus = self.connection_state.editor_focus_handle();
                     window.focus(&editor_focus);
                 }
             }
@@ -127,14 +127,14 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn close_connection_editor(&mut self, cx: &mut Context<Self>) {
-        self.connection_state.editor.close();
+        self.connection_state.close_editor();
         self.connection_state.clear_editor_fields();
         self.terminal.view.status = "connection editor closed".to_string();
         cx.notify();
     }
 
     pub(in crate::features) fn toggle_connection_icon_picker(&mut self, cx: &mut Context<Self>) {
-        self.connection_state.editor.toggle_icon_picker();
+        self.connection_state.toggle_editor_icon_picker();
         cx.notify();
     }
 
@@ -143,7 +143,7 @@ impl NyaTermApp {
         icon: Option<&str>,
         cx: &mut Context<Self>,
     ) {
-        self.connection_state.editor.set_icon(icon);
+        self.connection_state.set_editor_icon(icon);
         cx.notify();
     }
 
@@ -152,7 +152,7 @@ impl NyaTermApp {
         enabled: bool,
         cx: &mut Context<Self>,
     ) {
-        if self.connection_state.editor.set_icon_auto_detect(enabled) {
+        if self.connection_state.set_editor_icon_auto_detect(enabled) {
             cx.notify();
         }
     }
@@ -162,7 +162,7 @@ impl NyaTermApp {
         menu: ConnectionEditorMenu,
         cx: &mut Context<Self>,
     ) {
-        self.connection_state.editor.toggle_menu(menu);
+        self.connection_state.toggle_editor_menu(menu);
         cx.notify();
     }
 
@@ -172,10 +172,10 @@ impl NyaTermApp {
         menu: ConnectionEditorMenu,
         cx: &mut Context<Self>,
     ) {
-        if self.connection_state.editor.active_menu() != Some(menu) {
+        if self.connection_state.active_editor_menu() != Some(menu) {
             return;
         }
-        self.connection_state.editor.close_popovers();
+        self.connection_state.close_editor_popovers();
         cx.notify();
     }
 
@@ -186,8 +186,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.connection_state
-            .editor
-            .set_menu_value(menu, value.map(ToOwned::to_owned));
+            .set_editor_menu_value(menu, value.map(ToOwned::to_owned));
         cx.notify();
     }
 
@@ -196,7 +195,7 @@ impl NyaTermApp {
         source: ConnectionEditorPasswordSource,
         cx: &mut Context<Self>,
     ) {
-        self.connection_state.editor.set_password_source(source);
+        self.connection_state.set_editor_password_source(source);
         cx.notify();
     }
 
@@ -205,7 +204,7 @@ impl NyaTermApp {
         tab: ConnectionEditorAdvancedTab,
         cx: &mut Context<Self>,
     ) {
-        self.connection_state.editor.set_advanced_tab(tab);
+        self.connection_state.set_editor_advanced_tab(tab);
         cx.notify();
     }
 
@@ -214,7 +213,7 @@ impl NyaTermApp {
         tab: ConnectionEditorTelnetTab,
         cx: &mut Context<Self>,
     ) {
-        self.connection_state.editor.set_telnet_tab(tab);
+        self.connection_state.set_editor_telnet_tab(tab);
         cx.notify();
     }
 
@@ -236,8 +235,7 @@ impl NyaTermApp {
         let required_message = self.tr("dialog.groupNameRequired").to_string();
         if self
             .connection_state
-            .editor
-            .commit_new_group(required_message)
+            .commit_editor_new_group(required_message)
         {
             // The draft's copy is cleared by the commit; the box the name was
             // typed into holds its own buffer and has to be told.
@@ -252,7 +250,7 @@ impl NyaTermApp {
         kind: ConnectionKindTab,
         cx: &mut Context<Self>,
     ) {
-        if self.connection_state.editor.set_kind(kind) {
+        if self.connection_state.set_editor_kind(kind) {
             // Switching kind rewrites the default port on the draft; the box has
             // to be told, or it keeps showing the other protocol's.
             self.connection_state.sync_editor_fields_from_draft(cx);
@@ -281,7 +279,7 @@ impl NyaTermApp {
             let _ = this.update(cx, |this, cx| {
                 if let Some(path) = selected {
                     let path = path.display().to_string();
-                    this.connection_state.editor.apply_shell_path(path.clone());
+                    this.connection_state.apply_editor_shell_path(path.clone());
                     this.terminal.view.status = format!("shell path: {path}");
                 } else {
                     this.terminal.view.status = "shell path selection cancelled".to_string();
@@ -313,7 +311,7 @@ impl NyaTermApp {
             let _ = this.update(cx, |this, cx| {
                 if let Some(path) = selected {
                     let path = path.display().to_string();
-                    this.connection_state.editor.apply_working_dir(path.clone());
+                    this.connection_state.apply_editor_working_dir(path.clone());
                     this.terminal.view.status = format!("working dir: {path}");
                 } else {
                     this.terminal.view.status = "working directory selection cancelled".to_string();
@@ -330,7 +328,7 @@ impl NyaTermApp {
         flag: ConnectionEditorToggle,
         cx: &mut Context<Self>,
     ) {
-        self.connection_state.editor.toggle_flag(flag);
+        self.connection_state.toggle_editor_flag(flag);
         cx.notify();
     }
 
@@ -375,9 +373,8 @@ impl NyaTermApp {
         match keystroke.key.as_str() {
             "escape" => {
                 self.connection_state
-                    .editor
-                    .close_popovers_and_cancel_group_draft();
-                let focus = self.connection_state.editor.focus_handle();
+                    .close_editor_popovers_and_cancel_group_draft();
+                let focus = self.connection_state.editor_focus_handle();
                 window.focus(&focus);
                 cx.notify();
                 true
@@ -385,8 +382,7 @@ impl NyaTermApp {
             "down" | "up" => {
                 let delta = if keystroke.key == "down" { 1 } else { -1 };
                 self.connection_state
-                    .editor
-                    .step_menu_highlight(delta, values.len());
+                    .step_editor_menu_highlight(delta, values.len());
                 cx.notify();
                 true
             }
@@ -399,7 +395,7 @@ impl NyaTermApp {
                 } else {
                     values.len() - 1
                 };
-                self.connection_state.editor.set_menu_highlight(index);
+                self.connection_state.set_editor_menu_highlight(index);
                 cx.notify();
                 true
             }
@@ -407,18 +403,18 @@ impl NyaTermApp {
                 // Enter in the group popover's "new folder" box creates the
                 // folder; anywhere else it takes the highlighted option.
                 if menu == ConnectionEditorMenu::Group
-                    && self.connection_state.editor.new_group_field_is_focused(cx)
+                    && self.connection_state.editor_new_group_field_is_focused(cx)
                 {
                     self.commit_connection_editor_new_group(cx);
                     return true;
                 }
-                let highlight = self.connection_state.editor.menu_highlight();
+                let highlight = self.connection_state.editor_menu_highlight();
                 let Some(value) = values.get(highlight) else {
                     return false;
                 };
                 let value = value.clone();
                 self.set_connection_editor_menu_value(menu, value.as_deref(), cx);
-                let focus = self.connection_state.editor.focus_handle();
+                let focus = self.connection_state.editor_focus_handle();
                 window.focus(&focus);
                 true
             }
@@ -440,15 +436,14 @@ impl NyaTermApp {
 
         match keystroke.key.as_str() {
             "escape" => {
-                if self.connection_state.editor.icon_picker_is_open() {
-                    self.connection_state.editor.close_popovers();
+                if self.connection_state.editor_icon_picker_is_open() {
+                    self.connection_state.close_editor_popovers();
                     cx.notify();
                     return;
                 }
-                if self.connection_state.editor.menu_is_open() {
+                if self.connection_state.editor_menu_is_open() {
                     self.connection_state
-                        .editor
-                        .close_popovers_and_cancel_group_draft();
+                        .close_editor_popovers_and_cancel_group_draft();
                     cx.notify();
                     return;
                 }
@@ -458,16 +453,15 @@ impl NyaTermApp {
             "enter" => {
                 if !keystroke.modifiers.platform
                     && !keystroke.modifiers.control
-                    && self.connection_state.editor.description_is_focused()
+                    && self.connection_state.editor_description_is_focused()
                 {
-                    self.connection_state.editor.insert_description_newline();
+                    self.connection_state.insert_editor_description_newline();
                     cx.notify();
                     return;
                 }
                 if self
                     .connection_state
-                    .editor
-                    .new_group_name_focused_in_group_menu()
+                    .editor_new_group_name_focused_in_group_menu()
                 {
                     self.commit_connection_editor_new_group(cx);
                     return;
@@ -476,7 +470,7 @@ impl NyaTermApp {
                 return;
             }
             "tab" if !keystroke.modifiers.platform && !keystroke.modifiers.control => {
-                self.connection_state.editor.advance_focus();
+                self.connection_state.advance_editor_focus();
                 cx.notify();
                 return;
             }
@@ -489,8 +483,7 @@ impl NyaTermApp {
 
         if self
             .connection_state
-            .editor
-            .apply_text_key(keystroke.key.as_str(), keystroke.key_char.as_deref())
+            .apply_editor_text_key(keystroke.key.as_str(), keystroke.key_char.as_deref())
         {
             cx.notify();
         }
@@ -501,7 +494,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(mut editor) = self.connection_state.editor.active_draft() else {
+        let Some(mut editor) = self.connection_state.active_editor_draft() else {
             return;
         };
 

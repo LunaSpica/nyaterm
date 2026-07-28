@@ -406,7 +406,7 @@ pub(super) fn connection_editor_group_select(
                 .hover(|this| this.bg(rgb(palette.hover)))
                 .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
                     if *hovered {
-                        this.connection_state.editor.set_menu_highlight(index);
+                        this.connection_state.set_editor_menu_highlight(index);
                         cx.notify();
                     }
                 }))
@@ -482,13 +482,12 @@ pub(super) fn connection_editor_group_select(
                 )
                 .on_click(cx.listener(move |this, _, window, cx| {
                     this.toggle_connection_editor_menu(ConnectionEditorMenu::Group, cx);
-                    if this.connection_state.editor.active_menu()
+                    if this.connection_state.active_editor_menu()
                         == Some(ConnectionEditorMenu::Group)
                     {
                         this.connection_state
-                            .editor
-                            .set_menu_highlight(selected_index);
-                        let focus = this.connection_state.editor.menu_focus_handle();
+                            .set_editor_menu_highlight(selected_index);
+                        let focus = this.connection_state.editor_menu_focus_handle();
                         window.focus(&focus);
                     }
                 })),
@@ -686,7 +685,7 @@ pub(super) fn connection_editor_select(
                 // does not leave a second, stale one behind.
                 .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
                     if *hovered {
-                        this.connection_state.editor.set_menu_highlight(index);
+                        this.connection_state.set_editor_menu_highlight(index);
                         cx.notify();
                     }
                 }))
@@ -762,13 +761,12 @@ pub(super) fn connection_editor_select(
                 )
                 .on_click(cx.listener(move |this, _, window, cx| {
                     this.toggle_connection_editor_menu(menu, cx);
-                    if this.connection_state.editor.active_menu() == Some(menu) {
+                    if this.connection_state.active_editor_menu() == Some(menu) {
                         // Open on the current value, and take the keyboard, so
                         // the arrow keys start from something meaningful.
                         this.connection_state
-                            .editor
-                            .set_menu_highlight(selected_index);
-                        let focus = this.connection_state.editor.menu_focus_handle();
+                            .set_editor_menu_highlight(selected_index);
+                        let focus = this.connection_state.editor_menu_focus_handle();
                         window.focus(&focus);
                     }
                 })),

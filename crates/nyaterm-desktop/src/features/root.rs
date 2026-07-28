@@ -579,7 +579,7 @@ impl NyaTermApp {
                 this.child(self.sync_groups_overlay(cx))
             })
             .when_some(
-                self.connection_state.editor.inline_panel_draft(),
+                self.connection_state.inline_editor_panel_draft(),
                 |this, editor| this.child(self.connection_editor_panel(editor, cx)),
             )
             .when(
@@ -653,7 +653,7 @@ impl NyaTermApp {
             || self.settings_window_open_pending
             || self.quick_command_state.editor.window.is_some()
             || self.quick_command_state.editor.window_open_pending
-            || self.connection_state.editor.modal_window_open_or_pending()
+            || self.connection_state.editor_modal_window_open_or_pending()
             || !self.transfer.external_sync.windows.is_empty()
             || !self.transfer.external_sync.window_open_pending.is_empty()
     }
@@ -667,9 +667,9 @@ impl NyaTermApp {
             self.activate_quick_command_window(cx)
         } else if self.quick_command_state.editor.window_open_pending {
             true
-        } else if self.connection_state.editor.has_window() {
+        } else if self.connection_state.editor_has_window() {
             self.activate_connection_editor_window(cx)
-        } else if self.connection_state.editor.window_open_pending() {
+        } else if self.connection_state.editor_window_open_pending() {
             true
         } else if !self.transfer.external_sync.windows.is_empty() {
             self.activate_transfer_external_sync_window(cx)
