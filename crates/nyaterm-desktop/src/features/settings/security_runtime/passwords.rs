@@ -32,7 +32,7 @@ impl NyaTermApp {
                 .find(|entry| entry.id == password_id)
                 .cloned()
             else {
-                self.security.status = "password is no longer available".to_string();
+                self.security.set_status("password is no longer available");
                 cx.notify();
                 return;
             };
@@ -191,9 +191,8 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         // Tauri PasswordManagementTab: eye toggles reveal; hide does not need unlock.
-        if self.security.revealed.passwords.contains_key(&password_id) {
-            self.security.revealed.passwords.remove(&password_id);
-            self.security.status = "password hidden".to_string();
+        if self.security.hide_revealed_password(&password_id) {
+            self.security.set_status("password hidden");
             cx.notify();
             return;
         }
@@ -210,7 +209,7 @@ impl NyaTermApp {
         ) {
             Ok(store) => store,
             Err(error) => {
-                self.security.status = error.to_string();
+                self.security.set_status(error.to_string());
                 cx.notify();
                 return;
             }
@@ -219,17 +218,14 @@ impl NyaTermApp {
             Ok(Some(entry)) => {
                 let value = entry.password.unwrap_or_default();
                 if value.is_empty() {
-                    self.security.status = "password has no secret".to_string();
+                    self.security.set_status("password has no secret");
                 } else {
-                    self.security
-                        .revealed
-                        .passwords
-                        .insert(password_id.clone(), value);
-                    self.security.status = "password revealed".to_string();
+                    self.security.reveal_password(password_id.clone(), value);
+                    self.security.set_status("password revealed");
                 }
             }
-            Ok(None) => self.security.status = "password not found".to_string(),
-            Err(error) => self.security.status = error.to_string(),
+            Ok(None) => self.security.set_status("password not found"),
+            Err(error) => self.security.set_status(error.to_string()),
         }
         cx.notify();
     }
@@ -247,12 +243,16 @@ impl NyaTermApp {
         ) {
             return;
         }
-        if let Some(value) = self.security.revealed.passwords.get(&password_id).cloned() {
+        if let Some(value) = self
+            .security
+            .revealed_password(&password_id)
+            .map(str::to_string)
+        {
             if value.is_empty() {
-                self.security.status = "password has no secret".to_string();
+                self.security.set_status("password has no secret");
             } else {
                 cx.write_to_clipboard(ClipboardItem::new_string(value));
-                self.security.status = "password copied".to_string();
+                self.security.set_status("password copied");
             }
             cx.notify();
             return;
@@ -263,7 +263,7 @@ impl NyaTermApp {
         ) {
             Ok(store) => store,
             Err(error) => {
-                self.security.status = error.to_string();
+                self.security.set_status(error.to_string());
                 cx.notify();
                 return;
             }
@@ -272,18 +272,16 @@ impl NyaTermApp {
             Ok(Some(entry)) => {
                 let value = entry.password.unwrap_or_default();
                 if value.is_empty() {
-                    self.security.status = "password has no secret".to_string();
+                    self.security.set_status("password has no secret");
                 } else {
                     self.security
-                        .revealed
-                        .passwords
-                        .insert(password_id.clone(), value.clone());
+                        .reveal_password(password_id.clone(), value.clone());
                     cx.write_to_clipboard(ClipboardItem::new_string(value));
-                    self.security.status = "password revealed and copied".to_string();
+                    self.security.set_status("password revealed and copied");
                 }
             }
-            Ok(None) => self.security.status = "password not found".to_string(),
-            Err(error) => self.security.status = error.to_string(),
+            Ok(None) => self.security.set_status("password not found"),
+            Err(error) => self.security.set_status(error.to_string()),
         }
         cx.notify();
     }

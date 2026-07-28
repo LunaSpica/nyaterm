@@ -110,10 +110,8 @@ impl NyaTermApp {
                 };
                 let code_raw = self
                     .security
-                    .revealed
-                    .otp_codes
-                    .get(&entry.id)
-                    .cloned()
+                    .revealed_otp_code(&entry.id)
+                    .map(str::to_string)
                     .unwrap_or_else(|| "------".to_string());
                 let code_display = format_otp_code_display(&code_raw);
                 let is_totp = entry.otp_type.eq_ignore_ascii_case("totp");

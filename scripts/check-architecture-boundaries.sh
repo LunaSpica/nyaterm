@@ -313,7 +313,7 @@ check_no_multiline_matches \
   crates/nyaterm-desktop/src/features/settings/security_state.rs
 check_no_multiline_matches \
   "security catalog access must use SecurityFeatureState methods" \
-  '(self|this|app)\.security[[:space:]]*\.[[:space:]]*catalog' \
+  '(self|this|app)[[:space:]]*\.[[:space:]]*security[[:space:]]*\.[[:space:]]*catalog' \
   crates/nyaterm-desktop/src/features
 check_no_matches \
   "SecurityFeatureState must not expose editor or delete-confirmation state" \
@@ -321,7 +321,15 @@ check_no_matches \
   crates/nyaterm-desktop/src/features/settings/security_state.rs
 check_no_multiline_matches \
   "security editor transitions must use SecurityFeatureState methods" \
-  '(self|this|app)\.security[[:space:]]*\.[[:space:]]*(editors|delete_confirm)([[:space:]]*\.|[[:space:]]*=)' \
+  '(self|this|app)[[:space:]]*\.[[:space:]]*security[[:space:]]*\.[[:space:]]*(editors|delete_confirm)([[:space:]]*\.|[[:space:]]*=)' \
+  crates/nyaterm-desktop/src/features
+check_no_multiline_matches \
+  "SecurityFeatureState must not expose secret interaction state" \
+  'struct[[:space:]]+SecurityFeatureState[[:space:]]*\{[^}]*pub([[:space:]]|\([^)]*\))[[:space:]]+(auth_tab|revealed|status|unlock)[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/settings/security_state.rs
+check_no_multiline_matches \
+  "security secret interaction must use SecurityFeatureState methods" \
+  '(self|this|app)[[:space:]]*\.[[:space:]]*security[[:space:]]*\.[[:space:]]*(auth_tab|revealed|status|unlock)([[:space:]]*\.|[[:space:]]*=)' \
   crates/nyaterm-desktop/src/features
 
 check_no_matches \

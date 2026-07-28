@@ -19,12 +19,12 @@ use crate::models::{
 
 pub(in crate::features) struct SecurityFeatureState {
     catalog: SecurityCatalogState,
-    pub auth_tab: SecurityAuthTab,
+    auth_tab: SecurityAuthTab,
     editors: SecurityEditorState,
     delete_confirm: Option<SecurityDeleteConfirmState>,
-    pub revealed: SecurityRevealedState,
-    pub status: String,
-    pub unlock: SecurityUnlockState,
+    revealed: SecurityRevealedState,
+    status: String,
+    unlock: SecurityUnlockState,
     pub screen_lock: SecurityScreenLockState,
 }
 
@@ -79,21 +79,21 @@ struct SecurityEditorState {
 }
 
 /// Values the user has explicitly revealed, plus generated OTP codes.
-pub(in crate::features) struct SecurityRevealedState {
-    pub otp_codes: HashMap<String, String>,
-    pub passwords: HashMap<String, String>,
-    pub credentials: HashMap<String, String>,
+struct SecurityRevealedState {
+    otp_codes: HashMap<String, String>,
+    passwords: HashMap<String, String>,
+    credentials: HashMap<String, String>,
 }
 
 /// Master password unlock prompt.
-pub(in crate::features) struct SecurityUnlockState {
-    pub secrets_unlocked: bool,
-    pub prompt_open: bool,
-    pub master_required_prompt_open: bool,
-    pub draft: String,
-    pub error: Option<String>,
-    pub pending_action: Option<SecurityUnlockAction>,
-    pub focus: FocusHandle,
+struct SecurityUnlockState {
+    secrets_unlocked: bool,
+    prompt_open: bool,
+    master_required_prompt_open: bool,
+    draft: String,
+    error: Option<String>,
+    pending_action: Option<SecurityUnlockAction>,
+    focus: FocusHandle,
 }
 
 /// Whole-application idle/manual lock screen.
@@ -183,6 +183,155 @@ impl SecurityFeatureState {
 
     pub(in crate::features) fn clear_catalog(&mut self) {
         self.replace_catalog(Vec::new(), Vec::new(), Vec::new(), Vec::new());
+    }
+
+    pub(in crate::features) fn auth_tab(&self) -> SecurityAuthTab {
+        self.auth_tab
+    }
+
+    pub(in crate::features) fn set_auth_tab(&mut self, tab: SecurityAuthTab) {
+        self.auth_tab = tab;
+        self.status = format!("{} tab", tab.label().to_lowercase());
+    }
+
+    pub(in crate::features) fn set_status(&mut self, status: impl Into<String>) {
+        self.status = status.into();
+    }
+
+    pub(in crate::features) fn secrets_unlocked(&self) -> bool {
+        self.unlock.secrets_unlocked
+    }
+
+    pub(in crate::features) fn unlock_prompt_open(&self) -> bool {
+        self.unlock.prompt_open
+    }
+
+    pub(in crate::features) fn master_required_prompt_open(&self) -> bool {
+        self.unlock.master_required_prompt_open
+    }
+
+    pub(in crate::features) fn unlock_draft(&self) -> &str {
+        &self.unlock.draft
+    }
+
+    pub(in crate::features) fn unlock_error(&self) -> Option<&str> {
+        self.unlock.error.as_deref()
+    }
+
+    pub(in crate::features) fn unlock_focus(&self) -> &FocusHandle {
+        &self.unlock.focus
+    }
+
+    pub(in crate::features) fn set_pending_unlock_action(
+        &mut self,
+        action: Option<SecurityUnlockAction>,
+    ) {
+        self.unlock.pending_action = action;
+    }
+
+    pub(in crate::features) fn show_master_required_prompt(&mut self) {
+        self.unlock.pending_action = None;
+        self.unlock.prompt_open = false;
+        self.unlock.master_required_prompt_open = true;
+        self.unlock.draft.clear();
+        self.unlock.error = None;
+        self.status = "master password required".to_string();
+    }
+
+    pub(in crate::features) fn show_unlock_prompt(&mut self) {
+        self.unlock.master_required_prompt_open = false;
+        self.unlock.prompt_open = true;
+        self.unlock.draft.clear();
+        self.unlock.error = None;
+        self.status = "enter master password to unlock secrets".to_string();
+    }
+
+    pub(in crate::features) fn cancel_unlock_prompt(&mut self) {
+        self.unlock.pending_action = None;
+        self.close_unlock_prompt();
+    }
+
+    pub(in crate::features) fn close_master_required_prompt(&mut self) {
+        self.unlock.master_required_prompt_open = false;
+        self.unlock.pending_action = None;
+    }
+
+    pub(in crate::features) fn complete_unlock(&mut self) -> Option<SecurityUnlockAction> {
+        let pending_action = self.unlock.pending_action.take();
+        self.unlock.secrets_unlocked = true;
+        self.status = "secrets unlocked".to_string();
+        self.close_unlock_prompt();
+        pending_action
+    }
+
+    pub(in crate::features) fn reject_unlock(&mut self, error: String, status: &'static str) {
+        self.unlock.draft.clear();
+        self.unlock.error = Some(error);
+        self.status = status.to_string();
+    }
+
+    pub(in crate::features) fn apply_unlock_input(&mut self, text: String) {
+        self.unlock.draft = text;
+        self.unlock.error = None;
+    }
+
+    pub(in crate::features) fn unlock_without_master_password(&mut self) {
+        self.unlock.secrets_unlocked = true;
+    }
+
+    pub(in crate::features) fn revealed_password(&self, id: &str) -> Option<&str> {
+        self.revealed.passwords.get(id).map(String::as_str)
+    }
+
+    pub(in crate::features) fn hide_revealed_password(&mut self, id: &str) -> bool {
+        self.revealed.passwords.remove(id).is_some()
+    }
+
+    pub(in crate::features) fn reveal_password(&mut self, id: String, value: String) {
+        self.revealed.passwords.insert(id, value);
+    }
+
+    pub(in crate::features) fn revealed_credential(&self, id: &str) -> Option<&str> {
+        self.revealed.credentials.get(id).map(String::as_str)
+    }
+
+    pub(in crate::features) fn hide_revealed_credential(&mut self, id: &str) -> bool {
+        self.revealed.credentials.remove(id).is_some()
+    }
+
+    pub(in crate::features) fn reveal_credential(&mut self, id: String, value: String) {
+        self.revealed.credentials.insert(id, value);
+    }
+
+    pub(in crate::features) fn revealed_otp_code(&self, id: &str) -> Option<&str> {
+        self.revealed.otp_codes.get(id).map(String::as_str)
+    }
+
+    pub(in crate::features) fn clear_revealed_otp_code(&mut self, id: &str) {
+        self.revealed.otp_codes.remove(id);
+    }
+
+    pub(in crate::features) fn reveal_otp_code(&mut self, id: String, code: String) {
+        self.revealed.otp_codes.insert(id, code);
+    }
+
+    pub(in crate::features) fn clear_revealed_for_deleted(
+        &mut self,
+        kind: SecurityAuthTab,
+        id: &str,
+    ) {
+        match kind {
+            SecurityAuthTab::Otp => {
+                self.revealed.otp_codes.remove(id);
+            }
+            SecurityAuthTab::Passwords => {
+                self.revealed.passwords.remove(id);
+            }
+            SecurityAuthTab::Credentials => {
+                self.revealed.credentials.remove(id);
+            }
+            SecurityAuthTab::Keys => {}
+        }
     }
 
     pub(in crate::features) fn key_editor(&self) -> Option<&SecurityKeyEditorState> {
@@ -435,6 +584,7 @@ mod tests {
     use crate::models::{
         SecurityAuthTab, SecurityDeleteConfirmState, SecurityKeyEditorField,
         SecurityKeyEditorState, SecurityPasswordEditorField, SecurityPasswordEditorState,
+        SecurityUnlockAction,
     };
 
     fn security_state() -> SecurityFeatureState {
@@ -579,6 +729,53 @@ mod tests {
 
         security.finish_otp_qr_import();
         assert!(!security.otp_qr_importing());
+    }
+
+    #[test]
+    fn unlock_transitions_keep_pending_action_until_success_or_explicit_close() {
+        let mut security = security_state();
+        security.set_pending_unlock_action(Some(SecurityUnlockAction::RevealPassword(
+            "password-id".to_string(),
+        )));
+        security.show_unlock_prompt();
+        security.apply_unlock_input("attempt".to_string());
+
+        security.reject_unlock("wrong password".to_string(), "unlock rejected");
+        assert!(security.unlock_draft().is_empty());
+        assert!(security.unlock_error().is_some());
+        assert!(security.unlock_prompt_open());
+
+        assert_eq!(
+            security.complete_unlock(),
+            Some(SecurityUnlockAction::RevealPassword(
+                "password-id".to_string()
+            ))
+        );
+        assert!(security.secrets_unlocked());
+        assert!(!security.unlock_prompt_open());
+        assert!(security.unlock_error().is_none());
+
+        security.set_pending_unlock_action(Some(SecurityUnlockAction::RevealCredential(
+            "credential-id".to_string(),
+        )));
+        security.show_master_required_prompt();
+        assert!(security.master_required_prompt_open());
+        assert_eq!(security.complete_unlock(), None);
+    }
+
+    #[test]
+    fn locking_secrets_clears_revealed_passwords_and_credentials_but_keeps_otp_codes() {
+        let mut security = security_state();
+        security.reveal_password("password-id".to_string(), "value".to_string());
+        security.reveal_credential("credential-id".to_string(), "value".to_string());
+        security.reveal_otp_code("otp-id".to_string(), "123456".to_string());
+
+        security.lock_secrets();
+
+        assert!(!security.secrets_unlocked());
+        assert!(security.revealed_password("password-id").is_none());
+        assert!(security.revealed_credential("credential-id").is_none());
+        assert!(security.revealed_otp_code("otp-id").is_some());
     }
 
     #[test]

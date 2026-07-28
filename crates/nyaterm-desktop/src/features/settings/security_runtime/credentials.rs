@@ -32,7 +32,8 @@ impl NyaTermApp {
                 .find(|entry| entry.id == credential_id)
                 .cloned()
             else {
-                self.security.status = "credential is no longer available".to_string();
+                self.security
+                    .set_status("credential is no longer available");
                 cx.notify();
                 return;
             };
@@ -106,7 +107,7 @@ impl NyaTermApp {
             .find(|entry| entry.id == credential_id)
             .cloned()
         else {
-            self.security.status = "credential not found".to_string();
+            self.security.set_status("credential not found");
             cx.notify();
             return;
         };
@@ -116,7 +117,7 @@ impl NyaTermApp {
         ) {
             Ok(store) => store,
             Err(error) => {
-                self.security.status = error.to_string();
+                self.security.set_status(error.to_string());
                 cx.notify();
                 return;
             }
@@ -126,14 +127,14 @@ impl NyaTermApp {
         match store.save_credential(next.clone()) {
             Ok(_) => {
                 self.refresh_security_catalog();
-                self.security.status = format!(
+                self.security.set_status(format!(
                     "credential {} {}",
                     next.name,
                     if next.enabled { "enabled" } else { "disabled" }
-                );
+                ));
             }
             Err(error) => {
-                self.security.status = error.to_string();
+                self.security.set_status(error.to_string());
             }
         }
         cx.notify();
@@ -260,14 +261,8 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self
-            .security
-            .revealed
-            .credentials
-            .contains_key(&credential_id)
-        {
-            self.security.revealed.credentials.remove(&credential_id);
-            self.security.status = "credential password hidden".to_string();
+        if self.security.hide_revealed_credential(&credential_id) {
+            self.security.set_status("credential password hidden");
             cx.notify();
             return;
         }
@@ -286,7 +281,7 @@ impl NyaTermApp {
         ) {
             Ok(store) => store,
             Err(error) => {
-                self.security.status = error.to_string();
+                self.security.set_status(error.to_string());
                 cx.notify();
                 return;
             }
@@ -295,18 +290,17 @@ impl NyaTermApp {
             Ok(Some(entry)) => {
                 let value = entry.password.unwrap_or_default();
                 if value.is_empty() {
-                    self.security.status = "credential has no password".to_string();
+                    self.security.set_status("credential has no password");
                 } else {
                     self.security
-                        .revealed
-                        .credentials
-                        .insert(credential_id.clone(), value.clone());
+                        .reveal_credential(credential_id.clone(), value.clone());
                     cx.write_to_clipboard(ClipboardItem::new_string(value));
-                    self.security.status = "credential password revealed and copied".to_string();
+                    self.security
+                        .set_status("credential password revealed and copied");
                 }
             }
-            Ok(None) => self.security.status = "credential not found".to_string(),
-            Err(error) => self.security.status = error.to_string(),
+            Ok(None) => self.security.set_status("credential not found"),
+            Err(error) => self.security.set_status(error.to_string()),
         }
         cx.notify();
     }

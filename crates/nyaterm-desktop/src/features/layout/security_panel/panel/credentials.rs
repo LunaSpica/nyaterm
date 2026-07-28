@@ -45,13 +45,11 @@ impl NyaTermApp {
                 let delete_id = entry.id.clone();
                 let reveal_id = entry.id.clone();
                 let toggle_id = entry.id.clone();
-                let is_revealed = self.security.revealed.credentials.contains_key(&entry.id);
+                let is_revealed = self.security.revealed_credential(&entry.id).is_some();
                 let secret = self
                     .security
-                    .revealed
-                    .credentials
-                    .get(&entry.id)
-                    .cloned()
+                    .revealed_credential(&entry.id)
+                    .map(str::to_string)
                     .unwrap_or_default();
                 rows = rows.child(
                     div()

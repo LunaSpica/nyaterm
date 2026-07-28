@@ -41,12 +41,13 @@ impl NyaTermApp {
                         this.security.open_otp_editor(editor, status);
                     }
                     Ok(None) => {
-                        this.security.status = this.tr("common.cancel").to_string();
+                        let status = this.tr("common.cancel").to_string();
+                        this.security.set_status(status);
                     }
                     Err(error) => {
-                        this.security.status =
-                            format!("{}: {error}", this.tr("otpManager.qrImportFailed"));
-                        this.terminal.view.status = this.security.status.clone();
+                        let status = format!("{}: {error}", this.tr("otpManager.qrImportFailed"));
+                        this.security.set_status(status.clone());
+                        this.terminal.view.status = status;
                     }
                 }
                 cx.notify();
@@ -125,7 +126,7 @@ impl NyaTermApp {
                 .find(|entry| entry.id == otp_id)
                 .cloned()
             else {
-                self.security.status = "OTP entry is no longer available".to_string();
+                self.security.set_status("OTP entry is no longer available");
                 cx.notify();
                 return;
             };
@@ -325,7 +326,7 @@ impl NyaTermApp {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.security.revealed.otp_codes.remove(&otp_id);
+        self.security.clear_revealed_otp_code(&otp_id);
         match self
             .session
             .prompts
@@ -334,18 +335,16 @@ impl NyaTermApp {
         {
             Ok(Some(preview)) => {
                 let code = preview.code;
+                self.security.reveal_otp_code(otp_id.clone(), code);
                 self.security
-                    .revealed
-                    .otp_codes
-                    .insert(otp_id.clone(), code);
-                self.security.status = format!("OTP code ready for {}", compact_id(&otp_id));
+                    .set_status(format!("OTP code ready for {}", compact_id(&otp_id)));
                 self.terminal.view.status = "OTP code ready".to_string();
             }
             Ok(None) => {
-                self.security.status = "OTP entry not found".to_string();
+                self.security.set_status("OTP entry not found");
             }
             Err(error) => {
-                self.security.status = error;
+                self.security.set_status(error);
             }
         }
         cx.notify();
@@ -372,17 +371,15 @@ impl NyaTermApp {
                 .preview_otp_code(&otp_id)
             {
                 Ok(Some(preview)) => {
-                    self.security
-                        .revealed
-                        .otp_codes
-                        .insert(otp_id, preview.code);
+                    self.security.reveal_otp_code(otp_id, preview.code);
                     refreshed += 1;
                 }
                 Ok(None) | Err(_) => {}
             }
         }
         if refreshed > 0 {
-            self.security.status = format!("refreshed {refreshed} OTP code(s)");
+            self.security
+                .set_status(format!("refreshed {refreshed} OTP code(s)"));
         }
         let _ = window;
         cx.notify();
@@ -394,22 +391,24 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some(code) = self.security.revealed.otp_codes.get(&otp_id).cloned() {
+        if let Some(code) = self.security.revealed_otp_code(&otp_id).map(str::to_string) {
             if code != "------" && !code.trim().is_empty() {
                 cx.write_to_clipboard(ClipboardItem::new_string(code));
-                self.security.status = format!("OTP code copied ({})", compact_id(&otp_id));
+                self.security
+                    .set_status(format!("OTP code copied ({})", compact_id(&otp_id)));
                 self.terminal.view.status = "OTP code copied".to_string();
                 cx.notify();
                 return;
             }
         }
         self.generate_security_otp_code(otp_id.clone(), window, cx);
-        if let Some(code) = self.security.revealed.otp_codes.get(&otp_id).cloned()
+        if let Some(code) = self.security.revealed_otp_code(&otp_id).map(str::to_string)
             && code != "------"
             && !code.trim().is_empty()
         {
             cx.write_to_clipboard(ClipboardItem::new_string(code));
-            self.security.status = format!("OTP code copied ({})", compact_id(&otp_id));
+            self.security
+                .set_status(format!("OTP code copied ({})", compact_id(&otp_id)));
             self.terminal.view.status = "OTP code copied".to_string();
             cx.notify();
         }

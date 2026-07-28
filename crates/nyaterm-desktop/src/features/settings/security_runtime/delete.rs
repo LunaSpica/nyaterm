@@ -20,7 +20,7 @@ impl NyaTermApp {
         ) {
             Ok(store) => store,
             Err(error) => {
-                self.security.status = error.to_string();
+                self.security.set_status(error.to_string());
                 cx.notify();
                 return;
             }
@@ -33,25 +33,16 @@ impl NyaTermApp {
         };
         match result {
             Ok(()) => {
-                match confirm.kind {
-                    SecurityAuthTab::Otp => {
-                        self.security.revealed.otp_codes.remove(&confirm.id);
-                    }
-                    SecurityAuthTab::Passwords => {
-                        self.security.revealed.passwords.remove(&confirm.id);
-                    }
-                    SecurityAuthTab::Credentials => {
-                        self.security.revealed.credentials.remove(&confirm.id);
-                    }
-                    SecurityAuthTab::Keys => {}
-                }
+                self.security
+                    .clear_revealed_for_deleted(confirm.kind, &confirm.id);
                 self.refresh_security_catalog();
                 self.security.cancel_delete();
-                self.security.status = format!("{} deleted", confirm.label);
-                self.terminal.view.status = self.security.status.clone();
+                let status = format!("{} deleted", confirm.label);
+                self.security.set_status(status.clone());
+                self.terminal.view.status = status;
             }
             Err(error) => {
-                self.security.status = error.to_string();
+                self.security.set_status(error.to_string());
             }
         }
         cx.notify();

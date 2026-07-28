@@ -22,7 +22,7 @@ impl NyaTermApp {
                 .find(|key| key.id == key_id)
                 .cloned()
             else {
-                self.security.status = "SSH key is no longer available".to_string();
+                self.security.set_status("SSH key is no longer available");
                 cx.notify();
                 return;
             };
@@ -217,11 +217,11 @@ impl NyaTermApp {
             })),
         };
         let receiver = cx.prompt_for_paths(options);
-        self.security.status = if is_cert {
-            "selecting certificate file".to_string()
+        self.security.set_status(if is_cert {
+            "selecting certificate file"
         } else {
-            "selecting private key file".to_string()
-        };
+            "selecting private key file"
+        });
         cx.spawn(async move |this, cx| {
             let selected = match receiver.await {
                 Ok(Ok(Some(paths))) => paths.into_iter().next(),
@@ -239,10 +239,10 @@ impl NyaTermApp {
                             editor.has_key_data = true;
                         }
                         editor.error = None;
-                        this.security.status = "key file selected".to_string();
+                        this.security.set_status("key file selected");
                     }
                 } else {
-                    this.security.status = "key file selection cancelled".to_string();
+                    this.security.set_status("key file selection cancelled");
                 }
                 cx.notify();
             });

@@ -6,7 +6,7 @@ use crate::models::{NavItem, SecurityAuthTab, SecurityUnlockAction, SettingsTab}
 
 impl NyaTermApp {
     pub(in crate::features) fn security_secrets_locked(&self) -> bool {
-        self.settings.summary.has_master_password && !self.security.unlock.secrets_unlocked
+        self.settings.summary.has_master_password && !self.security.secrets_unlocked()
     }
 
     pub(in crate::features) fn require_security_secrets_unlocked(
@@ -15,10 +15,10 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
         pending_action: Option<SecurityUnlockAction>,
     ) -> bool {
-        if self.settings.summary.has_master_password && self.security.unlock.secrets_unlocked {
+        if self.settings.summary.has_master_password && self.security.secrets_unlocked() {
             return true;
         }
-        self.security.unlock.pending_action = pending_action;
+        self.security.set_pending_unlock_action(pending_action);
         self.open_security_unlock_prompt(window, cx);
         false
     }
@@ -29,23 +29,14 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if !self.settings.summary.has_master_password {
-            self.security.unlock.pending_action = None;
-            self.security.unlock.prompt_open = false;
-            self.security.unlock.master_required_prompt_open = true;
-            self.security.unlock.draft.clear();
+            self.security.show_master_required_prompt();
             self.forget_text_inputs("security.unlock.password");
-            self.security.unlock.error = None;
-            self.security.status = "master password required".to_string();
             cx.notify();
             return;
         }
-        self.security.unlock.master_required_prompt_open = false;
-        self.security.unlock.prompt_open = true;
-        self.security.unlock.draft.clear();
+        self.security.show_unlock_prompt();
         self.forget_text_inputs("security.unlock.password");
         let field = self.text_input("security.unlock.password", "", TextInputSetup::masked(), cx);
-        self.security.unlock.error = None;
-        self.security.status = "enter master password to unlock secrets".to_string();
         window.focus(&field.read(cx).focus_handle());
         cx.notify();
     }
@@ -57,16 +48,16 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn cancel_security_unlock_prompt(&mut self, cx: &mut Context<Self>) {
-        self.security.unlock.pending_action = None;
-        self.close_security_unlock_prompt(cx);
+        self.security.cancel_unlock_prompt();
+        self.forget_text_inputs("security.unlock.password");
+        cx.notify();
     }
 
     pub(in crate::features) fn close_security_master_required_prompt(
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        self.security.unlock.master_required_prompt_open = false;
-        self.security.unlock.pending_action = None;
+        self.security.close_master_required_prompt();
         cx.notify();
     }
 
@@ -74,8 +65,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        self.security.unlock.master_required_prompt_open = false;
-        self.security.unlock.pending_action = None;
+        self.security.close_master_required_prompt();
         self.shell.navigation.settings.active_tab = SettingsTab::Security;
         self.open_page(NavItem::Settings, cx);
     }
@@ -92,13 +82,8 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if !self.settings.summary.has_master_password {
-            self.security.unlock.pending_action = None;
-            self.security.unlock.prompt_open = false;
-            self.security.unlock.master_required_prompt_open = true;
-            self.security.unlock.draft.clear();
+            self.security.show_master_required_prompt();
             self.forget_text_inputs("security.unlock.password");
-            self.security.unlock.error = None;
-            self.security.status = "master password required".to_string();
             cx.notify();
             return;
         }
@@ -106,30 +91,25 @@ impl NyaTermApp {
             self.runtime.config_dir(),
             self.runtime.portable_key_path().map(ToOwned::to_owned),
         )
-        .and_then(|store| store.verify_master_password(&self.security.unlock.draft))
+        .and_then(|store| store.verify_master_password(self.security.unlock_draft()))
         {
             Ok(true) => {
-                let pending_action = self.security.unlock.pending_action.take();
-                self.security.unlock.secrets_unlocked = true;
-                self.security.status = "secrets unlocked".to_string();
+                let pending_action = self.security.complete_unlock();
                 self.close_security_unlock_prompt(cx);
                 if let Some(action) = pending_action {
                     self.execute_security_unlock_action(action, window, cx);
                 }
             }
             Ok(false) => {
-                self.security.unlock.draft.clear();
                 self.reset_text_input("security.unlock.password", "", cx);
-                self.security.unlock.error =
-                    Some(self.tr("secretUnlock.wrongPassword").to_string());
-                self.security.status = "unlock rejected".to_string();
+                let error = self.tr("secretUnlock.wrongPassword").to_string();
+                self.security.reject_unlock(error, "unlock rejected");
                 cx.notify();
             }
             Err(error) => {
-                self.security.unlock.draft.clear();
                 self.reset_text_input("security.unlock.password", "", cx);
-                self.security.unlock.error = Some(error.to_string());
-                self.security.status = "unlock failed".to_string();
+                self.security
+                    .reject_unlock(error.to_string(), "unlock failed");
                 cx.notify();
             }
         }
@@ -158,8 +138,7 @@ impl NyaTermApp {
         text: String,
         cx: &mut Context<Self>,
     ) {
-        self.security.unlock.draft = text;
-        self.security.unlock.error = None;
+        self.security.apply_unlock_input(text);
         cx.notify();
     }
 
@@ -202,8 +181,7 @@ impl NyaTermApp {
         tab: SecurityAuthTab,
         cx: &mut Context<Self>,
     ) {
-        self.security.auth_tab = tab;
-        self.security.status = format!("{} tab", self.security.auth_tab.label().to_lowercase());
+        self.security.set_auth_tab(tab);
         cx.notify();
     }
 

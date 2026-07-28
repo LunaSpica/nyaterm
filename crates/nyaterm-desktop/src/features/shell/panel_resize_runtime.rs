@@ -113,7 +113,7 @@ impl NyaTermApp {
         );
         self.apply_panel_stack_from_settings();
         if !self.settings.summary.has_master_password {
-            self.security.unlock.secrets_unlocked = true;
+            self.security.unlock_without_master_password();
         }
     }
 

@@ -1355,6 +1355,7 @@ Current ownership map:
 | SSH keys | Private catalog in `NyaTermApp.security` | Secret-adjacent persisted catalog | The security feature is authoritative; consumers use a read-only slice and the catalog has no `Debug` implementation. |
 | OTP entries | Private catalog in `NyaTermApp.security` | Secret-adjacent persisted catalog | Consumers use a read-only slice; do not log secrets or widen Debug exposure. |
 | Saved passwords/credentials | Private catalog in `NyaTermApp.security` | Secret-bearing persisted catalogs | Credential autofill and security settings use read-only owner APIs; grouped store loads and clears replace all four catalogs together. |
+| Secret unlock/reveal interaction | Private state in `NyaTermApp.security` | Secret-bearing transient UI state | Prompt admission, pending actions, success/failure, revealed values and lock cleanup enter through `SecurityFeatureState`; secret-bearing children have no `Debug` implementation. |
 | Serial ports | Private catalog in `NyaTermApp.connection_catalog` | Runtime/discovered state | Replaced through the catalog after session-manager discovery and never persisted. |
 | Tunnel/proxy configs | Private catalog in `NyaTermApp.tunnel_state` | Persisted network config | Views use read-only slices; pure move/upsert/delete candidates and successful commits stay on `TunnelFeatureState`. The Network page UI remains separate transient state. |
 | Queued saved-connection starts | `NyaTermApp.session.start` private queue | Transient session-start state | Admission, duplicate detection, draining and runtime cadence reads go through `SessionStartFeatureState` methods. |
@@ -1556,8 +1557,12 @@ honest remaining list.
    and delete-confirmation state private too; input routing and editor
    open/finish/close transitions now enter through `SecurityFeatureState`,
    while GPUI focus, rendering, file decoding and persistence remain in their
-   existing adapters. What remains at the composition root is stores, runtime
-   and focused feature owners.
+   existing adapters. The secret-access lifecycle batch then made auth-tab,
+   status, unlock prompt/pending-action state and revealed password,
+   credential and OTP maps private. Unlock success/failure and secret cleanup
+   are now owner transitions, while password verification, clipboard access
+   and OTP generation remain in their existing adapters. What remains at the
+   composition root is stores, runtime and focused feature owners.
    Group by cohesion where a cluster exists; do not force the count down for
    its own sake.
    Method ownership is now moving too, which is what grouping the fields alone

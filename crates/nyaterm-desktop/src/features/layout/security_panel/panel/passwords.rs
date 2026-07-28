@@ -45,8 +45,11 @@ impl NyaTermApp {
                 let delete_id = entry.id.clone();
                 let reveal_id = entry.id.clone();
                 let copy_id = entry.id.clone();
-                let is_revealed = self.security.revealed.passwords.contains_key(&entry.id);
-                let revealed_value = self.security.revealed.passwords.get(&entry.id).cloned();
+                let revealed_value = self
+                    .security
+                    .revealed_password(&entry.id)
+                    .map(str::to_string);
+                let is_revealed = revealed_value.is_some();
                 // Tauri: masked until revealed; revealed shows secret + Copy.
                 let secret_line = if is_revealed {
                     revealed_value

@@ -18,7 +18,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let active_tab = self.security.auth_tab;
+        let active_tab = self.security.auth_tab();
         let palette = self.theme_palette();
 
         let body = match active_tab {
@@ -69,10 +69,10 @@ impl NyaTermApp {
             .when_some(self.security.delete_confirm().cloned(), |this, confirm| {
                 this.child(self.security_delete_confirm_panel(confirm, cx))
             })
-            .when(self.security.unlock.prompt_open, |this| {
+            .when(self.security.unlock_prompt_open(), |this| {
                 this.child(self.security_unlock_prompt(cx))
             })
-            .when(self.security.unlock.master_required_prompt_open, |this| {
+            .when(self.security.master_required_prompt_open(), |this| {
                 this.child(self.security_master_required_prompt(cx))
             })
     }

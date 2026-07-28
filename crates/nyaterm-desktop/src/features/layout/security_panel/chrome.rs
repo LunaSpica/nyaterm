@@ -13,7 +13,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let unlocked =
-            self.settings.summary.has_master_password && self.security.unlock.secrets_unlocked;
+            self.settings.summary.has_master_password && self.security.secrets_unlocked();
         let palette = self.theme_palette();
         div()
             .id(SharedString::from("security-secrets-toggle"))
@@ -94,9 +94,10 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
+        let unlock_draft = self.security.unlock_draft().to_string();
         let password_input = self.text_input(
             "security.unlock.password",
-            &self.security.unlock.draft.clone(),
+            &unlock_draft,
             TextInputSetup::masked(),
             cx,
         );
@@ -119,7 +120,7 @@ impl NyaTermApp {
                     .flex()
                     .flex_col()
                     .gap_2()
-                    .track_focus(&self.security.unlock.focus)
+                    .track_focus(self.security.unlock_focus())
                     .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                         this.handle_security_unlock_key_down(event, window, cx);
                     }))
@@ -163,14 +164,17 @@ impl NyaTermApp {
                                     .child(password_input),
                             ),
                     )
-                    .when_some(self.security.unlock.error.clone(), |this, error| {
-                        this.child(
-                            div()
-                                .text_size(px(10.))
-                                .text_color(rgb(palette.danger))
-                                .child(error),
-                        )
-                    })
+                    .when_some(
+                        self.security.unlock_error().map(str::to_string),
+                        |this, error| {
+                            this.child(
+                                div()
+                                    .text_size(px(10.))
+                                    .text_color(rgb(palette.danger))
+                                    .child(error),
+                            )
+                        },
+                    )
                     .child(
                         div()
                             .flex()
@@ -262,7 +266,7 @@ impl NyaTermApp {
         tab: SecurityAuthTab,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let selected = self.security.auth_tab == tab;
+        let selected = self.security.auth_tab() == tab;
         let palette = self.theme_palette();
         // Tauri TabsTrigger text-xs inside h-8 grid segment.
         div()
