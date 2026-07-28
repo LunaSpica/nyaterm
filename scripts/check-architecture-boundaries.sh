@@ -228,6 +228,19 @@ check_no_matches \
   crates/nyaterm-desktop/src/features
 
 check_no_matches \
+  "CloudSyncFeatureState must expose methods, not writable fields" \
+  '^[[:space:]]*pub([[:space:]]|\([^)]*\))[[:space:]]+[[:alnum:]_]+[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/sync/state.rs
+check_no_matches \
+  "cloud sync secret merging must stay on CloudSyncFeatureState" \
+  'fn[[:space:]]+pending_cloud_sync_settings[[:space:]]*\(' \
+  crates/nyaterm-desktop/src/features
+check_no_matches \
+  "cloud sync state transitions must use CloudSyncFeatureState methods" \
+  '(self|this)\.cloud_sync\.(settings|state|history|history_expanded|conflict|secret_draft|status|job_running|focused_field|provider_menu_open|github)(\.|[[:space:]]*=)' \
+  crates/nyaterm-desktop/src/features
+
+check_no_matches \
   "recording runtime state must stay grouped under RecordingFeatureState" \
   '^[[:space:]]*pub\(in crate::features\)[[:space:]]+(recording_manager|recording_active_count|pending_auto_recording_session|recording_write_pipeline|recording_search_draft|recording_busy_actions|recording_path_prompt)[[:space:]]*:' \
   crates/nyaterm-desktop/src/features/app_state/mod.rs

@@ -1,5 +1,4 @@
 use gpui::{Context, Window};
-use nyaterm_core::CloudSyncError;
 
 use crate::features::NyaTermApp;
 use crate::models::SnapshotPasswordPromptKind;
@@ -83,15 +82,5 @@ impl NyaTermApp {
             SnapshotPasswordPromptKind::CloudForcePull
         };
         self.start_snapshot_password_prompt(kind, window, cx);
-    }
-
-    pub(in crate::features) fn capture_cloud_sync_conflict(
-        &mut self,
-        error: &CloudSyncError,
-        provider: String,
-        provider_action: bool,
-    ) {
-        self.cloud_sync
-            .capture_conflict(error, provider, provider_action);
     }
 }

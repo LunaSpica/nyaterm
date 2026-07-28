@@ -20,21 +20,21 @@ impl NyaTermApp {
             .child(self.cloud_sync_input(
                 "cloud-webdav-endpoint",
                 self.tr("settings.webdavEndpoint"),
-                self.cloud_sync.settings.webdav.endpoint.clone(),
+                self.cloud_sync.settings().webdav.endpoint.clone(),
                 CloudSyncInputField::WebdavEndpoint,
                 cx,
             ))
             .child(self.cloud_sync_input(
                 "cloud-webdav-root",
                 self.tr("settings.providerRoot"),
-                self.cloud_sync.settings.webdav.root.clone(),
+                self.cloud_sync.settings().webdav.root.clone(),
                 CloudSyncInputField::WebdavRoot,
                 cx,
             ))
             .child(self.cloud_sync_input(
                 "cloud-webdav-username",
                 self.tr("dialog.username"),
-                self.cloud_sync.settings.webdav.username.clone(),
+                self.cloud_sync.settings().webdav.username.clone(),
                 CloudSyncInputField::WebdavUsername,
                 cx,
             ))
@@ -68,28 +68,28 @@ impl NyaTermApp {
                     .child(self.cloud_sync_input(
                         "cloud-s3-endpoint",
                         self.tr("settings.s3Endpoint"),
-                        self.cloud_sync.settings.s3.endpoint.clone(),
+                        self.cloud_sync.settings().s3.endpoint.clone(),
                         CloudSyncInputField::S3Endpoint,
                         cx,
                     ))
                     .child(self.cloud_sync_input(
                         "cloud-s3-bucket",
                         self.tr("settings.s3Bucket"),
-                        self.cloud_sync.settings.s3.bucket.clone(),
+                        self.cloud_sync.settings().s3.bucket.clone(),
                         CloudSyncInputField::S3Bucket,
                         cx,
                     ))
                     .child(self.cloud_sync_input(
                         "cloud-s3-region",
                         self.tr("settings.s3Region"),
-                        self.cloud_sync.settings.s3.region.clone(),
+                        self.cloud_sync.settings().s3.region.clone(),
                         CloudSyncInputField::S3Region,
                         cx,
                     ))
                     .child(self.cloud_sync_input(
                         "cloud-s3-root",
                         self.tr("settings.providerRoot"),
-                        self.cloud_sync.settings.s3.root.clone(),
+                        self.cloud_sync.settings().s3.root.clone(),
                         CloudSyncInputField::S3Root,
                         cx,
                     ))
@@ -124,7 +124,7 @@ impl NyaTermApp {
                 settings_switch_with_enabled(
                     palette,
                     "cloud-s3-url-style",
-                    self.cloud_sync.settings.s3.virtual_host_style,
+                    self.cloud_sync.settings().s3.virtual_host_style,
                     self.cloud_sync_form_enabled(),
                     cx.listener(|this, _, _, cx| {
                         this.toggle_s3_virtual_host_style(cx);
@@ -145,9 +145,9 @@ impl NyaTermApp {
         let (root, client_id, root_field, access_field, refresh_field, id_field, secret_field) =
             match provider {
                 "google_drive" => (
-                    self.cloud_sync.settings.google_drive.root.clone(),
+                    self.cloud_sync.settings().google_drive.root.clone(),
                     self.cloud_sync
-                        .settings
+                        .settings()
                         .google_drive
                         .client_id
                         .clone()
@@ -159,9 +159,9 @@ impl NyaTermApp {
                     CloudSyncInputField::GoogleDriveClientSecret,
                 ),
                 _ => (
-                    self.cloud_sync.settings.onedrive.root.clone(),
+                    self.cloud_sync.settings().onedrive.root.clone(),
                     self.cloud_sync
-                        .settings
+                        .settings()
                         .onedrive
                         .client_id
                         .clone()
@@ -256,14 +256,14 @@ impl NyaTermApp {
             .child(self.cloud_sync_input(
                 "cloud-aliyun-drive-root",
                 self.tr("settings.providerRoot"),
-                self.cloud_sync.settings.aliyun_drive.root.clone(),
+                self.cloud_sync.settings().aliyun_drive.root.clone(),
                 CloudSyncInputField::AliyunDriveRoot,
                 cx,
             ))
             .child(self.cloud_sync_input(
                 "cloud-aliyun-drive-type",
                 self.tr("settings.aliyunDriveType"),
-                self.cloud_sync.settings.aliyun_drive.drive_type.clone(),
+                self.cloud_sync.settings().aliyun_drive.drive_type.clone(),
                 CloudSyncInputField::AliyunDriveType,
                 cx,
             ))
@@ -286,7 +286,7 @@ impl NyaTermApp {
                     "cloud-aliyun-drive-client-id",
                     self.tr("settings.driveClientId"),
                     self.cloud_sync
-                        .settings
+                        .settings()
                         .aliyun_drive
                         .client_id
                         .clone()
@@ -314,17 +314,23 @@ impl NyaTermApp {
             .grid()
             .grid_cols(2)
             .gap_2()
-            .child(self.cloud_sync_input(
-                "cloud-gitee-endpoint",
-                self.tr("settings.giteeSnippetApiEndpoint"),
-                self.cloud_sync.settings.gitee_snippet.api_endpoint.clone(),
-                CloudSyncInputField::GiteeEndpoint,
-                cx,
-            ))
+            .child(
+                self.cloud_sync_input(
+                    "cloud-gitee-endpoint",
+                    self.tr("settings.giteeSnippetApiEndpoint"),
+                    self.cloud_sync
+                        .settings()
+                        .gitee_snippet
+                        .api_endpoint
+                        .clone(),
+                    CloudSyncInputField::GiteeEndpoint,
+                    cx,
+                ),
+            )
             .child(self.cloud_sync_input(
                 "cloud-gitee-gist",
                 self.tr("settings.giteeSnippetId"),
-                self.cloud_sync.settings.gitee_snippet.gist_id.clone(),
+                self.cloud_sync.settings().gitee_snippet.gist_id.clone(),
                 CloudSyncInputField::GiteeGistId,
                 cx,
             ))
@@ -343,12 +349,12 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let palette = self.theme_palette();
-        let pending = self.cloud_sync.github.auth.pending;
+        let pending = self.cloud_sync.github_auth().pending;
         let form_enabled = self.cloud_sync_form_enabled();
-        let connected = !self.cloud_sync.secret_draft.github_token.is_empty()
+        let connected = !self.cloud_sync.secret_draft().github_token.is_empty()
             || self
                 .cloud_sync
-                .settings
+                .settings()
                 .github_gist
                 .access_token
                 .as_deref()
@@ -358,11 +364,11 @@ impl NyaTermApp {
         } else {
             self.tr("settings.githubGistConnect")
         };
-        let gist_id = self.cloud_sync.settings.github_gist.gist_id.clone();
-        let user_code = self.cloud_sync.github.auth.user_code.clone();
-        let verification_uri = self.cloud_sync.github.auth.verification_uri.clone();
-        let login = self.cloud_sync.github.auth.login.clone();
-        let message = self.cloud_sync.github.auth.message.clone();
+        let gist_id = self.cloud_sync.settings().github_gist.gist_id.clone();
+        let user_code = self.cloud_sync.github_auth().user_code.clone();
+        let verification_uri = self.cloud_sync.github_auth().verification_uri.clone();
+        let login = self.cloud_sync.github_auth().login.clone();
+        let message = self.cloud_sync.github_auth().message.clone();
 
         div()
             .flex()

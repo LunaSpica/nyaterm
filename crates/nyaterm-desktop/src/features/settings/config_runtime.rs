@@ -6,7 +6,7 @@ use nyaterm_transport::SftpDuplicatePolicy;
 
 use crate::features::{NyaTermApp, TextInputSetup};
 use crate::models::{
-    CloudSyncSecretDraft, ConfigPathPromptKind, ConfigPathPromptResult, SnapshotPasswordPromptKind,
+    ConfigPathPromptKind, ConfigPathPromptResult, SnapshotPasswordPromptKind,
     SnapshotPasswordPromptState, TranslationSecretDraft,
 };
 
@@ -561,19 +561,20 @@ impl NyaTermApp {
                         self.recording.manager.set_memory_limit(
                             self.settings.summary.recording_memory_limit_bytes as usize,
                         );
-                        self.cloud_sync.settings = store
+                        let cloud_sync_settings = store
                             .load_cloud_sync_settings()
-                            .unwrap_or_else(|_| self.cloud_sync.settings.clone());
-                        self.cloud_sync.secret_draft = CloudSyncSecretDraft::default();
+                            .unwrap_or_else(|_| self.cloud_sync.settings().clone());
                         self.ai.settings.config = store
                             .load_ai_settings()
                             .unwrap_or_else(|_| self.ai.settings.config.clone());
                         self.ai.settings.secret_draft.clear();
                         self.sync_ai_drafts_from_active_profile();
                         self.settings.rebase_master_password();
-                        self.cloud_sync.state = store
+                        let cloud_sync_state = store
                             .load_cloud_sync_state()
-                            .unwrap_or_else(|_| self.cloud_sync.state.clone());
+                            .unwrap_or_else(|_| self.cloud_sync.state().clone());
+                        self.cloud_sync
+                            .replace_loaded(cloud_sync_settings, cloud_sync_state);
                         self.transfer.paths.duplicate_policy =
                             SftpDuplicatePolicy::from_legacy_value(
                                 &self.settings.summary.transfer_duplicate_strategy,

@@ -1,7 +1,11 @@
 //! Authoritative state for cloud-sync configuration, history and background jobs.
 
 use std::collections::HashSet;
-use std::sync::{Arc, atomic::AtomicBool, mpsc};
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+    mpsc,
+};
 
 use nyaterm_core::{CloudSyncError, CloudSyncHistoryEntry, CloudSyncSettings, CloudSyncState};
 
@@ -11,26 +15,51 @@ use crate::models::{
 };
 
 pub(in crate::features) struct CloudSyncFeatureState {
-    pub settings: CloudSyncSettings,
-    pub state: CloudSyncState,
-    pub history: Vec<CloudSyncHistoryEntry>,
-    pub history_expanded: HashSet<String>,
-    pub conflict: Option<CloudSyncConflictState>,
-    pub secret_draft: CloudSyncSecretDraft,
-    pub status: String,
+    settings: CloudSyncSettings,
+    state: CloudSyncState,
+    history: Vec<CloudSyncHistoryEntry>,
+    history_expanded: HashSet<String>,
+    conflict: Option<CloudSyncConflictState>,
+    secret_draft: CloudSyncSecretDraft,
+    status: String,
     /// Prevent overlapping network jobs from applying cloud state out of order.
-    pub job_running: bool,
-    pub focused_field: CloudSyncInputField,
-    pub provider_menu_open: bool,
-    pub github: GithubGistAuthFeatureState,
+    job_running: bool,
+    focused_field: CloudSyncInputField,
+    provider_menu_open: bool,
+    github: GithubGistAuthFeatureState,
 }
 
-pub(in crate::features) struct GithubGistAuthFeatureState {
-    pub auth: GithubGistAuthState,
-    pub(super) tx: mpsc::Sender<GithubGistAuthJobEvent>,
-    pub(super) rx: mpsc::Receiver<GithubGistAuthJobEvent>,
-    pub(super) job_id: u64,
-    pub(super) cancel: Option<Arc<AtomicBool>>,
+struct GithubGistAuthFeatureState {
+    auth: GithubGistAuthState,
+    tx: mpsc::Sender<GithubGistAuthJobEvent>,
+    rx: mpsc::Receiver<GithubGistAuthJobEvent>,
+    job_id: u64,
+    cancel: Option<Arc<AtomicBool>>,
+}
+
+pub(in crate::features) struct GithubGistAuthJobStart {
+    job_id: u64,
+    existing_gist_id: Option<String>,
+    cancel: Arc<AtomicBool>,
+    tx: mpsc::Sender<GithubGistAuthJobEvent>,
+}
+
+impl GithubGistAuthJobStart {
+    pub(in crate::features) fn job_id(&self) -> u64 {
+        self.job_id
+    }
+
+    pub(in crate::features) fn existing_gist_id(&self) -> Option<String> {
+        self.existing_gist_id.clone()
+    }
+
+    pub(in crate::features) fn cancel(&self) -> Arc<AtomicBool> {
+        self.cancel.clone()
+    }
+
+    pub(in crate::features) fn sender(&self) -> mpsc::Sender<GithubGistAuthJobEvent> {
+        self.tx.clone()
+    }
 }
 
 impl CloudSyncFeatureState {
@@ -72,12 +101,214 @@ impl CloudSyncFeatureState {
         true
     }
 
+    pub(in crate::features) fn settings(&self) -> &CloudSyncSettings {
+        &self.settings
+    }
+
+    pub(in crate::features) fn state(&self) -> &CloudSyncState {
+        &self.state
+    }
+
+    pub(in crate::features) fn history(&self) -> &[CloudSyncHistoryEntry] {
+        &self.history
+    }
+
+    pub(in crate::features) fn history_expanded(&self) -> &HashSet<String> {
+        &self.history_expanded
+    }
+
+    pub(in crate::features) fn conflict(&self) -> Option<&CloudSyncConflictState> {
+        self.conflict.as_ref()
+    }
+
+    pub(in crate::features) fn secret_draft(&self) -> &CloudSyncSecretDraft {
+        &self.secret_draft
+    }
+
+    pub(in crate::features) fn status(&self) -> &str {
+        &self.status
+    }
+
+    pub(in crate::features) fn job_running(&self) -> bool {
+        self.job_running
+    }
+
+    pub(in crate::features) fn provider_menu_open(&self) -> bool {
+        self.provider_menu_open
+    }
+
+    pub(in crate::features) fn github_auth(&self) -> &GithubGistAuthState {
+        &self.github.auth
+    }
+
+    pub(in crate::features) fn settings_draft_snapshot(
+        &self,
+    ) -> (CloudSyncSettings, CloudSyncSecretDraft) {
+        (self.settings.clone(), self.secret_draft.clone())
+    }
+
+    pub(in crate::features) fn settings_draft_matches(
+        &self,
+        settings: &CloudSyncSettings,
+        secret_draft: &CloudSyncSecretDraft,
+    ) -> bool {
+        settings == &self.settings && secret_draft == &self.secret_draft
+    }
+
+    pub(in crate::features) fn replace_settings(
+        &mut self,
+        settings: CloudSyncSettings,
+        secret_draft: CloudSyncSecretDraft,
+    ) {
+        self.settings = settings;
+        self.secret_draft = secret_draft;
+    }
+
+    pub(in crate::features) fn replace_loaded(
+        &mut self,
+        settings: CloudSyncSettings,
+        state: CloudSyncState,
+    ) {
+        self.settings = settings;
+        self.state = state;
+        self.secret_draft = CloudSyncSecretDraft::default();
+    }
+
+    pub(in crate::features) fn pending_settings(&self) -> CloudSyncSettings {
+        let mut next = self.settings.clone();
+        let draft = &self.secret_draft;
+        if !draft.webdav_password.is_empty() {
+            next.webdav.password = Some(draft.webdav_password.clone());
+        }
+        if !draft.s3_access_key_id.is_empty() {
+            next.s3.access_key_id = Some(draft.s3_access_key_id.clone());
+        }
+        if !draft.s3_secret_access_key.is_empty() {
+            next.s3.secret_access_key = Some(draft.s3_secret_access_key.clone());
+        }
+        if !draft.s3_session_token.is_empty() {
+            next.s3.session_token = Some(draft.s3_session_token.clone());
+        }
+        if !draft.google_drive_access_token.is_empty() {
+            next.google_drive.access_token = Some(draft.google_drive_access_token.clone());
+        }
+        if !draft.google_drive_refresh_token.is_empty() {
+            next.google_drive.refresh_token = Some(draft.google_drive_refresh_token.clone());
+        }
+        if !draft.google_drive_client_secret.is_empty() {
+            next.google_drive.client_secret = Some(draft.google_drive_client_secret.clone());
+        }
+        if !draft.onedrive_access_token.is_empty() {
+            next.onedrive.access_token = Some(draft.onedrive_access_token.clone());
+        }
+        if !draft.onedrive_refresh_token.is_empty() {
+            next.onedrive.refresh_token = Some(draft.onedrive_refresh_token.clone());
+        }
+        if !draft.onedrive_client_secret.is_empty() {
+            next.onedrive.client_secret = Some(draft.onedrive_client_secret.clone());
+        }
+        if !draft.aliyun_drive_access_token.is_empty() {
+            next.aliyun_drive.access_token = Some(draft.aliyun_drive_access_token.clone());
+        }
+        if !draft.aliyun_drive_refresh_token.is_empty() {
+            next.aliyun_drive.refresh_token = Some(draft.aliyun_drive_refresh_token.clone());
+        }
+        if !draft.aliyun_drive_client_secret.is_empty() {
+            next.aliyun_drive.client_secret = Some(draft.aliyun_drive_client_secret.clone());
+        }
+        if !draft.gitee_token.is_empty() {
+            next.gitee_snippet.access_token = Some(draft.gitee_token.clone());
+        }
+        if !draft.github_token.is_empty() {
+            next.github_gist.access_token = Some(draft.github_token.clone());
+        }
+        next
+    }
+
+    pub(in crate::features) fn set_status(&mut self, status: impl Into<String>) {
+        self.status = status.into();
+    }
+
+    pub(in crate::features) fn select_provider(&mut self, provider: &'static str) {
+        self.settings.provider = provider.to_string();
+        self.provider_menu_open = false;
+        self.status = format!("provider set to {provider}; save to persist");
+    }
+
+    pub(in crate::features) fn toggle_provider_menu(&mut self) {
+        self.provider_menu_open = !self.provider_menu_open;
+    }
+
+    pub(in crate::features) fn toggle_enabled(&mut self) {
+        self.settings.enabled = !self.settings.enabled;
+        self.status = if self.settings.enabled {
+            "cloud sync enabled; save to persist"
+        } else {
+            "cloud sync disabled; save to persist"
+        }
+        .to_string();
+    }
+
+    pub(in crate::features) fn toggle_s3_virtual_host_style(&mut self) {
+        self.settings.s3.virtual_host_style = !self.settings.s3.virtual_host_style;
+        self.status = if self.settings.s3.virtual_host_style {
+            "S3 virtual-host style enabled; save to persist"
+        } else {
+            "S3 path-style URLs enabled; save to persist"
+        }
+        .to_string();
+    }
+
+    pub(in crate::features) fn toggle_auto_check(&mut self) {
+        self.settings.auto_check_on_startup = !self.settings.auto_check_on_startup;
+        self.status = "cloud sync auto-check setting edited".to_string();
+    }
+
+    pub(in crate::features) fn toggle_auto_push(&mut self) {
+        self.settings.auto_push_on_change = !self.settings.auto_push_on_change;
+        self.status = "cloud sync auto-push setting edited".to_string();
+    }
+
+    pub(in crate::features) fn adjust_debounce(&mut self, delta: i64) {
+        let current = self.settings.sync_debounce_seconds as i64;
+        self.settings.sync_debounce_seconds = (current + delta).clamp(1, 3_600) as u64;
+        self.status = "cloud sync debounce setting edited".to_string();
+    }
+
     pub(super) fn begin_job(&mut self) -> bool {
         if self.job_running {
             return false;
         }
         self.job_running = true;
         true
+    }
+
+    pub(super) fn complete_job(&mut self, state: CloudSyncState, status: String) {
+        self.job_running = false;
+        self.conflict = None;
+        self.state = state;
+        self.status = status;
+    }
+
+    pub(super) fn finish_job_with_status(&mut self, status: String) {
+        self.job_running = false;
+        self.status = status;
+    }
+
+    pub(super) fn fail_job(
+        &mut self,
+        error: &CloudSyncError,
+        status: String,
+        provider: String,
+        provider_action: bool,
+    ) {
+        self.job_running = false;
+        self.status = status;
+        self.capture_conflict(error, provider, provider_action);
+    }
+
+    pub(super) fn replace_history(&mut self, history: Vec<CloudSyncHistoryEntry>) {
+        self.history = history;
     }
 
     pub(super) fn toggle_history_details(&mut self, entry_id: &str) {
@@ -101,6 +332,108 @@ impl CloudSyncFeatureState {
                 provider_action,
             });
         }
+    }
+
+    pub(super) fn begin_github_auth(
+        &mut self,
+        waiting_message: String,
+    ) -> Option<GithubGistAuthJobStart> {
+        if self.github.auth.pending {
+            return None;
+        }
+        if let Some(cancel) = self.github.cancel.take() {
+            cancel.store(true, Ordering::Relaxed);
+        }
+        self.github.job_id = self.github.job_id.wrapping_add(1);
+        let existing_gist_id = self.settings.github_gist.gist_id.trim().to_string();
+        let existing_gist_id = (!existing_gist_id.is_empty()).then_some(existing_gist_id);
+        let cancel = Arc::new(AtomicBool::new(false));
+        self.github.auth = GithubGistAuthState {
+            pending: true,
+            message: Some(waiting_message.clone()),
+            ..Default::default()
+        };
+        self.github.cancel = Some(cancel.clone());
+        self.status = waiting_message;
+        Some(GithubGistAuthJobStart {
+            job_id: self.github.job_id,
+            existing_gist_id,
+            cancel,
+            tx: self.github.tx.clone(),
+        })
+    }
+
+    pub(super) fn cancel_github_auth(&mut self) {
+        if let Some(cancel) = self.github.cancel.take() {
+            cancel.store(true, Ordering::Relaxed);
+        }
+        self.github.job_id = self.github.job_id.wrapping_add(1);
+        self.github.auth = GithubGistAuthState::default();
+    }
+
+    pub(super) fn drain_github_auth_events(
+        &self,
+        limit: usize,
+    ) -> Vec<crate::models::GithubGistAuthEvent> {
+        let mut events = Vec::new();
+        for _ in 0..limit {
+            let Ok(job) = self.github.rx.try_recv() else {
+                break;
+            };
+            if job.job_id == self.github.job_id {
+                events.push(job.event);
+            }
+        }
+        events
+    }
+
+    pub(super) fn apply_github_auth_started(
+        &mut self,
+        user_code: String,
+        verification_uri: String,
+        message: String,
+    ) {
+        self.github.auth.pending = true;
+        self.github.auth.user_code = Some(user_code);
+        self.github.auth.verification_uri = Some(verification_uri);
+        self.github.auth.message = Some(message);
+    }
+
+    pub(super) fn apply_github_auth_polling(&mut self, message: String) {
+        self.github.auth.message = Some(message);
+    }
+
+    pub(super) fn apply_github_auth_succeeded(
+        &mut self,
+        access_token: String,
+        gist_id: String,
+        login: String,
+        message: String,
+    ) {
+        self.github.cancel = None;
+        self.secret_draft.github_token = access_token;
+        self.settings.github_gist.gist_id = gist_id;
+        self.github.auth = GithubGistAuthState {
+            pending: false,
+            login: Some(login),
+            message: Some(message.clone()),
+            ..Default::default()
+        };
+        self.status = message;
+    }
+
+    pub(super) fn apply_github_auth_failed(&mut self, message: String) {
+        self.github.cancel = None;
+        self.github.auth.pending = false;
+        self.github.auth.user_code = None;
+        self.github.auth.verification_uri = None;
+        self.github.auth.message = Some(message.clone());
+        self.status = message;
+    }
+
+    pub(super) fn apply_github_auth_cancelled(&mut self) {
+        self.github.cancel = None;
+        self.github.auth = GithubGistAuthState::default();
     }
 
     fn input_value_mut(&mut self) -> &mut String {
@@ -174,9 +507,13 @@ impl CloudSyncFeatureState {
 
 #[cfg(test)]
 mod tests {
-    use nyaterm_core::{CloudSyncHistoryEntry, CloudSyncSettings, CloudSyncState};
+    use std::sync::atomic::Ordering;
 
-    use crate::models::CloudSyncInputField;
+    use nyaterm_core::{CloudSyncError, CloudSyncHistoryEntry, CloudSyncSettings, CloudSyncState};
+
+    use crate::models::{
+        CloudSyncInputField, CloudSyncSecretDraft, GithubGistAuthEvent, GithubGistAuthJobEvent,
+    };
 
     use super::CloudSyncFeatureState;
 
@@ -198,19 +535,114 @@ mod tests {
 
         let mut cloud_sync = CloudSyncFeatureState::new(settings, state, history);
 
-        assert_eq!(cloud_sync.settings.provider, "webdav");
-        assert_eq!(cloud_sync.settings.remote_root, "team");
-        assert_eq!(cloud_sync.history.len(), 1);
-        assert!(cloud_sync.github.rx.try_recv().is_err());
-        assert!(!cloud_sync.job_running);
-        assert!(cloud_sync.conflict.is_none());
+        assert_eq!(cloud_sync.settings().provider, "webdav");
+        assert_eq!(cloud_sync.settings().remote_root, "team");
+        assert_eq!(cloud_sync.history().len(), 1);
+        assert!(cloud_sync.drain_github_auth_events(1).is_empty());
+        assert!(!cloud_sync.job_running());
+        assert!(cloud_sync.conflict().is_none());
 
-        cloud_sync.settings.webdav.password = Some("stored".to_string());
+        let mut settings = cloud_sync.settings().clone();
+        settings.webdav.password = Some("stored".to_string());
+        cloud_sync.replace_settings(settings, CloudSyncSecretDraft::default());
         assert!(cloud_sync.apply_input(CloudSyncInputField::WebdavPassword, "draft".to_string(),));
         assert_eq!(
-            cloud_sync.settings.webdav.password.as_deref(),
+            cloud_sync.settings().webdav.password.as_deref(),
             Some("stored")
         );
-        assert_eq!(cloud_sync.secret_draft.webdav_password, "draft");
+        assert_eq!(cloud_sync.secret_draft().webdav_password, "draft");
+    }
+
+    #[test]
+    fn pending_settings_merge_only_non_empty_secret_drafts() {
+        let mut settings = CloudSyncSettings::default();
+        settings.webdav.password = Some("stored-webdav".to_string());
+        settings.s3.session_token = Some("stored-session".to_string());
+        let mut cloud_sync =
+            CloudSyncFeatureState::new(settings, CloudSyncState::default(), Vec::new());
+        cloud_sync.secret_draft.webdav_password = "edited-webdav".to_string();
+        cloud_sync.secret_draft.github_token = "new-github-token".to_string();
+
+        let pending = cloud_sync.pending_settings();
+
+        assert_eq!(pending.webdav.password.as_deref(), Some("edited-webdav"));
+        assert_eq!(pending.s3.session_token.as_deref(), Some("stored-session"));
+        assert_eq!(
+            pending.github_gist.access_token.as_deref(),
+            Some("new-github-token")
+        );
+    }
+
+    #[test]
+    fn job_transitions_keep_running_state_status_and_conflict_consistent() {
+        let mut cloud_sync = CloudSyncFeatureState::new(
+            CloudSyncSettings::default(),
+            CloudSyncState::default(),
+            Vec::new(),
+        );
+
+        assert!(cloud_sync.begin_job());
+        assert!(!cloud_sync.begin_job());
+        cloud_sync.fail_job(
+            &CloudSyncError::Conflict("remote changed".to_string()),
+            "push failed".to_string(),
+            "webdav".to_string(),
+            true,
+        );
+        assert!(!cloud_sync.job_running());
+        assert_eq!(cloud_sync.status(), "push failed");
+        assert_eq!(cloud_sync.conflict().unwrap().provider, "webdav");
+
+        assert!(cloud_sync.begin_job());
+        let completed_state = CloudSyncState {
+            device_id: "device-2".to_string(),
+            ..CloudSyncState::default()
+        };
+        cloud_sync.complete_job(completed_state, "push complete".to_string());
+        assert!(!cloud_sync.job_running());
+        assert!(cloud_sync.conflict().is_none());
+        assert_eq!(cloud_sync.state().device_id, "device-2");
+        assert_eq!(cloud_sync.status(), "push complete");
+    }
+
+    #[test]
+    fn github_auth_filters_stale_events_and_cancels_the_active_job() {
+        let mut cloud_sync = CloudSyncFeatureState::new(
+            CloudSyncSettings::default(),
+            CloudSyncState::default(),
+            Vec::new(),
+        );
+        let job = cloud_sync
+            .begin_github_auth("waiting".to_string())
+            .expect("auth job should start");
+        let job_id = job.job_id();
+        let cancel = job.cancel();
+        cloud_sync
+            .github
+            .tx
+            .send(GithubGistAuthJobEvent {
+                job_id: job_id.wrapping_sub(1),
+                event: GithubGistAuthEvent::Cancelled,
+            })
+            .unwrap();
+        cloud_sync
+            .github
+            .tx
+            .send(GithubGistAuthJobEvent {
+                job_id,
+                event: GithubGistAuthEvent::Polling { slow_down: true },
+            })
+            .unwrap();
+
+        let events = cloud_sync.drain_github_auth_events(8);
+        assert_eq!(events.len(), 1);
+        assert!(matches!(
+            events[0],
+            GithubGistAuthEvent::Polling { slow_down: true }
+        ));
+
+        cloud_sync.cancel_github_auth();
+        assert!(cancel.load(Ordering::Relaxed));
+        assert!(!cloud_sync.github_auth().pending);
     }
 }

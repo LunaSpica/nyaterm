@@ -237,12 +237,16 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   drafts and GitHub device-flow runtime now have one authoritative
   `CloudSyncFeatureState` owner with a focused `github` child. Fifteen app
   fields became one feature field, and the device-flow channel is constructed
-  by that owner. Pure input routing, job admission, conflict capture and
-  history-expansion transitions moved onto the feature state; `NyaTermApp`
-  retains master-password/session policy checks, GPUI notification and task
-  coordination. Secret input still updates only `CloudSyncSecretDraft`, while
-  the existing encrypted settings merge and legacy state-document paths remain
-  unchanged.
+  by that owner. Every owner field and the GitHub child are now private. Input
+  routing, settings toggles/replacement, persistence-time secret-draft merging,
+  job admission/completion/failure, conflict capture, history replacement and
+  expansion, provider-menu state, and GitHub device-flow identity/cancellation/
+  event transitions now stay on the feature state. Views use read-only accessors;
+  `NyaTermApp` retains master-password/session policy checks, network and disk
+  work, external-URL/clipboard adapters, terminal-status mirroring, GPUI
+  notification and task coordination. Secret input still updates only
+  `CloudSyncSecretDraft`; encrypted settings, serialized state/history and
+  legacy state-document compatibility paths are unchanged.
 - Recording and SSH-tunnel background resources now have focused
   `RecordingFeatureState` and `TunnelFeatureState` owners. Eleven app fields
   became two feature fields: the recording owner constructs the manager/write
@@ -1548,6 +1552,11 @@ honest remaining list.
    pending/status/result state. Their fields and job payloads are private, and
    translation settings replacement cannot desynchronize the secret draft or
    active target language because the duplicate target-language field is gone.
+   Cloud sync now has the same method-only boundary: job-running, compatibility
+   state, status and conflict are committed together on success or failure;
+   settings drafts merge secret values on the owner; and GitHub device-flow
+   events cannot mutate the token draft, gist id or cancellation identity from
+   outside `CloudSyncFeatureState`.
    The three remote
    panes now share the same typed job lifecycle, so a stale Docker/process/stats
    event cannot clear the pending owner of a newer session job. Session dialogs

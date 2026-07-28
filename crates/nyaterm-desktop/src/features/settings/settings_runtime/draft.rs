@@ -1,10 +1,10 @@
 use gpui::Context;
-use nyaterm_core::{CloudSyncSettings, ConnectionStore};
+use nyaterm_core::ConnectionStore;
 use nyaterm_transport::SftpDuplicatePolicy;
 
 use crate::features::NyaTermApp;
 use crate::features::app_state::SettingsDraftSnapshot;
-use crate::models::{CloudSyncSecretDraft, MainMode, NavItem, TranslationSecretDraft};
+use crate::models::{MainMode, NavItem, TranslationSecretDraft};
 
 impl NyaTermApp {
     pub(in crate::features) fn begin_settings_draft(&mut self) {
@@ -13,14 +13,16 @@ impl NyaTermApp {
         }
         let (translation_settings, translation_secret_draft) =
             self.translation.settings_draft_snapshot();
+        let (cloud_sync_settings, cloud_sync_secret_draft) =
+            self.cloud_sync.settings_draft_snapshot();
         self.shell.navigation.settings.draft_snapshot = Some(SettingsDraftSnapshot {
             settings: self.settings.summary.clone(),
             ai_settings: self.ai.settings.config.clone(),
             ai_model_draft: self.ai.settings.model_draft.clone(),
             ai_base_url_draft: self.ai.settings.base_url_draft.clone(),
             ai_secret_draft: self.ai.settings.secret_draft.clone(),
-            cloud_sync_settings: self.cloud_sync.settings.clone(),
-            cloud_sync_secret_draft: self.cloud_sync.secret_draft.clone(),
+            cloud_sync_settings,
+            cloud_sync_secret_draft,
             translation_settings,
             translation_secret_draft,
             keyword_highlights: self.settings.keyword_config.clone(),
@@ -38,8 +40,10 @@ impl NyaTermApp {
             || snapshot.ai_model_draft != self.ai.settings.model_draft
             || snapshot.ai_base_url_draft != self.ai.settings.base_url_draft
             || snapshot.ai_secret_draft != self.ai.settings.secret_draft
-            || snapshot.cloud_sync_settings != self.cloud_sync.settings
-            || snapshot.cloud_sync_secret_draft != self.cloud_sync.secret_draft
+            || !self.cloud_sync.settings_draft_matches(
+                &snapshot.cloud_sync_settings,
+                &snapshot.cloud_sync_secret_draft,
+            )
             || !self.translation.settings_draft_matches(
                 &snapshot.translation_settings,
                 &snapshot.translation_secret_draft,
@@ -64,59 +68,8 @@ impl NyaTermApp {
         true
     }
 
-    pub(in crate::features) fn pending_cloud_sync_settings(&self) -> CloudSyncSettings {
-        let mut next = self.cloud_sync.settings.clone();
-        let draft = &self.cloud_sync.secret_draft;
-        if !draft.webdav_password.is_empty() {
-            next.webdav.password = Some(draft.webdav_password.clone());
-        }
-        if !draft.s3_access_key_id.is_empty() {
-            next.s3.access_key_id = Some(draft.s3_access_key_id.clone());
-        }
-        if !draft.s3_secret_access_key.is_empty() {
-            next.s3.secret_access_key = Some(draft.s3_secret_access_key.clone());
-        }
-        if !draft.s3_session_token.is_empty() {
-            next.s3.session_token = Some(draft.s3_session_token.clone());
-        }
-        if !draft.google_drive_access_token.is_empty() {
-            next.google_drive.access_token = Some(draft.google_drive_access_token.clone());
-        }
-        if !draft.google_drive_refresh_token.is_empty() {
-            next.google_drive.refresh_token = Some(draft.google_drive_refresh_token.clone());
-        }
-        if !draft.google_drive_client_secret.is_empty() {
-            next.google_drive.client_secret = Some(draft.google_drive_client_secret.clone());
-        }
-        if !draft.onedrive_access_token.is_empty() {
-            next.onedrive.access_token = Some(draft.onedrive_access_token.clone());
-        }
-        if !draft.onedrive_refresh_token.is_empty() {
-            next.onedrive.refresh_token = Some(draft.onedrive_refresh_token.clone());
-        }
-        if !draft.onedrive_client_secret.is_empty() {
-            next.onedrive.client_secret = Some(draft.onedrive_client_secret.clone());
-        }
-        if !draft.aliyun_drive_access_token.is_empty() {
-            next.aliyun_drive.access_token = Some(draft.aliyun_drive_access_token.clone());
-        }
-        if !draft.aliyun_drive_refresh_token.is_empty() {
-            next.aliyun_drive.refresh_token = Some(draft.aliyun_drive_refresh_token.clone());
-        }
-        if !draft.aliyun_drive_client_secret.is_empty() {
-            next.aliyun_drive.client_secret = Some(draft.aliyun_drive_client_secret.clone());
-        }
-        if !draft.gitee_token.is_empty() {
-            next.gitee_snippet.access_token = Some(draft.gitee_token.clone());
-        }
-        if !draft.github_token.is_empty() {
-            next.github_gist.access_token = Some(draft.github_token.clone());
-        }
-        next
-    }
-
     pub(in crate::features) fn pending_settings_cloud_error(&self) -> Option<String> {
-        let settings = self.pending_cloud_sync_settings();
+        let settings = self.cloud_sync.pending_settings();
         if !settings.enabled {
             return None;
         }
@@ -209,8 +162,9 @@ impl NyaTermApp {
         if !self.settings_draft_dirty() {
             return false;
         }
-        self.cloud_sync.status = "apply settings before running cloud sync".to_string();
-        self.terminal.view.status = self.cloud_sync.status.clone();
+        self.cloud_sync
+            .set_status("apply settings before running cloud sync");
+        self.terminal.view.status = self.cloud_sync.status().to_string();
         cx.notify();
         true
     }
@@ -259,7 +213,7 @@ impl NyaTermApp {
 
         let settings = self.settings.summary.clone();
         let ai_settings = self.pending_ai_settings();
-        let cloud_sync_settings = self.pending_cloud_sync_settings();
+        let cloud_sync_settings = self.cloud_sync.pending_settings();
         let translation_settings = self.translation.pending_settings();
         let keyword_highlights = self.settings.keyword_config.clone();
         let master_password_update = if self.settings.master_password.draft.is_empty() {
@@ -312,13 +266,13 @@ impl NyaTermApp {
                 self.apply_gpui_settings(saved_settings);
                 self.settings.rebase_master_password();
                 self.ai.settings.config = saved_ai_settings;
-                self.cloud_sync.settings = saved_cloud_sync_settings;
+                self.cloud_sync
+                    .replace_settings(saved_cloud_sync_settings, Default::default());
                 self.translation.replace_settings(
                     saved_translation_settings,
                     TranslationSecretDraft::default(),
                 );
                 self.settings.keyword_config = saved_keyword_highlights;
-                self.cloud_sync.secret_draft = CloudSyncSecretDraft::default();
                 self.ai.settings.secret_draft.clear();
                 self.sync_ai_drafts_from_active_profile();
                 self.recording
@@ -375,8 +329,10 @@ impl NyaTermApp {
             self.ai.settings.model_draft = snapshot.ai_model_draft;
             self.ai.settings.base_url_draft = snapshot.ai_base_url_draft;
             self.ai.settings.secret_draft = snapshot.ai_secret_draft;
-            self.cloud_sync.settings = snapshot.cloud_sync_settings;
-            self.cloud_sync.secret_draft = snapshot.cloud_sync_secret_draft;
+            self.cloud_sync.replace_settings(
+                snapshot.cloud_sync_settings,
+                snapshot.cloud_sync_secret_draft,
+            );
             self.translation.replace_settings(
                 snapshot.translation_settings,
                 snapshot.translation_secret_draft,
@@ -412,7 +368,7 @@ impl NyaTermApp {
         self.terminal.view.status = match self
             .settings
             .master_password
-            .toggle(self.cloud_sync.settings.enabled)
+            .toggle(self.cloud_sync.settings().enabled)
         {
             Ok(true) => "master password enabled; enter a password".to_string(),
             Ok(false) => "master password removal staged".to_string(),

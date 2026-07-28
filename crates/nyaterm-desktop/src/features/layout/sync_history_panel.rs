@@ -19,37 +19,50 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         // Tauri SyncBackupHistoryPanel:
         // shared PanelHeader + status strip + optional conflict card + dense history list.
-        let provider = configured_cloud_sync_provider(&self.cloud_sync.settings);
+        let provider = configured_cloud_sync_provider(self.cloud_sync.settings());
         let provider_label = format_cloud_provider(&provider);
-        let enabled = self.cloud_sync.settings.enabled;
+        let enabled = self.cloud_sync.settings().enabled;
         let state = if !enabled {
             "disabled"
-        } else if self.cloud_sync.conflict.is_some() {
+        } else if self.cloud_sync.conflict().is_some() {
             "conflict"
-        } else if self.cloud_sync.status.to_ascii_lowercase().contains("fail") {
+        } else if self
+            .cloud_sync
+            .status()
+            .to_ascii_lowercase()
+            .contains("fail")
+        {
             "failed"
-        } else if self.cloud_sync.status.to_ascii_lowercase().contains("push")
-            || self.cloud_sync.status.to_ascii_lowercase().contains("pull")
+        } else if self
+            .cloud_sync
+            .status()
+            .to_ascii_lowercase()
+            .contains("push")
             || self
                 .cloud_sync
-                .status
+                .status()
+                .to_ascii_lowercase()
+                .contains("pull")
+            || self
+                .cloud_sync
+                .status()
                 .to_ascii_lowercase()
                 .contains("running")
         {
             "running"
         } else if self
             .cloud_sync
-            .status
+            .status()
             .to_ascii_lowercase()
             .contains("success")
             || self
                 .cloud_sync
-                .status
+                .status()
                 .to_ascii_lowercase()
                 .contains("synced")
             || self
                 .cloud_sync
-                .status
+                .status()
                 .to_ascii_lowercase()
                 .contains("ready")
         {
@@ -65,10 +78,10 @@ impl NyaTermApp {
             "success" => self.tr("settings.syncState.success"),
             _ => self.tr("settings.syncState.idle"),
         };
-        let status_message = self.cloud_sync.status.clone();
-        let history = self.cloud_sync.history.clone();
-        let expanded = self.cloud_sync.history_expanded.clone();
-        let conflict = self.cloud_sync.conflict.clone();
+        let status_message = self.cloud_sync.status().to_string();
+        let history = self.cloud_sync.history().to_vec();
+        let expanded = self.cloud_sync.history_expanded().clone();
+        let conflict = self.cloud_sync.conflict().cloned();
 
         let mut rows = div().flex().flex_col();
         if history.is_empty() {
