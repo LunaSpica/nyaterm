@@ -1,6 +1,19 @@
-use super::*;
+use std::time::{Duration, Instant};
 
+use gpui::Context;
+use nyaterm_transport::SessionEvent;
+
+use crate::features::shell::event_pump::helpers::{
+    SESSION_EVENT_DRAIN_SLOW_CHUNK, SessionEventDrainBudget, SessionEventDrainTimings,
+    connect_settle_active, session_event_backlog_active, session_event_drain_budget,
+    session_event_drain_is_slow, session_event_drain_should_yield,
+    session_event_input_wake_drain_budget, session_events_output_bytes,
+    terminal_frame_backlog_active_from_counts, terminal_log_plain_text,
+    terminal_output_dropped_marker,
+};
+use crate::features::{NyaTermApp, short_id};
 use crate::models::AiDetectedErrorState;
+use crate::models::TerminalViewState;
 
 #[derive(Clone, Copy)]
 enum SessionOutputDrainStep {
