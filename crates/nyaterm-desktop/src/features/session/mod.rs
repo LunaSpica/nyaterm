@@ -18,8 +18,8 @@ mod zmodem_runtime;
 pub(in crate::features) use auth_runtime::{
     CredentialPromptBroker, CredentialPromptRequest, CredentialPromptState, HostKeyPromptBroker,
     HostKeyPromptChoice, HostKeyPromptIssue, HostKeyPromptRequest, KeyboardInteractivePromptState,
-    NativeHostKeyVerifier, NativeOtpCodePreview, NativeOtpProvider, SftpDuplicatePromptBroker,
-    SftpDuplicatePromptState, unix_seconds_now,
+    NativeHostKeyVerifier, NativeOtpCodePreview, NativeOtpProvider, SftpDuplicatePromptState,
+    unix_seconds_now,
 };
 pub(in crate::features) use prompt_runtime::{
     credential_prompt_id, credential_prompt_target, credential_text_input_id,
@@ -27,5 +27,6 @@ pub(in crate::features) use prompt_runtime::{
     keyboard_interactive_text_input_id, sftp_duplicate_prompt_id, uuid_like_prompt_id,
 };
 pub(in crate::features) use state::{
-    FailedSessionStart, PendingSessionStart, SessionFeatureState, SessionPaneState,
+    FailedSessionStart, PendingSessionStart, SessionFeatureFocus, SessionFeatureState,
+    SessionPaneState,
 };

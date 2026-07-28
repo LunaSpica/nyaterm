@@ -30,8 +30,9 @@ impl NyaTermApp {
             return;
         };
         let duplicate_policy = self.transfer.paths.duplicate_policy;
-        let duplicate_resolver = (duplicate_policy == SftpDuplicatePolicy::Ask)
-            .then(|| self.duplicate_prompts.clone() as Arc<dyn SftpDuplicateResolver>);
+        let duplicate_resolver = (duplicate_policy == SftpDuplicatePolicy::Ask).then(|| {
+            self.session.prompts.duplicate_prompts.clone() as Arc<dyn SftpDuplicateResolver>
+        });
         let transfer_options = self.sftp_transfer_options();
         self.enqueue_sftp_download_job_for_target(
             self.session.active_id.clone(),
@@ -327,8 +328,11 @@ impl NyaTermApp {
                 local_path,
             } => {
                 let duplicate_policy = self.transfer.paths.duplicate_policy;
-                let duplicate_resolver = (duplicate_policy == SftpDuplicatePolicy::Ask)
-                    .then(|| self.duplicate_prompts.clone() as Arc<dyn SftpDuplicateResolver>);
+                let duplicate_resolver =
+                    (duplicate_policy == SftpDuplicatePolicy::Ask).then(|| {
+                        self.session.prompts.duplicate_prompts.clone()
+                            as Arc<dyn SftpDuplicateResolver>
+                    });
                 let transfer_options = self.sftp_transfer_options();
                 let control = SftpTransferControl::new();
                 let job = &mut self.transfer.queue.jobs[index];
@@ -369,8 +373,11 @@ impl NyaTermApp {
                 remote_path,
             } => {
                 let duplicate_policy = self.transfer.paths.duplicate_policy;
-                let duplicate_resolver = (duplicate_policy == SftpDuplicatePolicy::Ask)
-                    .then(|| self.duplicate_prompts.clone() as Arc<dyn SftpDuplicateResolver>);
+                let duplicate_resolver =
+                    (duplicate_policy == SftpDuplicatePolicy::Ask).then(|| {
+                        self.session.prompts.duplicate_prompts.clone()
+                            as Arc<dyn SftpDuplicateResolver>
+                    });
                 let transfer_options = self.sftp_transfer_options();
                 let control = SftpTransferControl::new();
                 let job = &mut self.transfer.queue.jobs[index];

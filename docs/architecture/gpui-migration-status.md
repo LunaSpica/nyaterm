@@ -9,7 +9,7 @@ Last updated from the working tree on 2026-07-28.
 
 | Metric | Current value | Notes |
 | --- | ---: | --- |
-| `NyaTermApp` fields | 162 | Counted from `features/app_state/mod.rs`; down from 585, still transitional. |
+| `NyaTermApp` fields | 128 | Counted from `features/app_state/mod.rs`; down from 585, still transitional. |
 | `impl NyaTermApp` blocks | 238 | Spread across 233 files under `crates/nyaterm-desktop/src`. |
 | `#[path = "..."]` declarations in desktop | 0 | Cleared. Every directory is a real module; the boundary script fails on any new occurrence. |
 | `use super::*` imports in desktop | 0 | Cleared in production and test modules; guarded crate-wide. |
@@ -238,9 +238,17 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   existing `SessionStartFeatureState` is nested as `SessionFeatureState::start`
   and still owns its worker channel, pending/failed maps, active selection,
   cancellation tombstones, pane replacement state, reconnect failures and
-  deferred workspace split. `NyaTermApp` retains worker spawning, navigation,
-  event routing, logging and GPUI notifications. Session creation, reconnect,
-  terminal protocol and transport behavior are unchanged.
+  deferred workspace split. Two more focused children now own the session
+  interaction lifecycle: `SessionPromptState` constructs and retains the
+  SFTP-duplicate, host-key and credential brokers, active SSH verification
+  prompts, OTP provider and prompt focus; `SessionDialogState` owns tab
+  actions, close-all/quit confirmation, rename, color, info, startup-command
+  and temporary-SSH-link dialogs. This removes another thirty-four app fields.
+  Startup-command open/cancel/submit, delay and text-input transitions execute
+  on the dialog owner, while `NyaTermApp` retains worker spawning, navigation,
+  event routing, translation/status updates and GPUI notifications. Credential
+  storage, session creation, reconnect, terminal protocol and transport
+  behavior are unchanged.
 - Transfer state is grouped into `TransferFeatureState`. Seventy-eight fields
   turned out to be five separate things sharing one panel: the job `queue`, the
   SFTP `browser`, the file operation dialogs (`file_ops`), the built-in remote
@@ -1384,7 +1392,7 @@ honest remaining list.
    compiler-confirmed final pass also removed `features/prelude.rs`, so modules
    cannot regain the same implicit dependency surface through a shared import
    bucket.
-3. Largely done. `NyaTermApp` is down from 585 fields to 162, across fifteen
+3. Largely done. `NyaTermApp` is down from 585 fields to 128, across fifteen
    feature-state structs. The latest cohesive cuts moved sixteen terminal
    command-assistance and credential-prompt fields into
    `TerminalFeatureState::assist`, then seventeen transient settings fields
@@ -1393,8 +1401,8 @@ honest remaining list.
    owners, followed by cloud-sync configuration, secret drafts, history,
    conflict and GitHub device-flow state, recording and SSH-tunnel runtime
    resources with their job/UI lifecycle state, then the complete live session
-   runtime with its nested session-start and reconnect state machine. What is
-   left is a long tail, and much of it is
+   runtime with nested session-start, prompt and dialog ownership. What is left
+   is a long tail, and much of it is
    genuinely app-level (stores, runtime, services, persisted collections).
    Group by cohesion where a cluster exists; do not force the count down for
    its own sake.
@@ -1403,7 +1411,7 @@ honest remaining list.
    it belongs on that state, and the `NyaTermApp` method becomes a forwarder
    that owns `cx.notify()`. That is enforced by the type system rather than by
    convention — a handler taking `&mut TransferBrowserState` cannot reach the
-   session list no matter what a later edit tries. Thirty-seven methods have
+   session list no matter what a later edit tries. Forty-two methods have
    moved this way across transfers, security, the send command bar, AI, quick
    commands, cloud sync, recording and session starts; the transfer browser one
    made `TransferBrowserColumnResizeState` stop leaking into the page layer, while

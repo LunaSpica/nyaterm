@@ -35,3 +35,6 @@ time.workspace = true
 tracing.workspace = true
 zed_reqwest.workspace = true
 zip.workspace = true
+
+[dev-dependencies]
+gpui = { workspace = true, features = ["test-support"] }

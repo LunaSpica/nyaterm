@@ -20,14 +20,14 @@ impl NyaTermApp {
         choice: HostKeyPromptChoice,
         cx: &mut Context<Self>,
     ) {
-        let Some(request) = self.active_host_key_prompt.take() else {
+        let Some(request) = self.session.prompts.active_host_key_prompt.take() else {
             self.terminal.view.status = "no SSH host key prompt is active".to_string();
             cx.notify();
             return;
         };
 
         if request.id != request_id {
-            self.active_host_key_prompt = Some(request);
+            self.session.prompts.active_host_key_prompt = Some(request);
             self.terminal.view.status = "SSH host key prompt changed before response".to_string();
             cx.notify();
             return;
@@ -48,14 +48,14 @@ impl NyaTermApp {
         decision: SftpDuplicateDecision,
         cx: &mut Context<Self>,
     ) {
-        let Some(prompt) = self.active_duplicate_prompt.take() else {
+        let Some(prompt) = self.session.prompts.active_duplicate_prompt.take() else {
             self.terminal.view.status = "no SFTP duplicate prompt is active".to_string();
             cx.notify();
             return;
         };
 
         if prompt.id != request_id {
-            self.active_duplicate_prompt = Some(prompt);
+            self.session.prompts.active_duplicate_prompt = Some(prompt);
             self.terminal.view.status = "SFTP duplicate prompt changed before response".to_string();
             cx.notify();
             return;
@@ -71,25 +71,25 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn submit_credential_prompt(&mut self, cx: &mut Context<Self>) {
-        let Some(state) = self.active_credential_prompt.take() else {
+        let Some(state) = self.session.prompts.active_credential_prompt.take() else {
             return;
         };
         let host = credential_prompt_target(&state.prompt);
         let _ = state.response_tx.send(Some(state.value));
         self.forget_text_inputs("ssh.credential.");
-        self.credential_prompt_focus_pending = false;
+        self.session.prompts.credential_prompt_focus_pending = false;
         self.terminal.view.status = format!("submitted SSH credential for {host}");
         cx.notify();
     }
 
     pub(in crate::features) fn cancel_credential_prompt(&mut self, cx: &mut Context<Self>) {
-        let Some(state) = self.active_credential_prompt.take() else {
+        let Some(state) = self.session.prompts.active_credential_prompt.take() else {
             return;
         };
         let host = credential_prompt_target(&state.prompt);
         let _ = state.response_tx.send(None);
         self.forget_text_inputs("ssh.credential.");
-        self.credential_prompt_focus_pending = false;
+        self.session.prompts.credential_prompt_focus_pending = false;
         self.terminal.view.status = format!("cancelled SSH credential prompt for {host}");
         cx.notify();
     }
@@ -98,13 +98,18 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.active_keyboard_interactive_prompt.take() else {
+        let Some(state) = self
+            .session
+            .prompts
+            .active_keyboard_interactive_prompt
+            .take()
+        else {
             return;
         };
         let target = keyboard_interactive_prompt_target(&state.request);
         let _ = state.response_tx.send(Some(state.responses));
         self.forget_text_inputs("ssh.keyboard-interactive.");
-        self.credential_prompt_focus_pending = false;
+        self.session.prompts.credential_prompt_focus_pending = false;
         self.terminal.view.status = format!("submitted SSH verification for {target}");
         cx.notify();
     }
@@ -113,13 +118,18 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.active_keyboard_interactive_prompt.take() else {
+        let Some(state) = self
+            .session
+            .prompts
+            .active_keyboard_interactive_prompt
+            .take()
+        else {
             return;
         };
         let target = keyboard_interactive_prompt_target(&state.request);
         let _ = state.response_tx.send(None);
         self.forget_text_inputs("ssh.keyboard-interactive.");
-        self.credential_prompt_focus_pending = false;
+        self.session.prompts.credential_prompt_focus_pending = false;
         self.terminal.view.status = format!("cancelled SSH verification for {target}");
         cx.notify();
     }
@@ -129,14 +139,21 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(otp_id) = self
+            .session
+            .prompts
             .active_keyboard_interactive_prompt
             .as_ref()
             .and_then(|state| state.request.otp_id.clone())
         else {
             return;
         };
-        let result = self.otp_provider.preview_otp_code(&otp_id);
-        let Some(state) = self.active_keyboard_interactive_prompt.as_mut() else {
+        let result = self.session.prompts.otp_provider.preview_otp_code(&otp_id);
+        let Some(state) = self
+            .session
+            .prompts
+            .active_keyboard_interactive_prompt
+            .as_mut()
+        else {
             return;
         };
         match result {
@@ -161,7 +178,12 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.active_keyboard_interactive_prompt.as_mut() else {
+        let Some(state) = self
+            .session
+            .prompts
+            .active_keyboard_interactive_prompt
+            .as_mut()
+        else {
             return;
         };
         let Some(code) = state.otp_code.clone() else {
@@ -183,6 +205,8 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(code) = self
+            .session
+            .prompts
             .active_keyboard_interactive_prompt
             .as_ref()
             .and_then(|state| state.otp_code.clone())
@@ -200,7 +224,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.mark_user_activity();
-        if self.active_credential_prompt.is_none() {
+        if self.session.prompts.active_credential_prompt.is_none() {
             return;
         }
         let keystroke = &event.keystroke;
@@ -226,7 +250,12 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.mark_user_activity();
-        if self.active_keyboard_interactive_prompt.is_none() {
+        if self
+            .session
+            .prompts
+            .active_keyboard_interactive_prompt
+            .is_none()
+        {
             return;
         }
         let keystroke = &event.keystroke;
@@ -239,6 +268,8 @@ impl NyaTermApp {
             "escape" => self.cancel_keyboard_interactive_prompt(cx),
             "tab" => {
                 let Some((input_id, seed, setup)) = self
+                    .session
+                    .prompts
                     .active_keyboard_interactive_prompt
                     .as_mut()
                     .and_then(|state| {
@@ -283,7 +314,7 @@ impl NyaTermApp {
         text: String,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.active_credential_prompt.as_mut() else {
+        let Some(state) = self.session.prompts.active_credential_prompt.as_mut() else {
             return;
         };
         if state.id != prompt_id {
@@ -303,7 +334,12 @@ impl NyaTermApp {
         let Some((prompt_id, index)) = parse_keyboard_interactive_text_input_id(field_id) else {
             return;
         };
-        let Some(state) = self.active_keyboard_interactive_prompt.as_mut() else {
+        let Some(state) = self
+            .session
+            .prompts
+            .active_keyboard_interactive_prompt
+            .as_mut()
+        else {
             return;
         };
         if state.id != prompt_id {
@@ -323,7 +359,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        if let Some(state) = self.active_credential_prompt.as_ref() {
+        if let Some(state) = self.session.prompts.active_credential_prompt.as_ref() {
             let input_id = credential_text_input_id(&state.id);
             let seed = state.value.clone();
             let setup = if state.prompt.echo {
@@ -336,7 +372,12 @@ impl NyaTermApp {
             return true;
         }
 
-        let Some(state) = self.active_keyboard_interactive_prompt.as_ref() else {
+        let Some(state) = self
+            .session
+            .prompts
+            .active_keyboard_interactive_prompt
+            .as_ref()
+        else {
             return false;
         };
         let Some(index) = (!state.responses.is_empty())
@@ -357,30 +398,36 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn drain_host_key_prompts(&mut self) -> bool {
-        if self.active_host_key_prompt.is_some() || !self.host_key_prompts.has_pending() {
+        if self.session.prompts.active_host_key_prompt.is_some()
+            || !self.session.prompts.host_key_prompts.has_pending()
+        {
             return false;
         }
 
-        if let Some(request) = self.host_key_prompts.pop_pending() {
+        if let Some(request) = self.session.prompts.host_key_prompts.pop_pending() {
             self.terminal.view.status = format!(
                 "SSH host key decision required for {}",
                 request.host_key.host_identifier
             );
-            self.active_host_key_prompt = Some(request);
+            self.session.prompts.active_host_key_prompt = Some(request);
             return true;
         }
         false
     }
 
     pub(in crate::features) fn drain_credential_prompts(&mut self) -> bool {
-        if self.active_credential_prompt.is_some()
-            || self.active_keyboard_interactive_prompt.is_some()
-            || !self.credential_prompts.has_pending()
+        if self.session.prompts.active_credential_prompt.is_some()
+            || self
+                .session
+                .prompts
+                .active_keyboard_interactive_prompt
+                .is_some()
+            || !self.session.prompts.credential_prompts.has_pending()
         {
             return false;
         }
 
-        if let Some(request) = self.credential_prompts.pop_pending() {
+        if let Some(request) = self.session.prompts.credential_prompts.pop_pending() {
             match request {
                 CredentialPromptRequest::Secret {
                     id,
@@ -392,7 +439,7 @@ impl NyaTermApp {
                         "SSH credential required for {}",
                         credential_prompt_target(&prompt)
                     );
-                    self.active_credential_prompt = Some(CredentialPromptState {
+                    self.session.prompts.active_credential_prompt = Some(CredentialPromptState {
                         id,
                         prompt,
                         response_tx,
@@ -420,7 +467,13 @@ impl NyaTermApp {
                         request
                             .otp_id
                             .as_deref()
-                            .and_then(|otp_id| self.otp_provider.preview_otp_code(otp_id).ok())
+                            .and_then(|otp_id| {
+                                self.session
+                                    .prompts
+                                    .otp_provider
+                                    .preview_otp_code(otp_id)
+                                    .ok()
+                            })
                             .flatten()
                     } else {
                         None
@@ -431,7 +484,7 @@ impl NyaTermApp {
                         .map(|preview| preview.period)
                         .unwrap_or(0);
                     let otp_time_step = otp_preview.as_ref().and_then(|preview| preview.time_step);
-                    self.active_keyboard_interactive_prompt =
+                    self.session.prompts.active_keyboard_interactive_prompt =
                         Some(KeyboardInteractivePromptState {
                             id,
                             request,
@@ -446,14 +499,19 @@ impl NyaTermApp {
                         });
                 }
             }
-            self.credential_prompt_focus_pending = true;
+            self.session.prompts.credential_prompt_focus_pending = true;
             return true;
         }
         false
     }
 
     pub(in crate::features) fn refresh_keyboard_interactive_totp(&mut self) -> bool {
-        let Some(state) = self.active_keyboard_interactive_prompt.as_ref() else {
+        let Some(state) = self
+            .session
+            .prompts
+            .active_keyboard_interactive_prompt
+            .as_ref()
+        else {
             return false;
         };
         if state.otp_type.as_deref() != Some("totp") || state.otp_code.is_none() {
@@ -467,8 +525,13 @@ impl NyaTermApp {
         let Some(otp_id) = state.request.otp_id.clone() else {
             return false;
         };
-        let result = self.otp_provider.preview_otp_code(&otp_id);
-        let Some(state) = self.active_keyboard_interactive_prompt.as_mut() else {
+        let result = self.session.prompts.otp_provider.preview_otp_code(&otp_id);
+        let Some(state) = self
+            .session
+            .prompts
+            .active_keyboard_interactive_prompt
+            .as_mut()
+        else {
             return false;
         };
         match result {
@@ -488,16 +551,18 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn drain_duplicate_prompts(&mut self) -> bool {
-        if self.active_duplicate_prompt.is_some() || !self.duplicate_prompts.has_pending() {
+        if self.session.prompts.active_duplicate_prompt.is_some()
+            || !self.session.prompts.duplicate_prompts.has_pending()
+        {
             return false;
         }
 
-        if let Some(request) = self.duplicate_prompts.pop_pending() {
+        if let Some(request) = self.session.prompts.duplicate_prompts.pop_pending() {
             self.terminal.view.status = format!(
                 "SFTP duplicate decision required for {}",
                 request.request.target_path
             );
-            self.active_duplicate_prompt = Some(SftpDuplicatePromptState {
+            self.session.prompts.active_duplicate_prompt = Some(SftpDuplicatePromptState {
                 id: request.id,
                 request: request.request,
                 response_tx: request.response_tx,

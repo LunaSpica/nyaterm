@@ -455,12 +455,12 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
         let overlay = OverlayFlags {
-            tab_actions_open: self.tab_actions_session_id.is_some(),
-            rename_open: self.rename_session_id.is_some(),
-            color_picker_open: self.color_picker_open,
-            session_info_open: self.session_info_open,
-            startup_command_open: self.startup_command_open,
-            temporary_ssh_link_open: self.temporary_ssh_link_open,
+            tab_actions_open: self.session.dialogs.tab_actions_session_id.is_some(),
+            rename_open: self.session.dialogs.rename_session_id.is_some(),
+            color_picker_open: self.session.dialogs.color_picker_open,
+            session_info_open: self.session.dialogs.session_info_open,
+            startup_command_open: self.session.dialogs.startup_command_open,
+            temporary_ssh_link_open: self.session.dialogs.temporary_ssh_link_open,
             multi_line_paste_open: self.multi_line_paste.is_some(),
             terminal_actions_open: self.terminal.menus.actions_open,
             terminal_context_menu_open: self.terminal.menus.context_menu.is_some(),
@@ -468,7 +468,7 @@ impl NyaTermApp {
             action_link_tooltip_open: self.action_link_tooltip.is_some(),
             command_suggestions_open: self.terminal.assist.command_suggestions.is_some(),
             credential_suggestions_open: self.terminal.assist.credential_suggestions.is_some(),
-            close_all_sessions_confirm_open: self.close_all_sessions_confirm_open,
+            close_all_sessions_confirm_open: self.session.dialogs.close_all_sessions_confirm_open,
             locked: self.is_locked,
         };
         let quick_switch_open = self.quick_switch_open(cx);
@@ -482,9 +482,13 @@ impl NyaTermApp {
             && self.remote_editor_window.is_none()
             && !self.remote_editor_window_open_pending;
         let transfer_external_sync_open = self.active_external_editor_sync_prompt().is_some();
-        let ssh_auth_prompt_open = self.active_host_key_prompt.is_some()
-            || self.active_credential_prompt.is_some()
-            || self.active_keyboard_interactive_prompt.is_some();
+        let ssh_auth_prompt_open = self.session.prompts.active_host_key_prompt.is_some()
+            || self.session.prompts.active_credential_prompt.is_some()
+            || self
+                .session
+                .prompts
+                .active_keyboard_interactive_prompt
+                .is_some();
 
         content
             .when(overlay.tab_actions_open, |this| {
@@ -700,9 +704,13 @@ impl NyaTermApp {
     }
 
     fn ssh_auth_prompt_overlay(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
-        let host_key_prompt = self.active_host_key_prompt.clone();
-        let credential_prompt = self.active_credential_prompt.clone();
-        let keyboard_interactive_prompt = self.active_keyboard_interactive_prompt.clone();
+        let host_key_prompt = self.session.prompts.active_host_key_prompt.clone();
+        let credential_prompt = self.session.prompts.active_credential_prompt.clone();
+        let keyboard_interactive_prompt = self
+            .session
+            .prompts
+            .active_keyboard_interactive_prompt
+            .clone();
         let dialog_width = if keyboard_interactive_prompt.is_some() {
             384.
         } else {
@@ -720,14 +728,14 @@ impl NyaTermApp {
             .items_center()
             .justify_center()
             .p_3()
-            .track_focus(&self.credential_focus)
+            .track_focus(&self.session.prompts.credential_focus)
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
             .on_mouse_down(MouseButton::Middle, |_, _, cx| cx.stop_propagation())
             .on_click(cx.listener(|this, _, window, cx| {
                 cx.stop_propagation();
                 if !this.focus_active_ssh_prompt_input(window, cx) {
-                    window.focus(&this.credential_focus);
+                    window.focus(&this.session.prompts.credential_focus);
                 }
                 cx.notify();
             }))

@@ -196,8 +196,9 @@ impl NyaTermApp {
         let session_id = self.session.active_id.clone();
 
         let duplicate_policy = self.transfer.paths.duplicate_policy;
-        let duplicate_resolver = (duplicate_policy == SftpDuplicatePolicy::Ask)
-            .then(|| self.duplicate_prompts.clone() as Arc<dyn SftpDuplicateResolver>);
+        let duplicate_resolver = (duplicate_policy == SftpDuplicatePolicy::Ask).then(|| {
+            self.session.prompts.duplicate_prompts.clone() as Arc<dyn SftpDuplicateResolver>
+        });
         let transfer_options = self.sftp_transfer_options();
         let options = PathPromptOptions {
             files: false,
@@ -264,8 +265,9 @@ impl NyaTermApp {
         };
         let session_id = self.session.active_id.clone();
         let duplicate_policy = self.transfer.paths.duplicate_policy;
-        let duplicate_resolver = (duplicate_policy == SftpDuplicatePolicy::Ask)
-            .then(|| self.duplicate_prompts.clone() as Arc<dyn SftpDuplicateResolver>);
+        let duplicate_resolver = (duplicate_policy == SftpDuplicatePolicy::Ask).then(|| {
+            self.session.prompts.duplicate_prompts.clone() as Arc<dyn SftpDuplicateResolver>
+        });
         let transfer_options = self.sftp_transfer_options();
 
         let options = match kind {

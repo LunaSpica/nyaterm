@@ -10,17 +10,17 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
         let palette = self.theme_palette();
-        let title_key = if self.pending_quit_after_close_all {
+        let title_key = if self.session.dialogs.pending_quit_after_close_all {
             "dialog.confirmClose"
         } else {
             "tabCtx.closeAll"
         };
-        let description_key = if self.pending_quit_after_close_all {
+        let description_key = if self.session.dialogs.pending_quit_after_close_all {
             "dialog.confirmCloseDesc"
         } else {
             "tabCtx.closeAllConfirm"
         };
-        let action_key = if self.pending_quit_after_close_all {
+        let action_key = if self.session.dialogs.pending_quit_after_close_all {
             "dialog.confirmCloseAction"
         } else {
             "tabCtx.closeAll"
@@ -38,9 +38,9 @@ impl NyaTermApp {
             .items_center()
             .justify_center()
             .p_3()
-            .track_focus(&self.close_all_sessions_confirm_focus)
+            .track_focus(&self.session.dialogs.close_all_sessions_confirm_focus)
             .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(&this.close_all_sessions_confirm_focus);
+                window.focus(&this.session.dialogs.close_all_sessions_confirm_focus);
                 cx.notify();
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {

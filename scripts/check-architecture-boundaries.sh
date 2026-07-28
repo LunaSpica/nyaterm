@@ -159,6 +159,16 @@ check_no_matches \
   crates/nyaterm-desktop/src/features/app_state/mod.rs
 
 check_no_matches \
+  "session prompt runtime must stay grouped under SessionPromptState" \
+  '^[[:space:]]*pub\(in crate::features\)[[:space:]]+(duplicate_prompts|active_duplicate_prompt|host_key_prompts|active_host_key_prompt|credential_prompts|active_credential_prompt|active_keyboard_interactive_prompt|credential_prompt_focus_pending|credential_focus|otp_provider)[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/app_state/mod.rs
+
+check_no_matches \
+  "session dialogs must stay grouped under SessionDialogState" \
+  '^[[:space:]]*pub\(in crate::features\)[[:space:]]+(tab_actions_session_id|tab_actions_anchor|tab_actions_submenu|tab_actions_focus|close_all_sessions_confirm_open|pending_quit_after_close_all|pending_window_quit|close_all_sessions_confirm_focus|rename_session_id|rename_draft|rename_focus|color_picker_open|color_picker_focus|session_info_open|session_info_focus|startup_command_open|startup_command_action|startup_command_draft|startup_command_delay_ms|startup_command_focus|temporary_ssh_link_open|temporary_ssh_link_draft|temporary_ssh_link_error|temporary_ssh_link_focus)[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/app_state/mod.rs
+
+check_no_matches \
   "session start state must stay grouped under SessionStartFeatureState" \
   '^[[:space:]]*pub\(in crate::features\)[[:space:]]+(session_start_tx|session_start_rx|pending_session_starts|active_pending_session_start|failed_session_starts|active_failed_session_start|cancelled_session_start_requests|session_pane_states|pending_reconnect_replace_id|reconnect_session_failures|pending_workspace_split)[[:space:]]*:' \
   crates/nyaterm-desktop/src/features/app_state/mod.rs

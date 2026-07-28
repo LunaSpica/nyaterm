@@ -19,11 +19,7 @@ use super::recording::RecordingFeatureState;
 use super::remote::RemoteOpsFeatureState;
 use super::remote_editor_window::RemoteFileEditorWindow;
 use super::runtime_jobs::{CommandPersistenceRequest, CommandPersistenceResult};
-use super::session::{
-    CredentialPromptBroker, CredentialPromptState, HostKeyPromptBroker, HostKeyPromptRequest,
-    KeyboardInteractivePromptState, NativeOtpProvider, SessionFeatureState,
-    SftpDuplicatePromptBroker, SftpDuplicatePromptState,
-};
+use super::session::SessionFeatureState;
 use super::settings::{SecurityFeatureState, SettingsFeatureState};
 use super::settings_window::SettingsWindow;
 use super::sync::CloudSyncFeatureState;
@@ -38,9 +34,8 @@ use crate::models::{
     ActivityBarLayoutState, BottomPanelMode, BottomPanelResizeState, ConfigPathPromptKind,
     DiagnosticsPathPromptKind, HeaderStatusState, KeywordHighlightPathPromptKind, MainMode,
     MultiLinePasteDraft, NavItem, PanelResizeState, PanelStackResizeState, RightFocus, SettingsTab,
-    SnapshotPasswordPromptState, StartupCommandAction, StoreStatus, SyncInputGroup,
-    TabActionsSubmenu, TerminalFrameEvent, TitleMenu, TitleMenuSubmenu, WorkspacePaneNode,
-    WorkspaceSplitResizeState, WorkspaceSplitState,
+    SnapshotPasswordPromptState, StoreStatus, SyncInputGroup, TerminalFrameEvent, TitleMenu,
+    TitleMenuSubmenu, WorkspacePaneNode, WorkspaceSplitResizeState, WorkspaceSplitState,
 };
 
 mod construct;
@@ -122,41 +117,6 @@ pub struct NyaTermApp {
     pub(in crate::features) diagnostics_path_prompt: Option<DiagnosticsPathPromptKind>,
     pub(in crate::features) keyword_highlight_path_prompt: Option<KeywordHighlightPathPromptKind>,
     pub(in crate::features) active_snapshot_password_prompt: Option<SnapshotPasswordPromptState>,
-    pub(in crate::features) duplicate_prompts: Arc<SftpDuplicatePromptBroker>,
-    pub(in crate::features) active_duplicate_prompt: Option<SftpDuplicatePromptState>,
-    pub(in crate::features) host_key_prompts: Arc<HostKeyPromptBroker>,
-    pub(in crate::features) active_host_key_prompt: Option<HostKeyPromptRequest>,
-    pub(in crate::features) credential_prompts: Arc<CredentialPromptBroker>,
-    pub(in crate::features) active_credential_prompt: Option<CredentialPromptState>,
-    pub(in crate::features) active_keyboard_interactive_prompt:
-        Option<KeyboardInteractivePromptState>,
-    pub(in crate::features) credential_prompt_focus_pending: bool,
-    pub(in crate::features) credential_focus: FocusHandle,
-    pub(in crate::features) otp_provider: Arc<NativeOtpProvider>,
-    pub(in crate::features) tab_actions_session_id: Option<String>,
-    pub(in crate::features) tab_actions_anchor: Option<(f32, f32)>,
-    pub(in crate::features) tab_actions_submenu: Option<TabActionsSubmenu>,
-    pub(in crate::features) tab_actions_focus: FocusHandle,
-    pub(in crate::features) close_all_sessions_confirm_open: bool,
-    pub(in crate::features) pending_quit_after_close_all: bool,
-    pub(in crate::features) pending_window_quit: bool,
-    pub(in crate::features) close_all_sessions_confirm_focus: FocusHandle,
-    pub(in crate::features) rename_session_id: Option<String>,
-    pub(in crate::features) rename_draft: String,
-    pub(in crate::features) rename_focus: FocusHandle,
-    pub(in crate::features) color_picker_open: bool,
-    pub(in crate::features) color_picker_focus: FocusHandle,
-    pub(in crate::features) session_info_open: bool,
-    pub(in crate::features) session_info_focus: FocusHandle,
-    pub(in crate::features) startup_command_open: bool,
-    pub(in crate::features) startup_command_action: StartupCommandAction,
-    pub(in crate::features) startup_command_draft: String,
-    pub(in crate::features) startup_command_delay_ms: u64,
-    pub(in crate::features) startup_command_focus: FocusHandle,
-    pub(in crate::features) temporary_ssh_link_open: bool,
-    pub(in crate::features) temporary_ssh_link_draft: String,
-    pub(in crate::features) temporary_ssh_link_error: Option<&'static str>,
-    pub(in crate::features) temporary_ssh_link_focus: FocusHandle,
     pub(in crate::features) multi_line_paste: Option<MultiLinePasteDraft>,
     pub(in crate::features) multi_line_paste_marked_text: String,
     pub(in crate::features) multi_line_paste_marked_range: Option<std::ops::Range<usize>>,

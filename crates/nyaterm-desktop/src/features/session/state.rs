@@ -2,15 +2,22 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, mpsc};
 use std::time::Instant;
 
+use gpui::FocusHandle;
 use nyaterm_core::AiExecutionProfile;
 use nyaterm_transport::{SessionKind, SessionManager, SshMultiplexHandle, SshSessionConfig};
 
+use crate::features::DEFAULT_DUPLICATE_STARTUP_DELAY_MS;
 use crate::features::runtime_jobs::SessionStartResult;
 use crate::models::{
     ActiveSessionMenuState, SessionEventBridge, SessionLaunchConfig, SessionRuntimeMetadata,
-    StartupCommandRequest, WorkspaceSplitDirection,
+    StartupCommandAction, StartupCommandRequest, TabActionsSubmenu, WorkspaceSplitDirection,
 };
 
+use super::auth_runtime::{
+    CredentialPromptBroker, CredentialPromptState, HostKeyPromptBroker, HostKeyPromptRequest,
+    KeyboardInteractivePromptState, NativeOtpProvider, SftpDuplicatePromptBroker,
+    SftpDuplicatePromptState,
+};
 use super::trzsz_runtime::TrzszSessionState;
 use super::zmodem_runtime::ZmodemSessionState;
 
@@ -18,6 +25,8 @@ pub(in crate::features) struct SessionFeatureState {
     pub manager: Arc<SessionManager>,
     pub event_bridge: SessionEventBridge,
     pub start: SessionStartFeatureState,
+    pub prompts: SessionPromptState,
+    pub dialogs: SessionDialogState,
     pub command_history: HashMap<String, Vec<String>>,
     pub active_search_draft: String,
     pub active_menu: Option<ActiveSessionMenuState>,
@@ -41,15 +50,108 @@ pub(in crate::features) struct SessionFeatureState {
     pub multiplex_handles: HashMap<String, SshMultiplexHandle>,
 }
 
+pub(in crate::features) struct SessionFeatureFocus {
+    pub credential: FocusHandle,
+    pub tab_actions: FocusHandle,
+    pub close_all: FocusHandle,
+    pub rename: FocusHandle,
+    pub color_picker: FocusHandle,
+    pub info: FocusHandle,
+    pub startup_command: FocusHandle,
+    pub temporary_ssh_link: FocusHandle,
+}
+
+/// Native authentication and transfer prompts tied to the session runtime.
+pub(in crate::features) struct SessionPromptState {
+    pub duplicate_prompts: Arc<SftpDuplicatePromptBroker>,
+    pub active_duplicate_prompt: Option<SftpDuplicatePromptState>,
+    pub host_key_prompts: Arc<HostKeyPromptBroker>,
+    pub active_host_key_prompt: Option<HostKeyPromptRequest>,
+    pub credential_prompts: Arc<CredentialPromptBroker>,
+    pub active_credential_prompt: Option<CredentialPromptState>,
+    pub active_keyboard_interactive_prompt: Option<KeyboardInteractivePromptState>,
+    pub credential_prompt_focus_pending: bool,
+    pub credential_focus: FocusHandle,
+    pub otp_provider: Arc<NativeOtpProvider>,
+}
+
+/// Session-scoped overlays, confirmations and editing dialogs.
+pub(in crate::features) struct SessionDialogState {
+    pub tab_actions_session_id: Option<String>,
+    pub tab_actions_anchor: Option<(f32, f32)>,
+    pub tab_actions_submenu: Option<TabActionsSubmenu>,
+    pub tab_actions_focus: FocusHandle,
+    pub close_all_sessions_confirm_open: bool,
+    pub pending_quit_after_close_all: bool,
+    pub pending_window_quit: bool,
+    pub close_all_sessions_confirm_focus: FocusHandle,
+    pub rename_session_id: Option<String>,
+    pub rename_draft: String,
+    pub rename_focus: FocusHandle,
+    pub color_picker_open: bool,
+    pub color_picker_focus: FocusHandle,
+    pub session_info_open: bool,
+    pub session_info_focus: FocusHandle,
+    pub startup_command_open: bool,
+    pub startup_command_action: StartupCommandAction,
+    pub startup_command_draft: String,
+    pub startup_command_delay_ms: u64,
+    pub startup_command_focus: FocusHandle,
+    pub temporary_ssh_link_open: bool,
+    pub temporary_ssh_link_draft: String,
+    pub temporary_ssh_link_error: Option<&'static str>,
+    pub temporary_ssh_link_focus: FocusHandle,
+}
+
 impl SessionFeatureState {
     pub(in crate::features) fn new(
         manager: Arc<SessionManager>,
         event_bridge: SessionEventBridge,
+        otp_provider: Arc<NativeOtpProvider>,
+        focus: SessionFeatureFocus,
     ) -> Self {
         Self {
             manager,
             event_bridge,
             start: SessionStartFeatureState::new(),
+            prompts: SessionPromptState {
+                duplicate_prompts: Arc::new(SftpDuplicatePromptBroker::default()),
+                active_duplicate_prompt: None,
+                host_key_prompts: Arc::new(HostKeyPromptBroker::default()),
+                active_host_key_prompt: None,
+                credential_prompts: Arc::new(CredentialPromptBroker::default()),
+                active_credential_prompt: None,
+                active_keyboard_interactive_prompt: None,
+                credential_prompt_focus_pending: false,
+                credential_focus: focus.credential,
+                otp_provider,
+            },
+            dialogs: SessionDialogState {
+                tab_actions_session_id: None,
+                tab_actions_anchor: None,
+                tab_actions_submenu: None,
+                tab_actions_focus: focus.tab_actions,
+                close_all_sessions_confirm_open: false,
+                pending_quit_after_close_all: false,
+                pending_window_quit: false,
+                close_all_sessions_confirm_focus: focus.close_all,
+                rename_session_id: None,
+                rename_draft: String::new(),
+                rename_focus: focus.rename,
+                color_picker_open: false,
+                color_picker_focus: focus.color_picker,
+                session_info_open: false,
+                session_info_focus: focus.info,
+                startup_command_open: false,
+                startup_command_action: StartupCommandAction::Duplicate,
+                startup_command_draft: String::new(),
+                startup_command_delay_ms: DEFAULT_DUPLICATE_STARTUP_DELAY_MS,
+                startup_command_focus: focus.startup_command,
+                temporary_ssh_link_open: false,
+                temporary_ssh_link_draft: String::new(),
+                temporary_ssh_link_error: None,
+                temporary_ssh_link_focus: focus.temporary_ssh_link,
+            },
             command_history: HashMap::new(),
             active_search_draft: String::new(),
             active_menu: None,
@@ -67,6 +169,60 @@ impl SessionFeatureState {
             tab_colors: HashMap::new(),
             multiplex_handles: HashMap::new(),
         }
+    }
+}
+
+impl SessionDialogState {
+    pub(in crate::features) fn open_startup_command(
+        &mut self,
+        action: StartupCommandAction,
+        delay_ms: u64,
+    ) {
+        self.startup_command_open = true;
+        self.startup_command_action = action;
+        self.startup_command_draft.clear();
+        self.startup_command_delay_ms = delay_ms.min(60_000);
+    }
+
+    pub(in crate::features) fn cancel_startup_command(&mut self) -> StartupCommandAction {
+        let action = self.startup_command_action;
+        self.startup_command_open = false;
+        self.startup_command_action = StartupCommandAction::Duplicate;
+        self.startup_command_draft.clear();
+        self.startup_command_delay_ms = DEFAULT_DUPLICATE_STARTUP_DELAY_MS;
+        action
+    }
+
+    pub(in crate::features) fn take_startup_command(
+        &mut self,
+    ) -> Option<(StartupCommandAction, StartupCommandRequest)> {
+        let command = self.startup_command_draft.trim().to_string();
+        if command.is_empty() {
+            return None;
+        }
+        let request = StartupCommandRequest {
+            command,
+            delay_ms: self.startup_command_delay_ms.min(60_000),
+        };
+        let action = self.startup_command_action;
+        self.startup_command_open = false;
+        self.startup_command_action = StartupCommandAction::Duplicate;
+        self.startup_command_draft.clear();
+        Some((action, request))
+    }
+
+    pub(in crate::features) fn adjust_startup_command_delay(&mut self, delta_ms: i64) {
+        let next = (self.startup_command_delay_ms as i64 + delta_ms).clamp(0, 60_000);
+        self.startup_command_delay_ms = next as u64;
+    }
+
+    pub(in crate::features) fn apply_text_input(&mut self, field: &str, text: String) -> bool {
+        match field {
+            "rename" => self.rename_draft = text,
+            "startup-command" => self.startup_command_draft = text,
+            _ => return false,
+        }
+        true
     }
 }
 
@@ -310,14 +466,16 @@ mod tests {
     use std::sync::Arc;
     use std::time::Instant;
 
+    use gpui::TestAppContext;
     use nyaterm_core::AiExecutionProfile;
     use nyaterm_transport::{SessionKind, SessionManager};
 
     use crate::features::runtime_jobs::SessionStartResult;
-    use crate::models::{SessionEventBridge, TerminalFramePipeline};
+    use crate::models::{SessionEventBridge, StartupCommandAction, TerminalFramePipeline};
 
     use super::{
-        FailedSessionStart, PendingSessionStart, SessionFeatureState, SessionStartFeatureState,
+        FailedSessionStart, NativeOtpProvider, PendingSessionStart, SessionFeatureFocus,
+        SessionFeatureState, SessionStartFeatureState,
     };
 
     fn pending(name: &str) -> PendingSessionStart {
@@ -341,6 +499,8 @@ mod tests {
 
     #[test]
     fn session_state_owns_live_runtime_and_initializes_transient_state() {
+        let cx = TestAppContext::single();
+        let focus = || cx.update(|cx| cx.focus_handle());
         let manager = Arc::new(SessionManager::new());
         let event_bridge = SessionEventBridge::spawn(
             Arc::clone(&manager),
@@ -348,7 +508,22 @@ mod tests {
             "utf-8".to_string(),
             10_000,
         );
-        let sessions = SessionFeatureState::new(Arc::clone(&manager), event_bridge);
+        let otp_provider = Arc::new(NativeOtpProvider::new(std::path::PathBuf::new(), None));
+        let mut sessions = SessionFeatureState::new(
+            Arc::clone(&manager),
+            event_bridge,
+            Arc::clone(&otp_provider),
+            SessionFeatureFocus {
+                credential: focus(),
+                tab_actions: focus(),
+                close_all: focus(),
+                rename: focus(),
+                color_picker: focus(),
+                info: focus(),
+                startup_command: focus(),
+                temporary_ssh_link: focus(),
+            },
+        );
 
         assert!(Arc::ptr_eq(&sessions.manager, &manager));
         assert!(!sessions.start.has_pending());
@@ -365,6 +540,39 @@ mod tests {
         assert!(sessions.zmodem.is_empty());
         assert!(sessions.trzsz.is_empty());
         assert!(sessions.multiplex_handles.is_empty());
+        assert!(Arc::ptr_eq(&sessions.prompts.otp_provider, &otp_provider));
+        assert!(sessions.prompts.active_credential_prompt.is_none());
+        assert!(
+            sessions
+                .prompts
+                .active_keyboard_interactive_prompt
+                .is_none()
+        );
+        assert!(!sessions.dialogs.close_all_sessions_confirm_open);
+        assert!(sessions.dialogs.rename_session_id.is_none());
+        assert!(!sessions.dialogs.startup_command_open);
+
+        sessions
+            .dialogs
+            .open_startup_command(StartupCommandAction::Multiplex, 75_000);
+        assert_eq!(sessions.dialogs.startup_command_delay_ms, 60_000);
+        assert!(
+            sessions
+                .dialogs
+                .apply_text_input("startup-command", "  uptime  ".to_string())
+        );
+        let (action, request) = sessions
+            .dialogs
+            .take_startup_command()
+            .expect("non-empty command should be accepted");
+        assert_eq!(action, StartupCommandAction::Multiplex);
+        assert_eq!(request.command, "uptime");
+        assert_eq!(request.delay_ms, 60_000);
+        assert!(!sessions.dialogs.startup_command_open);
+        assert_eq!(
+            sessions.dialogs.startup_command_action,
+            StartupCommandAction::Duplicate
+        );
     }
 
     #[test]

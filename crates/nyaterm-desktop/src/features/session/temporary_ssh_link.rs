@@ -20,12 +20,12 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        self.temporary_ssh_link_open = true;
-        self.temporary_ssh_link_error = None;
+        self.session.dialogs.temporary_ssh_link_open = true;
+        self.session.dialogs.temporary_ssh_link_error = None;
         self.forget_text_inputs("temporary-ssh.link");
         let field = self.text_input(
             "temporary-ssh.link",
-            &self.temporary_ssh_link_draft.clone(),
+            &self.session.dialogs.temporary_ssh_link_draft.clone(),
             TextInputSetup::placeholder(self.tr("temporarySsh.placeholder")),
             cx,
         );
@@ -35,9 +35,9 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn close_temporary_ssh_link_dialog(&mut self, cx: &mut Context<Self>) {
-        self.temporary_ssh_link_open = false;
-        self.temporary_ssh_link_draft.clear();
-        self.temporary_ssh_link_error = None;
+        self.session.dialogs.temporary_ssh_link_open = false;
+        self.session.dialogs.temporary_ssh_link_draft.clear();
+        self.session.dialogs.temporary_ssh_link_error = None;
         self.forget_text_inputs("temporary-ssh.link");
         self.terminal.view.status = "temporary SSH link cancelled".to_string();
         cx.notify();
@@ -49,26 +49,27 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if self.has_pending_session_start() {
-            self.temporary_ssh_link_error = Some("temporarySsh.connecting");
+            self.session.dialogs.temporary_ssh_link_error = Some("temporarySsh.connecting");
             self.terminal.view.status =
                 "wait for the pending session to finish connecting".to_string();
             cx.notify();
             return;
         }
 
-        let parsed = match parse_temporary_ssh_link(&self.temporary_ssh_link_draft) {
+        let parsed = match parse_temporary_ssh_link(&self.session.dialogs.temporary_ssh_link_draft)
+        {
             Ok(parsed) => parsed,
             Err(error) => {
-                self.temporary_ssh_link_error = Some(error.locale_key());
+                self.session.dialogs.temporary_ssh_link_error = Some(error.locale_key());
                 self.terminal.view.status = "temporary SSH link is invalid".to_string();
                 cx.notify();
                 return;
             }
         };
         let config = self.temporary_ssh_session_config(parsed.clone());
-        self.temporary_ssh_link_open = false;
-        self.temporary_ssh_link_draft.clear();
-        self.temporary_ssh_link_error = None;
+        self.session.dialogs.temporary_ssh_link_open = false;
+        self.session.dialogs.temporary_ssh_link_draft.clear();
+        self.session.dialogs.temporary_ssh_link_error = None;
         self.forget_text_inputs("temporary-ssh.link");
         self.begin_background_ssh_start(
             parsed.name,
@@ -105,8 +106,8 @@ impl NyaTermApp {
         text: String,
         cx: &mut Context<Self>,
     ) {
-        self.temporary_ssh_link_draft = text;
-        self.temporary_ssh_link_error = None;
+        self.session.dialogs.temporary_ssh_link_draft = text;
+        self.session.dialogs.temporary_ssh_link_error = None;
         cx.notify();
     }
 
@@ -137,10 +138,10 @@ impl NyaTermApp {
                 config_dir: self.runtime.config_dir().to_path_buf(),
                 portable_key_path: self.runtime.portable_key_path().map(ToOwned::to_owned),
                 policy: self.settings.host_key_policy.clone(),
-                prompt_broker: self.host_key_prompts.clone(),
+                prompt_broker: self.session.prompts.host_key_prompts.clone(),
             })),
-            credential_provider: Some(self.credential_prompts.clone()),
-            otp_provider: Some(self.otp_provider.clone()),
+            credential_provider: Some(self.session.prompts.credential_prompts.clone()),
+            otp_provider: Some(self.session.prompts.otp_provider.clone()),
         }
     }
 }

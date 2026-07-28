@@ -2,8 +2,8 @@ use std::collections::HashSet;
 
 use gpui::{Context, KeyDownEvent, Window};
 
-use crate::features::{DEFAULT_DUPLICATE_STARTUP_DELAY_MS, NyaTermApp, TextInputSetup};
-use crate::models::{SessionLaunchConfig, StartupCommandAction, StartupCommandRequest};
+use crate::features::{NyaTermApp, TextInputSetup};
+use crate::models::{SessionLaunchConfig, StartupCommandAction};
 
 impl NyaTermApp {
     pub(in crate::features) fn open_rename_session(
@@ -17,12 +17,12 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        self.rename_session_id = Some(session_id);
-        self.rename_draft = current_name.chars().take(64).collect();
+        self.session.dialogs.rename_session_id = Some(session_id);
+        self.session.dialogs.rename_draft = current_name.chars().take(64).collect();
         self.forget_text_inputs("session.rename");
         let field = self.text_input(
             "session.rename",
-            &self.rename_draft.clone(),
+            &self.session.dialogs.rename_draft.clone(),
             TextInputSetup::placeholder(self.tr("tabCtx.renamePlaceholder")),
             cx,
         );
@@ -33,29 +33,31 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn close_rename_session(&mut self, cx: &mut Context<Self>) {
-        self.rename_session_id = None;
-        self.rename_draft.clear();
+        self.session.dialogs.rename_session_id = None;
+        self.session.dialogs.rename_draft.clear();
         self.forget_text_inputs("session.rename");
         self.terminal.view.status = "rename tab cancelled".to_string();
         cx.notify();
     }
 
     pub(in crate::features) fn submit_rename_session(&mut self, cx: &mut Context<Self>) {
-        let Some(session_id) = self.rename_session_id.take() else {
+        let Some(session_id) = self.session.dialogs.rename_session_id.take() else {
             self.terminal.view.status = "no tab rename is active".to_string();
             cx.notify();
             return;
         };
         let trimmed = self
+            .session
+            .dialogs
             .rename_draft
             .trim()
             .chars()
             .take(64)
             .collect::<String>();
-        self.rename_draft.clear();
+        self.session.dialogs.rename_draft.clear();
         if trimmed.is_empty() {
             self.terminal.view.status = "tab name cannot be empty".to_string();
-            self.rename_session_id = Some(session_id);
+            self.session.dialogs.rename_session_id = Some(session_id);
             cx.notify();
             return;
         }
@@ -125,9 +127,8 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        self.startup_command_open = true;
-        self.startup_command_action = action;
-        self.startup_command_draft.clear();
+        let delay_ms = u64::from(self.settings.interaction_duplicate_session_command_delay_ms);
+        self.session.dialogs.open_startup_command(action, delay_ms);
         self.forget_text_inputs("session.startup-command");
         let field = self.text_input(
             "session.startup-command",
@@ -135,23 +136,14 @@ impl NyaTermApp {
             TextInputSetup::placeholder(self.tr("tabCtx.commandRequired")),
             cx,
         );
-        self.startup_command_delay_ms = u64::from(
-            self.settings
-                .interaction_duplicate_session_command_delay_ms
-                .min(60_000),
-        );
         self.terminal.view.status = action.status_opened().to_string();
         window.focus(&field.read(cx).focus_handle());
         cx.notify();
     }
 
     pub(in crate::features) fn close_startup_command_dialog(&mut self, cx: &mut Context<Self>) {
-        let action = self.startup_command_action;
-        self.startup_command_open = false;
-        self.startup_command_action = StartupCommandAction::Duplicate;
-        self.startup_command_draft.clear();
+        let action = self.session.dialogs.cancel_startup_command();
         self.forget_text_inputs("session.startup-command");
-        self.startup_command_delay_ms = DEFAULT_DUPLICATE_STARTUP_DELAY_MS;
         self.terminal.view.status = action.status_cancelled().to_string();
         cx.notify();
     }
@@ -161,8 +153,7 @@ impl NyaTermApp {
         delta_ms: i64,
         cx: &mut Context<Self>,
     ) {
-        let next = (self.startup_command_delay_ms as i64 + delta_ms).clamp(0, 60_000);
-        self.startup_command_delay_ms = next as u64;
+        self.session.dialogs.adjust_startup_command_delay(delta_ms);
         cx.notify();
     }
 
@@ -171,20 +162,11 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let command = self.startup_command_draft.trim().to_string();
-        if command.is_empty() {
+        let Some((action, startup_command)) = self.session.dialogs.take_startup_command() else {
             self.terminal.view.status = "startup command cannot be empty".to_string();
             cx.notify();
             return;
-        }
-        let startup_command = StartupCommandRequest {
-            command,
-            delay_ms: self.startup_command_delay_ms.min(60_000),
         };
-        let action = self.startup_command_action;
-        self.startup_command_open = false;
-        self.startup_command_action = StartupCommandAction::Duplicate;
-        self.startup_command_draft.clear();
         self.forget_text_inputs("session.startup-command");
         match action {
             StartupCommandAction::Duplicate => {
@@ -222,10 +204,8 @@ impl NyaTermApp {
         text: String,
         cx: &mut Context<Self>,
     ) {
-        match field {
-            "rename" => self.rename_draft = text,
-            "startup-command" => self.startup_command_draft = text,
-            _ => return,
+        if !self.session.dialogs.apply_text_input(field, text) {
+            return;
         }
         cx.notify();
     }

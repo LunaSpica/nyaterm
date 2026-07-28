@@ -450,7 +450,11 @@ impl NyaTermApp {
             let field_id = keyboard_interactive_text_input_id(&request_id, index);
             let click_listener = cx.listener(move |this, _, _, cx| {
                 cx.stop_propagation();
-                if let Some(state) = this.active_keyboard_interactive_prompt.as_mut()
+                if let Some(state) = this
+                    .session
+                    .prompts
+                    .active_keyboard_interactive_prompt
+                    .as_mut()
                     && state.id == request_id
                 {
                     state.focused_index = index;

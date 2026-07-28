@@ -333,7 +333,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.security.revealed.otp_codes.remove(&otp_id);
-        match self.otp_provider.preview_otp_code(&otp_id) {
+        match self.session.prompts.otp_provider.preview_otp_code(&otp_id) {
             Ok(Some(preview)) => {
                 let code = preview.code;
                 self.security
@@ -366,7 +366,7 @@ impl NyaTermApp {
             .collect::<Vec<_>>();
         let mut refreshed = 0usize;
         for otp_id in ids {
-            match self.otp_provider.preview_otp_code(&otp_id) {
+            match self.session.prompts.otp_provider.preview_otp_code(&otp_id) {
                 Ok(Some(preview)) => {
                     self.security
                         .revealed

@@ -32,7 +32,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
         let palette = self.theme_palette();
-        let Some(session_id) = self.tab_actions_session_id.clone() else {
+        let Some(session_id) = self.session.dialogs.tab_actions_session_id.clone() else {
             return div().into_any_element();
         };
         let sessions = self.ordered_sessions();
@@ -41,9 +41,9 @@ impl NyaTermApp {
             .find(|session| session.id == session_id)
             .cloned()
         else {
-            self.tab_actions_session_id = None;
-            self.tab_actions_anchor = None;
-            self.tab_actions_submenu = None;
+            self.session.dialogs.tab_actions_session_id = None;
+            self.session.dialogs.tab_actions_anchor = None;
+            self.session.dialogs.tab_actions_submenu = None;
             return div().into_any_element();
         };
 
