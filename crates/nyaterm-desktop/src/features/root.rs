@@ -619,7 +619,7 @@ impl NyaTermApp {
             .when(self.quick_command_state.import.dialog_open, |this| {
                 this.child(self.quick_command_import_overlay(cx))
             })
-            .when(self.connection_state.import.is_dialog_open(), |this| {
+            .when(self.connection_state.import_dialog_is_open(), |this| {
                 this.child(self.connection_import_overlay(cx))
             })
             .when(quick_switch_open, |this| {

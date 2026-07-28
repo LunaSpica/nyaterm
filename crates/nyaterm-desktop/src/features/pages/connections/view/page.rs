@@ -221,25 +221,24 @@ impl NyaTermApp {
             .child(self.connections_search_bar(window, cx))
             .child(list)
             .when_some(
-                self.connection_state.group_editor.active_draft(),
+                self.connection_state.active_group_editor_draft(),
                 |this, editor| this.child(self.connection_group_editor_panel(editor, cx)),
             )
             .when_some(
-                self.connection_state.confirmations.active_delete(),
+                self.connection_state.active_delete_confirm(),
                 |this, confirm| this.child(self.connection_delete_confirm_panel(confirm, cx)),
             )
             .when_some(
-                self.connection_state.confirmations.active_group_delete(),
+                self.connection_state.active_group_delete_confirm(),
                 |this, confirm| this.child(self.connection_group_delete_confirm_panel(confirm, cx)),
             )
             .when_some(
-                self.connection_state.confirmations.active_group_open(),
+                self.connection_state.active_group_open_confirm(),
                 |this, confirm| this.child(self.connection_group_open_confirm_panel(confirm, cx)),
             )
-            .when(
-                self.connection_state.confirmations.clear_all_is_open(),
-                |this| this.child(self.connections_clear_all_confirm_panel(cx)),
-            )
+            .when(self.connection_state.clear_all_is_open(), |this| {
+                this.child(self.connections_clear_all_confirm_panel(cx))
+            })
             .when(self.connection_state.list.context_menu_is_open(), |this| {
                 this.child(self.connection_context_menu_overlay(cx))
             })

@@ -61,11 +61,11 @@ use self::network_logic::{
 
 pub(in crate::features) struct ConnectionFeatureState {
     pub list: ConnectionListState,
-    pub import: ConnectionImportState,
+    import: ConnectionImportState,
     pub editor: ConnectionEditorFeatureState,
-    pub group_editor: ConnectionGroupEditorFeatureState,
-    pub confirmations: ConnectionConfirmationState,
-    pub network: NetworkFeatureState,
+    group_editor: ConnectionGroupEditorFeatureState,
+    confirmations: ConnectionConfirmationState,
+    network: NetworkFeatureState,
 }
 
 pub(in crate::features) struct ConnectionFeatureFocus {
@@ -109,7 +109,7 @@ pub(in crate::features) struct ConnectionListState {
     last_selected_id: Option<String>,
 }
 
-pub(in crate::features) struct ConnectionImportState {
+struct ConnectionImportState {
     import_dialog_open: bool,
     import_path_prompt: Option<ConnectionImportSource>,
     import_focus: FocusHandle,
@@ -139,7 +139,7 @@ pub(in crate::features) struct ConnectionEditorFeatureState {
     menu_scroll: ScrollHandle,
 }
 
-pub(in crate::features) struct ConnectionGroupEditorFeatureState {
+struct ConnectionGroupEditorFeatureState {
     draft: Option<ConnectionGroupEditorState>,
     /// The folder-name input, built with the draft it mirrors.
     field: Option<Entity<TextField>>,
@@ -147,7 +147,7 @@ pub(in crate::features) struct ConnectionGroupEditorFeatureState {
     focus: FocusHandle,
 }
 
-pub(in crate::features) struct ConnectionConfirmationState {
+struct ConnectionConfirmationState {
     clear_all_open: bool,
     delete: Option<ConnectionDeleteConfirmState>,
     group_delete: Option<ConnectionGroupDeleteConfirmState>,
@@ -155,7 +155,7 @@ pub(in crate::features) struct ConnectionConfirmationState {
     group_open_focus: FocusHandle,
 }
 
-pub(in crate::features) struct NetworkFeatureState {
+struct NetworkFeatureState {
     tab: NetworkTab,
     delete_confirm: Option<NetworkDeleteConfirmState>,
     group_editor: Option<NetworkGroupEditorState>,
@@ -357,6 +357,285 @@ impl ConnectionFeatureState {
         }
     }
 
+    pub fn active_group_editor_draft(&self) -> Option<ConnectionGroupEditorState> {
+        self.group_editor.active_draft()
+    }
+
+    pub fn group_editor_focus_handle(&self) -> FocusHandle {
+        self.group_editor.focus_handle()
+    }
+
+    pub fn begin_group_editor(&mut self, draft: ConnectionGroupEditorState) {
+        self.group_editor.begin_edit(draft);
+    }
+
+    pub fn apply_group_editor_name_key(&mut self, key: &str, input: Option<&str>) -> bool {
+        self.group_editor.apply_name_key(key, input)
+    }
+
+    pub fn set_group_editor_error(&mut self, error: String) -> bool {
+        self.group_editor.set_error(error)
+    }
+
+    pub fn close_group_editor(&mut self) {
+        self.group_editor.close();
+    }
+
+    pub fn open_clear_all(&mut self) {
+        self.confirmations.open_clear_all();
+    }
+
+    pub fn close_clear_all(&mut self) {
+        self.confirmations.close_clear_all();
+    }
+
+    pub fn clear_all_is_open(&self) -> bool {
+        self.confirmations.clear_all_is_open()
+    }
+
+    pub fn active_delete_confirm(&self) -> Option<ConnectionDeleteConfirmState> {
+        self.confirmations.active_delete()
+    }
+
+    pub fn open_delete_confirm(&mut self, confirm: ConnectionDeleteConfirmState) {
+        self.confirmations.open_delete(confirm);
+    }
+
+    pub fn close_delete_confirm(&mut self) {
+        self.confirmations.close_delete();
+    }
+
+    pub fn take_delete_confirm(&mut self) -> Option<ConnectionDeleteConfirmState> {
+        self.confirmations.take_delete()
+    }
+
+    pub fn active_group_delete_confirm(&self) -> Option<ConnectionGroupDeleteConfirmState> {
+        self.confirmations.active_group_delete()
+    }
+
+    pub fn open_group_delete_confirm(&mut self, confirm: ConnectionGroupDeleteConfirmState) {
+        self.confirmations.open_group_delete(confirm);
+    }
+
+    pub fn close_group_delete_confirm(&mut self) {
+        self.confirmations.close_group_delete();
+    }
+
+    pub fn take_group_delete_confirm(&mut self) -> Option<ConnectionGroupDeleteConfirmState> {
+        self.confirmations.take_group_delete()
+    }
+
+    pub fn active_group_open_confirm(&self) -> Option<ConnectionGroupOpenConfirmState> {
+        self.confirmations.active_group_open()
+    }
+
+    pub fn open_group_open_confirm(&mut self, confirm: ConnectionGroupOpenConfirmState) {
+        self.confirmations.open_group_open(confirm);
+    }
+
+    pub fn close_group_open_confirm(&mut self) {
+        self.confirmations.close_group_open();
+    }
+
+    pub fn take_group_open_confirm(&mut self) -> Option<ConnectionGroupOpenConfirmState> {
+        self.confirmations.take_group_open()
+    }
+
+    pub fn group_open_focus_handle(&self) -> FocusHandle {
+        self.confirmations.group_open_focus_handle()
+    }
+
+    pub fn network_active_tab(&self) -> NetworkTab {
+        self.network.active_tab()
+    }
+
+    pub fn network_tab_is(&self, tab: NetworkTab) -> bool {
+        self.network.tab_is(tab)
+    }
+
+    pub fn network_section_is_expanded(&self, section_key: &str) -> bool {
+        self.network.section_is_expanded(section_key)
+    }
+
+    pub fn network_item_menu_is_open(&self, tab: NetworkTab, id: &str) -> bool {
+        self.network.item_menu_is_open(tab, id)
+    }
+
+    pub fn network_move_picker_is_open(&self, tab: NetworkTab, id: &str) -> bool {
+        self.network.move_picker_is_open(tab, id)
+    }
+
+    pub fn active_network_delete_confirm(&self) -> Option<NetworkDeleteConfirmState> {
+        self.network.active_delete_confirm()
+    }
+
+    pub fn active_network_group_editor(&self) -> Option<NetworkGroupEditorState> {
+        self.network.active_group_editor()
+    }
+
+    pub fn active_network_group_delete_confirm(&self) -> Option<NetworkGroupDeleteConfirmState> {
+        self.network.active_group_delete_confirm()
+    }
+
+    pub fn active_network_tunnel_editor(&self) -> Option<NetworkTunnelEditorState> {
+        self.network.active_tunnel_editor()
+    }
+
+    pub fn active_network_proxy_editor(&self) -> Option<NetworkProxyEditorState> {
+        self.network.active_proxy_editor()
+    }
+
+    pub fn network_tunnel_editor_focus_handle(&self) -> FocusHandle {
+        self.network.tunnel_editor_focus_handle()
+    }
+
+    pub fn network_proxy_editor_focus_handle(&self) -> FocusHandle {
+        self.network.proxy_editor_focus_handle()
+    }
+
+    pub fn set_network_tab(&mut self, tab: NetworkTab) {
+        self.network.set_tab(tab);
+    }
+
+    pub fn toggle_network_section(&mut self, section_key: String) -> bool {
+        self.network.toggle_section(section_key)
+    }
+
+    pub fn toggle_network_item_menu(&mut self, tab: NetworkTab, id: String) -> bool {
+        self.network.toggle_item_menu(tab, id)
+    }
+
+    pub fn toggle_network_move_picker(&mut self, tab: NetworkTab, id: String) -> bool {
+        self.network.toggle_move_picker(tab, id)
+    }
+
+    pub fn close_network_move_picker(&mut self) {
+        self.network.close_move_picker();
+    }
+
+    pub fn open_network_delete_confirm(&mut self, confirm: NetworkDeleteConfirmState) {
+        self.network.open_delete_confirm(confirm);
+    }
+
+    pub fn close_network_delete_confirm(&mut self) {
+        self.network.close_delete_confirm();
+    }
+
+    pub fn begin_network_group_edit(&mut self, draft: NetworkGroupEditorState) {
+        self.network.begin_group_edit(draft);
+    }
+
+    pub fn set_network_group_editor_name(&mut self, text: String) -> bool {
+        self.network.set_group_editor_name(text)
+    }
+
+    pub fn set_network_group_editor_error(&mut self, error: String) -> bool {
+        self.network.set_group_editor_error(error)
+    }
+
+    pub fn close_network_group_editor(&mut self) {
+        self.network.close_group_editor();
+    }
+
+    pub fn open_network_group_delete_confirm(&mut self, confirm: NetworkGroupDeleteConfirmState) {
+        self.network.open_group_delete_confirm(confirm);
+    }
+
+    pub fn close_network_group_delete_confirm(&mut self) {
+        self.network.close_group_delete_confirm();
+    }
+
+    pub fn begin_network_tunnel_edit(&mut self, draft: NetworkTunnelEditorState) {
+        self.network.begin_tunnel_edit(draft);
+    }
+
+    pub fn close_network_tunnel_editor(&mut self) {
+        self.network.close_tunnel_editor();
+    }
+
+    pub fn set_network_tunnel_editor_field(
+        &mut self,
+        field: NetworkTunnelEditorField,
+        text: String,
+    ) -> bool {
+        self.network.set_tunnel_editor_field(field, text)
+    }
+
+    pub fn cycle_network_tunnel_type(&mut self) -> Option<String> {
+        self.network.cycle_tunnel_type()
+    }
+
+    pub fn cycle_network_tunnel_connection<'a>(
+        &mut self,
+        connection_ids: impl IntoIterator<Item = &'a str>,
+    ) -> bool {
+        self.network.cycle_tunnel_connection(connection_ids)
+    }
+
+    pub fn cycle_network_tunnel_group<'a>(
+        &mut self,
+        group_ids: impl IntoIterator<Item = &'a str>,
+    ) -> bool {
+        self.network.cycle_tunnel_group(group_ids)
+    }
+
+    pub fn set_network_tunnel_bind_localhost(&mut self, bind_localhost: bool) -> bool {
+        self.network.set_tunnel_bind_localhost(bind_localhost)
+    }
+
+    pub fn toggle_network_tunnel_auto_open(&mut self) -> Option<bool> {
+        self.network.toggle_tunnel_auto_open()
+    }
+
+    pub fn set_network_tunnel_editor_error(&mut self, error: String) -> bool {
+        self.network.set_tunnel_editor_error(error)
+    }
+
+    pub fn begin_network_proxy_edit(&mut self, draft: NetworkProxyEditorState) {
+        self.network.begin_proxy_edit(draft);
+    }
+
+    pub fn close_network_proxy_editor(&mut self) {
+        self.network.close_proxy_editor();
+    }
+
+    pub fn set_network_proxy_editor_field(
+        &mut self,
+        field: NetworkProxyEditorField,
+        text: String,
+    ) -> bool {
+        self.network.set_proxy_editor_field(field, text)
+    }
+
+    pub fn cycle_network_proxy_protocol(&mut self) -> Option<String> {
+        self.network.cycle_proxy_protocol()
+    }
+
+    pub fn cycle_network_proxy_group<'a>(
+        &mut self,
+        group_ids: impl IntoIterator<Item = &'a str>,
+    ) -> bool {
+        self.network.cycle_proxy_group(group_ids)
+    }
+
+    pub fn set_network_proxy_editor_error(&mut self, error: String) -> bool {
+        self.network.set_proxy_editor_error(error)
+    }
+
+    pub fn remove_network_item_references(&mut self, tab: NetworkTab, id: &str) {
+        self.network.remove_item_references(tab, id);
+    }
+
+    pub fn remove_network_group_references(
+        &mut self,
+        tab: NetworkTab,
+        group_id: &str,
+        deleted_item_ids: &[String],
+    ) {
+        self.network
+            .remove_group_references(tab, group_id, deleted_item_ids);
+    }
+
     pub fn clear_editor_fields(&mut self) {
         self.editor.fields.clear();
         self.editor.field_subscriptions.clear();
@@ -375,6 +654,34 @@ impl ConnectionFeatureState {
             connection_id,
             group_id,
         );
+    }
+
+    pub fn import_dialog_is_open(&self) -> bool {
+        self.import.is_dialog_open()
+    }
+
+    pub fn import_path_prompt_active(&self) -> bool {
+        self.import.path_prompt_active()
+    }
+
+    pub fn import_focus_handle(&self) -> FocusHandle {
+        self.import.focus_handle()
+    }
+
+    pub fn open_import_dialog(&mut self) {
+        self.import.open_dialog();
+    }
+
+    pub fn close_import_dialog(&mut self) {
+        self.import.close_dialog();
+    }
+
+    pub fn begin_import_path_prompt(&mut self, source: ConnectionImportSource) {
+        self.import.begin_path_prompt(source);
+    }
+
+    pub fn finish_import_path_prompt(&mut self) {
+        self.import.finish_path_prompt();
     }
 }
 
@@ -1309,18 +1616,18 @@ mod tests {
         clear_network_tunnel_editor, clear_selected_connection_ids, close_connection_more_menu,
         commit_connection_editor_new_group, connection_drop_position_for_target,
         connection_editor_inline_panel_draft, connection_editor_window_open_or_pending,
-        cycle_connection_sort_mode, cycle_network_proxy_group, cycle_network_proxy_protocol,
-        cycle_network_tunnel_connection, cycle_network_tunnel_group, cycle_network_tunnel_type,
-        finish_connection_editor_save_state, insert_connection_editor_description_newline,
-        remove_connection_list_references, remove_group_list_references,
-        remove_network_group_and_item_references, remove_network_group_references,
-        remove_network_item_references, retain_loaded_connection_list_references,
-        select_connection_ids, set_connection_drop_target_if_changed,
-        set_connection_editor_advanced_tab, set_connection_editor_error,
-        set_connection_editor_field_text, set_connection_editor_icon, set_connection_editor_kind,
-        set_connection_editor_menu_value, set_connection_editor_password_source,
-        set_connection_editor_telnet_tab, set_connection_group_editor_error,
-        set_connection_group_hover, set_network_group_editor_error, set_network_group_editor_name,
+        cycle_connection_sort_mode, cycle_network_proxy_protocol, cycle_network_tunnel_connection,
+        cycle_network_tunnel_group, cycle_network_tunnel_type, finish_connection_editor_save_state,
+        insert_connection_editor_description_newline, remove_connection_list_references,
+        remove_group_list_references, remove_network_group_and_item_references,
+        remove_network_group_references, remove_network_item_references,
+        retain_loaded_connection_list_references, select_connection_ids,
+        set_connection_drop_target_if_changed, set_connection_editor_advanced_tab,
+        set_connection_editor_error, set_connection_editor_field_text, set_connection_editor_icon,
+        set_connection_editor_kind, set_connection_editor_menu_value,
+        set_connection_editor_password_source, set_connection_editor_telnet_tab,
+        set_connection_group_editor_error, set_connection_group_hover,
+        set_network_group_editor_error, set_network_group_editor_name,
         set_network_proxy_editor_error, set_network_proxy_editor_field,
         set_network_tunnel_bind_localhost, set_network_tunnel_editor_error,
         set_network_tunnel_editor_field, stepped_menu_highlight, sync_connection_search_expansion,

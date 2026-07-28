@@ -79,7 +79,7 @@ impl NyaTermApp {
                 proxy_list = proxy_list.child(proxy_section(palette, section, self, cx));
             }
         }
-        let active_tab = self.connection_state.network.active_tab();
+        let active_tab = self.connection_state.network_active_tab();
         // Tauri NetworkPanel body (PanelHeader is shared):
         // scroll(p-3) > Tabs(grid-cols-2) > config row (label + New Group/New item) > grouped list.
         // Network create/edit/delete use modal dialogs (Tauri Dialog) over the panel.
@@ -119,7 +119,7 @@ impl NyaTermApp {
                                 .child(network_tab_button(
                                     "network-tab-tunnels",
                                     self.tr("network.tunnels").to_string(),
-                                    self.connection_state.network.tab_is(NetworkTab::Tunnels),
+                                    self.connection_state.network_tab_is(NetworkTab::Tunnels),
                                     self.theme_palette(),
                                     cx.listener(|this, _, _, cx| {
                                         this.set_network_tab(NetworkTab::Tunnels, cx);
@@ -128,7 +128,7 @@ impl NyaTermApp {
                                 .child(network_tab_button(
                                     "network-tab-proxies",
                                     self.tr("network.proxy").to_string(),
-                                    self.connection_state.network.tab_is(NetworkTab::Proxies),
+                                    self.connection_state.network_tab_is(NetworkTab::Proxies),
                                     self.theme_palette(),
                                     cx.listener(|this, _, _, cx| {
                                         this.set_network_tab(NetworkTab::Proxies, cx);
@@ -161,7 +161,7 @@ impl NyaTermApp {
                                             "icons/fe/new-folder.svg",
                                             cx.listener(|this, _, _, cx| {
                                                 this.open_network_group_editor(
-                                                    this.connection_state.network.active_tab(),
+                                                    this.connection_state.network_active_tab(),
                                                     None,
                                                     cx,
                                                 );
@@ -169,8 +169,7 @@ impl NyaTermApp {
                                         ))
                                         .when(
                                             self.connection_state
-                                                .network
-                                                .tab_is(NetworkTab::Tunnels),
+                                                .network_tab_is(NetworkTab::Tunnels),
                                             |this| {
                                                 this.child(network_create_button(
                                                     palette,
@@ -187,8 +186,7 @@ impl NyaTermApp {
                                         )
                                         .when(
                                             self.connection_state
-                                                .network
-                                                .tab_is(NetworkTab::Proxies),
+                                                .network_tab_is(NetworkTab::Proxies),
                                             |this| {
                                                 this.child(network_create_button(
                                                     palette,
@@ -223,19 +221,19 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
         let palette = self.theme_palette();
-        if let Some(confirm) = self.connection_state.network.active_delete_confirm() {
+        if let Some(confirm) = self.connection_state.active_network_delete_confirm() {
             return Some(network_delete_confirm_panel(self, confirm, cx).into_any_element());
         }
-        if let Some(editor) = self.connection_state.network.active_group_editor() {
+        if let Some(editor) = self.connection_state.active_network_group_editor() {
             return Some(network_group_editor_panel(self, editor, cx).into_any_element());
         }
-        if let Some(confirm) = self.connection_state.network.active_group_delete_confirm() {
+        if let Some(confirm) = self.connection_state.active_network_group_delete_confirm() {
             return Some(network_group_delete_confirm_panel(self, confirm, cx).into_any_element());
         }
-        if let Some(editor) = self.connection_state.network.active_tunnel_editor() {
+        if let Some(editor) = self.connection_state.active_network_tunnel_editor() {
             return Some(network_tunnel_editor_panel(palette, editor, self, cx).into_any_element());
         }
-        if let Some(editor) = self.connection_state.network.active_proxy_editor() {
+        if let Some(editor) = self.connection_state.active_network_proxy_editor() {
             return Some(network_proxy_editor_panel(palette, editor, self, cx).into_any_element());
         }
         None

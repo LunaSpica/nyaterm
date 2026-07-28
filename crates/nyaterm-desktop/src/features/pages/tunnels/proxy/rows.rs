@@ -33,8 +33,7 @@ pub(in crate::features::pages::tunnels) fn proxy_network_row(
     let proxy_label_for_delete = proxy.name.clone();
     let menu_open = app
         .connection_state
-        .network
-        .item_menu_is_open(NetworkTab::Proxies, &proxy.id);
+        .network_item_menu_is_open(NetworkTab::Proxies, &proxy.id);
 
     // Tauri ProxyRow: name, protocol, address; overflow actions on the right.
     div()

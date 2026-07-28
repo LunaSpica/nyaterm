@@ -10,7 +10,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.connection_state.list.close_more_menu();
-        self.connection_state.confirmations.open_clear_all();
+        self.connection_state.open_clear_all();
         self.terminal.view.status = "confirm clearing all saved connections".to_string();
         cx.notify();
     }
@@ -19,24 +19,24 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        self.connection_state.confirmations.close_clear_all();
+        self.connection_state.close_clear_all();
         cx.notify();
     }
 
     pub(in crate::features) fn confirm_connections_clear_all(&mut self, cx: &mut Context<Self>) {
-        if !self.connection_state.confirmations.clear_all_is_open() {
+        if !self.connection_state.clear_all_is_open() {
             return;
         }
         match self.with_connection_store(|store| store.replace_sessions(&SessionsConfig::default()))
         {
             Ok(()) => {
-                self.connection_state.confirmations.close_clear_all();
+                self.connection_state.close_clear_all();
                 self.connection_state.list.clear_runtime_state();
                 self.refresh_store_from_runtime();
                 self.terminal.view.status = self.tr("savedConnections.clearAllSuccess").to_string();
             }
             Err(error) => {
-                self.connection_state.confirmations.close_clear_all();
+                self.connection_state.close_clear_all();
                 self.terminal.view.status = format!("clear saved connections failed: {error}");
                 self.store_status.message = self.terminal.view.status.clone();
                 self.store_status.ready = false;
@@ -60,8 +60,7 @@ impl NyaTermApp {
             return;
         };
         self.connection_state
-            .confirmations
-            .open_delete(ConnectionDeleteConfirmState {
+            .open_delete_confirm(ConnectionDeleteConfirmState {
                 connection_id,
                 label: connection.name.clone(),
             });
@@ -70,12 +69,12 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn close_connection_delete_confirm(&mut self, cx: &mut Context<Self>) {
-        self.connection_state.confirmations.close_delete();
+        self.connection_state.close_delete_confirm();
         cx.notify();
     }
 
     pub(in crate::features) fn confirm_connection_delete(&mut self, cx: &mut Context<Self>) {
-        let Some(confirm) = self.connection_state.confirmations.take_delete() else {
+        let Some(confirm) = self.connection_state.take_delete_confirm() else {
             return;
         };
         match self.with_connection_store(|store| store.delete_connection(&confirm.connection_id)) {
@@ -118,8 +117,7 @@ impl NyaTermApp {
             .filter(|child| child.parent_id.as_deref() == Some(group_id.as_str()))
             .count();
         self.connection_state
-            .confirmations
-            .open_group_delete(ConnectionGroupDeleteConfirmState {
+            .open_group_delete_confirm(ConnectionGroupDeleteConfirmState {
                 group_id,
                 label: group.name.clone(),
                 connection_count,
@@ -133,12 +131,12 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        self.connection_state.confirmations.close_group_delete();
+        self.connection_state.close_group_delete_confirm();
         cx.notify();
     }
 
     pub(in crate::features) fn confirm_connection_group_delete(&mut self, cx: &mut Context<Self>) {
-        let Some(confirm) = self.connection_state.confirmations.take_group_delete() else {
+        let Some(confirm) = self.connection_state.take_group_delete_confirm() else {
             return;
         };
         match self.with_connection_store(|store| store.delete_group(&confirm.group_id)) {

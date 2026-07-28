@@ -33,9 +33,9 @@ impl NyaTermApp {
             .flex()
             .flex_col()
             .gap_3()
-            .track_focus(&self.connection_state.group_editor.focus_handle())
+            .track_focus(&self.connection_state.group_editor_focus_handle())
             .on_click(cx.listener(|this, _, window, cx| {
-                let group_editor_focus = this.connection_state.group_editor.focus_handle();
+                let group_editor_focus = this.connection_state.group_editor_focus_handle();
                 window.focus(&group_editor_focus);
                 cx.notify();
             }))
@@ -259,17 +259,9 @@ impl NyaTermApp {
             .flex()
             .flex_col()
             .gap_3()
-            .track_focus(
-                &self
-                    .connection_state
-                    .confirmations
-                    .group_open_focus_handle(),
-            )
+            .track_focus(&self.connection_state.group_open_focus_handle())
             .on_click(cx.listener(|this, _, window, cx| {
-                let group_open_focus = this
-                    .connection_state
-                    .confirmations
-                    .group_open_focus_handle();
+                let group_open_focus = this.connection_state.group_open_focus_handle();
                 window.focus(&group_open_focus);
                 cx.notify();
             }))

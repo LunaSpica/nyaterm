@@ -74,8 +74,7 @@ pub(in crate::features::pages::tunnels) fn proxy_section(
     let section_key = format!("proxy:{}", section.id);
     let collapsed = !app
         .connection_state
-        .network
-        .section_is_expanded(&section_key);
+        .network_section_is_expanded(&section_key);
     let section_id_for_toggle = section.id.clone();
     let mut rows = div().flex().flex_col();
     if section.proxies.is_empty() {
@@ -93,8 +92,7 @@ pub(in crate::features::pages::tunnels) fn proxy_section(
         for (index, proxy) in section.proxies.into_iter().enumerate() {
             let move_picker_open = app
                 .connection_state
-                .network
-                .move_picker_is_open(NetworkTab::Proxies, &proxy.id);
+                .network_move_picker_is_open(NetworkTab::Proxies, &proxy.id);
             rows = rows.child(
                 div()
                     .flex()
@@ -191,8 +189,7 @@ pub(in crate::features::pages::tunnels) fn proxy_section(
                     let menu_id = format!("group:{}", group.id);
                     let menu_open = app
                         .connection_state
-                        .network
-                        .item_menu_is_open(NetworkTab::Proxies, &menu_id);
+                        .network_item_menu_is_open(NetworkTab::Proxies, &menu_id);
                     this.child(network_item_overflow_menu(
                         palette,
                         app.shell_surface_color(palette.surface),

@@ -36,8 +36,7 @@ impl NyaTermApp {
             .or(parent_id);
 
         self.connection_state
-            .group_editor
-            .begin_edit(ConnectionGroupEditorState {
+            .begin_group_editor(ConnectionGroupEditorState {
                 id: group_id,
                 name,
                 parent_id,
@@ -52,7 +51,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn close_connection_group_editor(&mut self, cx: &mut Context<Self>) {
-        self.connection_state.group_editor.close();
+        self.connection_state.close_group_editor();
         self.connection_state.clear_group_editor_field();
         self.terminal.view.status = "connection group editor closed".to_string();
         cx.notify();
@@ -74,8 +73,7 @@ impl NyaTermApp {
             "backspace" if !keystroke.modifiers.platform && !keystroke.modifiers.control => {
                 if self
                     .connection_state
-                    .group_editor
-                    .apply_name_key("backspace", None)
+                    .apply_group_editor_name_key("backspace", None)
                 {
                     cx.notify();
                 }
@@ -88,8 +86,7 @@ impl NyaTermApp {
                 {
                     if self
                         .connection_state
-                        .group_editor
-                        .apply_name_key(keystroke.key.as_str(), Some(input))
+                        .apply_group_editor_name_key(keystroke.key.as_str(), Some(input))
                     {
                         cx.notify();
                     }
@@ -100,13 +97,13 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn save_connection_group_editor(&mut self, cx: &mut Context<Self>) {
-        let Some(editor) = self.connection_state.group_editor.active_draft() else {
+        let Some(editor) = self.connection_state.active_group_editor_draft() else {
             return;
         };
         let name = editor.name.trim().to_string();
         if name.is_empty() {
             let message = self.tr("savedConnections.folderNameRequired").to_string();
-            self.connection_state.group_editor.set_error(message);
+            self.connection_state.set_group_editor_error(message);
             cx.notify();
             return;
         }
@@ -132,12 +129,12 @@ impl NyaTermApp {
         match self.with_connection_store(|store| store.save_group(&group)) {
             Ok(()) => {
                 self.connection_state.list.expand_group(group.id.clone());
-                self.connection_state.group_editor.close();
+                self.connection_state.close_group_editor();
                 self.refresh_store_from_runtime();
                 self.terminal.view.status = format!("saved connection group {}", group.name);
             }
             Err(error) => {
-                self.connection_state.group_editor.set_error(error);
+                self.connection_state.set_group_editor_error(error);
             }
         }
         cx.notify();

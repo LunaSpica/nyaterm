@@ -453,6 +453,8 @@ while IFS=: read -r file _line text; do
   case "$file" in
     crates/nyaterm-desktop/src/features/mod.rs) ;;
     crates/nyaterm-desktop/src/features/app_state/construct.rs) ;;
+    scripts/sync-icons.sh) ;;
+    scripts/icons.manifest) ;;
     docs/architecture/gpui-migration-status.md) ;;
     scripts/check-architecture-boundaries.sh) ;;
     *)
@@ -577,27 +579,31 @@ check_no_matches \
   '^[[:space:]]*pub(\([^)]*\))?[[:space:]]+(search_draft|search_focus|sort_mode|more_menu_open|context_menu|group_context_menu|hovered_connection_id|hover_pending|drop_target|hovered_group_id|expanded_group_ids|selected_ids|last_selected_id|import_dialog_open|import_path_prompt|import_focus|draft|window|window_open_pending|focus|icon_picker_open|menu|clear_all_open|delete|group_delete|group_open|group_open_focus|tab|delete_confirm|group_delete_confirm|item_menu|move_picker|expanded_sections|tunnel_editor|proxy_editor|group_editor_focus|tunnel_editor_focus|proxy_editor_focus)[[:space:]]*:' \
   crates/nyaterm-desktop/src/features/connections/state.rs
 check_no_matches \
-  "connection confirmations must be mutated through ConnectionConfirmationState methods" \
+  "connection confirmation child state must stay behind ConnectionFeatureState methods" \
+  'connection_state\.confirmations\.' \
+  crates/nyaterm-desktop/src/features
+check_no_matches \
+  "connection confirmations must be mutated through ConnectionFeatureState methods" \
   'connection_state\.confirmations\.(clear_all_open|delete|group_delete|group_open)\s*=' \
   crates/nyaterm-desktop/src/features/connections
 check_no_matches \
-  "connection page confirmations must be mutated through ConnectionConfirmationState methods" \
+  "connection page confirmations must be mutated through ConnectionFeatureState methods" \
   'connection_state\.confirmations\.(clear_all_open|delete|group_delete|group_open)\s*=' \
   crates/nyaterm-desktop/src/features/pages/connections
 check_no_matches \
-  "connection menu confirmation reads must use ConnectionConfirmationState methods" \
+  "connection menu confirmation reads must use ConnectionFeatureState methods" \
   'connection_state\.confirmations\.(clear_all_open|delete|group_delete|group_open|group_open_focus)(\.|[[:space:]]|$)' \
   crates/nyaterm-desktop/src/features/connections/connections/menus.rs
 check_no_matches \
-  "connection confirmation panel reads must use ConnectionConfirmationState methods" \
+  "connection confirmation panel reads must use ConnectionFeatureState methods" \
   'connection_state\.confirmations\.(clear_all_open|delete|group_delete|group_open|group_open_focus)(\.|[[:space:]]|$)' \
   crates/nyaterm-desktop/src/features/pages/connections/editor/group_delete.rs
 check_no_matches \
-  "connections page confirmation reads must use ConnectionConfirmationState methods" \
+  "connections page confirmation reads must use ConnectionFeatureState methods" \
   'connection_state\.confirmations\.(clear_all_open|delete|group_delete|group_open|group_open_focus)(\.|[[:space:]]|$)' \
   crates/nyaterm-desktop/src/features/pages/connections/view/page.rs
 check_no_matches \
-  "event pump confirmation projection must use ConnectionConfirmationState methods" \
+  "event pump confirmation projection must use ConnectionFeatureState methods" \
   'connection_state\.confirmations\.(clear_all_open|delete|group_delete|group_open|group_open_focus)(\.|[[:space:]]|$)' \
   crates/nyaterm-desktop/src/features/shell/event_pump/publish.rs
 
@@ -634,15 +640,19 @@ check_no_matches \
   crates/nyaterm-desktop/src/features/root.rs
 
 check_no_matches \
-  "connection import runtime must use ConnectionImportState methods" \
+  "connection import child state must stay behind ConnectionFeatureState methods" \
+  'connection_state\.import\.' \
+  crates/nyaterm-desktop/src/features
+check_no_matches \
+  "connection import runtime must use ConnectionFeatureState methods" \
   'connection_state\.import\.(import_dialog_open|import_path_prompt|import_focus)' \
   crates/nyaterm-desktop/src/features/connections/connection_import_runtime.rs
 check_no_matches \
-  "connection import overlay must use ConnectionImportState methods" \
+  "connection import overlay must use ConnectionFeatureState methods" \
   'connection_state\.import\.(import_dialog_open|import_path_prompt|import_focus)' \
   crates/nyaterm-desktop/src/features/panels/connection_import_overlay.rs
 check_no_matches \
-  "root connection import overlay state must use ConnectionImportState methods" \
+  "root connection import overlay state must use ConnectionFeatureState methods" \
   'connection_state\.import\.(import_dialog_open|import_path_prompt|import_focus)' \
   crates/nyaterm-desktop/src/features/root.rs
 
@@ -650,21 +660,25 @@ check_no_matches \
   "connection group editor draft mutations must go through ConnectionGroupEditorFeatureState methods" \
   'connection_state\.group_editor\.draft\.as_mut\(' \
   crates/nyaterm-desktop/src/features/connections
+check_no_matches \
+  "connection group editor child state must stay behind ConnectionFeatureState methods" \
+  'connection_state\.group_editor\.' \
+  crates/nyaterm-desktop/src/features
 
 check_no_matches \
-  "connection group runtime must use ConnectionGroupEditorFeatureState methods" \
+  "connection group runtime must use ConnectionFeatureState methods" \
   'connection_state\.group_editor\.(draft|focus)(\.|[[:space:]]|$)' \
   crates/nyaterm-desktop/src/features/connections/connection_runtime/groups.rs
 check_no_matches \
-  "connection group editor panel must use ConnectionGroupEditorFeatureState methods" \
+  "connection group editor panel must use ConnectionFeatureState methods" \
   'connection_state\.group_editor\.(draft|focus)(\.|[[:space:]]|$)' \
   crates/nyaterm-desktop/src/features/pages/connections/editor/group_delete.rs
 check_no_matches \
-  "connections page group editor state must use ConnectionGroupEditorFeatureState methods" \
+  "connections page group editor state must use ConnectionFeatureState methods" \
   'connection_state\.group_editor\.(draft|focus)(\.|[[:space:]]|$)' \
   crates/nyaterm-desktop/src/features/pages/connections/view/page.rs
 check_no_matches \
-  "event pump group editor state must use ConnectionGroupEditorFeatureState methods" \
+  "event pump group editor state must use ConnectionFeatureState methods" \
   'connection_state\.group_editor\.(draft|focus)(\.|[[:space:]]|$)' \
   crates/nyaterm-desktop/src/features/shell/event_pump/publish.rs
 
@@ -708,19 +722,23 @@ check_no_matches \
   crates/nyaterm-desktop/src/features/shell/panel_resize_runtime.rs
 
 check_no_matches \
-  "network editor drafts must be mutated through NetworkFeatureState methods" \
+  "network child state must stay behind ConnectionFeatureState methods" \
+  'connection_state\.network\.' \
+  crates/nyaterm-desktop/src/features
+check_no_matches \
+  "network editor drafts must be mutated through ConnectionFeatureState methods" \
   'connection_state\.network\.(group_editor|tunnel_editor|proxy_editor)\.as_mut\(' \
   crates/nyaterm-desktop/src/features/tunnels
 check_no_matches \
-  "network page state reads must use NetworkFeatureState methods" \
+  "network page state reads must use ConnectionFeatureState methods" \
   'connection_state\.network\.(tab|delete_confirm|group_editor|group_delete_confirm|item_menu|move_picker|expanded_sections|tunnel_editor|proxy_editor|group_editor_focus|tunnel_editor_focus|proxy_editor_focus)(\.|[[:space:]]|==|,|\)|$)' \
   crates/nyaterm-desktop/src/features/pages/tunnels
 check_no_matches \
-  "network runtime state reads must use NetworkFeatureState methods" \
+  "network runtime state reads must use ConnectionFeatureState methods" \
   'connection_state\.network\.(tab|delete_confirm|group_editor|group_delete_confirm|item_menu|move_picker|expanded_sections|tunnel_editor|proxy_editor|group_editor_focus|tunnel_editor_focus|proxy_editor_focus)(\.|[[:space:]]|==|,|\)|$)' \
   crates/nyaterm-desktop/src/features/tunnels
 check_no_matches \
-  "panel stack network projection must use NetworkFeatureState methods" \
+  "panel stack network projection must use ConnectionFeatureState methods" \
   'connection_state\.network\.(tab|delete_confirm|group_editor|group_delete_confirm|item_menu|move_picker|expanded_sections|tunnel_editor|proxy_editor|group_editor_focus|tunnel_editor_focus|proxy_editor_focus)(\.|[[:space:]]|==|,|\)|$)' \
   crates/nyaterm-desktop/src/features/shell/panel_stack_runtime.rs
 

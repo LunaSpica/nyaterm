@@ -554,7 +554,7 @@ impl NyaTermApp {
             NavItem::ActiveSessions => SharedString::from(self.active_sessions_header_count()),
             // Tauri NetworkPanel header shows active tab profile count.
             NavItem::Tunnels => {
-                let count = match self.connection_state.network.active_tab() {
+                let count = match self.connection_state.network_active_tab() {
                     NetworkTab::Tunnels => self.tunnels.len(),
                     NetworkTab::Proxies => self.proxies.len(),
                 };

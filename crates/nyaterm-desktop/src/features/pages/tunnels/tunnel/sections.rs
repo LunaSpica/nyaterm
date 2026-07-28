@@ -77,8 +77,7 @@ pub(in crate::features::pages::tunnels) fn tunnel_section(
     let section_key = format!("tunnel:{}", section.id);
     let collapsed = !app
         .connection_state
-        .network
-        .section_is_expanded(&section_key);
+        .network_section_is_expanded(&section_key);
     let section_id_for_toggle = section.id.clone();
     let mut rows = div().flex().flex_col();
     if section.tunnels.is_empty() {
@@ -119,12 +118,10 @@ pub(in crate::features::pages::tunnels) fn tunnel_section(
             let tunnel_label_for_delete = tunnel_name(&tunnel);
             let move_picker_open = app
                 .connection_state
-                .network
-                .move_picker_is_open(NetworkTab::Tunnels, &tunnel.id);
+                .network_move_picker_is_open(NetworkTab::Tunnels, &tunnel.id);
             let menu_open = app
                 .connection_state
-                .network
-                .item_menu_is_open(NetworkTab::Tunnels, &tunnel.id);
+                .network_item_menu_is_open(NetworkTab::Tunnels, &tunnel.id);
             let current_group_id = tunnel.group_id.clone();
             rows = rows.child(
                 div()
@@ -272,8 +269,7 @@ pub(in crate::features::pages::tunnels) fn tunnel_section(
                     let menu_id = format!("group:{}", group.id);
                     let menu_open = app
                         .connection_state
-                        .network
-                        .item_menu_is_open(NetworkTab::Tunnels, &menu_id);
+                        .network_item_menu_is_open(NetworkTab::Tunnels, &menu_id);
                     this.child(network_item_overflow_menu(
                         palette,
                         app.shell_surface_color(palette.surface),

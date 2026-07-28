@@ -3,13 +3,13 @@
 This document records the current GPUI migration boundaries and debt in
 `nyaterm-desktop`. Keep dynamic counts here instead of in `AGENTS.md`.
 
-Last updated from the working tree on 2026-07-27.
+Last updated from the working tree on 2026-07-28.
 
 ## Current Metrics
 
 | Metric | Current value | Notes |
 | --- | ---: | --- |
-| `NyaTermApp` fields | 262 | Counted from `features/app_state/mod.rs`; down from 585, still transitional. |
+| `NyaTermApp` fields | 261 | Counted from `features/app_state/mod.rs`; down from 585, still transitional. |
 | `impl NyaTermApp` blocks | 240 | Spread across 235 files under `crates/nyaterm-desktop/src`. |
 | `#[path = "..."]` declarations in desktop | 0 | Cleared. Every directory is a real module; the boundary script fails on any new occurrence. |
 | `use super::*` imports in desktop | 372 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
@@ -318,17 +318,21 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   guards governed editor runtime/view/projection paths against direct `focus`
   field reads.
 - Connection import runtime, overlay, and root rendering now use
-  `ConnectionImportState` façade methods for dialog visibility, active path
-  prompts, and focus handle access. The architecture script guards those files
-  against reintroducing direct `import_dialog_open`/`import_path_prompt`/
-  `import_focus` field reads.
+  `ConnectionFeatureState` façade methods for dialog visibility, active path
+  prompts, and focus handle access. The `import` child state is private, and
+  the architecture script guards governed features against reintroducing direct
+  `connection_state.import.*` access.
 - Connection group editor name input and validation errors now route through
-  `ConnectionGroupEditorFeatureState` methods instead of direct runtime draft
-  mutation.
+  `ConnectionFeatureState` methods instead of direct runtime draft mutation.
 - Connection group editor runtime, modal view, page rendering, and snapshot
-  publication now use `ConnectionGroupEditorFeatureState` façade methods for
-  active draft, open state, and focus handle access. The architecture script
-  guards those files against reintroducing direct `draft`/`focus` field reads.
+  publication now use `ConnectionFeatureState` façade methods for active draft,
+  open state, and focus handle access. The `group_editor` child state is
+  private, and the architecture script guards governed features against
+  reintroducing direct `connection_state.group_editor.*` access.
+- Connection delete, group-delete, group-open and clear-all confirmations now
+  route through `ConnectionFeatureState` façade methods. The `confirmations`
+  child state is private, so rendering and runtime actions no longer reach into
+  `connection_state.confirmations.*` directly.
 - Connection list refresh cleanup now runs after successful
   `refresh_store_from_runtime()` session reloads. Selection, range anchor,
   hover, pending hover, context menus, expanded groups, and drop target state
@@ -340,12 +344,13 @@ these as staged extraction candidates, not as formatting-only refactor targets.
 - Saved-group expansion now routes through `ConnectionListState::expand_group`;
   the architecture script guards against reintroducing direct expanded-group
   insertion in governed connections code.
-- Network page UI state now exposes semantic methods for tab/menu/move-picker
-  state, expanded-section reads, delete and group confirmations, tunnel/proxy
-  editor lifetime, group/tunnel/proxy editor input, focus/error/cycle/toggle
-  transitions, and deleted item reference cleanup. Tunnel runtime actions and
-  Network page rendering now use these methods instead of directly accessing
-  `connection_state.network` fields for those transitions and projections.
+- Network page UI state now sits behind `ConnectionFeatureState` façade methods
+  for tab/menu/move-picker state, expanded-section reads, delete and group
+  confirmations, tunnel/proxy editor lifetime, group/tunnel/proxy editor input,
+  focus/error/cycle/toggle transitions, and deleted item reference cleanup. The
+  `network` child state and `NetworkFeatureState` type are private to the state
+  module; tunnel runtime actions, Network page rendering, and panel-count
+  projection no longer access `connection_state.network.*` directly.
 - `NetworkFeatureState` pure helper logic now lives in
   `features/connections/state/network_logic.rs`. The public semantic methods
   remain in `state.rs`, while 485 lines of menu, move-picker, group editor,
@@ -814,6 +819,10 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   import JSON parsing, rule normalization, and merge accounting. `storage.rs`
   still owns settings load/save persistence, so redb table names, settings
   field paths, encryption, backup, and legacy fallback behavior are unchanged.
+- The architecture script's local legacy-source-path allowlist now includes
+  only the static icon vendoring script and manifest in addition to the existing
+  migration inventory paths. These references are provenance for committed
+  assets; default builds still must not depend on `./temp/nyaterm-tauri`.
 
 ## Migrating
 
@@ -831,11 +840,11 @@ Current ownership map:
 | Serial ports | `NyaTermApp.connection_serial_ports` | Runtime/discovered state | Not persisted by this state grouping. |
 | Tunnel/proxy configs | `NyaTermApp.tunnels`, `tunnel_groups`, `proxies`, `proxy_groups` | Persisted network config | UI overlay state moved under `connection_state.network`; config collections remain persisted domain state. |
 | List search/sort/hover/selection/DnD | `NyaTermApp.connection_state.list` | Temporary UI state | State is not persisted except sort setting remains synced to settings as before. |
-| Connection import dialog | `NyaTermApp.connection_state.import` | Temporary UI/runtime prompt state | File import still runs through existing runtime paths. |
+| Connection import dialog | `NyaTermApp.connection_state` private import child | Temporary UI/runtime prompt state | File import still runs through existing runtime paths; runtime and rendering enter through `ConnectionFeatureState` methods. |
 | Connection editor | `NyaTermApp.connection_state.editor` | Editing draft/window UI state | Runtime key handling, window lifecycle, rendering popovers, and sideband projection use state methods; draft remains separate from saved connection data. |
-| Group editor | `NyaTermApp.connection_state.group_editor` | Editing draft UI state | Draft remains separate from saved groups. |
-| Delete/open confirmations | `NyaTermApp.connection_state.confirmations` | Temporary UI state | Rendering and sideband projection now use state methods; persisted data changes only after existing confirm actions run. |
-| Network page UI | `NyaTermApp.connection_state.network` | Temporary UI/editor state | Page rendering, editor focus, confirm/editor draft reads, and panel-count projection use state methods. Tunnel/proxy configs remain in top-level persisted collections. |
+| Group editor | `NyaTermApp.connection_state` private group-editor child | Editing draft UI state | Draft remains separate from saved groups; runtime and rendering enter through `ConnectionFeatureState` methods. |
+| Delete/open confirmations | `NyaTermApp.connection_state` private confirmations child | Temporary UI state | Rendering and runtime actions enter through `ConnectionFeatureState` methods; persisted data changes only after existing confirm actions run. |
+| Network page UI | `NyaTermApp.connection_state` private network child | Temporary UI/editor state | Page rendering, editor focus, confirm/editor draft reads, and panel-count projection use `ConnectionFeatureState` methods. Tunnel/proxy configs remain in top-level persisted collections. |
 
 This round changed desktop-side state ownership, UI state plumbing, and module
 boundaries. Final reports should avoid broad statements that sound like no
@@ -858,7 +867,7 @@ desktop state ownership/UI adapter change, not a terminal parser, terminal
 protocol, SSH/SFTP protocol, transfer protocol, or persistence-format change.
 The tunnel/proxy runtime action files were touched only to route Network page
 menu, editor, confirmation, and stale-reference UI state through
-`NetworkFeatureState` after the existing persistence operations succeed.
+`ConnectionFeatureState` after the existing persistence operations succeed.
 Tunnel/proxy config storage formats and transport execution paths continue to
 use the existing behavior.
 

@@ -128,16 +128,12 @@ impl NyaTermApp {
             return;
         }
         self.connection_state
-            .confirmations
-            .open_group_open(ConnectionGroupOpenConfirmState {
+            .open_group_open_confirm(ConnectionGroupOpenConfirmState {
                 group_id,
                 label: group.name.clone(),
                 connection_count,
             });
-        let group_open_focus = self
-            .connection_state
-            .confirmations
-            .group_open_focus_handle();
+        let group_open_focus = self.connection_state.group_open_focus_handle();
         window.focus(&group_open_focus);
         cx.notify();
     }
@@ -146,7 +142,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        self.connection_state.confirmations.close_group_open();
+        self.connection_state.close_group_open_confirm();
         cx.notify();
     }
 
@@ -155,7 +151,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(confirm) = self.connection_state.confirmations.take_group_open() else {
+        let Some(confirm) = self.connection_state.take_group_open_confirm() else {
             return;
         };
         self.start_group_connections(confirm.group_id, window, cx);
