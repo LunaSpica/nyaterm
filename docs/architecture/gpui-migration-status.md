@@ -12,8 +12,8 @@ Last updated from the working tree on 2026-07-28.
 | `NyaTermApp` fields | 261 | Counted from `features/app_state/mod.rs`; down from 585, still transitional. |
 | `impl NyaTermApp` blocks | 240 | Spread across 235 files under `crates/nyaterm-desktop/src`. |
 | `#[path = "..."]` declarations in desktop | 0 | Cleared. Every directory is a real module; the boundary script fails on any new occurrence. |
-| `use super::*` imports in desktop | 277 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
-| `features/prelude.rs` rough exported-token count | 229 | Still a broad shared prelude; two hundred sixteen low-frequency transport/core/http/model/helper exports are now explicit imports. |
+| `use super::*` imports in desktop | 270 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
+| `features/prelude.rs` rough exported-token count | 228 | Still a broad shared prelude; two hundred seventeen low-frequency transport/core/http/model/helper exports are now explicit imports. |
 | Entity Store structs | 4 | `Runtime`, `WindowRuntime`, `StartupRestore`, `Overlay`. Each owns state the app does not. |
 | Snapshot structs | 0 | Cleared. No store is a projection of `NyaTermApp` any more. |
 | `replace_snapshot` methods | 0 | Cleared. |
@@ -425,6 +425,13 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   module entry points rather than implicit child preludes, and `settings/mod.rs`
   no longer carries the SFTP duplicate policy or tab-mouse models used only by
   those children. The boundary script governs all three complete subtrees.
+- The quick-command import runtime no longer uses wildcard imports or flattened
+  child-module globs. Its dialog calls the source adapter directly; source
+  parsing depends directionally on JSON, merge and helper modules; merge names
+  the core quick-command compatibility models; and the seven existing tests
+  import only the parser/merge API they exercise. `QuickCommandsConfig` also
+  left `features/prelude.rs`. NyaTerm, WindTerm and Xshell input shapes, the
+  4 MiB limit, merge behavior and storage path are unchanged.
 - `connection_runtime/helpers.rs` no longer depends on the connection runtime
   wildcard import; its GPUI, app, model, and core dependencies are explicit.
 - `connection_runtime/actions.rs` no longer depends on the connection runtime

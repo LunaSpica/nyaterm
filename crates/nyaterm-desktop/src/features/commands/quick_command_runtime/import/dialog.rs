@@ -1,6 +1,9 @@
-use super::*;
+use gpui::{AppContext, Context, PathPromptOptions, SharedString, Window};
 
+use crate::features::NyaTermApp;
 use crate::models::{QuickCommandImportPathPromptKind, QuickCommandImportPathPromptResult};
+
+use super::sources::import_quick_commands_from_path;
 
 impl NyaTermApp {
     pub(in crate::features) fn open_quick_command_import_dialog(

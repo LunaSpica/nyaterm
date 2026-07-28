@@ -579,6 +579,13 @@ declare -A SUPER_BASELINE=(
   [crates/nyaterm-desktop/src/features/pages/settings/workspace/interaction.rs]=0
   [crates/nyaterm-desktop/src/features/pages/settings/workspace/keybindings.rs]=0
   [crates/nyaterm-desktop/src/features/pages/settings/workspace/mod.rs]=0
+  [crates/nyaterm-desktop/src/features/commands/quick_command_runtime/import/dialog.rs]=0
+  [crates/nyaterm-desktop/src/features/commands/quick_command_runtime/import/helpers.rs]=0
+  [crates/nyaterm-desktop/src/features/commands/quick_command_runtime/import/json.rs]=0
+  [crates/nyaterm-desktop/src/features/commands/quick_command_runtime/import/merge.rs]=0
+  [crates/nyaterm-desktop/src/features/commands/quick_command_runtime/import/mod.rs]=0
+  [crates/nyaterm-desktop/src/features/commands/quick_command_runtime/import/sources.rs]=0
+  [crates/nyaterm-desktop/src/features/commands/quick_command_runtime/import/tests.rs]=0
   [crates/nyaterm-desktop/src/features/pages/transfers/helpers/browser.rs]=0
   [crates/nyaterm-desktop/src/features/pages/transfers/helpers/editor.rs]=0
   [crates/nyaterm-desktop/src/features/pages/transfers/helpers/job_row.rs]=0
@@ -624,6 +631,7 @@ while IFS=: read -r file _line _text; do
   fi
 done < <(rg -n --path-separator / '^[[:space:]]*use super::\*;' \
   crates/nyaterm-desktop/src/features/connections \
+  crates/nyaterm-desktop/src/features/commands/quick_command_runtime/import \
   crates/nyaterm-desktop/src/features/pages/mod.rs \
   crates/nyaterm-desktop/src/features/pages/connections \
   crates/nyaterm-desktop/src/features/pages/tunnels \
