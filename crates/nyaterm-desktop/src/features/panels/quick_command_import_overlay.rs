@@ -1,6 +1,11 @@
-use super::*;
+use gpui::{
+    App, ClickEvent, Context, FontWeight, IntoElement, KeyDownEvent, SharedString, Window, div,
+    prelude::*, px, rgb, rgba,
+};
 
+use crate::features::NyaTermApp;
 use crate::models::QuickCommandImportPathPromptKind;
+use crate::widgets::small_button;
 
 impl NyaTermApp {
     pub(in crate::features) fn quick_command_import_overlay(

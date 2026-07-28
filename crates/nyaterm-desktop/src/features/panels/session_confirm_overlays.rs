@@ -1,4 +1,8 @@
-use super::*;
+use gpui::{Context, FontWeight, KeyDownEvent, div, prelude::*, px, rgb, rgba};
+
+use crate::features::NyaTermApp;
+use crate::features::view_widgets::dialog_action_button;
+use crate::widgets::small_button;
 
 impl NyaTermApp {
     pub(in crate::features) fn close_all_sessions_confirm_overlay(

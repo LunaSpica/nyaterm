@@ -1,6 +1,12 @@
-use super::*;
+use gpui::{
+    AnyElement, App, ClickEvent, Context, FontWeight, IntoElement, KeyDownEvent, MouseButton,
+    SharedString, Window, div, prelude::*, px, rgb, rgba, svg, uniform_list,
+};
+
+use super::super::{filtered_quick_commands, quick_command_category_options};
+use crate::features::{ChromeTooltip, NyaTermApp, TextInputSetup};
 use crate::models::{QuickCommandSortMode, QuickCommandViewMode};
-use gpui::uniform_list;
+use crate::widgets::small_button;
 
 mod rows;
 use rows::quick_command_tile_column_count;

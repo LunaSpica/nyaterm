@@ -1,4 +1,11 @@
-use super::*;
+use gpui::{
+    Context, FontWeight, IntoElement, KeyDownEvent, MouseButton, SharedString, Window,
+    WindowControlArea, div, prelude::*, px, rgb, rgba, svg,
+};
+
+use crate::features::view_widgets::window_control_button;
+use crate::features::{NyaTermApp, TextInputSetup};
+use crate::widgets::small_button;
 
 impl NyaTermApp {
     pub(in crate::features) fn lock_screen_overlay(

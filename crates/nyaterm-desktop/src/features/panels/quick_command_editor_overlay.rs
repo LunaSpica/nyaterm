@@ -1,6 +1,16 @@
-use super::*;
+use gpui::{
+    AnyElement, App, ClickEvent, Context, FontWeight, IntoElement, KeyDownEvent, SharedString,
+    Window, div, prelude::*, px, rgb, rgba,
+};
+use nyaterm_core::truncate_preview;
 
+use super::{
+    quick_command_color, quick_command_editor_field, quick_command_editor_script_field,
+    quick_command_icon_mark,
+};
+use crate::features::{NyaTermApp, QUICK_COMMAND_COLOR_OPTIONS, QUICK_COMMAND_ICON_OPTIONS};
 use crate::models::{QuickCommandEditorField, QuickCommandEditorState};
+use crate::widgets::{mode_button, small_button};
 
 impl NyaTermApp {
     pub(in crate::features) fn quick_command_editor_overlay(

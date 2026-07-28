@@ -4,7 +4,7 @@ use gpui::AppContext;
 
 use crate::send_command::{
     SendCommandControlFocus, SendCommandDataType, SendCommandLineEnding, SendCommandMode,
-    SendCommandTarget,
+    SendCommandTarget, build_send_command_units_for, format_send_command_hex_display,
 };
 
 impl NyaTermApp {

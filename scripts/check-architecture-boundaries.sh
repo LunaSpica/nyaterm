@@ -113,7 +113,7 @@ check_no_matches \
 # acquire unrelated transport dependencies implicitly.
 check_no_matches \
   "low-frequency transport helpers must stay out of features/prelude.rs" \
-  '(^|[,{[:space:]])(SFTP_TRANSFER_CANCELLED|SftpTransferDirection|RemoteStatsService|open_ssh_multiplex_handle|run_local_command)([},[:space:]]|$)' \
+  '(^|[,{[:space:]])(SFTP_TRANSFER_CANCELLED|SftpTransferDirection|RemoteStatsService|TerminalHistorySearchRequest|open_ssh_multiplex_handle|run_local_command)([},[:space:]]|$)' \
   crates/nyaterm-desktop/src/features/prelude.rs
 
 check_no_matches \
@@ -123,8 +123,29 @@ check_no_matches \
 
 check_no_matches \
   "low-frequency widgets must stay out of features/prelude.rs" \
-  '(^|[,{[:space:]])svg_icon_button([},[:space:]]|$)' \
+  '(^|[,{[:space:]])(mode_button|session_info_row|svg_icon_button)([},[:space:]]|$)' \
   crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
+  "low-frequency GPUI types must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])WindowControlArea([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
+  "send-command helpers must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(build_send_command_units_for|format_send_command_hex_display|parse_send_command_hex)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
+  "shortcut formatting helper must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])event_to_hotkey_string([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
+  "panels module entry points must use named helper imports" \
+  '^[[:space:]]*(pub\([^)]*\)[[:space:]]+)?use[[:space:]]+(helpers|send_command_helpers)::\*;' \
+  crates/nyaterm-desktop/src/features/panels/mod.rs \
+  crates/nyaterm-desktop/src/features/panels/tab_actions_overlay/mod.rs
 
 check_no_matches \
   "cloud sync HTTP backend helpers must stay out of features/prelude.rs" \
@@ -643,6 +664,45 @@ declare -A SUPER_BASELINE=(
   [crates/nyaterm-desktop/src/features/inspector/ai_widgets/history.rs]=0
   [crates/nyaterm-desktop/src/features/inspector/ai_widgets/messages.rs]=0
   [crates/nyaterm-desktop/src/features/inspector/ai_widgets/transcript.rs]=0
+  [crates/nyaterm-desktop/src/features/panels/about_overlay.rs]=0
+  [crates/nyaterm-desktop/src/features/panels/active_session_menu_overlay.rs]=0
+  [crates/nyaterm-desktop/src/features/panels/connection_import_overlay.rs]=0
+  [crates/nyaterm-desktop/src/features/panels/helpers.rs]=0
+  [crates/nyaterm-desktop/src/features/panels/lock_screen_overlay.rs]=0
+  [crates/nyaterm-desktop/src/features/panels/mod.rs]=0
+  [crates/nyaterm-desktop/src/features/panels/multi_line_paste_overlay.rs]=0
+  [crates/nyaterm-desktop/src/features/panels/quick_command_category_menu_overlay.rs]=0
+  [crates/nyaterm-desktop/src/features/panels/quick_command_category_overlays.rs]=0
+  [crates/nyaterm-desktop/src/features/panels/quick_command_delete_overlay.rs]=0
+  [crates/nyaterm-desktop/src/features/panels/quick_command_details_overlay.rs]=0
+  [crates/nyaterm-desktop/src/features/panels/quick_command_editor_overlay.rs]=0
+  [crates/nyaterm-desktop/src/features/panels/quick_command_import_overlay.rs]=0
+  [crates/nyaterm-desktop/src/features/panels/quick_command_row_menu_overlay.rs]=0
+  [crates/nyaterm-desktop/src/features/panels/quick_command_variable_overlay.rs]=0
+  [crates/nyaterm-desktop/src/features/panels/quick_commands_panel/helpers.rs]=0
+  [crates/nyaterm-desktop/src/features/panels/quick_commands_panel/mod.rs]=0
+  [crates/nyaterm-desktop/src/features/panels/quick_commands_panel/panel/mod.rs]=0
+  [crates/nyaterm-desktop/src/features/panels/quick_commands_panel/panel/rows.rs]=0
+  [crates/nyaterm-desktop/src/features/panels/quick_commands_panel/panel/sidebar.rs]=0
+  [crates/nyaterm-desktop/src/features/panels/quick_switch_overlay.rs]=0
+  [crates/nyaterm-desktop/src/features/panels/recording_panel.rs]=0
+  [crates/nyaterm-desktop/src/features/panels/send_command_bar/controls.rs]=0
+  [crates/nyaterm-desktop/src/features/panels/send_command_bar/editor.rs]=0
+  [crates/nyaterm-desktop/src/features/panels/send_command_bar/header.rs]=0
+  [crates/nyaterm-desktop/src/features/panels/send_command_bar/mod.rs]=0
+  [crates/nyaterm-desktop/src/features/panels/send_command_bar/state.rs]=0
+  [crates/nyaterm-desktop/src/features/panels/send_command_helpers.rs]=0
+  [crates/nyaterm-desktop/src/features/panels/send_command_state.rs]=0
+  [crates/nyaterm-desktop/src/features/panels/session_confirm_overlays.rs]=0
+  [crates/nyaterm-desktop/src/features/panels/session_overlays.rs]=0
+  [crates/nyaterm-desktop/src/features/panels/sync_groups_overlay.rs]=0
+  [crates/nyaterm-desktop/src/features/panels/tab_actions_overlay/compact.rs]=0
+  [crates/nyaterm-desktop/src/features/panels/tab_actions_overlay/helpers.rs]=0
+  [crates/nyaterm-desktop/src/features/panels/tab_actions_overlay/mod.rs]=0
+  [crates/nyaterm-desktop/src/features/panels/tab_actions_overlay/overlay.rs]=0
+  [crates/nyaterm-desktop/src/features/panels/temporary_ssh_link_overlay.rs]=0
+  [crates/nyaterm-desktop/src/features/panels/terminal_actions_overlay.rs]=0
+  [crates/nyaterm-desktop/src/features/panels/update_overlay.rs]=0
   [crates/nyaterm-desktop/src/features/commands/mod.rs]=0
   [crates/nyaterm-desktop/src/features/commands/state.rs]=0
   [crates/nyaterm-desktop/src/features/commands/command_runtime/helpers.rs]=0
@@ -711,6 +771,7 @@ done < <(rg -n --path-separator / '^[[:space:]]*use super::\*;' \
   crates/nyaterm-desktop/src/features/connections \
   crates/nyaterm-desktop/src/features/commands \
   crates/nyaterm-desktop/src/features/inspector \
+  crates/nyaterm-desktop/src/features/panels \
   crates/nyaterm-desktop/src/features/settings \
   crates/nyaterm-desktop/src/features/pages/mod.rs \
   crates/nyaterm-desktop/src/features/pages/connections \

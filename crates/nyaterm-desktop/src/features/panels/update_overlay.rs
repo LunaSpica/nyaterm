@@ -1,4 +1,9 @@
-use super::*;
+use gpui::{Context, FontWeight, IntoElement, div, prelude::*, px, rgb, rgba};
+use nyaterm_core::RuntimeMode;
+
+use crate::features::NyaTermApp;
+use crate::features::view_widgets::{dialog_action_button, modal_close_icon_button};
+use crate::widgets::small_button;
 
 const RELEASES_URL: &str = "https://github.com/nyakang/nyaterm/releases";
 

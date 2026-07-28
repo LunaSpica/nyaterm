@@ -1,4 +1,6 @@
-use super::*;
+use gpui::{IntoElement, SharedString, div, prelude::*, px, rgb, svg};
+
+use crate::widgets::status_pill;
 
 pub(super) fn quick_command_row_actions(
     palette: crate::theme::ThemePalette,

@@ -1,5 +1,8 @@
-use super::*;
+use nyaterm_core::truncate_preview;
+use nyaterm_transport::SessionKind;
 
+use super::super::send_command_hex_preview;
+use crate::features::NyaTermApp;
 use crate::send_command::{SendCommandDataType, SendCommandLineEnding, SendCommandMode};
 
 pub(super) struct SendCommandBarViewState {

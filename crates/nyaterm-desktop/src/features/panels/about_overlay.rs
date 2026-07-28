@@ -1,4 +1,7 @@
-use super::*;
+use gpui::{Context, FontWeight, IntoElement, KeyDownEvent, div, prelude::*, px, rgb, rgba, svg};
+
+use crate::features::NyaTermApp;
+use crate::features::view_widgets::modal_close_icon_button;
 
 impl NyaTermApp {
     pub(in crate::features) fn open_about(&mut self, cx: &mut Context<Self>) {

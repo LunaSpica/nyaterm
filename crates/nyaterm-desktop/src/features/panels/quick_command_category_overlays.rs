@@ -1,6 +1,11 @@
-use super::*;
+use gpui::{
+    Context, FontWeight, IntoElement, KeyDownEvent, SharedString, div, prelude::*, px, rgb, rgba,
+};
 
+use crate::features::view_widgets::dialog_action_button;
+use crate::features::{NyaTermApp, TextInputSetup};
 use crate::models::{QuickCommandCategoryDeleteState, QuickCommandCategoryRenameState};
+use crate::widgets::small_button;
 
 impl NyaTermApp {
     pub(in crate::features) fn quick_command_category_delete_overlay(

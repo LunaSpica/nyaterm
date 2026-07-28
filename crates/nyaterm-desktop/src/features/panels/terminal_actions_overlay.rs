@@ -1,6 +1,12 @@
-use super::*;
+use gpui::{
+    Context, FontWeight, IntoElement, KeyDownEvent, SharedString, div, prelude::*, px, rgb, rgba,
+};
 
+use super::terminal_action_prompt_text;
+use crate::features::NyaTermApp;
+use crate::features::view_widgets::tab_action_button;
 use crate::models::{BottomPanelMode, RightFocus, TerminalSearchMode};
+use crate::widgets::small_button;
 
 impl NyaTermApp {
     pub(in crate::features) fn terminal_actions_overlay(

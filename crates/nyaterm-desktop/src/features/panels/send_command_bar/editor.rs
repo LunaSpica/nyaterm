@@ -1,7 +1,12 @@
 use super::state::SendCommandBarViewState;
-use super::*;
+use gpui::{
+    Context, FontWeight, IntoElement, KeyDownEvent, ScrollDelta, ScrollWheelEvent, SharedString,
+    div, prelude::*, px, rgb, svg,
+};
 
-use crate::send_command::SendCommandDataType;
+use super::super::{send_command_hex_byte_count, send_command_hex_guide_rows};
+use crate::features::{ChromeTooltip, NyaTermApp, TextInputSetup};
+use crate::send_command::{SendCommandDataType, format_send_command_hex_display};
 
 impl NyaTermApp {
     pub(super) fn send_command_bar_editor(

@@ -1,6 +1,12 @@
-use super::*;
+use gpui::{
+    Context, FontWeight, IntoElement, KeyDownEvent, SharedString, div, prelude::*, px, rgb, rgba,
+};
+use nyaterm_core::truncate_preview;
 
+use crate::features::view_widgets::dialog_action_button;
+use crate::features::{NyaTermApp, TextInputSetup};
 use crate::models::QuickCommandVariablePromptState;
+use crate::widgets::small_button;
 
 impl NyaTermApp {
     pub(in crate::features) fn quick_command_variable_prompt_overlay(

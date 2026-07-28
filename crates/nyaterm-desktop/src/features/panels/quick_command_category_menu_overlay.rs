@@ -1,4 +1,6 @@
-use super::*;
+use gpui::{Context, IntoElement, MouseButton, SharedString, div, prelude::*, px, rgb};
+
+use crate::features::NyaTermApp;
 
 impl NyaTermApp {
     pub(in crate::features) fn quick_command_category_menu_overlay(

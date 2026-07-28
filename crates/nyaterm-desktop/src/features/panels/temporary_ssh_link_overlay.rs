@@ -1,5 +1,12 @@
-use super::*;
+use gpui::{
+    Context, FontWeight, IntoElement, KeyDownEvent, MouseButton, SharedString, div, prelude::*, px,
+    rgb, rgba,
+};
+
+use crate::features::view_widgets::dialog_action_button;
+use crate::features::{NyaTermApp, TextInputSetup};
 use crate::temporary_ssh_link::parse_temporary_ssh_link;
+use crate::widgets::small_button;
 
 impl NyaTermApp {
     pub(in crate::features) fn temporary_ssh_link_overlay(

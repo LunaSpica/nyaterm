@@ -1,4 +1,15 @@
-use super::*;
+use std::collections::HashSet;
+
+use gpui::{
+    Context, FontWeight, IntoElement, KeyDownEvent, MouseButton, SharedString, div, prelude::*, px,
+    rgb, rgba,
+};
+use nyaterm_core::truncate_preview;
+
+use crate::features::formatting::session_kind_label;
+use crate::features::view_widgets::dialog_action_button;
+use crate::features::{NyaTermApp, TextInputSetup};
+use crate::widgets::{small_button, status_pill};
 
 impl NyaTermApp {
     pub(in crate::features) fn sync_groups_overlay(

@@ -1,5 +1,12 @@
-use super::*;
+use gpui::{
+    AnyElement, ClickEvent, Context, FontWeight, MouseButton, SharedString, div, prelude::*, px,
+    rgb, rgba,
+};
+use nyaterm_core::{QuickCommand, truncate_preview};
 
+use super::super::super::{quick_command_icon_mark, quick_command_pin_mark};
+use super::super::helpers::quick_command_row_actions;
+use crate::features::{ChromeTooltip, NyaTermApp};
 use crate::models::{QuickCommandRowMenuState, QuickCommandViewMode};
 
 impl NyaTermApp {

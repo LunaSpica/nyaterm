@@ -1,5 +1,7 @@
-use super::*;
+use gpui::{Context, FontWeight, MouseButton, SharedString, div, prelude::*, px, rgb, rgba};
 
+use super::super::super::QuickCommandCategoryOption;
+use crate::features::NyaTermApp;
 use crate::models::QuickCommandCategoryMenuState;
 
 impl NyaTermApp {

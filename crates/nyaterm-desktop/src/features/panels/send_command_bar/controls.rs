@@ -1,6 +1,14 @@
 use super::state::SendCommandBarViewState;
-use super::*;
+use gpui::{
+    Context, FontWeight, IntoElement, KeyDownEvent, SharedString, div, prelude::*, px, rgb,
+};
+use nyaterm_transport::SessionKind;
 
+use super::super::{
+    send_command_control_group, send_command_select_menu, send_command_select_menu_item,
+    send_command_select_trigger, send_command_stepper_button,
+};
+use crate::features::{NyaTermApp, TextInputSetup};
 use crate::send_command::{
     SendCommandControlFocus, SendCommandDataType, SendCommandLineEnding, SendCommandMode,
     SendCommandTarget,

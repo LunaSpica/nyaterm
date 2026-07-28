@@ -2,7 +2,7 @@ pub(super) use gpui::{
     AnimationExt, AnyElement, App, ClickEvent, ClipboardItem, Context, Entity, FocusHandle,
     FontWeight, IntoElement, KeyDownEvent, KeyUpEvent, MouseButton, MouseDownEvent,
     PathPromptOptions, Render, ScrollDelta, ScrollHandle, ScrollWheelEvent, SharedString, Timer,
-    Window, WindowControlArea, WindowHandle, div, prelude::*, px, rgb, rgba, svg,
+    Window, WindowHandle, div, prelude::*, px, rgb, rgba, svg,
 };
 pub(super) use nyaterm_core::{
     AgentOutputCaptureProcessor, AiAction, AiCommandCard, AiExecutionProfile, AiMode, AiSettings,
@@ -31,7 +31,7 @@ pub(super) use nyaterm_transport::{
     SshCredentialPromptKind, SshCredentialPromptReason, SshCredentialProvider, SshHostKey,
     SshHostKeyDecision, SshHostKeyVerifier, SshKeyAuthConfig, SshKeyboardInteractiveRequest,
     SshMultiplexHandle, SshOtpProvider, SshProcessService, SshProxyConfig, SshSessionConfig,
-    SshTunnelInfo, SshTunnelManager, TelnetSessionConfig, TerminalHistorySearchRequest,
+    SshTunnelInfo, SshTunnelManager, TelnetSessionConfig,
 };
 
 pub(super) use std::collections::{HashMap, HashSet, VecDeque};
@@ -51,10 +51,6 @@ pub(super) use crate::models::{
     TransferJobOutput, TransferJobResult, TransferJobState, TransferJobStatus, is_multi_line_paste,
     normalize_paste_newlines, panel_collapsed_from_persistence,
 };
-pub(super) use crate::send_command::{
-    build_send_command_units_for, format_send_command_hex_display, parse_send_command_hex,
-};
-pub(super) use crate::shortcuts::event_to_hotkey_string;
 pub(super) use crate::terminal::{
     NyaTerminalElement, NyaTerminalLayoutCache, TerminalBufferMatch, TerminalKeyMode,
     TerminalKeywordHighlightSnapshot, TerminalKeywordHighlighter, TerminalLineDecorations,
@@ -64,6 +60,4 @@ pub(super) use crate::terminal::{
     terminal_key_release_bytes_with_mode, terminal_keyword_highlight_expanded_rows,
     terminal_keyword_rules_key, terminal_text_cell_slice, terminal_text_cells,
 };
-pub(super) use crate::widgets::{
-    capability_line, empty_panel, mode_button, session_info_row, small_button, status_pill,
-};
+pub(super) use crate::widgets::{capability_line, empty_panel, small_button, status_pill};

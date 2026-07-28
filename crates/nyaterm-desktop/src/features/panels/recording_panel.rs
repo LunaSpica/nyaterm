@@ -1,5 +1,12 @@
-use super::*;
+use gpui::{
+    App, ClickEvent, Context, FontWeight, IntoElement, KeyDownEvent, MouseButton, SharedString,
+    Window, div, prelude::*, px, rgb, rgba, svg,
+};
+use nyaterm_core::truncate_preview;
+use nyaterm_transport::SessionInfo;
 
+use crate::features::formatting::{session_kind_label, short_id};
+use crate::features::{NyaTermApp, TextInputSetup};
 use crate::models::RecordingPathPromptKind;
 
 impl NyaTermApp {

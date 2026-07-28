@@ -1,6 +1,12 @@
-use super::*;
+use gpui::{
+    Context, FontWeight, IntoElement, KeyDownEvent, SharedString, div, prelude::*, px, rgb, rgba,
+};
 
+use crate::features::NyaTermApp;
+use crate::features::view_widgets::dialog_action_button;
 use crate::models::MultiLinePasteDraft;
+use crate::models::normalize_paste_newlines;
+use crate::widgets::small_button;
 
 impl NyaTermApp {
     pub(in crate::features) fn multi_line_paste_overlay(

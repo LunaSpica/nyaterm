@@ -1,4 +1,6 @@
-use super::*;
+use gpui::{Context, IntoElement, div, prelude::*, px, rgb};
+
+use crate::features::NyaTermApp;
 
 mod controls;
 mod editor;

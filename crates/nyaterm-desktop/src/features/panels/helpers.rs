@@ -1,6 +1,11 @@
-use super::*;
+use gpui::{Context, IntoElement, div, prelude::*, px, rgb, svg};
+use nyaterm_core::{QuickCommand, QuickCommandCategory};
 
+use crate::features::{
+    NyaTermApp, TextInputSetup, quick_command_category_label, quick_command_icon,
+};
 use crate::models::{QuickCommandEditorField, QuickCommandSortMode};
+use crate::send_command::parse_send_command_hex;
 
 pub(in crate::features::panels) struct QuickCommandCategoryOption {
     pub id: String,

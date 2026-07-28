@@ -1,4 +1,4 @@
-use super::*;
+use gpui::{FontWeight, IntoElement, SharedString, div, prelude::*, px, rgb, svg};
 
 pub(super) fn send_command_control_group(
     palette: crate::theme::ThemePalette,

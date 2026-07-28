@@ -1,6 +1,7 @@
 use super::state::SendCommandBarViewState;
-use super::*;
+use gpui::{Context, FontWeight, div, prelude::*, px, rgb};
 
+use crate::features::NyaTermApp;
 impl NyaTermApp {
     pub(super) fn send_command_bar_header(
         &mut self,

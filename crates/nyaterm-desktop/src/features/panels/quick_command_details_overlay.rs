@@ -1,4 +1,10 @@
-use super::*;
+use gpui::{
+    Context, FontWeight, IntoElement, KeyDownEvent, SharedString, div, prelude::*, px, rgb, rgba,
+};
+use nyaterm_core::truncate_preview;
+
+use super::quick_command_icon_mark;
+use crate::features::NyaTermApp;
 
 impl NyaTermApp {
     pub(in crate::features) fn quick_command_details_overlay(

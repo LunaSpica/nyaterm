@@ -1,5 +1,12 @@
-use super::*;
+use gpui::{
+    Context, FontWeight, IntoElement, KeyDownEvent, MouseButton, SharedString, div, prelude::*, px,
+    rgb, rgba, svg,
+};
+use nyaterm_core::truncate_preview;
+
+use crate::features::{NyaTermApp, TextInputSetup};
 use crate::models::QuickSwitchItem;
+use crate::widgets::status_pill;
 
 impl NyaTermApp {
     pub(in crate::features) fn quick_switch_overlay(

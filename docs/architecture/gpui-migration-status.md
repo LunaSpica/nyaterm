@@ -12,8 +12,8 @@ Last updated from the working tree on 2026-07-28.
 | `NyaTermApp` fields | 261 | Counted from `features/app_state/mod.rs`; down from 585, still transitional. |
 | `impl NyaTermApp` blocks | 239 | Spread across 234 files under `crates/nyaterm-desktop/src`. |
 | `#[path = "..."]` declarations in desktop | 0 | Cleared. Every directory is a real module; the boundary script fails on any new occurrence. |
-| `use super::*` imports in desktop | 201 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
-| `features/prelude.rs` rough exported-token count | 210 | Still a broad shared prelude; two hundred thirty-five low-frequency transport/core/http/model/helper/widget exports are now explicit imports. |
+| `use super::*` imports in desktop | 165 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
+| `features/prelude.rs` rough exported-token count | 202 | Still a broad shared prelude; two hundred forty-three low-frequency GPUI/transport/core/http/model/helper/widget exports are now explicit imports. |
 | Entity Store structs | 4 | `Runtime`, `WindowRuntime`, `StartupRestore`, `Overlay`. Each owns state the app does not. |
 | Snapshot structs | 0 | Cleared. No store is a projection of `NyaTermApp` any more. |
 | `replace_snapshot` methods | 0 | Cleared. |
@@ -474,6 +474,17 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   script governs all 12 Rust modules under `features/inspector` at zero
   `use super::*` imports. Inspector rendering, AI interaction and command
   execution behavior are unchanged.
+- The complete 39-module `features/panels` tree is now free of `use super::*`
+  imports. Thirty-six overlay, quick-command, send-command, tab-action,
+  recording, sync-group and session panel modules name their GPUI, core,
+  transport, model, widget and sibling-helper dependencies directly. The
+  panels and tab-actions module entry points also use named helper imports
+  instead of local glob chains. Eight low-frequency GPUI, transport,
+  send-command, shortcut and widget symbols left `features/prelude.rs`, and the
+  architecture script governs the whole subtree at zero parent-module
+  wildcard imports while keeping module-entry helper imports named.
+  Panel rendering, focus/keyboard routing, session actions, quick-command
+  execution and send-command formatting/dispatch behavior are unchanged.
 - `connection_runtime/helpers.rs` no longer depends on the connection runtime
   wildcard import; its GPUI, app, model, and core dependencies are explicit.
 - `connection_runtime/actions.rs` no longer depends on the connection runtime

@@ -1,4 +1,9 @@
-use super::*;
+use gpui::{Context, div, prelude::*};
+use nyaterm_transport::SessionKind;
+
+use super::super::terminal_action_prompt_text;
+use crate::features::NyaTermApp;
+use crate::models::SessionLaunchConfig;
 
 impl NyaTermApp {
     pub(super) fn tab_action_can_spawn_session(&self, session_id: &str) -> bool {

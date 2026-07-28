@@ -1,6 +1,9 @@
-use super::*;
+use gpui::{Context, FontWeight, IntoElement, SharedString, div, prelude::*, px, rgb, rgba};
 
+use crate::features::NyaTermApp;
+use crate::features::view_widgets::dialog_action_button;
 use crate::models::QuickCommandDeleteState;
+use crate::widgets::small_button;
 
 impl NyaTermApp {
     pub(in crate::features) fn quick_command_delete_overlay(
