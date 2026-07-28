@@ -509,14 +509,7 @@ impl NyaTermApp {
                             store.get_connection(connection_id)
                         }) {
                             Ok(Some(updated)) => {
-                                if let Some(connection) = self
-                                    .connection_catalog
-                                    .connections
-                                    .iter_mut()
-                                    .find(|connection| connection.id == connection_id)
-                                {
-                                    *connection = updated;
-                                }
+                                self.connection_catalog.update_connection(updated);
                             }
                             Ok(None) => {}
                             Err(error) => tracing::warn!(

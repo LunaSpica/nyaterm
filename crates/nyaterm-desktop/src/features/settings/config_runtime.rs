@@ -518,8 +518,8 @@ impl NyaTermApp {
                 let path = store.db_path().display().to_string();
                 match store.load_sessions() {
                     Ok(config) => {
-                        self.connection_catalog.connections = config.connections;
-                        self.connection_catalog.groups = config.groups;
+                        self.connection_catalog
+                            .replace_loaded(config.connections, config.groups);
                         self.retain_connection_list_references_from_loaded_store();
                         self.security.catalog.ssh_keys = store.list_ssh_keys().unwrap_or_default();
                         self.security.catalog.otp_entries =
@@ -584,8 +584,7 @@ impl NyaTermApp {
                         };
                     }
                     Err(error) => {
-                        self.connection_catalog.connections.clear();
-                        self.connection_catalog.groups.clear();
+                        self.connection_catalog.clear_loaded();
                         self.security.catalog.ssh_keys.clear();
                         self.security.catalog.otp_entries.clear();
                         self.security.catalog.passwords.clear();
@@ -607,7 +606,7 @@ impl NyaTermApp {
                 }
             }
             Err(error) => {
-                self.connection_catalog.connections.clear();
+                self.connection_catalog.clear_connections();
                 self.tunnel_state.clear_catalog();
                 self.commands.clear_loaded();
                 self.apply_gpui_settings(AppSettingsSummary::default());
@@ -632,13 +631,13 @@ impl NyaTermApp {
     fn retain_connection_list_references_from_loaded_store(&mut self) {
         let connection_ids = self
             .connection_catalog
-            .connections
+            .connections()
             .iter()
             .map(|connection| connection.id.clone())
             .collect::<std::collections::HashSet<_>>();
         let group_ids = self
             .connection_catalog
-            .groups
+            .groups()
             .iter()
             .map(|group| group.id.clone())
             .collect::<std::collections::HashSet<_>>();

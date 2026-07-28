@@ -127,7 +127,7 @@ impl NyaTermApp {
     pub(in crate::features) fn cycle_network_tunnel_connection(&mut self, cx: &mut Context<Self>) {
         let connection_ids = self
             .connection_catalog
-            .connections
+            .connections()
             .iter()
             .filter(|connection| matches!(&connection.config, ConnectionType::Ssh { .. }))
             .map(|connection| connection.id.as_str())
@@ -193,7 +193,7 @@ impl NyaTermApp {
         };
         if !self
             .connection_catalog
-            .connections
+            .connections()
             .iter()
             .any(|connection| connection.id == connection_id)
         {

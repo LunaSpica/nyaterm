@@ -574,7 +574,7 @@ impl NyaTermApp {
         })?;
         self.refresh_store_from_runtime();
         self.connection_catalog
-            .connections
+            .connections()
             .iter()
             .find(|item| item.id == connection.id)
             .cloned()
@@ -607,8 +607,8 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn refresh_connection_serial_ports(&mut self) {
-        self.connection_catalog.serial_ports =
-            self.session.manager.list_serial_ports().unwrap_or_default();
+        self.connection_catalog
+            .replace_serial_ports(self.session.manager.list_serial_ports().unwrap_or_default());
     }
 }
 

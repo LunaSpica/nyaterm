@@ -338,7 +338,7 @@ impl NyaTermApp {
         let icon_def = resolve_connection_icon(connection.icon.as_deref(), kind);
         let details_rows: Arc<[(&'static str, String)]> = connection_detail_rows(
             &connection,
-            &self.connection_catalog.connections,
+            self.connection_catalog.connections(),
             self.tunnel_state.proxies(),
         )
         .into();
@@ -454,7 +454,7 @@ impl NyaTermApp {
                         ConnectionDragKind::Group => {
                             let parent = this
                                 .connection_catalog
-                                .connections
+                                .connections()
                                 .iter()
                                 .find(|c| c.id == target_id)
                                 .and_then(|c| c.group_id.clone());

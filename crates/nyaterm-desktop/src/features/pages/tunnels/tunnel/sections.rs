@@ -100,7 +100,7 @@ pub(in crate::features::pages::tunnels) fn tunnel_section(
                 .as_deref()
                 .and_then(|id| {
                     app.connection_catalog
-                        .connections
+                        .connections()
                         .iter()
                         .find(|connection| connection.id == id)
                         .map(|connection| connection.name.clone())

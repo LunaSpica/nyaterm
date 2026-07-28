@@ -634,11 +634,11 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
         match panel {
-            NavItem::Connections if !self.connection_catalog.connections.is_empty() => Some(
+            NavItem::Connections if !self.connection_catalog.connections().is_empty() => Some(
                 div()
                     .text_size(px(11.))
                     .text_color(rgb(self.theme_palette().text_dimmed))
-                    .child(self.connection_catalog.connections.len().to_string())
+                    .child(self.connection_catalog.connections().len().to_string())
                     .into_any_element(),
             ),
             NavItem::AiAssistant => {

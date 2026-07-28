@@ -51,6 +51,17 @@ check_no_matches() {
   rm -f /tmp/nyaterm-architecture-boundary.$$
 }
 
+check_no_multiline_matches() {
+  local label="$1"
+  local pattern="$2"
+  local path="$3"
+  if rg -n -U "$pattern" "$path" >/tmp/nyaterm-architecture-boundary.$$ 2>/dev/null; then
+    fail "$label"
+    sed 's/^/  /' /tmp/nyaterm-architecture-boundary.$$ >&2
+  fi
+  rm -f /tmp/nyaterm-architecture-boundary.$$
+}
+
 check_no_matches_in_rust_fn() {
   local label="$1"
   local file="$2"
@@ -279,6 +290,18 @@ check_no_matches \
   "connection catalogs must stay in their authoritative feature owners" \
   '^[[:space:]]*pub\(in crate::features\)[[:space:]]+(connections|connection_groups|connection_ssh_keys|connection_otp_entries|connection_saved_passwords|connection_saved_credentials|connection_serial_ports|tunnels|tunnel_groups|proxies|proxy_groups|tunnel_runtime)[[:space:]]*:' \
   crates/nyaterm-desktop/src/features/app_state/mod.rs
+check_no_matches \
+  "ConnectionCatalogState must expose methods, not writable fields" \
+  '^[[:space:]]*pub([[:space:]]|\([^)]*\))[[:space:]]+(connections|groups|serial_ports)[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/connections/catalog.rs
+check_no_multiline_matches \
+  "connection catalog access must use ConnectionCatalogState methods" \
+  '(self|this|app)\.connection_catalog[[:space:]]*\.[[:space:]]*(connections|groups|serial_ports)([[:space:]]*\.|[[:space:]]*=)' \
+  crates/nyaterm-desktop/src/features
+check_no_matches \
+  "connection catalog transformations must stay on ConnectionCatalogState" \
+  'fn[[:space:]]+(connections_reordered_into_group|group_is_descendant)[[:space:]]*\(' \
+  crates/nyaterm-desktop/src/features/connections/connections/dnd.rs
 
 check_no_matches \
   "command catalog, UI, history and runtime fields must stay grouped under CommandFeatureState" \

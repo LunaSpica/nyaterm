@@ -156,7 +156,7 @@ impl NyaTermApp {
                 }),
             ));
 
-        let groups = ordered_connection_groups(&self.connection_catalog.groups);
+        let groups = ordered_connection_groups(self.connection_catalog.groups());
         if !groups.is_empty() {
             panel = panel.child(menu_separator(palette));
         }
@@ -208,13 +208,13 @@ impl NyaTermApp {
             });
         let connection = self
             .connection_catalog
-            .connections
+            .connections()
             .iter()
             .find(|connection| connection.id == state.connection_id)
             .cloned();
         let selected = self
             .connection_state
-            .selected_connections(&self.connection_catalog.connections);
+            .selected_connections(self.connection_catalog.connections());
         let selected_count = selected.len();
         let connect_label = if selected_count > 1
             && connection
@@ -263,7 +263,7 @@ impl NyaTermApp {
                     this.close_connection_context_menus(cx);
                     let selected = this
                         .connection_state
-                        .selected_connections(&this.connection_catalog.connections);
+                        .selected_connections(this.connection_catalog.connections());
                     if selected.len() > 1 && selected.iter().any(|conn| conn.id == connection_id) {
                         this.start_selected_saved_connections(window, cx);
                     } else if let Some(connection) = connection_for_connect.clone() {
@@ -314,7 +314,7 @@ impl NyaTermApp {
                     this.close_connection_context_menus(cx);
                     if this
                         .connection_state
-                        .selected_connections(&this.connection_catalog.connections)
+                        .selected_connections(this.connection_catalog.connections())
                         .len()
                         > 1
                     {
@@ -350,7 +350,7 @@ impl NyaTermApp {
                     this.close_connection_context_menus(cx);
                     if this
                         .connection_state
-                        .selected_connections(&this.connection_catalog.connections)
+                        .selected_connections(this.connection_catalog.connections())
                         .len()
                         > 1
                     {
@@ -396,8 +396,8 @@ impl NyaTermApp {
         let total_in_group = self
             .connection_state
             .saved_connections_in_group_tree(
-                &self.connection_catalog.connections,
-                &self.connection_catalog.groups,
+                self.connection_catalog.connections(),
+                self.connection_catalog.groups(),
                 &group_id,
             )
             .len();
@@ -505,7 +505,7 @@ impl NyaTermApp {
             });
         let selected = self
             .connection_state
-            .selected_connections(&self.connection_catalog.connections);
+            .selected_connections(self.connection_catalog.connections());
         let selected_count = selected.len();
         let move_submenu_open = self.connection_state.list_move_submenu_is_open();
         let move_ids = selected

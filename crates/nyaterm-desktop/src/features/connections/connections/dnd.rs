@@ -3,36 +3,6 @@ use nyaterm_core::{Group, SavedConnection};
 
 use crate::features::NyaTermApp;
 
-/// The target group's connections in their new order after a move.
-///
-/// Existing members keep their relative order and the moved connections are
-/// appended in list order — not in whatever order the selection happened to be
-/// built — so a multi-select move is not silently shuffled.
-fn connections_reordered_into_group(
-    connections: &[SavedConnection],
-    source_ids: &[String],
-    group_id: &Option<String>,
-) -> Vec<SavedConnection> {
-    let mut staying = connections
-        .iter()
-        .filter(|connection| {
-            &connection.group_id == group_id && !source_ids.contains(&connection.id)
-        })
-        .cloned()
-        .collect::<Vec<_>>();
-    staying.sort_by(|left, right| left.sort_order.cmp(&right.sort_order));
-
-    for connection in connections
-        .iter()
-        .filter(|connection| source_ids.contains(&connection.id))
-    {
-        let mut moved = connection.clone();
-        moved.group_id = group_id.clone();
-        staying.push(moved);
-    }
-    staying
-}
-
 impl NyaTermApp {
     pub(in crate::features) fn move_connection_before(
         &mut self,
@@ -46,7 +16,7 @@ impl NyaTermApp {
         }
         let Some(source) = self
             .connection_catalog
-            .connections
+            .connections()
             .iter()
             .find(|c| c.id == source_id)
             .cloned()
@@ -57,7 +27,7 @@ impl NyaTermApp {
         };
         let Some(target) = self
             .connection_catalog
-            .connections
+            .connections()
             .iter()
             .find(|c| c.id == target_id)
             .cloned()
@@ -70,7 +40,7 @@ impl NyaTermApp {
         let parent = target.group_id.clone();
         let mut siblings = self
             .connection_catalog
-            .connections
+            .connections()
             .iter()
             .filter(|c| c.group_id == parent && c.id != source_id)
             .cloned()
@@ -117,7 +87,7 @@ impl NyaTermApp {
         }
         let Some(source) = self
             .connection_catalog
-            .connections
+            .connections()
             .iter()
             .find(|c| c.id == source_id)
             .cloned()
@@ -128,7 +98,7 @@ impl NyaTermApp {
         };
         let Some(target) = self
             .connection_catalog
-            .connections
+            .connections()
             .iter()
             .find(|c| c.id == target_id)
             .cloned()
@@ -141,7 +111,7 @@ impl NyaTermApp {
         let parent = target.group_id.clone();
         let mut siblings = self
             .connection_catalog
-            .connections
+            .connections()
             .iter()
             .filter(|c| c.group_id == parent && c.id != source_id)
             .cloned()
@@ -186,7 +156,7 @@ impl NyaTermApp {
         self.connection_state.clear_list_drop_target();
         let Some(source) = self
             .connection_catalog
-            .connections
+            .connections()
             .iter()
             .find(|c| c.id == source_id)
             .cloned()
@@ -200,7 +170,7 @@ impl NyaTermApp {
         }
         let mut siblings = self
             .connection_catalog
-            .connections
+            .connections()
             .iter()
             .filter(|c| c.group_id == group_id && c.id != source_id)
             .cloned()
@@ -242,7 +212,7 @@ impl NyaTermApp {
         self.connection_state.clear_list_drop_target();
         let moving = self
             .connection_catalog
-            .connections
+            .connections()
             .iter()
             .filter(|connection| source_ids.contains(&connection.id))
             .cloned()
@@ -254,11 +224,9 @@ impl NyaTermApp {
         }
 
         let moved_count = moving.len();
-        let ordered = connections_reordered_into_group(
-            &self.connection_catalog.connections,
-            &source_ids,
-            &group_id,
-        );
+        let ordered = self
+            .connection_catalog
+            .connections_reordered_into_group(&source_ids, &group_id);
 
         match self.persist_connection_order(&ordered) {
             Ok(()) => {
@@ -289,7 +257,7 @@ impl NyaTermApp {
         }
         let Some(source) = self
             .connection_catalog
-            .groups
+            .groups()
             .iter()
             .find(|g| g.id == source_id)
             .cloned()
@@ -298,7 +266,7 @@ impl NyaTermApp {
         };
         let Some(target) = self
             .connection_catalog
-            .groups
+            .groups()
             .iter()
             .find(|g| g.id == target_id)
             .cloned()
@@ -309,7 +277,7 @@ impl NyaTermApp {
         let parent = target.parent_id.clone();
         let mut siblings = self
             .connection_catalog
-            .groups
+            .groups()
             .iter()
             .filter(|g| g.parent_id == parent && g.id != source_id)
             .cloned()
@@ -348,7 +316,7 @@ impl NyaTermApp {
         }
         // Prevent cycles: parent cannot be descendant of source.
         if let Some(pid) = parent_id.as_ref() {
-            if self.group_is_descendant(pid, &source_id) {
+            if self.connection_catalog.group_is_descendant(pid, &source_id) {
                 self.terminal.view.status = "cannot create group cycle".to_string();
                 cx.notify();
                 return;
@@ -356,7 +324,7 @@ impl NyaTermApp {
         }
         let Some(source) = self
             .connection_catalog
-            .groups
+            .groups()
             .iter()
             .find(|g| g.id == source_id)
             .cloned()
@@ -365,7 +333,7 @@ impl NyaTermApp {
         };
         let mut siblings = self
             .connection_catalog
-            .groups
+            .groups()
             .iter()
             .filter(|g| g.parent_id == parent_id && g.id != source_id)
             .cloned()
@@ -384,31 +352,6 @@ impl NyaTermApp {
             }
         }
         cx.notify();
-    }
-
-    pub(in crate::features) fn group_is_descendant(
-        &self,
-        candidate_id: &str,
-        ancestor_id: &str,
-    ) -> bool {
-        let mut current = Some(candidate_id.to_string());
-        let mut guard = 0;
-        while let Some(id) = current {
-            if id == ancestor_id {
-                return true;
-            }
-            guard += 1;
-            if guard > 64 {
-                break;
-            }
-            current = self
-                .connection_catalog
-                .groups
-                .iter()
-                .find(|g| g.id == id)
-                .and_then(|g| g.parent_id.clone());
-        }
-        false
     }
 
     pub(in crate::features) fn persist_connection_order(
@@ -444,7 +387,7 @@ impl NyaTermApp {
 mod tests {
     use nyaterm_core::{AiExecutionProfile, ConnectionType, SavedConnection};
 
-    use super::connections_reordered_into_group;
+    use crate::features::ConnectionCatalogState;
 
     fn connection(id: &str, group_id: Option<&str>, sort_order: i32) -> SavedConnection {
         SavedConnection {
@@ -483,8 +426,8 @@ mod tests {
             connection("target-0", Some("target"), 0),
         ];
 
-        let ordered = connections_reordered_into_group(
-            &connections,
+        let catalog = ConnectionCatalogState::new(connections, Vec::new());
+        let ordered = catalog.connections_reordered_into_group(
             // Deliberately reversed: the selection order must not leak through.
             &["b".to_string(), "a".to_string()],
             &Some("target".to_string()),
@@ -505,8 +448,8 @@ mod tests {
             connection("grouped", Some("g"), 0),
         ];
 
-        let ordered =
-            connections_reordered_into_group(&connections, &["grouped".to_string()], &None);
+        let catalog = ConnectionCatalogState::new(connections, Vec::new());
+        let ordered = catalog.connections_reordered_into_group(&["grouped".to_string()], &None);
 
         assert_eq!(ids(&ordered), vec!["root", "grouped"]);
         assert!(ordered.iter().all(|c| c.group_id.is_none()));
@@ -519,11 +462,9 @@ mod tests {
             connection("move", Some("g"), 1),
         ];
 
-        let ordered = connections_reordered_into_group(
-            &connections,
-            &["move".to_string()],
-            &Some("g".to_string()),
-        );
+        let catalog = ConnectionCatalogState::new(connections, Vec::new());
+        let ordered =
+            catalog.connections_reordered_into_group(&["move".to_string()], &Some("g".to_string()));
 
         assert_eq!(ids(&ordered), vec!["stay", "move"]);
     }

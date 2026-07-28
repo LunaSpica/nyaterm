@@ -81,7 +81,7 @@ impl NyaTermApp {
             editor
                 .group_id
                 .as_deref()
-                .and_then(|id| connection_group_path_label(&self.connection_catalog.groups, id))
+                .and_then(|id| connection_group_path_label(self.connection_catalog.groups(), id))
                 .unwrap_or_else(|| none_label.to_string())
         });
         let mut group_options = vec![ConnectionGroupChoice {
@@ -91,7 +91,7 @@ impl NyaTermApp {
             selected: editor.group_id.is_none() && editor.pending_group_name.is_none(),
         }];
         group_options.extend(
-            ordered_connection_groups(&self.connection_catalog.groups)
+            ordered_connection_groups(self.connection_catalog.groups())
                 .into_iter()
                 .map(|(group, depth)| {
                     let selected = editor.group_id.as_deref() == Some(group.id.as_str());
@@ -109,7 +109,7 @@ impl NyaTermApp {
             editor.group_id.as_deref()
         };
         let group_parent_hint = group_parent_id
-            .and_then(|id| connection_group_path_label(&self.connection_catalog.groups, id))
+            .and_then(|id| connection_group_path_label(self.connection_catalog.groups(), id))
             .map(|path| {
                 self.tr("dialog.newGroupParentHint")
                     .replace("{{group}}", &path)
@@ -197,7 +197,7 @@ impl NyaTermApp {
             .as_deref()
             .and_then(|id| {
                 self.connection_catalog
-                    .connections
+                    .connections()
                     .iter()
                     .find(|connection| connection.id == id)
                     .map(|connection| connection.name.clone())
@@ -277,13 +277,13 @@ impl NyaTermApp {
         }];
         jump_options.extend(
             self.connection_catalog
-                .connections
+                .connections()
                 .iter()
                 .filter(|connection| matches!(connection.config, ConnectionType::Ssh { .. }))
                 .filter(|connection| editor.id.as_deref() != Some(connection.id.as_str()))
                 .filter(|connection| {
                     !connection_proxy_jump_would_cycle(
-                        &self.connection_catalog.connections,
+                        self.connection_catalog.connections(),
                         editor.id.as_deref(),
                         connection,
                     )
@@ -312,7 +312,7 @@ impl NyaTermApp {
         if !editor.serial_port.is_empty()
             && !self
                 .connection_catalog
-                .serial_ports
+                .serial_ports()
                 .contains(&editor.serial_port)
         {
             serial_port_options.push(ConnectionEditorChoice {
@@ -321,7 +321,7 @@ impl NyaTermApp {
                 selected: true,
             });
         }
-        serial_port_options.extend(self.connection_catalog.serial_ports.iter().map(|port| {
+        serial_port_options.extend(self.connection_catalog.serial_ports().iter().map(|port| {
             ConnectionEditorChoice {
                 value: Some(port.clone()),
                 label: port.clone(),

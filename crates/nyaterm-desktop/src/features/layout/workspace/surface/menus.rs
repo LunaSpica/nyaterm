@@ -288,7 +288,7 @@ impl NyaTermApp {
         // Tauri TabBar new-session: shell sessions + recent by last_used.
         let mut shell: Vec<_> = self
             .connection_catalog
-            .connections
+            .connections()
             .iter()
             .filter(|connection| matches!(connection.config, ConnectionType::LocalTerminal { .. }))
             .cloned()
@@ -296,7 +296,7 @@ impl NyaTermApp {
         shell.sort_by_key(|connection| connection.sort_order);
         let mut recent: Vec<_> = self
             .connection_catalog
-            .connections
+            .connections()
             .iter()
             .filter(|connection| connection.last_used_at_ms.unwrap_or(0) > 0)
             .cloned()
@@ -312,7 +312,7 @@ impl NyaTermApp {
             // Fallback when no usage timestamps yet: first non-shell connections.
             recent = self
                 .connection_catalog
-                .connections
+                .connections()
                 .iter()
                 .filter(|connection| {
                     !matches!(connection.config, ConnectionType::LocalTerminal { .. })
@@ -485,8 +485,8 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let path = self.shell.chrome.new_session_group_menu_path.clone();
         let visible_group_ids = new_session_visible_group_ids(
-            &self.connection_catalog.connections,
-            &self.connection_catalog.groups,
+            self.connection_catalog.connections(),
+            self.connection_catalog.groups(),
         );
         let mut parent_group_id = None;
         let mut top = NEW_SESSION_MENU_ROW_HEIGHT + NEW_SESSION_MENU_PADDING;
@@ -494,7 +494,7 @@ impl NyaTermApp {
 
         for depth in 0..=path.len() {
             let groups = new_session_groups_for_parent(
-                &self.connection_catalog.groups,
+                self.connection_catalog.groups(),
                 &visible_group_ids,
                 parent_group_id.as_deref(),
             );
@@ -535,13 +535,13 @@ impl NyaTermApp {
     ) -> AnyElement {
         let palette = self.theme_palette();
         let groups = new_session_groups_for_parent(
-            &self.connection_catalog.groups,
+            self.connection_catalog.groups(),
             visible_group_ids,
             parent_group_id.as_deref(),
         );
         let connections = new_session_connections_for_group(
-            &self.connection_catalog.connections,
-            &self.connection_catalog.groups,
+            self.connection_catalog.connections(),
+            self.connection_catalog.groups(),
             parent_group_id.as_deref(),
         );
         let has_groups = !groups.is_empty();
@@ -696,7 +696,7 @@ impl NyaTermApp {
                 this.close_new_session_menu(cx);
                 if let Some(connection) = this
                     .connection_catalog
-                    .connections
+                    .connections()
                     .iter()
                     .find(|item| item.id == connection_id)
                     .cloned()
@@ -820,7 +820,7 @@ impl NyaTermApp {
                 this.close_new_session_menu(cx);
                 if let Some(connection) = this
                     .connection_catalog
-                    .connections
+                    .connections()
                     .iter()
                     .find(|item| item.id == connection_id)
                     .cloned()

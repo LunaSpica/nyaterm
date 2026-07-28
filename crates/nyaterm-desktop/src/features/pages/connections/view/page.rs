@@ -52,8 +52,8 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let query = self.connection_state.list_search_query();
         let sections = connection_sections(
-            &self.connection_catalog.connections,
-            &self.connection_catalog.groups,
+            self.connection_catalog.connections(),
+            self.connection_catalog.groups(),
             &query,
             self.connection_state.list_sort_mode(),
         );
@@ -78,8 +78,8 @@ impl NyaTermApp {
         // A folder is worth showing even before anything is filed under it, so the
         // empty state waits until there are no folders either. Otherwise a freshly
         // created folder is swallowed by "no saved connections".
-        let store_is_empty = self.connection_catalog.connections.is_empty()
-            && self.connection_catalog.groups.is_empty();
+        let store_is_empty = self.connection_catalog.connections().is_empty()
+            && self.connection_catalog.groups().is_empty();
         let nothing_matched = flat_rows.is_empty();
         let palette = self.theme_palette();
 
@@ -280,10 +280,10 @@ impl NyaTermApp {
             ConnectionSortMode::NameDesc => "savedConnections.sortNameDesc",
         });
         let more_open = self.connection_state.list_more_menu_is_open();
-        let can_clear_all = !self.connection_catalog.connections.is_empty();
+        let can_clear_all = !self.connection_catalog.connections().is_empty();
         let selected = self
             .connection_state
-            .selected_connections(&self.connection_catalog.connections);
+            .selected_connections(self.connection_catalog.connections());
         let selected_count = selected.len();
         let move_submenu_open = self.connection_state.list_move_submenu_is_open();
         let selected_ids = selected

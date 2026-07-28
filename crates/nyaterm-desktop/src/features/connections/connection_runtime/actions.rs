@@ -52,7 +52,7 @@ impl NyaTermApp {
     ) {
         let Some(connection) = self
             .connection_catalog
-            .connections
+            .connections()
             .iter()
             .find(|connection| connection.id == connection_id)
         else {
@@ -99,7 +99,7 @@ impl NyaTermApp {
     ) {
         let Some(group) = self
             .connection_catalog
-            .groups
+            .groups()
             .iter()
             .find(|group| group.id == group_id)
         else {
@@ -109,13 +109,13 @@ impl NyaTermApp {
         };
         let connection_count = self
             .connection_catalog
-            .connections
+            .connections()
             .iter()
             .filter(|connection| connection.group_id.as_deref() == Some(group_id.as_str()))
             .count();
         let child_group_count = self
             .connection_catalog
-            .groups
+            .groups()
             .iter()
             .filter(|child| child.parent_id.as_deref() == Some(group_id.as_str()))
             .count();
@@ -180,8 +180,8 @@ impl NyaTermApp {
     /// to the text field.
     fn step_connection_keyboard_active(&mut self, forward: bool, cx: &mut Context<Self>) -> bool {
         let visible = self.connection_state.visible_connection_ids(
-            &self.connection_catalog.connections,
-            &self.connection_catalog.groups,
+            self.connection_catalog.connections(),
+            self.connection_catalog.groups(),
         );
         if visible.is_empty() {
             return false;
@@ -209,8 +209,8 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> bool {
         let visible = self.connection_state.visible_connection_ids(
-            &self.connection_catalog.connections,
-            &self.connection_catalog.groups,
+            self.connection_catalog.connections(),
+            self.connection_catalog.groups(),
         );
         let Some(target) = self
             .connection_state
@@ -223,7 +223,7 @@ impl NyaTermApp {
         };
         let Some(connection) = self
             .connection_catalog
-            .connections
+            .connections()
             .iter()
             .find(|connection| connection.id == target)
             .cloned()
@@ -246,8 +246,8 @@ impl NyaTermApp {
         if !self
             .connection_state
             .visible_connection_ids(
-                &self.connection_catalog.connections,
-                &self.connection_catalog.groups,
+                self.connection_catalog.connections(),
+                self.connection_catalog.groups(),
             )
             .iter()
             .any(|candidate| candidate == &active)
@@ -314,7 +314,7 @@ impl NyaTermApp {
     pub(in crate::features) fn delete_selected_connections(&mut self, cx: &mut Context<Self>) {
         let selected = self
             .connection_state
-            .selected_connections(&self.connection_catalog.connections);
+            .selected_connections(self.connection_catalog.connections());
         if selected.is_empty() {
             self.terminal.view.status = "select saved connections before deleting".to_string();
             cx.notify();

@@ -523,7 +523,7 @@ impl NyaTermApp {
         if let Some(connection_id) = tab.connection_id.as_ref().filter(|id| !id.is_empty()) {
             let connection = self
                 .connection_catalog
-                .connections
+                .connections()
                 .iter()
                 .find(|connection| &connection.id == connection_id)
                 .cloned();

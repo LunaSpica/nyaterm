@@ -55,7 +55,7 @@ impl NyaTermApp {
     ) {
         let Some(connection) = self
             .connection_catalog
-            .connections
+            .connections()
             .iter()
             .find(|connection| connection.id == connection_id)
             .cloned()
@@ -84,7 +84,7 @@ impl NyaTermApp {
     ) {
         let selected = self
             .connection_state
-            .selected_connections(&self.connection_catalog.connections);
+            .selected_connections(self.connection_catalog.connections());
         if selected.is_empty() {
             self.terminal.view.status = "select saved connections before connecting".to_string();
             cx.notify();
@@ -102,8 +102,8 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let connections = self.connection_state.saved_connections_in_group_tree(
-            &self.connection_catalog.connections,
-            &self.connection_catalog.groups,
+            self.connection_catalog.connections(),
+            self.connection_catalog.groups(),
             &group_id,
         );
         if connections.is_empty() {
@@ -124,7 +124,7 @@ impl NyaTermApp {
     ) {
         let Some(group) = self
             .connection_catalog
-            .groups
+            .groups()
             .iter()
             .find(|group| group.id == group_id)
         else {
@@ -133,8 +133,8 @@ impl NyaTermApp {
         let connection_count = self
             .connection_state
             .saved_connections_in_group_tree(
-                &self.connection_catalog.connections,
-                &self.connection_catalog.groups,
+                self.connection_catalog.connections(),
+                self.connection_catalog.groups(),
                 &group_id,
             )
             .len();

@@ -140,7 +140,7 @@ impl NyaTermApp {
                 self.refresh_store_from_runtime();
                 self.connection_state.expand_list_groups(
                     self.connection_catalog
-                        .groups
+                        .groups()
                         .iter()
                         .map(|group| group.id.clone()),
                 );
