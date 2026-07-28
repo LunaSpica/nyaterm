@@ -1,8 +1,13 @@
-use super::*;
+use std::time::{Duration, Instant};
 
+use gpui::{Context, Window};
+use nyaterm_transport::{SftpService, SshProcessService};
+
+use crate::features::NyaTermApp;
 use crate::models::{
-    TransferBrowserChildrenMenuStatus, TransferBrowserNavigationSnapshot,
-    TransferBrowserPathMenuKind, TransferBrowserPathMenuState,
+    NavItem, TransferBrowserChildrenMenuStatus, TransferBrowserNavigationSnapshot,
+    TransferBrowserPathMenuKind, TransferBrowserPathMenuState, TransferJobEvent, TransferJobKind,
+    TransferJobOutput, TransferJobResult, TransferJobState, TransferJobStatus,
 };
 
 impl NyaTermApp {

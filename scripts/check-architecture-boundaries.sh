@@ -198,6 +198,11 @@ check_no_matches \
   crates/nyaterm-desktop/src/features/prelude.rs
 
 check_no_matches \
+  "transfer runtime dependencies must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(AiAction|PathPromptOptions|SftpDuplicateResolver|SftpFileEntry|SftpService|SftpTransferControl|SftpTransferOptions|SftpTransferProgress|SshProcessService|TransferJobEvent|TransferJobKind|TransferJobOutput|TransferJobState|TransferJobStatus)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
   "service runtime internals must stay unflattened from the features facade" \
   '(^|[,{[:space:]])(cloud_sync_history_status|DockerJobOutput|ProcessJobOutput|remote_job_event_matches)([},[:space:]]|$)' \
   crates/nyaterm-desktop/src/features/mod.rs
@@ -206,6 +211,17 @@ check_no_matches \
   "remote runtime module entry point must use named helper imports" \
   '^[[:space:]]*use[[:space:]]+helpers::\*;' \
   crates/nyaterm-desktop/src/features/remote/remote_runtime/mod.rs
+
+check_no_matches \
+  "transfer runtime internals must stay unflattened" \
+  '(^|[,{[:space:]])format_permissions_octal([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/mod.rs
+
+check_no_matches \
+  "transfer module entry points must use named internal imports" \
+  '^[[:space:]]*(pub\([^)]*\)[[:space:]]+)?use[[:space:]]+(helpers::\*|transfer_widgets::\*);|(^|[,{[:space:]])format_transfer_progress([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/transfers/mod.rs \
+  crates/nyaterm-desktop/src/features/transfers/transfer_jobs/mod.rs
 
 check_no_matches \
   "cloud sync HTTP module entry point must use named imports and re-exports" \
@@ -552,6 +568,17 @@ check_no_matches 'terminal-gpui #[path] debt' '#\[path\s*=' \
 # lower these counts so the debt cannot return.
 
 declare -A SUPER_BASELINE=(
+  [crates/nyaterm-desktop/src/features/transfers/mod.rs]=0
+  [crates/nyaterm-desktop/src/features/transfers/state.rs]=0
+  [crates/nyaterm-desktop/src/features/transfers/transfer_events.rs]=0
+  [crates/nyaterm-desktop/src/features/transfers/transfer_options.rs]=0
+  [crates/nyaterm-desktop/src/features/transfers/transfer_paths.rs]=0
+  [crates/nyaterm-desktop/src/features/transfers/transfer_widgets.rs]=0
+  [crates/nyaterm-desktop/src/features/transfers/transfer_jobs/mod.rs]=0
+  [crates/nyaterm-desktop/src/features/transfers/transfer_jobs/helpers.rs]=0
+  [crates/nyaterm-desktop/src/features/transfers/transfer_jobs/list_cwd.rs]=0
+  [crates/nyaterm-desktop/src/features/transfers/transfer_jobs/selection.rs]=0
+  [crates/nyaterm-desktop/src/features/transfers/transfer_jobs/transfer.rs]=0
   [crates/nyaterm-desktop/src/http/cloud_sync/mod.rs]=0
   [crates/nyaterm-desktop/src/http/cloud_sync/aliyun.rs]=0
   [crates/nyaterm-desktop/src/http/cloud_sync/github_gist_auth.rs]=0
@@ -885,6 +912,7 @@ done < <(rg -n --path-separator / '^[[:space:]]*use super::\*;' \
   crates/nyaterm-desktop/src/features/settings \
   crates/nyaterm-desktop/src/features/sync \
   crates/nyaterm-desktop/src/features/translation \
+  crates/nyaterm-desktop/src/features/transfers \
   crates/nyaterm-desktop/src/features/view_widgets \
   crates/nyaterm-desktop/src/features/pages/mod.rs \
   crates/nyaterm-desktop/src/features/pages/connections \

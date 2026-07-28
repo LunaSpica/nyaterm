@@ -1,6 +1,10 @@
-use super::*;
+use gpui::{Context, KeyDownEvent, MouseDownEvent, Window};
 
-use crate::models::{TransferJobDeleteState, TransferJobMenuState};
+use crate::features::NyaTermApp;
+use crate::models::{TransferJobDeleteState, TransferJobMenuState, TransferJobStatus};
+
+use super::super::transfer_widgets::transfer_job_title;
+use super::helpers::{transfer_job_local_target_path, transfer_job_reveal_dir};
 
 impl NyaTermApp {
     pub(in crate::features) fn select_transfer_job(

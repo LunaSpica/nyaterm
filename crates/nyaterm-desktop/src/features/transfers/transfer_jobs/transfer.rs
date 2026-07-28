@@ -1,4 +1,19 @@
-use super::*;
+use std::path::PathBuf;
+use std::sync::Arc;
+
+use gpui::{Context, Window};
+use nyaterm_transport::{
+    SftpDuplicatePolicy, SftpDuplicateResolver, SftpService, SftpTransferControl,
+    SftpTransferOptions, SshSessionConfig,
+};
+
+use crate::features::NyaTermApp;
+use crate::models::{
+    NavItem, TransferJobEvent, TransferJobKind, TransferJobOutput, TransferJobResult,
+    TransferJobState, TransferJobStatus,
+};
+
+use super::helpers::{TransferProgressEventSender, transfer_job_remote_parent_path};
 
 impl NyaTermApp {
     pub(in crate::features) fn start_sftp_download_job_for_target(

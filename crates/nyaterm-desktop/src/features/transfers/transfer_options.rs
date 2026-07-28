@@ -1,4 +1,6 @@
-use super::*;
+use nyaterm_transport::SftpTransferOptions;
+
+use crate::features::NyaTermApp;
 
 impl NyaTermApp {
     pub(in crate::features) fn sftp_transfer_options(&self) -> SftpTransferOptions {

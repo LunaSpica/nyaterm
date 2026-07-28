@@ -1,5 +1,17 @@
-use super::*;
-use crate::models::{TransferInputField, TransferPathPromptKind, TransferPathPromptResult};
+use std::path::PathBuf;
+use std::sync::Arc;
+
+use gpui::{Context, PathPromptOptions, SharedString, Window};
+use nyaterm_core::truncate_preview;
+use nyaterm_transport::{
+    SftpDuplicatePolicy, SftpDuplicateResolver, SftpTransferOptions, SshSessionConfig,
+};
+
+use crate::features::NyaTermApp;
+use crate::features::formatting::download_file_name_from_remote_path;
+use crate::models::{
+    NavItem, TransferInputField, TransferPathPromptKind, TransferPathPromptResult,
+};
 
 impl NyaTermApp {
     pub(in crate::features) fn prompt_transfer_download_path_setting(

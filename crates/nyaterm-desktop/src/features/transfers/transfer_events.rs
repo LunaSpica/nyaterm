@@ -1,11 +1,22 @@
-use super::*;
-use std::collections::{HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
+use std::path::PathBuf;
 
-use crate::models::{
-    AiPreparedRequest, TransferBrowserChildrenMenuStatus, TransferBrowserPathMenuKind,
-    TransferBrowserPathMenuState, TransferExternalSyncPromptState,
+use gpui::{Context, Window};
+use nyaterm_core::{AiAction, truncate_preview};
+use nyaterm_transport::{
+    SFTP_TRANSFER_CANCELLED, SftpFileEntry, SftpFileType, SftpTransferProgress,
 };
-use nyaterm_transport::{SFTP_TRANSFER_CANCELLED, SftpFileType};
+
+use crate::features::NyaTermApp;
+use crate::features::formatting::format_permissions_octal;
+use crate::models::{
+    AiPreparedRequest, NavItem, TransferBrowserChildrenMenuStatus, TransferBrowserPathMenuKind,
+    TransferBrowserPathMenuState, TransferExternalSyncPromptState, TransferJobEvent,
+    TransferJobKind, TransferJobOutput, TransferJobStatus,
+};
+
+use super::state::TransferFeatureState;
+use super::transfer_widgets::{format_file_size, format_transfer_progress};
 
 const TRANSFER_EVENT_DRAIN_LIMIT: usize = 256;
 
@@ -1083,8 +1094,17 @@ fn transfer_navigation_job_is_stale(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::collections::HashMap;
+    use std::path::PathBuf;
+
+    use nyaterm_transport::SftpTransferProgress;
+
+    use crate::models::{TransferJobEvent, TransferJobKind, TransferJobOutput};
+
+    use super::{
+        transfer_event_needs_browser_context, transfer_event_needs_ui_refresh,
+        transfer_navigation_job_is_stale,
+    };
 
     #[test]
     fn superseded_transfer_navigation_result_is_stale_per_session() {

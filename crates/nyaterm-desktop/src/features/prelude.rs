@@ -1,12 +1,12 @@
 pub(super) use gpui::{
     AnimationExt, AnyElement, App, ClickEvent, ClipboardItem, Context, Entity, FocusHandle,
-    FontWeight, IntoElement, KeyDownEvent, KeyUpEvent, MouseButton, MouseDownEvent,
-    PathPromptOptions, Render, ScrollDelta, ScrollHandle, ScrollWheelEvent, SharedString, Timer,
-    Window, WindowHandle, div, prelude::*, px, rgb, rgba, svg,
+    FontWeight, IntoElement, KeyDownEvent, KeyUpEvent, MouseButton, MouseDownEvent, Render,
+    ScrollDelta, ScrollHandle, ScrollWheelEvent, SharedString, Timer, Window, WindowHandle, div,
+    prelude::*, px, rgb, rgba, svg,
 };
 pub(super) use nyaterm_core::{
-    AgentOutputCaptureProcessor, AiAction, AiCommandCard, AiExecutionProfile, AiMode, AiSettings,
-    AppRuntime, AppSettingsSummary, CloudSyncHistoryEntry, CloudSyncSettings, CloudSyncState,
+    AgentOutputCaptureProcessor, AiCommandCard, AiExecutionProfile, AiMode, AiSettings, AppRuntime,
+    AppSettingsSummary, CloudSyncHistoryEntry, CloudSyncSettings, CloudSyncState,
     CommandHistoryEntry, CommandObservation, ConnectionStore, ConnectionType, Group,
     InputSelectionRange, KeywordHighlightConfig, NativeServices, NativeUpdateInfo, OtpEntry,
     ProxyConfig, ProxyGroup, QuickCommand, QuickCommandCategory, RuntimeMode, SavedConnection,
@@ -24,10 +24,8 @@ pub(super) use nyaterm_terminal::{
 pub(super) use nyaterm_transport::{
     DockerComposeService, DockerContainerDetails, RecordingManager, RemoteDockerOverview,
     RemoteProcess, RemoteStats, SessionEvent, SessionInfo, SessionKind, SessionManager,
-    SftpDuplicateDecision, SftpDuplicatePolicy, SftpDuplicateResolver, SftpFileEntry, SftpService,
-    SftpTransferControl, SftpTransferOptions, SftpTransferProgress, SshCredentialPromptKind,
-    SshCredentialPromptReason, SshMultiplexHandle, SshProcessService, SshSessionConfig,
-    SshTunnelInfo, SshTunnelManager,
+    SftpDuplicateDecision, SftpDuplicatePolicy, SshCredentialPromptKind, SshCredentialPromptReason,
+    SshMultiplexHandle, SshSessionConfig, SshTunnelInfo, SshTunnelManager,
 };
 
 pub(super) use std::collections::{HashMap, HashSet, VecDeque};
@@ -42,8 +40,7 @@ pub(super) use std::time::{Duration, Instant};
 pub(super) use crate::models::{
     CloudSyncInputField, CredentialAutofillMatchPipeline, CredentialAutofillMatchRequestKey,
     NavItem, PanelSide, SessionLaunchConfig, TerminalFrameActionLinks, TerminalViewState,
-    TransferJobEvent, TransferJobKind, TransferJobOutput, TransferJobResult, TransferJobState,
-    TransferJobStatus, is_multi_line_paste, normalize_paste_newlines,
+    TransferJobResult, is_multi_line_paste, normalize_paste_newlines,
     panel_collapsed_from_persistence,
 };
 pub(super) use crate::terminal::{

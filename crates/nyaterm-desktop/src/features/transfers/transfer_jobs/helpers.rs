@@ -1,4 +1,10 @@
-use super::*;
+use std::path::PathBuf;
+use std::sync::mpsc;
+use std::time::{Duration, Instant};
+
+use nyaterm_transport::SftpTransferProgress;
+
+use crate::models::{TransferJobEvent, TransferJobKind, TransferJobResult, TransferJobState};
 
 const TRANSFER_PROGRESS_EVENT_INTERVAL: Duration = Duration::from_millis(50);
 

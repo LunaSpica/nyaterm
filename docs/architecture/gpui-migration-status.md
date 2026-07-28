@@ -12,8 +12,8 @@ Last updated from the working tree on 2026-07-28.
 | `NyaTermApp` fields | 261 | Counted from `features/app_state/mod.rs`; down from 585, still transitional. |
 | `impl NyaTermApp` blocks | 239 | Spread across 234 files under `crates/nyaterm-desktop/src`. |
 | `#[path = "..."]` declarations in desktop | 0 | Cleared. Every directory is a real module; the boundary script fails on any new occurrence. |
-| `use super::*` imports in desktop | 106 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
-| `features/prelude.rs` rough exported-token count | 177 | Still a broad shared prelude; two hundred sixty-eight low-frequency GPUI/transport/core/http/model/helper/widget exports are now explicit imports. |
+| `use super::*` imports in desktop | 96 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
+| `features/prelude.rs` rough exported-token count | 163 | Still a broad shared prelude; two hundred eighty-two low-frequency GPUI/transport/core/http/model/helper/widget exports are now explicit imports. |
 | Entity Store structs | 4 | `Runtime`, `WindowRuntime`, `StartupRestore`, `Overlay`. Each owns state the app does not. |
 | Snapshot structs | 0 | Cleared. No store is a projection of `NyaTermApp` any more. |
 | `replace_snapshot` methods | 0 | Cleared. |
@@ -532,6 +532,19 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   prevents broad helper/provider re-exports from returning. Provider setting
   fields, request signing, OAuth refresh/device flow, remote path construction,
   secret handling and cloud-sync wire behavior are unchanged.
+- The complete eleven-module `features/transfers` runtime tree is now free of
+  `use super::*` imports, including transfer-event state tests. Browser event
+  reconciliation, native path prompts, transfer options, SFTP list/CWD jobs,
+  progress throttling, queue selection and upload/download control name their
+  GPUI, core, transport, model, formatting and sibling dependencies directly.
+  Both transfer module entry points are pure declarations plus deliberately
+  named public presentation exports; fourteen transfer-runtime-specific symbols
+  left `features/prelude.rs`, and two internal formatting helpers no longer
+  flatten through feature façades. The architecture script governs the whole
+  runtime tree at zero wildcard imports and prevents helper globs from
+  returning. SFTP duplicate resolution, retries, cancellation, progress,
+  browser session isolation, path selection and transfer protocol behavior are
+  unchanged.
 - `connection_runtime/helpers.rs` no longer depends on the connection runtime
   wildcard import; its GPUI, app, model, and core dependencies are explicit.
 - `connection_runtime/actions.rs` no longer depends on the connection runtime
