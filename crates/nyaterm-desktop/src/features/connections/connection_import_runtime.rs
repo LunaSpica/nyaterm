@@ -39,7 +39,9 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.connection_state.import_path_prompt_active() || self.config_path_prompt.is_some() {
+        if self.connection_state.import_path_prompt_active()
+            || self.settings_state.prompts.config_path.is_some()
+        {
             self.terminal.view.status = "connection import picker is already open".to_string();
             cx.notify();
             return;

@@ -113,7 +113,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn prompt_diagnostics_export(&mut self, cx: &mut Context<Self>) {
-        if self.diagnostics_path_prompt.is_some() {
+        if self.settings_state.prompts.diagnostics_path.is_some() {
             self.terminal.view.status = "diagnostics path picker is already open".to_string();
             cx.notify();
             return;
@@ -123,7 +123,7 @@ impl NyaTermApp {
         let receiver = cx.prompt_for_new_path(&directory, Some("nyaterm-diagnostics.zip"));
         let runtime = self.runtime.clone();
         let options = self.diagnostics_export_options();
-        self.diagnostics_path_prompt = Some(DiagnosticsPathPromptKind::Export);
+        self.settings_state.prompts.diagnostics_path = Some(DiagnosticsPathPromptKind::Export);
         self.terminal.view.status = "selecting diagnostics export destination".to_string();
         cx.spawn(async move |this, cx| {
             let result = match receiver.await {
@@ -153,7 +153,7 @@ impl NyaTermApp {
         &mut self,
         result: DiagnosticsPathPromptResult,
     ) {
-        self.diagnostics_path_prompt = None;
+        self.settings_state.prompts.diagnostics_path = None;
         match result {
             DiagnosticsPathPromptResult::Exported(info) => {
                 self.terminal.view.status = format!(

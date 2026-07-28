@@ -19,7 +19,7 @@ fn startup_restore_store_starts_after_window_open_once() {
 }
 
 #[test]
-fn startup_restore_store_tracks_queue_and_completion() {
+fn startup_restore_store_tracks_queue_admission() {
     let mut store = StartupRestoreStore::default();
     store.set_queue(vec![
         nyaterm_core::RestorableOpenTab::with_leaf_root("one", "Local", None, None, None),
@@ -34,7 +34,10 @@ fn startup_restore_store_tracks_queue_and_completion() {
         Some("one")
     );
     assert_eq!(store.queue_len(), 1);
-    assert!(store.mark_complete());
+    assert_eq!(
+        store.pop_next_tab().as_ref().map(|tab| tab.title.as_str()),
+        Some("two")
+    );
     assert!(!store.can_pump_queue(false));
 }
 

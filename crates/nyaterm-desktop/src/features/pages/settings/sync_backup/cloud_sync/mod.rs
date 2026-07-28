@@ -253,7 +253,9 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         let cloud_snapshot_prompt = self
-            .active_snapshot_password_prompt
+            .settings_state
+            .prompts
+            .snapshot_password
             .clone()
             .filter(|prompt| {
                 matches!(

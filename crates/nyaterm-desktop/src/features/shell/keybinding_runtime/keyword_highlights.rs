@@ -58,7 +58,7 @@ impl NyaTermApp {
         if self.block_import_for_settings_draft(cx) {
             return;
         }
-        if self.keyword_highlight_path_prompt.is_some() {
+        if self.settings_state.prompts.keyword_highlight_path.is_some() {
             self.terminal.view.status =
                 "keyword highlight import picker is already open".to_string();
             cx.notify();
@@ -73,7 +73,8 @@ impl NyaTermApp {
         let config_dir = self.runtime.config_dir().to_path_buf();
         let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
         let receiver = cx.prompt_for_paths(options);
-        self.keyword_highlight_path_prompt = Some(KeywordHighlightPathPromptKind::Import);
+        self.settings_state.prompts.keyword_highlight_path =
+            Some(KeywordHighlightPathPromptKind::Import);
         self.terminal.view.status = "selecting keyword highlight import file".to_string();
         cx.spawn(async move |this, cx| {
             let result = match receiver.await {
@@ -119,7 +120,7 @@ impl NyaTermApp {
     }
 
     fn apply_keyword_highlight_import_result(&mut self, result: KeywordHighlightPathPromptResult) {
-        self.keyword_highlight_path_prompt = None;
+        self.settings_state.prompts.keyword_highlight_path = None;
         match result {
             KeywordHighlightPathPromptResult::Imported {
                 imported_rules,

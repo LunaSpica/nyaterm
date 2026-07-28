@@ -2,13 +2,25 @@
 
 use gpui::FocusHandle;
 
-use crate::models::{KeywordHighlightEditorField, SearchEngineEditorField};
+use crate::models::{
+    ConfigPathPromptKind, DiagnosticsPathPromptKind, KeywordHighlightEditorField,
+    KeywordHighlightPathPromptKind, SearchEngineEditorField, SnapshotPasswordPromptState,
+};
 
 pub(in crate::features) struct SettingsFeatureState {
     pub search_engines: SearchEngineSettingsState,
     pub keyword_highlights: KeywordHighlightSettingsState,
     pub appearance: AppearanceSettingsState,
     pub keybindings: KeybindingSettingsState,
+    pub prompts: SettingsPromptState,
+}
+
+#[derive(Default)]
+pub(in crate::features) struct SettingsPromptState {
+    pub config_path: Option<ConfigPathPromptKind>,
+    pub diagnostics_path: Option<DiagnosticsPathPromptKind>,
+    pub keyword_highlight_path: Option<KeywordHighlightPathPromptKind>,
+    pub snapshot_password: Option<SnapshotPasswordPromptState>,
 }
 
 pub(in crate::features) struct SettingsFeatureFocus {
@@ -78,6 +90,7 @@ impl SettingsFeatureState {
                 search_draft: String::new(),
                 focus: focus.keybindings,
             },
+            prompts: SettingsPromptState::default(),
         }
     }
 }

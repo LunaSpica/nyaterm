@@ -4,7 +4,6 @@ use nyaterm_core::{RestorableOpenTab, RestorableWorkspacePaneNode};
 pub struct StartupRestoreStore {
     started_after_window_open: bool,
     open_tabs_restored: bool,
-    complete: bool,
     queue: Vec<RestorableOpenTab>,
     pending_pane_layouts: Vec<RestorableWorkspacePaneNode>,
     pending_active_pane_indexes: Vec<usize>,
@@ -35,18 +34,6 @@ impl StartupRestoreStore {
         true
     }
 
-    pub fn complete(&self) -> bool {
-        self.complete
-    }
-
-    pub fn mark_complete(&mut self) -> bool {
-        if self.complete {
-            return false;
-        }
-        self.complete = true;
-        true
-    }
-
     pub fn queue_len(&self) -> usize {
         self.queue.len()
     }
@@ -68,7 +55,7 @@ impl StartupRestoreStore {
     }
 
     pub fn can_pump_queue(&self, pending_session_active: bool) -> bool {
-        !self.complete && !pending_session_active && !self.queue.is_empty()
+        !pending_session_active && !self.queue.is_empty()
     }
 
     pub fn clear_pending_layouts(&mut self) {

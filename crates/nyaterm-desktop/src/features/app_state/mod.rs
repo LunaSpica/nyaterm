@@ -1,24 +1,19 @@
-use std::collections::{HashMap, VecDeque};
-use std::sync::{Arc, mpsc};
-use std::time::Instant;
+use std::collections::VecDeque;
+use std::sync::Arc;
 
-use gpui::WindowHandle;
 use nyaterm_core::{
     AppRuntime, AppSettingsSummary, CommandHistoryEntry, Group, KeywordHighlightConfig,
     NativeServices, OtpEntry, ProxyConfig, ProxyGroup, QuickCommand, QuickCommandCategory,
     SavedConnection, SavedCredential, SavedPassword, SshKey, TunnelConfig, TunnelGroup,
 };
 use nyaterm_legacy::MigrationInventory;
-use nyaterm_transport::SessionEvent;
 
 use super::ai::AiFeatureState;
-use super::commands::QuickCommandFeatureState;
+use super::commands::{CommandRuntimeState, QuickCommandFeatureState};
 use super::connections::ConnectionFeatureState;
 use super::panels::SendCommandFeatureState;
 use super::recording::RecordingFeatureState;
 use super::remote::RemoteOpsFeatureState;
-use super::remote_editor_window::RemoteFileEditorWindow;
-use super::runtime_jobs::{CommandPersistenceRequest, CommandPersistenceResult};
 use super::session::SessionFeatureState;
 use super::settings::{SecurityFeatureState, SettingsFeatureState};
 use super::shell::ShellFeatureState;
@@ -30,10 +25,7 @@ use super::transfers::TransferFeatureState;
 use super::translation::TranslationFeatureState;
 use super::tunnels::TunnelFeatureState;
 use super::update::UpdateFeatureState;
-use crate::models::{
-    ConfigPathPromptKind, DiagnosticsPathPromptKind, KeywordHighlightPathPromptKind,
-    SnapshotPasswordPromptState, StoreStatus,
-};
+use crate::models::StoreStatus;
 
 mod construct;
 mod types;
@@ -78,9 +70,7 @@ pub struct NyaTermApp {
     pub(in crate::features) update: UpdateFeatureState,
     pub(in crate::features) cloud_sync: CloudSyncFeatureState,
     pub(in crate::features) command_history: Arc<[CommandHistoryEntry]>,
-    pub(in crate::features) command_persistence_tx: mpsc::Sender<CommandPersistenceRequest>,
-    pub(in crate::features) command_persistence_rx: mpsc::Receiver<CommandPersistenceResult>,
-    pub(in crate::features) command_persistence_pending: usize,
+    pub(in crate::features) command_runtime: CommandRuntimeState,
     pub(in crate::features) session: SessionFeatureState,
     pub(in crate::features) shell: ShellFeatureState,
     pub(in crate::features) sync_input: SyncInputFeatureState,
@@ -91,14 +81,4 @@ pub struct NyaTermApp {
     pub(in crate::features) store_status: StoreStatus,
     pub(in crate::features) recording: RecordingFeatureState,
     pub(in crate::features) tunnel_runtime: TunnelFeatureState,
-    pub(in crate::features) about_open: bool,
-    pub(in crate::features) remote_editor_window: Option<WindowHandle<RemoteFileEditorWindow>>,
-    pub(in crate::features) remote_editor_window_open_pending: bool,
-    pub(in crate::features) config_path_prompt: Option<ConfigPathPromptKind>,
-    pub(in crate::features) diagnostics_path_prompt: Option<DiagnosticsPathPromptKind>,
-    pub(in crate::features) keyword_highlight_path_prompt: Option<KeywordHighlightPathPromptKind>,
-    pub(in crate::features) active_snapshot_password_prompt: Option<SnapshotPasswordPromptState>,
-    pub(in crate::features) pending_session_events: VecDeque<SessionEvent>,
-    pub(in crate::features) diagnostic_log_last_at: HashMap<&'static str, Instant>,
-    pub(in crate::features) startup_restore_complete: bool,
 }

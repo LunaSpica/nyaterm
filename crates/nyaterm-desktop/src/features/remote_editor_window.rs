@@ -30,8 +30,8 @@ impl Render for RemoteFileEditorWindow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         if self.app.read(cx).transfer.editor.workspace.is_none() {
             self.app.update(cx, |app, cx| {
-                app.remote_editor_window = None;
-                app.remote_editor_window_open_pending = false;
+                app.transfer.editor.window = None;
+                app.transfer.editor.window_open_pending = false;
                 cx.notify();
             });
             window.defer(cx, |window, _| window.remove_window());
@@ -131,7 +131,7 @@ impl Render for RemoteFileEditorWindow {
 
 impl NyaTermApp {
     pub(in crate::features) fn open_remote_file_editor_window(&mut self, cx: &mut Context<Self>) {
-        if let Some(handle) = self.remote_editor_window {
+        if let Some(handle) = self.transfer.editor.window {
             let app = cx.entity();
             cx.defer(move |cx| {
                 if handle
@@ -140,10 +140,12 @@ impl NyaTermApp {
                 {
                     let _ = app.update(cx, |app, cx| {
                         if app
-                            .remote_editor_window
+                            .transfer
+                            .editor
+                            .window
                             .is_some_and(|current| current == handle)
                         {
-                            app.remote_editor_window = None;
+                            app.transfer.editor.window = None;
                             cx.notify();
                         }
                     });
@@ -151,15 +153,15 @@ impl NyaTermApp {
             });
             return;
         }
-        if self.remote_editor_window_open_pending {
+        if self.transfer.editor.window_open_pending {
             return;
         }
 
-        self.remote_editor_window_open_pending = true;
+        self.transfer.editor.window_open_pending = true;
         cx.notify();
         let app = cx.entity();
         cx.defer(move |cx| {
-            let should_open = app.read(cx).remote_editor_window_open_pending;
+            let should_open = app.read(cx).transfer.editor.window_open_pending;
             if should_open {
                 open_remote_file_editor_window_now_from_app(app, cx);
             }
@@ -168,12 +170,12 @@ impl NyaTermApp {
 }
 
 fn open_remote_file_editor_window_now_from_app(app: Entity<NyaTermApp>, cx: &mut App) {
-    if let Some(handle) = app.read(cx).remote_editor_window {
+    if let Some(handle) = app.read(cx).transfer.editor.window {
         let activate_result = handle.update(cx, |_, window, _| window.activate_window());
         let _ = app.update(cx, |app, cx| {
-            app.remote_editor_window_open_pending = false;
+            app.transfer.editor.window_open_pending = false;
             if activate_result.is_err() {
-                app.remote_editor_window = None;
+                app.transfer.editor.window = None;
             }
             cx.notify();
         });
@@ -181,7 +183,7 @@ fn open_remote_file_editor_window_now_from_app(app: Entity<NyaTermApp>, cx: &mut
     }
     if app.read(cx).transfer.editor.workspace.is_none() {
         let _ = app.update(cx, |app, cx| {
-            app.remote_editor_window_open_pending = false;
+            app.transfer.editor.window_open_pending = false;
             cx.notify();
         });
         return;
@@ -204,8 +206,8 @@ fn open_remote_file_editor_window_now_from_app(app: Entity<NyaTermApp>, cx: &mut
                     app.close_transfer_editor(cx);
                     let should_close = app.transfer.editor.workspace.is_none();
                     if should_close {
-                        app.remote_editor_window = None;
-                        app.remote_editor_window_open_pending = false;
+                        app.transfer.editor.window = None;
+                        app.transfer.editor.window_open_pending = false;
                     }
                     should_close
                 })
@@ -216,13 +218,13 @@ fn open_remote_file_editor_window_now_from_app(app: Entity<NyaTermApp>, cx: &mut
 
     let _ = app.update(cx, |app, cx| match result {
         Ok(handle) => {
-            app.remote_editor_window = Some(handle);
-            app.remote_editor_window_open_pending = false;
+            app.transfer.editor.window = Some(handle);
+            app.transfer.editor.window_open_pending = false;
             cx.notify();
         }
         Err(error) => {
-            app.remote_editor_window = None;
-            app.remote_editor_window_open_pending = false;
+            app.transfer.editor.window = None;
+            app.transfer.editor.window_open_pending = false;
             app.terminal.view.status = format!("failed to open remote editor window: {error}");
             cx.notify();
         }

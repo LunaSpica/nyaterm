@@ -39,15 +39,17 @@ impl NyaTermApp {
         native_window: bool,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let backup_snapshot_prompt =
-            self.active_snapshot_password_prompt
-                .clone()
-                .filter(|prompt| {
-                    matches!(
-                        prompt.kind,
-                        SnapshotPasswordPromptKind::Export | SnapshotPasswordPromptKind::Import
-                    )
-                });
+        let backup_snapshot_prompt = self
+            .settings_state
+            .prompts
+            .snapshot_password
+            .clone()
+            .filter(|prompt| {
+                matches!(
+                    prompt.kind,
+                    SnapshotPasswordPromptKind::Export | SnapshotPasswordPromptKind::Import
+                )
+            });
         self.settings_shell(backup_snapshot_prompt, viewport_width, native_window, cx)
     }
 

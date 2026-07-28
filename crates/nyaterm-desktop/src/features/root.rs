@@ -41,9 +41,12 @@ impl NyaTermApp {
         self.refresh_window_render_inputs(window, cx);
         self.start_terminal_frame_event_wake(cx);
         self.try_restore_open_tabs(window, cx);
-        let should_pump = self.stores.startup_restore.update(cx, |store, _| {
-            store.can_pump_queue(self.has_pending_session_start())
-        });
+        let pending_session_start = self.has_pending_session_start();
+        let should_pump = !self.session.restore.is_complete()
+            && self
+                .stores
+                .startup_restore
+                .update(cx, |store, _| store.can_pump_queue(pending_session_start));
         if should_pump {
             self.pump_startup_restore_queue(window, cx);
         }
@@ -482,8 +485,8 @@ impl NyaTermApp {
             .as_ref()
             .is_some_and(|state| state.session_id.as_deref() == self.session.active_id.as_deref());
         let transfer_editor_open = self.transfer.editor.workspace.is_some()
-            && self.remote_editor_window.is_none()
-            && !self.remote_editor_window_open_pending;
+            && self.transfer.editor.window.is_none()
+            && !self.transfer.editor.window_open_pending;
         let transfer_external_sync_open = self.active_external_editor_sync_prompt().is_some();
         let ssh_auth_prompt_open = self.session.prompts.active_host_key_prompt.is_some()
             || self.session.prompts.active_credential_prompt.is_some()
@@ -646,7 +649,9 @@ impl NyaTermApp {
             .when(overlay.close_all_sessions_confirm_open, |this| {
                 this.child(self.close_all_sessions_confirm_overlay(cx))
             })
-            .when(self.about_open, |this| this.child(self.about_overlay(cx)))
+            .when(self.shell.chrome.about_open, |this| {
+                this.child(self.about_overlay(cx))
+            })
             .when(self.update.dialog_open, |this| {
                 this.child(self.update_overlay(cx))
             })

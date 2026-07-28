@@ -1,11 +1,11 @@
-use std::sync::{Arc, mpsc};
+use std::sync::Arc;
 
 use gpui::Context;
 use nyaterm_core::{AiCommandCard, truncate_preview};
 
 use crate::features::{
-    AiAgentStepStatus, CommandPersistenceRequest, CommandPersistenceResult, NyaTermApp,
-    SESSION_COMMAND_HISTORY_LIMIT, is_agent_command_card,
+    AiAgentStepStatus, CommandPersistencePoll, CommandPersistenceRequest, CommandPersistenceResult,
+    NyaTermApp, SESSION_COMMAND_HISTORY_LIMIT, is_agent_command_card,
 };
 
 const COMMAND_PERSISTENCE_EVENT_DRAIN_LIMIT: usize = 32;
@@ -294,13 +294,10 @@ impl NyaTermApp {
                 self.record_session_command_history(session_id, command);
             }
         }
-        if self
-            .command_persistence_tx
-            .send(CommandPersistenceRequest::AppendHistory(submitted))
-            .is_ok()
+        if !self
+            .command_runtime
+            .queue(CommandPersistenceRequest::AppendHistory(submitted))
         {
-            self.command_persistence_pending = self.command_persistence_pending.saturating_add(1);
-        } else {
             self.store_status.message = "command history worker is unavailable".to_string();
             self.store_status.ready = false;
         }
@@ -308,11 +305,10 @@ impl NyaTermApp {
 
     pub(in crate::features) fn queue_quick_command_use_count(&mut self, command_id: String) {
         if self
-            .command_persistence_tx
-            .send(CommandPersistenceRequest::IncrementQuickCommand(
+            .command_runtime
+            .queue(CommandPersistenceRequest::IncrementQuickCommand(
                 command_id.clone(),
             ))
-            .is_ok()
         {
             if let Some(command) = Arc::make_mut(&mut self.quick_commands)
                 .iter_mut()
@@ -320,7 +316,6 @@ impl NyaTermApp {
             {
                 command.use_count = Some(command.use_count.unwrap_or_default().saturating_add(1));
             }
-            self.command_persistence_pending = self.command_persistence_pending.saturating_add(1);
         } else {
             self.store_status.message = "command persistence worker is unavailable".to_string();
             self.store_status.ready = false;
@@ -330,12 +325,11 @@ impl NyaTermApp {
     pub(in crate::features) fn drain_command_persistence_events(&mut self) -> bool {
         let mut dirty = false;
         for _ in 0..COMMAND_PERSISTENCE_EVENT_DRAIN_LIMIT {
-            let event = match self.command_persistence_rx.try_recv() {
-                Ok(event) => event,
-                Err(mpsc::TryRecvError::Empty) => break,
-                Err(mpsc::TryRecvError::Disconnected) => {
-                    if self.command_persistence_pending > 0 {
-                        self.command_persistence_pending = 0;
+            let event = match self.command_runtime.poll() {
+                CommandPersistencePoll::Event(event) => event,
+                CommandPersistencePoll::Empty => break,
+                CommandPersistencePoll::Disconnected { had_pending } => {
+                    if had_pending {
                         self.store_status.message =
                             "command persistence worker disconnected".to_string();
                         self.store_status.ready = false;
@@ -344,7 +338,6 @@ impl NyaTermApp {
                     break;
                 }
             };
-            self.command_persistence_pending = self.command_persistence_pending.saturating_sub(1);
             dirty = true;
             match event {
                 CommandPersistenceResult::History(Ok(history)) => {

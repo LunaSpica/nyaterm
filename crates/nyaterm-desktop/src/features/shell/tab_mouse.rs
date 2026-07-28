@@ -336,7 +336,7 @@ impl NyaTermApp {
         };
         self.move_session_to_index(&dragged_session_id, next_index);
         self.terminal.view.status = format!("moved tab before {}", short_id(&target_session_id));
-        if self.startup_restore_complete {
+        if self.session.restore.is_complete() {
             self.persist_open_tabs();
         } else if self.terminal_windows_is_multi_leaf() {
             self.persist_terminal_window_layout();
@@ -361,7 +361,7 @@ impl NyaTermApp {
         let last_index = sessions.len().saturating_sub(1);
         self.move_session_to_index(&dragged_session_id, last_index);
         self.terminal.view.status = "moved tab to end".to_string();
-        if self.startup_restore_complete {
+        if self.session.restore.is_complete() {
             self.persist_open_tabs();
         } else if self.terminal_windows_is_multi_leaf() {
             self.persist_terminal_window_layout();

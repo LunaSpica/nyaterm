@@ -16,16 +16,16 @@ use std::sync::Arc;
 
 use super::super::settings::{SettingsFeatureFocus, SettingsFeatureState};
 use super::super::{
-    AiFeatureFocus, AiFeatureState, CloudSyncFeatureState, ConnectionFeatureFocus,
-    ConnectionFeatureState, INITIAL_TERMINAL_BANNER, LEGACY_ROOT, NativeOtpProvider,
-    QuickCommandFeatureFocus, QuickCommandFeatureState, RecordingFeatureState,
+    AiFeatureFocus, AiFeatureState, CloudSyncFeatureState, CommandRuntimeState,
+    ConnectionFeatureFocus, ConnectionFeatureState, INITIAL_TERMINAL_BANNER, LEGACY_ROOT,
+    NativeOtpProvider, QuickCommandFeatureFocus, QuickCommandFeatureState, RecordingFeatureState,
     RemoteOpsFeatureFocus, RemoteOpsFeatureState, SecurityFeatureFocus, SecurityFeatureState,
     SendCommandFeatureFocus, SendCommandFeatureState, SessionFeatureFocus, SessionFeatureState,
     ShellFeatureInit, ShellFeatureState, SyncInputFeatureState, TerminalFeatureFocus,
     TerminalFeatureState, TextInputRegistry, TransferFeatureFocus, TransferFeatureState,
     TranslationFeatureState, TunnelFeatureState, UpdateFeatureState, ai_active_profile_drafts,
     ai_usage_counts, appearance_font_options, quick_command_sort_mode_from_setting,
-    quick_command_view_mode_from_setting, spawn_command_persistence_worker,
+    quick_command_view_mode_from_setting,
 };
 use super::NyaTermApp;
 use crate::models::panel_collapsed_from_persistence;
@@ -55,7 +55,7 @@ impl NyaTermApp {
             command_modules: 0,
             copied_vendor_roots: Vec::new(),
         };
-        let (command_persistence_tx, command_persistence_rx) = spawn_command_persistence_worker(
+        let command_runtime = CommandRuntimeState::new(
             runtime.config_dir().to_path_buf(),
             runtime.portable_key_path().map(ToOwned::to_owned),
         );
@@ -425,9 +425,7 @@ impl NyaTermApp {
                 cloud_sync_history,
             ),
             command_history: Arc::from(command_history),
-            command_persistence_tx,
-            command_persistence_rx,
-            command_persistence_pending: 0,
+            command_runtime,
             session: SessionFeatureState::new(
                 session_manager,
                 session_event_bridge,
@@ -474,16 +472,6 @@ impl NyaTermApp {
             store_status,
             recording,
             tunnel_runtime: TunnelFeatureState::new(),
-            about_open: false,
-            remote_editor_window: None,
-            remote_editor_window_open_pending: false,
-            config_path_prompt: None,
-            diagnostics_path_prompt: None,
-            keyword_highlight_path_prompt: None,
-            active_snapshot_password_prompt: None,
-            pending_session_events: VecDeque::new(),
-            diagnostic_log_last_at: HashMap::new(),
-            startup_restore_complete: false,
         }
     }
 }

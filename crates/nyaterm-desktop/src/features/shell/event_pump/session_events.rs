@@ -108,7 +108,7 @@ impl NyaTermApp {
         // Common calm path: no local pending events, no bridge UI work, no file
         // transfer sideband. Skip harvest/atomics so idle and window-drag ticks
         // do not touch the session event pipeline at all.
-        if self.pending_session_events.is_empty()
+        if self.session.events.pending.is_empty()
             && !self.session.event_bridge.has_pending_ui_work()
             && (!drain_sideband_workers
                 || (self.session.zmodem.is_empty() && self.session.trzsz.is_empty()))
@@ -165,7 +165,7 @@ impl NyaTermApp {
         let mut bridge_drained_ui_events = 0usize;
         let mut bridge_drained_ui_output_bytes = 0usize;
         let mut pending_frame_outputs: Vec<(String, Vec<u8>)> = Vec::new();
-        if self.pending_session_events.is_empty() {
+        if self.session.events.pending.is_empty() {
             if self.session.event_bridge.has_pending_ui_work() {
                 let drain = self.session.event_bridge.drain_events_with_output_budget(
                     drain_budget.max_events,
@@ -196,7 +196,7 @@ impl NyaTermApp {
                         .session_event_dropped_output_bytes
                         .saturating_add(drain.stats.dropped_output_bytes as u64);
                 }
-                self.pending_session_events.extend(drain.events);
+                self.session.events.pending.extend(drain.events);
             } else {
                 // Direct-output-only ticks: harvest counters without UI queue lock.
                 let stats = self.session.event_bridge.harvest_direct_stats();
@@ -213,8 +213,8 @@ impl NyaTermApp {
             }
         }
 
-        if !self.pending_session_events.is_empty() {
-            while let Some(event) = self.pending_session_events.pop_front() {
+        if !self.session.events.pending.is_empty() {
+            while let Some(event) = self.session.events.pending.pop_front() {
                 drained_events += 1;
                 match event {
                     SessionEvent::Output { session_id, data } => {
@@ -234,7 +234,7 @@ impl NyaTermApp {
                         if matches!(step, SessionOutputDrainStep::SidebandOnly { .. })
                             && session_event_drain_should_yield(
                                 drain_started_at,
-                                !self.pending_session_events.is_empty(),
+                                !self.session.events.pending.is_empty(),
                                 transport_queued_events,
                                 transport_queued_output_bytes,
                                 drain_budget,
@@ -270,7 +270,7 @@ impl NyaTermApp {
                 }
                 if session_event_drain_should_yield(
                     drain_started_at,
-                    !self.pending_session_events.is_empty(),
+                    !self.session.events.pending.is_empty(),
                     transport_queued_events,
                     transport_queued_output_bytes,
                     drain_budget,
@@ -282,9 +282,9 @@ impl NyaTermApp {
         self.flush_pending_session_frame_outputs(&mut pending_frame_outputs, &mut drain_timings);
 
         let queued_events =
-            transport_queued_events.saturating_add(self.pending_session_events.len());
+            transport_queued_events.saturating_add(self.session.events.pending.len());
         let queued_output_bytes = transport_queued_output_bytes
-            .saturating_add(session_events_output_bytes(&self.pending_session_events));
+            .saturating_add(session_events_output_bytes(&self.session.events.pending));
         let drained_output_bytes = processed_output_bytes;
         self.terminal.view.runtime.session_event_queued_events = queued_events;
         self.terminal.view.runtime.session_event_queued_output_bytes = queued_output_bytes;

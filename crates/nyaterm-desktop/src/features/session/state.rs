@@ -1,10 +1,12 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::{Arc, mpsc};
 use std::time::Instant;
 
 use gpui::FocusHandle;
 use nyaterm_core::AiExecutionProfile;
-use nyaterm_transport::{SessionKind, SessionManager, SshMultiplexHandle, SshSessionConfig};
+use nyaterm_transport::{
+    SessionEvent, SessionKind, SessionManager, SshMultiplexHandle, SshSessionConfig,
+};
 
 use crate::features::DEFAULT_DUPLICATE_STARTUP_DELAY_MS;
 use crate::features::runtime_jobs::SessionStartResult;
@@ -25,6 +27,8 @@ pub(in crate::features) struct SessionFeatureState {
     pub manager: Arc<SessionManager>,
     pub event_bridge: SessionEventBridge,
     pub start: SessionStartFeatureState,
+    pub restore: SessionRestoreState,
+    pub events: SessionEventQueueState,
     pub prompts: SessionPromptState,
     pub dialogs: SessionDialogState,
     pub command_history: HashMap<String, Vec<String>>,
@@ -48,6 +52,16 @@ pub(in crate::features) struct SessionFeatureState {
     pub trzsz: HashMap<String, TrzszSessionState>,
     pub tab_colors: HashMap<String, u32>,
     pub multiplex_handles: HashMap<String, SshMultiplexHandle>,
+}
+
+#[derive(Default)]
+pub(in crate::features) struct SessionRestoreState {
+    complete: bool,
+}
+
+#[derive(Default)]
+pub(in crate::features) struct SessionEventQueueState {
+    pub pending: VecDeque<SessionEvent>,
 }
 
 pub(in crate::features) struct SessionFeatureFocus {
@@ -114,6 +128,8 @@ impl SessionFeatureState {
             manager,
             event_bridge,
             start: SessionStartFeatureState::new(),
+            restore: SessionRestoreState::default(),
+            events: SessionEventQueueState::default(),
             prompts: SessionPromptState {
                 duplicate_prompts: Arc::new(SftpDuplicatePromptBroker::default()),
                 active_duplicate_prompt: None,
@@ -169,6 +185,20 @@ impl SessionFeatureState {
             tab_colors: HashMap::new(),
             multiplex_handles: HashMap::new(),
         }
+    }
+}
+
+impl SessionRestoreState {
+    pub(in crate::features) fn is_complete(&self) -> bool {
+        self.complete
+    }
+
+    pub(in crate::features) fn mark_complete(&mut self) -> bool {
+        if self.complete {
+            return false;
+        }
+        self.complete = true;
+        true
     }
 }
 
@@ -475,8 +505,18 @@ mod tests {
 
     use super::{
         FailedSessionStart, NativeOtpProvider, PendingSessionStart, SessionFeatureFocus,
-        SessionFeatureState, SessionStartFeatureState,
+        SessionFeatureState, SessionRestoreState, SessionStartFeatureState,
     };
+
+    #[test]
+    fn startup_restore_completion_is_owned_and_idempotent() {
+        let mut restore = SessionRestoreState::default();
+
+        assert!(!restore.is_complete());
+        assert!(restore.mark_complete());
+        assert!(restore.is_complete());
+        assert!(!restore.mark_complete());
+    }
 
     fn pending(name: &str) -> PendingSessionStart {
         PendingSessionStart {

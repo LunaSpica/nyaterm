@@ -5,12 +5,12 @@ use crate::features::view_widgets::modal_close_icon_button;
 
 impl NyaTermApp {
     pub(in crate::features) fn open_about(&mut self, cx: &mut Context<Self>) {
-        self.about_open = true;
+        self.shell.chrome.about_open = true;
         cx.notify();
     }
 
     pub(in crate::features) fn close_about(&mut self, cx: &mut Context<Self>) {
-        self.about_open = false;
+        self.shell.chrome.about_open = false;
         cx.notify();
     }
 

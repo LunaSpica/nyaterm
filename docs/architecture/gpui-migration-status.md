@@ -9,7 +9,7 @@ Last updated from the working tree on 2026-07-28.
 
 | Metric | Current value | Notes |
 | --- | ---: | --- |
-| `NyaTermApp` fields | 55 | Counted from `features/app_state/mod.rs`; down from 585, still transitional. |
+| `NyaTermApp` fields | 43 | Counted from `features/app_state/mod.rs`; down from 585, still transitional. |
 | `impl NyaTermApp` blocks | 238 | Spread across 233 files under `crates/nyaterm-desktop/src`. |
 | `#[path = "..."]` declarations in desktop | 0 | Cleared. Every directory is a real module; the boundary script fails on any new occurrence. |
 | `use super::*` imports in desktop | 0 | Cleared in production and test modules; guarded crate-wide. |
@@ -342,6 +342,18 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   menu and workspace ownership transitions execute on the child states.
   Render helpers remain on views, while `NyaTermApp` retains settings
   persistence, GPUI notification, terminal coordination and event routing.
+- The remaining transient coordination tail was moved as one cohesive batch.
+  `SessionFeatureState` now owns the pending transport-event queue and startup
+  restore completion lifecycle; `StartupRestoreStore` owns only its queue,
+  pending layouts and startup/load idempotence, so the former duplicated
+  completion flag is gone. `CommandRuntimeState` owns the command persistence
+  channel pair and pending-work admission, while shell diagnostics own their
+  keyed throttle timestamps. Settings path/password prompts, About visibility
+  and the remote editor window lifecycle now live under their existing
+  settings, shell and transfer feature owners. Thirteen top-level fields became
+  one new runtime owner plus focused children on existing states, taking
+  `NyaTermApp` from 55 fields to 43 without changing persistence formats or
+  background-worker behavior.
 - The Entity Store projection layer is gone entirely, in two steps.
 
   First, the six domain stores (`Ai`, `CloudSync`, `Connections`, `RemoteOps`,
@@ -1420,7 +1432,7 @@ honest remaining list.
    compiler-confirmed final pass also removed `features/prelude.rs`, so modules
    cannot regain the same implicit dependency surface through a shared import
    bucket.
-3. Largely done. `NyaTermApp` is down from 585 fields to 55, across seventeen
+3. Largely done. `NyaTermApp` is down from 585 fields to 43, across eighteen
    feature-state structs. The latest cohesive cuts moved sixteen terminal
    command-assistance and credential-prompt fields into
    `TerminalFeatureState::assist`, then seventeen transient settings fields
@@ -1432,9 +1444,12 @@ honest remaining list.
    runtime with nested session-start, prompt and dialog ownership, then terminal
    presentation runtime followed by sync-input and screen-lock interaction
    lifecycles, and finally forty-seven window interaction fields under the
-   shell's viewport, navigation, panel, chrome and workspace children. What is
-   left is a long tail, and much of it is genuinely app-level (stores, runtime,
-   services, persisted collections).
+   shell's viewport, navigation, panel, chrome and workspace children. The
+   latest batch then moved session event/restore coordination, command
+   persistence runtime, diagnostic throttles, settings prompts, About state and
+   remote-editor window ownership to focused states. What is left is a long
+   tail, and much of it is genuinely app-level (stores, runtime, services,
+   persisted collections).
    Group by cohesion where a cluster exists; do not force the count down for
    its own sake.
    Method ownership is now moving too, which is what grouping the fields alone

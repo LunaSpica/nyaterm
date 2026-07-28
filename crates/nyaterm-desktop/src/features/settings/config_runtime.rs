@@ -14,7 +14,7 @@ use crate::models::{
 
 impl NyaTermApp {
     pub(in crate::features) fn prompt_config_export(&mut self, cx: &mut Context<Self>) {
-        if self.config_path_prompt.is_some() {
+        if self.settings_state.prompts.config_path.is_some() {
             self.terminal.view.status = "config path picker is already open".to_string();
             cx.notify();
             return;
@@ -24,7 +24,7 @@ impl NyaTermApp {
         let receiver = cx.prompt_for_new_path(&directory, Some("nyaterm-backup.redb"));
         let config_dir = self.runtime.config_dir().to_path_buf();
         let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
-        self.config_path_prompt = Some(ConfigPathPromptKind::Export);
+        self.settings_state.prompts.config_path = Some(ConfigPathPromptKind::Export);
         self.terminal.view.status = "selecting config backup destination".to_string();
         self.store_status.message = "selecting backup destination".to_string();
         cx.spawn(async move |this, cx| {
@@ -59,7 +59,7 @@ impl NyaTermApp {
         if self.block_import_for_settings_draft(cx) {
             return;
         }
-        if self.config_path_prompt.is_some() {
+        if self.settings_state.prompts.config_path.is_some() {
             self.terminal.view.status = "config path picker is already open".to_string();
             cx.notify();
             return;
@@ -79,7 +79,7 @@ impl NyaTermApp {
         let receiver = cx.prompt_for_paths(options);
         let config_dir = self.runtime.config_dir().to_path_buf();
         let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
-        self.config_path_prompt = Some(ConfigPathPromptKind::PortableImport);
+        self.settings_state.prompts.config_path = Some(ConfigPathPromptKind::PortableImport);
         self.terminal.view.status = "selecting portable snapshot to import".to_string();
         self.store_status.message = "selecting .nya snapshot".to_string();
         cx.spawn(async move |this, cx| {
@@ -119,13 +119,13 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.config_path_prompt.is_some() {
+        if self.settings_state.prompts.config_path.is_some() {
             self.terminal.view.status = "config path picker is already open".to_string();
             cx.notify();
             return;
         }
         self.forget_text_inputs("snapshot-password.");
-        self.active_snapshot_password_prompt = Some(SnapshotPasswordPromptState {
+        self.settings_state.prompts.snapshot_password = Some(SnapshotPasswordPromptState {
             kind,
             value: String::new(),
         });
@@ -173,12 +173,12 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn submit_snapshot_password_prompt(&mut self, cx: &mut Context<Self>) {
-        let Some(state) = self.active_snapshot_password_prompt.take() else {
+        let Some(state) = self.settings_state.prompts.snapshot_password.take() else {
             return;
         };
         let password = state.value.trim().to_string();
         if password.is_empty() {
-            self.active_snapshot_password_prompt = Some(SnapshotPasswordPromptState {
+            self.settings_state.prompts.snapshot_password = Some(SnapshotPasswordPromptState {
                 kind: state.kind,
                 value: String::new(),
             });
@@ -225,7 +225,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn cancel_snapshot_password_prompt(&mut self, cx: &mut Context<Self>) {
-        let Some(state) = self.active_snapshot_password_prompt.take() else {
+        let Some(state) = self.settings_state.prompts.snapshot_password.take() else {
             return;
         };
         self.forget_text_inputs("snapshot-password.");
@@ -263,7 +263,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.mark_user_activity();
-        if self.active_snapshot_password_prompt.is_none() {
+        if self.settings_state.prompts.snapshot_password.is_none() {
             return;
         }
         let keystroke = &event.keystroke;
@@ -283,7 +283,7 @@ impl NyaTermApp {
         text: String,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.active_snapshot_password_prompt.as_mut() else {
+        let Some(state) = self.settings_state.prompts.snapshot_password.as_mut() else {
             return;
         };
         state.value = text;
@@ -300,7 +300,8 @@ impl NyaTermApp {
         let receiver = cx.prompt_for_new_path(&directory, Some("nyaterm-encrypted.nya"));
         let config_dir = self.runtime.config_dir().to_path_buf();
         let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
-        self.config_path_prompt = Some(ConfigPathPromptKind::EncryptedPortableExport);
+        self.settings_state.prompts.config_path =
+            Some(ConfigPathPromptKind::EncryptedPortableExport);
         self.terminal.view.status = "selecting encrypted portable snapshot destination".to_string();
         self.store_status.message = "selecting encrypted .nya export destination".to_string();
         cx.spawn(async move |this, cx| {
@@ -351,7 +352,8 @@ impl NyaTermApp {
         let receiver = cx.prompt_for_paths(options);
         let config_dir = self.runtime.config_dir().to_path_buf();
         let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
-        self.config_path_prompt = Some(ConfigPathPromptKind::EncryptedPortableImport);
+        self.settings_state.prompts.config_path =
+            Some(ConfigPathPromptKind::EncryptedPortableImport);
         self.terminal.view.status = "selecting encrypted portable snapshot to import".to_string();
         self.store_status.message = "selecting encrypted .nya snapshot".to_string();
         cx.spawn(async move |this, cx| {
@@ -394,7 +396,7 @@ impl NyaTermApp {
         kind: ConfigPathPromptKind,
         result: ConfigPathPromptResult,
     ) {
-        self.config_path_prompt = None;
+        self.settings_state.prompts.config_path = None;
         match result {
             ConfigPathPromptResult::Exported(info) => {
                 self.store_status.path = info.database_path.display().to_string();

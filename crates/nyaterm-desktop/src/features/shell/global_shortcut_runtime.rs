@@ -20,7 +20,7 @@ impl NyaTermApp {
                 self.close_update_dialog(cx);
                 return true;
             }
-            if self.about_open {
+            if self.shell.chrome.about_open {
                 self.close_about(cx);
                 return true;
             }

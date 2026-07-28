@@ -277,7 +277,7 @@ impl NyaTermApp {
         // means there is nothing to restore; mark this done so the runtime can
         // enter the quiet cadence.
         if ordered.is_empty() {
-            if self.startup_restore_complete {
+            if self.session.restore.is_complete() {
                 self.terminal.windows.restored = true;
             }
             return;

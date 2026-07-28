@@ -11,11 +11,8 @@ use crate::models::{
 };
 
 impl NyaTermApp {
-    fn mark_startup_restore_complete(&mut self, cx: &mut Context<Self>) {
-        self.startup_restore_complete = true;
-        self.stores.startup_restore.update(cx, |store, _| {
-            store.mark_complete();
-        });
+    fn mark_startup_restore_complete(&mut self) {
+        self.session.restore.mark_complete();
     }
 
     /// Mark open tabs (and multi-leaf layout) dirty for a later idle flush.
@@ -347,27 +344,27 @@ impl NyaTermApp {
             return;
         }
         if !self.settings.startup_restore {
-            self.mark_startup_restore_complete(cx);
+            self.mark_startup_restore_complete();
             return;
         }
         if !self.ordered_sessions().is_empty() {
-            self.mark_startup_restore_complete(cx);
+            self.mark_startup_restore_complete();
             return;
         }
         let Ok(store) = ConnectionStore::open_with_portable_key_path(
             self.runtime.config_dir(),
             self.runtime.portable_key_path().map(ToOwned::to_owned),
         ) else {
-            self.mark_startup_restore_complete(cx);
+            self.mark_startup_restore_complete();
             return;
         };
         let Ok(tabs) = store.load_open_tabs() else {
-            self.mark_startup_restore_complete(cx);
+            self.mark_startup_restore_complete();
             return;
         };
         drop(store);
         if tabs.is_empty() {
-            self.mark_startup_restore_complete(cx);
+            self.mark_startup_restore_complete();
             return;
         }
         // Expand Tauri per-tab pane trees into a flat restore queue of sessions.
@@ -406,7 +403,7 @@ impl NyaTermApp {
             }
         }
         if expanded.is_empty() {
-            self.mark_startup_restore_complete(cx);
+            self.mark_startup_restore_complete();
             return;
         }
         let queue_len = expanded.len();
@@ -429,11 +426,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self
-            .stores
-            .startup_restore
-            .update(cx, |store, _| store.complete())
-        {
+        if self.session.restore.is_complete() {
             return;
         }
         if self.has_pending_session_start() {
@@ -456,14 +449,10 @@ impl NyaTermApp {
     }
 
     fn finish_startup_restore(&mut self, cx: &mut Context<Self>) {
-        if self
-            .stores
-            .startup_restore
-            .update(cx, |store, _| store.complete())
-        {
+        if self.session.restore.is_complete() {
             return;
         }
-        self.mark_startup_restore_complete(cx);
+        self.mark_startup_restore_complete();
         // After all tabs reconnect, attempt multi-leaf then global pane layout restore.
         self.terminal.windows.restored = false;
         self.shell.workspace.pane_layout_restored = false;

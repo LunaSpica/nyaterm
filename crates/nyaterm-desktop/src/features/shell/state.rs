@@ -25,6 +25,12 @@ pub(in crate::features) struct ShellFeatureState {
     pub panels: ShellPanelState,
     pub chrome: ShellChromeState,
     pub workspace: ShellWorkspaceState,
+    pub diagnostics: ShellDiagnosticState,
+}
+
+#[derive(Default)]
+pub(in crate::features) struct ShellDiagnosticState {
+    last_log_at: HashMap<&'static str, Instant>,
 }
 
 pub(in crate::features) struct ShellFeatureInit {
@@ -97,6 +103,7 @@ pub(in crate::features) struct ShellPanelState {
 
 /// Activity bar, title menus, tab-strip menus and connection-failure chrome.
 pub(in crate::features) struct ShellChromeState {
+    pub about_open: bool,
     pub activity_bar_layout: ActivityBarLayoutState,
     pub activity_bar_context_menu: Option<ActivityBarContextMenuState>,
     pub title_menu_open: Option<TitleMenu>,
@@ -168,6 +175,7 @@ impl ShellFeatureState {
                 stack_resize: None,
             },
             chrome: ShellChromeState {
+                about_open: false,
                 activity_bar_layout: init.activity_bar_layout,
                 activity_bar_context_menu: None,
                 title_menu_open: None,
@@ -190,7 +198,26 @@ impl ShellFeatureState {
                 focused_terminal_leaf_id: None,
                 pane_layout_restored: false,
             },
+            diagnostics: ShellDiagnosticState::default(),
         }
+    }
+}
+
+impl ShellDiagnosticState {
+    pub(in crate::features) fn should_log(
+        &mut self,
+        key: &'static str,
+        now: Instant,
+        throttle: Duration,
+    ) -> bool {
+        if self.last_log_at.get(key).is_some_and(|last| {
+            now.checked_duration_since(*last)
+                .is_some_and(|elapsed| elapsed < throttle)
+        }) {
+            return false;
+        }
+        self.last_log_at.insert(key, now);
+        true
     }
 }
 
@@ -548,6 +575,32 @@ mod tests {
                 .viewport
                 .title_drag_active(now + Duration::from_millis(10))
         );
+    }
+
+    #[test]
+    fn diagnostic_throttle_is_keyed_and_advances_after_interval() {
+        let mut shell = shell(BottomPanelMode::Hidden);
+        let now = Instant::now();
+        let throttle = Duration::from_secs(2);
+
+        assert!(shell.diagnostics.should_log("session", now, throttle));
+        assert!(
+            !shell
+                .diagnostics
+                .should_log("session", now + Duration::from_secs(1), throttle)
+        );
+        assert!(shell.diagnostics.should_log("frame", now, throttle));
+        assert!(
+            shell
+                .diagnostics
+                .should_log("session", now + Duration::from_secs(2), throttle)
+        );
+        assert!(
+            shell
+                .diagnostics
+                .should_log("clock", now + Duration::from_secs(2), throttle)
+        );
+        assert!(shell.diagnostics.should_log("clock", now, throttle));
     }
 
     #[test]

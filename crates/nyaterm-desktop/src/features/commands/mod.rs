@@ -2,10 +2,12 @@
 
 mod command_runtime;
 mod quick_command_runtime;
+mod runtime_state;
 mod state;
 
 pub(in crate::features) use quick_command_runtime::{
     QUICK_COMMAND_COLOR_OPTIONS, quick_command_category_label,
     quick_command_sort_mode_from_setting, quick_command_view_mode_from_setting,
 };
+pub(in crate::features) use runtime_state::{CommandPersistencePoll, CommandRuntimeState};
 pub(in crate::features) use state::{QuickCommandFeatureFocus, QuickCommandFeatureState};

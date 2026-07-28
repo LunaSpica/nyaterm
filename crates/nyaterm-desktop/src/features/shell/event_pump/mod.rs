@@ -7,8 +7,8 @@ use crate::features::shell::event_pump::helpers::{
     PENDING_SESSION_STATUS_INTERVAL, PENDING_SESSION_STILL_CONNECTING_AFTER,
     PendingSessionAuthWait, RUNTIME_IDLE_TICK_INTERVAL, RUNTIME_QUIET_TICK_INTERVAL,
     SLOW_DIAGNOSTIC_THROTTLE, TITLE_DRAG_ACTIVE_HOLD, TRANSFER_AUTO_SYNC_CWD_INTERVAL_SECONDS,
-    connect_settle_active, connect_settle_deadline, diagnostic_log_due,
-    pending_session_status_message, remote_refresh_due, runtime_output_pressure_active_from_counts,
+    connect_settle_active, connect_settle_deadline, pending_session_status_message,
+    remote_refresh_due, runtime_output_pressure_active_from_counts,
     runtime_tick_interval_for_pressure, runtime_ui_notify_allowed,
     terminal_cell_metrics_refresh_needed, terminal_input_idle_remaining_delay,
     viewport_change_terminal_session_ids, window_geometry_churn_active,
@@ -233,16 +233,9 @@ impl NyaTermApp {
         key: &'static str,
         now: Instant,
     ) -> bool {
-        if diagnostic_log_due(
-            self.diagnostic_log_last_at.get(key).copied(),
-            now,
-            SLOW_DIAGNOSTIC_THROTTLE,
-        ) {
-            self.diagnostic_log_last_at.insert(key, now);
-            true
-        } else {
-            false
-        }
+        self.shell
+            .diagnostics
+            .should_log(key, now, SLOW_DIAGNOSTIC_THROTTLE)
     }
 
     pub(in crate::features) fn visible_terminal_layout_cache_stats(&self) -> (u64, u64) {
@@ -458,7 +451,7 @@ impl NyaTermApp {
         runtime_output_pressure_active_from_counts(
             self.terminal.view.runtime.session_event_backlog_active,
             self.terminal.view.runtime.session_event_queued_output_bytes,
-            self.pending_session_events.len(),
+            self.session.events.pending.len(),
             self.session.event_bridge.queued_event_count()
                 + self.session.event_bridge.source_queued_event_count(),
             self.session.event_bridge.queued_output_bytes()
@@ -473,7 +466,7 @@ impl NyaTermApp {
         !self.runtime_output_pressure_active()
             && !self.session.start.has_pending()
             && self.pending_saved_connection_queue.is_empty()
-            && self.pending_session_events.is_empty()
+            && self.session.events.pending.is_empty()
             && !self.session.event_bridge.has_pending_ui_work()
             && !self.terminal_frame_backlog_active()
             && self.session.zmodem.is_empty()
@@ -493,7 +486,7 @@ impl NyaTermApp {
             && self.recording.pending_auto_start.is_none()
             && !self.tunnel_runtime.has_pending()
             && self.transfer.queue.jobs.is_empty()
-            && self.command_persistence_pending == 0
+            && self.command_runtime.is_idle()
             && !self.terminal.view.runtime.open_tabs_persist_dirty
             && !self.terminal.view.runtime.window_layout_persist_dirty
             && self.terminal.windows.restored

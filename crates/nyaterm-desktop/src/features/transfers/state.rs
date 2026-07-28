@@ -26,6 +26,8 @@ use crate::models::{
     TransferUnknownFileState,
 };
 
+use super::super::remote_editor_window::RemoteFileEditorWindow;
+
 pub(in crate::features) struct TransferFeatureState {
     pub queue: TransferQueueState,
     pub paths: TransferPathState,
@@ -142,6 +144,8 @@ pub(in crate::features) struct TransferEditorState {
     pub workspace: Option<TransferEditorWorkspaceState>,
     pub tabs_menu_open: bool,
     pub focus: FocusHandle,
+    pub window: Option<WindowHandle<RemoteFileEditorWindow>>,
+    pub window_open_pending: bool,
 }
 
 /// Handing a remote file to an external editor and syncing it back.
@@ -247,6 +251,8 @@ impl TransferFeatureState {
                 workspace: None,
                 tabs_menu_open: false,
                 focus: focus.editor,
+                window: None,
+                window_open_pending: false,
             },
             external_sync: TransferExternalSyncState {
                 prompts: HashMap::new(),

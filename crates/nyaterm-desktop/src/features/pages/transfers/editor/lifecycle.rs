@@ -84,7 +84,7 @@ impl NyaTermApp {
         workspace.remove_tab(tab_id);
         if workspace.tabs.is_empty() {
             self.transfer.editor.workspace = None;
-            self.remote_editor_window_open_pending = false;
+            self.transfer.editor.window_open_pending = false;
         }
         self.terminal.view.status = "remote editor tab closed".to_string();
         cx.notify();
@@ -110,7 +110,7 @@ impl NyaTermApp {
         }
         self.transfer.editor.workspace = None;
         self.transfer.editor.tabs_menu_open = false;
-        self.remote_editor_window_open_pending = false;
+        self.transfer.editor.window_open_pending = false;
         self.terminal.view.status = "remote editor closed".to_string();
         cx.notify();
     }
@@ -130,13 +130,13 @@ impl NyaTermApp {
                 workspace.close_after_save_all = false;
                 if workspace.tabs.is_empty() {
                     self.transfer.editor.workspace = None;
-                    self.remote_editor_window_open_pending = false;
+                    self.transfer.editor.window_open_pending = false;
                 }
             }
             self.terminal.view.status = "remote editor tab discarded".to_string();
         } else {
             self.transfer.editor.workspace = None;
-            self.remote_editor_window_open_pending = false;
+            self.transfer.editor.window_open_pending = false;
             self.terminal.view.status = "remote editor discarded".to_string();
         }
         cx.notify();

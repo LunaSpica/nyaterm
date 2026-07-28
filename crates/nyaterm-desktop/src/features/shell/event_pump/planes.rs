@@ -25,9 +25,12 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        let should_pump = self.stores.startup_restore.update(cx, |store, _| {
-            store.can_pump_queue(self.has_pending_session_start())
-        });
+        let pending_session_start = self.has_pending_session_start();
+        let should_pump = !self.session.restore.is_complete()
+            && self
+                .stores
+                .startup_restore
+                .update(cx, |store, _| store.can_pump_queue(pending_session_start));
         if !should_pump {
             return false;
         }
@@ -190,7 +193,7 @@ impl NyaTermApp {
             && !self.ai.chat.pending
             && self.ai.agent.loop_state.is_none()
             && !self.ai.discovery.pending
-            && self.command_persistence_pending == 0
+            && self.command_runtime.is_idle()
         {
             dirty |= self.drive_pending_focus(window, cx);
             // During connect settle, skip blink notifies so first frames stay free.
