@@ -1,8 +1,7 @@
 use gpui::{
-    AnyElement, App, Bounds, ClickEvent, ClipboardItem, Context, Element, Entity, FontWeight,
-    GlobalElementId, InspectorElementId, IntoElement, KeyDownEvent, LayoutId, MouseButton,
-    MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, ScrollDelta, ScrollWheelEvent,
-    SharedString, Window, div, prelude::*, px, rgb, svg,
+    AnyElement, App, ClickEvent, ClipboardItem, Context, Entity, FontWeight, IntoElement,
+    KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, SharedString, Window,
+    div, prelude::*, px, rgb, svg,
 };
 use nyaterm_transport::{SftpAttributeUpdate, SftpFileEntry, SftpFileType, SftpService};
 
@@ -10,13 +9,12 @@ use crate::models::{
     TransferBrowserBreadcrumbSegment, TransferBrowserChildrenMenuStatus,
     TransferBrowserColumnWidths, TransferBrowserContextMenuState,
     TransferBrowserFavoritesMenuState, TransferBrowserPathMenuKind, TransferBrowserPathMenuState,
-    TransferBrowserSortColumn, TransferBrowserUploadMenuState, TransferDeleteState,
-    TransferEditorField, TransferEditorState, TransferEditorWorkspaceState,
-    TransferExternalSyncPromptState, TransferJobEvent, TransferJobKind, TransferJobOutput,
-    TransferJobResult, TransferJobState, TransferJobStatus, TransferMoveState,
-    TransferNewFileState, TransferNewFolderState, TransferNewSymlinkState, TransferPathPromptKind,
-    TransferPermissionTarget, TransferPropertiesField, TransferPropertiesState,
-    TransferRenameState, TransferSymlinkField, TransferUnknownFileState,
+    TransferBrowserUploadMenuState, TransferDeleteState, TransferEditorField, TransferEditorState,
+    TransferEditorWorkspaceState, TransferExternalSyncPromptState, TransferJobEvent,
+    TransferJobKind, TransferJobOutput, TransferJobResult, TransferJobState, TransferJobStatus,
+    TransferMoveState, TransferNewFileState, TransferNewFolderState, TransferNewSymlinkState,
+    TransferPathPromptKind, TransferPermissionTarget, TransferPropertiesField,
+    TransferPropertiesState, TransferRenameState, TransferSymlinkField, TransferUnknownFileState,
 };
 use crate::widgets::{small_button, status_pill};
 use nyaterm_core::AiCustomActionConfig;

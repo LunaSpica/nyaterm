@@ -1,4 +1,24 @@
-use super::*;
+use gpui::{
+    AnyElement, App, Bounds, Context, Element, Entity, GlobalElementId, InspectorElementId,
+    IntoElement, KeyDownEvent, LayoutId, MouseButton, MouseDownEvent, Pixels, ScrollDelta,
+    ScrollWheelEvent, SharedString, Window, div, prelude::*, px, rgb, svg,
+};
+use nyaterm_core::truncate_preview;
+use nyaterm_transport::SftpFileType;
+
+use crate::features::{NyaTermApp, TextInputSetup};
+use crate::models::TransferBrowserSortColumn;
+
+use super::super::{
+    format_file_size, normalized_transfer_browser_path, sort_header_cell,
+    transfer_browser_entry_row, transfer_browser_parent_entry_row, transfer_browser_table_width,
+};
+use super::helpers::{
+    compact_transfer_footer_button, compact_transfer_footer_button_active,
+    compact_transfer_toolbar_button, compact_transfer_toolbar_button_active,
+    compact_transfer_toolbar_button_enabled, compact_transfer_upload_menu_button,
+    transfer_toolbar_divider,
+};
 
 const FILE_ROW_PX: f32 = 30.;
 const FILE_HEADER_PX: f32 = 28.;
