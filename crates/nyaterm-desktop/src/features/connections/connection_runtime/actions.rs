@@ -9,7 +9,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        self.connection_state.list.close_more_menu();
+        self.connection_state.close_list_more_menu();
         self.connection_state.open_clear_all();
         self.terminal.view.status = "confirm clearing all saved connections".to_string();
         cx.notify();
@@ -31,7 +31,7 @@ impl NyaTermApp {
         {
             Ok(()) => {
                 self.connection_state.close_clear_all();
-                self.connection_state.list.clear_runtime_state();
+                self.connection_state.clear_list_runtime_state();
                 self.refresh_store_from_runtime();
                 self.terminal.view.status = self.tr("savedConnections.clearAllSuccess").to_string();
             }
@@ -80,8 +80,7 @@ impl NyaTermApp {
         match self.with_connection_store(|store| store.delete_connection(&confirm.connection_id)) {
             Ok(()) => {
                 self.connection_state
-                    .list
-                    .remove_connection_references(&confirm.connection_id);
+                    .remove_list_connection_references(&confirm.connection_id);
                 self.refresh_store_from_runtime();
                 self.terminal.view.status = format!("deleted connection {}", confirm.label);
             }
@@ -142,8 +141,7 @@ impl NyaTermApp {
         match self.with_connection_store(|store| store.delete_group(&confirm.group_id)) {
             Ok(()) => {
                 self.connection_state
-                    .list
-                    .remove_group_references(&confirm.group_id);
+                    .remove_list_group_references(&confirm.group_id);
                 self.refresh_store_from_runtime();
                 self.terminal.view.status = format!("deleted connection group {}", confirm.label);
             }
@@ -159,12 +157,12 @@ impl NyaTermApp {
         group_id: String,
         cx: &mut Context<Self>,
     ) {
-        self.connection_state.list.toggle_group_expanded(group_id);
+        self.connection_state.toggle_list_group_expanded(group_id);
         cx.notify();
     }
 
     pub(in crate::features) fn cycle_connection_sort_mode(&mut self, cx: &mut Context<Self>) {
-        let sort_mode = self.connection_state.list.cycle_sort_mode();
+        let sort_mode = self.connection_state.cycle_list_sort_mode();
         self.settings.ui_saved_connections_sort_mode = sort_mode.persistence_id().to_string();
         self.persist_ui_layout();
         self.terminal.view.status = format!("connections sorted by {}", sort_mode.label());
@@ -182,8 +180,7 @@ impl NyaTermApp {
         }
         let current = self
             .connection_state
-            .list
-            .keyboard_active_connection_id()
+            .list_keyboard_active_connection_id()
             .and_then(|id| visible.iter().position(|candidate| candidate == id));
         let next = match (current, forward) {
             (Some(index), true) => (index + 1) % visible.len(),
@@ -192,8 +189,7 @@ impl NyaTermApp {
             (None, false) => visible.len() - 1,
         };
         self.connection_state
-            .list
-            .set_keyboard_active_connection_id(Some(visible[next].clone()));
+            .set_list_keyboard_active_connection_id(Some(visible[next].clone()));
         cx.notify();
         true
     }
@@ -207,8 +203,7 @@ impl NyaTermApp {
         let visible = self.visible_connection_ids();
         let Some(target) = self
             .connection_state
-            .list
-            .keyboard_active_connection_id()
+            .list_keyboard_active_connection_id()
             .filter(|id| visible.iter().any(|candidate| candidate == id))
             .map(ToOwned::to_owned)
             .or_else(|| visible.first().cloned())
@@ -231,8 +226,7 @@ impl NyaTermApp {
     pub(in crate::features) fn sync_connection_keyboard_active(&mut self, cx: &mut Context<Self>) {
         let Some(active) = self
             .connection_state
-            .list
-            .keyboard_active_connection_id()
+            .list_keyboard_active_connection_id()
             .map(ToOwned::to_owned)
         else {
             return;
@@ -243,8 +237,7 @@ impl NyaTermApp {
             .any(|candidate| candidate == &active)
         {
             self.connection_state
-                .list
-                .set_keyboard_active_connection_id(None);
+                .set_list_keyboard_active_connection_id(None);
             cx.notify();
         }
     }
@@ -274,12 +267,12 @@ impl NyaTermApp {
                 cx.stop_propagation();
                 self.clear_connection_search(window, cx);
             }
-            "up" | "down" if !self.connection_state.list.search_is_empty() => {
+            "up" | "down" if !self.connection_state.list_search_is_empty() => {
                 if self.step_connection_keyboard_active(keystroke.key == "down", cx) {
                     cx.stop_propagation();
                 }
             }
-            "enter" if !self.connection_state.list.search_is_empty() => {
+            "enter" if !self.connection_state.list_search_is_empty() => {
                 if self.open_connection_keyboard_active(window, cx) {
                     cx.stop_propagation();
                 }
@@ -293,9 +286,9 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let field = self.connection_state.list.search_field();
+        let field = self.connection_state.list_search_field();
         field.update(cx, |field, cx| field.set_content(String::new(), cx));
-        self.connection_state.list.set_search_text(String::new());
+        self.connection_state.set_list_search_text(String::new());
         window.focus(&field.read(cx).focus_handle());
         self.terminal.view.status = "connection search cleared".to_string();
         self.sync_connection_keyboard_active(cx);
@@ -322,8 +315,7 @@ impl NyaTermApp {
             Ok(()) => {
                 for connection in &selected {
                     self.connection_state
-                        .list
-                        .remove_connection_references(&connection.id);
+                        .remove_list_connection_references(&connection.id);
                 }
                 self.refresh_store_from_runtime();
                 self.terminal.view.status = format!("deleted {} connection(s)", selected.len());

@@ -541,37 +541,42 @@ done < <(rg -n --path-separator / '^[[:space:]]*use super::\*;' \
   crates/nyaterm-desktop/src/features/shell/event_pump \
   crates/nyaterm-desktop/src/features/tunnels 2>/dev/null || true)
 
-# Connection list selection invariants are owned by ConnectionListState. Keep
+# Connection list selection invariants are owned by ConnectionFeatureState's
+# private list child. Keep
 # governed production paths on semantic methods so clearing selection also
 # clears the range anchor and future stale-reference cleanup stays centralized.
 check_no_matches \
-  "connection list selection must be mutated through ConnectionListState methods" \
+  "connection list child state must stay behind ConnectionFeatureState methods" \
+  'connection_state\.list\.' \
+  crates/nyaterm-desktop/src/features
+check_no_matches \
+  "connection list selection must be mutated through ConnectionFeatureState methods" \
   'connection_state\.list\.(selected_ids|last_selected_id)\s*(=|\.clear\(|\.insert\(|\.remove\()' \
   crates/nyaterm-desktop/src/features/connections
 check_no_matches \
-  "connection page selection must be mutated through ConnectionListState methods" \
+  "connection page selection must be mutated through ConnectionFeatureState methods" \
   'connection_state\.list\.(selected_ids|last_selected_id)\s*(=|\.clear\(|\.insert\(|\.remove\()' \
   crates/nyaterm-desktop/src/features/pages/connections
 
 check_no_matches \
-  "connection list search/sort/menu state must be mutated through ConnectionListState methods" \
+  "connection list search/sort/menu state must be mutated through ConnectionFeatureState methods" \
   'connection_state\.list\.(search_draft|sort_mode|more_menu_open)\s*(=|\.clear\(|\.push_str\(|\.pop\()' \
   crates/nyaterm-desktop/src/features/connections
 check_no_matches \
-  "connection page search/sort/menu state must be mutated through ConnectionListState methods" \
+  "connection page search/sort/menu state must be mutated through ConnectionFeatureState methods" \
   'connection_state\.list\.(search_draft|sort_mode|more_menu_open)\s*(=|\.clear\(|\.push_str\(|\.pop\()' \
   crates/nyaterm-desktop/src/features/pages/connections
 check_no_matches \
-  "root connection more menu state must be mutated through ConnectionListState methods" \
+  "root connection more menu state must be mutated through ConnectionFeatureState methods" \
   'connection_state\.list\.more_menu_open\s*=' \
   crates/nyaterm-desktop/src/features/root.rs
 
 check_no_matches \
-  "connection drag target must be mutated through ConnectionListState methods" \
+  "connection drag target must be mutated through ConnectionFeatureState methods" \
   'connection_state\.list\.drop_target\s*=' \
   crates/nyaterm-desktop/src/features/connections
 check_no_matches \
-  "connection page drag target must be mutated through ConnectionListState methods" \
+  "connection page drag target must be mutated through ConnectionFeatureState methods" \
   'connection_state\.list\.drop_target\s*=' \
   crates/nyaterm-desktop/src/features/pages/connections
 check_no_matches \
@@ -687,41 +692,41 @@ check_no_matches \
   crates/nyaterm-desktop/src/features/shell/event_pump/publish.rs
 
 check_no_matches \
-  "connection expanded groups must be mutated through ConnectionListState methods" \
+  "connection expanded groups must be mutated through ConnectionFeatureState methods" \
   'connection_state\.list\.expanded_group_ids\.insert\(' \
   crates/nyaterm-desktop/src/features/connections
 
 check_no_matches \
-  "connection hover state must be mutated through ConnectionListState methods" \
+  "connection hover state must be mutated through ConnectionFeatureState methods" \
   'connection_state\.list\.(hovered_connection_id|hover_pending|hovered_group_id)\s*(=|\.take\()' \
   crates/nyaterm-desktop/src/features/pages/connections
 
 check_no_matches \
-  "connection runtime list reads must use ConnectionListState methods" \
+  "connection runtime list reads must use ConnectionFeatureState methods" \
   'connection_state\.list\.(search_draft|sort_mode|selected_ids|last_selected_id|context_menu|group_context_menu|hover_pending|hovered_connection_id|hovered_group_id|drop_target|expanded_group_ids|more_menu_open)(\.|[[:space:]]|==|,|\)|$)' \
   crates/nyaterm-desktop/src/features/connections/connections/selection.rs
 check_no_matches \
-  "connections page list reads must use ConnectionListState methods" \
+  "connections page list reads must use ConnectionFeatureState methods" \
   'connection_state\.list\.(search_draft|sort_mode|selected_ids|last_selected_id|context_menu|group_context_menu|search_focus|hover_pending|hovered_connection_id|hovered_group_id|drop_target|expanded_group_ids|more_menu_open)(\.|[[:space:]]|==|,|\)|$)' \
   crates/nyaterm-desktop/src/features/pages/connections
 check_no_matches \
-  "root connection menu reads must use ConnectionListState methods" \
+  "root connection menu reads must use ConnectionFeatureState methods" \
   'connection_state\.list\.more_menu_open([[:space:]]|[=!&|),;}]|$)' \
   crates/nyaterm-desktop/src/features/root.rs
 check_no_matches \
-  "event pump quiet-tick list reads must use ConnectionListState methods" \
+  "event pump quiet-tick list reads must use ConnectionFeatureState methods" \
   'connection_state\.list\.(search_draft|sort_mode|hover_pending)(\.|[[:space:]]|==|,|\)|$)' \
   crates/nyaterm-desktop/src/features/shell/event_pump/mod.rs
 check_no_matches \
-  "event pump list projection reads must use ConnectionListState methods" \
+  "event pump list projection reads must use ConnectionFeatureState methods" \
   'connection_state\.list\.(search_draft|sort_mode|hover_pending)(\.|[[:space:]]|==|,|\)|$)' \
   crates/nyaterm-desktop/src/features/shell/event_pump/publish.rs
 check_no_matches \
-  "connection import list reads must use ConnectionListState methods" \
+  "connection import list reads must use ConnectionFeatureState methods" \
   'connection_state\.list\.(expanded_group_ids|sort_mode)(\.|[[:space:]]|==|,|\)|$)' \
   crates/nyaterm-desktop/src/features/connections/connection_import_runtime.rs
 check_no_matches \
-  "panel resize list projection reads must use ConnectionListState methods" \
+  "panel resize list projection reads must use ConnectionFeatureState methods" \
   'connection_state\.list\.(expanded_group_ids|sort_mode)(\.|[[:space:]]|==|,|\)|$)' \
   crates/nyaterm-desktop/src/features/shell/panel_resize_runtime.rs
 

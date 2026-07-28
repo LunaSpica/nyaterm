@@ -60,7 +60,7 @@ use self::network_logic::{
 };
 
 pub(in crate::features) struct ConnectionFeatureState {
-    pub list: ConnectionListState,
+    list: ConnectionListState,
     import: ConnectionImportState,
     editor: ConnectionEditorFeatureState,
     group_editor: ConnectionGroupEditorFeatureState,
@@ -80,7 +80,7 @@ pub(in crate::features) struct ConnectionFeatureFocus {
     pub network_proxy_editor: FocusHandle,
 }
 
-pub(in crate::features) struct ConnectionListState {
+struct ConnectionListState {
     /// The editable field. It owns the caret, selection and composition; this
     /// struct only caches what it last reported so filtering stays synchronous.
     search_field: Entity<TextField>,
@@ -182,7 +182,7 @@ impl ConnectionFeatureState {
             &search_field,
             |app: &mut NyaTermApp, _, event: &TextFieldEvent, cx| {
                 let TextFieldEvent::Changed(text) = event;
-                app.connection_state.list.set_search_text(text.clone());
+                app.connection_state.set_list_search_text(text.clone());
                 app.sync_connection_keyboard_active(cx);
                 cx.notify();
             },
@@ -256,6 +256,215 @@ impl ConnectionFeatureState {
                 proxy_editor_focus: focus.network_proxy_editor,
             },
         }
+    }
+
+    pub fn list_search_query(&self) -> String {
+        self.list.search_query()
+    }
+
+    pub fn list_search_is_empty(&self) -> bool {
+        self.list.search_is_empty()
+    }
+
+    pub fn list_search_field(&self) -> Entity<TextField> {
+        self.list.search_field()
+    }
+
+    pub fn set_list_search_text(&mut self, text: String) {
+        self.list.set_search_text(text);
+    }
+
+    pub fn list_sort_mode(&self) -> ConnectionSortMode {
+        self.list.sort_mode()
+    }
+
+    pub fn list_more_menu_is_open(&self) -> bool {
+        self.list.more_menu_is_open()
+    }
+
+    pub fn list_has_selection(&self) -> bool {
+        self.list.has_selection()
+    }
+
+    pub fn list_contains_selected_id(&self, connection_id: &str) -> bool {
+        self.list.contains_selected_id(connection_id)
+    }
+
+    pub fn list_selected_connection_ids(&self) -> impl Iterator<Item = &str> {
+        self.list.selected_connection_ids()
+    }
+
+    pub fn list_context_menu_is_open(&self) -> bool {
+        self.list.context_menu_is_open()
+    }
+
+    pub fn active_list_connection_context_menu(&self) -> Option<ConnectionContextMenuState> {
+        self.list.active_context_menu()
+    }
+
+    pub fn list_group_context_menu_is_open(&self) -> bool {
+        self.list.group_context_menu_is_open()
+    }
+
+    pub fn active_list_group_context_menu(&self) -> Option<ConnectionGroupContextMenuState> {
+        self.list.active_group_context_menu()
+    }
+
+    pub fn list_background_context_menu_is_open(&self) -> bool {
+        self.list.list_context_menu_is_open()
+    }
+
+    pub fn active_list_background_context_menu(&self) -> Option<ConnectionListContextMenuState> {
+        self.list.active_list_context_menu()
+    }
+
+    pub fn list_expanded_group_ids(&self) -> &HashSet<String> {
+        self.list.expanded_group_ids()
+    }
+
+    pub fn list_group_is_expanded(&self, group_id: Option<&str>) -> bool {
+        self.list.group_is_expanded(group_id)
+    }
+
+    pub fn list_group_is_hovered(&self, group_id: Option<&str>) -> bool {
+        self.list.group_is_hovered(group_id)
+    }
+
+    pub fn list_drop_position_for_kind_target(
+        &self,
+        kind: ConnectionDragKind,
+        target_id: Option<&str>,
+    ) -> Option<ConnectionDropPosition> {
+        self.list.drop_position_for_kind_target(kind, target_id)
+    }
+
+    pub fn select_list_connection(
+        &mut self,
+        connection_id: String,
+        visible_ids: &[String],
+        additive: bool,
+        range: bool,
+    ) -> usize {
+        self.list
+            .select_connection(connection_id, visible_ids, additive, range)
+    }
+
+    pub fn clear_list_selection(&mut self) {
+        self.list.clear_selection();
+    }
+
+    pub fn toggle_list_more_menu(&mut self) {
+        self.list.toggle_more_menu();
+    }
+
+    pub fn close_list_more_menu(&mut self) -> bool {
+        self.list.close_more_menu()
+    }
+
+    pub fn cycle_list_sort_mode(&mut self) -> ConnectionSortMode {
+        self.list.cycle_sort_mode()
+    }
+
+    pub fn set_list_group_hover(&mut self, group_id: String, hovered: bool) -> bool {
+        self.list.set_group_hover(group_id, hovered)
+    }
+
+    pub fn list_keyboard_active_connection_id(&self) -> Option<&str> {
+        self.list.keyboard_active_connection_id()
+    }
+
+    pub fn list_connection_is_keyboard_active(&self, connection_id: &str) -> bool {
+        self.list.connection_is_keyboard_active(connection_id)
+    }
+
+    pub fn set_list_keyboard_active_connection_id(&mut self, connection_id: Option<String>) {
+        self.list.set_keyboard_active_connection_id(connection_id);
+    }
+
+    pub fn list_move_submenu_is_open(&self) -> bool {
+        self.list.move_submenu_is_open()
+    }
+
+    pub fn toggle_list_move_submenu(&mut self) {
+        self.list.toggle_move_submenu();
+    }
+
+    pub fn open_list_background_context_menu(&mut self, x: Pixels, y: Pixels) {
+        self.list.open_list_context_menu(x, y);
+    }
+
+    pub fn open_list_connection_context_menu(
+        &mut self,
+        connection_id: String,
+        x: Pixels,
+        y: Pixels,
+    ) {
+        self.list.open_context_menu(connection_id, x, y);
+    }
+
+    pub fn open_list_group_context_menu(&mut self, group_id: String, x: Pixels, y: Pixels) {
+        self.list.open_group_context_menu(group_id, x, y);
+    }
+
+    pub fn close_list_context_menus(&mut self) {
+        self.list.close_context_menus();
+    }
+
+    pub fn toggle_list_group_expanded(&mut self, group_id: String) -> bool {
+        self.list.toggle_group_expanded(group_id)
+    }
+
+    pub fn expand_list_group(&mut self, group_id: String) {
+        self.list.expand_group(group_id);
+    }
+
+    pub fn expand_list_groups(&mut self, group_ids: impl IntoIterator<Item = String>) {
+        self.list.expand_groups(group_ids);
+    }
+
+    pub fn sync_list_search_expansion(
+        &mut self,
+        query: &str,
+        matching_group_ids: impl IntoIterator<Item = String>,
+    ) -> bool {
+        self.list.sync_search_expansion(query, matching_group_ids)
+    }
+
+    pub fn set_list_drop_target_if_changed(&mut self, target: ConnectionDropTarget) -> bool {
+        self.list.set_drop_target_if_changed(target)
+    }
+
+    pub fn list_drop_position_for_target(
+        &self,
+        target_id: &str,
+        fallback: ConnectionDropPosition,
+    ) -> ConnectionDropPosition {
+        self.list.drop_position_for_target(target_id, fallback)
+    }
+
+    pub fn clear_list_drop_target(&mut self) {
+        self.list.clear_drop_target();
+    }
+
+    pub fn clear_list_runtime_state(&mut self) {
+        self.list.clear_runtime_state();
+    }
+
+    pub fn remove_list_connection_references(&mut self, connection_id: &str) {
+        self.list.remove_connection_references(connection_id);
+    }
+
+    pub fn remove_list_group_references(&mut self, group_id: &str) {
+        self.list.remove_group_references(group_id);
+    }
+
+    pub fn retain_loaded_list_references(
+        &mut self,
+        connection_ids: &HashSet<String>,
+        group_ids: &HashSet<String>,
+    ) {
+        self.list
+            .retain_loaded_references(connection_ids, group_ids);
     }
 
     /// The editor's fields, for handing to the render sections.

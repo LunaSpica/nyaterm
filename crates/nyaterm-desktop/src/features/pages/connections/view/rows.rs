@@ -86,8 +86,7 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         let expanded = self
             .connection_state
-            .list
-            .group_is_expanded(section.group_id.as_deref());
+            .list_group_is_expanded(section.group_id.as_deref());
         let group_id = section.group_id.clone();
         let group_label = section.label.clone();
         let empty_group_label = self.tr("savedConnections.emptyGroup");
@@ -137,7 +136,7 @@ impl NyaTermApp {
                     .rounded_sm()
                     .cursor_pointer()
                     .bg({
-                        let drop_inside = self.connection_state.list.drop_position_for_kind_target(
+                        let drop_inside = self.connection_state.list_drop_position_for_kind_target(
                             ConnectionDragKind::Group,
                             section.group_id.as_deref(),
                         ) == Some(ConnectionDropPosition::Inside);
@@ -145,8 +144,7 @@ impl NyaTermApp {
                             rgb(palette.hover)
                         } else if self
                             .connection_state
-                            .list
-                            .group_is_hovered(section.group_id.as_deref())
+                            .list_group_is_hovered(section.group_id.as_deref())
                         {
                             rgb(palette.hover)
                         } else {
@@ -154,7 +152,7 @@ impl NyaTermApp {
                         }
                     })
                     .when(
-                        self.connection_state.list.drop_position_for_kind_target(
+                        self.connection_state.list_drop_position_for_kind_target(
                             ConnectionDragKind::Group,
                             section.group_id.as_deref(),
                         ) == Some(ConnectionDropPosition::Inside),
@@ -166,8 +164,7 @@ impl NyaTermApp {
                             if let Some(group_id) = hover_group.clone() {
                                 if this
                                     .connection_state
-                                    .list
-                                    .set_group_hover(group_id, *hovered)
+                                    .set_list_group_hover(group_id, *hovered)
                                 {
                                     cx.notify();
                                 }
@@ -229,7 +226,7 @@ impl NyaTermApp {
                                         kind: ConnectionDragKind::Group,
                                         position,
                                     };
-                                    if this.connection_state.list.set_drop_target_if_changed(next) {
+                                    if this.connection_state.set_list_drop_target_if_changed(next) {
                                         cx.notify();
                                     }
                                 }
@@ -237,11 +234,11 @@ impl NyaTermApp {
                             .on_drop(cx.listener(
                                 move |this, payload: &ConnectionDragPayload, _, cx| {
                                     let position =
-                                        this.connection_state.list.drop_position_for_target(
+                                        this.connection_state.list_drop_position_for_target(
                                             &drop_group_id,
                                             ConnectionDropPosition::Inside,
                                         );
-                                    this.connection_state.list.clear_drop_target();
+                                    this.connection_state.clear_list_drop_target();
                                     match payload.kind {
                                         ConnectionDragKind::Connection => {
                                             this.move_connection_into_group(
@@ -326,14 +323,12 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let selected = self
             .connection_state
-            .list
-            .contains_selected_id(&connection.id);
+            .list_contains_selected_id(&connection.id);
         // The arrow keys walk filtered results without disturbing the selection,
         // so the active row gets its own fainter wash plus a ring.
         let keyboard_active = self
             .connection_state
-            .list
-            .connection_is_keyboard_active(&connection.id);
+            .list_connection_is_keyboard_active(&connection.id);
         let connect_connection = connection.clone();
         let connect_connection_dbl = connection.clone();
         let edit_id = connection.id.clone();
@@ -344,10 +339,10 @@ impl NyaTermApp {
         let details_rows: Arc<[(&'static str, String)]> =
             connection_detail_rows(&connection, &self.connections, &self.proxies).into();
         let row_group = SharedString::from(format!("connection-row-group-{}", connection.id));
-        let drop_position = self
-            .connection_state
-            .list
-            .drop_position_for_kind_target(ConnectionDragKind::Connection, Some(&connection.id));
+        let drop_position = self.connection_state.list_drop_position_for_kind_target(
+            ConnectionDragKind::Connection,
+            Some(&connection.id),
+        );
         let show_before = drop_position == Some(ConnectionDropPosition::Before);
         let show_after = drop_position == Some(ConnectionDropPosition::After);
         let show_inside = drop_position == Some(ConnectionDropPosition::Inside);
@@ -423,7 +418,7 @@ impl NyaTermApp {
                         kind: ConnectionDragKind::Connection,
                         position,
                     };
-                    if this.connection_state.list.set_drop_target_if_changed(next) {
+                    if this.connection_state.set_list_drop_target_if_changed(next) {
                         cx.notify();
                     }
                 }
@@ -433,9 +428,8 @@ impl NyaTermApp {
                 cx.listener(move |this, payload: &ConnectionDragPayload, _, cx| {
                     let position = this
                         .connection_state
-                        .list
-                        .drop_position_for_target(&target_id, ConnectionDropPosition::Before);
-                    this.connection_state.list.clear_drop_target();
+                        .list_drop_position_for_target(&target_id, ConnectionDropPosition::Before);
+                    this.connection_state.clear_list_drop_target();
                     match payload.kind {
                         ConnectionDragKind::Connection => match position {
                             ConnectionDropPosition::After => {

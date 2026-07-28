@@ -16,14 +16,12 @@ impl NyaTermApp {
             .iter()
             .filter(|connection| {
                 self.connection_state
-                    .list
-                    .contains_selected_id(&connection.id)
+                    .list_contains_selected_id(&connection.id)
             })
             .cloned()
             .chain(
                 self.connection_state
-                    .list
-                    .selected_connection_ids()
+                    .list_selected_connection_ids()
                     .filter(|id| !visible_ids.contains(*id))
                     .filter_map(|id| {
                         self.connections
@@ -45,7 +43,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let visible_ids = self.visible_connection_ids();
-        let count = self.connection_state.list.select_connection(
+        let count = self.connection_state.select_list_connection(
             connection_id,
             &visible_ids,
             additive,
@@ -60,7 +58,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn visible_connection_ids(&self) -> Vec<String> {
-        let query = self.connection_state.list.search_query();
+        let query = self.connection_state.list_search_query();
         // Mirror `connection_sections` ordering for Shift-range selection.
         let mut by_group: std::collections::HashMap<Option<String>, Vec<&SavedConnection>> =
             std::collections::HashMap::new();
@@ -86,7 +84,7 @@ impl NyaTermApp {
         }
         // Must order exactly like the rendered tree, or Shift-range selection and
         // keyboard navigation walk a different list than the one on screen.
-        let sort_mode = self.connection_state.list.sort_mode();
+        let sort_mode = self.connection_state.list_sort_mode();
         for list in by_group.values_mut() {
             list.sort_by(|left, right| match sort_mode {
                 crate::models::ConnectionSortMode::Default => left
@@ -137,7 +135,7 @@ impl NyaTermApp {
 
         let mut ids = Vec::new();
         let mut visited = std::collections::HashSet::new();
-        let expanded = self.connection_state.list.expanded_group_ids().clone();
+        let expanded = self.connection_state.list_expanded_group_ids().clone();
         // Groups first, ungrouped last (matches connection_sections / Tauri).
         for group in children_by_parent.get(&None).cloned().unwrap_or_default() {
             append_visible_connection_ids(
@@ -158,7 +156,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn clear_selected_connections(&mut self, cx: &mut Context<Self>) {
-        self.connection_state.list.clear_selection();
+        self.connection_state.clear_list_selection();
         self.terminal.view.status = "connection selection cleared".to_string();
         cx.notify();
     }
@@ -173,7 +171,7 @@ impl NyaTermApp {
 
         match self.copy_connections_to_store(&selected) {
             Ok(count) => {
-                self.connection_state.list.clear_selection();
+                self.connection_state.clear_list_selection();
                 self.terminal.view.status = format!("copied {count} saved connection(s)");
             }
             Err(error) => {

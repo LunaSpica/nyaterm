@@ -262,7 +262,7 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   wildcard import; its GPUI, app, model, and core dependencies are explicit.
 - `connection_runtime/actions.rs` no longer depends on the connection runtime
   wildcard import and now routes deleted connection/group cleanup through
-  `ConnectionListState` methods.
+  `ConnectionFeatureState` methods.
 - `connection_runtime/editor.rs` no longer depends on the connection runtime
   wildcard import; its GPUI, core, helper, app, and model dependencies are
   explicit.
@@ -290,22 +290,25 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   new-group commit, toggle behavior, and proxy editor secret draft/error
   cleanup.
 - `ConnectionListState` pure helper logic now lives in
-  `features/connections/state/list_logic.rs`. The public feature-state methods
-  remain in `state.rs`, preserving the existing caller facade while reducing
-  the monolithic state file by 368 lines of selection, search, sort, hover,
-  drag/drop, and stale-reference cleanup helpers.
+  `features/connections/state/list_logic.rs`. The public
+  `ConnectionFeatureState` list methods remain in `state.rs`, preserving the
+  caller facade while keeping the list child private and reducing the monolithic
+  state file by 368 lines of selection, search, sort, hover, drag/drop, and
+  stale-reference cleanup helpers.
 - Connection editor and connection group editor pure draft helper logic now
   lives in `features/connections/state/editor_logic.rs`. The public
   `ConnectionEditorFeatureState` and `ConnectionGroupEditorFeatureState`
   methods remain in `state.rs`, while editor lifecycle, menu, password source,
   tab, kind, toggle, keyboard input, path prompt, and group-name/error helpers
   are isolated behind the existing feature-state facade.
-- `ConnectionFeatureState` import, editor, group-editor, confirmation, and
-  network child state internals are private to the state module; governed
-  production code enters through semantic methods instead of accessing those
-  child fields directly. The list child is still a public transitional façade
-  because many list/tree/DnD rendering paths still call its semantic methods
-  directly.
+- `ConnectionFeatureState` list, import, editor, group-editor, confirmation,
+  and network child state internals are private to the state module; governed
+  production code enters through semantic `ConnectionFeatureState` methods
+  instead of accessing child fields directly. The architecture boundary script
+  rejects direct `connection_state.list.*`, `connection_state.import.*`,
+  `connection_state.editor.*`, `connection_state.group_editor.*`,
+  `connection_state.confirmations.*`, and `connection_state.network.*` access in
+  governed features.
 - Connection editor save-success UI cleanup now routes through
   `ConnectionFeatureState::finish_editor_save`. The runtime still owns
   validation, store persistence, reload, status text, and optional connection
@@ -337,13 +340,13 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   `refresh_store_from_runtime()` session reloads. Selection, range anchor,
   hover, pending hover, context menus, expanded groups, and drop target state
   are pruned against the loaded connection/group IDs through
-  `ConnectionListState`.
+  `ConnectionFeatureState` methods backed by its private list child.
 - Connection row hover intent, hover dismissal, and group hover transitions now
-  route through `ConnectionListState`, leaving the rows view to forward UI
+  route through `ConnectionFeatureState`, leaving the rows view to forward UI
   events instead of mutating transient list fields directly.
-- Saved-group expansion now routes through `ConnectionListState::expand_group`;
-  the architecture script guards against reintroducing direct expanded-group
-  insertion in governed connections code.
+- Saved-group expansion now routes through `ConnectionFeatureState`; the
+  architecture script guards against reintroducing direct list-child access in
+  governed connections code.
 - Network page UI state now sits behind `ConnectionFeatureState` façade methods
   for tab/menu/move-picker state, expanded-section reads, delete and group
   confirmations, tunnel/proxy editor lifetime, group/tunnel/proxy editor input,
@@ -397,12 +400,11 @@ these as staged extraction candidates, not as formatting-only refactor targets.
 - `scripts/check-architecture-boundaries.sh` locks the governed connections
   page tree at zero `#[path = "..."]` declarations and zero `use super::*`
   imports.
-- `scripts/check-architecture-boundaries.sh` also rejects direct mutating
-  writes to `connection_state.list.selected_ids` and `last_selected_id` in the
-  governed connections feature/page paths. Selection writes and governed
-  list-state reads now go through `ConnectionListState` methods, including
-  connection page rendering, context menus, root more-menu dismissal, and event
-  pump sideband projections.
+- `scripts/check-architecture-boundaries.sh` also rejects direct
+  `connection_state.list.*` access in governed features. Selection writes and
+  governed list-state reads now go through `ConnectionFeatureState` methods,
+  including connection page rendering, context menus, root more-menu dismissal,
+  and event pump sideband projections.
 - `.github/workflows/architecture-boundaries.yml` runs the architecture boundary
   script on pull requests and pushes to `main`, so governed debt checks have a CI
   entry point.
@@ -843,7 +845,7 @@ Current ownership map:
 | Saved passwords/credentials | `NyaTermApp.connection_saved_passwords`, `connection_saved_credentials` | Secret-bearing persisted catalogs | Remain top-level for now due credential autofill and security settings consumers. |
 | Serial ports | `NyaTermApp.connection_serial_ports` | Runtime/discovered state | Not persisted by this state grouping. |
 | Tunnel/proxy configs | `NyaTermApp.tunnels`, `tunnel_groups`, `proxies`, `proxy_groups` | Persisted network config | UI overlay state moved under `connection_state.network`; config collections remain persisted domain state. |
-| List search/sort/hover/selection/DnD | `NyaTermApp.connection_state.list` | Temporary UI state | State is not persisted except sort setting remains synced to settings as before. |
+| List search/sort/hover/selection/DnD | `NyaTermApp.connection_state` private list child | Temporary UI state | Runtime and rendering enter through `ConnectionFeatureState` methods; state is not persisted except sort setting remains synced to settings as before. |
 | Connection import dialog | `NyaTermApp.connection_state` private import child | Temporary UI/runtime prompt state | File import still runs through existing runtime paths; runtime and rendering enter through `ConnectionFeatureState` methods. |
 | Connection editor | `NyaTermApp.connection_state` private editor child | Editing draft/window UI state | Runtime key handling, window lifecycle, rendering popovers, and sideband projection use `ConnectionFeatureState` methods; draft remains separate from saved connection data. |
 | Group editor | `NyaTermApp.connection_state` private group-editor child | Editing draft UI state | Draft remains separate from saved groups; runtime and rendering enter through `ConnectionFeatureState` methods. |

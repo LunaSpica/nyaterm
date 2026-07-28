@@ -198,13 +198,14 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let palette = self.theme_palette();
-        let state = self.connection_state.list.active_context_menu().unwrap_or(
-            ConnectionContextMenuState {
+        let state = self
+            .connection_state
+            .active_list_connection_context_menu()
+            .unwrap_or(ConnectionContextMenuState {
                 connection_id: String::new(),
                 x: px(24.),
                 y: px(24.),
-            },
-        );
+            });
         let connection = self
             .connections
             .iter()
@@ -214,7 +215,7 @@ impl NyaTermApp {
         let connect_label = if selected_count > 1
             && connection
                 .as_ref()
-                .is_some_and(|conn| self.connection_state.list.contains_selected_id(&conn.id))
+                .is_some_and(|conn| self.connection_state.list_contains_selected_id(&conn.id))
         {
             format!(
                 "{} ({selected_count})",
@@ -229,14 +230,13 @@ impl NyaTermApp {
         let connection_for_rename = connection_id.clone();
         let connection_for_copy = connection_id.clone();
         let connection_for_delete = connection_id.clone();
-        let move_submenu_open = self.connection_state.list.move_submenu_is_open();
+        let move_submenu_open = self.connection_state.list_move_submenu_is_open();
         // A row that belongs to a multi-selection moves the whole selection, the
         // same rule the connect entry above already uses.
         let move_ids = if selected_count > 1
             && self
                 .connection_state
-                .list
-                .contains_selected_id(&state.connection_id)
+                .list_contains_selected_id(&state.connection_id)
         {
             self.selected_connections()
                 .into_iter()
@@ -320,7 +320,7 @@ impl NyaTermApp {
                 self.tr("savedConnections.moveToGroup"),
                 move_submenu_open,
                 cx.listener(|this, _, _, cx| {
-                    this.connection_state.list.toggle_move_submenu();
+                    this.connection_state.toggle_list_move_submenu();
                     cx.notify();
                 }),
             ))
@@ -365,8 +365,7 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         let state = self
             .connection_state
-            .list
-            .active_group_context_menu()
+            .active_list_group_context_menu()
             .unwrap_or(ConnectionGroupContextMenuState {
                 group_id: String::new(),
                 x: px(24.),
@@ -498,15 +497,14 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         let state = self
             .connection_state
-            .list
-            .active_list_context_menu()
+            .active_list_background_context_menu()
             .unwrap_or(ConnectionListContextMenuState {
                 x: px(24.),
                 y: px(24.),
             });
         let selected = self.selected_connections();
         let selected_count = selected.len();
-        let move_submenu_open = self.connection_state.list.move_submenu_is_open();
+        let move_submenu_open = self.connection_state.list_move_submenu_is_open();
         let move_ids = selected
             .into_iter()
             .map(|connection| connection.id)
@@ -553,7 +551,7 @@ impl NyaTermApp {
                     self.tr("savedConnections.moveToGroup"),
                     move_submenu_open,
                     cx.listener(|this, _, _, cx| {
-                        this.connection_state.list.toggle_move_submenu();
+                        this.connection_state.toggle_list_move_submenu();
                         cx.notify();
                     }),
                 ))

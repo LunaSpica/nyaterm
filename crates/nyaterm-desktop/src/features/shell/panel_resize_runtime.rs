@@ -150,8 +150,7 @@ impl NyaTermApp {
         self.settings.ui_right_panel_collapsed = self.right_inspector_collapsed;
         self.settings.ui_saved_connections_sort_mode = self
             .connection_state
-            .list
-            .sort_mode()
+            .list_sort_mode()
             .persistence_id()
             .to_string();
         self.sync_activity_layout_to_settings();

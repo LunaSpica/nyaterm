@@ -637,7 +637,6 @@ impl NyaTermApp {
             .map(|group| group.id.clone())
             .collect::<std::collections::HashSet<_>>();
         self.connection_state
-            .list
-            .retain_loaded_references(&connection_ids, &group_ids);
+            .retain_loaded_list_references(&connection_ids, &group_ids);
     }
 }

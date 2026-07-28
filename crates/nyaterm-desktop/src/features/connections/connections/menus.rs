@@ -11,7 +11,7 @@ impl NyaTermApp {
         event: &MouseDownEvent,
         cx: &mut Context<Self>,
     ) {
-        self.connection_state.list.open_context_menu(
+        self.connection_state.open_list_connection_context_menu(
             connection_id,
             event.position.x,
             event.position.y,
@@ -25,8 +25,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.connection_state
-            .list
-            .open_list_context_menu(event.position.x, event.position.y);
+            .open_list_background_context_menu(event.position.x, event.position.y);
         cx.notify();
     }
 
@@ -36,7 +35,7 @@ impl NyaTermApp {
         event: &MouseDownEvent,
         cx: &mut Context<Self>,
     ) {
-        self.connection_state.list.open_group_context_menu(
+        self.connection_state.open_list_group_context_menu(
             group_id,
             event.position.x,
             event.position.y,
@@ -45,7 +44,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn close_connection_context_menus(&mut self, cx: &mut Context<Self>) {
-        self.connection_state.list.close_context_menus();
+        self.connection_state.close_list_context_menus();
         cx.notify();
     }
 

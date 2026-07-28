@@ -46,7 +46,7 @@ impl NyaTermApp {
         }
 
         self.connection_state.open_import_dialog();
-        self.connection_state.list.close_more_menu();
+        self.connection_state.close_list_more_menu();
         self.title_menu_open = None;
         self.title_menu_submenu = None;
         self.terminal.view.status = "select a connection import source".to_string();
@@ -136,9 +136,9 @@ impl NyaTermApp {
         match result {
             ConnectionImportResult::Imported(count) => {
                 self.refresh_store_from_runtime();
-                self.connection_state
-                    .list
-                    .expand_groups(self.connection_groups.iter().map(|group| group.id.clone()));
+                self.connection_state.expand_list_groups(
+                    self.connection_groups.iter().map(|group| group.id.clone()),
+                );
                 let message = self
                     .tr("savedConnections.importSuccess")
                     .replace("{{count}}", &count.to_string());
