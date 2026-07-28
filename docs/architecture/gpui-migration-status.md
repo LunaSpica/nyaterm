@@ -351,6 +351,10 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   `network` child state and `NetworkFeatureState` type are private to the state
   module; tunnel runtime actions, Network page rendering, and panel-count
   projection no longer access `connection_state.network.*` directly.
+- `ConnectionFeatureFocus` no longer allocates an unused
+  `network_group_editor` focus handle. Network group editing uses the text-input
+  registry path instead of a dedicated modal focus handle, so keeping one in the
+  connection focus bundle was a stale migration artifact.
 - `NetworkFeatureState` pure helper logic now lives in
   `features/connections/state/network_logic.rs`. The public semantic methods
   remain in `state.rs`, while 485 lines of menu, move-picker, group editor,

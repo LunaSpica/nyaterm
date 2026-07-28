@@ -76,7 +76,6 @@ pub(in crate::features) struct ConnectionFeatureFocus {
     pub editor: FocusHandle,
     pub group_editor: FocusHandle,
     pub group_open_confirm: FocusHandle,
-    pub network_group_editor: FocusHandle,
     pub network_tunnel_editor: FocusHandle,
     pub network_proxy_editor: FocusHandle,
 }

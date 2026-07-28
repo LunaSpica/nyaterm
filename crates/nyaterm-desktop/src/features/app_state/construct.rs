@@ -292,7 +292,6 @@ impl NyaTermApp {
                     editor: cx.focus_handle(),
                     group_editor: cx.focus_handle(),
                     group_open_confirm: cx.focus_handle(),
-                    network_group_editor: cx.focus_handle(),
                     network_tunnel_editor: cx.focus_handle(),
                     network_proxy_editor: cx.focus_handle(),
                 },
