@@ -541,15 +541,15 @@ impl NyaTermApp {
                             store.load_app_settings_summary().unwrap_or_default(),
                         );
                         self.apply_ui_layout_from_settings();
-                        self.translation_settings = store
+                        self.translation.settings = store
                             .load_translation_settings()
                             .unwrap_or_else(|_| TranslationSettings {
                                 target_language: self.settings.language.clone(),
                                 ..TranslationSettings::default()
                             });
-                        self.translation_secret_draft = TranslationSecretDraft::default();
-                        self.translate_target_language =
-                            self.translation_settings.target_language.clone();
+                        self.translation.secret_draft = TranslationSecretDraft::default();
+                        self.translation.target_language =
+                            self.translation.settings.target_language.clone();
                         self.recording_manager
                             .set_memory_limit(self.settings.recording_memory_limit_bytes as usize);
                         self.cloud_sync_settings = store
@@ -592,10 +592,10 @@ impl NyaTermApp {
                         self.command_history = Arc::default();
                         self.keyword_highlights = KeywordHighlightConfig::default();
                         self.apply_gpui_settings(AppSettingsSummary::default());
-                        self.translation_settings = TranslationSettings::default();
-                        self.translation_secret_draft = TranslationSecretDraft::default();
-                        self.translate_target_language =
-                            self.translation_settings.target_language.clone();
+                        self.translation.settings = TranslationSettings::default();
+                        self.translation.secret_draft = TranslationSecretDraft::default();
+                        self.translation.target_language =
+                            self.translation.settings.target_language.clone();
                         self.store_status = StoreStatus {
                             path,
                             message: format!("failed to load sessions: {error}"),
@@ -614,9 +614,10 @@ impl NyaTermApp {
                 self.quick_command_categories.clear();
                 self.command_history = Arc::default();
                 self.apply_gpui_settings(AppSettingsSummary::default());
-                self.translation_settings = TranslationSettings::default();
-                self.translation_secret_draft = TranslationSecretDraft::default();
-                self.translate_target_language = self.translation_settings.target_language.clone();
+                self.translation.settings = TranslationSettings::default();
+                self.translation.secret_draft = TranslationSecretDraft::default();
+                self.translation.target_language =
+                    self.translation.settings.target_language.clone();
                 self.store_status = StoreStatus {
                     path: self
                         .runtime

@@ -19,8 +19,8 @@ impl NyaTermApp {
             ai_secret_draft: self.ai.settings.secret_draft.clone(),
             cloud_sync_settings: self.cloud_sync_settings.clone(),
             cloud_sync_secret_draft: self.cloud_sync_secret_draft.clone(),
-            translation_settings: self.translation_settings.clone(),
-            translation_secret_draft: self.translation_secret_draft.clone(),
+            translation_settings: self.translation.settings.clone(),
+            translation_secret_draft: self.translation.secret_draft.clone(),
             keyword_highlights: self.keyword_highlights.clone(),
             master_password_enabled: self.settings_master_password_enabled,
             master_password_draft: self.settings_master_password_draft.clone(),
@@ -38,8 +38,8 @@ impl NyaTermApp {
             || snapshot.ai_secret_draft != self.ai.settings.secret_draft
             || snapshot.cloud_sync_settings != self.cloud_sync_settings
             || snapshot.cloud_sync_secret_draft != self.cloud_sync_secret_draft
-            || snapshot.translation_settings != self.translation_settings
-            || snapshot.translation_secret_draft != self.translation_secret_draft
+            || snapshot.translation_settings != self.translation.settings
+            || snapshot.translation_secret_draft != self.translation.secret_draft
             || snapshot.keyword_highlights != self.keyword_highlights
             || snapshot.master_password_enabled != self.settings_master_password_enabled
             || snapshot.master_password_draft != self.settings_master_password_draft
@@ -61,18 +61,18 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn pending_translation_settings(&self) -> TranslationSettings {
-        let mut next = self.translation_settings.clone();
-        if !self.translation_secret_draft.deepl_api_key.is_empty() {
-            next.deepl_api_key = self.translation_secret_draft.deepl_api_key.clone();
+        let mut next = self.translation.settings.clone();
+        if !self.translation.secret_draft.deepl_api_key.is_empty() {
+            next.deepl_api_key = self.translation.secret_draft.deepl_api_key.clone();
         }
-        if !self.translation_secret_draft.baidu_app_key.is_empty() {
-            next.baidu_app_key = self.translation_secret_draft.baidu_app_key.clone();
+        if !self.translation.secret_draft.baidu_app_key.is_empty() {
+            next.baidu_app_key = self.translation.secret_draft.baidu_app_key.clone();
         }
-        if !self.translation_secret_draft.ali_app_key.is_empty() {
-            next.ali_app_key = self.translation_secret_draft.ali_app_key.clone();
+        if !self.translation.secret_draft.ali_app_key.is_empty() {
+            next.ali_app_key = self.translation.secret_draft.ali_app_key.clone();
         }
-        if !self.translation_secret_draft.youdao_app_key.is_empty() {
-            next.youdao_app_key = self.translation_secret_draft.youdao_app_key.clone();
+        if !self.translation.secret_draft.youdao_app_key.is_empty() {
+            next.youdao_app_key = self.translation.secret_draft.youdao_app_key.clone();
         }
         next
     }
@@ -326,13 +326,14 @@ impl NyaTermApp {
                 self.settings_master_password_draft.clear();
                 self.ai.settings.config = saved_ai_settings;
                 self.cloud_sync_settings = saved_cloud_sync_settings;
-                self.translation_settings = saved_translation_settings;
+                self.translation.settings = saved_translation_settings;
                 self.keyword_highlights = saved_keyword_highlights;
-                self.translation_secret_draft = TranslationSecretDraft::default();
+                self.translation.secret_draft = TranslationSecretDraft::default();
                 self.cloud_sync_secret_draft = CloudSyncSecretDraft::default();
                 self.ai.settings.secret_draft.clear();
                 self.sync_ai_drafts_from_active_profile();
-                self.translate_target_language = self.translation_settings.target_language.clone();
+                self.translation.target_language =
+                    self.translation.settings.target_language.clone();
                 self.recording_manager
                     .set_memory_limit(self.settings.recording_memory_limit_bytes as usize);
                 self.transfer.paths.duplicate_policy = SftpDuplicatePolicy::from_legacy_value(
@@ -384,8 +385,8 @@ impl NyaTermApp {
             self.ai.settings.secret_draft = snapshot.ai_secret_draft;
             self.cloud_sync_settings = snapshot.cloud_sync_settings;
             self.cloud_sync_secret_draft = snapshot.cloud_sync_secret_draft;
-            self.translation_settings = snapshot.translation_settings;
-            self.translation_secret_draft = snapshot.translation_secret_draft;
+            self.translation.settings = snapshot.translation_settings;
+            self.translation.secret_draft = snapshot.translation_secret_draft;
             self.keyword_highlights = snapshot.keyword_highlights;
             self.settings_master_password_enabled = snapshot.master_password_enabled;
             self.settings_master_password_draft = snapshot.master_password_draft;
@@ -397,7 +398,7 @@ impl NyaTermApp {
             self.invalidate_terminal_cell_metrics(cx);
             self.invalidate_paint_theme_caches();
             self.sync_ai_drafts_from_active_profile();
-            self.translate_target_language = self.translation_settings.target_language.clone();
+            self.translation.target_language = self.translation.settings.target_language.clone();
             self.refresh_visible_terminal_surfaces(cx);
         }
         self.finish_settings_page(cx);

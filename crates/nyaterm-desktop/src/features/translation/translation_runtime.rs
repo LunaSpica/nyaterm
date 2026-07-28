@@ -5,10 +5,11 @@ use gpui::{
 use nyaterm_core::ConnectionStore;
 
 use crate::features::NyaTermApp;
-use crate::features::runtime_jobs::TranslateJobResult;
 use crate::http::translation::translate_text;
 use crate::models::{TranslateInputField, TranslationDialogState, TranslationSecretDraft};
 use crate::widgets::small_button;
+
+use super::state::TranslateJobResult;
 
 const TRANSLATE_EVENT_DRAIN_LIMIT: usize = 8;
 
@@ -18,24 +19,24 @@ impl NyaTermApp {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.translate_pending {
-            self.translate_status = "translation already running".to_string();
+        if self.translation.pending {
+            self.translation.status = "translation already running".to_string();
             cx.notify();
             return;
         }
-        if self.translate_input.trim().is_empty() {
-            self.translate_status = "type text before translating".to_string();
+        if self.translation.input.trim().is_empty() {
+            self.translation.status = "type text before translating".to_string();
             cx.notify();
             return;
         }
 
-        self.translate_pending = true;
-        self.translate_status = format!("translating with {}", self.translate_provider);
-        let tx = self.translate_tx.clone();
-        let provider = self.translate_provider.clone();
-        let target_language = self.translate_target_language.clone();
-        let text = self.translate_input.clone();
-        let settings = self.translation_settings.clone();
+        self.translation.pending = true;
+        self.translation.status = format!("translating with {}", self.translation.provider);
+        let tx = self.translation.tx.clone();
+        let provider = self.translation.provider.clone();
+        let target_language = self.translation.target_language.clone();
+        let text = self.translation.input.clone();
+        let settings = self.translation.settings.clone();
         std::thread::spawn(move || {
             let result = translate_text(&provider, &text, &target_language, &settings);
             let _ = tx.send(TranslateJobResult { result });
@@ -46,10 +47,10 @@ impl NyaTermApp {
     pub(in crate::features) fn save_translation_settings(&mut self, cx: &mut Context<Self>) {
         let next = self.pending_translation_settings();
         if self.defer_settings_persistence(cx) {
-            self.translation_settings = next;
-            self.translation_secret_draft = TranslationSecretDraft::default();
-            self.translate_target_language = self.translation_settings.target_language.clone();
-            self.translate_status = "translation settings staged".to_string();
+            self.translation.settings = next;
+            self.translation.secret_draft = TranslationSecretDraft::default();
+            self.translation.target_language = self.translation.settings.target_language.clone();
+            self.translation.status = "translation settings staged".to_string();
             return;
         }
 
@@ -60,16 +61,17 @@ impl NyaTermApp {
         .and_then(|store| store.save_translation_settings(next))
         {
             Ok(saved) => {
-                self.translation_settings = saved;
-                self.translation_secret_draft = TranslationSecretDraft::default();
-                self.translate_target_language = self.translation_settings.target_language.clone();
-                self.translate_status = "translation settings saved".to_string();
+                self.translation.settings = saved;
+                self.translation.secret_draft = TranslationSecretDraft::default();
+                self.translation.target_language =
+                    self.translation.settings.target_language.clone();
+                self.translation.status = "translation settings saved".to_string();
                 self.store_status.message = "translation settings saved".to_string();
                 self.store_status.ready = true;
             }
             Err(error) => {
-                self.translate_status = format!("translation settings save failed: {error}");
-                self.store_status.message = self.translate_status.clone();
+                self.translation.status = format!("translation settings save failed: {error}");
+                self.store_status.message = self.translation.status.clone();
                 self.store_status.ready = false;
             }
         }
@@ -83,24 +85,24 @@ impl NyaTermApp {
     ) {
         match provider {
             "deepl" => {
-                self.translation_settings.deepl_api_key.clear();
-                self.translation_secret_draft.deepl_api_key.clear();
+                self.translation.settings.deepl_api_key.clear();
+                self.translation.secret_draft.deepl_api_key.clear();
             }
             "baidu" => {
-                self.translation_settings.baidu_app_key.clear();
-                self.translation_secret_draft.baidu_app_key.clear();
+                self.translation.settings.baidu_app_key.clear();
+                self.translation.secret_draft.baidu_app_key.clear();
             }
             "ali" => {
-                self.translation_settings.ali_app_key.clear();
-                self.translation_secret_draft.ali_app_key.clear();
+                self.translation.settings.ali_app_key.clear();
+                self.translation.secret_draft.ali_app_key.clear();
             }
             "youdao" => {
-                self.translation_settings.youdao_app_key.clear();
-                self.translation_secret_draft.youdao_app_key.clear();
+                self.translation.settings.youdao_app_key.clear();
+                self.translation.secret_draft.youdao_app_key.clear();
             }
             _ => {}
         }
-        self.translate_status = format!("{provider} translation secret cleared; save to persist");
+        self.translation.status = format!("{provider} translation secret cleared; save to persist");
         cx.notify();
     }
 
@@ -111,9 +113,9 @@ impl NyaTermApp {
         text: String,
         cx: &mut Context<Self>,
     ) {
-        self.translate_focused_field = field;
+        self.translation.focused_field = field;
         *self.translate_input_value_mut() = text;
-        self.translate_status = if field.is_settings_field() {
+        self.translation.status = if field.is_settings_field() {
             "translation settings edited".to_string()
         } else {
             "translation input edited".to_string()
@@ -122,16 +124,16 @@ impl NyaTermApp {
     }
 
     fn translate_input_value_mut(&mut self) -> &mut String {
-        match self.translate_focused_field {
-            TranslateInputField::TargetLanguage => &mut self.translate_target_language,
-            TranslateInputField::Text => &mut self.translate_input,
-            TranslateInputField::DeeplApiKey => &mut self.translation_secret_draft.deepl_api_key,
-            TranslateInputField::BaiduAppId => &mut self.translation_settings.baidu_app_id,
-            TranslateInputField::BaiduAppKey => &mut self.translation_secret_draft.baidu_app_key,
-            TranslateInputField::AliAppId => &mut self.translation_settings.ali_app_id,
-            TranslateInputField::AliAppKey => &mut self.translation_secret_draft.ali_app_key,
-            TranslateInputField::YoudaoAppId => &mut self.translation_settings.youdao_app_id,
-            TranslateInputField::YoudaoAppKey => &mut self.translation_secret_draft.youdao_app_key,
+        match self.translation.focused_field {
+            TranslateInputField::TargetLanguage => &mut self.translation.target_language,
+            TranslateInputField::Text => &mut self.translation.input,
+            TranslateInputField::DeeplApiKey => &mut self.translation.secret_draft.deepl_api_key,
+            TranslateInputField::BaiduAppId => &mut self.translation.settings.baidu_app_id,
+            TranslateInputField::BaiduAppKey => &mut self.translation.secret_draft.baidu_app_key,
+            TranslateInputField::AliAppId => &mut self.translation.settings.ali_app_id,
+            TranslateInputField::AliAppKey => &mut self.translation.secret_draft.ali_app_key,
+            TranslateInputField::YoudaoAppId => &mut self.translation.settings.youdao_app_id,
+            TranslateInputField::YoudaoAppKey => &mut self.translation.secret_draft.youdao_app_key,
         }
     }
 
@@ -145,21 +147,21 @@ impl NyaTermApp {
     ) {
         let text = text.trim().to_string();
         if text.is_empty() {
-            self.translate_status = "no text to translate".to_string();
+            self.translation.status = "no text to translate".to_string();
             cx.notify();
             return;
         }
-        self.translation_dialog = Some(TranslationDialogState {
+        self.translation.dialog = Some(TranslationDialogState {
             source_text: text.clone(),
             provider: provider.clone(),
             provider_label,
         });
-        self.translate_provider = provider;
-        self.translate_input = text;
-        self.translate_result = None;
-        self.translate_status = format!("translating with {}", self.translate_provider);
+        self.translation.provider = provider;
+        self.translation.input = text;
+        self.translation.result = None;
+        self.translation.status = format!("translating with {}", self.translation.provider);
         // Kick off immediately (Tauri TranslationDialog behavior).
-        if !self.translate_pending {
+        if !self.translation.pending {
             self.run_translation(window, cx);
         } else {
             cx.notify();
@@ -167,7 +169,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn close_translation_dialog(&mut self, cx: &mut Context<Self>) {
-        if self.translation_dialog.take().is_some() {
+        if self.translation.dialog.take().is_some() {
             cx.notify();
         }
     }
@@ -177,13 +179,13 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let Some(dialog) = self.translation_dialog.clone() else {
+        let Some(dialog) = self.translation.dialog.clone() else {
             return div().into_any_element();
         };
         let provider_label = dialog.provider_label.clone();
         let source = dialog.source_text.clone();
-        let pending = self.translate_pending;
-        let status = self.translate_status.clone();
+        let pending = self.translation.pending;
+        let status = self.translation.status.clone();
         let title_label = self.tr("translation.title");
         let source_label = self.tr("translation.sourceText");
         let translated_label = self.tr("translation.translatedText");
@@ -192,7 +194,7 @@ impl NyaTermApp {
         let copy_label = self.tr("translation.copy");
         let close_label = self.tr("translation.close");
         let copied_label = self.tr("translation.copied");
-        let result = self.translate_result.clone();
+        let result = self.translation.result.clone();
         let detected = result
             .as_ref()
             .map(|item| item.detected_language.clone())
@@ -355,11 +357,11 @@ impl NyaTermApp {
                                     "translation-dialog-copy",
                                     copy_label,
                                     cx.listener(|this, _, _, cx| {
-                                        if let Some(result) = this.translate_result.clone() {
+                                        if let Some(result) = this.translation.result.clone() {
                                             cx.write_to_clipboard(ClipboardItem::new_string(
                                                 result.translated,
                                             ));
-                                            this.translate_status = copied_label.to_string();
+                                            this.translation.status = copied_label.to_string();
                                             cx.notify();
                                         }
                                     }),
@@ -379,29 +381,29 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn drain_translate_events(&mut self) -> bool {
-        if !self.translate_pending {
+        if !self.translation.pending {
             return false;
         }
         let mut dirty = false;
         for _ in 0..TRANSLATE_EVENT_DRAIN_LIMIT {
-            let Ok(event) = self.translate_rx.try_recv() else {
+            let Ok(event) = self.translation.rx.try_recv() else {
                 break;
             };
             dirty = true;
-            self.translate_pending = false;
+            self.translation.pending = false;
             match event.result {
                 Ok(result) => {
-                    self.translate_status = format!(
+                    self.translation.status = format!(
                         "translated {} character(s) from {}",
                         result.original.chars().count(),
                         result.detected_language
                     );
-                    self.terminal.view.status = self.translate_status.clone();
-                    self.translate_result = Some(result);
+                    self.terminal.view.status = self.translation.status.clone();
+                    self.translation.result = Some(result);
                 }
                 Err(error) => {
-                    self.translate_status = format!("translation failed: {error}");
-                    self.terminal.view.status = self.translate_status.clone();
+                    self.translation.status = format!("translation failed: {error}");
+                    self.terminal.view.status = self.translation.status.clone();
                 }
             }
         }

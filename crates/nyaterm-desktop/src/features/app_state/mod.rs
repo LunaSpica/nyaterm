@@ -5,9 +5,9 @@ use std::time::Instant;
 use gpui::{FocusHandle, ScrollHandle, WindowHandle};
 use nyaterm_core::{
     AiExecutionProfile, AppRuntime, AppSettingsSummary, CloudSyncHistoryEntry, CloudSyncSettings,
-    CloudSyncState, CommandHistoryEntry, Group, KeywordHighlightConfig, NativeServices,
-    NativeUpdateInfo, OtpEntry, ProxyConfig, ProxyGroup, QuickCommand, QuickCommandCategory,
-    SavedConnection, SavedCredential, SavedPassword, SshKey, TunnelConfig, TunnelGroup,
+    CloudSyncState, CommandHistoryEntry, Group, KeywordHighlightConfig, NativeServices, OtpEntry,
+    ProxyConfig, ProxyGroup, QuickCommand, QuickCommandCategory, SavedConnection, SavedCredential,
+    SavedPassword, SshKey, TunnelConfig, TunnelGroup,
 };
 use nyaterm_legacy::MigrationInventory;
 use nyaterm_transport::{
@@ -22,8 +22,7 @@ use super::panels::SendCommandFeatureState;
 use super::remote::RemoteOpsFeatureState;
 use super::remote_editor_window::RemoteFileEditorWindow;
 use super::runtime_jobs::{
-    CommandPersistenceRequest, CommandPersistenceResult, SessionStartResult, TranslateJobResult,
-    TunnelJobResult, UpdateJobResult,
+    CommandPersistenceRequest, CommandPersistenceResult, SessionStartResult, TunnelJobResult,
 };
 use super::session::{
     CredentialPromptBroker, CredentialPromptState, HostKeyPromptBroker, HostKeyPromptRequest,
@@ -35,6 +34,8 @@ use super::settings_window::SettingsWindow;
 use super::terminal::TerminalFeatureState;
 use super::text_inputs::TextInputRegistry;
 use super::transfers::TransferFeatureState;
+use super::translation::TranslationFeatureState;
+use super::update::UpdateFeatureState;
 use crate::models::{
     ActionLinkMenuState, ActionLinkTooltipState, ActiveSessionMenuState,
     ActivityBarContextMenuState, ActivityBarLayoutState, BottomPanelMode, BottomPanelResizeState,
@@ -44,11 +45,9 @@ use crate::models::{
     PanelStackResizeState, RecordingPathPromptKind, RecordingWritePipeline, RightFocus,
     SessionEventBridge, SessionRuntimeMetadata, SettingsTab, SnapshotPasswordPromptState,
     StartupCommandAction, StoreStatus, SyncInputGroup, TabActionsSubmenu, TerminalFrameEvent,
-    TitleMenu, TitleMenuSubmenu, TranslateInputField, TranslationDialogState,
-    TranslationSecretDraft, WorkspacePaneNode, WorkspaceSplitDirection, WorkspaceSplitResizeState,
-    WorkspaceSplitState,
+    TitleMenu, TitleMenuSubmenu, WorkspacePaneNode, WorkspaceSplitDirection,
+    WorkspaceSplitResizeState, WorkspaceSplitState,
 };
-use nyaterm_core::{TranslateResult, TranslationSettings};
 
 mod construct;
 mod types;
@@ -89,6 +88,8 @@ pub struct NyaTermApp {
     pub(in crate::features) terminal: TerminalFeatureState,
     pub(in crate::features) send_command: SendCommandFeatureState,
     pub(in crate::features) transfer: TransferFeatureState,
+    pub(in crate::features) translation: TranslationFeatureState,
+    pub(in crate::features) update: UpdateFeatureState,
     pub(in crate::features) command_history: Arc<[CommandHistoryEntry]>,
     pub(in crate::features) command_persistence_tx: mpsc::Sender<CommandPersistenceRequest>,
     pub(in crate::features) command_persistence_rx: mpsc::Receiver<CommandPersistenceResult>,
@@ -105,7 +106,6 @@ pub struct NyaTermApp {
     pub(in crate::features) action_link_hover_pending:
         Option<(String, Instant, ActionLinkTooltipState)>,
 
-    pub(in crate::features) translation_dialog: Option<TranslationDialogState>,
     pub(in crate::features) bottom_panel: BottomPanelMode,
     pub(in crate::features) quick_cmd_height: f32,
     pub(in crate::features) serial_send_height: f32,
@@ -140,23 +140,6 @@ pub struct NyaTermApp {
     pub(in crate::features) tunnel_tx: mpsc::Sender<TunnelJobResult>,
     pub(in crate::features) tunnel_rx: mpsc::Receiver<TunnelJobResult>,
     pub(in crate::features) pending_tunnels: Vec<String>,
-    pub(in crate::features) translate_tx: mpsc::Sender<TranslateJobResult>,
-    pub(in crate::features) translate_rx: mpsc::Receiver<TranslateJobResult>,
-    pub(in crate::features) translate_provider: String,
-    pub(in crate::features) translation_settings: TranslationSettings,
-    pub(in crate::features) translation_secret_draft: TranslationSecretDraft,
-    pub(in crate::features) translate_target_language: String,
-    pub(in crate::features) translate_input: String,
-    pub(in crate::features) translate_result: Option<TranslateResult>,
-    pub(in crate::features) translate_status: String,
-    pub(in crate::features) translate_pending: bool,
-    pub(in crate::features) translate_focused_field: TranslateInputField,
-    pub(in crate::features) update_tx: mpsc::Sender<UpdateJobResult>,
-    pub(in crate::features) update_rx: mpsc::Receiver<UpdateJobResult>,
-    pub(in crate::features) update_status: String,
-    pub(in crate::features) update_info: Option<NativeUpdateInfo>,
-    pub(in crate::features) update_pending: bool,
-    pub(in crate::features) update_dialog_open: bool,
     pub(in crate::features) about_open: bool,
     pub(in crate::features) remote_editor_window: Option<WindowHandle<RemoteFileEditorWindow>>,
     pub(in crate::features) remote_editor_window_open_pending: bool,

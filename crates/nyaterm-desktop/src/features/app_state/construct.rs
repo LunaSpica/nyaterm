@@ -6,7 +6,7 @@ use crate::models::{
     ActivityBarLayoutState, BottomPanelMode, CloudSyncInputField, CloudSyncSecretDraft,
     GithubGistAuthState, HeaderStatusState, MainMode, NavItem, PanelSide, RecordingWritePipeline,
     RightFocus, SessionEventBridge, SettingsTab, StartupCommandAction, StoreStatus,
-    TerminalFramePipeline, TranslateInputField, TranslationSecretDraft,
+    TerminalFramePipeline,
 };
 use crate::terminal::initial_terminal_screen;
 use gpui::{Context, ScrollHandle};
@@ -26,9 +26,10 @@ use super::super::{
     QuickCommandFeatureState, RemoteOpsFeatureFocus, RemoteOpsFeatureState, SecurityFeatureFocus,
     SecurityFeatureState, SendCommandFeatureFocus, SendCommandFeatureState,
     SftpDuplicatePromptBroker, TerminalFeatureFocus, TerminalFeatureState, TextInputRegistry,
-    TransferFeatureFocus, TransferFeatureState, ai_active_profile_drafts, ai_usage_counts,
-    appearance_font_options, quick_command_sort_mode_from_setting,
-    quick_command_view_mode_from_setting, spawn_command_persistence_worker,
+    TransferFeatureFocus, TransferFeatureState, TranslationFeatureState, UpdateFeatureState,
+    ai_active_profile_drafts, ai_usage_counts, appearance_font_options,
+    quick_command_sort_mode_from_setting, quick_command_view_mode_from_setting,
+    spawn_command_persistence_worker,
 };
 use super::NyaTermApp;
 use crate::models::panel_collapsed_from_persistence;
@@ -60,8 +61,6 @@ impl NyaTermApp {
         };
         let (session_start_tx, session_start_rx) = mpsc::channel();
         let (tunnel_tx, tunnel_rx) = mpsc::channel();
-        let (translate_tx, translate_rx) = mpsc::channel();
-        let (update_tx, update_rx) = mpsc::channel();
         let (github_gist_auth_tx, github_gist_auth_rx) = mpsc::channel();
         let (command_persistence_tx, command_persistence_rx) = spawn_command_persistence_worker(
             runtime.config_dir().to_path_buf(),
@@ -289,7 +288,6 @@ impl NyaTermApp {
             .collect::<HashMap<_, _>>();
         let panel_multi_open = settings.ui_panel_multi_open;
         let settings_master_password_enabled = settings.has_master_password;
-        let translate_target_language = translation_settings.target_language.clone();
         let mut terminal_output_decoder = TerminalOutputDecoder::default();
         terminal_output_decoder.set_encoding(&settings.interaction_default_encoding);
         let mut terminal_screen = initial_terminal_screen();
@@ -427,6 +425,8 @@ impl NyaTermApp {
                 },
             ),
             remote_ops: RemoteOpsFeatureState::new(RemoteOpsFeatureFocus {}),
+            translation: TranslationFeatureState::new(translation_settings),
+            update: UpdateFeatureState::new(),
             command_history: Arc::from(command_history),
             command_persistence_tx,
             command_persistence_rx,
@@ -439,7 +439,6 @@ impl NyaTermApp {
             action_link_menu: None,
             action_link_tooltip: None,
             action_link_hover_pending: None,
-            translation_dialog: None,
             bottom_panel: if settings.ui_serial_send_visible {
                 BottomPanelMode::CommandSend
             } else if settings.ui_quick_cmd_visible {
@@ -476,23 +475,6 @@ impl NyaTermApp {
             tunnel_tx,
             tunnel_rx,
             pending_tunnels: Vec::new(),
-            translate_tx,
-            translate_rx,
-            translate_provider: "google".to_string(),
-            translation_settings,
-            translation_secret_draft: TranslationSecretDraft::default(),
-            translate_target_language,
-            translate_input: String::new(),
-            translate_result: None,
-            translate_status: "Google translation ready".to_string(),
-            translate_pending: false,
-            translate_focused_field: TranslateInputField::Text,
-            update_tx,
-            update_rx,
-            update_status: format!("Current version {}", env!("CARGO_PKG_VERSION")),
-            update_info: None,
-            update_pending: false,
-            update_dialog_open: false,
             about_open: false,
             remote_editor_window: None,
             remote_editor_window_open_pending: false,

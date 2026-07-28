@@ -83,7 +83,7 @@ impl NyaTermApp {
         if self.action_link_menu.is_some()
             || self.terminal.menus.context_menu.is_some()
             || self.terminal.selection.dragging
-            || self.translation_dialog.is_some()
+            || self.translation.dialog.is_some()
         {
             self.clear_action_link_tooltip(cx);
             return;

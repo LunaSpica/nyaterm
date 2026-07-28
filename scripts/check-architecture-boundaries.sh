@@ -118,6 +118,21 @@ check_no_matches \
   '^[[:space:]]*pub\(in crate::features\)[[:space:]]+(search_engine_edit_index|search_engine_expanded_index|search_engine_icon_picker_index|search_engine_actions_index|search_engine_edit_field|search_engine_focus|keyword_highlight_expanded_id|keyword_highlight_edit_id|keyword_highlight_edit_field|keyword_highlight_focus|appearance_menu_open|appearance_ui_font_options|appearance_terminal_font_options|keybinding_recording_id|keybinding_pending_keys|keybinding_search_draft|keybindings_focus)[[:space:]]*:' \
   crates/nyaterm-desktop/src/features/app_state/mod.rs
 
+check_no_matches \
+  "translation state must stay grouped under TranslationFeatureState" \
+  '^[[:space:]]*pub\(in crate::features\)[[:space:]]+(translation_dialog|translate_tx|translate_rx|translate_provider|translation_settings|translation_secret_draft|translate_target_language|translate_input|translate_result|translate_status|translate_pending|translate_focused_field)[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/app_state/mod.rs
+
+check_no_matches \
+  "update state must stay grouped under UpdateFeatureState" \
+  '^[[:space:]]*pub\(in crate::features\)[[:space:]]+(update_tx|update_rx|update_status|update_info|update_pending|update_dialog_open)[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/app_state/mod.rs
+
+check_no_matches \
+  "translation and update job events must stay in their owning features" \
+  'struct[[:space:]]+(TranslateJobResult|UpdateJobResult)' \
+  crates/nyaterm-desktop/src/features/runtime_jobs.rs
+
 # These low-frequency transport helpers have explicit imports at their call
 # sites. Keep them out of the shared feature prelude so new modules do not
 # acquire unrelated transport dependencies implicitly.

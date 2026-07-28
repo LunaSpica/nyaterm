@@ -4,7 +4,7 @@ use std::time::Instant;
 
 use nyaterm_core::{
     AiCommandCard, AiMode, AiModelDiscovery, CommandHistoryEntry, CommandObservation,
-    ConnectionStore, NativeUpdateInfo, TranslateResult,
+    ConnectionStore,
 };
 use nyaterm_transport::{
     DockerComposeService, DockerContainerDetails, RemoteDockerOverview, RemoteProcess, RemoteStats,
@@ -52,16 +52,6 @@ pub(in crate::features) struct StatsJobResult {
     pub(in crate::features) job_id: u64,
     pub(in crate::features) session_id: String,
     pub(in crate::features) result: Result<RemoteStats, String>,
-}
-
-#[derive(Debug)]
-pub(in crate::features) struct TranslateJobResult {
-    pub(in crate::features) result: Result<TranslateResult, String>,
-}
-
-#[derive(Debug)]
-pub(in crate::features) struct UpdateJobResult {
-    pub(in crate::features) result: Result<NativeUpdateInfo, String>,
 }
 
 #[derive(Debug)]

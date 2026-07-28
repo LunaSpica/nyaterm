@@ -29,6 +29,7 @@ mod transfer_external_sync_window;
 mod transfers;
 mod translation;
 mod tunnels;
+mod update;
 mod view_widgets;
 
 #[allow(unused_imports)]
@@ -77,7 +78,7 @@ pub(in crate::features) use runtime_jobs::{
     AiChatJobOutput, AiChatJobResult, AiChatWorkerEvent, AiDiscoveryJobResult,
     CommandPersistenceRequest, CommandPersistenceResult, DockerJobResult, ProcessJobResult,
     SessionStartResult, SessionStartSuccess, StatsJobResult, TunnelJobOutput, TunnelJobResult,
-    UpdateJobResult, spawn_command_persistence_worker,
+    spawn_command_persistence_worker,
 };
 pub(in crate::features) use session::{
     CredentialPromptBroker, HostKeyPromptBroker, NativeOtpProvider, SftpDuplicatePromptBroker,
@@ -101,6 +102,8 @@ pub(in crate::features) use transfers::{
     TransferFeatureFocus, TransferFeatureState, duplicate_decision_label, duplicate_policy_label,
     format_file_size, transfer_job_title, transfer_status_label,
 };
+pub(in crate::features) use translation::TranslationFeatureState;
+pub(in crate::features) use update::UpdateFeatureState;
 pub(in crate::features) use view_widgets::{
     child_window_header, child_window_titlebar, color_icon, connection_type_icon,
     dialog_action_button, logo_mark, metric, modal_close_icon_button,
