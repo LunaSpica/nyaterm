@@ -1,12 +1,74 @@
 use std::collections::{HashMap, HashSet};
-use std::sync::mpsc;
+use std::sync::{Arc, mpsc};
 use std::time::Instant;
 
 use nyaterm_core::AiExecutionProfile;
-use nyaterm_transport::SessionKind;
+use nyaterm_transport::{SessionKind, SessionManager, SshMultiplexHandle, SshSessionConfig};
 
 use crate::features::runtime_jobs::SessionStartResult;
-use crate::models::{SessionLaunchConfig, StartupCommandRequest, WorkspaceSplitDirection};
+use crate::models::{
+    ActiveSessionMenuState, SessionEventBridge, SessionLaunchConfig, SessionRuntimeMetadata,
+    StartupCommandRequest, WorkspaceSplitDirection,
+};
+
+use super::trzsz_runtime::TrzszSessionState;
+use super::zmodem_runtime::ZmodemSessionState;
+
+pub(in crate::features) struct SessionFeatureState {
+    pub manager: Arc<SessionManager>,
+    pub event_bridge: SessionEventBridge,
+    pub start: SessionStartFeatureState,
+    pub command_history: HashMap<String, Vec<String>>,
+    pub active_search_draft: String,
+    pub active_menu: Option<ActiveSessionMenuState>,
+    /// Per-session reconnect/disconnect busy state ("reconnect" | "disconnect").
+    pub busy_actions: HashMap<String, String>,
+    pub active_id: Option<String>,
+    pub active_ssh_config: Option<SshSessionConfig>,
+    pub active_ai_execution_profile: AiExecutionProfile,
+    pub order: Vec<String>,
+    pub metadata: HashMap<String, SessionRuntimeMetadata>,
+    pub custom_names: HashMap<String, String>,
+    /// OSC 0/2 titles from the session PTY (fall back when no custom rename).
+    pub dynamic_titles: HashMap<String, String>,
+    /// Latest OSC 7 working directories per session.
+    pub cwds: HashMap<String, String>,
+    /// Per-session ZMODEM detector / transfer state (UI-layer interception).
+    pub zmodem: HashMap<String, ZmodemSessionState>,
+    /// Per-session trzsz trigger detector state (pre-parser protocol slot).
+    pub trzsz: HashMap<String, TrzszSessionState>,
+    pub tab_colors: HashMap<String, u32>,
+    pub multiplex_handles: HashMap<String, SshMultiplexHandle>,
+}
+
+impl SessionFeatureState {
+    pub(in crate::features) fn new(
+        manager: Arc<SessionManager>,
+        event_bridge: SessionEventBridge,
+    ) -> Self {
+        Self {
+            manager,
+            event_bridge,
+            start: SessionStartFeatureState::new(),
+            command_history: HashMap::new(),
+            active_search_draft: String::new(),
+            active_menu: None,
+            busy_actions: HashMap::new(),
+            active_id: None,
+            active_ssh_config: None,
+            active_ai_execution_profile: AiExecutionProfile::SendOnly,
+            order: Vec::new(),
+            metadata: HashMap::new(),
+            custom_names: HashMap::new(),
+            dynamic_titles: HashMap::new(),
+            cwds: HashMap::new(),
+            zmodem: HashMap::new(),
+            trzsz: HashMap::new(),
+            tab_colors: HashMap::new(),
+            multiplex_handles: HashMap::new(),
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub(in crate::features) enum SessionPaneState {
@@ -245,14 +307,18 @@ pub(super) fn failed_session_start_display_name(failed: &FailedSessionStart) -> 
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
     use std::time::Instant;
 
     use nyaterm_core::AiExecutionProfile;
-    use nyaterm_transport::SessionKind;
+    use nyaterm_transport::{SessionKind, SessionManager};
 
     use crate::features::runtime_jobs::SessionStartResult;
+    use crate::models::{SessionEventBridge, TerminalFramePipeline};
 
-    use super::{FailedSessionStart, PendingSessionStart, SessionStartFeatureState};
+    use super::{
+        FailedSessionStart, PendingSessionStart, SessionFeatureState, SessionStartFeatureState,
+    };
 
     fn pending(name: &str) -> PendingSessionStart {
         PendingSessionStart {
@@ -271,6 +337,34 @@ mod tests {
             source_connection_id: None,
             reconnect_session_id: None,
         }
+    }
+
+    #[test]
+    fn session_state_owns_live_runtime_and_initializes_transient_state() {
+        let manager = Arc::new(SessionManager::new());
+        let event_bridge = SessionEventBridge::spawn(
+            Arc::clone(&manager),
+            TerminalFramePipeline::default(),
+            "utf-8".to_string(),
+            10_000,
+        );
+        let sessions = SessionFeatureState::new(Arc::clone(&manager), event_bridge);
+
+        assert!(Arc::ptr_eq(&sessions.manager, &manager));
+        assert!(!sessions.start.has_pending());
+        assert!(!sessions.start.has_failed());
+        assert!(sessions.command_history.is_empty());
+        assert!(sessions.active_id.is_none());
+        assert!(sessions.active_ssh_config.is_none());
+        assert_eq!(
+            sessions.active_ai_execution_profile,
+            AiExecutionProfile::SendOnly
+        );
+        assert!(sessions.order.is_empty());
+        assert!(sessions.metadata.is_empty());
+        assert!(sessions.zmodem.is_empty());
+        assert!(sessions.trzsz.is_empty());
+        assert!(sessions.multiplex_handles.is_empty());
     }
 
     #[test]

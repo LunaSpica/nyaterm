@@ -212,7 +212,7 @@ impl NyaTermApp {
     }
 
     fn serialize_open_tab_for_session(&self, session: &SessionInfo) -> RestorableOpenTab {
-        let metadata = self.session_metadata.get(&session.id);
+        let metadata = self.session.metadata.get(&session.id);
         let connection_id = metadata.and_then(|meta| meta.source_connection_id.clone());
         let session_type = match metadata.map(|meta| &meta.launch_config) {
             Some(SessionLaunchConfig::Ssh(_)) => "SSH",
@@ -221,9 +221,10 @@ impl NyaTermApp {
             Some(SessionLaunchConfig::Local(_)) | None => "Local",
         }
         .to_string();
-        let custom_name = self.session_custom_names.get(&session.id).cloned();
+        let custom_name = self.session.custom_names.get(&session.id).cloned();
         let tab_color = self
-            .session_tab_colors
+            .session
+            .tab_colors
             .get(&session.id)
             .map(|color| format!("#{color:06x}"));
         let title = self.session_display_name_by_info(session);
@@ -276,7 +277,7 @@ impl NyaTermApp {
         let mut tab = self.serialize_open_tab_for_session(first);
         // Title/type from first leaf; root carries the full tree.
         tab.root = Some(pane_root);
-        tab.active_pane_id = self.active_session_id.clone();
+        tab.active_pane_id = self.session.active_id.clone();
         Some(vec![tab])
     }
 
@@ -606,8 +607,8 @@ impl NyaTermApp {
         }
         self.session_pane_roots.insert(first.clone(), restored);
         self.rebuild_session_tab_owners();
-        if self.active_session_id.is_none() {
-            self.active_session_id = Some(first);
+        if self.session.active_id.is_none() {
+            self.session.active_id = Some(first);
         }
         self.sync_workspace_split_from_active_tab();
         self.workspace_pane_layout_restored = true;

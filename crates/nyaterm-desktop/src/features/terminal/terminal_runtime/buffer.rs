@@ -589,7 +589,7 @@ impl NyaTermApp {
             let allow_deferred_events = terminal_frame_deferred_events_can_apply(
                 self.terminal.view.runtime.session_event_backlog_active,
                 self.terminal.view.runtime.session_event_queued_output_bytes,
-                self.session_event_bridge.queued_output_bytes(),
+                self.session.event_bridge.queued_output_bytes(),
                 pending_terminal_frame_output_events(&self.pending_terminal_frame_events),
                 self.terminal.view.frame_pipeline.queued_output_bytes(),
             );
@@ -741,7 +741,7 @@ impl NyaTermApp {
             process_duration,
         } = frame;
         let has_snapshot = snapshot.is_some();
-        let is_active = self.active_session_id.as_deref() == Some(session_id.as_str());
+        let is_active = self.session.active_id.as_deref() == Some(session_id.as_str());
         let is_visible = self.terminal_session_has_visible_surface(&session_id);
         if is_visible
             && accepted_bytes > 0
@@ -910,7 +910,7 @@ impl NyaTermApp {
         if let Some(root) = self.workspace_split.as_ref() {
             return workspace_pane_node_visible_session_ids(root);
         }
-        self.active_session_id.iter().map(String::as_str).collect()
+        self.session.active_id.iter().map(String::as_str).collect()
     }
 
     fn apply_terminal_snapshot_frame(
@@ -1101,7 +1101,7 @@ impl NyaTermApp {
             session_id,
             true,
             is_visible,
-            self.active_session_id.as_deref(),
+            self.session.active_id.as_deref(),
             self.terminal.search.open,
             self.terminal.search.mode,
             current_search_key.as_ref(),
@@ -1206,7 +1206,7 @@ impl NyaTermApp {
         let mut clipboard_loads;
 
         if let Some(session_id) = session_id {
-            let is_active = self.active_session_id.as_deref() == Some(session_id);
+            let is_active = self.session.active_id.as_deref() == Some(session_id);
             let encoding = self.settings.interaction_default_encoding.clone();
             let view = self
                 .terminal
@@ -1227,11 +1227,12 @@ impl NyaTermApp {
                 self.terminal.view.runtime.visual_bell_ticks = 4;
             }
             if let Some(title) = effects.title {
-                self.session_dynamic_titles
+                self.session
+                    .dynamic_titles
                     .insert(session_id.to_string(), title);
             }
             if effects.reset_title {
-                self.session_dynamic_titles.remove(session_id);
+                self.session.dynamic_titles.remove(session_id);
             }
             let command_running = view.screen.command_running();
             shell_started |= effects.shell_command_started;
@@ -1308,11 +1309,12 @@ impl NyaTermApp {
             self.terminal.view.runtime.visual_bell_ticks = 4;
         }
         if let Some(title) = effects.title {
-            self.session_dynamic_titles
+            self.session
+                .dynamic_titles
                 .insert(session_id.to_string(), title);
         }
         if effects.reset_title {
-            self.session_dynamic_titles.remove(session_id);
+            self.session.dynamic_titles.remove(session_id);
         }
         self.handle_terminal_clipboard_effects(
             &mut clipboard_store,

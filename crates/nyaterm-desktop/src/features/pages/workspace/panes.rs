@@ -129,7 +129,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
         let reconnect_pending =
-            self.session_start.pending.values().any(|pending| {
+            self.session.start.pending.values().any(|pending| {
                 pending.reconnect_session_id.as_deref() == Some(session_id.as_str())
             });
         if reconnect_pending {
@@ -138,7 +138,8 @@ impl NyaTermApp {
                 .into_any_element();
         }
         if let Some(error) = self
-            .session_start
+            .session
+            .start
             .reconnect_failures
             .get(&session_id)
             .cloned()
@@ -159,7 +160,7 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         match node {
             WorkspacePaneNode::Leaf { session_id } => {
-                let is_active = self.active_session_id.as_deref() == Some(session_id.as_str());
+                let is_active = self.session.active_id.as_deref() == Some(session_id.as_str());
                 let content = self.workspace_session_content(session_id.clone(), cx);
                 let focus_id = session_id.clone();
                 let mut pane = div()

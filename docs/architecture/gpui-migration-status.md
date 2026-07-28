@@ -9,7 +9,7 @@ Last updated from the working tree on 2026-07-28.
 
 | Metric | Current value | Notes |
 | --- | ---: | --- |
-| `NyaTermApp` fields | 180 | Counted from `features/app_state/mod.rs`; down from 585, still transitional. |
+| `NyaTermApp` fields | 162 | Counted from `features/app_state/mod.rs`; down from 585, still transitional. |
 | `impl NyaTermApp` blocks | 238 | Spread across 233 files under `crates/nyaterm-desktop/src`. |
 | `#[path = "..."]` declarations in desktop | 0 | Cleared. Every directory is a real module; the boundary script fails on any new occurrence. |
 | `use super::*` imports in desktop | 0 | Cleared in production and test modules; guarded crate-wide. |
@@ -230,16 +230,17 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   for GPUI prompts, notifications, session policy and job-result routing.
   Recording output behavior, tunnel transport execution and persisted tunnel
   configuration formats are unchanged.
-- Session-start and reconnect lifecycle state now has one authoritative
-  `SessionStartFeatureState` owner. The worker channel, pending/failed maps,
-  active selection, cancellation tombstones, pane replacement state,
-  reconnect failures and deferred workspace split moved from eleven app fields
-  to one feature field. The owner constructs the channel and handles pure
-  selection, close/fallback, display-name and pending-status transitions;
-  `NyaTermApp` retains session-manager calls, worker spawning, navigation,
-  logging and GPUI notifications. `PendingSessionStart`, `FailedSessionStart`
-  and `SessionPaneState` moved with their owner out of `app_state/types.rs`.
-  Session creation and reconnect transport behavior are unchanged.
+- Live session runtime now has one top-level `SessionFeatureState` owner. The
+  session manager and event bridge, command history/search/menu/busy state,
+  active session/SSH/AI profile, order and runtime metadata, custom and dynamic
+  titles, working directories, tab colors, ZMODEM/trzsz state and SSH
+  multiplex handles moved from nineteen app fields to one feature field. The
+  existing `SessionStartFeatureState` is nested as `SessionFeatureState::start`
+  and still owns its worker channel, pending/failed maps, active selection,
+  cancellation tombstones, pane replacement state, reconnect failures and
+  deferred workspace split. `NyaTermApp` retains worker spawning, navigation,
+  event routing, logging and GPUI notifications. Session creation, reconnect,
+  terminal protocol and transport behavior are unchanged.
 - Transfer state is grouped into `TransferFeatureState`. Seventy-eight fields
   turned out to be five separate things sharing one panel: the job `queue`, the
   SFTP `browser`, the file operation dialogs (`file_ops`), the built-in remote
@@ -1383,7 +1384,7 @@ honest remaining list.
    compiler-confirmed final pass also removed `features/prelude.rs`, so modules
    cannot regain the same implicit dependency surface through a shared import
    bucket.
-3. Largely done. `NyaTermApp` is down from 585 fields to 180, across fifteen
+3. Largely done. `NyaTermApp` is down from 585 fields to 162, across fifteen
    feature-state structs. The latest cohesive cuts moved sixteen terminal
    command-assistance and credential-prompt fields into
    `TerminalFeatureState::assist`, then seventeen transient settings fields
@@ -1391,8 +1392,9 @@ honest remaining list.
    update channels, job state and dialogs into two authoritative feature-state
    owners, followed by cloud-sync configuration, secret drafts, history,
    conflict and GitHub device-flow state, recording and SSH-tunnel runtime
-   resources with their job/UI lifecycle state, then the session-start and
-   reconnect state machine. What is left is a long tail, and much of it is
+   resources with their job/UI lifecycle state, then the complete live session
+   runtime with its nested session-start and reconnect state machine. What is
+   left is a long tail, and much of it is
    genuinely app-level (stores, runtime, services, persisted collections).
    Group by cohesion where a cluster exists; do not force the count down for
    its own sake.

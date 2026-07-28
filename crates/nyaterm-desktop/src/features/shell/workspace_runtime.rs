@@ -13,7 +13,8 @@ use crate::models::{
 
 impl NyaTermApp {
     pub(in crate::features) fn live_session_ids(&self) -> HashSet<String> {
-        self.session_metadata
+        self.session
+            .metadata
             .iter()
             .filter(|(_, metadata)| !metadata.disconnected)
             .map(|(session_id, _)| session_id.clone())
@@ -57,8 +58,8 @@ impl NyaTermApp {
                                 self.session_pane_roots.insert(first.clone(), node);
                             }
                         } else if let WorkspacePaneNode::Leaf { session_id } = node {
-                            if self.active_session_id.is_none() {
-                                self.active_session_id = Some(session_id);
+                            if self.session.active_id.is_none() {
+                                self.session.active_id = Some(session_id);
                             }
                         }
                     }
@@ -78,7 +79,7 @@ impl NyaTermApp {
 
     fn live_session_ids_with_disconnected(&self) -> HashSet<String> {
         let mut live = self.live_session_ids();
-        for (session_id, metadata) in &self.session_metadata {
+        for (session_id, metadata) in &self.session.metadata {
             if metadata.disconnected {
                 live.insert(session_id.clone());
             }
@@ -103,7 +104,7 @@ impl NyaTermApp {
 
     /// Expose the active tab's pane tree via `workspace_split` for existing renderers.
     pub(in crate::features) fn sync_workspace_split_from_active_tab(&mut self) {
-        let Some(active) = self.active_session_id.clone() else {
+        let Some(active) = self.session.active_id.clone() else {
             self.workspace_split = None;
             self.sync_terminal_frame_snapshot_priority();
             return;
@@ -118,7 +119,7 @@ impl NyaTermApp {
     }
 
     fn write_back_active_tab_pane_root(&mut self) {
-        let Some(active) = self.active_session_id.clone() else {
+        let Some(active) = self.session.active_id.clone() else {
             return;
         };
         let tab_root = self.tab_root_for_session(&active);
@@ -182,7 +183,7 @@ impl NyaTermApp {
         session_id: String,
         cx: &mut Context<Self>,
     ) {
-        if self.active_session_id.as_deref() == Some(session_id.as_str()) {
+        if self.session.active_id.as_deref() == Some(session_id.as_str()) {
             return;
         }
         self.activate_session_id_with_surface_sync(&session_id, cx);
@@ -205,17 +206,17 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        let Some(source_session_id) = self.active_session_id.clone() else {
+        let Some(source_session_id) = self.session.active_id.clone() else {
             self.terminal.view.status = "start a session before splitting".to_string();
             cx.notify();
             return;
         };
-        if !self.session_metadata.contains_key(&source_session_id) {
+        if !self.session.metadata.contains_key(&source_session_id) {
             self.terminal.view.status = "active session cannot be duplicated for split".to_string();
             cx.notify();
             return;
         }
-        self.session_start.pending_workspace_split = Some((direction, source_session_id));
+        self.session.start.pending_workspace_split = Some((direction, source_session_id));
         self.duplicate_active_session(window, cx);
     }
 
@@ -224,7 +225,7 @@ impl NyaTermApp {
         new_session_id: &str,
     ) {
         let Some((direction, source_session_id)) =
-            self.session_start.pending_workspace_split.take()
+            self.session.start.pending_workspace_split.take()
         else {
             return;
         };
@@ -234,7 +235,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn unsplit_workspace(&mut self, cx: &mut Context<Self>) {
-        let Some(active_id) = self.active_session_id.clone() else {
+        let Some(active_id) = self.session.active_id.clone() else {
             self.terminal.view.status = "workspace is not split".to_string();
             cx.notify();
             return;
@@ -536,14 +537,14 @@ impl NyaTermApp {
             return;
         }
         // Prefer active session still present in the restored tree.
-        if let Some(active) = self.active_session_id.clone() {
+        if let Some(active) = self.session.active_id.clone() {
             if !restored.contains_session(&active) {
                 if let Some(first) = restored.session_ids().into_iter().next() {
-                    self.active_session_id = Some(first);
+                    self.session.active_id = Some(first);
                 }
             }
         } else if let Some(first) = restored.session_ids().into_iter().next() {
-            self.active_session_id = Some(first);
+            self.session.active_id = Some(first);
         }
         // Install as a per-tab root under the first leaf (legacy global layout path).
         if let Some(first) = restored.session_ids().into_iter().next() {

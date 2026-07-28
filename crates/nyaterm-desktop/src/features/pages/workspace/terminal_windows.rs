@@ -51,7 +51,8 @@ impl NyaTermApp {
                 for tab_id in &tab_ids {
                     let is_active_tab = active.as_str() == tab_id.as_str()
                         || self
-                            .active_session_id
+                            .session
+                            .active_id
                             .as_deref()
                             .is_some_and(|id| self.tab_root_for_session(id) == *tab_id);
                     let tab_number = global_index.get(tab_id).copied().unwrap_or(0);
@@ -74,7 +75,7 @@ impl NyaTermApp {
                             )
                         })
                         .unwrap_or(("Session", "icons/conn/terminal.svg"));
-                    let custom_color = self.session_tab_colors.get(tab_id).copied();
+                    let custom_color = self.session.tab_colors.get(tab_id).copied();
                     let leaf_ids = self
                         .session_pane_roots
                         .get(tab_id)

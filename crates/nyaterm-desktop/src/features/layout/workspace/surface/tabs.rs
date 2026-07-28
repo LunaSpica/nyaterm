@@ -299,7 +299,8 @@ impl NyaTermApp {
         let sessions = self.ordered_tab_sessions();
         let session_count = sessions.len();
         let mut transient_tabs: Vec<TransientSessionTab> = self
-            .session_start
+            .session
+            .start
             .pending
             .iter()
             .filter_map(|(request_id, pending)| {
@@ -329,7 +330,8 @@ impl NyaTermApp {
             })
             .collect::<Vec<_>>();
         transient_tabs.extend(
-            self.session_start
+            self.session
+                .start
                 .failed
                 .iter()
                 .map(|(request_id, failed)| {
@@ -367,7 +369,7 @@ impl NyaTermApp {
                 .then_with(|| left.3.cmp(&right.3))
         });
         if self.session_tab_scroll_into_view_pending {
-            if let Some(active_id) = self.active_session_id.as_deref() {
+            if let Some(active_id) = self.session.active_id.as_deref() {
                 if let Some(index) = sessions.iter().position(|session| session.id == active_id) {
                     let pending_count = transient_tabs
                         .iter()
@@ -399,9 +401,9 @@ impl NyaTermApp {
                 let (_, _, _, request_id, name, error) = transient_tabs[transient_cursor].clone();
                 let tab_number = tab_index + transient_cursor + 1;
                 let active =
-                    self.session_start.active_pending.as_deref() == Some(request_id.as_str());
+                    self.session.start.active_pending.as_deref() == Some(request_id.as_str());
                 let active = active
-                    || self.session_start.active_failed.as_deref() == Some(request_id.as_str());
+                    || self.session.start.active_failed.as_deref() == Some(request_id.as_str());
                 tabs = tabs.child(match error {
                     Some(error) => self
                         .failed_session_tab(request_id, name, error, tab_number, active, cx)
@@ -426,10 +428,11 @@ impl NyaTermApp {
                 kind_label: session_kind_label(session.kind),
             };
             let drop_target_session_id = session.id.clone();
-            let custom_color = self.session_tab_colors.get(&session.id).copied();
+            let custom_color = self.session.tab_colors.get(&session.id).copied();
             // Active when any leaf under this tab root is focused.
             let is_active = self
-                .active_session_id
+                .session
+                .active_id
                 .as_deref()
                 .is_some_and(|id| self.tab_root_for_session(id) == session.id);
             let leaf_ids = self
@@ -662,8 +665,8 @@ impl NyaTermApp {
         while transient_cursor < transient_tabs.len() {
             let (_, _, _, request_id, name, error) = transient_tabs[transient_cursor].clone();
             let tab_number = session_count + transient_cursor + 1;
-            let active = self.session_start.active_pending.as_deref() == Some(request_id.as_str())
-                || self.session_start.active_failed.as_deref() == Some(request_id.as_str());
+            let active = self.session.start.active_pending.as_deref() == Some(request_id.as_str())
+                || self.session.start.active_failed.as_deref() == Some(request_id.as_str());
             tabs = tabs.child(match error {
                 Some(error) => self
                     .failed_session_tab(request_id, name, error, tab_number, active, cx)

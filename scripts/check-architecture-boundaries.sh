@@ -154,6 +154,11 @@ check_no_matches \
   crates/nyaterm-desktop/src/features/app_state/mod.rs
 
 check_no_matches \
+  "live session runtime state must stay grouped under SessionFeatureState" \
+  '^[[:space:]]*pub\(in crate::features\)[[:space:]]+(session_manager|session_event_bridge|session_start|session_command_history|active_sessions_search_draft|active_session_menu|active_session_busy_actions|active_session_id|active_ssh_config|active_ai_execution_profile|session_order|session_metadata|session_custom_names|session_dynamic_titles|session_cwds|zmodem_sessions|trzsz_sessions|session_tab_colors|ssh_multiplex_handles)[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/app_state/mod.rs
+
+check_no_matches \
   "session start state must stay grouped under SessionStartFeatureState" \
   '^[[:space:]]*pub\(in crate::features\)[[:space:]]+(session_start_tx|session_start_rx|pending_session_starts|active_pending_session_start|failed_session_starts|active_failed_session_start|cancelled_session_start_requests|session_pane_states|pending_reconnect_replace_id|reconnect_session_failures|pending_workspace_split)[[:space:]]*:' \
   crates/nyaterm-desktop/src/features/app_state/mod.rs

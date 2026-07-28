@@ -14,7 +14,7 @@ use super::helpers::{queue_action_button, transfer_job_row};
 impl NyaTermApp {
     pub(super) fn transfer_queue_view(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = self.theme_palette();
-        let active_session_id = self.active_session_id.as_deref();
+        let active_session_id = self.session.active_id.as_deref();
         let visible_jobs = self
             .transfer
             .queue
@@ -55,7 +55,7 @@ impl NyaTermApp {
         };
 
         let mut list = div().flex().flex_col();
-        if self.active_session_id.is_none() {
+        if self.session.active_id.is_none() {
             list = list.child(
                 div()
                     .flex()

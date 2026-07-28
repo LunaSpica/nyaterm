@@ -121,7 +121,7 @@ impl NyaTermApp {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(config) = self.active_ssh_config.clone() else {
+        let Some(config) = self.session.active_ssh_config.clone() else {
             self.terminal.view.status = "start an SSH session first".to_string();
             self.ensure_panel_open(crate::models::NavItem::Transfers);
             cx.notify();
@@ -130,7 +130,7 @@ impl NyaTermApp {
         let id = self.next_transfer_id("sftp-symlink");
         self.transfer.queue.jobs.push(TransferJobState {
             id: id.clone(),
-            session_id: self.active_session_id.clone(),
+            session_id: self.session.active_id.clone(),
             kind: TransferJobKind::Symlink {
                 link_path: link_path.clone(),
                 target_path: target_path.clone(),
@@ -303,7 +303,7 @@ impl NyaTermApp {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(config) = self.active_ssh_config.clone() else {
+        let Some(config) = self.session.active_ssh_config.clone() else {
             self.terminal.view.status = "start an SSH session first".to_string();
             self.ensure_panel_open(crate::models::NavItem::Transfers);
             cx.notify();
@@ -313,7 +313,7 @@ impl NyaTermApp {
         let id = self.next_transfer_id("sftp-rename");
         self.transfer.queue.jobs.push(TransferJobState {
             id: id.clone(),
-            session_id: self.active_session_id.clone(),
+            session_id: self.session.active_id.clone(),
             kind: TransferJobKind::Rename {
                 old_path: old_path.clone(),
                 new_path: new_path.clone(),

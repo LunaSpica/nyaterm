@@ -20,7 +20,8 @@ impl NyaTermApp {
             return;
         }
         let exists = self
-            .session_metadata
+            .session
+            .metadata
             .get(&session_id)
             .is_some_and(|metadata| !metadata.disconnected);
         if !exists {
@@ -132,7 +133,8 @@ impl NyaTermApp {
                 match result {
                     Ok(path)
                         if this
-                            .session_metadata
+                            .session
+                            .metadata
                             .get(&result_session_id)
                             .is_some_and(|metadata| !metadata.disconnected) =>
                     {

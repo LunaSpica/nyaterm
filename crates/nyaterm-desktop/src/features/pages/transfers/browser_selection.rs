@@ -485,7 +485,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        if self.active_session_id.is_none() {
+        if self.session.active_id.is_none() {
             self.terminal.view.status = "start a session before sending remote path".to_string();
             cx.notify();
             return;

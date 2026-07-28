@@ -14,10 +14,11 @@ impl NyaTermApp {
         }
 
         let live_ids = self
-            .session_order
+            .session
+            .order
             .iter()
             .filter(|session_id| {
-                self.session_metadata.contains_key(*session_id)
+                self.session.metadata.contains_key(*session_id)
                     && !self.is_secondary_pane_session(session_id)
             })
             .cloned()
@@ -47,7 +48,7 @@ impl NyaTermApp {
             for tab_id in &live_ids {
                 root.ensure_tab(tab_id, preferred.as_deref());
             }
-            if let Some(active) = self.active_session_id.clone() {
+            if let Some(active) = self.session.active_id.clone() {
                 let _ = root.set_active_tab(&active);
             }
             if self
@@ -72,7 +73,7 @@ impl NyaTermApp {
         if tab_ids.is_empty() {
             return;
         }
-        let active = self.active_session_id.clone();
+        let active = self.session.active_id.clone();
         let root = TerminalWindowNode::leaf(tab_ids, active);
         self.focused_terminal_window_leaf_id = root.first_leaf_id();
         self.terminal.windows.tree = Some(root);
@@ -225,7 +226,7 @@ impl NyaTermApp {
         // Clear global pane splits so multi-leaf rendering takes precedence cleanly.
         self.workspace_split = None;
         self.workspace_split_resize = None;
-        if let Some(active) = self.active_session_id.clone() {
+        if let Some(active) = self.session.active_id.clone() {
             let mut root = layout;
             let _ = root.set_active_tab(&active);
             self.focused_terminal_window_leaf_id =
@@ -261,7 +262,7 @@ impl NyaTermApp {
             return;
         }
         // Do not open the config DB during connect/register; wait for idle.
-        if self.session_start.has_pending() || self.runtime_output_pressure_active() {
+        if self.session.start.has_pending() || self.runtime_output_pressure_active() {
             return;
         }
         let ordered = self
@@ -296,7 +297,7 @@ impl NyaTermApp {
             return;
         }
         self.focused_terminal_window_leaf_id = restored.first_leaf_id();
-        if let Some(active) = self.active_session_id.clone() {
+        if let Some(active) = self.session.active_id.clone() {
             let mut root = restored;
             let _ = root.set_active_tab(&active);
             self.focused_terminal_window_leaf_id =

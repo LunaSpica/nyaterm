@@ -12,14 +12,16 @@ impl NyaTermApp {
         session: &SessionInfo,
     ) -> String {
         if let Some(name) = self
-            .session_custom_names
+            .session
+            .custom_names
             .get(&session.id)
             .filter(|name| !name.trim().is_empty())
         {
             return name.clone();
         }
         if let Some(name) = self
-            .session_dynamic_titles
+            .session
+            .dynamic_titles
             .get(&session.id)
             .filter(|name| !name.trim().is_empty())
         {
@@ -30,14 +32,16 @@ impl NyaTermApp {
 
     pub(in crate::features) fn session_display_name(&self, session_id: &str) -> Option<String> {
         if let Some(name) = self
-            .session_custom_names
+            .session
+            .custom_names
             .get(session_id)
             .filter(|name| !name.trim().is_empty())
         {
             return Some(name.clone());
         }
         if let Some(name) = self
-            .session_dynamic_titles
+            .session
+            .dynamic_titles
             .get(session_id)
             .filter(|name| !name.trim().is_empty())
         {
@@ -48,7 +52,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn session_endpoint(&self, session_id: &str) -> Option<String> {
-        let metadata = self.session_metadata.get(session_id)?;
+        let metadata = self.session.metadata.get(session_id)?;
         match &metadata.launch_config {
             SessionLaunchConfig::Local(config) => {
                 let shell = config
@@ -78,7 +82,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn session_ssh_host(&self, session_id: &str) -> Option<String> {
-        let metadata = self.session_metadata.get(session_id)?;
+        let metadata = self.session.metadata.get(session_id)?;
         match &metadata.launch_config {
             SessionLaunchConfig::Ssh(config) if !config.host.trim().is_empty() => {
                 Some(config.host.clone())
@@ -88,7 +92,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn session_ssh_address(&self, session_id: &str) -> Option<String> {
-        let metadata = self.session_metadata.get(session_id)?;
+        let metadata = self.session.metadata.get(session_id)?;
         match &metadata.launch_config {
             SessionLaunchConfig::Ssh(config)
                 if !config.username.trim().is_empty() && !config.host.trim().is_empty() =>
@@ -116,7 +120,7 @@ impl NyaTermApp {
         if self.is_session_disconnected(session_id) {
             lines.push("Disconnected — press Enter to reconnect".to_string());
         }
-        if let Some(cwd) = self.session_cwds.get(session_id) {
+        if let Some(cwd) = self.session.cwds.get(session_id) {
             if !cwd.trim().is_empty() {
                 lines.push(format!("cwd {cwd}"));
             }
@@ -125,7 +129,7 @@ impl NyaTermApp {
     }
 
     fn active_session_info_line(&self) -> Option<String> {
-        let session_id = self.active_session_id.as_deref()?;
+        let session_id = self.session.active_id.as_deref()?;
         let name = self.session_display_name(session_id)?;
         let session = self.session_info(session_id)?;
         let endpoint = self
@@ -145,10 +149,10 @@ impl NyaTermApp {
     pub(in crate::features) fn active_session_info_details(
         &self,
     ) -> Option<Vec<(&'static str, String)>> {
-        let session_id = self.active_session_id.as_deref()?;
+        let session_id = self.session.active_id.as_deref()?;
         let name = self.session_display_name(session_id)?;
         let session = self.session_info(session_id)?;
-        let metadata = self.session_metadata.get(session_id)?;
+        let metadata = self.session.metadata.get(session_id)?;
         let endpoint = self
             .session_endpoint(session_id)
             .unwrap_or_else(|| "unknown endpoint".to_string());
@@ -170,7 +174,7 @@ impl NyaTermApp {
                 format!("{:?}", metadata.ai_execution_profile),
             ),
         ];
-        if let Some(cwd) = self.session_cwds.get(session_id) {
+        if let Some(cwd) = self.session.cwds.get(session_id) {
             details.push((self.tr("sessionInfo.cwd"), cwd.clone()));
         }
 
@@ -238,15 +242,15 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn activate_session_id(&mut self, session_id: &str) -> Option<String> {
-        self.session_start.active_pending = None;
-        self.session_start.active_failed = None;
+        self.session.start.active_pending = None;
+        self.session.start.active_failed = None;
         self.open_tabs_menu_open = false;
         self.new_session_menu_open = false;
         self.new_session_all_sessions_open = false;
         self.new_session_group_menu_path.clear();
         // Session switch resets terminal-output credential autofill (Tauri XTerminal remount).
         self.terminal.assist.reset_for_session_switch();
-        let previous_session_id = self.active_session_id.clone();
+        let previous_session_id = self.session.active_id.clone();
         let switching_sessions = previous_session_id.as_deref() != Some(session_id);
         if previous_session_id.as_deref() != Some(session_id)
             && let Some(previous_session_id) = previous_session_id.as_deref()
@@ -254,7 +258,7 @@ impl NyaTermApp {
             self.cache_transfer_browser_session(previous_session_id);
         }
 
-        self.active_session_id = Some(session_id.to_string());
+        self.session.active_id = Some(session_id.to_string());
         if switching_sessions {
             self.transfer.queue.selected_job_id = None;
             self.transfer.queue.job_menu = None;
@@ -265,12 +269,12 @@ impl NyaTermApp {
         // Keep workspace_split mirrored to the active tab's per-tab pane root.
         self.sync_workspace_split_from_active_tab();
         self.transfer.browser.auto_sync_cwd_last_at = None;
-        if let Some(metadata) = self.session_metadata.get(session_id).cloned() {
-            self.active_ssh_config = metadata.ssh_config;
-            self.active_ai_execution_profile = metadata.ai_execution_profile;
+        if let Some(metadata) = self.session.metadata.get(session_id).cloned() {
+            self.session.active_ssh_config = metadata.ssh_config;
+            self.session.active_ai_execution_profile = metadata.ai_execution_profile;
         } else {
-            self.active_ssh_config = None;
-            self.active_ai_execution_profile = AiExecutionProfile::SendOnly;
+            self.session.active_ssh_config = None;
+            self.session.active_ai_execution_profile = AiExecutionProfile::SendOnly;
         }
         // Transfer browser state is only needed when the transfers panel is open
         // or we already have cached browser state for this session. Skipping the
@@ -410,7 +414,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         // Local metadata is authoritative for tab existence; transport lock not needed.
-        let known = self.session_metadata.contains_key(&session_id);
+        let known = self.session.metadata.contains_key(&session_id);
         let disconnected = self.is_session_disconnected(&session_id);
         if !known && !disconnected {
             self.terminal.view.status = "session no longer exists".to_string();
@@ -447,7 +451,8 @@ impl NyaTermApp {
             return;
         }
         let active_index = self
-            .active_session_id
+            .session
+            .active_id
             .as_deref()
             .and_then(|active_id| {
                 sessions
@@ -534,7 +539,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.select_session(session_id.clone(), cx);
-        if self.active_session_id.as_deref() != Some(session_id.as_str()) {
+        if self.session.active_id.as_deref() != Some(session_id.as_str()) {
             return;
         }
         self.tab_actions_session_id = Some(session_id);
@@ -554,7 +559,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn copy_active_session_name(&mut self, cx: &mut Context<Self>) {
-        let Some(session_id) = self.active_session_id.as_deref() else {
+        let Some(session_id) = self.session.active_id.as_deref() else {
             self.terminal.view.status = "no active session name to copy".to_string();
             cx.notify();
             return;
@@ -570,7 +575,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn copy_active_session_ssh_host(&mut self, cx: &mut Context<Self>) {
-        let Some(session_id) = self.active_session_id.as_deref() else {
+        let Some(session_id) = self.session.active_id.as_deref() else {
             self.terminal.view.status = "no active SSH host to copy".to_string();
             cx.notify();
             return;
@@ -590,7 +595,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.active_session_id.is_none() {
+        if self.session.active_id.is_none() {
             self.terminal.view.status = "no active session info".to_string();
             cx.notify();
             return;
@@ -636,18 +641,18 @@ impl NyaTermApp {
         color: Option<u32>,
         cx: &mut Context<Self>,
     ) {
-        let Some(session_id) = self.active_session_id.clone() else {
+        let Some(session_id) = self.session.active_id.clone() else {
             self.terminal.view.status = "no active session color to set".to_string();
             cx.notify();
             return;
         };
         match color {
             Some(color) => {
-                self.session_tab_colors.insert(session_id, color);
+                self.session.tab_colors.insert(session_id, color);
                 self.terminal.view.status = "tab color updated".to_string();
             }
             None => {
-                self.session_tab_colors.remove(&session_id);
+                self.session.tab_colors.remove(&session_id);
                 self.terminal.view.status = "tab color reset".to_string();
             }
         }

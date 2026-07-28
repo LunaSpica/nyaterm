@@ -167,7 +167,8 @@ impl NyaTermApp {
     fn mark_terminal_input_latency_activity(&mut self, cx: &mut Context<Self>) {
         self.terminal.view.runtime.last_terminal_input_at = Some(Instant::now());
         if let Some(session_id) = self
-            .active_session_id
+            .session
+            .active_id
             .as_deref()
             .filter(|session_id| !session_id.is_empty())
         {
@@ -431,7 +432,7 @@ impl NyaTermApp {
         if !self.terminal.search.open || self.terminal.search.mode != TerminalSearchMode::Buffer {
             return false;
         }
-        let Some(session_id) = self.active_session_id.as_deref() else {
+        let Some(session_id) = self.session.active_id.as_deref() else {
             return false;
         };
         let Some(key) = self.terminal_search_key() else {
@@ -459,10 +460,10 @@ impl NyaTermApp {
             self.terminal.view.runtime.session_event_backlog_active,
             self.terminal.view.runtime.session_event_queued_output_bytes,
             self.pending_session_events.len(),
-            self.session_event_bridge.queued_event_count()
-                + self.session_event_bridge.source_queued_event_count(),
-            self.session_event_bridge.queued_output_bytes()
-                + self.session_event_bridge.source_queued_output_bytes(),
+            self.session.event_bridge.queued_event_count()
+                + self.session.event_bridge.source_queued_event_count(),
+            self.session.event_bridge.queued_output_bytes()
+                + self.session.event_bridge.source_queued_output_bytes(),
             self.pending_terminal_frame_events.len(),
             self.terminal.view.frame_pipeline.queued_event_count(),
             self.terminal.view.frame_pipeline.queued_output_bytes(),
@@ -471,13 +472,13 @@ impl NyaTermApp {
 
     pub(in crate::features) fn runtime_quiet_tick_allowed(&self) -> bool {
         !self.runtime_output_pressure_active()
-            && !self.session_start.has_pending()
+            && !self.session.start.has_pending()
             && self.pending_saved_connection_queue.is_empty()
             && self.pending_session_events.is_empty()
-            && !self.session_event_bridge.has_pending_ui_work()
+            && !self.session.event_bridge.has_pending_ui_work()
             && !self.terminal_frame_backlog_active()
-            && self.zmodem_sessions.is_empty()
-            && self.trzsz_sessions.is_empty()
+            && self.session.zmodem.is_empty()
+            && self.session.trzsz.is_empty()
             && self.active_host_key_prompt.is_none()
             && self.active_credential_prompt.is_none()
             && self.active_keyboard_interactive_prompt.is_none()
@@ -504,7 +505,7 @@ impl NyaTermApp {
             && !self.ai.chat.focus_pending
             && !self.transfer.file_ops.rename_focus_pending
             && !self.credential_prompt_focus_pending
-            && !((self.active_ssh_config.is_some()
+            && !((self.session.active_ssh_config.is_some()
                 && matches!(
                     self.current_right_panel(),
                     Some(NavItem::Stats | NavItem::Processes | NavItem::Docker)
@@ -547,7 +548,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        if self.active_ssh_config.is_none() {
+        if self.session.active_ssh_config.is_none() {
             return false;
         }
 

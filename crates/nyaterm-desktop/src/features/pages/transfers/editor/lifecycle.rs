@@ -33,11 +33,11 @@ impl NyaTermApp {
         session_id: Option<&str>,
     ) -> Option<SshSessionConfig> {
         session_id
-            .and_then(|session_id| self.session_metadata.get(session_id))
+            .and_then(|session_id| self.session.metadata.get(session_id))
             .and_then(|metadata| metadata.ssh_config.clone())
             .or_else(|| {
-                (session_id == self.active_session_id.as_deref())
-                    .then(|| self.active_ssh_config.clone())
+                (session_id == self.session.active_id.as_deref())
+                    .then(|| self.session.active_ssh_config.clone())
                     .flatten()
             })
     }

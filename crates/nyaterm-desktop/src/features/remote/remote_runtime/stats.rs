@@ -14,14 +14,14 @@ impl NyaTermApp {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(config) = self.active_ssh_config.clone() else {
+        let Some(config) = self.session.active_ssh_config.clone() else {
             self.remote_ops.stats.status =
                 "start an SSH session before inspecting stats".to_string();
             self.terminal.view.status = self.remote_ops.stats.status.clone();
             cx.notify();
             return;
         };
-        let Some(job_session_id) = self.active_session_id.clone() else {
+        let Some(job_session_id) = self.session.active_id.clone() else {
             self.remote_ops.stats.status =
                 "start an SSH session before inspecting stats".to_string();
             cx.notify();
@@ -79,7 +79,7 @@ impl NyaTermApp {
             dirty = true;
             self.remote_ops.stats.pending = false;
             self.remote_ops.stats.job_session_id = None;
-            if self.active_session_id.as_deref() != Some(event.session_id.as_str()) {
+            if self.session.active_id.as_deref() != Some(event.session_id.as_str()) {
                 continue;
             }
             match event.result {

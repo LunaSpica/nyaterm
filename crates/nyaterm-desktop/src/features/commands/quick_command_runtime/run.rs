@@ -104,7 +104,7 @@ impl NyaTermApp {
             )?;
             store
                 .append_ai_audit(AppendAiAuditRequest {
-                    connection_id: self.active_session_id.clone(),
+                    connection_id: self.session.active_id.clone(),
                     action: "ai.save_quick_command".to_string(),
                     user_input: Some(self.ai.chat.response_preview.clone()),
                     generated_command: Some(card.command.clone()),
@@ -175,7 +175,7 @@ impl NyaTermApp {
                 cx.notify();
                 return;
             }
-        } else if self.active_session_id.is_none() {
+        } else if self.session.active_id.is_none() {
             self.terminal.view.status =
                 "start a terminal session before using a quick command".to_string();
             cx.notify();

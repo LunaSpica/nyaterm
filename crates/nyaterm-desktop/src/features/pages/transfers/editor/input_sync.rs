@@ -199,11 +199,11 @@ impl NyaTermApp {
     ) {
         let config = session_id
             .as_deref()
-            .and_then(|session_id| self.session_metadata.get(session_id))
+            .and_then(|session_id| self.session.metadata.get(session_id))
             .and_then(|metadata| metadata.ssh_config.clone())
             .or_else(|| {
-                (session_id.as_deref() == self.active_session_id.as_deref())
-                    .then(|| self.active_ssh_config.clone())
+                (session_id.as_deref() == self.session.active_id.as_deref())
+                    .then(|| self.session.active_ssh_config.clone())
                     .flatten()
             });
         let Some(config) = config else {
@@ -228,7 +228,7 @@ impl NyaTermApp {
     pub(in crate::features) fn active_external_editor_sync_prompt(
         &self,
     ) -> Option<(String, TransferExternalSyncPromptState)> {
-        let active_session_id = self.active_session_id.as_deref()?;
+        let active_session_id = self.session.active_id.as_deref()?;
         self.transfer
             .external_sync
             .prompts

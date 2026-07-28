@@ -237,11 +237,11 @@ impl NyaTermApp {
                 dirty = true;
                 continue;
             }
-            let before_pending_count = self.session_start.pending.len();
+            let before_pending_count = self.session.start.pending.len();
             self.start_saved_connection_with_options(start.connection, start.options, window, cx);
             dirty = true;
             if self.has_pending_session_start()
-                || self.session_start.pending.len() > before_pending_count
+                || self.session.start.pending.len() > before_pending_count
             {
                 return true;
             }

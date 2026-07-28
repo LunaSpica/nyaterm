@@ -12,7 +12,8 @@ impl NyaTermApp {
     pub(in crate::features) fn cache_transfer_browser_session(&mut self, session_id: &str) {
         if session_id.trim().is_empty()
             || !self
-                .session_metadata
+                .session
+                .metadata
                 .get(session_id)
                 .is_some_and(|metadata| metadata.ssh_config.is_some())
         {
@@ -100,7 +101,7 @@ impl NyaTermApp {
         self.transfer.browser.entries.clear();
         self.transfer.browser.loading = false;
         self.transfer.browser.error = None;
-        self.transfer.browser.status = if self.active_ssh_config.is_some() {
+        self.transfer.browser.status = if self.session.active_ssh_config.is_some() {
             "List a remote directory to browse files.".to_string()
         } else {
             "Start an SSH session to browse remote files.".to_string()
@@ -452,8 +453,9 @@ impl NyaTermApp {
     pub(in crate::features::pages::transfers) fn active_transfer_browser_connection_id(
         &self,
     ) -> Option<String> {
-        let session_id = self.active_session_id.as_deref()?;
-        self.session_metadata
+        let session_id = self.session.active_id.as_deref()?;
+        self.session
+            .metadata
             .get(session_id)?
             .source_connection_id
             .clone()
@@ -521,7 +523,7 @@ fn record_transfer_browser_history_entry(
 
 impl NyaTermApp {
     fn prepare_transfer_browser_navigation(&mut self) -> TransferBrowserNavigationSnapshot {
-        let session_key = self.active_session_id.clone().unwrap_or_default();
+        let session_key = self.session.active_id.clone().unwrap_or_default();
         let pending_job_id = self.transfer.browser.navigation_jobs.remove(&session_key);
         let stable_snapshot = pending_job_id
             .and_then(|job_id| self.transfer.browser.pending_navigations.remove(&job_id));

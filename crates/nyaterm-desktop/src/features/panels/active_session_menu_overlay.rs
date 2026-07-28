@@ -8,13 +8,13 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let Some(menu) = self.active_session_menu.clone() else {
+        let Some(menu) = self.session.active_menu.clone() else {
             return div().into_any_element();
         };
         let session_id = menu.session_id.clone();
         let reconnect_session_id = session_id.clone();
         let close_session_id = session_id.clone();
-        let busy_action = self.active_session_busy_actions.get(&session_id).cloned();
+        let busy_action = self.session.busy_actions.get(&session_id).cloned();
         let is_busy = busy_action.is_some();
         let is_disconnected = self.is_session_disconnected(&session_id);
         let can_reconnect = !is_busy && !self.has_pending_session_start();
@@ -47,7 +47,7 @@ impl NyaTermApp {
             .left_0()
             .right_0()
             .on_click(cx.listener(|this, _, _, cx| {
-                this.active_session_menu = None;
+                this.session.active_menu = None;
                 cx.notify();
             }))
             .child(
@@ -81,9 +81,10 @@ impl NyaTermApp {
                         false,
                         cx.listener(move |this, _, window, cx| {
                             cx.stop_propagation();
-                            this.active_session_menu = None;
+                            this.session.active_menu = None;
                             if this
-                                .active_session_busy_actions
+                                .session
+                                .busy_actions
                                 .contains_key(&reconnect_session_id)
                                 || this.has_pending_session_start()
                             {
@@ -104,10 +105,8 @@ impl NyaTermApp {
                         true,
                         cx.listener(move |this, _, _, cx| {
                             cx.stop_propagation();
-                            this.active_session_menu = None;
-                            if this
-                                .active_session_busy_actions
-                                .contains_key(&close_session_id)
+                            this.session.active_menu = None;
+                            if this.session.busy_actions.contains_key(&close_session_id)
                                 || this.is_session_disconnected(&close_session_id)
                             {
                                 cx.notify();

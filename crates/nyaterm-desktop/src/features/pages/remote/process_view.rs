@@ -31,7 +31,7 @@ impl NyaTermApp {
                 cx,
             )
             .into_any_element();
-        if self.active_ssh_config.is_none() {
+        if self.session.active_ssh_config.is_none() {
             return div()
                 .size_full()
                 .bg(self.shell_transparent_color(palette.surface))

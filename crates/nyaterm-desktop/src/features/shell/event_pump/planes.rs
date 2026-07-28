@@ -169,7 +169,7 @@ impl NyaTermApp {
         // Ultra-light idle: focus + optional blink only. Used for pure window drag
         // (viewport often unchanged) and quiet connected sessions with no sideband.
         // Remote auto-refresh also feeds the title bar's resource and host modes.
-        let remote_panels_need_poll = (self.active_ssh_config.is_some()
+        let remote_panels_need_poll = (self.session.active_ssh_config.is_some()
             && (matches!(
                 self.current_right_panel(),
                 Some(NavItem::Stats | NavItem::Processes | NavItem::Docker)
@@ -293,7 +293,7 @@ impl NyaTermApp {
                 frame_event_count = self.terminal.view.frame_pipeline.queued_event_count(),
                 frame_event_wake_count = self.terminal.view.frame_pipeline.event_wake_count(),
                 pending_frame_events = self.pending_terminal_frame_events.len(),
-                pending_session_starts = self.session_start.pending.len(),
+                pending_session_starts = self.session.start.pending.len(),
                 queued_saved_connection_starts = self.pending_saved_connection_queue.len(),
                 output_pressure,
                 next_tick_delay_ms = self.window_runtime_tick_delay().as_millis(),
@@ -355,7 +355,7 @@ impl NyaTermApp {
                 .saturating_sub(self.terminal.view.runtime.last_perf_layout_cache_hits);
             let layout_cache_miss_delta = layout_cache_misses
                 .saturating_sub(self.terminal.view.runtime.last_perf_layout_cache_misses);
-            let active_session_id = self.active_session_id.as_deref().unwrap_or("");
+            let active_session_id = self.session.active_id.as_deref().unwrap_or("");
             let active_scroll_offset = self.active_terminal_scroll_offset();
             let active_display_offset = self.active_terminal_display_offset();
             let visible_session_count = self.visible_terminal_session_ids().len();
@@ -366,7 +366,7 @@ impl NyaTermApp {
                 || chrome_frame_notify_delta > 0
                 || self.terminal.view.runtime.session_event_queued_events > 0
                 || self.terminal.view.runtime.session_event_queued_output_bytes > 0
-                || self.session_event_bridge.queued_output_bytes() > 0
+                || self.session.event_bridge.queued_output_bytes() > 0
                 || self.terminal.view.frame_pipeline.queued_output_bytes() > 0
                 || self.terminal.view.frame_pipeline.queued_event_count() > 0
                 || !self.pending_terminal_frame_events.is_empty();
@@ -398,7 +398,7 @@ impl NyaTermApp {
                     queued_session_events = self.terminal.view.runtime.session_event_queued_events,
                     queued_session_output_bytes =
                         self.terminal.view.runtime.session_event_queued_output_bytes,
-                    bridge_output_bytes = self.session_event_bridge.queued_output_bytes(),
+                    bridge_output_bytes = self.session.event_bridge.queued_output_bytes(),
                     frame_command_count = self.terminal.view.frame_pipeline.queued_command_count(),
                     frame_command_output_bytes =
                         self.terminal.view.frame_pipeline.queued_output_bytes(),
@@ -447,8 +447,8 @@ impl NyaTermApp {
         let mut dirty = false;
 
         // Common idle path: no connecting sessions and no auth/SFTP prompts.
-        if !self.session_start.has_pending()
-            && self.session_start.cancelled.is_empty()
+        if !self.session.start.has_pending()
+            && self.session.start.cancelled.is_empty()
             && self.pending_saved_connection_queue.is_empty()
             && self.active_host_key_prompt.is_none()
             && self.active_credential_prompt.is_none()
@@ -622,7 +622,7 @@ impl NyaTermApp {
         // Layout restore opens the config DB — never do it while sessions are
         // still connecting or the data plane is under pressure.
         if !self.terminal.windows.restored
-            && !self.session_start.has_pending()
+            && !self.session.start.has_pending()
             && !self.runtime_output_pressure_active()
             && !connect_settle
         {
@@ -632,7 +632,7 @@ impl NyaTermApp {
             }
         }
         // Auto-recording opens files; keep it off the first calm frames after connect.
-        if !self.session_start.has_pending()
+        if !self.session.start.has_pending()
             && !self.runtime_output_pressure_active()
             && !connect_settle
             && let Some((session_id, session_name)) = self.recording.pending_auto_start.take()

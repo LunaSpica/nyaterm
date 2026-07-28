@@ -382,7 +382,7 @@ impl NyaTermApp {
         }
 
         self.select_session(session_id.clone(), cx);
-        if self.active_session_id.as_deref() != Some(session_id.as_str()) {
+        if self.session.active_id.as_deref() != Some(session_id.as_str()) {
             return;
         }
 

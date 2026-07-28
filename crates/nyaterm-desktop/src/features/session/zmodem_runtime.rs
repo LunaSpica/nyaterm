@@ -112,13 +112,14 @@ impl ZmodemSessionState {
 
 impl NyaTermApp {
     fn zmodem_state_mut(&mut self, session_id: &str) -> &mut ZmodemSessionState {
-        self.zmodem_sessions
+        self.session
+            .zmodem
             .entry(session_id.to_string())
             .or_default()
     }
 
     pub(in crate::features) fn clear_zmodem_session(&mut self, session_id: &str) {
-        if let Some(mut state) = self.zmodem_sessions.remove(session_id) {
+        if let Some(mut state) = self.session.zmodem.remove(session_id) {
             state.stop_worker();
             self.sync_session_event_bridge_session_policy(session_id);
         }
@@ -130,7 +131,7 @@ impl NyaTermApp {
         dropped_bytes: usize,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.zmodem_sessions.get_mut(session_id) else {
+        let Some(state) = self.session.zmodem.get_mut(session_id) else {
             return;
         };
         let reason = format!("terminal output dropped {dropped_bytes} byte(s)");
@@ -176,10 +177,11 @@ impl NyaTermApp {
 
         // Prefer SSH config bound to this session, fall back to active.
         let ssh_config = self
-            .session_metadata
+            .session
+            .metadata
             .get(&session_id)
             .and_then(|meta| meta.ssh_config.clone())
-            .or_else(|| self.active_ssh_config.clone());
+            .or_else(|| self.session.active_ssh_config.clone());
 
         let Some(config) = ssh_config else {
             // Non-SSH sessions cannot probe; start rz immediately.
@@ -188,7 +190,8 @@ impl NyaTermApp {
         };
 
         let remote_dir = self
-            .session_cwds
+            .session
+            .cwds
             .get(&session_id)
             .cloned()
             .filter(|cwd| !cwd.trim().is_empty())
@@ -295,7 +298,7 @@ impl NyaTermApp {
         session_id: &str,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.zmodem_sessions.get_mut(session_id) else {
+        let Some(state) = self.session.zmodem.get_mut(session_id) else {
             return;
         };
         state.pending_upload = None;
@@ -324,7 +327,7 @@ impl NyaTermApp {
         save_dir: PathBuf,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.zmodem_sessions.get_mut(&session_id) else {
+        let Some(state) = self.session.zmodem.get_mut(&session_id) else {
             return;
         };
         state.pending_download = false;
@@ -346,11 +349,11 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> bool {
-        if self.zmodem_sessions.is_empty() {
+        if self.session.zmodem.is_empty() {
             return false;
         }
         let mut events = Vec::new();
-        for (session_id, state) in &mut self.zmodem_sessions {
+        for (session_id, state) in &mut self.session.zmodem {
             let Some(worker) = state.worker.as_ref() else {
                 continue;
             };
@@ -382,7 +385,7 @@ impl NyaTermApp {
     ) {
         self.apply_zmodem_actions(session_id, event.actions, cx);
         if event.done
-            && let Some(state) = self.zmodem_sessions.get_mut(session_id)
+            && let Some(state) = self.session.zmodem.get_mut(session_id)
             && state.worker.is_some()
         {
             state.worker = None;
@@ -409,7 +412,7 @@ impl NyaTermApp {
         }
 
         // Active transfer: consume all raw bytes.
-        if let Some(state) = self.zmodem_sessions.get(session_id)
+        if let Some(state) = self.session.zmodem.get(session_id)
             && let Some(worker) = state.worker.as_ref()
         {
             worker.send_input(data.to_vec());
@@ -417,18 +420,20 @@ impl NyaTermApp {
         }
 
         if self
-            .zmodem_sessions
+            .session
+            .zmodem
             .get(session_id)
             .is_some_and(|state| state.transfer.is_some())
         {
             if let Some(transfer) = self
-                .zmodem_sessions
+                .session
+                .zmodem
                 .get_mut(session_id)
                 .and_then(|state| state.transfer.take())
             {
                 let worker = ZmodemWorker::spawn(transfer);
                 worker.send_input(data.to_vec());
-                if let Some(state) = self.zmodem_sessions.get_mut(session_id) {
+                if let Some(state) = self.session.zmodem.get_mut(session_id) {
                     state.worker = Some(worker);
                 }
             }
@@ -488,7 +493,7 @@ impl NyaTermApp {
         session_id: &str,
         data: &[u8],
     ) -> bool {
-        let state_is_idle = self.zmodem_sessions.get(session_id).is_none_or(|state| {
+        let state_is_idle = self.session.zmodem.get(session_id).is_none_or(|state| {
             state.transfer.is_none()
                 && state.worker.is_none()
                 && state.pending_upload.is_none()
@@ -570,7 +575,7 @@ impl NyaTermApp {
                 self.terminal.view.status =
                     format!("ZMODEM {dir} complete ({file_count} file(s)) [{session_id}]");
                 self.finish_zmodem_transfer_jobs(session_id, true, None, cx);
-                if let Some(state) = self.zmodem_sessions.get_mut(session_id) {
+                if let Some(state) = self.session.zmodem.get_mut(session_id) {
                     state.transfer = None;
                     state.worker = None;
                     state.detector = ZmodemDetector::new();
@@ -581,7 +586,7 @@ impl NyaTermApp {
             ZmodemEvent::Failed { reason } => {
                 self.terminal.view.status = format!("ZMODEM failed: {reason}");
                 self.finish_zmodem_transfer_jobs(session_id, false, Some(reason.as_str()), cx);
-                if let Some(state) = self.zmodem_sessions.get_mut(session_id) {
+                if let Some(state) = self.session.zmodem.get_mut(session_id) {
                     state.transfer = None;
                     state.worker = None;
                     state.detector = ZmodemDetector::new();

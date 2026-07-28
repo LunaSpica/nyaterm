@@ -89,7 +89,7 @@ impl NyaTermApp {
                 cx,
             )
             .into_any_element();
-        if self.active_ssh_config.is_none() {
+        if self.session.active_ssh_config.is_none() {
             return div()
                 .size_full()
                 .bg(self.shell_transparent_color(palette.surface))
@@ -187,7 +187,7 @@ impl NyaTermApp {
                 palette,
                 menu_bg,
                 self.remote_ops.docker.overview.is_some(),
-                self.active_ssh_config.is_some(),
+                self.session.active_ssh_config.is_some(),
                 overview.available,
                 &filtered_containers,
                 query.is_empty(),

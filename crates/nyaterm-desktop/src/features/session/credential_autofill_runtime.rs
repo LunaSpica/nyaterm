@@ -77,7 +77,7 @@ impl NyaTermApp {
         if matches.is_empty() {
             return;
         }
-        let Some(session_id) = self.active_session_id.clone() else {
+        let Some(session_id) = self.session.active_id.clone() else {
             return;
         };
         let (cursor_row, cursor_col) = self.active_terminal_cursor_cell_for_autofill();
@@ -97,7 +97,7 @@ impl NyaTermApp {
     fn active_terminal_cursor_cell_for_autofill(&self) -> (usize, usize) {
         let offset = self.active_terminal_display_offset();
         let snapshot =
-            self.terminal_snapshot_for_session(self.active_session_id.as_deref(), offset);
+            self.terminal_snapshot_for_session(self.session.active_id.as_deref(), offset);
         let row = if snapshot.cursor.row == usize::MAX {
             snapshot.row_count().saturating_sub(1)
         } else {
@@ -125,7 +125,7 @@ impl NyaTermApp {
         let mut dirty = self.drain_credential_autofill_match_events(cx);
         let detection_was_pending = self.terminal.assist.credential_autofill_detection_pending;
         if credential_autofill_snapshot_detection_can_run(
-            self.active_session_id.as_deref(),
+            self.session.active_id.as_deref(),
             !self.connection_saved_credentials.is_empty()
                 || self.terminal.assist.credential_autofill_pending.is_some(),
             self.terminal.view.runtime.session_event_queued_output_bytes,
@@ -143,7 +143,7 @@ impl NyaTermApp {
         if !credential_autofill_detection_should_run_this_tick(
             detection_was_pending,
             credential_autofill_pending_detection_can_run(
-                self.active_session_id.as_deref(),
+                self.session.active_id.as_deref(),
                 self.terminal.assist.credential_autofill_detection_pending,
                 self.terminal.view.runtime.session_event_queued_output_bytes,
                 self.pending_session_events.len(),
@@ -164,7 +164,7 @@ impl NyaTermApp {
     }
 
     fn sync_credential_autofill_from_active_snapshot(&mut self, cx: &mut Context<Self>) -> bool {
-        let Some(session_id) = self.active_session_id.clone() else {
+        let Some(session_id) = self.session.active_id.clone() else {
             return false;
         };
         let Some(prompt_text) = self
@@ -186,7 +186,7 @@ impl NyaTermApp {
         prompt_text: String,
         cx: &mut Context<Self>,
     ) -> bool {
-        if self.active_session_id.as_deref() != Some(session_id) {
+        if self.session.active_id.as_deref() != Some(session_id) {
             return false;
         }
         if prompt_text.is_empty() {
@@ -247,7 +247,7 @@ impl NyaTermApp {
         &mut self,
         _cx: &mut Context<Self>,
     ) -> bool {
-        if self.active_session_id.is_none() || self.terminal.assist.credential_suggestions.is_some()
+        if self.session.active_id.is_none() || self.terminal.assist.credential_suggestions.is_some()
         {
             return false;
         }
@@ -266,7 +266,7 @@ impl NyaTermApp {
             return false;
         };
         let current_line = prompt_text.trim().to_string();
-        let Some(active_session_id) = self.active_session_id.clone() else {
+        let Some(active_session_id) = self.session.active_id.clone() else {
             return false;
         };
         let credentials = self.connection_saved_credentials.clone();
@@ -341,7 +341,7 @@ impl NyaTermApp {
             return false;
         }
         self.terminal.assist.credential_autofill_pending_request = None;
-        if self.active_session_id.as_deref() != Some(event.key.session_id.as_str()) {
+        if self.session.active_id.as_deref() != Some(event.key.session_id.as_str()) {
             return false;
         }
         if credential_autofill_prompt_text_from_visible(
@@ -395,7 +395,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        if self.active_session_id.as_deref() != Some(session_id) {
+        if self.session.active_id.as_deref() != Some(session_id) {
             self.activate_session_id_with_surface_sync(session_id, cx);
         }
         match kind {

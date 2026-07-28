@@ -307,7 +307,8 @@ impl NyaTermApp {
 
     pub(in crate::features) fn sync_peer_session_ids(&self, session_id: &str) -> Vec<String> {
         let live_ids = self
-            .session_metadata
+            .session
+            .metadata
             .iter()
             .filter(|(_, metadata)| !metadata.disconnected)
             .map(|(session_id, _)| session_id.clone())

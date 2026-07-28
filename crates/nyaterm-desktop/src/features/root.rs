@@ -477,7 +477,7 @@ impl NyaTermApp {
             .file_ops
             .properties
             .as_ref()
-            .is_some_and(|state| state.session_id.as_deref() == self.active_session_id.as_deref());
+            .is_some_and(|state| state.session_id.as_deref() == self.session.active_id.as_deref());
         let transfer_editor_open = self.transfer.editor.workspace.is_some()
             && self.remote_editor_window.is_none()
             && !self.remote_editor_window_open_pending;
@@ -605,7 +605,7 @@ impl NyaTermApp {
                 self.quick_command_state.list.category_menu.is_some(),
                 |this| this.child(self.quick_command_category_menu_overlay(cx)),
             )
-            .when(self.active_session_menu.is_some(), |this| {
+            .when(self.session.active_menu.is_some(), |this| {
                 this.child(self.active_session_menu_overlay(cx))
             })
             .when(
@@ -820,7 +820,7 @@ impl Render for NyaTermApp {
                 total_ms = render_duration.as_millis(),
                 root_chrome_ms = root_duration.as_millis(),
                 overlay_host_ms = overlay_duration.as_millis(),
-                active_session_id = self.active_session_id.as_deref().unwrap_or(""),
+                active_session_id = self.session.active_id.as_deref().unwrap_or(""),
                 visible_session_count = self.visible_terminal_session_ids().len(),
                 connect_settle_active = self
                     .terminal

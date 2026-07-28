@@ -4,13 +4,12 @@ use std::time::Instant;
 
 use gpui::{FocusHandle, ScrollHandle, WindowHandle};
 use nyaterm_core::{
-    AiExecutionProfile, AppRuntime, AppSettingsSummary, CommandHistoryEntry, Group,
-    KeywordHighlightConfig, NativeServices, OtpEntry, ProxyConfig, ProxyGroup, QuickCommand,
-    QuickCommandCategory, SavedConnection, SavedCredential, SavedPassword, SshKey, TunnelConfig,
-    TunnelGroup,
+    AppRuntime, AppSettingsSummary, CommandHistoryEntry, Group, KeywordHighlightConfig,
+    NativeServices, OtpEntry, ProxyConfig, ProxyGroup, QuickCommand, QuickCommandCategory,
+    SavedConnection, SavedCredential, SavedPassword, SshKey, TunnelConfig, TunnelGroup,
 };
 use nyaterm_legacy::MigrationInventory;
-use nyaterm_transport::{SessionEvent, SessionManager, SshMultiplexHandle, SshSessionConfig};
+use nyaterm_transport::SessionEvent;
 
 use super::ai::AiFeatureState;
 use super::commands::QuickCommandFeatureState;
@@ -22,7 +21,7 @@ use super::remote_editor_window::RemoteFileEditorWindow;
 use super::runtime_jobs::{CommandPersistenceRequest, CommandPersistenceResult};
 use super::session::{
     CredentialPromptBroker, CredentialPromptState, HostKeyPromptBroker, HostKeyPromptRequest,
-    KeyboardInteractivePromptState, NativeOtpProvider, SessionStartFeatureState,
+    KeyboardInteractivePromptState, NativeOtpProvider, SessionFeatureState,
     SftpDuplicatePromptBroker, SftpDuplicatePromptState,
 };
 use super::settings::{SecurityFeatureState, SettingsFeatureState};
@@ -35,11 +34,10 @@ use super::translation::TranslationFeatureState;
 use super::tunnels::TunnelFeatureState;
 use super::update::UpdateFeatureState;
 use crate::models::{
-    ActionLinkMenuState, ActionLinkTooltipState, ActiveSessionMenuState,
-    ActivityBarContextMenuState, ActivityBarLayoutState, BottomPanelMode, BottomPanelResizeState,
-    ConfigPathPromptKind, DiagnosticsPathPromptKind, HeaderStatusState,
-    KeywordHighlightPathPromptKind, MainMode, MultiLinePasteDraft, NavItem, PanelResizeState,
-    PanelStackResizeState, RightFocus, SessionEventBridge, SessionRuntimeMetadata, SettingsTab,
+    ActionLinkMenuState, ActionLinkTooltipState, ActivityBarContextMenuState,
+    ActivityBarLayoutState, BottomPanelMode, BottomPanelResizeState, ConfigPathPromptKind,
+    DiagnosticsPathPromptKind, HeaderStatusState, KeywordHighlightPathPromptKind, MainMode,
+    MultiLinePasteDraft, NavItem, PanelResizeState, PanelStackResizeState, RightFocus, SettingsTab,
     SnapshotPasswordPromptState, StartupCommandAction, StoreStatus, SyncInputGroup,
     TabActionsSubmenu, TerminalFrameEvent, TitleMenu, TitleMenuSubmenu, WorkspacePaneNode,
     WorkspaceSplitResizeState, WorkspaceSplitState,
@@ -91,12 +89,7 @@ pub struct NyaTermApp {
     pub(in crate::features) command_persistence_tx: mpsc::Sender<CommandPersistenceRequest>,
     pub(in crate::features) command_persistence_rx: mpsc::Receiver<CommandPersistenceResult>,
     pub(in crate::features) command_persistence_pending: usize,
-    pub(in crate::features) session_command_history: HashMap<String, Vec<String>>,
-    pub(in crate::features) active_sessions_search_draft: String,
-    /// Root-level reconnect/disconnect overflow menu (Tauri ActiveSessions DropdownMenu).
-    pub(in crate::features) active_session_menu: Option<ActiveSessionMenuState>,
-    /// Per-session reconnect/disconnect busy state ("reconnect" | "disconnect").
-    pub(in crate::features) active_session_busy_actions: HashMap<String, String>,
+    pub(in crate::features) session: SessionFeatureState,
     pub(in crate::features) action_link_menu: Option<ActionLinkMenuState>,
     pub(in crate::features) action_link_tooltip: Option<ActionLinkTooltipState>,
     /// Pending action-link hover (Tauri 250ms delay before showing tooltip).
@@ -120,10 +113,7 @@ pub struct NyaTermApp {
     pub(in crate::features) settings_master_password_enabled: bool,
     pub(in crate::features) settings_master_password_draft: String,
     pub(in crate::features) store_status: StoreStatus,
-    pub(in crate::features) session_manager: Arc<SessionManager>,
-    pub(in crate::features) session_event_bridge: SessionEventBridge,
     pub(in crate::features) recording: RecordingFeatureState,
-    pub(in crate::features) session_start: SessionStartFeatureState,
     pub(in crate::features) tunnel_runtime: TunnelFeatureState,
     pub(in crate::features) about_open: bool,
     pub(in crate::features) remote_editor_window: Option<WindowHandle<RemoteFileEditorWindow>>,
@@ -143,24 +133,6 @@ pub struct NyaTermApp {
     pub(in crate::features) credential_prompt_focus_pending: bool,
     pub(in crate::features) credential_focus: FocusHandle,
     pub(in crate::features) otp_provider: Arc<NativeOtpProvider>,
-    pub(in crate::features) active_session_id: Option<String>,
-    pub(in crate::features) active_ssh_config: Option<SshSessionConfig>,
-    pub(in crate::features) active_ai_execution_profile: AiExecutionProfile,
-    pub(in crate::features) session_order: Vec<String>,
-    pub(in crate::features) session_metadata: HashMap<String, SessionRuntimeMetadata>,
-    pub(in crate::features) session_custom_names: HashMap<String, String>,
-    /// OSC 0/2 titles from the session PTY (fall back when no custom rename).
-    pub(in crate::features) session_dynamic_titles: HashMap<String, String>,
-    /// Latest OSC 7 working directories per session.
-    pub(in crate::features) session_cwds: HashMap<String, String>,
-    /// Per-session ZMODEM detector / transfer state (UI-layer interception).
-    pub(in crate::features) zmodem_sessions:
-        HashMap<String, crate::features::session::ZmodemSessionState>,
-    /// Per-session trzsz trigger detector state (pre-parser protocol slot).
-    pub(in crate::features) trzsz_sessions:
-        HashMap<String, crate::features::session::TrzszSessionState>,
-    pub(in crate::features) session_tab_colors: HashMap<String, u32>,
-    pub(in crate::features) ssh_multiplex_handles: HashMap<String, SshMultiplexHandle>,
     pub(in crate::features) tab_actions_session_id: Option<String>,
     pub(in crate::features) tab_actions_anchor: Option<(f32, f32)>,
     pub(in crate::features) tab_actions_submenu: Option<TabActionsSubmenu>,

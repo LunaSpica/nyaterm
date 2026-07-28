@@ -16,7 +16,8 @@ impl NyaTermApp {
         system: &SystemInfo,
     ) {
         let Some(connection_id) = self
-            .session_metadata
+            .session
+            .metadata
             .get(session_id)
             .and_then(|metadata| metadata.source_connection_id.as_deref())
             .map(str::trim)

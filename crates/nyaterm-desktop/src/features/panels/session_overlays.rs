@@ -106,9 +106,10 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         let active_color = self
-            .active_session_id
+            .session
+            .active_id
             .as_deref()
-            .and_then(|session_id| self.session_tab_colors.get(session_id))
+            .and_then(|session_id| self.session.tab_colors.get(session_id))
             .copied();
         let mut swatches = div().mt_3().grid().grid_cols(6).gap_2();
         for (name, color) in TAB_PRESET_COLORS {

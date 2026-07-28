@@ -23,7 +23,7 @@ impl NyaTermApp {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(config) = self.active_ssh_config.clone() else {
+        let Some(config) = self.session.active_ssh_config.clone() else {
             self.terminal.view.status = "start an SSH session first".to_string();
             self.ensure_panel_open(NavItem::Transfers);
             cx.notify();
@@ -34,7 +34,7 @@ impl NyaTermApp {
             .then(|| self.duplicate_prompts.clone() as Arc<dyn SftpDuplicateResolver>);
         let transfer_options = self.sftp_transfer_options();
         self.enqueue_sftp_download_job_for_target(
-            self.active_session_id.clone(),
+            self.session.active_id.clone(),
             config,
             remote_path,
             local_path,
@@ -294,7 +294,7 @@ impl NyaTermApp {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(config) = self.active_ssh_config.clone() else {
+        let Some(config) = self.session.active_ssh_config.clone() else {
             self.terminal.view.status = "start an SSH session first".to_string();
             self.ensure_panel_open(NavItem::Transfers);
             cx.notify();
@@ -432,7 +432,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn pause_all_transfer_jobs(&mut self, cx: &mut Context<Self>) {
-        let active_session_id = self.active_session_id.clone();
+        let active_session_id = self.session.active_id.clone();
         let mut changed = 0;
         for job in &mut self.transfer.queue.jobs {
             if job.is_visible_for_session(active_session_id.as_deref())
@@ -454,7 +454,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn resume_all_transfer_jobs(&mut self, cx: &mut Context<Self>) {
-        let active_session_id = self.active_session_id.clone();
+        let active_session_id = self.session.active_id.clone();
         let mut changed = 0;
         for job in &mut self.transfer.queue.jobs {
             if job.is_visible_for_session(active_session_id.as_deref())
@@ -476,7 +476,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn cancel_all_transfer_jobs(&mut self, cx: &mut Context<Self>) {
-        let active_session_id = self.active_session_id.clone();
+        let active_session_id = self.session.active_id.clone();
         let mut changed = 0;
         for job in &mut self.transfer.queue.jobs {
             if job.is_visible_for_session(active_session_id.as_deref())
@@ -501,7 +501,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn clear_completed_transfer_jobs(&mut self, cx: &mut Context<Self>) {
-        let active_session_id = self.active_session_id.clone();
+        let active_session_id = self.session.active_id.clone();
         let before = self.transfer.queue.jobs.len();
         self.transfer.queue.jobs.retain(|job| {
             !job.is_visible_for_session(active_session_id.as_deref())
@@ -517,7 +517,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn clear_stopped_transfer_jobs(&mut self, cx: &mut Context<Self>) {
-        let active_session_id = self.active_session_id.clone();
+        let active_session_id = self.session.active_id.clone();
         let before = self.transfer.queue.jobs.len();
         self.transfer.queue.jobs.retain(|job| {
             !job.is_visible_for_session(active_session_id.as_deref())

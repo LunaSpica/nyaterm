@@ -72,7 +72,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        let Some(config) = self.active_ssh_config.clone() else {
+        let Some(config) = self.session.active_ssh_config.clone() else {
             self.terminal.view.status = "start an SSH session first".to_string();
             cx.notify();
             return;
@@ -89,7 +89,7 @@ impl NyaTermApp {
         let id = self.next_transfer_id("sftp-ai-file");
         self.transfer.queue.jobs.push(TransferJobState {
             id: id.clone(),
-            session_id: self.active_session_id.clone(),
+            session_id: self.session.active_id.clone(),
             kind: TransferJobKind::AiFileAction {
                 remote_path: remote_path.clone(),
                 action_id: action_id.clone(),
@@ -226,7 +226,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        let session_id = self.active_session_id.clone();
+        let session_id = self.session.active_id.clone();
         let tab_id = TransferEditorState::tab_id(session_id.as_deref(), &entry.path);
         if let Some(editor) = self.transfer.editor.workspace.as_mut()
             && editor.tabs.iter().any(|tab| tab.id == tab_id)
@@ -326,13 +326,13 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        let Some(config) = self.active_ssh_config.clone() else {
+        let Some(config) = self.session.active_ssh_config.clone() else {
             self.terminal.view.status = "start an SSH session first".to_string();
             self.ensure_panel_open(NavItem::Transfers);
             cx.notify();
             return;
         };
-        let session_id = self.active_session_id.clone();
+        let session_id = self.session.active_id.clone();
         self.open_transfer_external_for_session(entry, session_id, config, cx);
     }
 

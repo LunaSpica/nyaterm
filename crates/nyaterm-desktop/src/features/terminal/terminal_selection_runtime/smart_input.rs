@@ -48,9 +48,9 @@ impl NyaTermApp {
         if offset != 0 {
             return None;
         }
-        let snapshot = self.terminal_snapshot_for_session(self.active_session_id.as_deref(), 0);
+        let snapshot = self.terminal_snapshot_for_session(self.session.active_id.as_deref(), 0);
         let snapshot_row = self.terminal_snapshot_row_for_session_viewport_row(
-            self.active_session_id.as_deref(),
+            self.session.active_id.as_deref(),
             snapshot.as_ref(),
             0,
             cell.row,
@@ -103,7 +103,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn can_use_smart_cursor_selection(&self) -> bool {
-        if self.active_session_id.is_none() {
+        if self.session.active_id.is_none() {
             return false;
         }
         if self.is_credential_prompt_input_mode() {
@@ -113,7 +113,7 @@ impl NyaTermApp {
         if state.desynced || state.line_rewrite_required || state.paste_mode || state.multiline {
             return false;
         }
-        if let Some(session_id) = self.active_session_id.as_deref() {
+        if let Some(session_id) = self.session.active_id.as_deref() {
             if !self.sync_peer_session_ids(session_id).is_empty() {
                 return false;
             }
@@ -148,10 +148,10 @@ impl NyaTermApp {
             // Selection in history is not the live input line.
             return None;
         }
-        let snapshot = self.terminal_snapshot_for_session(self.active_session_id.as_deref(), 0);
+        let snapshot = self.terminal_snapshot_for_session(self.session.active_id.as_deref(), 0);
 
         let snapshot_row = self.terminal_snapshot_row_for_session_viewport_row(
-            self.active_session_id.as_deref(),
+            self.session.active_id.as_deref(),
             snapshot.as_ref(),
             0,
             start.row,

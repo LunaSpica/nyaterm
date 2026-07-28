@@ -241,14 +241,14 @@ impl NyaTermApp {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(config) = self.active_ssh_config.clone() else {
+        let Some(config) = self.session.active_ssh_config.clone() else {
             self.remote_ops.process.status =
                 "start an SSH session before listing processes".to_string();
             self.terminal.view.status = self.remote_ops.process.status.clone();
             cx.notify();
             return;
         };
-        let Some(job_session_id) = self.active_session_id.clone() else {
+        let Some(job_session_id) = self.session.active_id.clone() else {
             self.remote_ops.process.status =
                 "start an SSH session before listing processes".to_string();
             cx.notify();
@@ -288,14 +288,14 @@ impl NyaTermApp {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(config) = self.active_ssh_config.clone() else {
+        let Some(config) = self.session.active_ssh_config.clone() else {
             self.remote_ops.process.status =
                 "start an SSH session before signalling processes".to_string();
             self.terminal.view.status = self.remote_ops.process.status.clone();
             cx.notify();
             return;
         };
-        let Some(job_session_id) = self.active_session_id.clone() else {
+        let Some(job_session_id) = self.session.active_id.clone() else {
             self.remote_ops.process.status =
                 "start an SSH session before signalling processes".to_string();
             cx.notify();
@@ -340,14 +340,14 @@ impl NyaTermApp {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(config) = self.active_ssh_config.clone() else {
+        let Some(config) = self.session.active_ssh_config.clone() else {
             self.remote_ops.process.status =
                 "start an SSH session before renicing processes".to_string();
             self.terminal.view.status = self.remote_ops.process.status.clone();
             cx.notify();
             return;
         };
-        let Some(job_session_id) = self.active_session_id.clone() else {
+        let Some(job_session_id) = self.session.active_id.clone() else {
             self.remote_ops.process.status =
                 "start an SSH session before renicing processes".to_string();
             cx.notify();
@@ -402,7 +402,7 @@ impl NyaTermApp {
             dirty = true;
             self.remote_ops.process.pending = false;
             self.remote_ops.process.job_session_id = None;
-            if self.active_session_id.as_deref() != Some(event.session_id.as_str()) {
+            if self.session.active_id.as_deref() != Some(event.session_id.as_str()) {
                 continue;
             }
             let was_list_refresh = self.remote_ops.process.status == "listing remote processes";

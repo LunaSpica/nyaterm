@@ -579,7 +579,7 @@ impl NyaTermApp {
                 }
             }
             NavItem::Processes => {
-                if self.active_ssh_config.is_none()
+                if self.session.active_ssh_config.is_none()
                     || !self.remote_ops.process.snapshot_loaded
                     || self.remote_ops.process.items.is_empty()
                 {
@@ -589,7 +589,7 @@ impl NyaTermApp {
                 }
             }
             NavItem::Docker => {
-                if self.active_ssh_config.is_none() {
+                if self.session.active_ssh_config.is_none() {
                     return SharedString::from("");
                 }
                 let Some(overview) = self
@@ -721,7 +721,7 @@ impl NyaTermApp {
             NavItem::Stats => {
                 let palette = self.theme_palette();
                 let can_refresh =
-                    self.active_ssh_config.is_some() && !self.remote_ops.stats.pending;
+                    self.session.active_ssh_config.is_some() && !self.remote_ops.stats.pending;
                 Some(
                     header_svg_icon_button(
                         palette,
@@ -739,7 +739,7 @@ impl NyaTermApp {
             NavItem::Processes => {
                 let palette = self.theme_palette();
                 let can_refresh =
-                    self.active_ssh_config.is_some() && !self.remote_ops.process.pending;
+                    self.session.active_ssh_config.is_some() && !self.remote_ops.process.pending;
                 Some(
                     header_svg_icon_button(
                         palette,
@@ -757,7 +757,7 @@ impl NyaTermApp {
             NavItem::Docker => {
                 let palette = self.theme_palette();
                 let can_refresh =
-                    self.active_ssh_config.is_some() && !self.remote_ops.docker.pending;
+                    self.session.active_ssh_config.is_some() && !self.remote_ops.docker.pending;
                 let can_prune = can_refresh
                     && self
                         .remote_ops

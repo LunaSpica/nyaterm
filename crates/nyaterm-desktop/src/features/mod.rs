@@ -81,7 +81,7 @@ pub(in crate::features) use runtime_jobs::{
 };
 pub(in crate::features) use session::{
     CredentialPromptBroker, FailedSessionStart, HostKeyPromptBroker, NativeOtpProvider,
-    PendingSessionStart, SessionPaneState, SessionStartFeatureState, SftpDuplicatePromptBroker,
+    PendingSessionStart, SessionFeatureState, SessionPaneState, SftpDuplicatePromptBroker,
     credential_prompt_target, keyboard_interactive_prompt_target,
 };
 pub(in crate::features) use settings::{SecurityFeatureFocus, SecurityFeatureState};

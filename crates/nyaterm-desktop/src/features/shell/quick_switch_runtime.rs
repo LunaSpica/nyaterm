@@ -69,7 +69,7 @@ impl NyaTermApp {
         let mut session_items = Vec::new();
         for session in &sessions {
             let title = self.session_display_name_by_info(&session);
-            let active = self.active_session_id.as_deref() == Some(session.id.as_str());
+            let active = self.session.active_id.as_deref() == Some(session.id.as_str());
             let mut subtitle = format!(
                 "{} - {}",
                 session_kind_label(session.kind),
@@ -88,7 +88,8 @@ impl NyaTermApp {
         }
 
         let mut transient_items = self
-            .session_start
+            .session
+            .start
             .pending
             .iter()
             .filter(|(_, pending)| pending.reconnect_session_id.is_none())
@@ -119,7 +120,7 @@ impl NyaTermApp {
                             self.tr("sessionQuickSwitcher.connecting"),
                             session_kind_label(pending.kind)
                         ),
-                        active: self.session_start.active_pending.as_deref()
+                        active: self.session.start.active_pending.as_deref()
                             == Some(request_id.as_str()),
                         failed: false,
                         search_detail: None,
@@ -127,7 +128,8 @@ impl NyaTermApp {
                 )
             })
             .chain(
-                self.session_start
+                self.session
+                    .start
                     .failed
                     .iter()
                     .map(|(request_id, failed)| {
@@ -158,7 +160,7 @@ impl NyaTermApp {
                                     self.tr("terminal.connectionFailed"),
                                     session_kind_label(pending.kind)
                                 ),
-                                active: self.session_start.active_failed.as_deref()
+                                active: self.session.start.active_failed.as_deref()
                                     == Some(request_id.as_str()),
                                 failed: true,
                                 search_detail: Some(failed.error.clone()),

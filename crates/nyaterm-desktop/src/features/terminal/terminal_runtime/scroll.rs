@@ -309,7 +309,7 @@ fn terminal_should_apply_session_cwd(
 
 impl NyaTermApp {
     pub(in crate::features) fn active_terminal_scroll_offset(&self) -> usize {
-        if let Some(session_id) = self.active_session_id.as_deref() {
+        if let Some(session_id) = self.session.active_id.as_deref() {
             self.terminal
                 .view
                 .views
@@ -322,11 +322,11 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn active_terminal_display_offset(&self) -> usize {
-        self.terminal_display_offset_for_session(self.active_session_id.as_deref())
+        self.terminal_display_offset_for_session(self.session.active_id.as_deref())
     }
 
     pub(in crate::features) fn active_terminal_visual_scroll_active(&self) -> bool {
-        self.terminal_visual_scroll_active_for_session(self.active_session_id.as_deref())
+        self.terminal_visual_scroll_active_for_session(self.session.active_id.as_deref())
     }
 
     pub(in crate::features) fn terminal_visual_scroll_active_for_session(
@@ -607,7 +607,7 @@ impl NyaTermApp {
         delta_lines: i32,
         cx: &mut Context<Self>,
     ) {
-        let session_id = self.active_session_id.clone();
+        let session_id = self.session.active_id.clone();
         self.scroll_terminal_by_for_session(session_id.as_deref(), delta_lines, cx);
     }
 
@@ -665,13 +665,14 @@ impl NyaTermApp {
         self.terminal.view.scroll_offset = next.min(max);
         if self.terminal.view.scroll_offset == 0 {
             self.clear_terminal_scroll_residual_for_session(None);
-            if let Some(session_id) = self.active_session_id.clone()
+            if let Some(session_id) = self.session.active_id.clone()
                 && let Some(view) = self.terminal.view.views.get_mut(&session_id)
             {
                 view.has_new_while_scrolled = false;
             }
         }
-        self.active_session_id
+        self.session
+            .active_id
             .clone()
             .and_then(|session_id| self.terminal_scroll_visual_state_for_session(&session_id))
     }
@@ -936,7 +937,7 @@ impl NyaTermApp {
         let session_id = session_id
             .filter(|id| !id.is_empty())
             .map(str::to_string)
-            .or_else(|| self.active_session_id.clone());
+            .or_else(|| self.session.active_id.clone());
         let Some(session_id) = session_id else {
             return;
         };
@@ -1082,7 +1083,7 @@ impl NyaTermApp {
                     return;
                 }
                 // Activate target session if needed.
-                if self.active_session_id.as_deref() != Some(session_id.as_str()) {
+                if self.session.active_id.as_deref() != Some(session_id.as_str()) {
                     self.activate_session_id_with_surface_sync(&session_id, cx);
                 }
                 let text = nyaterm_core::format_local_terminal_drop_input(&path_strings);
@@ -1128,16 +1129,18 @@ impl NyaTermApp {
 
     pub(in crate::features) fn apply_session_cwd(&mut self, session_id: &str, cwd: String) {
         let changed = self
-            .session_cwds
+            .session
+            .cwds
             .get(session_id)
             .map(|prev| prev != &cwd)
             .unwrap_or(true);
-        self.session_cwds
+        self.session
+            .cwds
             .insert(session_id.to_string(), cwd.clone());
         // Auto-sync the transfer browser path when enabled for the active SSH session.
         if terminal_should_apply_session_cwd(
             changed,
-            self.active_session_id.as_deref() == Some(session_id),
+            self.session.active_id.as_deref() == Some(session_id),
             self.transfer_browser_auto_sync_cwd_enabled(),
             self.transfer.browser.path_editing,
             &cwd,
@@ -1160,7 +1163,7 @@ impl NyaTermApp {
         command_running: bool,
     ) {
         // Only affect the active session suggestion pipeline.
-        if self.active_session_id.as_deref() != Some(session_id) {
+        if self.session.active_id.as_deref() != Some(session_id) {
             return;
         }
         if started {
@@ -1189,7 +1192,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn scroll_terminal_to_bottom_state_only(&mut self) -> Option<String> {
-        if let Some(session_id) = self.active_session_id.clone() {
+        if let Some(session_id) = self.session.active_id.clone() {
             let residual_lines = self.terminal_scroll_residual_for_session(Some(&session_id));
             if let Some(view) = self.terminal.view.views.get_mut(&session_id) {
                 let changed = terminal_scroll_to_bottom_state_needs_update(
@@ -1227,7 +1230,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn scroll_terminal_to_top(&mut self, cx: &mut Context<Self>) {
-        if let Some(session_id) = self.active_session_id.clone() {
+        if let Some(session_id) = self.session.active_id.clone() {
             if let Some(view) = self.terminal.view.views.get_mut(&session_id) {
                 view.scroll_offset = view.scrollback_len_for_ui();
             }
@@ -1235,7 +1238,7 @@ impl NyaTermApp {
             self.terminal.view.scroll_offset = self.terminal.view.screen.scrollback_len();
         }
         self.notify_terminal_scroll_after_state_change(
-            self.active_session_id.clone().as_deref(),
+            self.session.active_id.clone().as_deref(),
             cx,
         );
     }
@@ -1299,7 +1302,7 @@ impl NyaTermApp {
                 self.clear_terminal_scroll_residual_for_session(None);
             }
         }
-        self.active_session_id.clone()
+        self.session.active_id.clone()
     }
 
     /// Map a vertical pointer position (0..=1 top→bottom of track) to scroll_offset.
@@ -1348,7 +1351,7 @@ impl NyaTermApp {
     ) -> Option<String> {
         self.terminal.view.scrollbar_dragging = true;
         self.terminal.view.scrollbar_drag_session_id = session_id.clone();
-        session_id.or_else(|| self.active_session_id.clone())
+        session_id.or_else(|| self.session.active_id.clone())
     }
 
     pub(in crate::features) fn update_terminal_scrollbar_drag(
@@ -1391,7 +1394,7 @@ impl NyaTermApp {
         let session_id = session_id
             .filter(|id| !id.is_empty())
             .map(str::to_string)
-            .or_else(|| self.active_session_id.clone());
+            .or_else(|| self.session.active_id.clone());
         let Some(session_id) = session_id else {
             return;
         };
@@ -1460,7 +1463,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn active_terminal_page_rows(&self) -> usize {
         // Prefer live screen rows when available; fall back to classic 24-row page.
-        if let Some(session_id) = self.active_session_id.as_deref() {
+        if let Some(session_id) = self.session.active_id.as_deref() {
             if let Some(view) = self.terminal.view.views.get(session_id) {
                 let rows = view.viewport_rows_for_ui();
                 if rows > 0 {
@@ -1475,7 +1478,7 @@ impl NyaTermApp {
     pub(in crate::features) fn desired_terminal_resize_geometry(
         &self,
     ) -> Option<TerminalResizeGeometry> {
-        self.desired_terminal_resize_geometry_for_session_hint(self.active_session_id.as_deref())
+        self.desired_terminal_resize_geometry_for_session_hint(self.session.active_id.as_deref())
     }
 
     pub(in crate::features) fn desired_terminal_resize_geometry_for_session_hint(
@@ -1492,7 +1495,7 @@ impl NyaTermApp {
                     .copied()
             })
             .or_else(|| {
-                self.active_session_id.as_deref().and_then(|session_id| {
+                self.session.active_id.as_deref().and_then(|session_id| {
                     self.terminal
                         .layout
                         .session_surface_bounds
@@ -1510,7 +1513,7 @@ impl NyaTermApp {
     ) -> TerminalResizeGeometry {
         self.terminal_resize_geometry_for_bounds_for_session(
             bounds,
-            self.active_session_id.as_deref(),
+            self.session.active_id.as_deref(),
         )
     }
 
@@ -1539,7 +1542,7 @@ impl NyaTermApp {
         {
             return false;
         }
-        let bounds = if let Some(session_id) = self.active_session_id.as_deref() {
+        let bounds = if let Some(session_id) = self.session.active_id.as_deref() {
             self.terminal
                 .layout
                 .session_surface_bounds
@@ -1553,7 +1556,7 @@ impl NyaTermApp {
             return false;
         };
         self.resize_terminal_to_bounds_for_session(
-            self.active_session_id.clone().as_deref(),
+            self.session.active_id.clone().as_deref(),
             bounds,
         )
     }
@@ -1633,7 +1636,7 @@ impl NyaTermApp {
             }
             if backend_changed {
                 view.remember_backend_resize(cols, rows, pixel_width, pixel_height);
-                let _ = self.session_manager.resize_with_pixels(
+                let _ = self.session.manager.resize_with_pixels(
                     session_id,
                     cols,
                     rows,

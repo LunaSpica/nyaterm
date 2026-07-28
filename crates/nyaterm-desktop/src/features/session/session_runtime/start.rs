@@ -216,7 +216,8 @@ impl NyaTermApp {
         &self,
         connection: &SavedConnection,
     ) -> bool {
-        self.session_start
+        self.session
+            .start
             .pending
             .values()
             .any(|pending| pending.source_connection_id.as_deref() == Some(connection.id.as_str()))
@@ -247,9 +248,10 @@ impl NyaTermApp {
     ) {
         let connection_name = connection.name.clone();
         let source_connection_id = Some(connection.id.clone());
-        let geometry_session_hint = after_session_id
-            .as_deref()
-            .or(self.session_start.reconnect_replace_id.as_deref());
+        let geometry_session_hint =
+            after_session_id
+                .as_deref()
+                .or(self.session.start.reconnect_replace_id.as_deref());
         let desired_geometry =
             self.desired_terminal_resize_geometry_for_session_hint(geometry_session_hint);
         let build_context = self.ssh_session_config_build_context();
@@ -273,8 +275,8 @@ impl NyaTermApp {
             cx,
         );
 
-        let session_manager = self.session_manager.clone();
-        let session_start_tx = self.session_start.sender();
+        let session_manager = self.session.manager.clone();
+        let session_start_tx = self.session.start.sender();
         let request_id_for_worker = request_id.clone();
         std::thread::spawn(move || {
             let worker_started_at = Instant::now();

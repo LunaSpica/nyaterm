@@ -287,15 +287,16 @@ impl NyaTermApp {
         let (target, target_label) = match session.kind {
             SessionKind::Ssh => {
                 let config = self
-                    .session_metadata
+                    .session
+                    .metadata
                     .get(&terminal_session_id)
                     .and_then(|metadata| match &metadata.launch_config {
                         SessionLaunchConfig::Ssh(config) => Some(config.clone()),
                         _ => None,
                     })
                     .or_else(|| {
-                        (self.active_session_id.as_deref() == Some(terminal_session_id.as_str()))
-                            .then(|| self.active_ssh_config.clone())
+                        (self.session.active_id.as_deref() == Some(terminal_session_id.as_str()))
+                            .then(|| self.session.active_ssh_config.clone())
                             .flatten()
                     })
                     .ok_or_else(|| "Target SSH session is missing its exec config".to_string())?;
@@ -592,10 +593,10 @@ impl NyaTermApp {
     }
 
     fn active_ai_execution_profile(&self) -> AiExecutionProfile {
-        if self.active_ai_execution_profile != AiExecutionProfile::Auto {
-            return self.active_ai_execution_profile;
+        if self.session.active_ai_execution_profile != AiExecutionProfile::Auto {
+            return self.session.active_ai_execution_profile;
         }
-        let Some(session_id) = self.active_session_id.as_deref() else {
+        let Some(session_id) = self.session.active_id.as_deref() else {
             return AiExecutionProfile::SendOnly;
         };
         self.session_info(session_id)

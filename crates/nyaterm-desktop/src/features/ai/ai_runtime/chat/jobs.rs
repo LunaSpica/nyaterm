@@ -243,7 +243,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn ai_terminal_context(&self) -> AiContext {
-        self.ai_terminal_context_for_session(self.active_session_id.as_deref())
+        self.ai_terminal_context_for_session(self.session.active_id.as_deref())
     }
 
     pub(in crate::features) fn ai_selected_model_id(&self) -> Option<String> {
@@ -413,7 +413,7 @@ impl NyaTermApp {
             }
         }
         if session_ids.is_empty()
-            && let Some(active_session_id) = self.active_session_id.as_ref()
+            && let Some(active_session_id) = self.session.active_id.as_ref()
             && self.session_info(active_session_id).is_some()
             && !self.is_session_disconnected(active_session_id)
         {
@@ -597,10 +597,12 @@ impl NyaTermApp {
         session_id: Option<&str>,
         line_limit: usize,
     ) -> AiContext {
-        let metadata = session_id.and_then(|session_id| self.session_metadata.get(session_id));
+        let metadata = session_id.and_then(|session_id| self.session.metadata.get(session_id));
         let ssh = match metadata.map(|metadata| &metadata.launch_config) {
             Some(SessionLaunchConfig::Ssh(config)) => Some(config),
-            _ if session_id == self.active_session_id.as_deref() => self.active_ssh_config.as_ref(),
+            _ if session_id == self.session.active_id.as_deref() => {
+                self.session.active_ssh_config.as_ref()
+            }
             _ => None,
         };
         let session = session_id.and_then(|session_id| self.session_info(session_id));
@@ -618,7 +620,7 @@ impl NyaTermApp {
             .map(|session_id| self.terminal_buffer_text_for_session(session_id))
             .unwrap_or_else(|| self.active_terminal_buffer_text());
         let selected_text =
-            if session_id.is_none() || session_id == self.active_session_id.as_deref() {
+            if session_id.is_none() || session_id == self.session.active_id.as_deref() {
                 self.selected_terminal_text().unwrap_or_default()
             } else {
                 String::new()

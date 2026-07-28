@@ -60,7 +60,8 @@ impl NyaTermApp {
             return;
         }
         self.forget_text_inputs("session.rename");
-        self.session_custom_names
+        self.session
+            .custom_names
             .insert(session_id.clone(), trimmed.clone());
         self.terminal.view.status = format!("renamed tab to {trimmed}");
         cx.notify();
@@ -97,7 +98,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.active_session_id.is_none() {
+        if self.session.active_id.is_none() {
             self.terminal.view.status = match action {
                 StartupCommandAction::Duplicate => {
                     "select a session before duplicating with a command"
@@ -112,9 +113,10 @@ impl NyaTermApp {
         }
         if action == StartupCommandAction::Multiplex
             && self
-                .active_session_id
+                .session
+                .active_id
                 .as_deref()
-                .and_then(|session_id| self.session_metadata.get(session_id))
+                .and_then(|session_id| self.session.metadata.get(session_id))
                 .is_none_or(|metadata| {
                     !matches!(metadata.launch_config, SessionLaunchConfig::Ssh(_))
                 })
@@ -230,22 +232,23 @@ impl NyaTermApp {
 
     pub(in crate::features) fn remove_session_state(&mut self, session_id: &str) {
         self.clear_terminal_mouse_report_for_session(session_id);
-        self.session_start.reconnect_failures.remove(session_id);
-        self.session_order.retain(|id| id != session_id);
+        self.session.start.reconnect_failures.remove(session_id);
+        self.session.order.retain(|id| id != session_id);
         self.session_tab_owner.remove(session_id);
         // If this leaf was a tab root, drop its pane tree (prune will rekey survivors).
         self.session_pane_roots.remove(session_id);
         let multiplex_key = self
-            .session_metadata
+            .session
+            .metadata
             .remove(session_id)
             .and_then(|metadata| metadata.ssh_multiplex_key);
-        self.session_custom_names.remove(session_id);
-        self.session_dynamic_titles.remove(session_id);
-        self.session_cwds.remove(session_id);
+        self.session.custom_names.remove(session_id);
+        self.session.dynamic_titles.remove(session_id);
+        self.session.cwds.remove(session_id);
         self.clear_zmodem_session(session_id);
         self.clear_trzsz_session(session_id);
-        self.session_event_bridge.clear_session(session_id);
-        self.session_tab_colors.remove(session_id);
+        self.session.event_bridge.clear_session(session_id);
+        self.session.tab_colors.remove(session_id);
         self.terminal.view.views.remove(session_id);
         self.remove_terminal_surface(session_id);
         self.terminal
@@ -256,7 +259,7 @@ impl NyaTermApp {
             .layout
             .session_surface_bounds
             .remove(session_id);
-        self.session_command_history.remove(session_id);
+        self.session.command_history.remove(session_id);
         self.transfer.browser.session_cache.remove(session_id);
         self.transfer
             .external_sync
@@ -304,11 +307,12 @@ impl NyaTermApp {
         }
         if let Some(multiplex_key) = multiplex_key {
             let still_in_use = self
-                .session_metadata
+                .session
+                .metadata
                 .values()
                 .any(|metadata| metadata.ssh_multiplex_key.as_deref() == Some(&multiplex_key));
             if !still_in_use {
-                if let Some(handle) = self.ssh_multiplex_handles.remove(&multiplex_key) {
+                if let Some(handle) = self.session.multiplex_handles.remove(&multiplex_key) {
                     let _ = handle.disconnect();
                 }
             }
@@ -318,11 +322,13 @@ impl NyaTermApp {
     pub(in crate::features) fn next_session_after(&self, session_id: &str) -> Option<String> {
         // Local metadata includes live + disconnected tabs; no transport lock.
         let known_ids = self
-            .session_metadata
+            .session
+            .metadata
             .keys()
             .cloned()
             .collect::<HashSet<_>>();
-        self.session_order
+        self.session
+            .order
             .iter()
             .find(|candidate| candidate.as_str() != session_id && known_ids.contains(*candidate))
             .cloned()

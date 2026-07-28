@@ -97,7 +97,7 @@ impl NyaTermApp {
         if text.is_empty() {
             return;
         }
-        let Some(session_id) = self.active_session_id.clone() else {
+        let Some(session_id) = self.session.active_id.clone() else {
             if self.set_terminal_status_if_changed("no active session for paste") {
                 cx.notify();
             }

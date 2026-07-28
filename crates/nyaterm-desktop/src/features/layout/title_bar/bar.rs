@@ -351,7 +351,7 @@ impl NyaTermApp {
     }
 
     fn remote_stats_header_label(&self, mode: HeaderStatusMode) -> Option<String> {
-        if self.active_ssh_config.is_none() || !self.settings.ui_show_remote_stats {
+        if self.session.active_ssh_config.is_none() || !self.settings.ui_show_remote_stats {
             return None;
         }
         let stats = self.remote_ops.stats.data.as_ref()?;
@@ -392,7 +392,7 @@ impl NyaTermApp {
     }
 
     fn remote_stats_header_fallback(&self) -> String {
-        if self.active_ssh_config.is_none() {
+        if self.session.active_ssh_config.is_none() {
             self.tr("panel.resourceMonitorNoSession").to_string()
         } else if !self.settings.ui_show_remote_stats {
             self.tr("panel.resourceMonitorDisabled").to_string()
@@ -473,23 +473,24 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn title_context_label(&self) -> String {
-        if self.session_start.active_pending.is_some()
+        if self.session.start.active_pending.is_some()
             && let Some(pending) = self.pending_session_display_name()
         {
             return pending;
         }
-        if self.session_start.active_failed.is_some()
+        if self.session.start.active_failed.is_some()
             && let Some(failed) = self.failed_session_display_name()
         {
             return failed;
         }
-        if let Some(session_id) = self.active_session_id.as_deref() {
+        if let Some(session_id) = self.session.active_id.as_deref() {
             let tab_root = self.tab_root_for_session(session_id);
             let name = self
                 .session_display_name(&tab_root)
                 .unwrap_or_else(|| short_id(&tab_root).to_string());
             let has_custom_name = self
-                .session_custom_names
+                .session
+                .custom_names
                 .get(&tab_root)
                 .is_some_and(|value| !value.trim().is_empty());
             if !has_custom_name
@@ -515,13 +516,13 @@ impl NyaTermApp {
     }
 
     fn title_context_icon(&self) -> Option<&'static str> {
-        if self.session_start.active_pending.is_some() {
+        if self.session.start.active_pending.is_some() {
             return Some("icons/conn/connect.svg");
         }
-        if self.session_start.active_failed.is_some() {
+        if self.session.start.active_failed.is_some() {
             return Some("icons/session/disconnect.svg");
         }
-        if let Some(session_id) = self.active_session_id.as_deref() {
+        if let Some(session_id) = self.session.active_id.as_deref() {
             return self
                 .session_info(session_id)
                 .map(|session| session_kind_icon_path(session.kind));

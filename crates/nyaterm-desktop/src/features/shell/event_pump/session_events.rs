@@ -109,9 +109,9 @@ impl NyaTermApp {
         // transfer sideband. Skip harvest/atomics so idle and window-drag ticks
         // do not touch the session event pipeline at all.
         if self.pending_session_events.is_empty()
-            && !self.session_event_bridge.has_pending_ui_work()
+            && !self.session.event_bridge.has_pending_ui_work()
             && (!drain_sideband_workers
-                || (self.zmodem_sessions.is_empty() && self.trzsz_sessions.is_empty()))
+                || (self.session.zmodem.is_empty() && self.session.trzsz.is_empty()))
         {
             if self.terminal.view.runtime.session_event_queued_events != 0
                 || self.terminal.view.runtime.session_event_queued_output_bytes != 0
@@ -166,8 +166,8 @@ impl NyaTermApp {
         let mut bridge_drained_ui_output_bytes = 0usize;
         let mut pending_frame_outputs: Vec<(String, Vec<u8>)> = Vec::new();
         if self.pending_session_events.is_empty() {
-            if self.session_event_bridge.has_pending_ui_work() {
-                let drain = self.session_event_bridge.drain_events_with_output_budget(
+            if self.session.event_bridge.has_pending_ui_work() {
+                let drain = self.session.event_bridge.drain_events_with_output_budget(
                     drain_budget.max_events,
                     drain_budget.max_output_bytes,
                 );
@@ -199,7 +199,7 @@ impl NyaTermApp {
                 self.pending_session_events.extend(drain.events);
             } else {
                 // Direct-output-only ticks: harvest counters without UI queue lock.
-                let stats = self.session_event_bridge.harvest_direct_stats();
+                let stats = self.session.event_bridge.harvest_direct_stats();
                 transport_queued_events = stats
                     .source_queued_events
                     .saturating_add(stats.ui_queued_events);
@@ -351,7 +351,7 @@ impl NyaTermApp {
         self.note_trzsz_output_discontinuity(&session_id);
         self.note_zmodem_output_discontinuity(&session_id, bytes, cx);
         self.note_ai_agent_output_discontinuity(&session_id, bytes, cx);
-        self.session_event_bridge.route_session_to_ui(&session_id);
+        self.session.event_bridge.route_session_to_ui(&session_id);
         let encoding = self.settings.interaction_default_encoding.clone();
         let view = self
             .terminal
@@ -366,7 +366,7 @@ impl NyaTermApp {
             .pipeline
             .write_output(session_id.clone(), marker.clone());
         self.append_terminal_log_for_session(Some(&session_id), &marker, true);
-        if self.active_session_id.as_deref() == Some(session_id.as_str()) {
+        if self.session.active_id.as_deref() == Some(session_id.as_str()) {
             self.terminal.view.status = format!(
                 "terminal output overloaded; dropped {} queued byte(s)",
                 bytes
@@ -382,7 +382,7 @@ impl NyaTermApp {
         reason: String,
         cx: &mut Context<Self>,
     ) -> bool {
-        let known_session = self.session_metadata.contains_key(&session_id);
+        let known_session = self.session.metadata.contains_key(&session_id);
         tracing::warn!(
             diagnostic = "session_exited",
             session_id = %session_id,
@@ -400,9 +400,9 @@ impl NyaTermApp {
         }
         self.clear_trzsz_session(&session_id);
         self.clear_zmodem_session(&session_id);
-        self.session_event_bridge.clear_session(&session_id);
+        self.session.event_bridge.clear_session(&session_id);
         self.cleanup_recording_for_session(&session_id);
-        let _ = self.session_manager.close(&session_id);
+        let _ = self.session.manager.close(&session_id);
         if known_session {
             // Keep the tab so the user can reconnect (Tauri disconnected pane).
             self.mark_session_disconnected(&session_id, cx);
@@ -428,7 +428,7 @@ impl NyaTermApp {
                 .pipeline
                 .write_output(session_id.clone(), log.clone());
         }
-        if session_id.is_empty() || self.active_session_id.as_deref() == Some(session_id.as_str()) {
+        if session_id.is_empty() || self.session.active_id.as_deref() == Some(session_id.as_str()) {
             self.terminal.view.status = format!("session error: {message}");
             self.append_terminal_log(log);
         } else {
@@ -546,7 +546,7 @@ impl NyaTermApp {
         if data.is_empty() {
             return;
         }
-        let watched = self.active_session_id.as_deref() == Some(session_id)
+        let watched = self.session.active_id.as_deref() == Some(session_id)
             || self
                 .ai
                 .chat
