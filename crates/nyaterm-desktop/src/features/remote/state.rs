@@ -9,7 +9,6 @@ use std::collections::{HashMap, HashSet};
 use std::sync::mpsc;
 use std::time::Instant;
 
-use gpui::FocusHandle;
 use nyaterm_transport::{
     DockerComposeService, DockerContainerDetails, RemoteDockerOverview, RemoteProcess, RemoteStats,
 };
@@ -91,7 +90,7 @@ pub(in crate::features) struct StatsPaneState {
 }
 
 impl RemoteOpsFeatureState {
-    pub(in crate::features) fn new(focus: RemoteOpsFeatureFocus) -> Self {
+    pub(in crate::features) fn new(_focus: RemoteOpsFeatureFocus) -> Self {
         let (docker_tx, docker_rx) = mpsc::channel();
         let (process_tx, process_rx) = mpsc::channel();
         let (stats_tx, stats_rx) = mpsc::channel();

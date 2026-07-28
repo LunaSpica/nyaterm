@@ -58,8 +58,8 @@ pub(in crate::features) use connections::{
     ConnectionDropTarget, ConnectionEditorToggle, ConnectionFeatureFocus, ConnectionFeatureState,
 };
 pub(in crate::features) use formatting::{
-    cloud_sync_history_status, cloud_sync_status_dot_color, cloud_sync_status_text_color,
-    compact_id, configured_cloud_sync_provider, docker_compose_project_key, docker_state_color,
+    cloud_sync_status_dot_color, cloud_sync_status_text_color, compact_id,
+    configured_cloud_sync_provider, docker_compose_project_key, docker_state_color,
     docker_state_label, docker_state_rank, download_file_name_from_remote_path,
     format_cloud_provider, format_duration_ms, format_history_timestamp_ms, format_last_used_ms,
     format_permissions_octal, format_rate, format_terminal_line_timestamp_ms, format_uptime,
@@ -80,10 +80,9 @@ pub(in crate::features) use remote_text_editor::RemoteTextEditor;
 pub(in crate::features) use runtime_jobs::{
     ActivitySide, AiAgentBackgroundTarget, AiAgentLoopState, AiAgentStepStatus, AiAgentStepView,
     AiChatJobOutput, AiChatJobResult, AiChatWorkerEvent, AiDiscoveryJobResult,
-    CommandPersistenceRequest, CommandPersistenceResult, DockerJobOutput, DockerJobResult,
-    ProcessJobOutput, ProcessJobResult, SessionStartResult, SessionStartSuccess, StatsJobResult,
-    TranslateJobResult, TunnelJobOutput, TunnelJobResult, UpdateJobResult,
-    remote_job_event_matches, spawn_command_persistence_worker,
+    CommandPersistenceRequest, CommandPersistenceResult, DockerJobResult, ProcessJobResult,
+    SessionStartResult, SessionStartSuccess, StatsJobResult, TranslateJobResult, TunnelJobOutput,
+    TunnelJobResult, UpdateJobResult, spawn_command_persistence_worker,
 };
 pub(in crate::features) use session::{
     CredentialPromptBroker, CredentialPromptState, HostKeyPromptBroker, HostKeyPromptChoice,

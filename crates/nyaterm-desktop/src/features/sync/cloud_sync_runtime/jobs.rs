@@ -1,9 +1,15 @@
-use super::*;
+use std::time::Instant;
 
+use gpui::{AppContext, Context};
 use nyaterm_core::{
-    CLOUD_SYNC_HISTORY_LIMIT, LocalCloudSyncOptions, append_cloud_sync_history,
-    pull_local_snapshot, push_local_snapshot, read_cloud_sync_history,
+    CLOUD_SYNC_HISTORY_LIMIT, CloudSyncHistoryEntry, LocalCloudSyncOptions,
+    append_cloud_sync_history, pull_local_snapshot, push_local_snapshot, read_cloud_sync_history,
 };
+
+use crate::features::NyaTermApp;
+use crate::features::formatting::{cloud_sync_history_status, configured_cloud_sync_provider};
+
+use super::super::{pull_provider_snapshot, push_provider_snapshot, test_provider_connection};
 
 impl NyaTermApp {
     pub(in crate::features) fn run_provider_cloud_sync_test(&mut self, cx: &mut Context<Self>) {

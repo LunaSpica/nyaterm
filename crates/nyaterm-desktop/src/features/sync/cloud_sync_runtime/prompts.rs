@@ -1,5 +1,7 @@
-use super::*;
+use gpui::{Context, Window};
+use nyaterm_core::CloudSyncError;
 
+use crate::features::NyaTermApp;
 use crate::models::{CloudSyncConflictState, SnapshotPasswordPromptKind};
 
 impl NyaTermApp {

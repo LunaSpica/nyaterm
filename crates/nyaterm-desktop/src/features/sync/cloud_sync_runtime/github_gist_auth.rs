@@ -1,5 +1,11 @@
-use super::*;
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
 
+use gpui::{ClipboardItem, Context};
+
+use crate::features::NyaTermApp;
 use crate::http::cloud_sync::run_github_gist_device_flow;
 use crate::models::{GithubGistAuthEvent, GithubGistAuthState};
 

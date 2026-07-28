@@ -193,6 +193,21 @@ check_no_matches \
   crates/nyaterm-desktop/src/features/prelude.rs
 
 check_no_matches \
+  "service runtime dependencies must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(CloudSyncError|DockerService)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
+  "service runtime internals must stay unflattened from the features facade" \
+  '(^|[,{[:space:]])(cloud_sync_history_status|DockerJobOutput|ProcessJobOutput|remote_job_event_matches)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/mod.rs
+
+check_no_matches \
+  "remote runtime module entry point must use named helper imports" \
+  '^[[:space:]]*use[[:space:]]+helpers::\*;' \
+  crates/nyaterm-desktop/src/features/remote/remote_runtime/mod.rs
+
+check_no_matches \
   "low-frequency translation UI models must stay out of features/prelude.rs" \
   '(^|[,{[:space:]])(TranslateInputField|TranslationDialogState|TranslationSecretDraft)([},[:space:]]|$)' \
   crates/nyaterm-desktop/src/features/prelude.rs
@@ -532,6 +547,22 @@ check_no_matches 'terminal-gpui #[path] debt' '#\[path\s*=' \
 # lower these counts so the debt cannot return.
 
 declare -A SUPER_BASELINE=(
+  [crates/nyaterm-desktop/src/features/remote/mod.rs]=0
+  [crates/nyaterm-desktop/src/features/remote/state.rs]=0
+  [crates/nyaterm-desktop/src/features/remote/remote_runtime/mod.rs]=0
+  [crates/nyaterm-desktop/src/features/remote/remote_runtime/docker.rs]=0
+  [crates/nyaterm-desktop/src/features/remote/remote_runtime/helpers.rs]=0
+  [crates/nyaterm-desktop/src/features/remote/remote_runtime/process.rs]=0
+  [crates/nyaterm-desktop/src/features/remote/remote_runtime/stats.rs]=0
+  [crates/nyaterm-desktop/src/features/sync/mod.rs]=0
+  [crates/nyaterm-desktop/src/features/sync/cloud_sync_provider.rs]=0
+  [crates/nyaterm-desktop/src/features/sync/cloud_sync_runtime/mod.rs]=0
+  [crates/nyaterm-desktop/src/features/sync/cloud_sync_runtime/github_gist_auth.rs]=0
+  [crates/nyaterm-desktop/src/features/sync/cloud_sync_runtime/jobs.rs]=0
+  [crates/nyaterm-desktop/src/features/sync/cloud_sync_runtime/prompts.rs]=0
+  [crates/nyaterm-desktop/src/features/sync/cloud_sync_runtime/settings.rs]=0
+  [crates/nyaterm-desktop/src/features/translation/mod.rs]=0
+  [crates/nyaterm-desktop/src/features/translation/translation_runtime.rs]=0
   [crates/nyaterm-desktop/src/features/connections/connections/mod.rs]=0
   [crates/nyaterm-desktop/src/features/connections/connections/dnd.rs]=0
   [crates/nyaterm-desktop/src/features/connections/connections/menus.rs]=0
@@ -833,8 +864,11 @@ done < <(rg -n --path-separator / '^[[:space:]]*use super::\*;' \
   crates/nyaterm-desktop/src/features/icons \
   crates/nyaterm-desktop/src/features/inspector \
   crates/nyaterm-desktop/src/features/panels \
+  crates/nyaterm-desktop/src/features/remote \
   crates/nyaterm-desktop/src/features/session \
   crates/nyaterm-desktop/src/features/settings \
+  crates/nyaterm-desktop/src/features/sync \
+  crates/nyaterm-desktop/src/features/translation \
   crates/nyaterm-desktop/src/features/view_widgets \
   crates/nyaterm-desktop/src/features/pages/mod.rs \
   crates/nyaterm-desktop/src/features/pages/connections \

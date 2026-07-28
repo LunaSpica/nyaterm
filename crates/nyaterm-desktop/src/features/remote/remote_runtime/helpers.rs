@@ -1,4 +1,4 @@
-use super::*;
+use nyaterm_transport::RemoteDockerOverview;
 
 pub(super) const DOCKER_SHELL_SELECTOR: &str = "if command -v bash >/dev/null 2>&1; then exec bash; elif command -v zsh >/dev/null 2>&1; then exec zsh; elif command -v fish >/dev/null 2>&1; then exec fish; elif command -v ash >/dev/null 2>&1; then exec ash; else exec sh; fi";
 

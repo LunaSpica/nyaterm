@@ -1,6 +1,7 @@
-use super::*;
+use gpui::Context;
 
-use crate::models::SettingsTab;
+use crate::features::NyaTermApp;
+use crate::models::{CloudSyncInputField, SettingsTab};
 
 impl NyaTermApp {
     pub(in crate::features) fn update_cloud_sync_provider(

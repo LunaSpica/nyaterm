@@ -6,9 +6,9 @@ pub(super) use gpui::{
 };
 pub(super) use nyaterm_core::{
     AgentOutputCaptureProcessor, AiAction, AiCommandCard, AiExecutionProfile, AiMode, AiSettings,
-    AppRuntime, AppSettingsSummary, CloudSyncError, CloudSyncHistoryEntry, CloudSyncSettings,
-    CloudSyncState, CommandHistoryEntry, CommandObservation, ConnectionStore, ConnectionType,
-    Group, InputSelectionRange, KeywordHighlightConfig, NativeServices, NativeUpdateInfo, OtpEntry,
+    AppRuntime, AppSettingsSummary, CloudSyncHistoryEntry, CloudSyncSettings, CloudSyncState,
+    CommandHistoryEntry, CommandObservation, ConnectionStore, ConnectionType, Group,
+    InputSelectionRange, KeywordHighlightConfig, NativeServices, NativeUpdateInfo, OtpEntry,
     ProxyConfig, ProxyGroup, QuickCommand, QuickCommandCategory, RuntimeMode, SavedConnection,
     SavedCredential, SavedPassword, SshKey, TerminalInputState, TerminalWireWriteKind,
     TunnelConfig, TunnelGroup, apply_terminal_input_data, build_move_input_cursor_data,
@@ -22,12 +22,12 @@ pub(super) use nyaterm_terminal::{
     TerminalEffects, TerminalOutputDecoder, TerminalScreen, TerminalSnapshot,
 };
 pub(super) use nyaterm_transport::{
-    DockerComposeService, DockerContainerDetails, DockerService, RecordingManager,
-    RemoteDockerOverview, RemoteProcess, RemoteStats, SessionEvent, SessionInfo, SessionKind,
-    SessionManager, SftpDuplicateDecision, SftpDuplicatePolicy, SftpDuplicateResolver,
-    SftpFileEntry, SftpService, SftpTransferControl, SftpTransferOptions, SftpTransferProgress,
-    SshCredentialPromptKind, SshCredentialPromptReason, SshMultiplexHandle, SshProcessService,
-    SshSessionConfig, SshTunnelInfo, SshTunnelManager,
+    DockerComposeService, DockerContainerDetails, RecordingManager, RemoteDockerOverview,
+    RemoteProcess, RemoteStats, SessionEvent, SessionInfo, SessionKind, SessionManager,
+    SftpDuplicateDecision, SftpDuplicatePolicy, SftpDuplicateResolver, SftpFileEntry, SftpService,
+    SftpTransferControl, SftpTransferOptions, SftpTransferProgress, SshCredentialPromptKind,
+    SshCredentialPromptReason, SshMultiplexHandle, SshProcessService, SshSessionConfig,
+    SshTunnelInfo, SshTunnelManager,
 };
 
 pub(super) use std::collections::{HashMap, HashSet, VecDeque};

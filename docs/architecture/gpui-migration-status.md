@@ -12,8 +12,8 @@ Last updated from the working tree on 2026-07-28.
 | `NyaTermApp` fields | 261 | Counted from `features/app_state/mod.rs`; down from 585, still transitional. |
 | `impl NyaTermApp` blocks | 239 | Spread across 234 files under `crates/nyaterm-desktop/src`. |
 | `#[path = "..."]` declarations in desktop | 0 | Cleared. Every directory is a real module; the boundary script fails on any new occurrence. |
-| `use super::*` imports in desktop | 130 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
-| `features/prelude.rs` rough exported-token count | 179 | Still a broad shared prelude; two hundred sixty-six low-frequency GPUI/transport/core/http/model/helper/widget exports are now explicit imports. |
+| `use super::*` imports in desktop | 115 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
+| `features/prelude.rs` rough exported-token count | 177 | Still a broad shared prelude; two hundred sixty-eight low-frequency GPUI/transport/core/http/model/helper/widget exports are now explicit imports. |
 | Entity Store structs | 4 | `Runtime`, `WindowRuntime`, `StartupRestore`, `Overlay`. Each owns state the app does not. |
 | Snapshot structs | 0 | Cleared. No store is a projection of `NyaTermApp` any more. |
 | `replace_snapshot` methods | 0 | Cleared. |
@@ -509,6 +509,18 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   Persisted connection/quick-command icon keys, icon resolution order, markdown
   parsing and rendering, cloud-sync history rows, and shared widget behavior
   are unchanged.
+- The complete background-service runtime set under `features/remote`,
+  `features/sync` and `features/translation` is now free of `use super::*`
+  imports. Sixteen module/state/runtime files name their GPUI, core, transport,
+  HTTP, model, formatting, widget and sibling dependencies directly; the three
+  feature entry points and cloud-sync runtime entry point are pure module
+  declarations, and the remote runtime no longer imports its helper module as
+  a glob. `CloudSyncError` and `DockerService` also left the shared prelude,
+  while four low-frequency job/helper aliases no longer flatten into the
+  top-level features façade. The architecture script governs all three trees
+  at zero parent-module wildcard imports. Remote Docker/process/stats jobs,
+  cloud-sync provider, history and conflict behavior, persisted sync and
+  translation formats, and translation requests/rendering are unchanged.
 - `connection_runtime/helpers.rs` no longer depends on the connection runtime
   wildcard import; its GPUI, app, model, and core dependencies are explicit.
 - `connection_runtime/actions.rs` no longer depends on the connection runtime

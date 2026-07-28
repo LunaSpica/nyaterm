@@ -1,7 +1,14 @@
-use super::*;
+use gpui::{
+    ClipboardItem, Context, FontWeight, IntoElement, MouseButton, SharedString, Window, div,
+    prelude::*, px, rgb, rgba,
+};
+use nyaterm_core::ConnectionStore;
 
+use crate::features::NyaTermApp;
+use crate::features::runtime_jobs::TranslateJobResult;
 use crate::http::translation::translate_text;
 use crate::models::{TranslateInputField, TranslationDialogState, TranslationSecretDraft};
+use crate::widgets::small_button;
 
 const TRANSLATE_EVENT_DRAIN_LIMIT: usize = 8;
 
