@@ -1,7 +1,19 @@
-use super::*;
+use gpui::{
+    Context, FontWeight, InteractiveElement as _, IntoElement, MouseButton, MouseDownEvent,
+    ParentElement as _, SharedString, StatefulInteractiveElement as _, Styled as _, div,
+    prelude::FluentBuilder as _, px, relative, rgb,
+};
+use nyaterm_core::truncate_preview;
+
+use crate::features::{NyaTermApp, format_file_size, transfer_job_title, transfer_status_label};
+use crate::models::{TransferJobState, TransferJobStatus};
+use crate::theme::ThemePalette;
+use crate::widgets::status_pill;
+
+use super::{transfer_direction_label, transfer_progress_percent_label, transfer_progress_ratio};
 
 pub(in crate::features::pages::transfers) fn transfer_job_row(
-    palette: crate::theme::ThemePalette,
+    palette: ThemePalette,
     job: TransferJobState,
     directory_progress: Option<String>,
     _selected_remote_path: Option<String>,
@@ -137,7 +149,7 @@ pub(in crate::features::pages::transfers) fn transfer_job_row(
                     .child(
                         div()
                             .h_full()
-                            .w(gpui::relative(percent))
+                            .w(relative(percent))
                             .rounded_full()
                             .bg(rgb(palette.link)),
                     ),

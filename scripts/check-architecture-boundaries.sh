@@ -515,6 +515,7 @@ declare -A SUPER_BASELINE=(
   [crates/nyaterm-desktop/src/features/pages/tunnels/tunnel/row.rs]=0
   [crates/nyaterm-desktop/src/features/pages/tunnels/tunnel/sections.rs]=0
   [crates/nyaterm-desktop/src/features/pages/transfers/helpers/editor.rs]=0
+  [crates/nyaterm-desktop/src/features/pages/transfers/helpers/job_row.rs]=0
   [crates/nyaterm-desktop/src/features/pages/transfers/helpers/paths.rs]=0
   [crates/nyaterm-desktop/src/features/pages/transfers/helpers/properties.rs]=0
   [crates/nyaterm-desktop/src/features/pages/transfers/helpers/queue.rs]=0
@@ -560,6 +561,7 @@ done < <(rg -n --path-separator / '^[[:space:]]*use super::\*;' \
   crates/nyaterm-desktop/src/features/pages/connections \
   crates/nyaterm-desktop/src/features/pages/tunnels \
   crates/nyaterm-desktop/src/features/pages/transfers/helpers/editor.rs \
+  crates/nyaterm-desktop/src/features/pages/transfers/helpers/job_row.rs \
   crates/nyaterm-desktop/src/features/pages/transfers/helpers/paths.rs \
   crates/nyaterm-desktop/src/features/pages/transfers/helpers/properties.rs \
   crates/nyaterm-desktop/src/features/pages/transfers/helpers/queue.rs \
