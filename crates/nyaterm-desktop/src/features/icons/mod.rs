@@ -127,7 +127,7 @@ fn legible_on(color: u32, palette: ThemePalette) -> u32 {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{IconDef, ThemePalette, legible_on, relative_luminance};
 
     fn dark() -> ThemePalette {
         crate::theme::theme_palette("github-dark")

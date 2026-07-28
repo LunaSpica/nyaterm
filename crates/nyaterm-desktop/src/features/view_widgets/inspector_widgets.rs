@@ -1,4 +1,8 @@
-use super::*;
+use gpui::{
+    App, ClickEvent, FontWeight, IntoElement, SharedString, Window, div, prelude::*, px, rgb, svg,
+};
+
+use crate::theme::ThemePalette;
 
 /// Tauri EmptyWorkspaceState row: action label (primary) + shortcut key chips.
 pub(in crate::features) fn empty_workspace_action(

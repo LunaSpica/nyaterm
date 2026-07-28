@@ -117,7 +117,7 @@ pub(in crate::features) fn file_entry_icon(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{IconDef, ThemePalette, file_entry_icon};
 
     fn palette() -> ThemePalette {
         crate::theme::theme_palette("github-dark")

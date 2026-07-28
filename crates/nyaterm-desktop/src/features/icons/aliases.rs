@@ -72,7 +72,7 @@ pub(super) fn resolve_alias(normalized: &str) -> &str {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{CONNECTION_ICON_ALIASES, normalize_connection_icon_key, resolve_alias};
 
     #[test]
     fn normalization_strips_the_svg_suffix_case_insensitively() {

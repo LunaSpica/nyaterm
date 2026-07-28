@@ -124,7 +124,7 @@ pub(in crate::features) fn infer_connection_icon_key_from_remote_system(
 mod tests {
     use super::super::connection::resolve_connection_icon;
     use super::super::{IconPaint, connection::default_connection_icon_for_kind};
-    use super::*;
+    use super::{DISTRO_MATCHES, infer_connection_icon_key_from_remote_system};
 
     fn infer(os: &str) -> Option<&'static str> {
         infer_connection_icon_key_from_remote_system(os, "x86_64")

@@ -394,7 +394,10 @@ pub(in crate::features) fn parse_markdown_blocks(content: &str) -> Vec<MarkdownB
 
 #[cfg(test)]
 mod markdown_tests {
-    use super::*;
+    use super::{
+        InlineMdStyle, MarkdownBlock, extract_think_content, parse_inline_markdown,
+        parse_markdown_blocks,
+    };
 
     #[test]
     fn parse_table_and_inline() {

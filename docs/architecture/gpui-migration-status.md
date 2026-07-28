@@ -12,7 +12,7 @@ Last updated from the working tree on 2026-07-28.
 | `NyaTermApp` fields | 261 | Counted from `features/app_state/mod.rs`; down from 585, still transitional. |
 | `impl NyaTermApp` blocks | 239 | Spread across 234 files under `crates/nyaterm-desktop/src`. |
 | `#[path = "..."]` declarations in desktop | 0 | Cleared. Every directory is a real module; the boundary script fails on any new occurrence. |
-| `use super::*` imports in desktop | 144 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
+| `use super::*` imports in desktop | 130 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
 | `features/prelude.rs` rough exported-token count | 179 | Still a broad shared prelude; two hundred sixty-six low-frequency GPUI/transport/core/http/model/helper/widget exports are now explicit imports. |
 | Entity Store structs | 4 | `Runtime`, `WindowRuntime`, `StartupRestore`, `Overlay`. Each owns state the app does not. |
 | Snapshot structs | 0 | Cleared. No store is a projection of `NyaTermApp` any more. |
@@ -497,6 +497,18 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   imports and prevents those prelude exports from returning. SSH host-key and
   credential prompting, OTP lookup, credential autofill, session startup and
   restore, recording, and TRZSZ/ZMODEM behavior are unchanged.
+- The complete 18-module presentation-support set under `features/icons`,
+  `features/formatting` and `features/view_widgets` is now free of
+  `use super::*` imports. Icon compatibility tests, markdown parser tests and
+  GPUI view helpers name their exact data, theme, formatting, widget and GPUI
+  dependencies. The formatting, view-widget and top-level feature façades also
+  use named re-exports instead of glob re-exports; twenty-three low-frequency
+  aliases no longer flatten into `crate::features` and remain available only
+  through their owning module paths. The architecture script governs all three
+  trees and prevents their module-entry glob re-exports from returning.
+  Persisted connection/quick-command icon keys, icon resolution order, markdown
+  parsing and rendering, cloud-sync history rows, and shared widget behavior
+  are unchanged.
 - `connection_runtime/helpers.rs` no longer depends on the connection runtime
   wildcard import; its GPUI, app, model, and core dependencies are explicit.
 - `connection_runtime/actions.rs` no longer depends on the connection runtime

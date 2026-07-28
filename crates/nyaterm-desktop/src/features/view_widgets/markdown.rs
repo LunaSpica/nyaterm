@@ -1,4 +1,12 @@
-use super::*;
+use gpui::{
+    FontStyle, FontWeight, HighlightStyle, IntoElement, SharedString, StrikethroughStyle,
+    StyledText, UnderlineStyle, div, prelude::*, px, rgb,
+};
+
+use crate::features::formatting::{
+    InlineMdStyle, MarkdownBlock, parse_inline_markdown, parse_markdown_blocks,
+};
+use crate::theme::ThemePalette;
 
 /// Lightweight GFM markdown renderer for AI transcript (Tauri MarkdownContent parity).
 pub(in crate::features) fn markdown_content_view(

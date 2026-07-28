@@ -168,6 +168,11 @@ check_no_matches \
   crates/nyaterm-desktop/src/features/panels/tab_actions_overlay/mod.rs
 
 check_no_matches \
+  "presentation support module entry points must use named re-exports" \
+  '^[[:space:]]*pub\(in crate::features\)[[:space:]]+use[[:space:]]+(formatting|view_widgets|labels|ai_history|markdown|chrome|inspector_widgets|stats|rows|icons)::\*;' \
+  crates/nyaterm-desktop/src/features
+
+check_no_matches \
   "cloud sync HTTP backend helpers must stay out of features/prelude.rs" \
   '(^|[,{[:space:]])(NativeAliyunDriveRemote|NativeGoogleDriveRemote|NativeOneDriveRemote|NativeS3Remote|NativeSnippetHttpClient|NativeWebdavRemote|run_github_gist_device_flow)([},[:space:]]|$)' \
   crates/nyaterm-desktop/src/features/prelude.rs
@@ -672,6 +677,17 @@ declare -A SUPER_BASELINE=(
   [crates/nyaterm-desktop/src/features/settings/settings_runtime/recording_transfer.rs]=0
   [crates/nyaterm-desktop/src/features/settings/settings_runtime/search_engines.rs]=0
   [crates/nyaterm-desktop/src/features/settings/settings_runtime/terminal_remote.rs]=0
+  [crates/nyaterm-desktop/src/features/formatting/ai_history.rs]=0
+  [crates/nyaterm-desktop/src/features/formatting/labels.rs]=0
+  [crates/nyaterm-desktop/src/features/formatting/markdown.rs]=0
+  [crates/nyaterm-desktop/src/features/formatting/mod.rs]=0
+  [crates/nyaterm-desktop/src/features/icons/aliases.rs]=0
+  [crates/nyaterm-desktop/src/features/icons/connection.rs]=0
+  [crates/nyaterm-desktop/src/features/icons/file_kind.rs]=0
+  [crates/nyaterm-desktop/src/features/icons/mod.rs]=0
+  [crates/nyaterm-desktop/src/features/icons/quick.rs]=0
+  [crates/nyaterm-desktop/src/features/icons/remote_system.rs]=0
+  [crates/nyaterm-desktop/src/features/icons/search.rs]=0
   [crates/nyaterm-desktop/src/features/inspector/mod.rs]=0
   [crates/nyaterm-desktop/src/features/inspector/ai_ask.rs]=0
   [crates/nyaterm-desktop/src/features/inspector/commands.rs]=0
@@ -792,6 +808,13 @@ declare -A SUPER_BASELINE=(
   [crates/nyaterm-desktop/src/features/tunnels/tunnel_runtime/helpers.rs]=0
   [crates/nyaterm-desktop/src/features/tunnels/tunnel_runtime/proxy_editor.rs]=0
   [crates/nyaterm-desktop/src/features/tunnels/tunnel_runtime/tunnel_editor.rs]=0
+  [crates/nyaterm-desktop/src/features/view_widgets/chrome.rs]=0
+  [crates/nyaterm-desktop/src/features/view_widgets/icons.rs]=0
+  [crates/nyaterm-desktop/src/features/view_widgets/inspector_widgets.rs]=0
+  [crates/nyaterm-desktop/src/features/view_widgets/markdown.rs]=0
+  [crates/nyaterm-desktop/src/features/view_widgets/mod.rs]=0
+  [crates/nyaterm-desktop/src/features/view_widgets/rows.rs]=0
+  [crates/nyaterm-desktop/src/features/view_widgets/stats.rs]=0
 )
 
 for file in "${!SUPER_BASELINE[@]}"; do
@@ -806,10 +829,13 @@ done < <(rg -n --path-separator / '^[[:space:]]*use super::\*;' \
   crates/nyaterm-desktop/src/features/ai \
   crates/nyaterm-desktop/src/features/connections \
   crates/nyaterm-desktop/src/features/commands \
+  crates/nyaterm-desktop/src/features/formatting \
+  crates/nyaterm-desktop/src/features/icons \
   crates/nyaterm-desktop/src/features/inspector \
   crates/nyaterm-desktop/src/features/panels \
   crates/nyaterm-desktop/src/features/session \
   crates/nyaterm-desktop/src/features/settings \
+  crates/nyaterm-desktop/src/features/view_widgets \
   crates/nyaterm-desktop/src/features/pages/mod.rs \
   crates/nyaterm-desktop/src/features/pages/connections \
   crates/nyaterm-desktop/src/features/pages/tunnels \

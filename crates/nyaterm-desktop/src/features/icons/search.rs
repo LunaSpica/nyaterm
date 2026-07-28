@@ -58,7 +58,7 @@ pub(in crate::features) fn search_engine_icon(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{SEARCH_ENGINE_ICON_IDS, ThemePalette, search_engine_icon};
 
     fn palette() -> ThemePalette {
         crate::theme::theme_palette("github-dark")

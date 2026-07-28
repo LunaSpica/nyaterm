@@ -1,37 +1,26 @@
-use gpui::{
-    App, ClickEvent, FontStyle, FontWeight, HighlightStyle, IntoElement, SharedString,
-    StrikethroughStyle, StyledText, TitlebarOptions, UnderlineStyle, Window, WindowControlArea,
-    div, prelude::*, px, rgb, rgba, svg,
-};
-use nyaterm_core::{
-    CloudSyncHistoryEntry, ConnectionType, NativeServiceStatus, SavedConnection, TunnelConfig,
-    truncate_preview,
-};
-use nyaterm_transport::{DockerContainer, NetworkInfo, RemoteProcess};
-
-use crate::models::WorkspaceSplitDirection;
-use crate::widgets::{mode_button, small_button, status_pill};
-
-use super::{
-    InlineMdStyle, MarkdownBlock, ThemePalette, cloud_sync_history_summary,
-    cloud_sync_kind_text_color, cloud_sync_status_dot_color, cloud_sync_status_text_color,
-    compact_id, docker_state_color, docker_state_label, format_history_timestamp_ms, format_rate,
-    parse_inline_markdown, parse_markdown_blocks, tunnel_endpoint, tunnel_name,
-};
-
 mod chrome;
-pub(in crate::features) use chrome::*;
+pub(in crate::features) use chrome::{
+    child_window_header, child_window_titlebar, dialog_action_button, logo_mark,
+    modal_close_icon_button, modal_dialog_footer_localized, modal_dialog_footer_localized_danger,
+    modal_dialog_shell, panel_header_with_actions, window_control_button,
+};
 
 mod inspector_widgets;
-pub(in crate::features) use inspector_widgets::*;
+pub(in crate::features) use inspector_widgets::{
+    empty_workspace_action, tab_action_button, tab_menu_item, tab_menu_item_enabled,
+    tab_menu_separator,
+};
 
 mod stats;
-pub(in crate::features) use stats::*;
+pub(in crate::features) use stats::{metric, service_status, stats_progress_bar};
 mod rows;
-pub(in crate::features) use rows::*;
+pub(in crate::features) use rows::cloud_sync_history_row;
 
 mod icons;
-pub(in crate::features) use icons::*;
+pub(in crate::features) use icons::{
+    activity_icon, color_icon, connection_type_icon, mono_icon, nyaterm_logo_mark, themed_icon,
+    transfer_entry_icon,
+};
 
 mod markdown;
-pub(in crate::features) use markdown::*;
+pub(in crate::features) use markdown::markdown_content_view;

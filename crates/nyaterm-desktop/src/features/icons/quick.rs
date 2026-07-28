@@ -50,7 +50,7 @@ pub(in crate::features) fn quick_command_icon(icon_tag: &str) -> Option<IconDef>
 #[cfg(test)]
 mod tests {
     use super::super::IconPaint;
-    use super::*;
+    use super::{BRAND_ICONS, GENERIC_ICONS, QUICK_COMMAND_ICON_OPTIONS, quick_command_icon};
 
     /// Tags the GPUI picker has offered since the migration. Saved commands carry
     /// them, so none may stop resolving.

@@ -242,7 +242,10 @@ pub(in crate::features) fn default_connection_icon_for_kind(kind: &str) -> IconD
 mod tests {
     use super::super::IconPaint;
     use super::super::aliases::CONNECTION_ICON_ALIASES;
-    use super::*;
+    use super::{
+        CONNECTION_ICON_OPTIONS, LINUX_ICONS, SERVER_ICONS, SYSTEM_ICONS,
+        default_connection_icon_for_kind, lookup, resolve_connection_icon,
+    };
 
     /// Every key the GPUI picker has ever offered. Stored connections carry these
     /// verbatim, so none may stop resolving.

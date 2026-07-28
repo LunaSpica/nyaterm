@@ -57,7 +57,16 @@ pub(in crate::features) use connections::{
     ConnectionDragKind, ConnectionDragPayload, ConnectionDragPreview, ConnectionDropPosition,
     ConnectionDropTarget, ConnectionEditorToggle, ConnectionFeatureFocus, ConnectionFeatureState,
 };
-pub(in crate::features) use formatting::*;
+pub(in crate::features) use formatting::{
+    cloud_sync_history_status, cloud_sync_status_dot_color, cloud_sync_status_text_color,
+    compact_id, configured_cloud_sync_provider, docker_compose_project_key, docker_state_color,
+    docker_state_label, docker_state_rank, download_file_name_from_remote_path,
+    format_cloud_provider, format_duration_ms, format_history_timestamp_ms, format_last_used_ms,
+    format_permissions_octal, format_rate, format_terminal_line_timestamp_ms, format_uptime,
+    non_empty_string, none_if_blank, normalize_startup_command, recent_terminal_output,
+    session_kind_label, short_id, status_label, trim_terminal_output_to, tunnel_endpoint,
+    tunnel_mode, tunnel_name,
+};
 pub(in crate::features) use icons::{
     CONNECTION_ICON_OPTIONS, DEFAULT_CONNECTION_ICON, IconDef, QUICK_COMMAND_ICON_OPTIONS,
     SEARCH_ENGINE_ICON_IDS, file_entry_icon, infer_connection_icon_key_from_remote_system,
@@ -103,7 +112,13 @@ pub(in crate::features) use transfers::{
     TransferFeatureFocus, TransferFeatureState, duplicate_decision_label, duplicate_policy_label,
     format_file_size, transfer_job_title, transfer_status_label,
 };
-pub(in crate::features) use view_widgets::*;
+pub(in crate::features) use view_widgets::{
+    activity_icon, child_window_header, child_window_titlebar, cloud_sync_history_row, color_icon,
+    connection_type_icon, dialog_action_button, empty_workspace_action, logo_mark, metric,
+    modal_close_icon_button, modal_dialog_footer_localized, modal_dialog_footer_localized_danger,
+    modal_dialog_shell, mono_icon, nyaterm_logo_mark, panel_header_with_actions, service_status,
+    stats_progress_bar, themed_icon, transfer_entry_icon, window_control_button,
+};
 
 const LEGACY_ROOT: &str = "./temp/nyaterm-tauri";
 pub(crate) const INITIAL_TERMINAL_BANNER: &str = "$ nyaterm --native\nGPUI shell initialized.\nStart a local terminal or open a saved connection.\n";

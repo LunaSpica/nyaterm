@@ -1,4 +1,13 @@
-use super::*;
+use gpui::{
+    App, ClickEvent, FontWeight, IntoElement, SharedString, Window, div, prelude::*, px, rgb,
+};
+use nyaterm_core::{CloudSyncHistoryEntry, truncate_preview};
+
+use crate::features::formatting::{
+    cloud_sync_history_summary, cloud_sync_kind_text_color, cloud_sync_status_dot_color,
+    cloud_sync_status_text_color, compact_id, format_history_timestamp_ms,
+};
+use crate::theme::ThemePalette;
 
 pub(in crate::features) fn cloud_sync_history_row(
     palette: ThemePalette,

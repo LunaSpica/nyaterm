@@ -1,4 +1,8 @@
-use super::*;
+use gpui::{FontWeight, IntoElement, SharedString, div, prelude::*, px, rgb};
+use nyaterm_core::NativeServiceStatus;
+
+use crate::theme::ThemePalette;
+use crate::widgets::status_pill;
 
 pub(in crate::features) fn stats_progress_bar(
     palette: ThemePalette,

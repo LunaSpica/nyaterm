@@ -1,4 +1,17 @@
-use super::*;
+use std::path::PathBuf;
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use gpui::rgb;
+use nyaterm_core::{
+    AppSettingsSummary, CloudSyncError, CloudSyncHistoryEntry, CloudSyncSettings, RiskLevel,
+    TunnelConfig,
+};
+use nyaterm_transport::{
+    SessionKind, SshSessionConfig, SshTunnelMode, TelnetEnterMode, safe_recording_name,
+};
+
+use crate::features::AiAgentStepStatus;
+use crate::theme::ThemePalette;
 
 pub(in crate::features) fn ai_agent_step_status_style(
     status: AiAgentStepStatus,

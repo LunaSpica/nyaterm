@@ -1,5 +1,10 @@
-use super::*;
-use gpui::AnyElement;
+use gpui::{
+    AnyElement, App, ClickEvent, FontWeight, IntoElement, SharedString, TitlebarOptions, Window,
+    WindowControlArea, div, prelude::*, px, rgb, rgba, svg,
+};
+
+use crate::theme::ThemePalette;
+use crate::widgets::small_button;
 
 pub(in crate::features) fn logo_mark(palette: ThemePalette) -> impl IntoElement {
     div()
