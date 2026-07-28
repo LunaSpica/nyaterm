@@ -1,7 +1,23 @@
-use super::*;
+use gpui::{
+    AnyElement, ClickEvent, Context, InteractiveElement as _, IntoElement, KeyDownEvent,
+    MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement as _, Pixels,
+    SharedString, StatefulInteractiveElement as _, Styled as _, div, prelude::*, px, rgb,
+};
+use nyaterm_core::truncate_preview;
+use nyaterm_transport::{SftpFileEntry, SftpFileType};
+
+use std::collections::HashSet;
+
+use crate::features::{NyaTermApp, gpui_code_font_family};
+use crate::models::{TransferBrowserColumnWidths, TransferRenameState};
+use crate::theme::ThemePalette;
+
+use super::{
+    format_file_size, format_permissions_octal, format_sftp_modified, transfer_entry_icon,
+};
 
 pub(super) fn transfer_browser_parent_entry_row(
-    palette: crate::theme::ThemePalette,
+    palette: ThemePalette,
     current_path: String,
     column_widths: TransferBrowserColumnWidths,
     cx: &mut Context<NyaTermApp>,
@@ -61,8 +77,8 @@ pub(super) fn transfer_browser_parent_entry_row(
 }
 
 fn transfer_browser_text_cell(
-    palette: crate::theme::ThemePalette,
-    width: gpui::Pixels,
+    palette: ThemePalette,
+    width: Pixels,
     value: &'static str,
 ) -> impl IntoElement {
     div()
@@ -76,13 +92,13 @@ fn transfer_browser_text_cell(
 }
 
 pub(super) fn transfer_browser_entry_row(
-    palette: crate::theme::ThemePalette,
+    palette: ThemePalette,
     entry: SftpFileEntry,
     selected_remote_path: Option<String>,
     selected_remote_paths: &HashSet<String>,
     column_widths: TransferBrowserColumnWidths,
     rename_state: Option<TransferRenameState>,
-    rename_input: Option<gpui::AnyElement>,
+    rename_input: Option<AnyElement>,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
     let entry_path = entry.path.clone();
@@ -193,7 +209,7 @@ pub(super) fn transfer_browser_entry_row(
                         div()
                             .min_w_0()
                             .flex_1()
-                            .font_family(crate::features::gpui_code_font_family())
+                            .font_family(gpui_code_font_family())
                             // A name that cannot be saved reddens the box.
                             .when(rename_has_error, |this| {
                                 this.rounded_sm().border_1().border_color(rgb(0x7f1d1d))
@@ -234,7 +250,7 @@ pub(super) fn transfer_browser_entry_row(
                 .px_2()
                 .truncate()
                 .text_xs()
-                .font_family(crate::features::gpui_code_font_family())
+                .font_family(gpui_code_font_family())
                 .text_color(rgb(palette.text_muted))
                 .child(format_sftp_modified(entry.modified_at)),
         )
@@ -256,7 +272,7 @@ pub(super) fn transfer_browser_entry_row(
                 .px_2()
                 .truncate()
                 .text_xs()
-                .font_family(crate::features::gpui_code_font_family())
+                .font_family(gpui_code_font_family())
                 .text_color(rgb(palette.text_muted))
                 .child(
                     entry

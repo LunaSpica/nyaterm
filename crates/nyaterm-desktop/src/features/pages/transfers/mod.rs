@@ -1,24 +1,22 @@
 use gpui::{
     AnyElement, App, ClickEvent, ClipboardItem, Context, Entity, FontWeight, IntoElement,
-    KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, SharedString, Window,
-    div, prelude::*, px, rgb, svg,
+    KeyDownEvent, MouseButton, MouseDownEvent, SharedString, Window, div, prelude::*, px, rgb, svg,
 };
 use nyaterm_transport::{SftpAttributeUpdate, SftpFileEntry, SftpFileType, SftpService};
 
 use crate::models::{
     TransferBrowserBreadcrumbSegment, TransferBrowserChildrenMenuStatus,
-    TransferBrowserColumnWidths, TransferBrowserContextMenuState,
-    TransferBrowserFavoritesMenuState, TransferBrowserPathMenuKind, TransferBrowserPathMenuState,
-    TransferBrowserUploadMenuState, TransferDeleteState, TransferEditorField, TransferEditorState,
-    TransferEditorWorkspaceState, TransferExternalSyncPromptState, TransferJobEvent,
-    TransferJobKind, TransferJobOutput, TransferJobResult, TransferJobState, TransferJobStatus,
-    TransferMoveState, TransferNewFileState, TransferNewFolderState, TransferNewSymlinkState,
-    TransferPathPromptKind, TransferPermissionTarget, TransferPropertiesField,
-    TransferPropertiesState, TransferRenameState, TransferSymlinkField, TransferUnknownFileState,
+    TransferBrowserContextMenuState, TransferBrowserFavoritesMenuState,
+    TransferBrowserPathMenuKind, TransferBrowserPathMenuState, TransferBrowserUploadMenuState,
+    TransferDeleteState, TransferEditorField, TransferEditorState, TransferEditorWorkspaceState,
+    TransferExternalSyncPromptState, TransferJobEvent, TransferJobKind, TransferJobOutput,
+    TransferJobResult, TransferJobState, TransferJobStatus, TransferMoveState,
+    TransferNewFileState, TransferNewFolderState, TransferNewSymlinkState, TransferPathPromptKind,
+    TransferPermissionTarget, TransferPropertiesField, TransferPropertiesState,
+    TransferRenameState, TransferSymlinkField, TransferUnknownFileState,
 };
 use crate::widgets::{small_button, status_pill};
 use nyaterm_core::AiCustomActionConfig;
-use std::collections::HashSet;
 
 use super::super::{
     NyaTermApp, RemoteTextEditor, TextInputSetup, dialog_action_button, format_file_size,
@@ -48,7 +46,7 @@ mod path_bar;
 mod properties;
 mod queue;
 
-use entry_row::*;
+use entry_row::{transfer_browser_entry_row, transfer_browser_parent_entry_row};
 use helpers::*;
 
 const NATIVE_EDITOR_MAX_BYTES: u64 = 512 * 1024;
