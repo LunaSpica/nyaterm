@@ -100,7 +100,11 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let connections = self.saved_connections_in_group_tree(&group_id);
+        let connections = self.connection_state.saved_connections_in_group_tree(
+            &self.connections,
+            &self.connection_groups,
+            &group_id,
+        );
         if connections.is_empty() {
             self.terminal.view.status = "group has no connections".to_string();
             cx.notify();
@@ -124,7 +128,10 @@ impl NyaTermApp {
         else {
             return;
         };
-        let connection_count = self.saved_connections_in_group_tree(&group_id).len();
+        let connection_count = self
+            .connection_state
+            .saved_connections_in_group_tree(&self.connections, &self.connection_groups, &group_id)
+            .len();
         if connection_count == 0 {
             return;
         }
@@ -156,31 +163,6 @@ impl NyaTermApp {
             return;
         };
         self.start_group_connections(confirm.group_id, window, cx);
-    }
-
-    fn saved_connections_in_group_tree(&self, group_id: &str) -> Vec<SavedConnection> {
-        let mut group_ids = std::collections::HashSet::from([group_id.to_string()]);
-        let mut changed = true;
-        while changed {
-            changed = false;
-            for group in &self.connection_groups {
-                if let Some(parent) = group.parent_id.as_ref() {
-                    if group_ids.contains(parent) && group_ids.insert(group.id.clone()) {
-                        changed = true;
-                    }
-                }
-            }
-        }
-        self.connections
-            .iter()
-            .filter(|connection| {
-                connection
-                    .group_id
-                    .as_ref()
-                    .is_some_and(|id| group_ids.contains(id))
-            })
-            .cloned()
-            .collect()
     }
 
     pub(in crate::features) fn enqueue_saved_connection_start(

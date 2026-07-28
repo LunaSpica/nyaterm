@@ -714,6 +714,14 @@ check_no_matches \
   'fn (selected_connections|visible_connection_ids)\(' \
   crates/nyaterm-desktop/src/features/connections/connections/selection.rs
 check_no_matches \
+  "connection group tree queries must stay on ConnectionFeatureState" \
+  'fn saved_connections_in_group_tree|group_ids = std::collections::HashSet::from' \
+  crates/nyaterm-desktop/src/features/connections/connections/menus.rs
+check_no_matches \
+  "connection page group tree queries must stay on ConnectionFeatureState" \
+  'group_ids = std::collections::HashSet::from' \
+  crates/nyaterm-desktop/src/features/pages/connections/menus.rs
+check_no_matches \
   "connections page list reads must use ConnectionFeatureState methods" \
   'connection_state\.list\.(search_draft|sort_mode|selected_ids|last_selected_id|context_menu|group_context_menu|search_focus|hover_pending|hovered_connection_id|hovered_group_id|drop_target|expanded_group_ids|more_menu_open)(\.|[[:space:]]|==|,|\)|$)' \
   crates/nyaterm-desktop/src/features/pages/connections

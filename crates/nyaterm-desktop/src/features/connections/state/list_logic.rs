@@ -34,6 +34,24 @@ pub(super) fn selected_connections_for_list_state(
         .collect()
 }
 
+pub(super) fn saved_connections_in_group_tree_for_list_state(
+    connections: &[SavedConnection],
+    groups: &[Group],
+    group_id: &str,
+) -> Vec<SavedConnection> {
+    let group_ids = group_tree_ids(groups, group_id);
+    connections
+        .iter()
+        .filter(|connection| {
+            connection
+                .group_id
+                .as_ref()
+                .is_some_and(|id| group_ids.contains(id))
+        })
+        .cloned()
+        .collect()
+}
+
 pub(super) fn visible_connection_ids_for_list_state(
     connections: &[SavedConnection],
     groups: &[Group],
@@ -92,6 +110,22 @@ pub(super) fn visible_connection_ids_for_list_state(
         ids.extend(root.into_iter().map(|connection| connection.id.clone()));
     }
     ids
+}
+
+fn group_tree_ids(groups: &[Group], group_id: &str) -> HashSet<String> {
+    let mut group_ids = HashSet::from([group_id.to_string()]);
+    let mut changed = true;
+    while changed {
+        changed = false;
+        for group in groups {
+            if let Some(parent) = group.parent_id.as_ref() {
+                if group_ids.contains(parent) && group_ids.insert(group.id.clone()) {
+                    changed = true;
+                }
+            }
+        }
+    }
+    group_ids
 }
 
 fn connection_matches_query(connection: &SavedConnection, query: &str) -> bool {

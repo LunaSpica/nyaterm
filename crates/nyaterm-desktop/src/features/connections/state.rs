@@ -42,10 +42,10 @@ use self::list_logic::{
     clear_connection_list_runtime_state, clear_selected_connection_ids, close_connection_more_menu,
     connection_drop_position_for_target, cycle_connection_sort_mode,
     remove_connection_list_references, remove_group_list_references,
-    retain_loaded_connection_list_references, select_connection_ids,
-    selected_connections_for_list_state, set_connection_drop_target_if_changed,
-    set_connection_group_hover, sync_connection_search_expansion,
-    visible_connection_ids_for_list_state,
+    retain_loaded_connection_list_references, saved_connections_in_group_tree_for_list_state,
+    select_connection_ids, selected_connections_for_list_state,
+    set_connection_drop_target_if_changed, set_connection_group_hover,
+    sync_connection_search_expansion, visible_connection_ids_for_list_state,
 };
 #[cfg(test)]
 use self::network_logic::remove_network_group_references;
@@ -293,6 +293,15 @@ impl ConnectionFeatureState {
 
     pub fn selected_connections(&self, connections: &[SavedConnection]) -> Vec<SavedConnection> {
         selected_connections_for_list_state(connections, &self.list.selected_ids)
+    }
+
+    pub fn saved_connections_in_group_tree(
+        &self,
+        connections: &[SavedConnection],
+        groups: &[Group],
+        group_id: &str,
+    ) -> Vec<SavedConnection> {
+        saved_connections_in_group_tree_for_list_state(connections, groups, group_id)
     }
 
     pub fn visible_connection_ids(
@@ -2031,13 +2040,14 @@ mod tests {
         insert_connection_editor_description_newline, remove_connection_list_references,
         remove_group_list_references, remove_network_group_and_item_references,
         remove_network_group_references, remove_network_item_references,
-        retain_loaded_connection_list_references, select_connection_ids,
-        selected_connections_for_list_state, set_connection_drop_target_if_changed,
-        set_connection_editor_advanced_tab, set_connection_editor_error,
-        set_connection_editor_field_text, set_connection_editor_icon, set_connection_editor_kind,
-        set_connection_editor_menu_value, set_connection_editor_password_source,
-        set_connection_editor_telnet_tab, set_connection_group_editor_error,
-        set_connection_group_hover, set_network_group_editor_error, set_network_group_editor_name,
+        retain_loaded_connection_list_references, saved_connections_in_group_tree_for_list_state,
+        select_connection_ids, selected_connections_for_list_state,
+        set_connection_drop_target_if_changed, set_connection_editor_advanced_tab,
+        set_connection_editor_error, set_connection_editor_field_text, set_connection_editor_icon,
+        set_connection_editor_kind, set_connection_editor_menu_value,
+        set_connection_editor_password_source, set_connection_editor_telnet_tab,
+        set_connection_group_editor_error, set_connection_group_hover,
+        set_network_group_editor_error, set_network_group_editor_name,
         set_network_proxy_editor_error, set_network_proxy_editor_field,
         set_network_tunnel_bind_localhost, set_network_tunnel_editor_error,
         set_network_tunnel_editor_field, stepped_menu_highlight, sync_connection_search_expansion,
@@ -2368,6 +2378,32 @@ mod tests {
                 .map(|connection| connection.id.as_str())
                 .collect::<Vec<_>>(),
             vec!["first", "third"]
+        );
+    }
+
+    #[test]
+    fn saved_connections_in_group_tree_for_list_state_includes_descendants_in_loaded_order() {
+        let connections = vec![
+            saved_connection("root", "Root", None, 0),
+            saved_connection("direct", "Direct", Some("parent-group"), 1),
+            saved_connection("nested", "Nested", Some("child-group"), 0),
+            saved_connection("other", "Other", Some("other-group"), 0),
+        ];
+        let groups = vec![
+            group("parent-group", "Parent Group", None, 0),
+            group("child-group", "Child Group", Some("parent-group"), 0),
+            group("other-group", "Other Group", None, 1),
+        ];
+
+        let grouped =
+            saved_connections_in_group_tree_for_list_state(&connections, &groups, "parent-group");
+
+        assert_eq!(
+            grouped
+                .iter()
+                .map(|connection| connection.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["direct", "nested"]
         );
     }
 

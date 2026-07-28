@@ -346,6 +346,10 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   projections pass the persisted connection/group collections into
   `ConnectionFeatureState`; list filtering, sorting, expanded-group traversal
   and selection projection stay out of the app coordinator.
+- Saved-connection group-tree derivation also lives behind
+  `ConnectionFeatureState`; starting all connections in a folder and deciding
+  whether the group context menu should show "open all" no longer duplicate the
+  descendant traversal in `NyaTermApp` or page render code.
 - Connection row hover intent, hover dismissal, and group hover transitions now
   route through `ConnectionFeatureState`, leaving the rows view to forward UI
   events instead of mutating transient list fields directly.

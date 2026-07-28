@@ -392,29 +392,10 @@ impl NyaTermApp {
         let group_id_open = group_id.clone();
         let group_id_edit = group_id.clone();
         let group_id_delete = group_id.clone();
-        let total_in_group = {
-            let mut group_ids = std::collections::HashSet::from([group_id.clone()]);
-            let mut changed = true;
-            while changed {
-                changed = false;
-                for group in &self.connection_groups {
-                    if let Some(parent) = group.parent_id.as_ref() {
-                        if group_ids.contains(parent) && group_ids.insert(group.id.clone()) {
-                            changed = true;
-                        }
-                    }
-                }
-            }
-            self.connections
-                .iter()
-                .filter(|connection| {
-                    connection
-                        .group_id
-                        .as_ref()
-                        .is_some_and(|id| group_ids.contains(id))
-                })
-                .count()
-        };
+        let total_in_group = self
+            .connection_state
+            .saved_connections_in_group_tree(&self.connections, &self.connection_groups, &group_id)
+            .len();
         let menu = div()
             .flex()
             .flex_col()
