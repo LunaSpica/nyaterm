@@ -9,7 +9,7 @@ Last updated from the working tree on 2026-07-28.
 
 | Metric | Current value | Notes |
 | --- | ---: | --- |
-| `NyaTermApp` fields | 261 | Counted from `features/app_state/mod.rs`; down from 585, still transitional. |
+| `NyaTermApp` fields | 245 | Counted from `features/app_state/mod.rs`; down from 585, still transitional. |
 | `impl NyaTermApp` blocks | 238 | Spread across 233 files under `crates/nyaterm-desktop/src`. |
 | `#[path = "..."]` declarations in desktop | 0 | Cleared. Every directory is a real module; the boundary script fails on any new occurrence. |
 | `use super::*` imports in desktop | 0 | Cleared in production and test modules; guarded crate-wide. |
@@ -222,10 +222,14 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   `ai_secret_draft` fields with the old names; it is a separate snapshot type,
   and the rewrite was anchored on `self`/`this` so those were left alone.
 - Terminal presentation state is grouped into `TerminalFeatureState`: `search`,
-  `view` runtime, `input` focus and IME, `selection` and mouse reporting,
-  painted `layout` geometry, `menus`, and the split/tab `windows` tree. Parsing,
-  snapshots and the wire protocol are untouched and stay in `nyaterm-terminal`
-  and `nyaterm-transport`. `OverlaySnapshot` keeps its own
+  `view` runtime, `input` focus and IME, inline command/credential `assist`,
+  `selection` and mouse reporting, painted `layout` geometry, `menus`, and the
+  split/tab `windows` tree. The `assist` child owns the sixteen command tracker,
+  suggestion popup, credential prompt detector and background matcher fields
+  that previously lived directly on `NyaTermApp`; session-switch and settings
+  reset operations now live on that child state. Parsing, snapshots and the
+  wire protocol are untouched and stay in `nyaterm-terminal` and
+  `nyaterm-transport`. `OverlaySnapshot` keeps its own
   `terminal_actions_open` / `terminal_context_menu_open` projection fields.
 - `core/storage.rs` is split by domain rather than by type: `command_history`,
   `known_hosts`, `ai_history`, `vault` (SSH keys, OTP, passwords, credentials),
@@ -1324,7 +1328,8 @@ while `features/mod.rs` still flattened every feature directory through
 still sit in the same crate-wide namespace, reachable from everywhere. Build the
 real module tree first, then the remaining steps actually enforce something.
 
-Items 1 through 4 are done. What follows is the honest remaining list.
+Items 1, 2, 4, 5 and 6 are done. Item 3 remains active; what follows is the
+honest remaining list.
 
 1. Done. `#[path = "..."]` no longer appears in `nyaterm-desktop` or
    `nyaterm-terminal-gpui`, and a crate-wide guard keeps it that way.
@@ -1333,11 +1338,13 @@ Items 1 through 4 are done. What follows is the honest remaining list.
    compiler-confirmed final pass also removed `features/prelude.rs`, so modules
    cannot regain the same implicit dependency surface through a shared import
    bucket.
-3. Largely done. `NyaTermApp` is down from 585 fields to 261, across eight
-   feature-state structs. What is left is a long tail — the biggest remaining
-   domain is eighteen fields, and much of the rest is genuinely app-level
-   (stores, runtime, services, persisted collections). Group by cohesion where
-   a cluster exists; do not force the count down for its own sake.
+3. Largely done. `NyaTermApp` is down from 585 fields to 245, across eight
+   feature-state structs. The latest cohesive cut moved sixteen terminal
+   command-assistance and credential-prompt fields into
+   `TerminalFeatureState::assist`. What is left is a long tail, and much of it
+   is genuinely app-level (stores, runtime, services, persisted collections).
+   Group by cohesion where a cluster exists; do not force the count down for
+   its own sake.
    Method ownership is now moving too, which is what grouping the fields alone
    did not buy. The rule: if a method only reads and writes one feature state,
    it belongs on that state, and the `NyaTermApp` method becomes a forwarder
@@ -1367,8 +1374,8 @@ Items 1 through 4 are done. What follows is the honest remaining list.
    `terminal_surface_entity.rs` (4,524) are the next files of this size, but
    they are render hot paths and need a different approach than a domain cut.
    `core/ai.rs` is done too, down from 4,032 to 1,554.
-6. Reduce `features/prelude.rs` opportunistically while touching a module, not
-   as standalone rounds. The remaining entries are genuinely shared types.
+6. Done. The final explicit-import pass removed `features/prelude.rs`; a
+   crate-wide guard prevents a replacement shared feature prelude.
 7. Tighten one more low-risk crate-root export after confirming there are no
    external workspace consumers. Prefer desktop/UI presentation crates before
    touching core or transport public APIs.

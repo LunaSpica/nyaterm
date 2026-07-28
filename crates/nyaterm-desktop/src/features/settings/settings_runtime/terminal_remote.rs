@@ -1,5 +1,5 @@
 use gpui::Context;
-use nyaterm_core::{ConnectionStore, TerminalInputState};
+use nyaterm_core::ConnectionStore;
 
 use crate::features::NyaTermApp;
 
@@ -25,12 +25,9 @@ impl NyaTermApp {
 
     pub(in crate::features) fn toggle_terminal_low_latency_mode(&mut self, cx: &mut Context<Self>) {
         self.settings.terminal_low_latency_mode = !self.settings.terminal_low_latency_mode;
-        self.command_suggestion_search_gen = self.command_suggestion_search_gen.saturating_add(1);
+        self.terminal.assist.invalidate_command_suggestion_search();
         if self.settings.terminal_low_latency_mode {
-            self.command_suggestions = None;
-            self.command_input_tracker = TerminalInputState::new();
-            self.command_suggestions_suppressed = false;
-            self.pending_command_history_entry = None;
+            self.terminal.assist.clear_command_tracking();
         }
         self.invalidate_paint_theme_caches();
         self.save_terminal_settings(cx);

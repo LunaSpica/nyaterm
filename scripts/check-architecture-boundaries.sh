@@ -108,6 +108,11 @@ check_no_matches \
   '^[[:space:]]*pub[[:space:]]+(open|query|marked_text|selected_index)[[:space:]]*:' \
   crates/nyaterm-desktop/src/entities/overlay.rs
 
+check_no_matches \
+  "terminal assist fields must stay grouped under TerminalFeatureState" \
+  '^[[:space:]]*pub\(in crate::features\)[[:space:]]+(command_suggestions|command_input_tracker|command_suggestions_suppressed|pending_command_history_entry|command_suggestion_search_gen|command_suggestion_refresh_task|credential_suggestions|credential_autofill_buffer|credential_autofill_recent|credential_autofill_pending|credential_autofill_detection_pending|credential_autofill_next_request_id|credential_autofill_pending_request|credential_autofill_match_pipeline|credential_autofill_sending|credential_prompt_input_until_ms)[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/app_state/mod.rs
+
 # These low-frequency transport helpers have explicit imports at their call
 # sites. Keep them out of the shared feature prelude so new modules do not
 # acquire unrelated transport dependencies implicitly.

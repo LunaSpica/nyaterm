@@ -1165,19 +1165,25 @@ impl NyaTermApp {
         }
         if started {
             // Command is running: clear tracker and suppress suggestions (Tauri C mark).
-            self.command_input_tracker = TerminalInputState::new();
-            self.command_suggestions = None;
-            self.command_suggestions_suppressed = true;
-            self.command_suggestion_search_gen =
-                self.command_suggestion_search_gen.saturating_add(1);
+            self.terminal.assist.command_input_tracker = TerminalInputState::new();
+            self.terminal.assist.command_suggestions = None;
+            self.terminal.assist.command_suggestions_suppressed = true;
+            self.terminal.assist.command_suggestion_search_gen = self
+                .terminal
+                .assist
+                .command_suggestion_search_gen
+                .saturating_add(1);
         }
         if finished {
             // Command finished: re-enable suggestion tracking (Tauri D mark).
-            self.command_suggestions_suppressed = false;
-            self.command_input_tracker = TerminalInputState::new();
-            self.command_suggestions = None;
-            self.command_suggestion_search_gen =
-                self.command_suggestion_search_gen.saturating_add(1);
+            self.terminal.assist.command_suggestions_suppressed = false;
+            self.terminal.assist.command_input_tracker = TerminalInputState::new();
+            self.terminal.assist.command_suggestions = None;
+            self.terminal.assist.command_suggestion_search_gen = self
+                .terminal
+                .assist
+                .command_suggestion_search_gen
+                .saturating_add(1);
         }
         let _ = command_running;
     }

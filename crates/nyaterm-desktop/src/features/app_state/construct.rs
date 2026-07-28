@@ -4,17 +4,17 @@ use std::time::Instant;
 
 use crate::models::{
     ActivityBarLayoutState, BottomPanelMode, CloudSyncInputField, CloudSyncSecretDraft,
-    CredentialAutofillMatchPipeline, GithubGistAuthState, HeaderStatusState,
-    KeywordHighlightEditorField, MainMode, NavItem, PanelSide, RecordingWritePipeline, RightFocus,
-    SearchEngineEditorField, SessionEventBridge, SettingsTab, StartupCommandAction, StoreStatus,
-    TerminalFramePipeline, TranslateInputField, TranslationSecretDraft,
+    GithubGistAuthState, HeaderStatusState, KeywordHighlightEditorField, MainMode, NavItem,
+    PanelSide, RecordingWritePipeline, RightFocus, SearchEngineEditorField, SessionEventBridge,
+    SettingsTab, StartupCommandAction, StoreStatus, TerminalFramePipeline, TranslateInputField,
+    TranslationSecretDraft,
 };
 use crate::terminal::initial_terminal_screen;
 use gpui::{Context, ScrollHandle};
 use nyaterm_core::{
     AiExecutionProfile, AiSettings, AppRuntime, AppSettingsSummary, CLOUD_SYNC_HISTORY_LIMIT,
     CloudSyncSettings, CloudSyncState, ConnectionStore, KeywordHighlightConfig, NativeServices,
-    TerminalInputState, TranslationSettings, read_cloud_sync_history, uuid,
+    TranslationSettings, read_cloud_sync_history, uuid,
 };
 use nyaterm_terminal::TerminalOutputDecoder;
 use nyaterm_transport::{RecordingManager, SessionManager, SftpDuplicatePolicy, SshTunnelManager};
@@ -338,23 +338,6 @@ impl NyaTermApp {
             proxy_groups,
             quick_commands: Arc::from(quick_commands),
             quick_command_categories,
-            command_suggestions: None,
-            command_input_tracker: TerminalInputState::new(),
-            command_suggestions_suppressed: false,
-            pending_command_history_entry: None,
-            command_suggestion_search_gen: 0,
-            command_suggestion_refresh_task: None,
-            credential_suggestions: None,
-            credential_autofill_buffer: String::new(),
-            credential_autofill_recent: HashMap::new(),
-            credential_autofill_pending: None,
-            credential_autofill_detection_pending: false,
-            credential_autofill_next_request_id: 0,
-            credential_autofill_pending_request: None,
-            credential_autofill_match_pipeline: CredentialAutofillMatchPipeline::spawn(),
-            credential_autofill_sending: false,
-            credential_prompt_input_until_ms: 0,
-
             quick_command_state: QuickCommandFeatureState::new(
                 quick_command_sort_mode_from_setting(&settings.ui_quick_cmd_sort_mode),
                 quick_command_view_mode_from_setting(&settings.ui_quick_cmd_view_mode),

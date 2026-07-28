@@ -7,8 +7,7 @@ use nyaterm_core::{
     AiExecutionProfile, AppRuntime, AppSettingsSummary, CloudSyncHistoryEntry, CloudSyncSettings,
     CloudSyncState, CommandHistoryEntry, Group, KeywordHighlightConfig, NativeServices,
     NativeUpdateInfo, OtpEntry, ProxyConfig, ProxyGroup, QuickCommand, QuickCommandCategory,
-    SavedConnection, SavedCredential, SavedPassword, SshKey, TerminalInputState, TunnelConfig,
-    TunnelGroup,
+    SavedConnection, SavedCredential, SavedPassword, SshKey, TunnelConfig, TunnelGroup,
 };
 use nyaterm_legacy::MigrationInventory;
 use nyaterm_transport::{
@@ -39,12 +38,10 @@ use super::transfers::TransferFeatureState;
 use crate::models::{
     ActionLinkMenuState, ActionLinkTooltipState, ActiveSessionMenuState,
     ActivityBarContextMenuState, ActivityBarLayoutState, BottomPanelMode, BottomPanelResizeState,
-    CloudSyncConflictState, CloudSyncInputField, CloudSyncSecretDraft, CommandSuggestionState,
-    ConfigPathPromptKind, CredentialAutofillMatchPipeline, CredentialAutofillMatchRequestKey,
-    CredentialSuggestionState, DiagnosticsPathPromptKind, GithubGistAuthJobEvent,
-    GithubGistAuthState, HeaderStatusState, KeywordHighlightEditorField,
-    KeywordHighlightPathPromptKind, MainMode, MultiLinePasteDraft, NavItem, PanelResizeState,
-    PanelStackResizeState, PendingCredentialAutofill, RecordingPathPromptKind,
+    CloudSyncConflictState, CloudSyncInputField, CloudSyncSecretDraft, ConfigPathPromptKind,
+    DiagnosticsPathPromptKind, GithubGistAuthJobEvent, GithubGistAuthState, HeaderStatusState,
+    KeywordHighlightEditorField, KeywordHighlightPathPromptKind, MainMode, MultiLinePasteDraft,
+    NavItem, PanelResizeState, PanelStackResizeState, RecordingPathPromptKind,
     RecordingWritePipeline, RightFocus, SearchEngineEditorField, SessionEventBridge,
     SessionRuntimeMetadata, SettingsTab, SnapshotPasswordPromptState, StartupCommandAction,
     StoreStatus, SyncInputGroup, TabActionsSubmenu, TerminalFrameEvent, TitleMenu,
@@ -96,32 +93,6 @@ pub struct NyaTermApp {
     pub(in crate::features) command_persistence_rx: mpsc::Receiver<CommandPersistenceResult>,
     pub(in crate::features) command_persistence_pending: usize,
     pub(in crate::features) session_command_history: HashMap<String, Vec<String>>,
-    /// Inline terminal command suggestions (Tauri CommandSuggestions).
-    pub(in crate::features) command_suggestions: Option<CommandSuggestionState>,
-    /// Local terminal input tracker for inline suggestions (Tauri terminalInputTracker).
-    pub(in crate::features) command_input_tracker: TerminalInputState,
-    /// Hide suggestions after interactive programs (vim/htop/less/...) until Ctrl+C/q.
-    pub(in crate::features) command_suggestions_suppressed: bool,
-    /// Command captured from tracker at Enter, consumed by history recording.
-    pub(in crate::features) pending_command_history_entry: Option<String>,
-    /// Bumps to cancel in-flight 80ms suggestion search timers (Tauri searchTimer).
-    pub(in crate::features) command_suggestion_search_gen: u64,
-    /// Owning the debounce task lets a newer key cancel the previous timer.
-    pub(in crate::features) command_suggestion_refresh_task: Option<gpui::Task<()>>,
-    /// Terminal-output credential autofill panel (Tauri CredentialSuggestions).
-    pub(in crate::features) credential_suggestions: Option<CredentialSuggestionState>,
-    pub(in crate::features) credential_autofill_buffer: String,
-    pub(in crate::features) credential_autofill_recent: HashMap<String, u64>,
-    pub(in crate::features) credential_autofill_pending: Option<PendingCredentialAutofill>,
-    pub(in crate::features) credential_autofill_detection_pending: bool,
-    pub(in crate::features) credential_autofill_next_request_id: u64,
-    pub(in crate::features) credential_autofill_pending_request:
-        Option<CredentialAutofillMatchRequestKey>,
-    pub(in crate::features) credential_autofill_match_pipeline: CredentialAutofillMatchPipeline,
-    pub(in crate::features) credential_autofill_sending: bool,
-    /// Suppress command suggestions while a password/username prompt is active.
-    pub(in crate::features) credential_prompt_input_until_ms: u64,
-
     pub(in crate::features) active_sessions_search_draft: String,
     /// Root-level reconnect/disconnect overflow menu (Tauri ActiveSessions DropdownMenu).
     pub(in crate::features) active_session_menu: Option<ActiveSessionMenuState>,

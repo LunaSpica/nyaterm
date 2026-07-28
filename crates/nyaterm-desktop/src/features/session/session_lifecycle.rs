@@ -262,9 +262,9 @@ impl NyaTermApp {
         }
 
         if self.active_session_id.as_deref() == Some(session_id) {
-            self.command_input_tracker = TerminalInputState::new();
-            self.command_suggestions = None;
-            self.credential_suggestions = None;
+            self.terminal.assist.command_input_tracker = TerminalInputState::new();
+            self.terminal.assist.command_suggestions = None;
+            self.terminal.assist.credential_suggestions = None;
         }
         self.prune_workspace_split();
         cx.notify();

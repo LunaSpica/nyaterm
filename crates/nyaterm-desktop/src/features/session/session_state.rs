@@ -1,5 +1,5 @@
 use gpui::{ClipboardItem, Context, Window};
-use nyaterm_core::{AiExecutionProfile, TerminalInputState};
+use nyaterm_core::AiExecutionProfile;
 use nyaterm_transport::SessionInfo;
 
 use crate::features::NyaTermApp;
@@ -245,17 +245,7 @@ impl NyaTermApp {
         self.new_session_all_sessions_open = false;
         self.new_session_group_menu_path.clear();
         // Session switch resets terminal-output credential autofill (Tauri XTerminal remount).
-        self.credential_suggestions = None;
-        self.credential_autofill_buffer.clear();
-        self.credential_autofill_recent.clear();
-        self.credential_autofill_pending = None;
-        self.credential_autofill_sending = false;
-        self.credential_prompt_input_until_ms = 0;
-        self.command_input_tracker = TerminalInputState::new();
-        self.command_suggestions = None;
-        self.command_suggestions_suppressed = false;
-        self.pending_command_history_entry = None;
-        self.command_suggestion_search_gen = self.command_suggestion_search_gen.saturating_add(1);
+        self.terminal.assist.reset_for_session_switch();
         let previous_session_id = self.active_session_id.clone();
         let switching_sessions = previous_session_id.as_deref() != Some(session_id);
         if previous_session_id.as_deref() != Some(session_id)

@@ -600,7 +600,7 @@ impl NyaTermApp {
                             .flatten();
                         let is_plain_text_input = terminal_plain_text_input_event(event);
                         if is_plain_text_input {
-                            if this.credential_suggestions.is_some()
+                            if this.terminal.assist.credential_suggestions.is_some()
                                 && this.handle_credential_suggestion_key(event, cx)
                             {
                                 cx.stop_propagation();

@@ -24,8 +24,8 @@ impl NyaTermApp {
         let selected_text = self.selected_terminal_text().unwrap_or_default();
         self.action_link_menu = None;
         self.action_link_tooltip = None;
-        self.command_suggestions = None;
-        self.credential_suggestions = None;
+        self.terminal.assist.command_suggestions = None;
+        self.terminal.assist.credential_suggestions = None;
         self.terminal.menus.context_menu = Some(TerminalContextMenuState {
             x: event.position.x,
             y: event.position.y,

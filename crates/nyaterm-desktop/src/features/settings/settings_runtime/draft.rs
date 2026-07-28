@@ -1,5 +1,5 @@
 use gpui::Context;
-use nyaterm_core::{CloudSyncSettings, ConnectionStore, TerminalInputState, TranslationSettings};
+use nyaterm_core::{CloudSyncSettings, ConnectionStore, TranslationSettings};
 use nyaterm_transport::SftpDuplicatePolicy;
 
 use crate::features::NyaTermApp;
@@ -341,10 +341,7 @@ impl NyaTermApp {
                 self.sync_terminal_encodings_from_settings();
                 self.enforce_terminal_scrollback_limit();
                 if !self.settings.interaction_command_suggestions_enabled {
-                    self.command_suggestions = None;
-                    self.command_input_tracker = TerminalInputState::new();
-                    self.command_suggestions_suppressed = false;
-                    self.pending_command_history_entry = None;
+                    self.terminal.assist.clear_command_tracking();
                 }
                 self.invalidate_terminal_cell_metrics(cx);
                 self.refresh_visible_terminal_surfaces(cx);

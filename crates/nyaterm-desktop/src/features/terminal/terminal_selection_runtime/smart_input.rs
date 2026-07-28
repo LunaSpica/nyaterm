@@ -39,7 +39,7 @@ impl NyaTermApp {
         if !self.can_use_smart_cursor_selection() {
             return None;
         }
-        let state = &self.command_input_tracker;
+        let state = &self.terminal.assist.command_input_tracker;
         if state.value.is_empty() {
             return None;
         }
@@ -86,14 +86,14 @@ impl NyaTermApp {
         if !self.can_use_smart_cursor_selection() {
             return false;
         }
-        let mut state = self.command_input_tracker.clone();
+        let mut state = self.terminal.assist.command_input_tracker.clone();
         let next_cursor = target_cursor.min(state.value.len());
         let payload = build_move_input_cursor_data(&state.value, state.cursor, next_cursor);
         if payload.is_empty() && next_cursor == state.cursor {
             return false;
         }
         state.cursor = next_cursor;
-        self.command_input_tracker = state;
+        self.terminal.assist.command_input_tracker = state;
         if !payload.is_empty() {
             self.send_terminal_input_without_suggestion_track(payload.into_bytes(), cx);
         } else {
@@ -109,7 +109,7 @@ impl NyaTermApp {
         if self.is_credential_prompt_input_mode() {
             return false;
         }
-        let state = &self.command_input_tracker;
+        let state = &self.terminal.assist.command_input_tracker;
         if state.desynced || state.line_rewrite_required || state.paste_mode || state.multiline {
             return false;
         }
@@ -129,7 +129,7 @@ impl NyaTermApp {
         if !self.can_use_smart_cursor_selection() {
             return None;
         }
-        let state = &self.command_input_tracker;
+        let state = &self.terminal.assist.command_input_tracker;
         if state.value.is_empty() {
             return None;
         }
@@ -205,13 +205,13 @@ impl NyaTermApp {
         payload: String,
         cx: &mut Context<Self>,
     ) {
-        self.command_input_tracker = next_state;
+        self.terminal.assist.command_input_tracker = next_state;
         self.clear_terminal_selection(cx);
         // Don't double-track via note_command_suggestion_input; state is already updated.
         self.send_terminal_input_without_suggestion_track(payload.into_bytes(), cx);
-        if can_suggest_from_tracker(&self.command_input_tracker) {
+        if can_suggest_from_tracker(&self.terminal.assist.command_input_tracker) {
             self.schedule_command_suggestion_refresh(cx);
-        } else if self.command_suggestions.take().is_some() {
+        } else if self.terminal.assist.command_suggestions.take().is_some() {
             cx.notify();
         }
     }
@@ -224,7 +224,7 @@ impl NyaTermApp {
         if !self.can_use_smart_cursor_selection() {
             return false;
         }
-        let state = self.command_input_tracker.clone();
+        let state = self.terminal.assist.command_input_tracker.clone();
         let move_to_end = build_move_input_cursor_data(&state.value, state.cursor, selected.end);
         let delete_count = selected.len_chars(&state.value);
         if delete_count == 0 {
@@ -246,7 +246,7 @@ impl NyaTermApp {
         if !self.can_use_smart_cursor_selection() || data.is_empty() {
             return false;
         }
-        let state = self.command_input_tracker.clone();
+        let state = self.terminal.assist.command_input_tracker.clone();
         let move_to_end = build_move_input_cursor_data(&state.value, state.cursor, selected.end);
         let delete_count = selected.len_chars(&state.value);
         let delete_bytes = "\u{007f}".repeat(delete_count);
@@ -266,7 +266,7 @@ impl NyaTermApp {
         if !self.can_use_smart_cursor_selection() {
             return false;
         }
-        let state = self.command_input_tracker.clone();
+        let state = self.terminal.assist.command_input_tracker.clone();
         let target = match edge {
             SmartSelectionEdge::Start => selected.start,
             SmartSelectionEdge::End => selected.end,
@@ -274,7 +274,7 @@ impl NyaTermApp {
         let payload = build_move_input_cursor_data(&state.value, state.cursor, target);
         let mut next = state;
         next.cursor = target.min(next.value.len());
-        self.command_input_tracker = next;
+        self.terminal.assist.command_input_tracker = next;
         self.clear_terminal_selection(cx);
         if !payload.is_empty() {
             self.send_terminal_input_without_suggestion_track(payload.into_bytes(), cx);

@@ -1,7 +1,7 @@
 use std::time::Instant;
 
 use gpui::Context;
-use nyaterm_core::{ConnectionStore, TerminalInputState};
+use nyaterm_core::ConnectionStore;
 
 use crate::features::NyaTermApp;
 
@@ -153,10 +153,7 @@ impl NyaTermApp {
         if !self.settings.interaction_command_suggestions_enabled
             && self.settings_draft_snapshot.is_none()
         {
-            self.command_suggestions = None;
-            self.command_input_tracker = TerminalInputState::new();
-            self.command_suggestions_suppressed = false;
-            self.pending_command_history_entry = None;
+            self.terminal.assist.clear_command_tracking();
         }
         self.save_interaction_settings(cx);
     }

@@ -317,8 +317,8 @@ impl NyaTermApp {
             })
             .collect::<Vec<_>>();
         self.action_link_tooltip = None;
-        self.command_suggestions = None;
-        self.credential_suggestions = None;
+        self.terminal.assist.command_suggestions = None;
+        self.terminal.assist.credential_suggestions = None;
         self.action_link_menu = Some(ActionLinkMenuState {
             x: event.position().x,
             y: event.position().y,

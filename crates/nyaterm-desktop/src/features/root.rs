@@ -466,8 +466,8 @@ impl NyaTermApp {
             terminal_context_menu_open: self.terminal.menus.context_menu.is_some(),
             action_link_menu_open: self.action_link_menu.is_some(),
             action_link_tooltip_open: self.action_link_tooltip.is_some(),
-            command_suggestions_open: self.command_suggestions.is_some(),
-            credential_suggestions_open: self.credential_suggestions.is_some(),
+            command_suggestions_open: self.terminal.assist.command_suggestions.is_some(),
+            credential_suggestions_open: self.terminal.assist.credential_suggestions.is_some(),
             close_all_sessions_confirm_open: self.close_all_sessions_confirm_open,
             locked: self.is_locked,
         };
