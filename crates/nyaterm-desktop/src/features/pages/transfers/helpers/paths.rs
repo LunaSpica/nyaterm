@@ -1,4 +1,6 @@
-use super::*;
+use gpui::Pixels;
+
+use crate::models::TransferBrowserColumnWidths;
 
 pub(in crate::features::pages::transfers) fn remote_file_name(path: &str) -> String {
     path.trim_end_matches('/')
@@ -76,7 +78,7 @@ impl TransferPathPart {
 
 pub(in crate::features::pages::transfers) fn transfer_browser_table_width(
     widths: TransferBrowserColumnWidths,
-) -> gpui::Pixels {
+) -> Pixels {
     widths.name + widths.modified + widths.size + widths.permissions + widths.owner + widths.group
 }
 
