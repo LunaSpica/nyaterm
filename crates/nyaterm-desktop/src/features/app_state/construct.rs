@@ -364,12 +364,12 @@ impl NyaTermApp {
                 },
             ),
             security: SecurityFeatureState::new(
-                SecurityCatalogState {
-                    ssh_keys: connection_ssh_keys,
-                    otp_entries: connection_otp_entries,
-                    passwords: connection_saved_passwords,
-                    credentials: connection_saved_credentials,
-                },
+                SecurityCatalogState::new(
+                    connection_ssh_keys,
+                    connection_otp_entries,
+                    connection_saved_passwords,
+                    connection_saved_credentials,
+                ),
                 security_secrets_unlocked,
                 "security ready".to_string(),
                 SecurityFeatureFocus {

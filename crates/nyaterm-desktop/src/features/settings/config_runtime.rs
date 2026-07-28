@@ -521,13 +521,12 @@ impl NyaTermApp {
                         self.connection_catalog
                             .replace_loaded(config.connections, config.groups);
                         self.retain_connection_list_references_from_loaded_store();
-                        self.security.catalog.ssh_keys = store.list_ssh_keys().unwrap_or_default();
-                        self.security.catalog.otp_entries =
-                            store.list_otp_entries().unwrap_or_default();
-                        self.security.catalog.passwords =
-                            store.list_passwords().unwrap_or_default();
-                        self.security.catalog.credentials =
-                            store.list_credentials().unwrap_or_default();
+                        self.security.replace_catalog(
+                            store.list_ssh_keys().unwrap_or_default(),
+                            store.list_otp_entries().unwrap_or_default(),
+                            store.list_passwords().unwrap_or_default(),
+                            store.list_credentials().unwrap_or_default(),
+                        );
                         self.tunnel_state.replace_loaded_catalog(
                             store.list_tunnels().unwrap_or_default(),
                             store.list_tunnel_groups().unwrap_or_default(),
@@ -585,10 +584,7 @@ impl NyaTermApp {
                     }
                     Err(error) => {
                         self.connection_catalog.clear_loaded();
-                        self.security.catalog.ssh_keys.clear();
-                        self.security.catalog.otp_entries.clear();
-                        self.security.catalog.passwords.clear();
-                        self.security.catalog.credentials.clear();
+                        self.security.clear_catalog();
                         self.tunnel_state.clear_catalog();
                         self.commands.clear_loaded();
                         self.settings.keyword_config = KeywordHighlightConfig::default();

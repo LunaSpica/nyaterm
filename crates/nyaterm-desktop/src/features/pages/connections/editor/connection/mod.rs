@@ -120,8 +120,7 @@ impl NyaTermApp {
             .as_deref()
             .and_then(|id| {
                 self.security
-                    .catalog
-                    .ssh_keys
+                    .ssh_keys()
                     .iter()
                     .find(|key| key.id == id)
                     .map(|key| key.name.clone())
@@ -132,8 +131,7 @@ impl NyaTermApp {
             .as_deref()
             .and_then(|id| {
                 self.security
-                    .catalog
-                    .passwords
+                    .passwords()
                     .iter()
                     .find(|password| password.id == id)
                     .map(|password| password.name.clone())
@@ -144,8 +142,7 @@ impl NyaTermApp {
             .as_deref()
             .and_then(|id| {
                 self.security
-                    .catalog
-                    .otp_entries
+                    .otp_entries()
                     .iter()
                     .find(|entry| entry.id == id)
                     .map(|entry| {
@@ -220,19 +217,22 @@ impl NyaTermApp {
             label: none_label.to_string(),
             selected: editor.key_id.is_none(),
         }];
-        key_options.extend(self.security.catalog.ssh_keys.iter().map(|key| {
-            ConnectionEditorChoice {
-                value: Some(key.id.clone()),
-                label: key.name.clone(),
-                selected: editor.key_id.as_deref() == Some(key.id.as_str()),
-            }
-        }));
+        key_options.extend(
+            self.security
+                .ssh_keys()
+                .iter()
+                .map(|key| ConnectionEditorChoice {
+                    value: Some(key.id.clone()),
+                    label: key.name.clone(),
+                    selected: editor.key_id.as_deref() == Some(key.id.as_str()),
+                }),
+        );
         let mut password_options = vec![ConnectionEditorChoice {
             value: None,
             label: none_label.to_string(),
             selected: editor.password_id.is_none(),
         }];
-        password_options.extend(self.security.catalog.passwords.iter().map(|password| {
+        password_options.extend(self.security.passwords().iter().map(|password| {
             ConnectionEditorChoice {
                 value: Some(password.id.clone()),
                 label: password.name.clone(),
@@ -244,7 +244,7 @@ impl NyaTermApp {
             label: self.tr("dialog.noOtp").to_string(),
             selected: editor.otp_id.is_none(),
         }];
-        otp_options.extend(self.security.catalog.otp_entries.iter().map(|entry| {
+        otp_options.extend(self.security.otp_entries().iter().map(|entry| {
             let label = if entry.issuer.is_empty() {
                 entry.username.clone()
             } else if entry.username.is_empty() {

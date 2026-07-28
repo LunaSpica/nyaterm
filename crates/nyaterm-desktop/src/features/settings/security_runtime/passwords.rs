@@ -27,8 +27,7 @@ impl NyaTermApp {
         let editor = if let Some(password_id) = password_id {
             let Some(entry) = self
                 .security
-                .catalog
-                .passwords
+                .passwords()
                 .iter()
                 .find(|entry| entry.id == password_id)
                 .cloned()
@@ -176,8 +175,7 @@ impl NyaTermApp {
         }
         let label = self
             .security
-            .catalog
-            .passwords
+            .passwords()
             .iter()
             .find(|entry| entry.id == password_id)
             .map(|entry| entry.name.clone())

@@ -117,7 +117,7 @@ impl NyaTermApp {
             .credential_autofill_pending_request
             .is_none()
             && !self.terminal.assist.credential_autofill_detection_pending
-            && self.security.catalog.credentials.is_empty()
+            && self.security.credentials().is_empty()
             && self.terminal.assist.credential_autofill_pending.is_none()
         {
             return false;
@@ -126,7 +126,7 @@ impl NyaTermApp {
         let detection_was_pending = self.terminal.assist.credential_autofill_detection_pending;
         if credential_autofill_snapshot_detection_can_run(
             self.session.active_id.as_deref(),
-            !self.security.catalog.credentials.is_empty()
+            !self.security.credentials().is_empty()
                 || self.terminal.assist.credential_autofill_pending.is_some(),
             self.terminal.view.runtime.session_event_queued_output_bytes,
             self.session.events.pending.len(),
@@ -251,7 +251,7 @@ impl NyaTermApp {
         {
             return false;
         }
-        if self.security.catalog.credentials.is_empty() {
+        if self.security.credentials().is_empty() {
             return false;
         }
 
@@ -269,7 +269,7 @@ impl NyaTermApp {
         let Some(active_session_id) = self.session.active_id.clone() else {
             return false;
         };
-        let credentials = self.security.catalog.credentials.clone();
+        let credentials = self.security.credentials().to_vec();
 
         if let Some(pending) = self.terminal.assist.credential_autofill_pending.clone() {
             if pending.expires_at_ms <= now {

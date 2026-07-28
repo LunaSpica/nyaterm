@@ -17,8 +17,7 @@ impl NyaTermApp {
         let editor = if let Some(key_id) = key_id {
             let Some(key) = self
                 .security
-                .catalog
-                .ssh_keys
+                .ssh_keys()
                 .iter()
                 .find(|key| key.id == key_id)
                 .cloned()
@@ -192,8 +191,7 @@ impl NyaTermApp {
     ) {
         let label = self
             .security
-            .catalog
-            .ssh_keys
+            .ssh_keys()
             .iter()
             .find(|key| key.id == key_id)
             .map(|key| key.name.clone())

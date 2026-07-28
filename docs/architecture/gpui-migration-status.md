@@ -1352,9 +1352,9 @@ Current ownership map:
 | --- | --- | --- | --- |
 | Saved connections | Private catalog in `NyaTermApp.connection_catalog` | Persisted domain state | Views receive read-only slices; grouped load/clear, copy refresh and recently-used replacement enter through `ConnectionCatalogState` methods. |
 | Connection groups | Private catalog in `NyaTermApp.connection_catalog` | Persisted domain state | Same compatibility boundary and method-only owner as saved connections. |
-| SSH keys | `NyaTermApp.security.catalog.ssh_keys` | Secret-adjacent persisted catalog | The security feature is authoritative; the catalog has no `Debug` implementation. |
-| OTP entries | `NyaTermApp.security.catalog.otp_entries` | Secret-adjacent persisted catalog | Do not log secrets or widen Debug exposure. |
-| Saved passwords/credentials | `NyaTermApp.security.catalog.passwords`, `credentials` | Secret-bearing persisted catalogs | Credential autofill and security settings read the same authoritative values through the security owner. |
+| SSH keys | Private catalog in `NyaTermApp.security` | Secret-adjacent persisted catalog | The security feature is authoritative; consumers use a read-only slice and the catalog has no `Debug` implementation. |
+| OTP entries | Private catalog in `NyaTermApp.security` | Secret-adjacent persisted catalog | Consumers use a read-only slice; do not log secrets or widen Debug exposure. |
+| Saved passwords/credentials | Private catalog in `NyaTermApp.security` | Secret-bearing persisted catalogs | Credential autofill and security settings use read-only owner APIs; grouped store loads and clears replace all four catalogs together. |
 | Serial ports | Private catalog in `NyaTermApp.connection_catalog` | Runtime/discovered state | Replaced through the catalog after session-manager discovery and never persisted. |
 | Tunnel/proxy configs | Private catalog in `NyaTermApp.tunnel_state` | Persisted network config | Views use read-only slices; pure move/upsert/delete candidates and successful commits stay on `TunnelFeatureState`. The Network page UI remains separate transient state. |
 | Queued saved-connection starts | `NyaTermApp.session.start` private queue | Transient session-start state | Admission, duplicate detection, draining and runtime cadence reads go through `SessionStartFeatureState` methods. |
@@ -1547,8 +1547,12 @@ honest remaining list.
    connection-catalog encapsulation batch then made saved connections, groups
    and discovered serial ports private, routed all readers through slices, and
    moved grouped load/clear, recently-used replacement, multi-move ordering and
-   group-cycle detection onto the owner. What remains at the composition root
-   is stores, runtime and focused feature owners.
+   group-cycle detection onto the owner. The security-catalog encapsulation
+   batch then made SSH keys, OTP entries, saved passwords and credentials
+   private, routed consumers through read-only slices, and grouped store refresh
+   and failure clearing on `SecurityFeatureState` without widening
+   secret-bearing `Debug` exposure. What remains at the composition root is
+   stores, runtime and focused feature owners.
    Group by cohesion where a cluster exists; do not force the count down for
    its own sake.
    Method ownership is now moving too, which is what grouping the fields alone

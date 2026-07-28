@@ -26,13 +26,13 @@ impl NyaTermApp {
         ));
         if let Some(editor) = self.security.editors.credential.clone() {
             body = body.child(self.security_credential_editor_view(editor, cx));
-        } else if self.security.catalog.credentials.is_empty() {
+        } else if self.security.credentials().is_empty() {
             body = body.child(empty_panel(
                 self.tr("credentialManager.noCredentials"),
                 self.theme_palette(),
             ));
         } else {
-            let entries = self.security.catalog.credentials.clone();
+            let entries = self.security.credentials().to_vec();
             let entry_count = entries.len();
             let mut rows = div()
                 .rounded_md()

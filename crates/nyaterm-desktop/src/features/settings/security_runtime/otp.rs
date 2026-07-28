@@ -125,8 +125,7 @@ impl NyaTermApp {
         let editor = if let Some(otp_id) = otp_id {
             let Some(entry) = self
                 .security
-                .catalog
-                .otp_entries
+                .otp_entries()
                 .iter()
                 .find(|entry| entry.id == otp_id)
                 .cloned()
@@ -300,8 +299,7 @@ impl NyaTermApp {
     ) {
         let label = self
             .security
-            .catalog
-            .otp_entries
+            .otp_entries()
             .iter()
             .find(|entry| entry.id == otp_id)
             .map(|entry| {
@@ -369,8 +367,7 @@ impl NyaTermApp {
     ) {
         let ids = self
             .security
-            .catalog
-            .otp_entries
+            .otp_entries()
             .iter()
             .filter(|entry| entry.otp_type.eq_ignore_ascii_case("totp"))
             .map(|entry| entry.id.clone())

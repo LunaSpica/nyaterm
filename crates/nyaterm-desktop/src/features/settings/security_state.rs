@@ -18,7 +18,7 @@ use crate::models::{
 };
 
 pub(in crate::features) struct SecurityFeatureState {
-    pub catalog: SecurityCatalogState,
+    catalog: SecurityCatalogState,
     pub auth_tab: SecurityAuthTab,
     pub editors: SecurityEditorState,
     pub delete_confirm: Option<SecurityDeleteConfirmState>,
@@ -33,10 +33,26 @@ pub(in crate::features) struct SecurityFeatureState {
 /// This type deliberately has no `Debug` implementation so callers cannot
 /// accidentally log secret-bearing entries through the feature state.
 pub(in crate::features) struct SecurityCatalogState {
-    pub ssh_keys: Vec<SshKey>,
-    pub otp_entries: Vec<OtpEntry>,
-    pub passwords: Vec<SavedPassword>,
-    pub credentials: Vec<SavedCredential>,
+    ssh_keys: Vec<SshKey>,
+    otp_entries: Vec<OtpEntry>,
+    passwords: Vec<SavedPassword>,
+    credentials: Vec<SavedCredential>,
+}
+
+impl SecurityCatalogState {
+    pub(in crate::features) fn new(
+        ssh_keys: Vec<SshKey>,
+        otp_entries: Vec<OtpEntry>,
+        passwords: Vec<SavedPassword>,
+        credentials: Vec<SavedCredential>,
+    ) -> Self {
+        Self {
+            ssh_keys,
+            otp_entries,
+            passwords,
+            credentials,
+        }
+    }
 }
 
 /// Focus handles the security panel needs at construction time.
@@ -138,6 +154,36 @@ impl SecurityFeatureState {
             },
         }
     }
+
+    pub(in crate::features) fn ssh_keys(&self) -> &[SshKey] {
+        &self.catalog.ssh_keys
+    }
+
+    pub(in crate::features) fn otp_entries(&self) -> &[OtpEntry] {
+        &self.catalog.otp_entries
+    }
+
+    pub(in crate::features) fn passwords(&self) -> &[SavedPassword] {
+        &self.catalog.passwords
+    }
+
+    pub(in crate::features) fn credentials(&self) -> &[SavedCredential] {
+        &self.catalog.credentials
+    }
+
+    pub(in crate::features) fn replace_catalog(
+        &mut self,
+        ssh_keys: Vec<SshKey>,
+        otp_entries: Vec<OtpEntry>,
+        passwords: Vec<SavedPassword>,
+        credentials: Vec<SavedCredential>,
+    ) {
+        self.catalog = SecurityCatalogState::new(ssh_keys, otp_entries, passwords, credentials);
+    }
+
+    pub(in crate::features) fn clear_catalog(&mut self) {
+        self.replace_catalog(Vec::new(), Vec::new(), Vec::new(), Vec::new());
+    }
 }
 
 impl SecurityScreenLockState {
@@ -180,6 +226,7 @@ mod tests {
     use std::time::Duration;
 
     use gpui::TestAppContext;
+    use nyaterm_core::{OtpEntry, SavedCredential, SavedPassword, SshKey};
 
     use super::{SecurityCatalogState, SecurityFeatureFocus, SecurityFeatureState};
 
@@ -187,12 +234,7 @@ mod tests {
         let cx = TestAppContext::single();
         let focus = || cx.update(|cx| cx.focus_handle());
         SecurityFeatureState::new(
-            SecurityCatalogState {
-                ssh_keys: Vec::new(),
-                otp_entries: Vec::new(),
-                passwords: Vec::new(),
-                credentials: Vec::new(),
-            },
+            SecurityCatalogState::new(Vec::new(), Vec::new(), Vec::new(), Vec::new()),
             true,
             "ready".to_string(),
             SecurityFeatureFocus {
@@ -204,6 +246,65 @@ mod tests {
                 screen_lock: focus(),
             },
         )
+    }
+
+    #[test]
+    fn catalog_replacement_and_clear_update_all_security_collections() {
+        let mut security = security_state();
+
+        security.replace_catalog(
+            vec![SshKey {
+                id: "key-id".to_string(),
+                name: "key".to_string(),
+                key: None,
+                cert: None,
+                passphrase: None,
+                key_file_path: None,
+                cert_file_path: None,
+                has_key_data: false,
+                has_cert_data: false,
+            }],
+            vec![OtpEntry {
+                id: "otp-id".to_string(),
+                otp_type: "totp".to_string(),
+                issuer: String::new(),
+                username: String::new(),
+                secret: None,
+                algorithm: "SHA1".to_string(),
+                digits: 6,
+                period: 30,
+                counter: 0,
+                has_secret: false,
+            }],
+            vec![SavedPassword {
+                id: "password-id".to_string(),
+                name: "password".to_string(),
+                password: None,
+                has_password: false,
+            }],
+            vec![SavedCredential {
+                id: "credential-id".to_string(),
+                name: "credential".to_string(),
+                username: String::new(),
+                password: None,
+                username_prompt_regex: None,
+                password_prompt_regex: None,
+                enabled: true,
+                has_password: false,
+            }],
+        );
+
+        assert_eq!(security.ssh_keys().len(), 1);
+        assert_eq!(security.otp_entries().len(), 1);
+        assert_eq!(security.passwords().len(), 1);
+        assert_eq!(security.credentials().len(), 1);
+
+        security.clear_catalog();
+
+        assert!(security.ssh_keys().is_empty());
+        assert!(security.otp_entries().is_empty());
+        assert!(security.passwords().is_empty());
+        assert!(security.credentials().is_empty());
     }
 
     #[test]

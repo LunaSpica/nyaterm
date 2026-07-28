@@ -304,6 +304,19 @@ check_no_matches \
   crates/nyaterm-desktop/src/features/connections/connections/dnd.rs
 
 check_no_matches \
+  "SecurityFeatureState must not expose its catalog" \
+  '^[[:space:]]*pub([[:space:]]|\([^)]*\))[[:space:]]+catalog[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/settings/security_state.rs
+check_no_multiline_matches \
+  "SecurityCatalogState must expose methods, not writable fields" \
+  'struct[[:space:]]+SecurityCatalogState[[:space:]]*\{[^}]*pub([[:space:]]|\([^)]*\))[[:space:]]+(ssh_keys|otp_entries|passwords|credentials)[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/settings/security_state.rs
+check_no_multiline_matches \
+  "security catalog access must use SecurityFeatureState methods" \
+  '(self|this|app)\.security[[:space:]]*\.[[:space:]]*catalog' \
+  crates/nyaterm-desktop/src/features
+
+check_no_matches \
   "command catalog, UI, history and runtime fields must stay grouped under CommandFeatureState" \
   '^[[:space:]]*pub\(in crate::features\)[[:space:]]+(quick_commands|quick_command_categories|quick_command_state|command_history|command_runtime)[[:space:]]*:' \
   crates/nyaterm-desktop/src/features/app_state/mod.rs
