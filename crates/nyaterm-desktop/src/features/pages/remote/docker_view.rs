@@ -1,4 +1,15 @@
-use super::*;
+use gpui::{Context, IntoElement, div, prelude::*, px, rgb};
+
+use crate::features::{NyaTermApp, TextInputSetup};
+use crate::models::DockerTab;
+use crate::widgets::empty_panel;
+
+use super::docker::{
+    DockerLabels, docker_compose_panel, docker_compose_project_matches, docker_confirm_panel,
+    docker_container_matches, docker_containers_panel, docker_details_panel, docker_image_matches,
+    docker_images_panel, docker_network_matches, docker_networks_panel, docker_overview_strip,
+    docker_tab_bar, docker_volume_matches, docker_volumes_panel,
+};
 
 impl NyaTermApp {
     pub(in crate::features) fn docker_view(&mut self, cx: &mut Context<Self>) -> impl IntoElement {

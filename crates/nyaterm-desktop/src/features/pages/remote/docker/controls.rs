@@ -1,8 +1,19 @@
-use super::*;
+use gpui::{
+    App, ClickEvent, Context, FontWeight, IntoElement, MouseButton, Window, div, prelude::*, px,
+    rgb,
+};
+use nyaterm_transport::RemoteDockerOverview;
+
+use crate::features::{NyaTermApp, gpui_code_font_family, modal_dialog_shell};
+use crate::models::{DockerConfirmState, DockerTab};
+use crate::theme::ThemePalette;
+use crate::widgets::small_button;
+
+use super::DockerLabels;
 
 pub(in crate::features::pages::remote) fn docker_overview_strip(
-    palette: crate::theme::ThemePalette,
-    overview: &nyaterm_transport::RemoteDockerOverview,
+    palette: ThemePalette,
+    overview: &RemoteDockerOverview,
     labels: [String; 3],
 ) -> impl IntoElement {
     let [running_label, stopped_label, images_label] = labels;
@@ -49,7 +60,7 @@ pub(in crate::features::pages::remote) fn docker_overview_strip(
 }
 
 fn docker_overview_stat(
-    palette: crate::theme::ThemePalette,
+    palette: ThemePalette,
     label: String,
     value: usize,
     accent: Option<u32>,
@@ -74,7 +85,7 @@ fn docker_overview_stat(
         .child(
             div()
                 .flex_none()
-                .font_family(crate::features::gpui_code_font_family())
+                .font_family(gpui_code_font_family())
                 .text_size(px(11.))
                 .font_weight(FontWeight(600.))
                 .child(value.to_string()),
@@ -82,10 +93,10 @@ fn docker_overview_stat(
 }
 
 pub(in crate::features::pages::remote) fn docker_tab_bar(
-    palette: crate::theme::ThemePalette,
+    palette: ThemePalette,
     menu_bg: gpui::Rgba,
     active_tab: DockerTab,
-    overview: &nyaterm_transport::RemoteDockerOverview,
+    overview: &RemoteDockerOverview,
     labels: [String; 5],
     more_label: String,
     panel_width: f32,
@@ -221,7 +232,7 @@ pub(in crate::features::pages::remote) fn docker_tab_bar(
 }
 
 fn docker_tab_button(
-    palette: crate::theme::ThemePalette,
+    palette: ThemePalette,
     id: impl Into<String>,
     label: String,
     active: bool,
@@ -257,7 +268,7 @@ fn docker_tab_button(
 }
 
 fn docker_tab_menu_item(
-    palette: crate::theme::ThemePalette,
+    palette: ThemePalette,
     id: String,
     label: String,
     active: bool,
@@ -290,7 +301,7 @@ fn docker_tab_menu_item(
 }
 
 pub(in crate::features::pages::remote) fn docker_confirm_panel(
-    palette: crate::theme::ThemePalette,
+    palette: ThemePalette,
     dialog_bg: gpui::Rgba,
     confirm: DockerConfirmState,
     labels: DockerLabels,
@@ -310,7 +321,7 @@ pub(in crate::features::pages::remote) fn docker_confirm_panel(
         )
         .child(
             div()
-                .font_family(crate::features::gpui_code_font_family())
+                .font_family(gpui_code_font_family())
                 .text_xs()
                 .line_height(px(17.))
                 .text_color(rgb(0xfecdd3))

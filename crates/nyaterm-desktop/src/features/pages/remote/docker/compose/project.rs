@@ -1,7 +1,20 @@
-use super::*;
+use std::collections::{HashMap, HashSet};
+
+use gpui::{Context, FontWeight, IntoElement, SharedString, div, prelude::*, px, rgb, svg};
+use nyaterm_core::truncate_preview;
+use nyaterm_transport::{DockerComposeProject, DockerComposeService};
+
+use crate::features::{NyaTermApp, docker_compose_project_key, gpui_code_font_family};
+use crate::theme::ThemePalette;
+use crate::widgets::{empty_panel, status_pill, svg_icon_button};
+
+use super::super::{DockerLabels, resources::docker_resource_static_panel};
+use super::menus::docker_compose_project_action_menu;
+use super::service::docker_compose_services_panel;
+use super::status::{compose_status_color, compose_status_label};
 
 pub(in crate::features::pages::remote) fn docker_compose_panel(
-    palette: crate::theme::ThemePalette,
+    palette: ThemePalette,
     menu_bg: gpui::Rgba,
     projects: &[DockerComposeProject],
     expanded_projects: &HashSet<String>,
@@ -47,7 +60,7 @@ pub(in crate::features::pages::remote) fn docker_compose_panel(
 }
 
 pub(in crate::features::pages::remote) fn docker_compose_project_row(
-    palette: crate::theme::ThemePalette,
+    palette: ThemePalette,
     menu_bg: gpui::Rgba,
     project: &DockerComposeProject,
     project_key: &str,
@@ -180,7 +193,7 @@ pub(in crate::features::pages::remote) fn docker_compose_project_row(
                         )
                         .child(
                             div()
-                                .font_family(crate::features::gpui_code_font_family())
+                                .font_family(gpui_code_font_family())
                                 .text_size(px(10.))
                                 .text_color(rgb(palette.text_dimmed))
                                 .overflow_hidden()

@@ -1,4 +1,6 @@
-use super::*;
+use gpui::rgb;
+
+use crate::theme::ThemePalette;
 
 pub(in crate::features::pages::remote) fn compose_status_label(status: &str) -> &'static str {
     let lower = status.trim().to_ascii_lowercase();
@@ -20,7 +22,7 @@ pub(in crate::features::pages::remote) fn compose_status_label(status: &str) -> 
 }
 
 pub(in crate::features::pages::remote) fn compose_status_color(
-    palette: crate::theme::ThemePalette,
+    palette: ThemePalette,
     status: &str,
 ) -> gpui::Hsla {
     match status {

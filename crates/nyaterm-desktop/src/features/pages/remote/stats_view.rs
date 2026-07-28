@@ -1,5 +1,13 @@
-use super::*;
-use gpui::SharedString;
+use gpui::{Context, FontWeight, IntoElement, SharedString, div, prelude::*, px, rgb, svg};
+use nyaterm_core::truncate_preview;
+
+use crate::features::{
+    NyaTermApp, format_file_size, format_rate, format_uptime, gpui_code_font_family,
+    stats_progress_bar,
+};
+use crate::widgets::empty_panel;
+
+use super::process::usage_color;
 
 impl NyaTermApp {
     pub(in crate::features) fn stats_view(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -167,7 +175,7 @@ impl NyaTermApp {
                                                     .child(
                                                         div()
                                                             .font_family(
-                                                                crate::features::gpui_code_font_family(),
+                                                                gpui_code_font_family(),
                                                             )
                                                             .text_size(px(13.))
                                                             .font_weight(FontWeight(700.))

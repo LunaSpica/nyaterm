@@ -1,4 +1,4 @@
-use super::*;
+use crate::features::docker_state_label;
 
 #[derive(Clone, Copy)]
 pub(in crate::features::pages::remote) struct DockerLabels {
@@ -108,9 +108,12 @@ mod details;
 mod matchers;
 mod resources;
 
-pub(super) use compose::*;
-pub(super) use containers::*;
-pub(super) use controls::*;
-pub(super) use details::*;
-pub(super) use matchers::*;
-pub(super) use resources::*;
+pub(super) use compose::docker_compose_panel;
+pub(super) use containers::docker_containers_panel;
+pub(super) use controls::{docker_confirm_panel, docker_overview_strip, docker_tab_bar};
+pub(super) use details::docker_details_panel;
+pub(super) use matchers::{
+    docker_compose_project_matches, docker_container_matches, docker_image_matches,
+    docker_network_matches, docker_volume_matches,
+};
+pub(super) use resources::{docker_images_panel, docker_networks_panel, docker_volumes_panel};

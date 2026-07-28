@@ -1,7 +1,17 @@
-use super::*;
+use gpui::{Context, FontWeight, IntoElement, SharedString, div, prelude::*, px, rgb};
+use nyaterm_core::truncate_preview;
+use nyaterm_transport::DockerComposeService;
+
+use crate::features::{NyaTermApp, compact_id, gpui_code_font_family};
+use crate::theme::ThemePalette;
+use crate::widgets::{small_button, status_pill, svg_icon_button};
+
+use super::super::DockerLabels;
+use super::menus::docker_compose_service_action_menu;
+use super::status::{compose_status_color, compose_status_label};
 
 pub(in crate::features::pages::remote) fn docker_compose_services_panel(
-    palette: crate::theme::ThemePalette,
+    palette: ThemePalette,
     menu_bg: gpui::Rgba,
     project_name: String,
     config_files: Option<String>,
@@ -103,7 +113,7 @@ pub(in crate::features::pages::remote) fn docker_compose_services_panel(
 }
 
 pub(in crate::features::pages::remote) fn docker_compose_service_row(
-    palette: crate::theme::ThemePalette,
+    palette: ThemePalette,
     menu_bg: gpui::Rgba,
     project_name: String,
     config_files: Option<String>,
@@ -189,7 +199,7 @@ pub(in crate::features::pages::remote) fn docker_compose_service_row(
                 )
                 .child(
                     div()
-                        .font_family(crate::features::gpui_code_font_family())
+                        .font_family(gpui_code_font_family())
                         .text_size(px(10.))
                         .text_color(rgb(palette.text_dimmed))
                         .overflow_hidden()

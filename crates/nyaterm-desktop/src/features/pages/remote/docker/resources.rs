@@ -1,12 +1,23 @@
-use super::*;
-use gpui::{ScrollDelta, ScrollWheelEvent, SharedString};
+use gpui::{
+    Context, FontWeight, IntoElement, ScrollDelta, ScrollWheelEvent, SharedString, div, prelude::*,
+    px, rgb,
+};
+use nyaterm_core::truncate_preview;
+use nyaterm_transport::{DockerImage, DockerNetwork, DockerVolume};
+
+use crate::features::{NyaTermApp, compact_id, gpui_code_font_family};
+use crate::models::{DockerConfirmAction, DockerConfirmState};
+use crate::theme::ThemePalette;
+use crate::widgets::{empty_panel, svg_icon_button};
+
+use super::DockerLabels;
 
 const DOCKER_RESOURCE_ROW_PX: f32 = 64.;
 const DOCKER_RESOURCE_VIEWPORT_ROWS: usize = 14;
 const DOCKER_RESOURCE_OVERSCAN: usize = 6;
 
 pub(in crate::features::pages::remote) fn docker_images_panel(
-    palette: crate::theme::ThemePalette,
+    palette: ThemePalette,
     images: &[DockerImage],
     list_offset: usize,
     labels: DockerLabels,
@@ -65,7 +76,7 @@ pub(in crate::features::pages::remote) fn docker_images_panel(
 }
 
 pub(in crate::features::pages::remote) fn docker_volumes_panel(
-    palette: crate::theme::ThemePalette,
+    palette: ThemePalette,
     volumes: &[DockerVolume],
     list_offset: usize,
     labels: DockerLabels,
@@ -118,7 +129,7 @@ pub(in crate::features::pages::remote) fn docker_volumes_panel(
 }
 
 pub(in crate::features::pages::remote) fn docker_networks_panel(
-    palette: crate::theme::ThemePalette,
+    palette: ThemePalette,
     networks: &[DockerNetwork],
     list_offset: usize,
     labels: DockerLabels,
@@ -187,7 +198,7 @@ fn docker_resource_window(total: usize, list_offset: usize) -> (usize, usize, f3
 }
 
 fn docker_resource_empty(
-    palette: crate::theme::ThemePalette,
+    palette: ThemePalette,
     title: &'static str,
     message: &'static str,
 ) -> gpui::AnyElement {
@@ -205,7 +216,7 @@ fn docker_resource_empty(
 }
 
 pub(in crate::features::pages::remote) fn docker_resource_panel(
-    _palette: crate::theme::ThemePalette,
+    _palette: ThemePalette,
     title: &'static str,
     count: usize,
     rows: impl IntoElement,
@@ -257,7 +268,7 @@ pub(in crate::features::pages::remote) fn docker_resource_panel(
 }
 
 pub(in crate::features::pages::remote) fn docker_resource_static_panel(
-    _palette: crate::theme::ThemePalette,
+    _palette: ThemePalette,
     title: &'static str,
     _count: usize,
     rows: impl IntoElement,
@@ -277,7 +288,7 @@ pub(in crate::features::pages::remote) fn docker_resource_static_panel(
 }
 
 pub(in crate::features::pages::remote) fn docker_resource_row(
-    palette: crate::theme::ThemePalette,
+    palette: ThemePalette,
     title: String,
     detail: String,
 ) -> gpui::Div {
@@ -310,7 +321,7 @@ pub(in crate::features::pages::remote) fn docker_resource_row(
                 )
                 .child(
                     div()
-                        .font_family(crate::features::gpui_code_font_family())
+                        .font_family(gpui_code_font_family())
                         .text_size(px(10.))
                         .text_color(rgb(palette.text_dimmed))
                         .overflow_hidden()

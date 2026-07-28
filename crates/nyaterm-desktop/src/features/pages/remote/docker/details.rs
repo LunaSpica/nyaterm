@@ -1,7 +1,17 @@
-use super::*;
+use gpui::{Context, FontWeight, IntoElement, div, prelude::*, px, rgb};
+use nyaterm_core::truncate_preview;
+use nyaterm_transport::{DockerContainer, DockerContainerDetails};
+
+use crate::features::{
+    NyaTermApp, compact_id, docker_state_color, gpui_code_font_family, modal_dialog_shell,
+};
+use crate::theme::ThemePalette;
+use crate::widgets::{empty_panel, small_button, status_pill};
+
+use super::DockerLabels;
 
 pub(in crate::features::pages::remote) fn docker_details_panel(
-    palette: crate::theme::ThemePalette,
+    palette: ThemePalette,
     dialog_bg: gpui::Rgba,
     container_id: Option<String>,
     details: Option<DockerContainerDetails>,
@@ -95,7 +105,7 @@ pub(in crate::features::pages::remote) fn docker_details_panel(
                     .gap(px(2.))
                     .child(
                         div()
-                            .font_family(crate::features::gpui_code_font_family())
+                            .font_family(gpui_code_font_family())
                             .text_size(px(11.))
                             .text_color(rgb(palette.text))
                             .overflow_hidden()
@@ -148,7 +158,7 @@ pub(in crate::features::pages::remote) fn docker_details_panel(
                     )
                     .child(
                         div()
-                            .font_family(crate::features::gpui_code_font_family())
+                            .font_family(gpui_code_font_family())
                             .text_size(px(10.))
                             .text_color(rgb(palette.text_dimmed))
                             .child(ip_address),
@@ -545,7 +555,7 @@ fn docker_metric(
         .child(
             div()
                 .mt_1()
-                .font_family(crate::features::gpui_code_font_family())
+                .font_family(gpui_code_font_family())
                 .text_size(px(11.))
                 .text_color(rgb(palette.text))
                 .child(value.into()),
@@ -580,7 +590,7 @@ fn docker_detail_line(
             div()
                 .min_w_0()
                 .flex_1()
-                .font_family(crate::features::gpui_code_font_family())
+                .font_family(gpui_code_font_family())
                 .text_size(px(11.))
                 .line_height(px(15.))
                 .text_color(rgb(palette.text))

@@ -1,7 +1,13 @@
-use super::*;
+use gpui::{Context, IntoElement, MouseButton, SharedString, div, prelude::*, px, rgb};
+
+use crate::features::NyaTermApp;
+use crate::models::{DockerConfirmAction, DockerConfirmState};
+use crate::theme::ThemePalette;
+
+use super::super::DockerLabels;
 
 pub(in crate::features::pages::remote) fn docker_compose_project_action_menu(
-    palette: crate::theme::ThemePalette,
+    palette: ThemePalette,
     menu_bg: gpui::Rgba,
     project_name: String,
     config_files: Option<String>,
@@ -26,7 +32,7 @@ pub(in crate::features::pages::remote) fn docker_compose_project_action_menu(
         .py_1()
         .flex()
         .flex_col()
-        .on_mouse_down(gpui::MouseButton::Left, |_, _, _| {})
+        .on_mouse_down(MouseButton::Left, |_, _, _| {})
         .child(compose_menu_item(
             palette,
             format!("compose-up-{short}"),
@@ -92,7 +98,7 @@ pub(in crate::features::pages::remote) fn docker_compose_project_action_menu(
 }
 
 pub(in crate::features::pages::remote) fn docker_compose_service_action_menu(
-    palette: crate::theme::ThemePalette,
+    palette: ThemePalette,
     menu_bg: gpui::Rgba,
     project_name: String,
     config_files: Option<String>,
@@ -222,7 +228,7 @@ pub(in crate::features::pages::remote) fn docker_compose_service_action_menu(
 }
 
 pub(in crate::features::pages::remote) fn compose_menu_item(
-    palette: crate::theme::ThemePalette,
+    palette: ThemePalette,
     id: impl Into<String>,
     label: &'static str,
     disabled: bool,
@@ -250,7 +256,7 @@ pub(in crate::features::pages::remote) fn compose_menu_item(
 }
 
 pub(in crate::features::pages::remote) fn compose_menu_separator(
-    palette: crate::theme::ThemePalette,
+    palette: ThemePalette,
 ) -> impl IntoElement {
     div().h(px(1.)).mx_2().my_1().bg(rgb(palette.border))
 }

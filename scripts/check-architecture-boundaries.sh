@@ -551,6 +551,20 @@ declare -A SUPER_BASELINE=(
   [crates/nyaterm-desktop/src/features/pages/remote/process/resources.rs]=0
   [crates/nyaterm-desktop/src/features/pages/remote/process/table.rs]=0
   [crates/nyaterm-desktop/src/features/pages/remote/process_view.rs]=0
+  [crates/nyaterm-desktop/src/features/pages/remote/docker/compose/menus.rs]=0
+  [crates/nyaterm-desktop/src/features/pages/remote/docker/compose/mod.rs]=0
+  [crates/nyaterm-desktop/src/features/pages/remote/docker/compose/project.rs]=0
+  [crates/nyaterm-desktop/src/features/pages/remote/docker/compose/service.rs]=0
+  [crates/nyaterm-desktop/src/features/pages/remote/docker/compose/status.rs]=0
+  [crates/nyaterm-desktop/src/features/pages/remote/docker/containers.rs]=0
+  [crates/nyaterm-desktop/src/features/pages/remote/docker/controls.rs]=0
+  [crates/nyaterm-desktop/src/features/pages/remote/docker/details.rs]=0
+  [crates/nyaterm-desktop/src/features/pages/remote/docker/matchers.rs]=0
+  [crates/nyaterm-desktop/src/features/pages/remote/docker/mod.rs]=0
+  [crates/nyaterm-desktop/src/features/pages/remote/docker/resources.rs]=0
+  [crates/nyaterm-desktop/src/features/pages/remote/docker_view.rs]=0
+  [crates/nyaterm-desktop/src/features/pages/remote/mod.rs]=0
+  [crates/nyaterm-desktop/src/features/pages/remote/stats_view.rs]=0
   [crates/nyaterm-desktop/src/features/pages/settings/transfer/advanced.rs]=0
   [crates/nyaterm-desktop/src/features/pages/settings/transfer/editor.rs]=0
   [crates/nyaterm-desktop/src/features/pages/settings/transfer/files.rs]=0
@@ -614,8 +628,7 @@ done < <(rg -n --path-separator / '^[[:space:]]*use super::\*;' \
   crates/nyaterm-desktop/src/features/pages/connections \
   crates/nyaterm-desktop/src/features/pages/tunnels \
   crates/nyaterm-desktop/src/features/pages/transfers \
-  crates/nyaterm-desktop/src/features/pages/remote/process \
-  crates/nyaterm-desktop/src/features/pages/remote/process_view.rs \
+  crates/nyaterm-desktop/src/features/pages/remote \
   crates/nyaterm-desktop/src/features/pages/settings/transfer \
   crates/nyaterm-desktop/src/features/pages/settings/terminal \
   crates/nyaterm-desktop/src/features/pages/settings/workspace \

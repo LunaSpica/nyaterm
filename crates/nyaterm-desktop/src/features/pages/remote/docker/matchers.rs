@@ -1,4 +1,6 @@
-use super::*;
+use nyaterm_transport::{
+    DockerComposeProject, DockerContainer, DockerImage, DockerNetwork, DockerVolume,
+};
 
 pub(in crate::features::pages::remote) fn docker_container_matches(
     container: &DockerContainer,

@@ -1,8 +1,21 @@
-use super::*;
-use gpui::{SharedString, rgba};
+use gpui::{
+    Context, FontWeight, IntoElement, MouseButton, ScrollDelta, ScrollWheelEvent, SharedString,
+    div, prelude::*, px, rgb, rgba,
+};
+use nyaterm_core::truncate_preview;
+use nyaterm_transport::DockerContainer;
+
+use crate::features::{
+    NyaTermApp, compact_id, docker_state_color, docker_state_rank, gpui_code_font_family,
+};
+use crate::models::{DockerConfirmAction, DockerConfirmState};
+use crate::theme::ThemePalette;
+use crate::widgets::{empty_panel, status_pill, svg_icon_button};
+
+use super::DockerLabels;
 
 pub(in crate::features::pages::remote) fn docker_containers_panel(
-    palette: crate::theme::ThemePalette,
+    palette: ThemePalette,
     menu_bg: gpui::Rgba,
     has_snapshot: bool,
     has_session: bool,
@@ -123,7 +136,7 @@ pub(in crate::features::pages::remote) fn docker_containers_panel(
 }
 
 fn docker_container_row(
-    palette: crate::theme::ThemePalette,
+    palette: ThemePalette,
     menu_bg: gpui::Rgba,
     container: DockerContainer,
     menu_open: bool,
@@ -197,7 +210,7 @@ fn docker_container_row(
                         .flex()
                         .items_center()
                         .gap_2()
-                        .font_family(crate::features::gpui_code_font_family())
+                        .font_family(gpui_code_font_family())
                         .text_size(px(10.))
                         .text_color(rgb(palette.text_dimmed))
                         .child(
@@ -251,7 +264,7 @@ fn docker_container_row(
 }
 
 fn docker_container_action_menu(
-    palette: crate::theme::ThemePalette,
+    palette: ThemePalette,
     menu_bg: gpui::Rgba,
     container_id: String,
     container_name: String,
@@ -284,7 +297,7 @@ fn docker_container_action_menu(
         .py_1()
         .flex()
         .flex_col()
-        .on_mouse_down(gpui::MouseButton::Left, |_, _, _| {})
+        .on_mouse_down(MouseButton::Left, |_, _, _| {})
         .child(docker_menu_item(
             palette,
             format!("docker-menu-logs-{short}"),
@@ -390,7 +403,7 @@ fn docker_container_action_menu(
 }
 
 fn docker_menu_item(
-    palette: crate::theme::ThemePalette,
+    palette: ThemePalette,
     id: impl Into<String>,
     label: &'static str,
     disabled: bool,
@@ -417,11 +430,11 @@ fn docker_menu_item(
         .child(label)
 }
 
-fn docker_menu_separator(palette: crate::theme::ThemePalette) -> impl IntoElement {
+fn docker_menu_separator(palette: ThemePalette) -> impl IntoElement {
     div().h(px(1.)).mx_2().my_1().bg(rgb(palette.border))
 }
 
-fn docker_state_border_color(palette: crate::theme::ThemePalette, state: &str) -> gpui::Hsla {
+fn docker_state_border_color(palette: ThemePalette, state: &str) -> gpui::Hsla {
     match state.trim().to_ascii_lowercase().as_str() {
         "running" => rgb(0x22c55e).into(),
         "restarting" | "paused" => rgb(0xf59e0b).into(),

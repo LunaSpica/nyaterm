@@ -12,7 +12,7 @@ Last updated from the working tree on 2026-07-28.
 | `NyaTermApp` fields | 261 | Counted from `features/app_state/mod.rs`; down from 585, still transitional. |
 | `impl NyaTermApp` blocks | 240 | Spread across 235 files under `crates/nyaterm-desktop/src`. |
 | `#[path = "..."]` declarations in desktop | 0 | Cleared. Every directory is a real module; the boundary script fails on any new occurrence. |
-| `use super::*` imports in desktop | 290 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
+| `use super::*` imports in desktop | 277 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
 | `features/prelude.rs` rough exported-token count | 229 | Still a broad shared prelude; two hundred sixteen low-frequency transport/core/http/model/helper exports are now explicit imports. |
 | Entity Store structs | 4 | `Runtime`, `WindowRuntime`, `StartupRestore`, `Overlay`. Each owns state the app does not. |
 | Snapshot structs | 0 | Cleared. No store is a projection of `NyaTermApp` any more. |
@@ -410,6 +410,14 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   names the page API it re-exports instead of flattening every child symbol,
   and the remote page parent no longer carries process-only models or GPUI
   input types.
+- The Docker/Compose pages and adjacent remote stats page no longer use
+  wildcard imports. Docker's two module layers expose named composition APIs;
+  project, service, menu and status modules import each other directionally,
+  while the top-level view sees only the panels and matchers it composes. The
+  stats page imports `usage_color` from the process module directly, leaving
+  `pages/remote/mod.rs` as a pure module entry point. All 13 wildcard imports
+  were removed across roughly 3,800 lines, so the boundary script now governs
+  the complete `pages/remote` tree.
 - The settings `transfer`, `terminal` and `workspace` subtrees no longer use
   wildcard imports. Fourteen module boundaries across roughly 4,773 lines now
   name their GPUI traits, settings form helpers, text-input setup, shortcut,
