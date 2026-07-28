@@ -299,10 +299,9 @@ impl NyaTermApp {
             .busy_actions
             .insert(session_id.clone(), "reconnect".to_string());
         self.session.active_menu = None;
-        self.session.start.active_pending = None;
-        self.session.start.active_failed = None;
+        self.session.start.clear_active_selection();
         let old_id = session_id;
-        self.session.start.reconnect_failures.remove(&old_id);
+        self.session.start.clear_reconnect_failure(&old_id);
         let source_index = self
             .session
             .order
@@ -350,7 +349,7 @@ impl NyaTermApp {
         let source_connection_id = metadata.source_connection_id.clone();
         let ai_execution_profile = metadata.ai_execution_profile;
         let seed = Some(seed_output);
-        self.session.start.reconnect_replace_id = Some(old_id.clone());
+        self.session.start.set_reconnect_target(old_id.clone());
 
         match launch_config {
             SessionLaunchConfig::Local(mut config) => {
@@ -430,7 +429,7 @@ impl NyaTermApp {
         old_id: &str,
         new_id: &str,
     ) {
-        self.session.start.reconnect_failures.remove(old_id);
+        self.session.start.clear_reconnect_failure(old_id);
         if let Some(bounds) = self.terminal.layout.session_surface_bounds.remove(old_id) {
             self.terminal
                 .layout

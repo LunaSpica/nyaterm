@@ -803,25 +803,6 @@ impl SessionDialogState {
     }
 }
 
-#[derive(Debug, Clone)]
-pub(in crate::features) enum SessionPaneState {
-    Connecting {
-        request_id: String,
-        name: String,
-        kind: SessionKind,
-    },
-    Live {
-        session_id: String,
-    },
-    Failed {
-        name: String,
-        error: String,
-    },
-    Disconnected {
-        session_id: String,
-    },
-}
-
 pub(in crate::features) struct PendingSessionStart {
     pub connection_name: String,
     pub launch_config: Option<SessionLaunchConfig>,
@@ -853,16 +834,23 @@ pub(in crate::features) struct FailedSessionStart {
 pub(in crate::features) struct SessionStartFeatureState {
     tx: mpsc::Sender<SessionStartResult>,
     rx: mpsc::Receiver<SessionStartResult>,
-    pub pending: HashMap<String, PendingSessionStart>,
-    pub active_pending: Option<String>,
-    pub failed: HashMap<String, FailedSessionStart>,
-    pub active_failed: Option<String>,
-    pub cancelled: HashSet<String>,
-    pub panes: HashMap<String, SessionPaneState>,
-    pub reconnect_replace_id: Option<String>,
-    pub reconnect_failures: HashMap<String, String>,
-    pub pending_workspace_split: Option<(WorkspaceSplitDirection, String)>,
+    pending: HashMap<String, PendingSessionStart>,
+    active_pending: Option<String>,
+    failed: HashMap<String, FailedSessionStart>,
+    active_failed: Option<String>,
+    cancelled: HashSet<String>,
+    reconnect_replace_id: Option<String>,
+    reconnect_failures: HashMap<String, String>,
+    pending_workspace_split: Option<(WorkspaceSplitDirection, String)>,
     saved_connection_queue: VecDeque<PendingSavedConnectionStart>,
+}
+
+pub(in crate::features) enum SessionStartEventRequest {
+    Cancelled,
+    Pending {
+        pending: Option<PendingSessionStart>,
+        was_active: bool,
+    },
 }
 
 #[derive(Clone, Default)]
@@ -892,7 +880,6 @@ impl SessionStartFeatureState {
             failed: HashMap::new(),
             active_failed: None,
             cancelled: HashSet::new(),
-            panes: HashMap::new(),
             reconnect_replace_id: None,
             reconnect_failures: HashMap::new(),
             pending_workspace_split: None,
@@ -914,6 +901,45 @@ impl SessionStartFeatureState {
 
     pub(in crate::features) fn has_failed(&self) -> bool {
         !self.failed.is_empty()
+    }
+
+    pub(in crate::features) fn pending_count(&self) -> usize {
+        self.pending.len()
+    }
+
+    pub(in crate::features) fn has_cancelled_results(&self) -> bool {
+        !self.cancelled.is_empty()
+    }
+
+    pub(in crate::features) fn has_active_pending(&self) -> bool {
+        self.active_pending.is_some()
+    }
+
+    pub(in crate::features) fn has_active_failed(&self) -> bool {
+        self.active_failed.is_some()
+    }
+
+    pub(in crate::features) fn request_is_active(&self, request_id: &str) -> bool {
+        self.active_pending.as_deref() == Some(request_id)
+            || self.active_failed.as_deref() == Some(request_id)
+    }
+
+    pub(in crate::features) fn pending_entries(
+        &self,
+    ) -> impl Iterator<Item = (&String, &PendingSessionStart)> {
+        self.pending.iter()
+    }
+
+    pub(in crate::features) fn failed_entries(
+        &self,
+    ) -> impl Iterator<Item = (&String, &FailedSessionStart)> {
+        self.failed.iter()
+    }
+
+    pub(in crate::features) fn source_connection_is_pending(&self, connection_id: &str) -> bool {
+        self.pending
+            .values()
+            .any(|pending| pending.source_connection_id.as_deref() == Some(connection_id))
     }
 
     pub(in crate::features) fn queue_saved_connection(
@@ -947,6 +973,124 @@ impl SessionStartFeatureState {
         self.saved_connection_queue
             .iter()
             .any(|queued| queued.connection.id == connection_id)
+    }
+
+    pub(in crate::features) fn register_pending(
+        &mut self,
+        request_id: String,
+        mut pending: PendingSessionStart,
+    ) -> bool {
+        pending.reconnect_session_id = self.reconnect_replace_id.clone();
+        let reconnecting = pending.reconnect_session_id.is_some();
+        self.pending.insert(request_id.clone(), pending);
+        if !reconnecting {
+            self.active_pending = Some(request_id);
+            self.active_failed = None;
+        }
+        reconnecting
+    }
+
+    pub(in crate::features) fn take_event_request(
+        &mut self,
+        request_id: &str,
+    ) -> SessionStartEventRequest {
+        if self.cancelled.remove(request_id) {
+            return SessionStartEventRequest::Cancelled;
+        }
+        let was_active = self.active_pending.as_deref() == Some(request_id);
+        let pending = self.pending.remove(request_id);
+        if was_active {
+            self.active_pending = None;
+        }
+        SessionStartEventRequest::Pending {
+            pending,
+            was_active,
+        }
+    }
+
+    pub(in crate::features) fn complete_success(
+        &mut self,
+        reconnecting: bool,
+        was_active: bool,
+        no_active_session: bool,
+    ) -> bool {
+        if reconnecting {
+            self.reconnect_replace_id = None;
+        }
+        was_active || (self.active_pending.is_none() && no_active_session)
+    }
+
+    pub(in crate::features) fn record_failure(
+        &mut self,
+        request_id: String,
+        pending: Option<PendingSessionStart>,
+        error: String,
+        was_active: bool,
+        reconnect_session_exists: bool,
+    ) -> bool {
+        let reconnect_session_id = pending
+            .as_ref()
+            .and_then(|pending| pending.reconnect_session_id.clone());
+        if let Some(session_id) = reconnect_session_id {
+            self.reconnect_replace_id = None;
+            if reconnect_session_exists {
+                self.reconnect_failures.insert(session_id, error);
+            }
+            return true;
+        }
+        if let Some(pending) = pending {
+            self.failed
+                .insert(request_id.clone(), FailedSessionStart { pending, error });
+            if was_active {
+                self.active_failed = Some(request_id);
+            }
+        }
+        false
+    }
+
+    pub(in crate::features) fn clear_active_selection(&mut self) {
+        self.active_pending = None;
+        self.active_failed = None;
+    }
+
+    pub(in crate::features) fn reconnect_target(&self) -> Option<&str> {
+        self.reconnect_replace_id.as_deref()
+    }
+
+    pub(in crate::features) fn set_reconnect_target(&mut self, session_id: String) {
+        self.reconnect_replace_id = Some(session_id);
+    }
+
+    pub(in crate::features) fn clear_reconnect_target(&mut self) {
+        self.reconnect_replace_id = None;
+    }
+
+    pub(in crate::features) fn reconnect_is_pending(&self, session_id: &str) -> bool {
+        self.pending
+            .values()
+            .any(|pending| pending.reconnect_session_id.as_deref() == Some(session_id))
+    }
+
+    pub(in crate::features) fn reconnect_failure(&self, session_id: &str) -> Option<&str> {
+        self.reconnect_failures.get(session_id).map(String::as_str)
+    }
+
+    pub(in crate::features) fn clear_reconnect_failure(&mut self, session_id: &str) {
+        self.reconnect_failures.remove(session_id);
+    }
+
+    pub(in crate::features) fn set_pending_workspace_split(
+        &mut self,
+        direction: WorkspaceSplitDirection,
+        source_session_id: String,
+    ) {
+        self.pending_workspace_split = Some((direction, source_session_id));
+    }
+
+    pub(in crate::features) fn take_pending_workspace_split(
+        &mut self,
+    ) -> Option<(WorkspaceSplitDirection, String)> {
+        self.pending_workspace_split.take()
     }
 
     pub(in crate::features) fn pending_display_name(&self) -> Option<String> {
@@ -1004,7 +1148,6 @@ impl SessionStartFeatureState {
     ) -> Option<PendingSessionStart> {
         let pending = self.pending.remove(request_id)?;
         self.cancelled.insert(request_id.to_string());
-        self.panes.remove(request_id);
         if self.active_pending.as_deref() == Some(request_id) {
             self.active_pending = self.latest_pending_request_id();
             if self.active_pending.is_none() {
@@ -1028,7 +1171,6 @@ impl SessionStartFeatureState {
         request_id: &str,
     ) -> Option<FailedSessionStart> {
         let failed = self.failed.remove(request_id)?;
-        self.panes.remove(request_id);
         if self.active_failed.as_deref() == Some(request_id) {
             self.active_failed = None;
             self.active_pending = self.latest_pending_request_id();
@@ -1106,6 +1248,7 @@ mod tests {
     use crate::features::session::HostKeyPromptIssue;
     use crate::models::{
         SessionEventBridge, StartupCommandAction, TabActionsSubmenu, TerminalFramePipeline,
+        WorkspaceSplitDirection,
     };
 
     use super::{
@@ -1113,7 +1256,8 @@ mod tests {
         HostKeyPromptRequest, KeyboardInteractivePromptState, NativeOtpCodePreview,
         NativeOtpProvider, PendingSessionStart, PromptResolution, RenameSessionSubmission,
         SavedConnectionStartOptions, SessionFeatureFocus, SessionFeatureState, SessionPromptState,
-        SessionRestoreState, SessionStartFeatureState, SftpDuplicatePromptBroker,
+        SessionRestoreState, SessionStartEventRequest, SessionStartFeatureState,
+        SftpDuplicatePromptBroker,
     };
 
     #[test]
@@ -1486,9 +1630,102 @@ mod tests {
             .close_pending("request-1")
             .expect("selected pending start should close");
         assert_eq!(closed.connection_name, "local shell");
-        assert!(starts.cancelled.contains("request-1"));
+        assert!(starts.has_cancelled_results());
+        assert!(matches!(
+            starts.take_event_request("request-1"),
+            SessionStartEventRequest::Cancelled
+        ));
+        assert!(!starts.has_cancelled_results());
         assert!(!starts.has_pending());
-        assert!(starts.active_pending.is_none());
+        assert!(!starts.has_active_pending());
+    }
+
+    #[test]
+    fn session_start_registration_owns_fresh_and_reconnect_selection() {
+        let mut fresh = SessionStartFeatureState::new();
+        assert!(!fresh.register_pending("request-fresh".to_string(), pending("fresh")));
+        assert!(fresh.request_is_active("request-fresh"));
+        assert_eq!(fresh.pending_count(), 1);
+
+        let mut reconnect = SessionStartFeatureState::new();
+        reconnect.set_reconnect_target("session-old".to_string());
+        assert!(reconnect.register_pending("request-reconnect".to_string(), pending("reconnect")));
+        assert!(!reconnect.has_active_pending());
+        assert!(reconnect.reconnect_is_pending("session-old"));
+        assert_eq!(reconnect.reconnect_target(), Some("session-old"));
+    }
+
+    #[test]
+    fn session_start_results_route_normal_and_reconnect_failures_atomically() {
+        let mut fresh = SessionStartFeatureState::new();
+        fresh.register_pending("request-fresh".to_string(), pending("fresh"));
+        let SessionStartEventRequest::Pending {
+            pending: pending_state,
+            was_active,
+        } = fresh.take_event_request("request-fresh")
+        else {
+            panic!("fresh result should retain pending metadata");
+        };
+        assert!(was_active);
+        assert!(!fresh.record_failure(
+            "request-fresh".to_string(),
+            pending_state,
+            "connection failed".to_string(),
+            was_active,
+            false,
+        ));
+        assert!(fresh.has_failed());
+        assert!(fresh.has_active_failed());
+        assert_eq!(
+            fresh
+                .active_failed()
+                .expect("active failure should be retained")
+                .error,
+            "connection failed"
+        );
+
+        let mut reconnect = SessionStartFeatureState::new();
+        reconnect.set_reconnect_target("session-old".to_string());
+        reconnect.register_pending("request-reconnect".to_string(), pending("reconnect"));
+        let SessionStartEventRequest::Pending {
+            pending: pending_state,
+            was_active,
+        } = reconnect.take_event_request("request-reconnect")
+        else {
+            panic!("reconnect result should retain pending metadata");
+        };
+        assert!(!was_active);
+        assert!(reconnect.record_failure(
+            "request-reconnect".to_string(),
+            pending_state,
+            "reconnect failed".to_string(),
+            was_active,
+            true,
+        ));
+        assert!(!reconnect.has_failed());
+        assert_eq!(
+            reconnect.reconnect_failure("session-old"),
+            Some("reconnect failed")
+        );
+        assert!(reconnect.reconnect_target().is_none());
+    }
+
+    #[test]
+    fn session_start_success_and_workspace_split_are_single_owner_transitions() {
+        let mut starts = SessionStartFeatureState::new();
+        starts.set_reconnect_target("session-old".to_string());
+        assert!(!starts.complete_success(true, false, false));
+        assert!(starts.reconnect_target().is_none());
+
+        starts.set_pending_workspace_split(
+            WorkspaceSplitDirection::Horizontal,
+            "session-source".to_string(),
+        );
+        assert!(matches!(
+            starts.take_pending_workspace_split(),
+            Some((WorkspaceSplitDirection::Horizontal, source)) if source == "session-source"
+        ));
+        assert!(starts.take_pending_workspace_split().is_none());
     }
 
     #[test]

@@ -128,10 +128,7 @@ impl NyaTermApp {
         session_id: String,
         cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
-        let reconnect_pending =
-            self.session.start.pending.values().any(|pending| {
-                pending.reconnect_session_id.as_deref() == Some(session_id.as_str())
-            });
+        let reconnect_pending = self.session.start.reconnect_is_pending(&session_id);
         if reconnect_pending {
             return self
                 .workspace_reconnect_pending_state(&session_id)
@@ -140,9 +137,8 @@ impl NyaTermApp {
         if let Some(error) = self
             .session
             .start
-            .reconnect_failures
-            .get(&session_id)
-            .cloned()
+            .reconnect_failure(&session_id)
+            .map(str::to_string)
         {
             return self
                 .workspace_reconnect_failed_state(session_id, error, cx)

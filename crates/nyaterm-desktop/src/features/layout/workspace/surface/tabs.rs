@@ -301,8 +301,7 @@ impl NyaTermApp {
         let mut transient_tabs: Vec<TransientSessionTab> = self
             .session
             .start
-            .pending
-            .iter()
+            .pending_entries()
             .filter_map(|(request_id, pending)| {
                 if pending.reconnect_session_id.is_some() {
                     return None;
@@ -332,8 +331,7 @@ impl NyaTermApp {
         transient_tabs.extend(
             self.session
                 .start
-                .failed
-                .iter()
+                .failed_entries()
                 .map(|(request_id, failed)| {
                     let pending = &failed.pending;
                     let name = pending
@@ -403,10 +401,7 @@ impl NyaTermApp {
             {
                 let (_, _, _, request_id, name, error) = transient_tabs[transient_cursor].clone();
                 let tab_number = tab_index + transient_cursor + 1;
-                let active =
-                    self.session.start.active_pending.as_deref() == Some(request_id.as_str());
-                let active = active
-                    || self.session.start.active_failed.as_deref() == Some(request_id.as_str());
+                let active = self.session.start.request_is_active(&request_id);
                 tabs = tabs.child(match error {
                     Some(error) => self
                         .failed_session_tab(request_id, name, error, tab_number, active, cx)
@@ -670,8 +665,7 @@ impl NyaTermApp {
         while transient_cursor < transient_tabs.len() {
             let (_, _, _, request_id, name, error) = transient_tabs[transient_cursor].clone();
             let tab_number = session_count + transient_cursor + 1;
-            let active = self.session.start.active_pending.as_deref() == Some(request_id.as_str())
-                || self.session.start.active_failed.as_deref() == Some(request_id.as_str());
+            let active = self.session.start.request_is_active(&request_id);
             tabs = tabs.child(match error {
                 Some(error) => self
                     .failed_session_tab(request_id, name, error, tab_number, active, cx)

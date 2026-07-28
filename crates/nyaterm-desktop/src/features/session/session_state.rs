@@ -242,8 +242,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn activate_session_id(&mut self, session_id: &str) -> Option<String> {
-        self.session.start.active_pending = None;
-        self.session.start.active_failed = None;
+        self.session.start.clear_active_selection();
         self.shell.chrome.prepare_session_switch();
         // Session switch resets terminal-output credential autofill (Tauri XTerminal remount).
         self.terminal.assist.reset_for_session_switch();

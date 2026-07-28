@@ -82,7 +82,7 @@ pub(in crate::features) use runtime_jobs::{
 pub(in crate::features) use session::{
     CredentialPromptBroker, FailedSessionStart, HostKeyPromptBroker, NativeOtpProvider,
     PendingSessionStart, SavedConnectionStartOptions, SessionFeatureFocus, SessionFeatureState,
-    SessionPaneState, credential_prompt_target, keyboard_interactive_prompt_target,
+    SessionStartEventRequest, credential_prompt_target, keyboard_interactive_prompt_target,
 };
 pub(in crate::features) use settings::{
     SecurityCatalogState, SecurityFeatureFocus, SecurityFeatureState,

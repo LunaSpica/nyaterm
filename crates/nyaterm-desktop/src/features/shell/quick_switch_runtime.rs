@@ -90,8 +90,7 @@ impl NyaTermApp {
         let mut transient_items = self
             .session
             .start
-            .pending
-            .iter()
+            .pending_entries()
             .filter(|(_, pending)| pending.reconnect_session_id.is_none())
             .map(|(request_id, pending)| {
                 let insert_index = quick_switch_transient_insert_index(
@@ -120,8 +119,7 @@ impl NyaTermApp {
                             self.tr("sessionQuickSwitcher.connecting"),
                             session_kind_label(pending.kind)
                         ),
-                        active: self.session.start.active_pending.as_deref()
-                            == Some(request_id.as_str()),
+                        active: self.session.start.request_is_active(request_id),
                         failed: false,
                         search_detail: None,
                     },
@@ -130,8 +128,7 @@ impl NyaTermApp {
             .chain(
                 self.session
                     .start
-                    .failed
-                    .iter()
+                    .failed_entries()
                     .map(|(request_id, failed)| {
                         let pending = &failed.pending;
                         let insert_index = quick_switch_transient_insert_index(
@@ -160,8 +157,7 @@ impl NyaTermApp {
                                     self.tr("terminal.connectionFailed"),
                                     session_kind_label(pending.kind)
                                 ),
-                                active: self.session.start.active_failed.as_deref()
-                                    == Some(request_id.as_str()),
+                                active: self.session.start.request_is_active(request_id),
                                 failed: true,
                                 search_detail: Some(failed.error.clone()),
                             },

@@ -261,6 +261,18 @@ check_no_matches \
   "session start state must stay grouped under SessionStartFeatureState" \
   '^[[:space:]]*pub\(in crate::features\)[[:space:]]+(session_start_tx|session_start_rx|pending_session_starts|active_pending_session_start|failed_session_starts|active_failed_session_start|cancelled_session_start_requests|session_pane_states|pending_reconnect_replace_id|reconnect_session_failures|pending_workspace_split)[[:space:]]*:' \
   crates/nyaterm-desktop/src/features/app_state/mod.rs
+check_no_matches \
+  "SessionStartFeatureState lifecycle fields must remain private" \
+  '^[[:space:]]*pub([[:space:]]|\([^)]*\))[[:space:]]+(active_pending|active_failed|cancelled|panes|reconnect_replace_id|reconnect_failures|pending_workspace_split|saved_connection_queue)[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/session/state.rs
+check_no_matches \
+  "SessionStartFeatureState maps and result channels must remain private" \
+  '^[[:space:]]*pub([[:space:]]|\([^)]*\))[[:space:]]+((pending|failed)[[:space:]]*:[[:space:]]*HashMap<String,[[:space:]]*(PendingSessionStart|FailedSessionStart)>|(tx|rx)[[:space:]]*:[[:space:]]*mpsc::(Sender|Receiver)<SessionStartResult>)' \
+  crates/nyaterm-desktop/src/features/session/state.rs
+check_no_matches \
+  "retired SessionPaneState write-only projection must not return" \
+  'SessionPaneState' \
+  crates/nyaterm-desktop/src
 
 check_no_matches \
   "session start models must stay with SessionStartFeatureState" \

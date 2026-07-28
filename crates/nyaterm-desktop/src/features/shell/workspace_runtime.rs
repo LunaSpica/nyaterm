@@ -208,7 +208,9 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        self.session.start.pending_workspace_split = Some((direction, source_session_id));
+        self.session
+            .start
+            .set_pending_workspace_split(direction, source_session_id);
         self.duplicate_active_session(window, cx);
     }
 
@@ -217,7 +219,7 @@ impl NyaTermApp {
         new_session_id: &str,
     ) {
         let Some((direction, source_session_id)) =
-            self.session.start.pending_workspace_split.take()
+            self.session.start.take_pending_workspace_split()
         else {
             return;
         };

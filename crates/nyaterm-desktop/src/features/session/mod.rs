@@ -27,5 +27,5 @@ pub(in crate::features) use prompt_runtime::{
 };
 pub(in crate::features) use state::{
     FailedSessionStart, PendingSessionStart, SavedConnectionStartOptions, SessionFeatureFocus,
-    SessionFeatureState, SessionPaneState,
+    SessionFeatureState, SessionStartEventRequest,
 };

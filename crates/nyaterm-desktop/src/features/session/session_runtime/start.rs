@@ -218,9 +218,7 @@ impl NyaTermApp {
     ) -> bool {
         self.session
             .start
-            .pending
-            .values()
-            .any(|pending| pending.source_connection_id.as_deref() == Some(connection.id.as_str()))
+            .source_connection_is_pending(&connection.id)
     }
 
     pub(in crate::features) fn saved_connection_start_is_pending_or_queued(
@@ -248,10 +246,9 @@ impl NyaTermApp {
     ) {
         let connection_name = connection.name.clone();
         let source_connection_id = Some(connection.id.clone());
-        let geometry_session_hint =
-            after_session_id
-                .as_deref()
-                .or(self.session.start.reconnect_replace_id.as_deref());
+        let geometry_session_hint = after_session_id
+            .as_deref()
+            .or(self.session.start.reconnect_target());
         let desired_geometry =
             self.desired_terminal_resize_geometry_for_session_hint(geometry_session_hint);
         let build_context = self.ssh_session_config_build_context();

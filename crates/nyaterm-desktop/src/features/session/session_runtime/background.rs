@@ -11,8 +11,8 @@ use super::super::state::{failed_session_start_display_name, pending_session_sta
 use super::PendingSessionStartRegistration;
 use crate::features::formatting::{session_kind_label, short_id, ssh_multiplex_key};
 use crate::features::{
-    FailedSessionStart, NyaTermApp, PendingSessionStart, SessionPaneState, SessionStartResult,
-    SessionStartSuccess,
+    FailedSessionStart, NyaTermApp, PendingSessionStart, SessionStartEventRequest,
+    SessionStartResult, SessionStartSuccess,
 };
 use crate::models::{
     MainMode, NavItem, SessionLaunchConfig, SessionRuntimeMetadata, StartupCommandRequest,
@@ -117,7 +117,6 @@ impl NyaTermApp {
     ) -> String {
         let request_id = uuid();
         let requested_at = Instant::now();
-        let reconnect_session_id = self.session.start.reconnect_replace_id.clone();
         let PendingSessionStartRegistration {
             connection_name,
             launch_config,
@@ -135,19 +134,7 @@ impl NyaTermApp {
             append_start_log,
         } = registration;
 
-        if reconnect_session_id.is_none() {
-            self.shell.chrome.last_connect_failure_name = None;
-            self.shell.chrome.last_connect_failure_error = None;
-        }
-        self.session.start.panes.insert(
-            request_id.clone(),
-            SessionPaneState::Connecting {
-                request_id: request_id.clone(),
-                name: connection_name.clone(),
-                kind,
-            },
-        );
-        self.session.start.pending.insert(
+        let reconnecting = self.session.start.register_pending(
             request_id.clone(),
             PendingSessionStart {
                 connection_name: connection_name.clone(),
@@ -163,12 +150,12 @@ impl NyaTermApp {
                 startup_command,
                 multiplex_key,
                 source_connection_id,
-                reconnect_session_id: reconnect_session_id.clone(),
+                reconnect_session_id: None,
             },
         );
-        if reconnect_session_id.is_none() {
-            self.session.start.active_pending = Some(request_id.clone());
-            self.session.start.active_failed = None;
+        if !reconnecting {
+            self.shell.chrome.last_connect_failure_name = None;
+            self.shell.chrome.last_connect_failure_error = None;
         }
         self.terminal.view.status = status_message;
         // Status + connecting tab already show progress; avoid full terminal decode
@@ -254,10 +241,9 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         config.deferred_pty = true;
-        let geometry_session_hint =
-            after_session_id
-                .as_deref()
-                .or(self.session.start.reconnect_replace_id.as_deref());
+        let geometry_session_hint = after_session_id
+            .as_deref()
+            .or(self.session.start.reconnect_target());
         if let Some(geometry) =
             self.desired_terminal_resize_geometry_for_session_hint(geometry_session_hint)
         {
@@ -325,10 +311,9 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         config.deferred_pty = true;
-        let geometry_session_hint =
-            after_session_id
-                .as_deref()
-                .or(self.session.start.reconnect_replace_id.as_deref());
+        let geometry_session_hint = after_session_id
+            .as_deref()
+            .or(self.session.start.reconnect_target());
         if let Some(geometry) =
             self.desired_terminal_resize_geometry_for_session_hint(geometry_session_hint)
         {
@@ -430,31 +415,31 @@ impl NyaTermApp {
             };
             dirty = true;
             let request_id = event.request_id.clone();
-            if self.session.start.cancelled.remove(&event.request_id) {
-                self.session.start.panes.remove(&event.request_id);
-                if let Ok(success) = event.result {
-                    let session_id = success.session_info.id;
-                    if let Err(error) = self.session.manager.close(&session_id) {
-                        tracing::warn!(
+            let (pending, was_active_pending) =
+                match self.session.start.take_event_request(&event.request_id) {
+                    SessionStartEventRequest::Cancelled => {
+                        if let Ok(success) = event.result {
+                            let session_id = success.session_info.id;
+                            if let Err(error) = self.session.manager.close(&session_id) {
+                                tracing::warn!(
+                                    request_id = %request_id,
+                                    session_id = %session_id,
+                                    error = %error,
+                                    "failed to close cancelled session start result"
+                                );
+                            }
+                        }
+                        tracing::debug!(
                             request_id = %request_id,
-                            session_id = %session_id,
-                            error = %error,
-                            "failed to close cancelled session start result"
+                            "discarded cancelled session start result"
                         );
+                        continue;
                     }
-                }
-                tracing::debug!(
-                    request_id = %request_id,
-                    "discarded cancelled session start result"
-                );
-                continue;
-            }
-            let was_active_pending =
-                self.session.start.active_pending.as_deref() == Some(event.request_id.as_str());
-            let pending = self.session.start.pending.remove(&event.request_id);
-            if was_active_pending {
-                self.session.start.active_pending = None;
-            }
+                    SessionStartEventRequest::Pending {
+                        pending,
+                        was_active,
+                    } => (pending, was_active),
+                };
             let connection_name = event.connection_name.clone();
             let kind = pending
                 .as_ref()
@@ -480,8 +465,7 @@ impl NyaTermApp {
                         .as_deref()
                         .is_some_and(|stale_id| !self.session.metadata.contains_key(stale_id))
                     {
-                        let _ = self.session.start.reconnect_replace_id.take();
-                        self.session.start.panes.remove(&request_id);
+                        self.session.start.clear_reconnect_target();
                         if let Err(error) = self.session.manager.close(&session_id) {
                             tracing::warn!(
                                 request_id = %request_id,
@@ -596,7 +580,6 @@ impl NyaTermApp {
                         self.move_session_to_index(&session_id, insert_index);
                     }
                     if let Some(stale_id) = reconnect_session_id {
-                        let _ = self.session.start.reconnect_replace_id.take();
                         if stale_id != session_id {
                             self.migrate_reconnected_session_state(&stale_id, &session_id);
                             self.remove_session_state(&stale_id);
@@ -604,16 +587,14 @@ impl NyaTermApp {
                             self.persist_terminal_window_layout();
                         }
                     }
-                    self.session.start.panes.insert(
-                        event.request_id.clone(),
-                        SessionPaneState::Live {
-                            session_id: session_id.clone(),
-                        },
+                    let should_activate = self.session.start.complete_success(
+                        pending
+                            .as_ref()
+                            .is_some_and(|pending| pending.reconnect_session_id.is_some()),
+                        was_active_pending,
+                        self.session.active_id.is_none(),
                     );
-                    if was_active_pending
-                        || (self.session.start.active_pending.is_none()
-                            && self.session.active_id.is_none())
-                    {
+                    if should_activate {
                         self.activate_session_id(&session_id);
                     }
                     // First connected frames often land with a login banner burst.
@@ -681,42 +662,19 @@ impl NyaTermApp {
                     let reconnect_session_id = pending
                         .as_ref()
                         .and_then(|pending| pending.reconnect_session_id.clone());
-                    let reconnect_failure = reconnect_session_id.is_some();
-                    if reconnect_failure {
-                        let _ = self.session.start.reconnect_replace_id.take();
-                    }
+                    let reconnect_session_exists = reconnect_session_id
+                        .as_deref()
+                        .is_some_and(|session_id| self.session.metadata.contains_key(session_id));
+                    let reconnect_failure = self.session.start.record_failure(
+                        request_id.clone(),
+                        pending,
+                        error.clone(),
+                        was_active_pending,
+                        reconnect_session_exists,
+                    );
                     if !reconnect_failure {
                         self.shell.chrome.last_connect_failure_name = Some(connection_name.clone());
                         self.shell.chrome.last_connect_failure_error = Some(error.clone());
-                    }
-                    if let Some(session_id) = reconnect_session_id {
-                        if self.session.metadata.contains_key(&session_id) {
-                            self.session
-                                .start
-                                .reconnect_failures
-                                .insert(session_id, error.clone());
-                        }
-                        self.session.start.panes.remove(&request_id);
-                    } else if let Some(pending) = pending {
-                        self.session.start.failed.insert(
-                            request_id.clone(),
-                            FailedSessionStart {
-                                pending,
-                                error: error.clone(),
-                            },
-                        );
-                        if was_active_pending {
-                            self.session.start.active_failed = Some(request_id.clone());
-                        }
-                    }
-                    if !reconnect_failure {
-                        self.session.start.panes.insert(
-                            request_id.clone(),
-                            SessionPaneState::Failed {
-                                name: connection_name.clone(),
-                                error: error.clone(),
-                            },
-                        );
                     }
                     self.terminal.view.status =
                         format!("failed to start {connection_name}: {error}");

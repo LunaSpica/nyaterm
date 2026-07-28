@@ -296,7 +296,7 @@ impl NyaTermApp {
                 frame_event_count = self.terminal.view.frame_pipeline.queued_event_count(),
                 frame_event_wake_count = self.terminal.view.frame_pipeline.event_wake_count(),
                 pending_frame_events = self.terminal.view.pending_frame_events.len(),
-                pending_session_starts = self.session.start.pending.len(),
+                pending_session_starts = self.session.start.pending_count(),
                 queued_saved_connection_starts = self.session.start.saved_connection_queue_len(),
                 output_pressure,
                 next_tick_delay_ms = self.window_runtime_tick_delay().as_millis(),
@@ -451,7 +451,7 @@ impl NyaTermApp {
 
         // Common idle path: no connecting sessions and no auth/SFTP prompts.
         if !self.session.start.has_pending()
-            && self.session.start.cancelled.is_empty()
+            && !self.session.start.has_cancelled_results()
             && !self.session.start.has_queued_saved_connections()
             && !self.session.prompts.has_pending_or_active_prompt()
         {

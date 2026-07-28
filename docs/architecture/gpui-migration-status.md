@@ -276,6 +276,16 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   setup, event routing, status updates and GPUI notifications. Credential
   storage, session creation, reconnect, terminal protocol and transport
   behavior are unchanged.
+  The session-start ownership pass made all eleven surviving
+  `SessionStartFeatureState` fields private. Fresh/reconnect registration,
+  cancellation tombstones, event-result admission, active pending/failed
+  selection, failure routing, reconnect errors and deferred workspace splits
+  now update through owner transitions; renderers receive only read-only
+  iterators and queries. The write-only `SessionPaneState`/`panes` projection
+  was removed because no runtime or view ever read it. Worker spawning,
+  connection-store updates, session registration and GPUI notification remain
+  application-level coordination, and session/persistence formats are
+  unchanged.
 - Transfer state is grouped into `TransferFeatureState`. Seventy-eight fields
   turned out to be five separate things sharing one panel: the job `queue`, the
   SFTP `browser`, the file operation dialogs (`file_ops`), the built-in remote
