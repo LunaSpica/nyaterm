@@ -14,7 +14,7 @@ impl NyaTermApp {
         session_name: String,
         cx: &mut Context<Self>,
     ) {
-        if self.recording_path_prompt.is_some() {
+        if self.recording.path_prompt.is_some() {
             self.terminal.view.status = "recording path picker is already open".to_string();
             cx.notify();
             return;
@@ -39,7 +39,7 @@ impl NyaTermApp {
             .and_then(|value| value.to_str())
             .unwrap_or("nyaterm-recording.log");
         let receiver = cx.prompt_for_new_path(&directory, Some(file_name));
-        self.recording_path_prompt = Some(kind);
+        self.recording.path_prompt = Some(kind);
         self.terminal.view.status = match kind {
             RecordingPathPromptKind::Start => "selecting recording path".to_string(),
             RecordingPathPromptKind::SaveTranscript => "selecting transcript path".to_string(),
@@ -67,7 +67,7 @@ impl NyaTermApp {
         result: RecordingPathPromptResult,
         cx: &mut Context<Self>,
     ) {
-        self.recording_path_prompt = None;
+        self.recording.path_prompt = None;
         match result {
             RecordingPathPromptResult::Selected(path) => match kind {
                 RecordingPathPromptKind::Start => {
@@ -96,16 +96,17 @@ impl NyaTermApp {
     }
 
     fn start_recording_to_path(&mut self, session_id: &str, path: String, cx: &mut Context<Self>) {
-        if self.recording_busy_actions.contains_key(session_id) {
+        if self.recording.busy_actions.contains_key(session_id) {
             self.terminal.view.status = "recording operation already in progress".to_string();
             cx.notify();
             return;
         }
-        self.recording_busy_actions
+        self.recording
+            .busy_actions
             .insert(session_id.to_string(), "record".to_string());
         self.terminal.view.status = "starting recording".to_string();
-        let manager = Arc::clone(&self.recording_manager);
-        let writer = self.recording_write_pipeline.writer();
+        let manager = Arc::clone(&self.recording.manager);
+        let writer = self.recording.writer();
         let job_session_id = session_id.to_string();
         let memory_limit = self.settings.recording_memory_limit_bytes as usize;
         let include_io_labels = self.settings.recording_include_io_labels;
@@ -127,7 +128,7 @@ impl NyaTermApp {
         cx.spawn(async move |this, cx| {
             let result = task.await;
             let _ = this.update(cx, |this, cx| {
-                this.recording_busy_actions.remove(&result_session_id);
+                this.recording.busy_actions.remove(&result_session_id);
                 match result {
                     Ok(path)
                         if this
@@ -135,13 +136,13 @@ impl NyaTermApp {
                             .get(&result_session_id)
                             .is_some_and(|metadata| !metadata.disconnected) =>
                     {
-                        this.recording_active_count =
-                            this.recording_manager.list_recording_sessions().len();
+                        this.recording.refresh_active_count();
                         this.terminal.view.status = format!("recording started: {path}");
                         this.append_terminal_log(format!("\n# recording started: {path}\n"));
                     }
                     Ok(_) => {
-                        this.recording_write_pipeline
+                        this.recording
+                            .pipeline
                             .cleanup_session(result_session_id.clone());
                         this.terminal.view.status =
                             "recording start cancelled because session closed".to_string();
@@ -162,16 +163,17 @@ impl NyaTermApp {
         session_id: &str,
         cx: &mut Context<Self>,
     ) {
-        if self.recording_busy_actions.contains_key(session_id) {
+        if self.recording.busy_actions.contains_key(session_id) {
             self.terminal.view.status = "recording operation already in progress".to_string();
             cx.notify();
             return;
         }
-        self.recording_busy_actions
+        self.recording
+            .busy_actions
             .insert(session_id.to_string(), "record".to_string());
         self.terminal.view.status = "stopping recording".to_string();
-        let manager = Arc::clone(&self.recording_manager);
-        let writer = self.recording_write_pipeline.writer();
+        let manager = Arc::clone(&self.recording.manager);
+        let writer = self.recording.writer();
         let job_session_id = session_id.to_string();
         let task = cx.background_spawn(async move {
             writer.flush();
@@ -183,9 +185,8 @@ impl NyaTermApp {
         cx.spawn(async move |this, cx| {
             let result = task.await;
             let _ = this.update(cx, |this, cx| {
-                this.recording_busy_actions.remove(&result_session_id);
-                this.recording_active_count =
-                    this.recording_manager.list_recording_sessions().len();
+                this.recording.busy_actions.remove(&result_session_id);
+                this.recording.refresh_active_count();
                 match result {
                     Ok(path) => {
                         this.terminal.view.status = format!("recording saved: {path}");
@@ -203,16 +204,17 @@ impl NyaTermApp {
     }
 
     fn save_transcript_to_path(&mut self, session_id: &str, path: String, cx: &mut Context<Self>) {
-        if self.recording_busy_actions.contains_key(session_id) {
+        if self.recording.busy_actions.contains_key(session_id) {
             self.terminal.view.status = "recording operation already in progress".to_string();
             cx.notify();
             return;
         }
-        self.recording_busy_actions
+        self.recording
+            .busy_actions
             .insert(session_id.to_string(), "save".to_string());
         self.terminal.view.status = "saving transcript".to_string();
-        let manager = Arc::clone(&self.recording_manager);
-        let writer = self.recording_write_pipeline.writer();
+        let manager = Arc::clone(&self.recording.manager);
+        let writer = self.recording.writer();
         let job_session_id = session_id.to_string();
         let memory_limit = self.settings.recording_memory_limit_bytes as usize;
         let include_io_labels = self.settings.recording_include_io_labels;
@@ -233,7 +235,7 @@ impl NyaTermApp {
         cx.spawn(async move |this, cx| {
             let result = task.await;
             let _ = this.update(cx, |this, cx| {
-                this.recording_busy_actions.remove(&result_session_id);
+                this.recording.busy_actions.remove(&result_session_id);
                 match result {
                     Ok(path) => {
                         this.terminal.view.status = format!("transcript saved: {path}");
@@ -264,12 +266,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn cleanup_recording_for_session(&mut self, session_id: &str) {
-        if self.recording_manager.is_recording(session_id) {
-            self.recording_active_count = self.recording_active_count.saturating_sub(1);
-        }
-        self.recording_busy_actions.remove(session_id);
-        self.recording_write_pipeline
-            .cleanup_session(session_id.to_string());
+        self.recording.cleanup_session(session_id);
     }
 
     pub(in crate::features) fn apply_recording_search(
@@ -278,7 +275,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.mark_user_activity();
-        self.recording_search_draft = text;
+        self.recording.search_draft = text;
         cx.notify();
     }
 }

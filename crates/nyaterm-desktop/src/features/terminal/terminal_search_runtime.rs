@@ -188,7 +188,7 @@ impl NyaTermApp {
             return;
         }
         self.terminal.search.history_pending_key = Some(key.clone());
-        self.recording_write_pipeline.request_history_search(key);
+        self.recording.pipeline.request_history_search(key);
     }
 
     pub(in crate::features) fn drain_recording_pipeline_events(&mut self) -> bool {
@@ -196,7 +196,7 @@ impl NyaTermApp {
             return false;
         }
         let mut dirty = false;
-        while let Some(event) = self.recording_write_pipeline.try_recv_event() {
+        while let Some(event) = self.recording.pipeline.try_recv_event() {
             match event {
                 RecordingWriteEvent::HistorySearch(event) => {
                     if self.terminal.search.history_pending_key.as_ref() == Some(&event.key) {

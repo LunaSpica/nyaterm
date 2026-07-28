@@ -1268,7 +1268,8 @@ impl NyaTermApp {
             return Err(error);
         }
         if disposition.record_logical_input {
-            self.recording_write_pipeline
+            self.recording
+                .pipeline
                 .write_input(session_id.to_string(), bytes.to_vec());
         }
         Ok(())
@@ -1292,7 +1293,8 @@ impl NyaTermApp {
             return Err(error);
         }
         if disposition.record_raw_input {
-            self.recording_write_pipeline
+            self.recording
+                .pipeline
                 .write_raw_input(session_id.to_string(), bytes.to_vec());
         }
         Ok(())
@@ -1318,7 +1320,8 @@ impl NyaTermApp {
             return Err(error);
         }
         if disposition.record_logical_input {
-            self.recording_write_pipeline
+            self.recording
+                .pipeline
                 .write_input(session_id.to_string(), recording_bytes.to_vec());
         }
         Ok(())
@@ -1365,7 +1368,8 @@ impl NyaTermApp {
             return;
         }
         let log = terminal_session_write_failure_log(context, error);
-        self.recording_write_pipeline
+        self.recording
+            .pipeline
             .write_output(session_id.to_string(), log.clone());
         self.append_terminal_log_for_session(Some(session_id), &log, true);
     }

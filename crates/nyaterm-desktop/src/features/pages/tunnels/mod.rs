@@ -24,7 +24,8 @@ impl NyaTermApp {
     pub(in crate::features) fn tunnels_view(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = self.theme_palette();
         let open_tunnels = self
-            .tunnel_manager
+            .tunnel_runtime
+            .manager
             .list()
             .unwrap_or_default()
             .into_iter()

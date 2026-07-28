@@ -178,8 +178,13 @@ impl NyaTermApp {
         label: String,
         cx: &mut Context<Self>,
     ) {
-        if self.tunnel_manager.is_open(&tunnel_id).unwrap_or(false) {
-            if let Err(error) = self.tunnel_manager.close(&tunnel_id) {
+        if self
+            .tunnel_runtime
+            .manager
+            .is_open(&tunnel_id)
+            .unwrap_or(false)
+        {
+            if let Err(error) = self.tunnel_runtime.manager.close(&tunnel_id) {
                 self.terminal.view.status =
                     format!("failed to close tunnel before delete: {error}");
                 cx.notify();
@@ -199,7 +204,7 @@ impl NyaTermApp {
             Ok(()) => {
                 let deleted = next_tunnels.len() != before;
                 self.tunnels = next_tunnels;
-                self.pending_tunnels.retain(|id| id != &tunnel_id);
+                self.tunnel_runtime.finish(&tunnel_id);
                 self.connection_state
                     .remove_network_item_references(NetworkTab::Tunnels, &tunnel_id);
                 self.terminal.view.status = if deleted {
@@ -262,13 +267,18 @@ impl NyaTermApp {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.pending_tunnels.iter().any(|id| id == &tunnel.id) {
+        if self.tunnel_runtime.is_pending(&tunnel.id) {
             self.terminal.view.status =
                 format!("tunnel {} is already pending", tunnel_name(&tunnel));
             cx.notify();
             return;
         }
-        if self.tunnel_manager.is_open(&tunnel.id).unwrap_or(false) {
+        if self
+            .tunnel_runtime
+            .manager
+            .is_open(&tunnel.id)
+            .unwrap_or(false)
+        {
             self.terminal.view.status = format!("tunnel {} is already open", tunnel_name(&tunnel));
             cx.notify();
             return;
@@ -331,10 +341,10 @@ impl NyaTermApp {
                 .then_some(tunnel.target_port),
         };
 
-        self.pending_tunnels.push(tunnel.id.clone());
+        self.tunnel_runtime.mark_pending(tunnel.id.clone());
         self.terminal.view.status = format!("opening tunnel {}", tunnel_name(&tunnel));
-        let tunnel_manager = self.tunnel_manager.clone();
-        let tunnel_tx = self.tunnel_tx.clone();
+        let tunnel_manager = self.tunnel_runtime.manager.clone();
+        let tunnel_tx = self.tunnel_runtime.sender();
         std::thread::spawn(move || {
             let result = tunnel_manager
                 .open(config)
@@ -353,21 +363,26 @@ impl NyaTermApp {
         tunnel_id: String,
         cx: &mut Context<Self>,
     ) {
-        if self.pending_tunnels.iter().any(|id| id == &tunnel_id) {
+        if self.tunnel_runtime.is_pending(&tunnel_id) {
             self.terminal.view.status = format!("tunnel {tunnel_id} is already pending");
             cx.notify();
             return;
         }
-        if !self.tunnel_manager.is_open(&tunnel_id).unwrap_or(false) {
+        if !self
+            .tunnel_runtime
+            .manager
+            .is_open(&tunnel_id)
+            .unwrap_or(false)
+        {
             self.terminal.view.status = format!("tunnel {tunnel_id} is not open");
             cx.notify();
             return;
         }
 
-        self.pending_tunnels.push(tunnel_id.clone());
+        self.tunnel_runtime.mark_pending(tunnel_id.clone());
         self.terminal.view.status = format!("closing tunnel {tunnel_id}");
-        let tunnel_manager = self.tunnel_manager.clone();
-        let tunnel_tx = self.tunnel_tx.clone();
+        let tunnel_manager = self.tunnel_runtime.manager.clone();
+        let tunnel_tx = self.tunnel_runtime.sender();
         std::thread::spawn(move || {
             let result = tunnel_manager
                 .close(&tunnel_id)
@@ -379,16 +394,16 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn drain_tunnel_events(&mut self) -> bool {
-        if self.pending_tunnels.is_empty() {
+        if !self.tunnel_runtime.has_pending() {
             return false;
         }
         let mut dirty = false;
         for _ in 0..TUNNEL_EVENT_DRAIN_LIMIT {
-            let Ok(event) = self.tunnel_rx.try_recv() else {
+            let Ok(event) = self.tunnel_runtime.try_recv() else {
                 break;
             };
             dirty = true;
-            self.pending_tunnels.retain(|id| id != &event.tunnel_id);
+            self.tunnel_runtime.finish(&event.tunnel_id);
             match event.result {
                 Ok(TunnelJobOutput::Opened(info)) => {
                     self.terminal.view.status = format!(

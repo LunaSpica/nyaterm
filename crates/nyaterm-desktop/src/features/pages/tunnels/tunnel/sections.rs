@@ -94,7 +94,7 @@ pub(in crate::features::pages::tunnels) fn tunnel_section(
     } else {
         for (index, tunnel) in section.tunnels.into_iter().enumerate() {
             let open_info = open_tunnels.get(&tunnel.id).cloned();
-            let pending = app.pending_tunnels.iter().any(|id| id == &tunnel.id);
+            let pending = app.tunnel_runtime.is_pending(&tunnel.id);
             let connection_label = tunnel
                 .connection_id
                 .as_deref()

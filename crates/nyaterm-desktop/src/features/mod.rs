@@ -12,6 +12,7 @@ mod layout;
 mod pages;
 mod panels;
 mod quick_command_window;
+mod recording;
 mod remote;
 mod remote_editor_window;
 mod remote_text_editor;
@@ -71,6 +72,7 @@ pub(in crate::features) use icons::{
 };
 pub(in crate::features) use panels::{SendCommandFeatureFocus, SendCommandFeatureState};
 pub(in crate::features) use quick_command_window::QuickCommandWindow;
+pub(in crate::features) use recording::RecordingFeatureState;
 pub(in crate::features) use remote::{RemoteOpsFeatureFocus, RemoteOpsFeatureState};
 pub(in crate::features) use remote_text_editor::RemoteTextEditor;
 pub(in crate::features) use runtime_jobs::{
@@ -104,6 +106,7 @@ pub(in crate::features) use transfers::{
     format_file_size, transfer_job_title, transfer_status_label,
 };
 pub(in crate::features) use translation::TranslationFeatureState;
+pub(in crate::features) use tunnels::TunnelFeatureState;
 pub(in crate::features) use update::UpdateFeatureState;
 pub(in crate::features) use view_widgets::{
     child_window_header, child_window_titlebar, color_icon, connection_type_icon,

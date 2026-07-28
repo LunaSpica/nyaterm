@@ -51,7 +51,7 @@ impl NyaTermApp {
         let recording_label = self.tr("recording.recording").to_string();
         let search_field = self.text_input(
             "recording.search",
-            &self.recording_search_draft.clone(),
+            &self.recording.search_draft.clone(),
             TextInputSetup::placeholder(search_placeholder),
             cx,
         );
@@ -83,8 +83,8 @@ impl NyaTermApp {
                 let start_session_name = session_name.clone();
                 let save_session_name = session_name.clone();
                 let is_current = active_session_id.as_deref() == Some(session.id.as_str());
-                let session_is_recording = self.recording_manager.is_recording(&session.id);
-                let busy_action = self.recording_busy_actions.get(&session.id).cloned();
+                let session_is_recording = self.recording.manager.is_recording(&session.id);
+                let busy_action = self.recording.busy_actions.get(&session.id).cloned();
                 let is_busy = busy_action.is_some();
                 let kind = session_kind_label(session.kind).to_ascii_uppercase();
                 let short = short_id(&session.id).to_string();
@@ -208,12 +208,13 @@ impl NyaTermApp {
                                     cx.listener(move |this, _, _, cx| {
                                         cx.stop_propagation();
                                         if this
-                                            .recording_busy_actions
+                                            .recording
+                                            .busy_actions
                                             .contains_key(&start_session_id)
                                         {
                                             return;
                                         }
-                                        if this.recording_manager.is_recording(&start_session_id) {
+                                        if this.recording.manager.is_recording(&start_session_id) {
                                             this.stop_recording_for_session(&start_session_id, cx);
                                         } else {
                                             this.prompt_recording_path_for_session(
@@ -239,7 +240,8 @@ impl NyaTermApp {
                                     cx.listener(move |this, _, _, cx| {
                                         cx.stop_propagation();
                                         if this
-                                            .recording_busy_actions
+                                            .recording
+                                            .busy_actions
                                             .contains_key(&save_session_id)
                                         {
                                             return;
@@ -304,7 +306,7 @@ impl NyaTermApp {
                                 .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
                                     if event.keystroke.key == "escape" {
                                         cx.stop_propagation();
-                                        this.recording_search_draft.clear();
+                                        this.recording.search_draft.clear();
                                         this.reset_text_input("recording.search", "", cx);
                                         this.terminal.view.status =
                                             "recording search cleared".to_string();
@@ -341,7 +343,7 @@ impl NyaTermApp {
     }
 
     fn recording_session_filter_query(&self) -> String {
-        self.recording_search_draft.trim().to_lowercase()
+        self.recording.search_draft.trim().to_lowercase()
     }
 }
 

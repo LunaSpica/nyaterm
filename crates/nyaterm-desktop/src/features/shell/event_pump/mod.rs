@@ -486,8 +486,8 @@ impl NyaTermApp {
             && !self.credential_prompts.has_pending()
             && !self.duplicate_prompts.has_pending()
             && self.action_link_hover_pending.is_none()
-            && self.pending_auto_recording_session.is_none()
-            && self.pending_tunnels.is_empty()
+            && self.recording.pending_auto_start.is_none()
+            && !self.tunnel_runtime.has_pending()
             && self.transfer.queue.jobs.is_empty()
             && self.command_persistence_pending == 0
             && !self.terminal.view.runtime.open_tabs_persist_dirty

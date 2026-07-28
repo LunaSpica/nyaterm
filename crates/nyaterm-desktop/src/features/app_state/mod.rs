@@ -10,19 +10,17 @@ use nyaterm_core::{
     TunnelGroup,
 };
 use nyaterm_legacy::MigrationInventory;
-use nyaterm_transport::{
-    RecordingManager, SessionEvent, SessionManager, SshMultiplexHandle, SshSessionConfig,
-    SshTunnelManager,
-};
+use nyaterm_transport::{SessionEvent, SessionManager, SshMultiplexHandle, SshSessionConfig};
 
 use super::ai::AiFeatureState;
 use super::commands::QuickCommandFeatureState;
 use super::connections::ConnectionFeatureState;
 use super::panels::SendCommandFeatureState;
+use super::recording::RecordingFeatureState;
 use super::remote::RemoteOpsFeatureState;
 use super::remote_editor_window::RemoteFileEditorWindow;
 use super::runtime_jobs::{
-    CommandPersistenceRequest, CommandPersistenceResult, SessionStartResult, TunnelJobResult,
+    CommandPersistenceRequest, CommandPersistenceResult, SessionStartResult,
 };
 use super::session::{
     CredentialPromptBroker, CredentialPromptState, HostKeyPromptBroker, HostKeyPromptRequest,
@@ -36,17 +34,17 @@ use super::terminal::TerminalFeatureState;
 use super::text_inputs::TextInputRegistry;
 use super::transfers::TransferFeatureState;
 use super::translation::TranslationFeatureState;
+use super::tunnels::TunnelFeatureState;
 use super::update::UpdateFeatureState;
 use crate::models::{
     ActionLinkMenuState, ActionLinkTooltipState, ActiveSessionMenuState,
     ActivityBarContextMenuState, ActivityBarLayoutState, BottomPanelMode, BottomPanelResizeState,
     ConfigPathPromptKind, DiagnosticsPathPromptKind, HeaderStatusState,
     KeywordHighlightPathPromptKind, MainMode, MultiLinePasteDraft, NavItem, PanelResizeState,
-    PanelStackResizeState, RecordingPathPromptKind, RecordingWritePipeline, RightFocus,
-    SessionEventBridge, SessionRuntimeMetadata, SettingsTab, SnapshotPasswordPromptState,
-    StartupCommandAction, StoreStatus, SyncInputGroup, TabActionsSubmenu, TerminalFrameEvent,
-    TitleMenu, TitleMenuSubmenu, WorkspacePaneNode, WorkspaceSplitDirection,
-    WorkspaceSplitResizeState, WorkspaceSplitState,
+    PanelStackResizeState, RightFocus, SessionEventBridge, SessionRuntimeMetadata, SettingsTab,
+    SnapshotPasswordPromptState, StartupCommandAction, StoreStatus, SyncInputGroup,
+    TabActionsSubmenu, TerminalFrameEvent, TitleMenu, TitleMenuSubmenu, WorkspacePaneNode,
+    WorkspaceSplitDirection, WorkspaceSplitResizeState, WorkspaceSplitState,
 };
 
 mod construct;
@@ -126,25 +124,13 @@ pub struct NyaTermApp {
     pub(in crate::features) store_status: StoreStatus,
     pub(in crate::features) session_manager: Arc<SessionManager>,
     pub(in crate::features) session_event_bridge: SessionEventBridge,
-    pub(in crate::features) recording_manager: Arc<RecordingManager>,
-    /// Cached count of sessions with active file recording (paint-safe).
-    pub(in crate::features) recording_active_count: usize,
-    /// Deferred auto-start recording after connect (avoid file open on success arm).
-    pub(in crate::features) pending_auto_recording_session: Option<(String, String)>,
-    pub(in crate::features) recording_write_pipeline: RecordingWritePipeline,
-    pub(in crate::features) recording_search_draft: String,
-    /// Per-session recording panel busy state ("record" | "save").
-    pub(in crate::features) recording_busy_actions: HashMap<String, String>,
+    pub(in crate::features) recording: RecordingFeatureState,
     pub(in crate::features) session_start_tx: mpsc::Sender<SessionStartResult>,
     pub(in crate::features) session_start_rx: mpsc::Receiver<SessionStartResult>,
-    pub(in crate::features) tunnel_manager: Arc<SshTunnelManager>,
-    pub(in crate::features) tunnel_tx: mpsc::Sender<TunnelJobResult>,
-    pub(in crate::features) tunnel_rx: mpsc::Receiver<TunnelJobResult>,
-    pub(in crate::features) pending_tunnels: Vec<String>,
+    pub(in crate::features) tunnel_runtime: TunnelFeatureState,
     pub(in crate::features) about_open: bool,
     pub(in crate::features) remote_editor_window: Option<WindowHandle<RemoteFileEditorWindow>>,
     pub(in crate::features) remote_editor_window_open_pending: bool,
-    pub(in crate::features) recording_path_prompt: Option<RecordingPathPromptKind>,
     pub(in crate::features) config_path_prompt: Option<ConfigPathPromptKind>,
     pub(in crate::features) diagnostics_path_prompt: Option<DiagnosticsPathPromptKind>,
     pub(in crate::features) keyword_highlight_path_prompt: Option<KeywordHighlightPathPromptKind>,

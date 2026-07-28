@@ -69,7 +69,8 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn save_recording_settings(&mut self, cx: &mut Context<Self>) {
-        self.recording_manager
+        self.recording
+            .manager
             .set_memory_limit(self.settings.recording_memory_limit_bytes as usize);
         if self.defer_settings_persistence(cx) {
             return;
@@ -82,7 +83,8 @@ impl NyaTermApp {
         {
             Ok(settings) => {
                 self.apply_gpui_settings(settings);
-                self.recording_manager
+                self.recording
+                    .manager
                     .set_memory_limit(self.settings.recording_memory_limit_bytes as usize);
                 self.store_status.message = "recording settings saved".to_string();
                 self.store_status.ready = true;

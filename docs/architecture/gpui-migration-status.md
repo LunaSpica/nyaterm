@@ -9,7 +9,7 @@ Last updated from the working tree on 2026-07-28.
 
 | Metric | Current value | Notes |
 | --- | ---: | --- |
-| `NyaTermApp` fields | 199 | Counted from `features/app_state/mod.rs`; down from 585, still transitional. |
+| `NyaTermApp` fields | 190 | Counted from `features/app_state/mod.rs`; down from 585, still transitional. |
 | `impl NyaTermApp` blocks | 238 | Spread across 233 files under `crates/nyaterm-desktop/src`. |
 | `#[path = "..."]` declarations in desktop | 0 | Cleared. Every directory is a real module; the boundary script fails on any new occurrence. |
 | `use super::*` imports in desktop | 0 | Cleared in production and test modules; guarded crate-wide. |
@@ -221,6 +221,15 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   coordination. Secret input still updates only `CloudSyncSecretDraft`, while
   the existing encrypted settings merge and legacy state-document paths remain
   unchanged.
+- Recording and SSH-tunnel background resources now have focused
+  `RecordingFeatureState` and `TunnelFeatureState` owners. Eleven app fields
+  became two feature fields: the recording owner constructs the manager/write
+  pipeline and retains active-count, deferred auto-start, busy/search and path
+  prompt state, while the tunnel owner constructs its manager/job channel and
+  owns pending-job admission and completion. `NyaTermApp` remains responsible
+  for GPUI prompts, notifications, session policy and job-result routing.
+  Recording output behavior, tunnel transport execution and persisted tunnel
+  configuration formats are unchanged.
 - Transfer state is grouped into `TransferFeatureState`. Seventy-eight fields
   turned out to be five separate things sharing one panel: the job `queue`, the
   SFTP `browser`, the file operation dialogs (`file_ops`), the built-in remote
@@ -1364,15 +1373,16 @@ honest remaining list.
    compiler-confirmed final pass also removed `features/prelude.rs`, so modules
    cannot regain the same implicit dependency surface through a shared import
    bucket.
-3. Largely done. `NyaTermApp` is down from 585 fields to 199, across twelve
+3. Largely done. `NyaTermApp` is down from 585 fields to 190, across fourteen
    feature-state structs. The latest cohesive cuts moved sixteen terminal
    command-assistance and credential-prompt fields into
    `TerminalFeatureState::assist`, then seventeen transient settings fields
    into four `SettingsFeatureState` children, then moved translation and native
    update channels, job state and dialogs into two authoritative feature-state
    owners, followed by cloud-sync configuration, secret drafts, history,
-   conflict and GitHub device-flow state. What is left is a long tail, and much
-   of it is genuinely app-level (stores, runtime, services, persisted
+   conflict and GitHub device-flow state, then recording and SSH-tunnel runtime
+   resources with their job/UI lifecycle state. What is left is a long tail,
+   and much of it is genuinely app-level (stores, runtime, services, persisted
    collections). Group by cohesion where a cluster exists; do not force the
    count down for its own sake.
    Method ownership is now moving too, which is what grouping the fields alone
@@ -1380,12 +1390,13 @@ honest remaining list.
    it belongs on that state, and the `NyaTermApp` method becomes a forwarder
    that owns `cx.notify()`. That is enforced by the type system rather than by
    convention — a handler taking `&mut TransferBrowserState` cannot reach the
-   session list no matter what a later edit tries. Twenty-six methods have
+   session list no matter what a later edit tries. Twenty-seven methods have
    moved this way across transfers, security, the send command bar, AI, quick
-   commands and cloud sync; the transfer browser one made
+   commands, cloud sync and recording; the transfer browser one made
    `TransferBrowserColumnResizeState` stop leaking into the page layer, while
-   cloud sync made secret-field routing inaccessible outside its owner, which
-   is the kind of signal to look for.
+   cloud sync made secret-field routing inaccessible outside its owner, and
+   recording cleanup can no longer leave its manager, busy map and pipeline out
+   of sync. Those are the kinds of signals to look for.
    Two caveats worth keeping. Render helpers stay on the view even when they
    read one state — moving element construction onto a data struct trades one
    coupling for a worse one. And a method that reads a state plus `self.tr(...)`

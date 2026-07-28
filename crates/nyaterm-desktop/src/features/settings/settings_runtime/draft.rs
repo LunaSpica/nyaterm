@@ -334,7 +334,8 @@ impl NyaTermApp {
                 self.sync_ai_drafts_from_active_profile();
                 self.translation.target_language =
                     self.translation.settings.target_language.clone();
-                self.recording_manager
+                self.recording
+                    .manager
                     .set_memory_limit(self.settings.recording_memory_limit_bytes as usize);
                 self.transfer.paths.duplicate_policy = SftpDuplicatePolicy::from_legacy_value(
                     &self.settings.transfer_duplicate_strategy,
@@ -390,7 +391,8 @@ impl NyaTermApp {
             self.keyword_highlights = snapshot.keyword_highlights;
             self.settings_master_password_enabled = snapshot.master_password_enabled;
             self.settings_master_password_draft = snapshot.master_password_draft;
-            self.recording_manager
+            self.recording
+                .manager
                 .set_memory_limit(self.settings.recording_memory_limit_bytes as usize);
             self.transfer.paths.duplicate_policy =
                 SftpDuplicatePolicy::from_legacy_value(&self.settings.transfer_duplicate_strategy);

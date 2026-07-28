@@ -143,6 +143,16 @@ check_no_matches \
   'fn[[:space:]]+cloud_sync_input_value_mut[[:space:]]*\(' \
   crates/nyaterm-desktop/src/features
 
+check_no_matches \
+  "recording runtime state must stay grouped under RecordingFeatureState" \
+  '^[[:space:]]*pub\(in crate::features\)[[:space:]]+(recording_manager|recording_active_count|pending_auto_recording_session|recording_write_pipeline|recording_search_draft|recording_busy_actions|recording_path_prompt)[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/app_state/mod.rs
+
+check_no_matches \
+  "tunnel runtime state must stay grouped under TunnelFeatureState" \
+  '^[[:space:]]*pub\(in crate::features\)[[:space:]]+(tunnel_manager|tunnel_tx|tunnel_rx|pending_tunnels)[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/app_state/mod.rs
+
 # These low-frequency transport helpers have explicit imports at their call
 # sites. Keep them out of the shared feature prelude so new modules do not
 # acquire unrelated transport dependencies implicitly.

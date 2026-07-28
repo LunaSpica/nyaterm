@@ -351,7 +351,7 @@ impl NyaTermApp {
             ActivityBarEntry::QuickCommands => self.bottom_panel == BottomPanelMode::QuickCommands,
             ActivityBarEntry::CommandSend => self.bottom_panel == BottomPanelMode::CommandSend,
             ActivityBarEntry::Recording => {
-                self.panel_entry_selected(NavItem::Recording) || self.recording_active_count > 0
+                self.panel_entry_selected(NavItem::Recording) || self.recording.active_count > 0
             }
             ActivityBarEntry::Lock => self.is_locked,
         }

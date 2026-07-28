@@ -4,8 +4,8 @@ use std::time::Instant;
 
 use crate::models::{
     ActivityBarLayoutState, BottomPanelMode, HeaderStatusState, MainMode, NavItem, PanelSide,
-    RecordingWritePipeline, RightFocus, SessionEventBridge, SettingsTab, StartupCommandAction,
-    StoreStatus, TerminalFramePipeline,
+    RightFocus, SessionEventBridge, SettingsTab, StartupCommandAction, StoreStatus,
+    TerminalFramePipeline,
 };
 use crate::terminal::initial_terminal_screen;
 use gpui::{Context, ScrollHandle};
@@ -15,18 +15,19 @@ use nyaterm_core::{
     TranslationSettings, read_cloud_sync_history, uuid,
 };
 use nyaterm_terminal::TerminalOutputDecoder;
-use nyaterm_transport::{RecordingManager, SessionManager, SftpDuplicatePolicy, SshTunnelManager};
+use nyaterm_transport::{SessionManager, SftpDuplicatePolicy};
 
 use super::super::settings::{SettingsFeatureFocus, SettingsFeatureState};
 use super::super::{
     AiFeatureFocus, AiFeatureState, CloudSyncFeatureState, ConnectionFeatureFocus,
     ConnectionFeatureState, CredentialPromptBroker, DEFAULT_DUPLICATE_STARTUP_DELAY_MS,
     HostKeyPromptBroker, INITIAL_TERMINAL_BANNER, LEGACY_ROOT, NativeOtpProvider,
-    QuickCommandFeatureFocus, QuickCommandFeatureState, RemoteOpsFeatureFocus,
-    RemoteOpsFeatureState, SecurityFeatureFocus, SecurityFeatureState, SendCommandFeatureFocus,
-    SendCommandFeatureState, SftpDuplicatePromptBroker, TerminalFeatureFocus, TerminalFeatureState,
-    TextInputRegistry, TransferFeatureFocus, TransferFeatureState, TranslationFeatureState,
-    UpdateFeatureState, ai_active_profile_drafts, ai_usage_counts, appearance_font_options,
+    QuickCommandFeatureFocus, QuickCommandFeatureState, RecordingFeatureState,
+    RemoteOpsFeatureFocus, RemoteOpsFeatureState, SecurityFeatureFocus, SecurityFeatureState,
+    SendCommandFeatureFocus, SendCommandFeatureState, SftpDuplicatePromptBroker,
+    TerminalFeatureFocus, TerminalFeatureState, TextInputRegistry, TransferFeatureFocus,
+    TransferFeatureState, TranslationFeatureState, TunnelFeatureState, UpdateFeatureState,
+    ai_active_profile_drafts, ai_usage_counts, appearance_font_options,
     quick_command_sort_mode_from_setting, quick_command_view_mode_from_setting,
     spawn_command_persistence_worker,
 };
@@ -59,7 +60,6 @@ impl NyaTermApp {
             copied_vendor_roots: Vec::new(),
         };
         let (session_start_tx, session_start_rx) = mpsc::channel();
-        let (tunnel_tx, tunnel_rx) = mpsc::channel();
         let (command_persistence_tx, command_persistence_rx) = spawn_command_persistence_worker(
             runtime.config_dir().to_path_buf(),
             runtime.portable_key_path().map(ToOwned::to_owned),
@@ -226,11 +226,8 @@ impl NyaTermApp {
         ));
         let transfer_duplicate_policy =
             SftpDuplicatePolicy::from_legacy_value(&settings.transfer_duplicate_strategy);
-        let recording_manager = Arc::new(RecordingManager::new());
-        recording_manager.set_memory_limit(settings.recording_memory_limit_bytes as usize);
-        let recording_write_pipeline =
-            RecordingWritePipeline::spawn(Arc::clone(&recording_manager));
-        let recording_writer = recording_write_pipeline.writer();
+        let recording = RecordingFeatureState::new(settings.recording_memory_limit_bytes as usize);
+        let recording_writer = recording.writer();
         let cloud_sync_history = read_cloud_sync_history(
             runtime.log_dir(),
             settings.diagnostics_retention_days,
@@ -466,22 +463,13 @@ impl NyaTermApp {
             store_status,
             session_manager,
             session_event_bridge,
-            recording_manager,
-            recording_active_count: 0,
-            pending_auto_recording_session: None,
-            recording_write_pipeline,
-            recording_search_draft: String::new(),
-            recording_busy_actions: HashMap::new(),
+            recording,
             session_start_tx,
             session_start_rx,
-            tunnel_manager: Arc::new(SshTunnelManager::new()),
-            tunnel_tx,
-            tunnel_rx,
-            pending_tunnels: Vec::new(),
+            tunnel_runtime: TunnelFeatureState::new(),
             about_open: false,
             remote_editor_window: None,
             remote_editor_window_open_pending: false,
-            recording_path_prompt: None,
             config_path_prompt: None,
             diagnostics_path_prompt: None,
             keyword_highlight_path_prompt: None,

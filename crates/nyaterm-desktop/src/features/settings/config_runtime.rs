@@ -550,7 +550,8 @@ impl NyaTermApp {
                         self.translation.secret_draft = TranslationSecretDraft::default();
                         self.translation.target_language =
                             self.translation.settings.target_language.clone();
-                        self.recording_manager
+                        self.recording
+                            .manager
                             .set_memory_limit(self.settings.recording_memory_limit_bytes as usize);
                         self.cloud_sync.settings = store
                             .load_cloud_sync_settings()
