@@ -464,7 +464,7 @@ impl NyaTermApp {
                 + self.session.event_bridge.source_queued_event_count(),
             self.session.event_bridge.queued_output_bytes()
                 + self.session.event_bridge.source_queued_output_bytes(),
-            self.pending_terminal_frame_events.len(),
+            self.terminal.view.pending_frame_events.len(),
             self.terminal.view.frame_pipeline.queued_event_count(),
             self.terminal.view.frame_pipeline.queued_output_bytes(),
         )
@@ -490,7 +490,7 @@ impl NyaTermApp {
             && !self.session.prompts.host_key_prompts.has_pending()
             && !self.session.prompts.credential_prompts.has_pending()
             && !self.session.prompts.duplicate_prompts.has_pending()
-            && self.action_link_hover_pending.is_none()
+            && self.terminal.menus.action_link_hover_pending.is_none()
             && self.recording.pending_auto_start.is_none()
             && !self.tunnel_runtime.has_pending()
             && self.transfer.queue.jobs.is_empty()

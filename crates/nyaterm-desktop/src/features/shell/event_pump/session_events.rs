@@ -641,7 +641,7 @@ impl NyaTermApp {
 
     pub(super) fn terminal_frame_backlog_active(&self) -> bool {
         terminal_frame_backlog_active_from_counts(
-            self.pending_terminal_frame_events.len(),
+            self.terminal.view.pending_frame_events.len(),
             self.terminal.view.frame_pipeline.queued_event_count(),
             self.terminal.view.frame_pipeline.queued_command_count(),
         )

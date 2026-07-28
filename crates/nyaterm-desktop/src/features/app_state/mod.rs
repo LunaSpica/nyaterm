@@ -30,11 +30,10 @@ use super::translation::TranslationFeatureState;
 use super::tunnels::TunnelFeatureState;
 use super::update::UpdateFeatureState;
 use crate::models::{
-    ActionLinkMenuState, ActionLinkTooltipState, ActivityBarContextMenuState,
-    ActivityBarLayoutState, BottomPanelMode, BottomPanelResizeState, ConfigPathPromptKind,
-    DiagnosticsPathPromptKind, HeaderStatusState, KeywordHighlightPathPromptKind, MainMode,
-    MultiLinePasteDraft, NavItem, PanelResizeState, PanelStackResizeState, RightFocus, SettingsTab,
-    SnapshotPasswordPromptState, StoreStatus, SyncInputGroup, TerminalFrameEvent, TitleMenu,
+    ActivityBarContextMenuState, ActivityBarLayoutState, BottomPanelMode, BottomPanelResizeState,
+    ConfigPathPromptKind, DiagnosticsPathPromptKind, HeaderStatusState,
+    KeywordHighlightPathPromptKind, MainMode, NavItem, PanelResizeState, PanelStackResizeState,
+    RightFocus, SettingsTab, SnapshotPasswordPromptState, StoreStatus, SyncInputGroup, TitleMenu,
     TitleMenuSubmenu, WorkspacePaneNode, WorkspaceSplitResizeState, WorkspaceSplitState,
 };
 
@@ -85,12 +84,6 @@ pub struct NyaTermApp {
     pub(in crate::features) command_persistence_rx: mpsc::Receiver<CommandPersistenceResult>,
     pub(in crate::features) command_persistence_pending: usize,
     pub(in crate::features) session: SessionFeatureState,
-    pub(in crate::features) action_link_menu: Option<ActionLinkMenuState>,
-    pub(in crate::features) action_link_tooltip: Option<ActionLinkTooltipState>,
-    /// Pending action-link hover (Tauri 250ms delay before showing tooltip).
-    pub(in crate::features) action_link_hover_pending:
-        Option<(String, Instant, ActionLinkTooltipState)>,
-
     pub(in crate::features) bottom_panel: BottomPanelMode,
     pub(in crate::features) quick_cmd_height: f32,
     pub(in crate::features) serial_send_height: f32,
@@ -117,25 +110,11 @@ pub struct NyaTermApp {
     pub(in crate::features) diagnostics_path_prompt: Option<DiagnosticsPathPromptKind>,
     pub(in crate::features) keyword_highlight_path_prompt: Option<KeywordHighlightPathPromptKind>,
     pub(in crate::features) active_snapshot_password_prompt: Option<SnapshotPasswordPromptState>,
-    pub(in crate::features) multi_line_paste: Option<MultiLinePasteDraft>,
-    pub(in crate::features) multi_line_paste_marked_text: String,
-    pub(in crate::features) multi_line_paste_marked_range: Option<std::ops::Range<usize>>,
-    pub(in crate::features) multi_line_paste_cursor: usize,
-    pub(in crate::features) multi_line_paste_anchor: Option<usize>,
-    pub(in crate::features) multi_line_paste_focus: FocusHandle,
     pub(in crate::features) lock_focus: FocusHandle,
     pub(in crate::features) lock_password_draft: String,
     pub(in crate::features) lock_status: String,
-    pub(in crate::features) pending_terminal_frame_events: VecDeque<TerminalFrameEvent>,
     pub(in crate::features) pending_session_events: VecDeque<SessionEvent>,
     pub(in crate::features) diagnostic_log_last_at: HashMap<&'static str, Instant>,
-    /// Cached terminal surface palette (theme + contrast fingerprint).
-    pub(in crate::features) cached_terminal_theme_palette:
-        Option<(String, String, String, crate::theme::ThemePalette)>,
-    /// Cached keyword highlight rules for paint (invalidated on settings change).
-    pub(in crate::features) cached_keyword_highlight_rules:
-        Option<std::sync::Arc<Vec<nyaterm_core::ResolvedKeywordHighlightRule>>>,
-
     pub(in crate::features) last_viewport_size: (f32, f32),
     /// Cached intrinsic dimensions for the current tiled wallpaper path.
     pub(in crate::features) wallpaper_tile_dimensions: Option<(String, u32, u32)>,

@@ -86,8 +86,8 @@ impl EntityInputHandler for NyaTermApp {
         window: &mut Window,
         _cx: &mut Context<Self>,
     ) -> Option<String> {
-        if self.multi_line_paste.is_some() && self.multi_line_paste_focus.is_focused(window) {
-            let text = self.multi_line_paste_text();
+        if self.terminal.paste.draft.is_some() && self.terminal.paste.focus.is_focused(window) {
+            let text = self.terminal.paste.text();
             let byte_range = byte_range_from_utf16(text, &range);
             *adjusted_range = Some(utf16_range_from_bytes(text, &byte_range));
             return Some(text[byte_range].to_string());
@@ -108,12 +108,14 @@ impl EntityInputHandler for NyaTermApp {
         window: &mut Window,
         _cx: &mut Context<Self>,
     ) -> Option<UTF16Selection> {
-        if self.multi_line_paste_focus.is_focused(window) {
-            let text = self.multi_line_paste_text();
-            let range = self.multi_line_paste_selected_byte_range();
+        if self.terminal.paste.focus.is_focused(window) {
+            let text = self.terminal.paste.text();
+            let range = self.terminal.paste.selected_byte_range();
             let reversed = self
-                .multi_line_paste_anchor
-                .is_some_and(|anchor| anchor > self.multi_line_paste_cursor);
+                .terminal
+                .paste
+                .anchor
+                .is_some_and(|anchor| anchor > self.terminal.paste.cursor);
             return Some(UTF16Selection {
                 range: utf16_range_from_bytes(text, &range),
                 reversed,
@@ -130,20 +132,22 @@ impl EntityInputHandler for NyaTermApp {
         window: &mut Window,
         _cx: &mut Context<Self>,
     ) -> Option<Range<usize>> {
-        if self.multi_line_paste.is_some() && self.multi_line_paste_focus.is_focused(window) {
+        if self.terminal.paste.draft.is_some() && self.terminal.paste.focus.is_focused(window) {
             return self
-                .multi_line_paste_marked_range
+                .terminal
+                .paste
+                .marked_range
                 .as_ref()
-                .map(|range| utf16_range_from_bytes(self.multi_line_paste_text(), range));
+                .map(|range| utf16_range_from_bytes(self.terminal.paste.text(), range));
         }
         let len = self.terminal.input.ime_marked_text.encode_utf16().count();
         (len > 0).then_some(0..len)
     }
 
     fn unmark_text(&mut self, window: &mut Window, _cx: &mut Context<Self>) {
-        if self.multi_line_paste.is_some() && self.multi_line_paste_focus.is_focused(window) {
-            self.multi_line_paste_marked_text.clear();
-            self.multi_line_paste_marked_range = None;
+        if self.terminal.paste.draft.is_some() && self.terminal.paste.focus.is_focused(window) {
+            self.terminal.paste.marked_text.clear();
+            self.terminal.paste.marked_range = None;
             return;
         }
         self.terminal.input.ime_marked_text.clear();
@@ -156,13 +160,15 @@ impl EntityInputHandler for NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.multi_line_paste.is_some() && self.multi_line_paste_focus.is_focused(window) {
+        if self.terminal.paste.draft.is_some() && self.terminal.paste.focus.is_focused(window) {
             let range = range
                 .as_ref()
-                .map(|range| byte_range_from_utf16(self.multi_line_paste_text(), range))
-                .or_else(|| self.multi_line_paste_marked_range.clone())
-                .unwrap_or_else(|| self.multi_line_paste_selected_byte_range());
-            self.replace_multi_line_paste_range(range, text, cx);
+                .map(|range| byte_range_from_utf16(self.terminal.paste.text(), range))
+                .or_else(|| self.terminal.paste.marked_range.clone())
+                .unwrap_or_else(|| self.terminal.paste.selected_byte_range());
+            if self.terminal.paste.replace_range(range, text) {
+                cx.notify();
+            }
             return;
         }
         self.terminal.input.ime_marked_text.clear();
@@ -191,22 +197,24 @@ impl EntityInputHandler for NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.multi_line_paste.is_some() && self.multi_line_paste_focus.is_focused(window) {
+        if self.terminal.paste.draft.is_some() && self.terminal.paste.focus.is_focused(window) {
             let range = range
                 .as_ref()
-                .map(|range| byte_range_from_utf16(self.multi_line_paste_text(), range))
-                .or_else(|| self.multi_line_paste_marked_range.clone())
-                .unwrap_or_else(|| self.multi_line_paste_selected_byte_range());
+                .map(|range| byte_range_from_utf16(self.terminal.paste.text(), range))
+                .or_else(|| self.terminal.paste.marked_range.clone())
+                .unwrap_or_else(|| self.terminal.paste.selected_byte_range());
             let start = range.start;
-            self.replace_multi_line_paste_range(range, new_text, cx);
-            self.multi_line_paste_marked_text = new_text.to_string();
-            self.multi_line_paste_marked_range =
+            if !self.terminal.paste.replace_range(range, new_text) {
+                return;
+            }
+            self.terminal.paste.marked_text = new_text.to_string();
+            self.terminal.paste.marked_range =
                 (!new_text.is_empty()).then_some(start..start + new_text.len());
             if let Some(selected) = new_selected_range {
                 let selected = byte_range_from_utf16(new_text, &selected);
-                self.multi_line_paste_anchor =
+                self.terminal.paste.anchor =
                     (selected.start != selected.end).then_some(start + selected.start);
-                self.multi_line_paste_cursor = start + selected.end;
+                self.terminal.paste.cursor = start + selected.end;
             }
             cx.notify();
             return;
@@ -222,7 +230,7 @@ impl EntityInputHandler for NyaTermApp {
         window: &mut Window,
         _cx: &mut Context<Self>,
     ) -> Option<Bounds<Pixels>> {
-        if self.multi_line_paste.is_some() && self.multi_line_paste_focus.is_focused(window) {
+        if self.terminal.paste.draft.is_some() && self.terminal.paste.focus.is_focused(window) {
             return Some(element_bounds);
         }
         let (cell_w, cell_h) = self.terminal_cell_size();
@@ -263,10 +271,10 @@ impl EntityInputHandler for NyaTermApp {
         window: &mut Window,
         _cx: &mut Context<Self>,
     ) -> Option<usize> {
-        if self.multi_line_paste.is_some() && self.multi_line_paste_focus.is_focused(window) {
+        if self.terminal.paste.draft.is_some() && self.terminal.paste.focus.is_focused(window) {
             return Some(utf16_offset_for_byte(
-                self.multi_line_paste_text(),
-                self.multi_line_paste_cursor,
+                self.terminal.paste.text(),
+                self.terminal.paste.cursor,
             ));
         }
         Some(0)

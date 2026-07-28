@@ -81,7 +81,7 @@ impl NyaTermApp {
         if self.settings.terminal_low_latency_mode {
             return Arc::new(Vec::new());
         }
-        if let Some(cached) = self.cached_keyword_highlight_rules.as_ref() {
+        if let Some(cached) = self.terminal.paint.cached_keyword_highlight_rules.as_ref() {
             return cached.clone();
         }
         // Cache miss (settings path / first call without ensure): build once without storing.
@@ -103,10 +103,10 @@ impl NyaTermApp {
 
     fn ensure_keyword_highlight_rules_cache(&mut self) {
         if self.settings.terminal_low_latency_mode {
-            self.cached_keyword_highlight_rules = Some(Arc::new(Vec::new()));
+            self.terminal.paint.cached_keyword_highlight_rules = Some(Arc::new(Vec::new()));
             return;
         }
-        if self.cached_keyword_highlight_rules.is_some() {
+        if self.terminal.paint.cached_keyword_highlight_rules.is_some() {
             return;
         }
         let rules = if !self.keyword_highlights.enabled {
@@ -120,7 +120,7 @@ impl NyaTermApp {
                 self.terminal_theme_is_dark(),
             ))
         };
-        self.cached_keyword_highlight_rules = Some(rules);
+        self.terminal.paint.cached_keyword_highlight_rules = Some(rules);
     }
 
     /// Terminal surface palette: follows optional `terminal_theme`, else UI theme.
@@ -135,7 +135,7 @@ impl NyaTermApp {
             .unwrap_or("");
         let contrast = self.settings.minimum_contrast_ratio.as_str();
         if let Some((cached_ui, cached_term, cached_contrast, palette)) =
-            self.cached_terminal_theme_palette.as_ref()
+            self.terminal.paint.cached_terminal_theme_palette.as_ref()
         {
             if cached_ui == ui_theme && cached_term == terminal_theme && cached_contrast == contrast
             {
@@ -165,7 +165,7 @@ impl NyaTermApp {
             .to_string();
         let contrast = self.settings.minimum_contrast_ratio.clone();
         if let Some((cached_ui, cached_term, cached_contrast, _)) =
-            self.cached_terminal_theme_palette.as_ref()
+            self.terminal.paint.cached_terminal_theme_palette.as_ref()
         {
             if cached_ui == &ui_theme
                 && cached_term == &terminal_theme
@@ -183,7 +183,8 @@ impl NyaTermApp {
             },
             &contrast,
         );
-        self.cached_terminal_theme_palette = Some((ui_theme, terminal_theme, contrast, palette));
+        self.terminal.paint.cached_terminal_theme_palette =
+            Some((ui_theme, terminal_theme, contrast, palette));
     }
 
     fn compute_terminal_theme_palette(
@@ -203,8 +204,8 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn invalidate_paint_theme_caches(&mut self) {
-        self.cached_terminal_theme_palette = None;
-        self.cached_keyword_highlight_rules = None;
+        self.terminal.paint.cached_terminal_theme_palette = None;
+        self.terminal.paint.cached_keyword_highlight_rules = None;
     }
 
     pub(in crate::features) fn refresh_visible_terminal_surfaces(

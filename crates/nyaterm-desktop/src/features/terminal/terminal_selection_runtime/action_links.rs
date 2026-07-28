@@ -39,8 +39,8 @@ impl NyaTermApp {
 
     fn clear_action_link_tooltip_state(&mut self) -> bool {
         clear_action_link_tooltip_state(
-            &mut self.action_link_tooltip,
-            &mut self.action_link_hover_pending,
+            &mut self.terminal.menus.action_link_tooltip,
+            &mut self.terminal.menus.action_link_hover_pending,
         )
     }
 
@@ -48,22 +48,25 @@ impl NyaTermApp {
         &mut self,
         _cx: &mut Context<Self>,
     ) -> bool {
-        let Some((key, started, tip)) = self.action_link_hover_pending.clone() else {
+        let Some((key, started, tip)) = self.terminal.menus.action_link_hover_pending.clone()
+        else {
             return false;
         };
         if started.elapsed() < Duration::from_millis(250) {
             return false;
         }
-        self.action_link_hover_pending = None;
+        self.terminal.menus.action_link_hover_pending = None;
         // Only show if still matching the pending key (not superseded).
         if self
+            .terminal
+            .menus
             .action_link_tooltip
             .as_ref()
             .is_some_and(|current| current.match_key == key)
         {
             return true;
         }
-        self.action_link_tooltip = Some(tip);
+        self.terminal.menus.action_link_tooltip = Some(tip);
         true
     }
 
@@ -80,7 +83,7 @@ impl NyaTermApp {
             return;
         }
         // Hide while menus are open or while selecting text.
-        if self.action_link_menu.is_some()
+        if self.terminal.menus.action_link_menu.is_some()
             || self.terminal.menus.context_menu.is_some()
             || self.terminal.selection.dragging
             || self.translation.dialog.is_some()
@@ -147,16 +150,16 @@ impl NyaTermApp {
             match_key: match_key.clone(),
         };
         // Already visible for this link: track position.
-        if let Some(current) = self.action_link_tooltip.as_ref() {
+        if let Some(current) = self.terminal.menus.action_link_tooltip.as_ref() {
             if current.match_key == match_key {
                 return;
             }
         }
         // Pending same link: update position only.
-        if let Some((key, started, _)) = self.action_link_hover_pending.clone() {
+        if let Some((key, started, _)) = self.terminal.menus.action_link_hover_pending.clone() {
             if key == match_key {
                 let ready = started.elapsed() >= Duration::from_millis(250);
-                self.action_link_hover_pending = Some((match_key, started, next));
+                self.terminal.menus.action_link_hover_pending = Some((match_key, started, next));
                 if ready {
                     self.poll_action_link_tooltip_delay(cx);
                 }
@@ -164,8 +167,8 @@ impl NyaTermApp {
             }
         }
         // New link under cursor: start 250ms delay (Tauri ActionLinkTooltip).
-        let visible_changed = self.action_link_tooltip.take().is_some();
-        self.action_link_hover_pending = Some((match_key, Instant::now(), next));
+        let visible_changed = self.terminal.menus.action_link_tooltip.take().is_some();
+        self.terminal.menus.action_link_hover_pending = Some((match_key, Instant::now(), next));
         if visible_changed {
             cx.notify();
         }
@@ -283,11 +286,11 @@ impl NyaTermApp {
 
     pub(in crate::features) fn close_action_link_menu(&mut self, cx: &mut Context<Self>) {
         let mut changed = false;
-        if self.action_link_menu.take().is_some() {
+        if self.terminal.menus.action_link_menu.take().is_some() {
             self.terminal.view.status = "action link menu closed".to_string();
             changed = true;
         }
-        if self.action_link_tooltip.take().is_some() {
+        if self.terminal.menus.action_link_tooltip.take().is_some() {
             changed = true;
         }
         if changed {
@@ -316,10 +319,10 @@ impl NyaTermApp {
                 is_default: action.is_default,
             })
             .collect::<Vec<_>>();
-        self.action_link_tooltip = None;
+        self.terminal.menus.action_link_tooltip = None;
         self.terminal.assist.command_suggestions = None;
         self.terminal.assist.credential_suggestions = None;
-        self.action_link_menu = Some(ActionLinkMenuState {
+        self.terminal.menus.action_link_menu = Some(ActionLinkMenuState {
             x: event.position().x,
             y: event.position().y,
             kind_label: item.kind.label().to_string(),
@@ -407,7 +410,7 @@ impl NyaTermApp {
         let Some((item, actions)) = self.action_link_at_click(event, cx) else {
             return false;
         };
-        self.action_link_tooltip = None;
+        self.terminal.menus.action_link_tooltip = None;
         let Some(default) = actions
             .iter()
             .find(|action| action.is_default)

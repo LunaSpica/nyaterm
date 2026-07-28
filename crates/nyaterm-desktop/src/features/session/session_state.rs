@@ -398,13 +398,13 @@ impl NyaTermApp {
         if self.terminal.menus.context_menu.take().is_some() {
             chrome_changed = true;
         }
-        if self.action_link_menu.take().is_some() {
+        if self.terminal.menus.action_link_menu.take().is_some() {
             chrome_changed = true;
         }
-        if self.action_link_tooltip.take().is_some() {
+        if self.terminal.menus.action_link_tooltip.take().is_some() {
             chrome_changed = true;
         }
-        self.action_link_hover_pending = None;
+        self.terminal.menus.action_link_hover_pending = None;
         chrome_changed
     }
 

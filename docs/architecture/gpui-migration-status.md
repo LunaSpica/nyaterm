@@ -9,7 +9,7 @@ Last updated from the working tree on 2026-07-28.
 
 | Metric | Current value | Notes |
 | --- | ---: | --- |
-| `NyaTermApp` fields | 128 | Counted from `features/app_state/mod.rs`; down from 585, still transitional. |
+| `NyaTermApp` fields | 116 | Counted from `features/app_state/mod.rs`; down from 585, still transitional. |
 | `impl NyaTermApp` blocks | 238 | Spread across 233 files under `crates/nyaterm-desktop/src`. |
 | `#[path = "..."]` declarations in desktop | 0 | Cleared. Every directory is a real module; the boundary script fails on any new occurrence. |
 | `use super::*` imports in desktop | 0 | Cleared in production and test modules; guarded crate-wide. |
@@ -277,13 +277,20 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   and the rewrite was anchored on `self`/`this` so those were left alone.
 - Terminal presentation state is grouped into `TerminalFeatureState`: `search`,
   `view` runtime, `input` focus and IME, inline command/credential `assist`,
-  `selection` and mouse reporting, painted `layout` geometry, `menus`, and the
-  split/tab `windows` tree. The `assist` child owns the sixteen command tracker,
-  suggestion popup, credential prompt detector and background matcher fields
-  that previously lived directly on `NyaTermApp`; session-switch and settings
-  reset operations now live on that child state. Parsing, snapshots and the
-  wire protocol are untouched and stay in `nyaterm-terminal` and
-  `nyaterm-transport`. `OverlaySnapshot` keeps its own
+  dedicated multi-line `paste` review editor, `selection` and mouse reporting,
+  painted `layout` geometry, `menus`, paint caches, and the split/tab `windows`
+  tree. The `assist` child owns the sixteen command tracker, suggestion popup,
+  credential prompt detector and background matcher fields that previously
+  lived directly on `NyaTermApp`; session-switch and settings reset operations
+  now live on that child state. Action-link menu/tooltip state is part of
+  `menus`, the terminal frame queue is part of `view`, and terminal palette and
+  keyword-highlight caches are part of `paint`. `TerminalPasteReviewState` is
+  still the dedicated full editing surface: it now owns draft normalization,
+  UTF-8 cursor and selection transitions, vertical movement and IME reset, while
+  `NyaTermApp` retains GPUI key routing, status updates and session sends. The
+  line-by-line path still intentionally bypasses bracketed-paste framing.
+  Parsing, snapshots and the wire protocol are untouched and stay in
+  `nyaterm-terminal` and `nyaterm-transport`. `OverlaySnapshot` keeps its own
   `terminal_actions_open` / `terminal_context_menu_open` projection fields.
 - `core/storage.rs` is split by domain rather than by type: `command_history`,
   `known_hosts`, `ai_history`, `vault` (SSH keys, OTP, passwords, credentials),
@@ -1392,7 +1399,7 @@ honest remaining list.
    compiler-confirmed final pass also removed `features/prelude.rs`, so modules
    cannot regain the same implicit dependency surface through a shared import
    bucket.
-3. Largely done. `NyaTermApp` is down from 585 fields to 128, across fifteen
+3. Largely done. `NyaTermApp` is down from 585 fields to 116, across fifteen
    feature-state structs. The latest cohesive cuts moved sixteen terminal
    command-assistance and credential-prompt fields into
    `TerminalFeatureState::assist`, then seventeen transient settings fields
@@ -1411,15 +1418,17 @@ honest remaining list.
    it belongs on that state, and the `NyaTermApp` method becomes a forwarder
    that owns `cx.notify()`. That is enforced by the type system rather than by
    convention — a handler taking `&mut TransferBrowserState` cannot reach the
-   session list no matter what a later edit tries. Forty-two methods have
+   session list no matter what a later edit tries. Forty-eight methods have
    moved this way across transfers, security, the send command bar, AI, quick
-   commands, cloud sync, recording and session starts; the transfer browser one
-   made `TransferBrowserColumnResizeState` stop leaking into the page layer, while
-   cloud sync made secret-field routing inaccessible outside its owner, and
+   commands, cloud sync, recording, session starts and terminal paste review;
+   the transfer browser one made `TransferBrowserColumnResizeState` stop leaking
+   into the page layer, while cloud sync made secret-field routing inaccessible
+   outside its owner, and
    recording cleanup can no longer leave its manager, busy map and pipeline out
-   of sync, and closing a pending session start cannot update its maps without
-   also applying the active pending/failed fallback rules. Those are the kinds
-   of signals to look for.
+   of sync, closing a pending session start cannot update its maps without also
+   applying the active pending/failed fallback rules, and paste editing cannot
+   mutate its UTF-8 cursor without also clearing stale selection/IME state.
+   Those are the kinds of signals to look for.
    Two caveats worth keeping. Render helpers stay on the view even when they
    read one state — moving element construction onto a data struct trades one
    coupling for a worse one. And a method that reads a state plus `self.tr(...)`

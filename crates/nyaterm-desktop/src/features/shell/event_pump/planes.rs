@@ -296,7 +296,7 @@ impl NyaTermApp {
                     self.terminal.view.frame_pipeline.queued_output_bytes(),
                 frame_event_count = self.terminal.view.frame_pipeline.queued_event_count(),
                 frame_event_wake_count = self.terminal.view.frame_pipeline.event_wake_count(),
-                pending_frame_events = self.pending_terminal_frame_events.len(),
+                pending_frame_events = self.terminal.view.pending_frame_events.len(),
                 pending_session_starts = self.session.start.pending.len(),
                 queued_saved_connection_starts = self.pending_saved_connection_queue.len(),
                 output_pressure,
@@ -373,7 +373,7 @@ impl NyaTermApp {
                 || self.session.event_bridge.queued_output_bytes() > 0
                 || self.terminal.view.frame_pipeline.queued_output_bytes() > 0
                 || self.terminal.view.frame_pipeline.queued_event_count() > 0
-                || !self.pending_terminal_frame_events.is_empty();
+                || !self.terminal.view.pending_frame_events.is_empty();
             if has_runtime_activity {
                 tracing::info!(
                     diagnostic = "terminal_perf_heartbeat",
@@ -408,7 +408,7 @@ impl NyaTermApp {
                         self.terminal.view.frame_pipeline.queued_output_bytes(),
                     frame_event_count = self.terminal.view.frame_pipeline.queued_event_count(),
                     frame_event_wake_count = self.terminal.view.frame_pipeline.event_wake_count(),
-                    pending_frame_events = self.pending_terminal_frame_events.len(),
+                    pending_frame_events = self.terminal.view.pending_frame_events.len(),
                     full_shell_paint_delta,
                     surface_paint_delta,
                     surface_frame_notify_delta,

@@ -580,7 +580,7 @@ impl NyaTermApp {
         self.fill_pending_terminal_frame_events(max_events);
 
         while drained_events < max_events {
-            if self.pending_terminal_frame_events.is_empty() {
+            if self.terminal.view.pending_frame_events.is_empty() {
                 if self.fill_pending_terminal_frame_events(max_events) == 0 {
                     break;
                 }
@@ -590,11 +590,11 @@ impl NyaTermApp {
                 self.terminal.view.runtime.session_event_backlog_active,
                 self.terminal.view.runtime.session_event_queued_output_bytes,
                 self.session.event_bridge.queued_output_bytes(),
-                pending_terminal_frame_output_events(&self.pending_terminal_frame_events),
+                pending_terminal_frame_output_events(&self.terminal.view.pending_frame_events),
                 self.terminal.view.frame_pipeline.queued_output_bytes(),
             );
             let (frames, coalesced) = pop_terminal_frame_events_for_apply(
-                &mut self.pending_terminal_frame_events,
+                &mut self.terminal.view.pending_frame_events,
                 &visible_session_ids,
                 allow_deferred_events,
             );
@@ -685,7 +685,7 @@ impl NyaTermApp {
                     .runtime
                     .connect_settle_until
                     .is_some_and(|until| Instant::now() < until),
-                pending_events = self.pending_terminal_frame_events.len(),
+                pending_events = self.terminal.view.pending_frame_events.len(),
                 total_ms = total_duration.as_millis(),
                 max_apply_ms = max_apply_duration.as_millis(),
                 "slow terminal frame event drain"
@@ -695,11 +695,11 @@ impl NyaTermApp {
     }
 
     fn fill_pending_terminal_frame_events(&mut self, max_events: usize) -> usize {
-        let room = max_events.saturating_sub(self.pending_terminal_frame_events.len());
+        let room = max_events.saturating_sub(self.terminal.view.pending_frame_events.len());
         self.terminal
             .view
             .frame_pipeline
-            .drain_events_into(&mut self.pending_terminal_frame_events, room)
+            .drain_events_into(&mut self.terminal.view.pending_frame_events, room)
     }
 
     fn apply_terminal_frame_event(

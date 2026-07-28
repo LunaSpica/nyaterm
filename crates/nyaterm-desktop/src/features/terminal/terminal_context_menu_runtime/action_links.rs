@@ -11,7 +11,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let Some(menu) = self.action_link_menu.clone() else {
+        let Some(menu) = self.terminal.menus.action_link_menu.clone() else {
             return div().into_any_element();
         };
         let (viewport_w, viewport_h) = self.last_viewport_size;
@@ -129,7 +129,7 @@ impl NyaTermApp {
         _cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let Some(tip) = self.action_link_tooltip.clone() else {
+        let Some(tip) = self.terminal.menus.action_link_tooltip.clone() else {
             return div().into_any_element();
         };
         let mod_label = if cfg!(target_os = "macos") {

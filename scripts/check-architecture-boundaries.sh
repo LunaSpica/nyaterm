@@ -114,6 +114,11 @@ check_no_matches \
   crates/nyaterm-desktop/src/features/app_state/mod.rs
 
 check_no_matches \
+  "terminal presentation runtime fields must stay grouped under TerminalFeatureState" \
+  '^[[:space:]]*pub\(in crate::features\)[[:space:]]+(action_link_menu|action_link_tooltip|action_link_hover_pending|multi_line_paste|multi_line_paste_marked_text|multi_line_paste_marked_range|multi_line_paste_cursor|multi_line_paste_anchor|multi_line_paste_focus|pending_terminal_frame_events|cached_terminal_theme_palette|cached_keyword_highlight_rules)[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/app_state/mod.rs
+
+check_no_matches \
   "settings transient UI fields must stay grouped under SettingsFeatureState" \
   '^[[:space:]]*pub\(in crate::features\)[[:space:]]+(search_engine_edit_index|search_engine_expanded_index|search_engine_icon_picker_index|search_engine_actions_index|search_engine_edit_field|search_engine_focus|keyword_highlight_expanded_id|keyword_highlight_edit_id|keyword_highlight_edit_field|keyword_highlight_focus|appearance_menu_open|appearance_ui_font_options|appearance_terminal_font_options|keybinding_recording_id|keybinding_pending_keys|keybinding_search_draft|keybindings_focus)[[:space:]]*:' \
   crates/nyaterm-desktop/src/features/app_state/mod.rs

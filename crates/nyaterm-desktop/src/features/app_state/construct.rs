@@ -353,6 +353,7 @@ impl NyaTermApp {
                     actions: cx.focus_handle(),
                     x11_display: cx.focus_handle(),
                     terminal: cx.focus_handle(),
+                    paste: cx.focus_handle(),
                 },
             ),
             ai: AiFeatureState::new(
@@ -444,9 +445,6 @@ impl NyaTermApp {
                 },
             ),
             text_inputs: TextInputRegistry::default(),
-            action_link_menu: None,
-            action_link_tooltip: None,
-            action_link_hover_pending: None,
             bottom_panel: if settings.ui_serial_send_visible {
                 BottomPanelMode::CommandSend
             } else if settings.ui_quick_cmd_visible {
@@ -478,20 +476,11 @@ impl NyaTermApp {
             diagnostics_path_prompt: None,
             keyword_highlight_path_prompt: None,
             active_snapshot_password_prompt: None,
-            multi_line_paste: None,
-            multi_line_paste_marked_text: String::new(),
-            multi_line_paste_marked_range: None,
-            multi_line_paste_cursor: 0,
-            multi_line_paste_anchor: None,
-            multi_line_paste_focus: cx.focus_handle(),
             lock_focus: cx.focus_handle(),
             lock_password_draft: String::new(),
             lock_status: String::new(),
-            pending_terminal_frame_events: VecDeque::new(),
             pending_session_events: VecDeque::new(),
             diagnostic_log_last_at: HashMap::new(),
-            cached_terminal_theme_palette: None,
-            cached_keyword_highlight_rules: None,
             last_viewport_size: (1280., 800.),
             wallpaper_tile_dimensions: None,
             last_viewport_change_at: None,

@@ -808,9 +808,10 @@ impl NyaTermApp {
                             .when(!is_disconnected && !terminal_mouse_reporting, |this| {
                                 this.cursor_text()
                             })
-                            .when(is_active && self.action_link_tooltip.is_some(), |this| {
-                                this.cursor_pointer()
-                            })
+                            .when(
+                                is_active && self.terminal.menus.action_link_tooltip.is_some(),
+                                |this| this.cursor_pointer(),
+                            )
                             .pl(px(self.terminal_content_insets().left))
                             .pr(px(self.terminal_content_insets().right))
                             .pt(px(self.terminal_content_insets().top))
