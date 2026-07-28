@@ -478,14 +478,11 @@ impl NyaTermApp {
             && self.remote_editor_window.is_none()
             && !self.remote_editor_window_open_pending;
         let transfer_external_sync_open = self.active_external_editor_sync_prompt().is_some();
+        let ssh_auth_prompt_open = self.active_host_key_prompt.is_some()
+            || self.active_credential_prompt.is_some()
+            || self.active_keyboard_interactive_prompt.is_some();
 
         content
-            .when(
-                self.active_host_key_prompt.is_some()
-                    || self.active_credential_prompt.is_some()
-                    || self.active_keyboard_interactive_prompt.is_some(),
-                |this| this.child(self.ssh_auth_prompt_overlay(cx)),
-            )
             .when(overlay.tab_actions_open, |this| {
                 this.child(self.tab_actions_overlay(cx))
             })
@@ -644,6 +641,11 @@ impl NyaTermApp {
             .when(self.modal_child_window_open(), |this| {
                 this.child(self.modal_owner_backdrop(cx))
             })
+            // Background SSH operations can request credentials while another
+            // modal is open, so authentication must be the topmost overlay.
+            .when(ssh_auth_prompt_open, |this| {
+                this.child(self.ssh_auth_prompt_overlay(cx))
+            })
     }
 
     fn modal_child_window_open(&self) -> bool {
@@ -715,7 +717,11 @@ impl NyaTermApp {
             .justify_center()
             .p_3()
             .track_focus(&self.credential_focus)
+            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
+            .on_mouse_down(MouseButton::Middle, |_, _, cx| cx.stop_propagation())
             .on_click(cx.listener(|this, _, window, cx| {
+                cx.stop_propagation();
                 if !this.focus_active_ssh_prompt_input(window, cx) {
                     window.focus(&this.credential_focus);
                 }
