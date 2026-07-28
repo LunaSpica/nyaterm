@@ -1,4 +1,16 @@
-use super::*;
+use gpui::{Context, KeyDownEvent, Window};
+use nyaterm_transport::{SftpAttributeUpdate, SftpFileEntry, SftpFileType, SftpService};
+
+use crate::features::{NyaTermApp, TextInputSetup};
+use crate::models::{
+    TransferJobEvent, TransferJobKind, TransferJobOutput, TransferJobResult, TransferJobState,
+    TransferJobStatus, TransferPropertiesField,
+};
+
+use super::{
+    format_permissions_octal, normalized_transfer_browser_path, parse_transfer_mode,
+    remote_file_name, remote_parent_path, transfer_properties_state_from_entry,
+};
 
 impl NyaTermApp {
     pub(super) fn open_current_transfer_browser_properties(
@@ -349,7 +361,9 @@ fn normalize_transfer_properties_input(field: TransferPropertiesField, text: &st
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::models::TransferPropertiesField;
+
+    use super::normalize_transfer_properties_input;
 
     #[test]
     fn properties_mode_input_keeps_four_octal_digits() {

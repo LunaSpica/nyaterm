@@ -2,7 +2,7 @@ use gpui::{
     AnyElement, App, ClickEvent, ClipboardItem, Context, Entity, FontWeight, IntoElement,
     KeyDownEvent, MouseButton, MouseDownEvent, SharedString, Window, div, prelude::*, px, rgb, svg,
 };
-use nyaterm_transport::{SftpAttributeUpdate, SftpFileEntry, SftpFileType, SftpService};
+use nyaterm_transport::{SftpFileEntry, SftpFileType, SftpService};
 
 use crate::models::{
     TransferBrowserBreadcrumbSegment, TransferBrowserChildrenMenuStatus,
@@ -10,8 +10,8 @@ use crate::models::{
     TransferEditorField, TransferEditorState, TransferEditorWorkspaceState,
     TransferExternalSyncPromptState, TransferJobEvent, TransferJobKind, TransferJobOutput,
     TransferJobResult, TransferJobState, TransferJobStatus, TransferMoveState,
-    TransferNewFileState, TransferNewFolderState, TransferNewSymlinkState, TransferPropertiesField,
-    TransferRenameState, TransferSymlinkField, TransferUnknownFileState,
+    TransferNewFileState, TransferNewFolderState, TransferNewSymlinkState, TransferRenameState,
+    TransferSymlinkField, TransferUnknownFileState,
 };
 use crate::widgets::small_button;
 use nyaterm_core::AiCustomActionConfig;
