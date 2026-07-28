@@ -1,8 +1,8 @@
-use super::*;
+use gpui::Context;
+use nyaterm_core::ConnectionStore;
 
-use crate::models::{
-    MainMode, SmartSplitMode, SplitEdge, TabDockZone, TerminalWindowNode, WorkspaceSplitDirection,
-};
+use crate::features::{NyaTermApp, short_id};
+use crate::models::{MainMode, NavItem, SmartSplitMode, TabDockZone, TerminalWindowNode};
 
 impl NyaTermApp {
     /// Ensure every live session appears in the multi-leaf layout once it is enabled.
