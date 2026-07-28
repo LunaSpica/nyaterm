@@ -16,9 +16,9 @@ use crate::models::{
 };
 
 use super::auth_runtime::{
-    CredentialPromptBroker, CredentialPromptState, HostKeyPromptBroker, HostKeyPromptRequest,
-    KeyboardInteractivePromptState, NativeOtpProvider, SftpDuplicatePromptBroker,
-    SftpDuplicatePromptState,
+    CredentialPromptBroker, CredentialPromptRequest, CredentialPromptState, HostKeyPromptBroker,
+    HostKeyPromptRequest, KeyboardInteractivePromptState, NativeOtpCodePreview, NativeOtpProvider,
+    SftpDuplicatePromptBroker, SftpDuplicatePromptState,
 };
 use super::trzsz_runtime::TrzszSessionState;
 use super::zmodem_runtime::ZmodemSessionState;
@@ -77,16 +77,28 @@ pub(in crate::features) struct SessionFeatureFocus {
 
 /// Native authentication and transfer prompts tied to the session runtime.
 pub(in crate::features) struct SessionPromptState {
-    pub duplicate_prompts: Arc<SftpDuplicatePromptBroker>,
-    pub active_duplicate_prompt: Option<SftpDuplicatePromptState>,
-    pub host_key_prompts: Arc<HostKeyPromptBroker>,
-    pub active_host_key_prompt: Option<HostKeyPromptRequest>,
-    pub credential_prompts: Arc<CredentialPromptBroker>,
-    pub active_credential_prompt: Option<CredentialPromptState>,
-    pub active_keyboard_interactive_prompt: Option<KeyboardInteractivePromptState>,
-    pub credential_prompt_focus_pending: bool,
-    pub credential_focus: FocusHandle,
-    pub otp_provider: Arc<NativeOtpProvider>,
+    duplicate_prompts: Arc<SftpDuplicatePromptBroker>,
+    active_duplicate_prompt: Option<SftpDuplicatePromptState>,
+    host_key_prompts: Arc<HostKeyPromptBroker>,
+    active_host_key_prompt: Option<HostKeyPromptRequest>,
+    credential_prompts: Arc<CredentialPromptBroker>,
+    active_credential_prompt: Option<CredentialPromptState>,
+    active_keyboard_interactive_prompt: Option<KeyboardInteractivePromptState>,
+    credential_prompt_focus_pending: bool,
+    credential_focus: FocusHandle,
+    otp_provider: Arc<NativeOtpProvider>,
+}
+
+pub(in crate::features) enum PromptResolution<T> {
+    Inactive,
+    Changed,
+    Ready(T),
+}
+
+pub(in crate::features) struct PromptInputTarget {
+    pub id: String,
+    pub seed: String,
+    pub echo: bool,
 }
 
 /// Session-scoped overlays, confirmations and editing dialogs.
@@ -205,6 +217,329 @@ impl SessionRestoreState {
         }
         self.complete = true;
         true
+    }
+}
+
+impl SessionPromptState {
+    pub(in crate::features) fn duplicate_broker(&self) -> Arc<SftpDuplicatePromptBroker> {
+        Arc::clone(&self.duplicate_prompts)
+    }
+
+    pub(in crate::features) fn host_key_broker(&self) -> Arc<HostKeyPromptBroker> {
+        Arc::clone(&self.host_key_prompts)
+    }
+
+    pub(in crate::features) fn credential_broker(&self) -> Arc<CredentialPromptBroker> {
+        Arc::clone(&self.credential_prompts)
+    }
+
+    pub(in crate::features) fn otp_provider(&self) -> Arc<NativeOtpProvider> {
+        Arc::clone(&self.otp_provider)
+    }
+
+    pub(in crate::features) fn credential_focus(&self) -> &FocusHandle {
+        &self.credential_focus
+    }
+
+    pub(in crate::features) fn credential_focus_is_pending(&self) -> bool {
+        self.credential_prompt_focus_pending
+    }
+
+    pub(in crate::features) fn finish_credential_focus(&mut self) {
+        self.credential_prompt_focus_pending = false;
+    }
+
+    pub(in crate::features) fn active_duplicate(&self) -> Option<&SftpDuplicatePromptState> {
+        self.active_duplicate_prompt.as_ref()
+    }
+
+    pub(in crate::features) fn active_host_key(&self) -> Option<&HostKeyPromptRequest> {
+        self.active_host_key_prompt.as_ref()
+    }
+
+    pub(in crate::features) fn active_credential(&self) -> Option<&CredentialPromptState> {
+        self.active_credential_prompt.as_ref()
+    }
+
+    pub(in crate::features) fn active_keyboard_interactive(
+        &self,
+    ) -> Option<&KeyboardInteractivePromptState> {
+        self.active_keyboard_interactive_prompt.as_ref()
+    }
+
+    pub(in crate::features) fn has_active_credential(&self) -> bool {
+        self.active_credential_prompt.is_some()
+    }
+
+    pub(in crate::features) fn has_active_keyboard_interactive(&self) -> bool {
+        self.active_keyboard_interactive_prompt.is_some()
+    }
+
+    pub(in crate::features) fn has_active_ssh_auth(&self) -> bool {
+        self.active_host_key_prompt.is_some()
+            || self.active_credential_prompt.is_some()
+            || self.active_keyboard_interactive_prompt.is_some()
+    }
+
+    pub(in crate::features) fn has_pending_or_active_prompt(&self) -> bool {
+        self.has_active_ssh_auth()
+            || self.active_duplicate_prompt.is_some()
+            || self.host_key_prompts.has_pending()
+            || self.credential_prompts.has_pending()
+            || self.duplicate_prompts.has_pending()
+    }
+
+    pub(in crate::features) fn take_host_key_resolution(
+        &mut self,
+        request_id: &str,
+    ) -> PromptResolution<HostKeyPromptRequest> {
+        let Some(request) = self.active_host_key_prompt.take() else {
+            return PromptResolution::Inactive;
+        };
+        if request.id != request_id {
+            self.active_host_key_prompt = Some(request);
+            return PromptResolution::Changed;
+        }
+        PromptResolution::Ready(request)
+    }
+
+    pub(in crate::features) fn take_duplicate_resolution(
+        &mut self,
+        request_id: &str,
+    ) -> PromptResolution<SftpDuplicatePromptState> {
+        let Some(prompt) = self.active_duplicate_prompt.take() else {
+            return PromptResolution::Inactive;
+        };
+        if prompt.id != request_id {
+            self.active_duplicate_prompt = Some(prompt);
+            return PromptResolution::Changed;
+        }
+        PromptResolution::Ready(prompt)
+    }
+
+    pub(in crate::features) fn take_credential(&mut self) -> Option<CredentialPromptState> {
+        let state = self.active_credential_prompt.take()?;
+        self.credential_prompt_focus_pending = false;
+        Some(state)
+    }
+
+    pub(in crate::features) fn take_keyboard_interactive(
+        &mut self,
+    ) -> Option<KeyboardInteractivePromptState> {
+        let state = self.active_keyboard_interactive_prompt.take()?;
+        self.credential_prompt_focus_pending = false;
+        Some(state)
+    }
+
+    pub(in crate::features) fn keyboard_interactive_otp_id(&self) -> Option<String> {
+        self.active_keyboard_interactive_prompt
+            .as_ref()
+            .and_then(|state| state.request.otp_id.clone())
+    }
+
+    pub(in crate::features) fn keyboard_interactive_otp_code(&self) -> Option<String> {
+        self.active_keyboard_interactive_prompt
+            .as_ref()
+            .and_then(|state| state.otp_code.clone())
+    }
+
+    pub(in crate::features) fn apply_keyboard_interactive_otp_result(
+        &mut self,
+        result: Result<Option<NativeOtpCodePreview>, String>,
+        clear_missing_time_step: bool,
+    ) -> bool {
+        let Some(state) = self.active_keyboard_interactive_prompt.as_mut() else {
+            return false;
+        };
+        match result {
+            Ok(Some(preview)) => {
+                state.otp_code = Some(preview.code);
+                state.otp_type = Some(preview.otp_type);
+                state.otp_period = preview.period;
+                state.otp_time_step = preview.time_step;
+                state.otp_error = None;
+                true
+            }
+            Ok(None) => {
+                state.otp_code = None;
+                if clear_missing_time_step {
+                    state.otp_time_step = None;
+                }
+                state.otp_error = Some("OTP entry not found".to_string());
+                false
+            }
+            Err(error) => {
+                state.otp_code = None;
+                state.otp_time_step = None;
+                state.otp_error = Some(error);
+                false
+            }
+        }
+    }
+
+    pub(in crate::features) fn send_keyboard_interactive_otp_to_response(
+        &mut self,
+    ) -> Option<(String, String)> {
+        let state = self.active_keyboard_interactive_prompt.as_mut()?;
+        let code = state.otp_code.clone()?;
+        let response = state.responses.first_mut()?;
+        *response = code;
+        state.focused_index = 0;
+        Some((state.id.clone(), response.clone()))
+    }
+
+    pub(in crate::features) fn advance_keyboard_interactive_focus(
+        &mut self,
+        backwards: bool,
+    ) -> Option<PromptInputTarget> {
+        let state = self.active_keyboard_interactive_prompt.as_mut()?;
+        let prompt_count = state.responses.len();
+        if prompt_count == 0 {
+            return None;
+        }
+        state.focused_index = if backwards {
+            state
+                .focused_index
+                .checked_sub(1)
+                .unwrap_or(prompt_count - 1)
+        } else {
+            (state.focused_index + 1) % prompt_count
+        };
+        let index = state.focused_index;
+        Some(PromptInputTarget {
+            id: format!("ssh.keyboard-interactive.{}.{index}", state.id),
+            seed: state.responses[index].clone(),
+            echo: state.request.prompts[index].echo,
+        })
+    }
+
+    pub(in crate::features) fn apply_credential_input(
+        &mut self,
+        prompt_id: &str,
+        text: String,
+    ) -> bool {
+        let Some(state) = self.active_credential_prompt.as_mut() else {
+            return false;
+        };
+        if state.id != prompt_id {
+            return false;
+        }
+        state.value = text;
+        true
+    }
+
+    pub(in crate::features) fn apply_keyboard_interactive_input(
+        &mut self,
+        prompt_id: &str,
+        index: usize,
+        text: String,
+    ) -> bool {
+        let Some(state) = self.active_keyboard_interactive_prompt.as_mut() else {
+            return false;
+        };
+        if state.id != prompt_id {
+            return false;
+        }
+        let Some(response) = state.responses.get_mut(index) else {
+            return false;
+        };
+        *response = text;
+        state.focused_index = index;
+        true
+    }
+
+    pub(in crate::features) fn focus_keyboard_interactive_response(
+        &mut self,
+        prompt_id: &str,
+        index: usize,
+    ) -> bool {
+        let Some(state) = self.active_keyboard_interactive_prompt.as_mut() else {
+            return false;
+        };
+        if state.id != prompt_id || index >= state.responses.len() {
+            return false;
+        }
+        state.focused_index = index;
+        true
+    }
+
+    pub(in crate::features) fn active_input_target(&self) -> Option<PromptInputTarget> {
+        if let Some(state) = self.active_credential_prompt.as_ref() {
+            return Some(PromptInputTarget {
+                id: format!("ssh.credential.{}", state.id),
+                seed: state.value.clone(),
+                echo: state.prompt.echo,
+            });
+        }
+        let state = self.active_keyboard_interactive_prompt.as_ref()?;
+        let index = (!state.responses.is_empty())
+            .then_some(state.focused_index.min(state.responses.len() - 1))?;
+        Some(PromptInputTarget {
+            id: format!("ssh.keyboard-interactive.{}.{index}", state.id),
+            seed: state.responses[index].clone(),
+            echo: state.request.prompts[index].echo,
+        })
+    }
+
+    pub(in crate::features) fn activate_next_host_key(&mut self) -> Option<String> {
+        if self.active_host_key_prompt.is_some() || !self.host_key_prompts.has_pending() {
+            return None;
+        }
+        let request = self.host_key_prompts.pop_pending()?;
+        let host = request.host_key.host_identifier.clone();
+        self.active_host_key_prompt = Some(request);
+        Some(host)
+    }
+
+    pub(in crate::features) fn take_next_credential_request(
+        &self,
+    ) -> Option<CredentialPromptRequest> {
+        if self.active_credential_prompt.is_some()
+            || self.active_keyboard_interactive_prompt.is_some()
+            || !self.credential_prompts.has_pending()
+        {
+            return None;
+        }
+        self.credential_prompts.pop_pending()
+    }
+
+    pub(in crate::features) fn activate_credential(&mut self, state: CredentialPromptState) {
+        self.active_credential_prompt = Some(state);
+        self.credential_prompt_focus_pending = true;
+    }
+
+    pub(in crate::features) fn activate_keyboard_interactive(
+        &mut self,
+        state: KeyboardInteractivePromptState,
+    ) {
+        self.active_keyboard_interactive_prompt = Some(state);
+        self.credential_prompt_focus_pending = true;
+    }
+
+    pub(in crate::features) fn keyboard_totp_refresh_otp_id(&self, now: u64) -> Option<String> {
+        let state = self.active_keyboard_interactive_prompt.as_ref()?;
+        if state.otp_type.as_deref() != Some("totp") || state.otp_code.is_none() {
+            return None;
+        }
+        let current_step = now / state.otp_period.max(1);
+        if state.otp_time_step == Some(current_step) {
+            return None;
+        }
+        state.request.otp_id.clone()
+    }
+
+    pub(in crate::features) fn activate_next_duplicate(&mut self) -> Option<String> {
+        if self.active_duplicate_prompt.is_some() || !self.duplicate_prompts.has_pending() {
+            return None;
+        }
+        let request = self.duplicate_prompts.pop_pending()?;
+        let target = request.request.target_path.clone();
+        self.active_duplicate_prompt = Some(SftpDuplicatePromptState {
+            id: request.id,
+            request: request.request,
+            response_tx: request.response_tx,
+        });
+        Some(target)
     }
 }
 
@@ -756,22 +1091,29 @@ pub(super) fn failed_session_start_display_name(failed: &FailedSessionStart) -> 
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
+    use std::sync::{Arc, mpsc};
     use std::time::Instant;
 
     use gpui::TestAppContext;
     use nyaterm_core::{AiExecutionProfile, ConnectionType, SavedConnection};
-    use nyaterm_transport::{SessionKind, SessionManager};
+    use nyaterm_transport::{
+        SessionKind, SessionManager, SshCredentialPrompt, SshCredentialPromptKind,
+        SshCredentialPromptReason, SshHostKey, SshKeyboardInteractivePrompt,
+        SshKeyboardInteractiveRequest,
+    };
 
     use crate::features::runtime_jobs::SessionStartResult;
+    use crate::features::session::HostKeyPromptIssue;
     use crate::models::{
         SessionEventBridge, StartupCommandAction, TabActionsSubmenu, TerminalFramePipeline,
     };
 
     use super::{
-        FailedSessionStart, NativeOtpProvider, PendingSessionStart, RenameSessionSubmission,
-        SavedConnectionStartOptions, SessionFeatureFocus, SessionFeatureState, SessionRestoreState,
-        SessionStartFeatureState,
+        CredentialPromptBroker, CredentialPromptState, FailedSessionStart, HostKeyPromptBroker,
+        HostKeyPromptRequest, KeyboardInteractivePromptState, NativeOtpCodePreview,
+        NativeOtpProvider, PendingSessionStart, PromptResolution, RenameSessionSubmission,
+        SavedConnectionStartOptions, SessionFeatureFocus, SessionFeatureState, SessionPromptState,
+        SessionRestoreState, SessionStartFeatureState, SftpDuplicatePromptBroker,
     };
 
     #[test]
@@ -827,6 +1169,162 @@ mod tests {
         }
     }
 
+    fn prompt_state(cx: &TestAppContext) -> SessionPromptState {
+        SessionPromptState {
+            duplicate_prompts: Arc::new(SftpDuplicatePromptBroker::default()),
+            active_duplicate_prompt: None,
+            host_key_prompts: Arc::new(HostKeyPromptBroker::default()),
+            active_host_key_prompt: None,
+            credential_prompts: Arc::new(CredentialPromptBroker::default()),
+            active_credential_prompt: None,
+            active_keyboard_interactive_prompt: None,
+            credential_prompt_focus_pending: false,
+            credential_focus: cx.update(|cx| cx.focus_handle()),
+            otp_provider: Arc::new(NativeOtpProvider::new(std::path::PathBuf::new(), None)),
+        }
+    }
+
+    fn credential_prompt_state(id: &str) -> CredentialPromptState {
+        let (response_tx, _response_rx) = mpsc::channel();
+        CredentialPromptState {
+            id: id.to_string(),
+            prompt: SshCredentialPrompt {
+                host: "example.test".to_string(),
+                port: 22,
+                username: "nya".to_string(),
+                connection_name: "example".to_string(),
+                kind: SshCredentialPromptKind::Password,
+                reason: SshCredentialPromptReason::MissingPassword,
+                attempt: 1,
+                prompt_text: None,
+                echo: false,
+            },
+            response_tx,
+            value: String::new(),
+        }
+    }
+
+    #[test]
+    fn credential_prompt_owner_isolates_input_and_clears_focus_on_take() {
+        let cx = TestAppContext::single();
+        let mut prompts = prompt_state(&cx);
+
+        prompts.activate_credential(credential_prompt_state("credential-1"));
+        assert!(prompts.credential_focus_is_pending());
+        assert!(!prompts.apply_credential_input("credential-2", "wrong".to_string()));
+        assert_eq!(
+            prompts
+                .active_credential()
+                .expect("credential prompt should remain active")
+                .value,
+            ""
+        );
+
+        assert!(prompts.apply_credential_input("credential-1", "secret".to_string()));
+        let prompt = prompts
+            .take_credential()
+            .expect("matching credential prompt should be taken");
+        assert_eq!(prompt.id, "credential-1");
+        assert_eq!(prompt.value, "secret");
+        assert!(!prompts.credential_focus_is_pending());
+        assert!(prompts.active_credential().is_none());
+    }
+
+    #[test]
+    fn mismatched_host_key_resolution_preserves_active_prompt() {
+        let cx = TestAppContext::single();
+        let mut prompts = prompt_state(&cx);
+        let (response_tx, _response_rx) = mpsc::channel();
+        prompts.active_host_key_prompt = Some(HostKeyPromptRequest {
+            id: "host-key-1".to_string(),
+            host_key: SshHostKey {
+                host: "example.test".to_string(),
+                port: 22,
+                host_identifier: "example.test".to_string(),
+                key_type: "ssh-ed25519".to_string(),
+                key_base64: "test-key".to_string(),
+                fingerprint: "SHA256:test".to_string(),
+            },
+            issue: HostKeyPromptIssue::Unknown,
+            response_tx,
+        });
+
+        assert!(matches!(
+            prompts.take_host_key_resolution("host-key-2"),
+            PromptResolution::Changed
+        ));
+        assert_eq!(
+            prompts
+                .active_host_key()
+                .expect("mismatched resolution must restore the prompt")
+                .id,
+            "host-key-1"
+        );
+    }
+
+    #[test]
+    fn otp_missing_entry_preserves_manual_timing_but_clears_refresh_timing() {
+        let cx = TestAppContext::single();
+        let mut prompts = prompt_state(&cx);
+        let (response_tx, _response_rx) = mpsc::channel();
+        prompts.activate_keyboard_interactive(KeyboardInteractivePromptState {
+            id: "keyboard-1".to_string(),
+            request: SshKeyboardInteractiveRequest {
+                host: "example.test".to_string(),
+                port: 22,
+                username: "nya".to_string(),
+                connection_name: "example".to_string(),
+                name: "verification".to_string(),
+                instructions: String::new(),
+                round: 1,
+                prompts: vec![SshKeyboardInteractivePrompt {
+                    prompt: "Code".to_string(),
+                    echo: false,
+                }],
+                otp_id: Some("otp-1".to_string()),
+            },
+            response_tx,
+            responses: vec![String::new()],
+            focused_index: 0,
+            otp_code: Some("test-code".to_string()),
+            otp_type: Some("totp".to_string()),
+            otp_period: 30,
+            otp_time_step: Some(7),
+            otp_error: None,
+        });
+
+        assert!(!prompts.apply_keyboard_interactive_otp_result(Ok(None), false));
+        assert_eq!(
+            prompts
+                .active_keyboard_interactive()
+                .expect("keyboard prompt should remain active")
+                .otp_time_step,
+            Some(7)
+        );
+
+        assert!(!prompts.apply_keyboard_interactive_otp_result(Ok(None), true));
+        let active = prompts
+            .active_keyboard_interactive()
+            .expect("keyboard prompt should remain active");
+        assert!(active.otp_time_step.is_none());
+        assert_eq!(active.otp_error.as_deref(), Some("OTP entry not found"));
+
+        assert!(prompts.apply_keyboard_interactive_otp_result(
+            Ok(Some(NativeOtpCodePreview {
+                code: "next-code".to_string(),
+                otp_type: "totp".to_string(),
+                period: 30,
+                time_step: Some(8),
+            })),
+            true,
+        ));
+        let active = prompts
+            .active_keyboard_interactive()
+            .expect("keyboard prompt should remain active");
+        assert_eq!(active.otp_time_step, Some(8));
+        assert!(active.otp_error.is_none());
+    }
+
     #[test]
     fn session_state_owns_live_runtime_and_initializes_transient_state() {
         let cx = TestAppContext::single();
@@ -870,14 +1368,9 @@ mod tests {
         assert!(sessions.zmodem.is_empty());
         assert!(sessions.trzsz.is_empty());
         assert!(sessions.multiplex_handles.is_empty());
-        assert!(Arc::ptr_eq(&sessions.prompts.otp_provider, &otp_provider));
-        assert!(sessions.prompts.active_credential_prompt.is_none());
-        assert!(
-            sessions
-                .prompts
-                .active_keyboard_interactive_prompt
-                .is_none()
-        );
+        assert!(Arc::ptr_eq(&sessions.prompts.otp_provider(), &otp_provider));
+        assert!(sessions.prompts.active_credential().is_none());
+        assert!(sessions.prompts.active_keyboard_interactive().is_none());
         assert!(!sessions.dialogs.close_all_sessions_confirm_is_open());
         assert!(!sessions.dialogs.rename_is_open());
         assert!(!sessions.dialogs.startup_command_is_open());

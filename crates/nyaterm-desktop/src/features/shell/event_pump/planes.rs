@@ -41,7 +41,7 @@ impl NyaTermApp {
     fn drive_pending_focus(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
         if !self.ai.chat.focus_pending
             && !self.transfer.file_ops.rename_focus_pending
-            && !self.session.prompts.credential_prompt_focus_pending
+            && !self.session.prompts.credential_focus_is_pending()
         {
             return false;
         }
@@ -56,16 +56,12 @@ impl NyaTermApp {
             self.transfer.file_ops.rename_focus_pending = false;
             dirty = true;
         }
-        if self.session.prompts.credential_prompt_focus_pending
-            && (self.session.prompts.active_credential_prompt.is_some()
-                || self
-                    .session
-                    .prompts
-                    .active_keyboard_interactive_prompt
-                    .is_some())
+        if self.session.prompts.credential_focus_is_pending()
+            && (self.session.prompts.has_active_credential()
+                || self.session.prompts.has_active_keyboard_interactive())
         {
             self.focus_active_ssh_prompt_input(window, cx);
-            self.session.prompts.credential_prompt_focus_pending = false;
+            self.session.prompts.finish_credential_focus();
             dirty = true;
         }
         dirty
@@ -457,17 +453,7 @@ impl NyaTermApp {
         if !self.session.start.has_pending()
             && self.session.start.cancelled.is_empty()
             && !self.session.start.has_queued_saved_connections()
-            && self.session.prompts.active_host_key_prompt.is_none()
-            && self.session.prompts.active_credential_prompt.is_none()
-            && self
-                .session
-                .prompts
-                .active_keyboard_interactive_prompt
-                .is_none()
-            && self.session.prompts.active_duplicate_prompt.is_none()
-            && !self.session.prompts.host_key_prompts.has_pending()
-            && !self.session.prompts.credential_prompts.has_pending()
-            && !self.session.prompts.duplicate_prompts.has_pending()
+            && !self.session.prompts.has_pending_or_active_prompt()
         {
             return RuntimeControlPlaneResult {
                 dirty: false,

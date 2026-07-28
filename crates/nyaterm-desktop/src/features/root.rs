@@ -493,13 +493,7 @@ impl NyaTermApp {
             && self.transfer.editor.window.is_none()
             && !self.transfer.editor.window_open_pending;
         let transfer_external_sync_open = self.active_external_editor_sync_prompt().is_some();
-        let ssh_auth_prompt_open = self.session.prompts.active_host_key_prompt.is_some()
-            || self.session.prompts.active_credential_prompt.is_some()
-            || self
-                .session
-                .prompts
-                .active_keyboard_interactive_prompt
-                .is_some();
+        let ssh_auth_prompt_open = self.session.prompts.has_active_ssh_auth();
 
         content
             .when(overlay.tab_actions_open, |this| {
@@ -717,13 +711,10 @@ impl NyaTermApp {
     }
 
     fn ssh_auth_prompt_overlay(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
-        let host_key_prompt = self.session.prompts.active_host_key_prompt.clone();
-        let credential_prompt = self.session.prompts.active_credential_prompt.clone();
-        let keyboard_interactive_prompt = self
-            .session
-            .prompts
-            .active_keyboard_interactive_prompt
-            .clone();
+        let host_key_prompt = self.session.prompts.active_host_key().cloned();
+        let credential_prompt = self.session.prompts.active_credential().cloned();
+        let keyboard_interactive_prompt =
+            self.session.prompts.active_keyboard_interactive().cloned();
         let dialog_width = if keyboard_interactive_prompt.is_some() {
             384.
         } else {
@@ -741,14 +732,14 @@ impl NyaTermApp {
             .items_center()
             .justify_center()
             .p_3()
-            .track_focus(&self.session.prompts.credential_focus)
+            .track_focus(self.session.prompts.credential_focus())
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
             .on_mouse_down(MouseButton::Middle, |_, _, cx| cx.stop_propagation())
             .on_click(cx.listener(|this, _, window, cx| {
                 cx.stop_propagation();
                 if !this.focus_active_ssh_prompt_input(window, cx) {
-                    window.focus(&this.session.prompts.credential_focus);
+                    window.focus(this.session.prompts.credential_focus());
                 }
                 cx.notify();
             }))

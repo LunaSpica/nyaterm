@@ -6,10 +6,10 @@ use nyaterm_transport::{
     SshKeyboardInteractiveRequest,
 };
 
+use super::state::PromptResolution;
 use super::{
     CredentialPromptRequest, CredentialPromptState, HostKeyPromptChoice,
-    KeyboardInteractivePromptState, NativeOtpCodePreview, SftpDuplicatePromptState,
-    unix_seconds_now,
+    KeyboardInteractivePromptState, unix_seconds_now,
 };
 use crate::features::{NyaTermApp, TextInputSetup, duplicate_decision_label};
 
@@ -20,18 +20,20 @@ impl NyaTermApp {
         choice: HostKeyPromptChoice,
         cx: &mut Context<Self>,
     ) {
-        let Some(request) = self.session.prompts.active_host_key_prompt.take() else {
-            self.terminal.view.status = "no SSH host key prompt is active".to_string();
-            cx.notify();
-            return;
+        let request = match self.session.prompts.take_host_key_resolution(&request_id) {
+            PromptResolution::Inactive => {
+                self.terminal.view.status = "no SSH host key prompt is active".to_string();
+                cx.notify();
+                return;
+            }
+            PromptResolution::Changed => {
+                self.terminal.view.status =
+                    "SSH host key prompt changed before response".to_string();
+                cx.notify();
+                return;
+            }
+            PromptResolution::Ready(request) => request,
         };
-
-        if request.id != request_id {
-            self.session.prompts.active_host_key_prompt = Some(request);
-            self.terminal.view.status = "SSH host key prompt changed before response".to_string();
-            cx.notify();
-            return;
-        }
 
         let host = request.host_key.host_identifier.clone();
         let _ = request.response_tx.send(choice);
@@ -48,18 +50,20 @@ impl NyaTermApp {
         decision: SftpDuplicateDecision,
         cx: &mut Context<Self>,
     ) {
-        let Some(prompt) = self.session.prompts.active_duplicate_prompt.take() else {
-            self.terminal.view.status = "no SFTP duplicate prompt is active".to_string();
-            cx.notify();
-            return;
+        let prompt = match self.session.prompts.take_duplicate_resolution(&request_id) {
+            PromptResolution::Inactive => {
+                self.terminal.view.status = "no SFTP duplicate prompt is active".to_string();
+                cx.notify();
+                return;
+            }
+            PromptResolution::Changed => {
+                self.terminal.view.status =
+                    "SFTP duplicate prompt changed before response".to_string();
+                cx.notify();
+                return;
+            }
+            PromptResolution::Ready(prompt) => prompt,
         };
-
-        if prompt.id != request_id {
-            self.session.prompts.active_duplicate_prompt = Some(prompt);
-            self.terminal.view.status = "SFTP duplicate prompt changed before response".to_string();
-            cx.notify();
-            return;
-        }
 
         let target = prompt.request.target_path.clone();
         let _ = prompt.response_tx.send(decision);
@@ -71,25 +75,23 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn submit_credential_prompt(&mut self, cx: &mut Context<Self>) {
-        let Some(state) = self.session.prompts.active_credential_prompt.take() else {
+        let Some(state) = self.session.prompts.take_credential() else {
             return;
         };
         let host = credential_prompt_target(&state.prompt);
         let _ = state.response_tx.send(Some(state.value));
         self.forget_text_inputs("ssh.credential.");
-        self.session.prompts.credential_prompt_focus_pending = false;
         self.terminal.view.status = format!("submitted SSH credential for {host}");
         cx.notify();
     }
 
     pub(in crate::features) fn cancel_credential_prompt(&mut self, cx: &mut Context<Self>) {
-        let Some(state) = self.session.prompts.active_credential_prompt.take() else {
+        let Some(state) = self.session.prompts.take_credential() else {
             return;
         };
         let host = credential_prompt_target(&state.prompt);
         let _ = state.response_tx.send(None);
         self.forget_text_inputs("ssh.credential.");
-        self.session.prompts.credential_prompt_focus_pending = false;
         self.terminal.view.status = format!("cancelled SSH credential prompt for {host}");
         cx.notify();
     }
@@ -98,18 +100,12 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self
-            .session
-            .prompts
-            .active_keyboard_interactive_prompt
-            .take()
-        else {
+        let Some(state) = self.session.prompts.take_keyboard_interactive() else {
             return;
         };
         let target = keyboard_interactive_prompt_target(&state.request);
         let _ = state.response_tx.send(Some(state.responses));
         self.forget_text_inputs("ssh.keyboard-interactive.");
-        self.session.prompts.credential_prompt_focus_pending = false;
         self.terminal.view.status = format!("submitted SSH verification for {target}");
         cx.notify();
     }
@@ -118,18 +114,12 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self
-            .session
-            .prompts
-            .active_keyboard_interactive_prompt
-            .take()
-        else {
+        let Some(state) = self.session.prompts.take_keyboard_interactive() else {
             return;
         };
         let target = keyboard_interactive_prompt_target(&state.request);
         let _ = state.response_tx.send(None);
         self.forget_text_inputs("ssh.keyboard-interactive.");
-        self.session.prompts.credential_prompt_focus_pending = false;
         self.terminal.view.status = format!("cancelled SSH verification for {target}");
         cx.notify();
     }
@@ -138,38 +128,20 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        let Some(otp_id) = self
-            .session
-            .prompts
-            .active_keyboard_interactive_prompt
-            .as_ref()
-            .and_then(|state| state.request.otp_id.clone())
-        else {
+        let Some(otp_id) = self.session.prompts.keyboard_interactive_otp_id() else {
             return;
         };
-        let result = self.session.prompts.otp_provider.preview_otp_code(&otp_id);
-        let Some(state) = self
+        let result = self
             .session
             .prompts
-            .active_keyboard_interactive_prompt
-            .as_mut()
-        else {
-            return;
-        };
-        match result {
-            Ok(Some(preview)) => {
-                apply_keyboard_interactive_otp_preview(state, preview);
-                self.terminal.view.status = "OTP code ready".to_string();
-            }
-            Ok(None) => {
-                state.otp_code = None;
-                state.otp_error = Some("OTP entry not found".to_string());
-            }
-            Err(error) => {
-                state.otp_code = None;
-                state.otp_time_step = None;
-                state.otp_error = Some(error);
-            }
+            .otp_provider()
+            .preview_otp_code(&otp_id);
+        if self
+            .session
+            .prompts
+            .apply_keyboard_interactive_otp_result(result, false)
+        {
+            self.terminal.view.status = "OTP code ready".to_string();
         }
         cx.notify();
     }
@@ -178,39 +150,24 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self
+        let Some((prompt_id, response)) = self
             .session
             .prompts
-            .active_keyboard_interactive_prompt
-            .as_mut()
+            .send_keyboard_interactive_otp_to_response()
         else {
             return;
         };
-        let Some(code) = state.otp_code.clone() else {
-            return;
-        };
-        if let Some(response) = state.responses.first_mut() {
-            *response = code;
-            state.focused_index = 0;
-            let input_id = keyboard_interactive_text_input_id(&state.id, 0);
-            let response = response.clone();
-            self.reset_text_input(&input_id, &response, cx);
-            self.terminal.view.status = "OTP code sent to verification input".to_string();
-            cx.notify();
-        }
+        let input_id = keyboard_interactive_text_input_id(&prompt_id, 0);
+        self.reset_text_input(&input_id, &response, cx);
+        self.terminal.view.status = "OTP code sent to verification input".to_string();
+        cx.notify();
     }
 
     pub(in crate::features) fn copy_keyboard_interactive_otp_code(
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        let Some(code) = self
-            .session
-            .prompts
-            .active_keyboard_interactive_prompt
-            .as_ref()
-            .and_then(|state| state.otp_code.clone())
-        else {
+        let Some(code) = self.session.prompts.keyboard_interactive_otp_code() else {
             return;
         };
         cx.write_to_clipboard(ClipboardItem::new_string(code));
@@ -224,7 +181,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.mark_user_activity();
-        if self.session.prompts.active_credential_prompt.is_none() {
+        if !self.session.prompts.has_active_credential() {
             return;
         }
         let keystroke = &event.keystroke;
@@ -250,12 +207,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.mark_user_activity();
-        if self
-            .session
-            .prompts
-            .active_keyboard_interactive_prompt
-            .is_none()
-        {
+        if !self.session.prompts.has_active_keyboard_interactive() {
             return;
         }
         let keystroke = &event.keystroke;
@@ -267,40 +219,19 @@ impl NyaTermApp {
             "enter" => self.submit_keyboard_interactive_prompt(cx),
             "escape" => self.cancel_keyboard_interactive_prompt(cx),
             "tab" => {
-                let Some((input_id, seed, setup)) = self
+                let Some(target) = self
                     .session
                     .prompts
-                    .active_keyboard_interactive_prompt
-                    .as_mut()
-                    .and_then(|state| {
-                        let prompt_count = state.responses.len();
-                        if prompt_count == 0 {
-                            return None;
-                        }
-                        state.focused_index = if keystroke.modifiers.shift {
-                            state
-                                .focused_index
-                                .checked_sub(1)
-                                .unwrap_or(prompt_count - 1)
-                        } else {
-                            (state.focused_index + 1) % prompt_count
-                        };
-                        let index = state.focused_index;
-                        let setup = if state.request.prompts[index].echo {
-                            TextInputSetup::default()
-                        } else {
-                            TextInputSetup::masked()
-                        };
-                        Some((
-                            keyboard_interactive_text_input_id(&state.id, index),
-                            state.responses[index].clone(),
-                            setup,
-                        ))
-                    })
+                    .advance_keyboard_interactive_focus(keystroke.modifiers.shift)
                 else {
                     return;
                 };
-                let field = self.text_input(input_id, &seed, setup, cx);
+                let setup = if target.echo {
+                    TextInputSetup::default()
+                } else {
+                    TextInputSetup::masked()
+                };
+                let field = self.text_input(target.id, &target.seed, setup, cx);
                 window.focus(&field.read(cx).focus_handle());
                 cx.notify();
             }
@@ -314,13 +245,9 @@ impl NyaTermApp {
         text: String,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.session.prompts.active_credential_prompt.as_mut() else {
-            return;
-        };
-        if state.id != prompt_id {
+        if !self.session.prompts.apply_credential_input(prompt_id, text) {
             return;
         }
-        state.value = text;
         self.mark_user_activity();
         cx.notify();
     }
@@ -334,22 +261,13 @@ impl NyaTermApp {
         let Some((prompt_id, index)) = parse_keyboard_interactive_text_input_id(field_id) else {
             return;
         };
-        let Some(state) = self
+        if !self
             .session
             .prompts
-            .active_keyboard_interactive_prompt
-            .as_mut()
-        else {
-            return;
-        };
-        if state.id != prompt_id {
+            .apply_keyboard_interactive_input(&prompt_id, index, text)
+        {
             return;
         }
-        let Some(response) = state.responses.get_mut(index) else {
-            return;
-        };
-        *response = text;
-        state.focused_index = index;
         self.mark_user_activity();
         cx.notify();
     }
@@ -359,75 +277,29 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        if let Some(state) = self.session.prompts.active_credential_prompt.as_ref() {
-            let input_id = credential_text_input_id(&state.id);
-            let seed = state.value.clone();
-            let setup = if state.prompt.echo {
-                TextInputSetup::default()
-            } else {
-                TextInputSetup::masked()
-            };
-            let field = self.text_input(input_id, &seed, setup, cx);
-            window.focus(&field.read(cx).focus_handle());
-            return true;
-        }
-
-        let Some(state) = self
-            .session
-            .prompts
-            .active_keyboard_interactive_prompt
-            .as_ref()
-        else {
+        let Some(target) = self.session.prompts.active_input_target() else {
             return false;
         };
-        let Some(index) = (!state.responses.is_empty())
-            .then_some(state.focused_index.min(state.responses.len() - 1))
-        else {
-            return false;
-        };
-        let input_id = keyboard_interactive_text_input_id(&state.id, index);
-        let seed = state.responses[index].clone();
-        let setup = if state.request.prompts[index].echo {
+        let setup = if target.echo {
             TextInputSetup::default()
         } else {
             TextInputSetup::masked()
         };
-        let field = self.text_input(input_id, &seed, setup, cx);
+        let field = self.text_input(target.id, &target.seed, setup, cx);
         window.focus(&field.read(cx).focus_handle());
         true
     }
 
     pub(in crate::features) fn drain_host_key_prompts(&mut self) -> bool {
-        if self.session.prompts.active_host_key_prompt.is_some()
-            || !self.session.prompts.host_key_prompts.has_pending()
-        {
+        let Some(host) = self.session.prompts.activate_next_host_key() else {
             return false;
-        }
-
-        if let Some(request) = self.session.prompts.host_key_prompts.pop_pending() {
-            self.terminal.view.status = format!(
-                "SSH host key decision required for {}",
-                request.host_key.host_identifier
-            );
-            self.session.prompts.active_host_key_prompt = Some(request);
-            return true;
-        }
-        false
+        };
+        self.terminal.view.status = format!("SSH host key decision required for {host}");
+        true
     }
 
     pub(in crate::features) fn drain_credential_prompts(&mut self) -> bool {
-        if self.session.prompts.active_credential_prompt.is_some()
-            || self
-                .session
-                .prompts
-                .active_keyboard_interactive_prompt
-                .is_some()
-            || !self.session.prompts.credential_prompts.has_pending()
-        {
-            return false;
-        }
-
-        if let Some(request) = self.session.prompts.credential_prompts.pop_pending() {
+        if let Some(request) = self.session.prompts.take_next_credential_request() {
             match request {
                 CredentialPromptRequest::Secret {
                     id,
@@ -439,12 +311,14 @@ impl NyaTermApp {
                         "SSH credential required for {}",
                         credential_prompt_target(&prompt)
                     );
-                    self.session.prompts.active_credential_prompt = Some(CredentialPromptState {
-                        id,
-                        prompt,
-                        response_tx,
-                        value: String::new(),
-                    });
+                    self.session
+                        .prompts
+                        .activate_credential(CredentialPromptState {
+                            id,
+                            prompt,
+                            response_tx,
+                            value: String::new(),
+                        });
                 }
                 CredentialPromptRequest::KeyboardInteractive {
                     id,
@@ -472,7 +346,7 @@ impl NyaTermApp {
                             .and_then(|otp_id| {
                                 self.session
                                     .prompts
-                                    .otp_provider
+                                    .otp_provider()
                                     .preview_otp_code(otp_id)
                                     .ok()
                             })
@@ -486,8 +360,8 @@ impl NyaTermApp {
                         .map(|preview| preview.period)
                         .unwrap_or(0);
                     let otp_time_step = otp_preview.as_ref().and_then(|preview| preview.time_step);
-                    self.session.prompts.active_keyboard_interactive_prompt =
-                        Some(KeyboardInteractivePromptState {
+                    self.session.prompts.activate_keyboard_interactive(
+                        KeyboardInteractivePromptState {
                             id,
                             request,
                             response_tx,
@@ -498,92 +372,41 @@ impl NyaTermApp {
                             otp_period,
                             otp_time_step,
                             otp_error: None,
-                        });
+                        },
+                    );
                 }
             }
-            self.session.prompts.credential_prompt_focus_pending = true;
             return true;
         }
         false
     }
 
     pub(in crate::features) fn refresh_keyboard_interactive_totp(&mut self) -> bool {
-        let Some(state) = self
+        let Some(otp_id) = self
             .session
             .prompts
-            .active_keyboard_interactive_prompt
-            .as_ref()
+            .keyboard_totp_refresh_otp_id(unix_seconds_now())
         else {
             return false;
         };
-        if state.otp_type.as_deref() != Some("totp") || state.otp_code.is_none() {
-            return false;
-        }
-        let period = state.otp_period.max(1);
-        let current_step = unix_seconds_now() / period;
-        if state.otp_time_step == Some(current_step) {
-            return false;
-        }
-        let Some(otp_id) = state.request.otp_id.clone() else {
-            return false;
-        };
-        let result = self.session.prompts.otp_provider.preview_otp_code(&otp_id);
-        let Some(state) = self
+        let result = self
             .session
             .prompts
-            .active_keyboard_interactive_prompt
-            .as_mut()
-        else {
-            return false;
-        };
-        match result {
-            Ok(Some(preview)) => apply_keyboard_interactive_otp_preview(state, preview),
-            Ok(None) => {
-                state.otp_code = None;
-                state.otp_time_step = None;
-                state.otp_error = Some("OTP entry not found".to_string());
-            }
-            Err(error) => {
-                state.otp_code = None;
-                state.otp_time_step = None;
-                state.otp_error = Some(error);
-            }
-        }
+            .otp_provider()
+            .preview_otp_code(&otp_id);
+        self.session
+            .prompts
+            .apply_keyboard_interactive_otp_result(result, true);
         true
     }
 
     pub(in crate::features) fn drain_duplicate_prompts(&mut self) -> bool {
-        if self.session.prompts.active_duplicate_prompt.is_some()
-            || !self.session.prompts.duplicate_prompts.has_pending()
-        {
+        let Some(target) = self.session.prompts.activate_next_duplicate() else {
             return false;
-        }
-
-        if let Some(request) = self.session.prompts.duplicate_prompts.pop_pending() {
-            self.terminal.view.status = format!(
-                "SFTP duplicate decision required for {}",
-                request.request.target_path
-            );
-            self.session.prompts.active_duplicate_prompt = Some(SftpDuplicatePromptState {
-                id: request.id,
-                request: request.request,
-                response_tx: request.response_tx,
-            });
-            return true;
-        }
-        false
+        };
+        self.terminal.view.status = format!("SFTP duplicate decision required for {target}");
+        true
     }
-}
-
-fn apply_keyboard_interactive_otp_preview(
-    state: &mut KeyboardInteractivePromptState,
-    preview: NativeOtpCodePreview,
-) {
-    state.otp_code = Some(preview.code);
-    state.otp_type = Some(preview.otp_type);
-    state.otp_period = preview.period;
-    state.otp_time_step = preview.time_step;
-    state.otp_error = None;
 }
 
 pub(in crate::features) fn uuid_like_prompt_id(host_key: &SshHostKey) -> String {

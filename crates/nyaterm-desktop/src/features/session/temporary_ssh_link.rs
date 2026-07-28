@@ -137,10 +137,10 @@ impl NyaTermApp {
                 config_dir: self.runtime.config_dir().to_path_buf(),
                 portable_key_path: self.runtime.portable_key_path().map(ToOwned::to_owned),
                 policy: self.settings.summary.host_key_policy.clone(),
-                prompt_broker: self.session.prompts.host_key_prompts.clone(),
+                prompt_broker: self.session.prompts.host_key_broker(),
             })),
-            credential_provider: Some(self.session.prompts.credential_prompts.clone()),
-            otp_provider: Some(self.session.prompts.otp_provider.clone()),
+            credential_provider: Some(self.session.prompts.credential_broker()),
+            otp_provider: Some(self.session.prompts.otp_provider()),
         }
     }
 }

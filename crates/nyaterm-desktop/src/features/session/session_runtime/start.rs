@@ -323,9 +323,9 @@ impl NyaTermApp {
             host_key_policy: self.settings.summary.host_key_policy.clone(),
             x11_display: self.settings.summary.x11_display.clone(),
             keep_alive_interval_secs: self.settings.summary.terminal_keep_alive_interval,
-            host_key_prompts: self.session.prompts.host_key_prompts.clone(),
-            credential_prompts: self.session.prompts.credential_prompts.clone(),
-            otp_provider: self.session.prompts.otp_provider.clone(),
+            host_key_prompts: self.session.prompts.host_key_broker(),
+            credential_prompts: self.session.prompts.credential_broker(),
+            otp_provider: self.session.prompts.otp_provider(),
         }
     }
 

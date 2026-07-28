@@ -243,6 +243,10 @@ check_no_matches \
   "session prompt runtime must stay grouped under SessionPromptState" \
   '^[[:space:]]*pub\(in crate::features\)[[:space:]]+(duplicate_prompts|active_duplicate_prompt|host_key_prompts|active_host_key_prompt|credential_prompts|active_credential_prompt|active_keyboard_interactive_prompt|credential_prompt_focus_pending|credential_focus|otp_provider)[[:space:]]*:' \
   crates/nyaterm-desktop/src/features/app_state/mod.rs
+check_no_matches \
+  "SessionPromptState fields must remain private; use owner transitions and read-only getters" \
+  '^[[:space:]]*pub([[:space:]]|\([^)]*\))[[:space:]]+(duplicate_prompts|active_duplicate_prompt|host_key_prompts|active_host_key_prompt|credential_prompts|active_credential_prompt|active_keyboard_interactive_prompt|credential_prompt_focus_pending|credential_focus|otp_provider)[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/session/state.rs
 
 check_no_matches \
   "session dialogs must stay grouped under SessionDialogState" \

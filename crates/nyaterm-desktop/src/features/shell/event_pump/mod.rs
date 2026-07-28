@@ -362,7 +362,7 @@ impl NyaTermApp {
         }
         if self.ai.chat.focus_pending
             || self.transfer.file_ops.rename_focus_pending
-            || self.session.prompts.credential_prompt_focus_pending
+            || self.session.prompts.credential_focus_is_pending()
         {
             return true;
         }
@@ -472,17 +472,7 @@ impl NyaTermApp {
             && !self.terminal_frame_backlog_active()
             && self.session.zmodem.is_empty()
             && self.session.trzsz.is_empty()
-            && self.session.prompts.active_host_key_prompt.is_none()
-            && self.session.prompts.active_credential_prompt.is_none()
-            && self
-                .session
-                .prompts
-                .active_keyboard_interactive_prompt
-                .is_none()
-            && self.session.prompts.active_duplicate_prompt.is_none()
-            && !self.session.prompts.host_key_prompts.has_pending()
-            && !self.session.prompts.credential_prompts.has_pending()
-            && !self.session.prompts.duplicate_prompts.has_pending()
+            && !self.session.prompts.has_pending_or_active_prompt()
             && self.terminal.menus.action_link_hover_pending.is_none()
             && self.recording.pending_auto_start.is_none()
             && !self.tunnel_state.has_pending()
@@ -501,7 +491,7 @@ impl NyaTermApp {
             && !self.update.pending
             && !self.ai.chat.focus_pending
             && !self.transfer.file_ops.rename_focus_pending
-            && !self.session.prompts.credential_prompt_focus_pending
+            && !self.session.prompts.credential_focus_is_pending()
             && !((self.session.active_ssh_config.is_some()
                 && matches!(
                     self.current_right_panel(),
@@ -606,22 +596,17 @@ impl NyaTermApp {
     }
 
     fn pending_session_auth_wait(&self) -> Option<PendingSessionAuthWait> {
-        if let Some(prompt) = self
-            .session
-            .prompts
-            .active_keyboard_interactive_prompt
-            .as_ref()
-        {
+        if let Some(prompt) = self.session.prompts.active_keyboard_interactive() {
             return Some(PendingSessionAuthWait::Credential {
                 target: keyboard_interactive_prompt_target(&prompt.request),
             });
         }
-        if let Some(prompt) = self.session.prompts.active_credential_prompt.as_ref() {
+        if let Some(prompt) = self.session.prompts.active_credential() {
             return Some(PendingSessionAuthWait::Credential {
                 target: credential_prompt_target(&prompt.prompt),
             });
         }
-        if let Some(prompt) = self.session.prompts.active_host_key_prompt.as_ref() {
+        if let Some(prompt) = self.session.prompts.active_host_key() {
             return Some(PendingSessionAuthWait::HostKey {
                 host: prompt.host_key.host_identifier.clone(),
             });

@@ -204,7 +204,7 @@ impl NyaTermApp {
         };
 
         let policy = self.transfer.paths.duplicate_policy;
-        let resolver = self.session.prompts.duplicate_prompts.clone();
+        let resolver = self.session.prompts.duplicate_broker();
         let id = self.next_transfer_id("zmodem-probe");
         self.transfer.queue.jobs.push(TransferJobState {
             id: id.clone(),

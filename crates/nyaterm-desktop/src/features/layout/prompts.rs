@@ -450,15 +450,9 @@ impl NyaTermApp {
             let field_id = keyboard_interactive_text_input_id(&request_id, index);
             let click_listener = cx.listener(move |this, _, _, cx| {
                 cx.stop_propagation();
-                if let Some(state) = this
-                    .session
+                this.session
                     .prompts
-                    .active_keyboard_interactive_prompt
-                    .as_mut()
-                    && state.id == request_id
-                {
-                    state.focused_index = index;
-                }
+                    .focus_keyboard_interactive_response(&request_id, index);
                 cx.notify();
             });
             let input = self.text_input_box(field_id.clone(), &value, setup, cx);

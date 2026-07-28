@@ -262,6 +262,12 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   prompts, OTP provider and prompt focus; `SessionDialogState` owns tab
   actions, close-all/quit confirmation, rename, color, info, startup-command
   and temporary-SSH-link dialogs. This removes another thirty-four app fields.
+  A later ownership pass made all ten prompt fields private. Broker admission,
+  active-prompt resolution, credential and keyboard-interactive input, focus
+  lifecycle, OTP preview/refresh state and prompt-id mismatch handling now run
+  through `SessionPromptState` transitions and read-only getters. Mismatched
+  decisions preserve the active prompt, and the existing distinction between
+  manual OTP generation and periodic TOTP refresh remains unchanged.
   A later ownership pass made all twenty-four dialog fields private. Tab-action
   and submenu lifecycle, close-all/quit confirmation, rename validation, color
   and info close/open state, startup-command delay, and temporary-SSH draft/
