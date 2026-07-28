@@ -87,7 +87,7 @@ pub(in crate::features) use session::{
 pub(in crate::features) use settings::{SecurityFeatureFocus, SecurityFeatureState};
 pub(in crate::features) use shell::{
     ChromeTooltip, SessionTabDragPayload, SessionTabDragPreview, SessionTabTooltip,
-    ShellFeatureState, TAB_MOUSE_ACTIONS, TabMouseActionTarget,
+    ShellFeatureInit, ShellFeatureState, TAB_MOUSE_ACTIONS, TabMouseActionTarget,
 };
 pub(in crate::features) use shell::{
     appearance_font_options, appearance_font_stack, gpui_code_font_family,

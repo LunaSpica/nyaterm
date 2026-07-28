@@ -436,7 +436,8 @@ impl NyaTermApp {
                                     "cloud-open-security",
                                     self.tr("settings.openSecuritySettings"),
                                     cx.listener(|this, _, _, cx| {
-                                        this.settings_active_tab = SettingsTab::Security;
+                                        this.shell.navigation.settings.active_tab =
+                                            SettingsTab::Security;
                                         cx.notify();
                                     }),
                                 )),

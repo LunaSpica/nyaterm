@@ -30,7 +30,7 @@ impl NyaTermApp {
             .filter(|description| !description.is_empty());
         let command_text = command.command.clone();
         let estimated_h = if description.is_some() { 224. } else { 182. };
-        let (viewport_w, viewport_h) = self.last_viewport_size;
+        let (viewport_w, viewport_h) = self.shell.viewport.size;
         let (popover_x, popover_y) = quick_command_details_popover_position(
             f32::from(anchor_x) - 304.,
             f32::from(anchor_y) - estimated_h - 6.,

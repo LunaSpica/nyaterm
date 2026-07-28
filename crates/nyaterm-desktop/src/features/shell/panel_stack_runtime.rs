@@ -10,8 +10,8 @@ use nyaterm_core::{AgentCommandExecutionMode, truncate_preview};
 
 use crate::features::{ChromeTooltip, NyaTermApp, TextInputSetup, panel_header_with_actions};
 use crate::models::{
-    ActivityBarZone, MainMode, NavItem, NetworkTab, PanelSide, PanelStackResizeState, RightFocus,
-    SecurityAuthTab, SettingsTab,
+    ActivityBarZone, MainMode, NavItem, NetworkTab, PanelSide, RightFocus, SecurityAuthTab,
+    SettingsTab,
 };
 use crate::theme::ThemePalette;
 
@@ -28,41 +28,45 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn toggle_panel_multi_open(&mut self, cx: &mut Context<Self>) {
-        self.panel_multi_open = !self.panel_multi_open;
-        if self.panel_multi_open {
-            if self.left_open_panels.is_empty() {
-                if let Some(panel) = self.active_left_panel {
+        self.shell.panels.multi_open = !self.shell.panels.multi_open;
+        if self.shell.panels.multi_open {
+            if self.shell.panels.left_open.is_empty() {
+                if let Some(panel) = self.shell.panels.active_left {
                     let id = panel.persistence_id().to_string();
                     if Self::is_stackable_panel_id(&id) {
-                        self.left_open_panels.push(id);
+                        self.shell.panels.left_open.push(id);
                     }
                 }
             }
-            if self.right_open_panels.is_empty() {
-                if let Some(panel) = self.active_right_panel {
+            if self.shell.panels.right_open.is_empty() {
+                if let Some(panel) = self.shell.panels.active_right {
                     let id = panel.persistence_id().to_string();
                     if Self::is_stackable_panel_id(&id) {
-                        self.right_open_panels.push(id);
+                        self.shell.panels.right_open.push(id);
                     }
                 }
             }
             self.terminal.view.status = "multi-open panels enabled".to_string();
         } else {
             // Collapse to active-only mode.
-            if self.active_left_panel.is_none() {
-                self.active_left_panel = self
-                    .left_open_panels
+            if self.shell.panels.active_left.is_none() {
+                self.shell.panels.active_left = self
+                    .shell
+                    .panels
+                    .left_open
                     .first()
                     .and_then(|id| NavItem::from_persistence_id(id));
             }
-            if self.active_right_panel.is_none() {
-                self.active_right_panel = self
-                    .right_open_panels
+            if self.shell.panels.active_right.is_none() {
+                self.shell.panels.active_right = self
+                    .shell
+                    .panels
+                    .right_open
                     .first()
                     .and_then(|id| NavItem::from_persistence_id(id));
             }
-            self.left_open_panels.clear();
-            self.right_open_panels.clear();
+            self.shell.panels.left_open.clear();
+            self.shell.panels.right_open.clear();
             self.terminal.view.status = "single panel mode".to_string();
         }
         self.persist_ui_layout();
@@ -70,10 +74,10 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn side_open_panel_ids(&self, side: PanelSide) -> Vec<String> {
-        if !self.panel_multi_open {
+        if !self.shell.panels.multi_open {
             let active = match side {
-                PanelSide::Left => self.active_left_panel,
-                PanelSide::Right => self.active_right_panel,
+                PanelSide::Left => self.shell.panels.active_left,
+                PanelSide::Right => self.shell.panels.active_right,
             };
             return active
                 .map(|item| item.persistence_id().to_string())
@@ -82,8 +86,8 @@ impl NyaTermApp {
         }
 
         let open = match side {
-            PanelSide::Left => &self.left_open_panels,
-            PanelSide::Right => &self.right_open_panels,
+            PanelSide::Left => &self.shell.panels.left_open,
+            PanelSide::Right => &self.shell.panels.right_open,
         };
         if open.is_empty() {
             return Vec::new();
@@ -95,7 +99,7 @@ impl NyaTermApp {
         };
         let mut ordered = Vec::new();
         for zone in zones {
-            for id in self.activity_bar_layout.zone(zone) {
+            for id in self.shell.chrome.activity_bar_layout.zone(zone) {
                 if open_set.contains(id) && Self::is_stackable_panel_id(id) {
                     ordered.push(id.clone());
                 }
@@ -105,27 +109,25 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn side_overlay_panel(&self, side: PanelSide) -> Option<NavItem> {
-        if !self.panel_multi_open {
+        if !self.shell.panels.multi_open {
             return None;
         }
         let active = match side {
-            PanelSide::Left => self.active_left_panel,
-            PanelSide::Right => self.active_right_panel,
+            PanelSide::Left => self.shell.panels.active_left,
+            PanelSide::Right => self.shell.panels.active_right,
         }?;
         let id = active.persistence_id();
         Self::is_exclusive_panel_id(id).then_some(active)
     }
 
     pub(in crate::features) fn panel_stack_weight(&self, panel_id: &str) -> f32 {
-        self.panel_stack_sizes
-            .get(panel_id)
-            .copied()
-            .filter(|value| value.is_finite() && *value > 0.)
-            .unwrap_or(1.)
+        self.shell.panels.stack_weight(panel_id)
     }
 
     pub(in crate::features) fn panel_side_for_item(&self, item: NavItem) -> Option<PanelSide> {
-        self.activity_bar_layout
+        self.shell
+            .chrome
+            .activity_bar_layout
             .side_for_entry(item.persistence_id())
             .or_else(|| item.is_left_panel().then_some(PanelSide::Left))
             .or_else(|| item.is_right_panel().then_some(PanelSide::Right))
@@ -140,7 +142,7 @@ impl NyaTermApp {
             self.open_page(NavItem::Settings, cx);
             return;
         }
-        if !self.panel_multi_open {
+        if !self.shell.panels.multi_open {
             self.open_panel(item, cx);
             return;
         }
@@ -151,18 +153,18 @@ impl NyaTermApp {
             return;
         };
 
-        self.main_mode = MainMode::Workspace;
-        self.selected_nav = item;
+        self.shell.navigation.main_mode = MainMode::Workspace;
+        self.shell.navigation.selected_nav = item;
         if item == NavItem::Recording {
-            self.right_focus = RightFocus::Recording;
+            self.shell.panels.right_focus = RightFocus::Recording;
         } else {
-            self.right_focus = RightFocus::Default;
+            self.shell.panels.right_focus = RightFocus::Default;
         }
 
         if Self::is_exclusive_panel_id(&id) {
             let active = match side {
-                PanelSide::Left => self.active_left_panel,
-                PanelSide::Right => self.active_right_panel,
+                PanelSide::Left => self.shell.panels.active_left,
+                PanelSide::Right => self.shell.panels.active_right,
             };
             if active == Some(item) {
                 // Dismiss exclusive overlay to stack.
@@ -172,24 +174,24 @@ impl NyaTermApp {
                     .find_map(|open_id| NavItem::from_persistence_id(&open_id));
                 match side {
                     PanelSide::Left => {
-                        self.active_left_panel = fallback;
-                        self.left_sidebar_collapsed = fallback.is_none();
+                        self.shell.panels.active_left = fallback;
+                        self.shell.panels.left_collapsed = fallback.is_none();
                     }
                     PanelSide::Right => {
-                        self.active_right_panel = fallback;
-                        self.right_inspector_collapsed = fallback.is_none();
+                        self.shell.panels.active_right = fallback;
+                        self.shell.panels.right_collapsed = fallback.is_none();
                     }
                 }
                 self.terminal.view.status = format!("{} closed", item.label());
             } else {
                 match side {
                     PanelSide::Left => {
-                        self.active_left_panel = Some(item);
-                        self.left_sidebar_collapsed = false;
+                        self.shell.panels.active_left = Some(item);
+                        self.shell.panels.left_collapsed = false;
                     }
                     PanelSide::Right => {
-                        self.active_right_panel = Some(item);
-                        self.right_inspector_collapsed = false;
+                        self.shell.panels.active_right = Some(item);
+                        self.shell.panels.right_collapsed = false;
                     }
                 }
                 self.terminal.view.status = format!("{} opened", item.label());
@@ -200,13 +202,13 @@ impl NyaTermApp {
         }
 
         let open_list = match side {
-            PanelSide::Left => &mut self.left_open_panels,
-            PanelSide::Right => &mut self.right_open_panels,
+            PanelSide::Left => &mut self.shell.panels.left_open,
+            PanelSide::Right => &mut self.shell.panels.right_open,
         };
         let is_open = open_list.iter().any(|value| value == &id);
         let active = match side {
-            PanelSide::Left => self.active_left_panel,
-            PanelSide::Right => self.active_right_panel,
+            PanelSide::Left => self.shell.panels.active_left,
+            PanelSide::Right => self.shell.panels.active_right,
         };
 
         // If exclusive overlay is showing and stacked panel already open, reveal stack.
@@ -217,12 +219,12 @@ impl NyaTermApp {
         {
             match side {
                 PanelSide::Left => {
-                    self.active_left_panel = Some(item);
-                    self.left_sidebar_collapsed = false;
+                    self.shell.panels.active_left = Some(item);
+                    self.shell.panels.left_collapsed = false;
                 }
                 PanelSide::Right => {
-                    self.active_right_panel = Some(item);
-                    self.right_inspector_collapsed = false;
+                    self.shell.panels.active_right = Some(item);
+                    self.shell.panels.right_collapsed = false;
                 }
             }
             self.terminal.view.status = format!("{} focused", item.label());
@@ -247,14 +249,14 @@ impl NyaTermApp {
             };
             match side {
                 PanelSide::Left => {
-                    self.active_left_panel = next_active;
-                    self.left_sidebar_collapsed =
-                        next_active.is_none() && self.left_open_panels.is_empty();
+                    self.shell.panels.active_left = next_active;
+                    self.shell.panels.left_collapsed =
+                        next_active.is_none() && self.shell.panels.left_open.is_empty();
                 }
                 PanelSide::Right => {
-                    self.active_right_panel = next_active;
-                    self.right_inspector_collapsed =
-                        next_active.is_none() && self.right_open_panels.is_empty();
+                    self.shell.panels.active_right = next_active;
+                    self.shell.panels.right_collapsed =
+                        next_active.is_none() && self.shell.panels.right_open.is_empty();
                 }
             }
             self.terminal.view.status = format!("{} closed", item.label());
@@ -262,12 +264,12 @@ impl NyaTermApp {
             open_list.push(id);
             match side {
                 PanelSide::Left => {
-                    self.active_left_panel = Some(item);
-                    self.left_sidebar_collapsed = false;
+                    self.shell.panels.active_left = Some(item);
+                    self.shell.panels.left_collapsed = false;
                 }
                 PanelSide::Right => {
-                    self.active_right_panel = Some(item);
-                    self.right_inspector_collapsed = false;
+                    self.shell.panels.active_right = Some(item);
+                    self.shell.panels.right_collapsed = false;
                 }
             }
             self.terminal.view.status = format!("{} opened", item.label());
@@ -277,39 +279,45 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn ensure_panel_in_stack(&mut self, item: NavItem) {
-        self.main_mode = MainMode::Workspace;
-        self.selected_nav = item;
-        if !self.panel_multi_open {
+        self.shell.navigation.main_mode = MainMode::Workspace;
+        self.shell.navigation.selected_nav = item;
+        if !self.shell.panels.multi_open {
             self.ensure_panel_open(item);
             return;
         }
         let id = item.persistence_id().to_string();
         match self.panel_side_for_item(item) {
             Some(PanelSide::Left) => {
-                self.left_sidebar_collapsed = false;
+                self.shell.panels.left_collapsed = false;
                 if Self::is_exclusive_panel_id(&id) {
-                    self.active_left_panel = Some(item);
+                    self.shell.panels.active_left = Some(item);
                 } else {
-                    if !self.left_open_panels.iter().any(|value| value == &id) {
-                        self.left_open_panels.push(id);
+                    if !self.shell.panels.left_open.iter().any(|value| value == &id) {
+                        self.shell.panels.left_open.push(id);
                     }
-                    self.active_left_panel = Some(item);
+                    self.shell.panels.active_left = Some(item);
                 }
             }
             Some(PanelSide::Right) => {
-                self.right_inspector_collapsed = false;
-                self.right_focus = if item == NavItem::Recording {
+                self.shell.panels.right_collapsed = false;
+                self.shell.panels.right_focus = if item == NavItem::Recording {
                     RightFocus::Recording
                 } else {
                     RightFocus::Default
                 };
                 if Self::is_exclusive_panel_id(&id) {
-                    self.active_right_panel = Some(item);
+                    self.shell.panels.active_right = Some(item);
                 } else {
-                    if !self.right_open_panels.iter().any(|value| value == &id) {
-                        self.right_open_panels.push(id);
+                    if !self
+                        .shell
+                        .panels
+                        .right_open
+                        .iter()
+                        .any(|value| value == &id)
+                    {
+                        self.shell.panels.right_open.push(id);
                     }
-                    self.active_right_panel = Some(item);
+                    self.shell.panels.active_right = Some(item);
                 }
             }
             None => {}
@@ -325,15 +333,13 @@ impl NyaTermApp {
         container_height: f32,
         cx: &mut Context<Self>,
     ) {
-        self.panel_stack_resize = Some(PanelStackResizeState {
+        self.shell.panels.start_stack_resize(
             side,
-            above_id: above_id.clone(),
-            below_id: below_id.clone(),
-            start_y: event.position.y,
-            above_weight: self.panel_stack_weight(&above_id),
-            below_weight: self.panel_stack_weight(&below_id),
-            container_height: container_height.max(1.),
-        });
+            above_id,
+            below_id,
+            event.position.y,
+            container_height,
+        );
         self.terminal.view.status = "resizing panel stack".to_string();
         cx.notify();
     }
@@ -343,24 +349,9 @@ impl NyaTermApp {
         event: &MouseMoveEvent,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.panel_stack_resize.clone() else {
-            return;
-        };
-        let delta_px = f32::from(event.position.y - state.start_y);
-        let pair = state.above_weight + state.below_weight;
-        if pair <= 0. || state.container_height <= 0. {
-            return;
+        if self.shell.panels.update_stack_resize(event.position.y) {
+            cx.notify();
         }
-        let px_per_weight = state.container_height / pair;
-        let min_weight = (48. / px_per_weight).min(pair / 2.).max(0.05);
-        let next_above =
-            (state.above_weight + delta_px / px_per_weight).clamp(min_weight, pair - min_weight);
-        let next_below = pair - next_above;
-        self.panel_stack_sizes
-            .insert(state.above_id.clone(), next_above);
-        self.panel_stack_sizes
-            .insert(state.below_id.clone(), next_below);
-        cx.notify();
     }
 
     pub(in crate::features) fn finish_panel_stack_resize(
@@ -368,7 +359,7 @@ impl NyaTermApp {
         _event: &MouseUpEvent,
         cx: &mut Context<Self>,
     ) {
-        if self.panel_stack_resize.take().is_some() {
+        if self.shell.panels.finish_stack_resize() {
             self.persist_ui_layout();
             self.terminal.view.status = "panel stack sizes saved".to_string();
             cx.notify();
@@ -376,11 +367,13 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn sync_panel_stack_to_settings(&mut self) {
-        self.settings.ui_panel_multi_open = self.panel_multi_open;
-        self.settings.ui_left_open_panels = self.left_open_panels.clone();
-        self.settings.ui_right_open_panels = self.right_open_panels.clone();
+        self.settings.ui_panel_multi_open = self.shell.panels.multi_open;
+        self.settings.ui_left_open_panels = self.shell.panels.left_open.clone();
+        self.settings.ui_right_open_panels = self.shell.panels.right_open.clone();
         self.settings.ui_panel_stack_sizes = self
-            .panel_stack_sizes
+            .shell
+            .panels
+            .stack_sizes
             .iter()
             .filter_map(|(key, value)| {
                 let scaled = (*value * 1000.).round();
@@ -390,29 +383,29 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn apply_panel_stack_from_settings(&mut self) {
-        self.panel_multi_open = self.settings.ui_panel_multi_open;
-        self.left_open_panels = self.settings.ui_left_open_panels.clone();
-        self.right_open_panels = self.settings.ui_right_open_panels.clone();
-        self.panel_stack_sizes = self
+        self.shell.panels.multi_open = self.settings.ui_panel_multi_open;
+        self.shell.panels.left_open = self.settings.ui_left_open_panels.clone();
+        self.shell.panels.right_open = self.settings.ui_right_open_panels.clone();
+        self.shell.panels.stack_sizes = self
             .settings
             .ui_panel_stack_sizes
             .iter()
             .filter_map(|(key, value)| (*value > 0).then(|| (key.clone(), (*value as f32) / 1000.)))
             .collect();
-        if self.panel_multi_open {
-            if self.left_open_panels.is_empty() {
-                if let Some(panel) = self.active_left_panel {
+        if self.shell.panels.multi_open {
+            if self.shell.panels.left_open.is_empty() {
+                if let Some(panel) = self.shell.panels.active_left {
                     let id = panel.persistence_id().to_string();
                     if Self::is_stackable_panel_id(&id) {
-                        self.left_open_panels.push(id);
+                        self.shell.panels.left_open.push(id);
                     }
                 }
             }
-            if self.right_open_panels.is_empty() {
-                if let Some(panel) = self.active_right_panel {
+            if self.shell.panels.right_open.is_empty() {
+                if let Some(panel) = self.shell.panels.active_right {
                     let id = panel.persistence_id().to_string();
                     if Self::is_stackable_panel_id(&id) {
-                        self.right_open_panels.push(id);
+                        self.shell.panels.right_open.push(id);
                     }
                 }
             }
@@ -433,14 +426,24 @@ impl NyaTermApp {
                 PanelSide::Left => self.current_left_panel(),
                 PanelSide::Right => self.current_right_panel(),
             }
-            .or_else(|| self.activity_bar_layout.first_panel_on_side(side))
+            .or_else(|| {
+                self.shell
+                    .chrome
+                    .activity_bar_layout
+                    .first_panel_on_side(side)
+            })
             .unwrap_or(NavItem::Workspace);
             self.single_side_panel(side, fallback, window, cx)
-        } else if open_ids.len() == 1 || !self.panel_multi_open {
+        } else if open_ids.len() == 1 || !self.shell.panels.multi_open {
             let panel = open_ids
                 .first()
                 .and_then(|id| NavItem::from_persistence_id(id))
-                .or_else(|| self.activity_bar_layout.first_panel_on_side(side))
+                .or_else(|| {
+                    self.shell
+                        .chrome
+                        .activity_bar_layout
+                        .first_panel_on_side(side)
+                })
                 .unwrap_or(NavItem::Workspace);
             self.single_side_panel(side, panel, window, cx)
         } else {
@@ -701,7 +704,7 @@ impl NyaTermApp {
                             cx.listener(|this, _, _, cx| {
                                 this.ai.history.open = false;
                                 this.ai.panel.execution_menu_open = false;
-                                this.settings_active_tab = SettingsTab::AiGeneral;
+                                this.shell.navigation.settings.active_tab = SettingsTab::AiGeneral;
                                 this.open_page(NavItem::Settings, cx);
                             }),
                         ))

@@ -50,10 +50,10 @@ impl NyaTermApp {
         if !self.session.start.select_pending(&request_id) {
             return;
         }
-        self.open_tabs_menu_open = false;
-        self.new_session_menu_open = false;
-        self.selected_nav = NavItem::Workspace;
-        self.main_mode = MainMode::Workspace;
+        self.shell.chrome.open_tabs_menu_open = false;
+        self.shell.chrome.new_session_menu_open = false;
+        self.shell.navigation.selected_nav = NavItem::Workspace;
+        self.shell.navigation.main_mode = MainMode::Workspace;
         cx.notify();
     }
 
@@ -80,10 +80,10 @@ impl NyaTermApp {
         if !self.session.start.select_failed(&request_id) {
             return;
         }
-        self.open_tabs_menu_open = false;
-        self.new_session_menu_open = false;
-        self.selected_nav = NavItem::Workspace;
-        self.main_mode = MainMode::Workspace;
+        self.shell.chrome.open_tabs_menu_open = false;
+        self.shell.chrome.new_session_menu_open = false;
+        self.shell.navigation.selected_nav = NavItem::Workspace;
+        self.shell.navigation.main_mode = MainMode::Workspace;
         cx.notify();
     }
 
@@ -96,8 +96,8 @@ impl NyaTermApp {
             return;
         };
         if !self.session.start.has_failed() {
-            self.last_connect_failure_name = None;
-            self.last_connect_failure_error = None;
+            self.shell.chrome.last_connect_failure_name = None;
+            self.shell.chrome.last_connect_failure_error = None;
         }
         self.terminal.view.status = format!(
             "closed failed connection {}",
@@ -136,8 +136,8 @@ impl NyaTermApp {
         } = registration;
 
         if reconnect_session_id.is_none() {
-            self.last_connect_failure_name = None;
-            self.last_connect_failure_error = None;
+            self.shell.chrome.last_connect_failure_name = None;
+            self.shell.chrome.last_connect_failure_error = None;
         }
         self.session.start.panes.insert(
             request_id.clone(),
@@ -174,8 +174,8 @@ impl NyaTermApp {
         // Status + connecting tab already show progress; avoid full terminal decode
         // work on the click path before the worker even starts.
         let _ = append_start_log;
-        self.selected_nav = NavItem::Workspace;
-        self.main_mode = MainMode::Workspace;
+        self.shell.navigation.selected_nav = NavItem::Workspace;
+        self.shell.navigation.main_mode = MainMode::Workspace;
         cx.notify();
         request_id
     }
@@ -469,8 +469,8 @@ impl NyaTermApp {
             match event.result {
                 Ok(success) => {
                     let ui_register_started_at = Instant::now();
-                    self.last_connect_failure_name = None;
-                    self.last_connect_failure_error = None;
+                    self.shell.chrome.last_connect_failure_name = None;
+                    self.shell.chrome.last_connect_failure_error = None;
                     let session_info = success.session_info;
                     let session_id = session_info.id.clone();
                     let reconnect_session_id = pending
@@ -640,7 +640,7 @@ impl NyaTermApp {
                         self.schedule_startup_command(session_id.clone(), startup_command, cx);
                     }
                     self.apply_pending_workspace_split_for_duplicate(&session_id);
-                    self.selected_nav = NavItem::Workspace;
+                    self.shell.navigation.selected_nav = NavItem::Workspace;
                     let ui_register_duration = ui_register_started_at.elapsed();
                     let request_to_ui_duration = requested_at
                         .map(|requested_at| requested_at.elapsed())
@@ -685,8 +685,8 @@ impl NyaTermApp {
                         let _ = self.session.start.reconnect_replace_id.take();
                     }
                     if !reconnect_failure {
-                        self.last_connect_failure_name = Some(connection_name.clone());
-                        self.last_connect_failure_error = Some(error.clone());
+                        self.shell.chrome.last_connect_failure_name = Some(connection_name.clone());
+                        self.shell.chrome.last_connect_failure_error = Some(error.clone());
                     }
                     if let Some(session_id) = reconnect_session_id {
                         if self.session.metadata.contains_key(&session_id) {
@@ -725,7 +725,7 @@ impl NyaTermApp {
                             connection_name
                         ));
                     }
-                    self.selected_nav = NavItem::Workspace;
+                    self.shell.navigation.selected_nav = NavItem::Workspace;
                     let request_to_ui_duration = requested_at
                         .map(|requested_at| requested_at.elapsed())
                         .unwrap_or(worker_duration + worker_to_ui_duration);

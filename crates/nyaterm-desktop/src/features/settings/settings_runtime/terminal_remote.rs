@@ -48,7 +48,7 @@ impl NyaTermApp {
     ) {
         let next = (self.settings.terminal_scrollback_lines as i32 + delta).clamp(100, 100_000);
         self.settings.terminal_scrollback_lines = next as u32;
-        if self.settings_draft_snapshot.is_none() {
+        if self.shell.navigation.settings.draft_snapshot.is_none() {
             self.enforce_terminal_scrollback_limit();
         }
         self.save_terminal_settings(cx);

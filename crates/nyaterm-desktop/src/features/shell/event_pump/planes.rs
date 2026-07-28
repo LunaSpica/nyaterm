@@ -161,7 +161,7 @@ impl NyaTermApp {
             }
             return true;
         }
-        let geometry_churn = window_geometry_churn_active(self.last_viewport_change_at, now);
+        let geometry_churn = window_geometry_churn_active(self.shell.viewport.last_change_at, now);
         let calm_tick = self.runtime_quiet_tick_allowed();
         if geometry_churn && calm_tick {
             dirty |= self.drive_pending_focus(window, cx);
@@ -603,7 +603,7 @@ impl NyaTermApp {
         // Idle-plane work does not drain output; one pressure sample is enough for the stage.
         let output_pressure = self.runtime_output_pressure_active();
         let now = Instant::now();
-        let geometry_churn = window_geometry_churn_active(self.last_viewport_change_at, now);
+        let geometry_churn = window_geometry_churn_active(self.shell.viewport.last_change_at, now);
         let connect_settle =
             connect_settle_active(self.terminal.view.runtime.connect_settle_until, now);
         // Geometry churn / connect settle: keep focus only (no remote/layout/DB).

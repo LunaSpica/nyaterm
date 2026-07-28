@@ -290,7 +290,7 @@ impl NyaTermApp {
                     self.tr("dockerManager.compose").to_string(),
                 ],
                 self.tr("common.more").to_string(),
-                self.right_panel_width,
+                self.shell.panels.right_width,
                 self.remote_ops.docker.tab_menu_open,
                 cx,
             ))

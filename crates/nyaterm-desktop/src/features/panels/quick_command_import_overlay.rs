@@ -48,7 +48,7 @@ impl NyaTermApp {
             .child(
                 div()
                     .id(SharedString::from("quick-command-import-dialog"))
-                    .w(px((self.last_viewport_size.0 - 32.).clamp(280., 380.)))
+                    .w(px((self.shell.viewport.size.0 - 32.).clamp(280., 380.)))
                     .max_w_full()
                     .rounded_md()
                     .border_1()

@@ -233,7 +233,7 @@ impl NyaTermApp {
         if !command.ends_with('\n') {
             command.push('\n');
         }
-        self.selected_nav = NavItem::Workspace;
+        self.shell.navigation.selected_nav = NavItem::Workspace;
         if self.send_terminal_input(command.into_bytes(), cx) {
             self.remote_ops.docker.status = status;
             self.terminal.view.status = self.remote_ops.docker.status.clone();

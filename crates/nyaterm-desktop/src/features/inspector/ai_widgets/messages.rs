@@ -86,7 +86,7 @@ impl NyaTermApp {
             });
         let quote_text = state.text.clone();
         let copy_text = state.text.clone();
-        let (viewport_w, viewport_h) = self.last_viewport_size;
+        let (viewport_w, viewport_h) = self.shell.viewport.size;
         let (menu_x, menu_y, menu_max_h) = ai_message_menu_position(
             f32::from(state.x),
             f32::from(state.y),

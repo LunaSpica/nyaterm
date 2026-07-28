@@ -143,7 +143,7 @@ impl NyaTermApp {
             };
         let _ = selection_link_kind;
 
-        let (viewport_w, viewport_h) = self.last_viewport_size;
+        let (viewport_w, viewport_h) = self.shell.viewport.size;
         // Approximate height from max-h for clamp (scrollable menus can be shorter).
         let (menu_x, menu_y) = clamp_menu_position(
             f32::from(menu.x),

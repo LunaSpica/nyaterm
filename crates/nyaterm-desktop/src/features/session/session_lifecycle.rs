@@ -105,8 +105,8 @@ impl NyaTermApp {
                 );
             }
         }
-        self.selected_nav = NavItem::Workspace;
-        self.main_mode = MainMode::Workspace;
+        self.shell.navigation.selected_nav = NavItem::Workspace;
+        self.shell.navigation.main_mode = MainMode::Workspace;
         cx.notify();
     }
 
@@ -169,8 +169,8 @@ impl NyaTermApp {
             existing_multiplex,
             cx,
         );
-        self.selected_nav = NavItem::Workspace;
-        self.main_mode = MainMode::Workspace;
+        self.shell.navigation.selected_nav = NavItem::Workspace;
+        self.shell.navigation.main_mode = MainMode::Workspace;
         cx.notify();
     }
 
@@ -420,8 +420,8 @@ impl NyaTermApp {
         self.session
             .busy_actions
             .retain(|id, _| self.session.metadata.contains_key(id));
-        self.selected_nav = NavItem::Workspace;
-        self.main_mode = MainMode::Workspace;
+        self.shell.navigation.selected_nav = NavItem::Workspace;
+        self.shell.navigation.main_mode = MainMode::Workspace;
         cx.notify();
     }
 
@@ -463,17 +463,7 @@ impl NyaTermApp {
                 .insert(new_id.to_string(), history);
         }
 
-        let mut pane_roots = std::mem::take(&mut self.session_pane_roots);
-        for root in pane_roots.values_mut() {
-            root.replace_session_id(old_id, new_id);
-        }
-        if let Some(root) = pane_roots.remove(old_id) {
-            pane_roots.insert(new_id.to_string(), root);
-        }
-        self.session_pane_roots = pane_roots;
-        if let Some(root) = self.workspace_split.as_mut() {
-            root.replace_session_id(old_id, new_id);
-        }
+        self.shell.workspace.replace_session_id(old_id, new_id);
         if let Some(root) = self.terminal.windows.tree.as_mut() {
             root.replace_tab_id(old_id, new_id);
         }
@@ -481,7 +471,6 @@ impl NyaTermApp {
         if self.session.active_id.as_deref() == Some(old_id) {
             self.activate_session_id(new_id);
         }
-        self.rebuild_session_tab_owners();
         self.sync_workspace_split_from_active_tab();
     }
 }

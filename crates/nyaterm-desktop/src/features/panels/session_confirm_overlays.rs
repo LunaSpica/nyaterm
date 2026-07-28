@@ -54,7 +54,7 @@ impl NyaTermApp {
             .child(
                 div()
                     .id("close-all-sessions-confirm-dialog")
-                    .w(px((self.last_viewport_size.0 - 32.).clamp(280., 400.)))
+                    .w(px((self.shell.viewport.size.0 - 32.).clamp(280., 400.)))
                     .max_w_full()
                     .mx_4()
                     .rounded_md()

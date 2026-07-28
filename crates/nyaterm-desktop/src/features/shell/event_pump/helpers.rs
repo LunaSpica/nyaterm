@@ -174,10 +174,6 @@ pub(super) fn window_geometry_churn_active(
     })
 }
 
-pub(super) fn title_drag_active(title_drag_active_until: Option<Instant>, now: Instant) -> bool {
-    title_drag_active_until.is_some_and(|until| now < until)
-}
-
 pub(super) fn connect_settle_active(until: Option<Instant>, now: Instant) -> bool {
     until.is_some_and(|until| now < until)
 }
@@ -439,7 +435,7 @@ mod tests {
         terminal_input_idle_remaining_delay, terminal_log_plain_text,
         terminal_output_dropped_marker, terminal_performance_tick_session_ids,
         terminal_render_work_pressure_active, terminal_user_scroll_frame_apply_pending,
-        title_drag_active, viewport_change_terminal_session_ids, window_geometry_churn_active,
+        viewport_change_terminal_session_ids, window_geometry_churn_active,
     };
 
     #[test]
@@ -543,14 +539,6 @@ mod tests {
             Some(now - WINDOW_GEOMETRY_CHURN_HOLD - Duration::from_millis(1)),
             now
         ));
-    }
-
-    #[test]
-    fn title_drag_active_until_deadline() {
-        let now = Instant::now();
-        assert!(!title_drag_active(None, now));
-        assert!(title_drag_active(Some(now + Duration::from_millis(1)), now));
-        assert!(!title_drag_active(Some(now), now));
     }
 
     #[test]

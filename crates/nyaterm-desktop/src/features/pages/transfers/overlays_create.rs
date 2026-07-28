@@ -23,7 +23,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let dialog_width = transfer_dialog_width(self.last_viewport_size.0, 500.);
+        let dialog_width = transfer_dialog_width(self.shell.viewport.size.0, 500.);
         let state = self
             .transfer
             .file_ops
@@ -228,7 +228,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let dialog_width = transfer_dialog_width(self.last_viewport_size.0, 500.);
+        let dialog_width = transfer_dialog_width(self.shell.viewport.size.0, 500.);
         let state = self
             .transfer
             .file_ops
@@ -431,7 +431,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let dialog_width = transfer_dialog_width(self.last_viewport_size.0, 480.);
+        let dialog_width = transfer_dialog_width(self.shell.viewport.size.0, 480.);
         let state = self
             .transfer
             .file_ops

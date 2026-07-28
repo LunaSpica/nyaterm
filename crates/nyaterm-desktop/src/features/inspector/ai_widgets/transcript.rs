@@ -112,7 +112,7 @@ impl NyaTermApp {
                         .cursor_pointer()
                         .hover(|this| this.bg(rgb(0x2ea043)))
                         .on_click(cx.listener(|this, _, _, cx| {
-                            this.settings_active_tab = SettingsTab::AiGeneral;
+                            this.shell.navigation.settings.active_tab = SettingsTab::AiGeneral;
                             this.open_page(NavItem::Settings, cx);
                         }))
                         .child(self.tr("ai.setupAction")),

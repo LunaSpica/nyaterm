@@ -10,7 +10,7 @@ use crate::features::shell::event_pump::helpers::{
     connect_settle_active, connect_settle_deadline, diagnostic_log_due,
     pending_session_status_message, remote_refresh_due, runtime_output_pressure_active_from_counts,
     runtime_tick_interval_for_pressure, runtime_ui_notify_allowed,
-    terminal_cell_metrics_refresh_needed, terminal_input_idle_remaining_delay, title_drag_active,
+    terminal_cell_metrics_refresh_needed, terminal_input_idle_remaining_delay,
     viewport_change_terminal_session_ids, window_geometry_churn_active,
 };
 use crate::features::{
@@ -59,13 +59,14 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        let before_viewport = self.last_viewport_size;
         let before_metrics = self.terminal.layout.cell_metrics;
         let vs = window.viewport_size();
-        self.last_viewport_size = (f32::from(vs.width), f32::from(vs.height));
-        if self.last_viewport_size != before_viewport {
+        let viewport_changed = self
+            .shell
+            .viewport
+            .update_size((f32::from(vs.width), f32::from(vs.height)), Instant::now());
+        if viewport_changed {
             // Geometry churn (resize / some window managers during move).
-            self.last_viewport_change_at = Some(Instant::now());
             self.notify_terminal_surfaces_for_viewport_change(cx);
         }
         if terminal_cell_metrics_refresh_needed(self.terminal.layout.cell_metrics) {
@@ -76,8 +77,7 @@ impl NyaTermApp {
             self.resize_all_known_terminal_surfaces();
             self.refresh_visible_terminal_surfaces(cx);
         }
-        self.last_viewport_size != before_viewport
-            || self.terminal.layout.cell_metrics != before_metrics
+        viewport_changed || self.terminal.layout.cell_metrics != before_metrics
     }
 
     fn notify_terminal_surfaces_for_viewport_change(&mut self, cx: &mut Context<Self>) {
@@ -219,11 +219,13 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn mark_title_drag_activity(&mut self) {
-        self.title_drag_active_until = Some(Instant::now() + TITLE_DRAG_ACTIVE_HOLD);
+        self.shell
+            .viewport
+            .mark_title_drag(Instant::now(), TITLE_DRAG_ACTIVE_HOLD);
     }
 
     pub(in crate::features) fn title_drag_active(&self, now: Instant) -> bool {
-        title_drag_active(self.title_drag_active_until, now)
+        self.shell.viewport.title_drag_active(now)
     }
 
     pub(in crate::features) fn should_log_slow_diagnostic(
@@ -305,7 +307,7 @@ impl NyaTermApp {
         // idle cadence so full plane ticks do not stack on compositor paints.
         let now = Instant::now();
         if self.title_drag_active(now)
-            || window_geometry_churn_active(self.last_viewport_change_at, now)
+            || window_geometry_churn_active(self.shell.viewport.last_change_at, now)
         {
             return RUNTIME_IDLE_TICK_INTERVAL;
         }
@@ -323,7 +325,7 @@ impl NyaTermApp {
         if !self.terminal.view.runtime.event_pump_started {
             return false;
         }
-        if self.last_viewport_size != viewport_size
+        if self.shell.viewport.size != viewport_size
             || terminal_cell_metrics_refresh_needed(self.terminal.layout.cell_metrics)
         {
             return true;

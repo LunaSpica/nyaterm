@@ -1,9 +1,9 @@
 use crate::models::{
-    ActivityBarLayoutState, BottomPanelMode, HeaderStatusState, MainMode, NavItem, PanelSide,
-    RightFocus, SessionEventBridge, SettingsTab, StoreStatus, TerminalFramePipeline,
+    ActivityBarLayoutState, BottomPanelMode, NavItem, PanelSide, SessionEventBridge, StoreStatus,
+    TerminalFramePipeline,
 };
 use crate::terminal::initial_terminal_screen;
-use gpui::{Context, ScrollHandle};
+use gpui::Context;
 use nyaterm_core::{
     AiSettings, AppRuntime, AppSettingsSummary, CLOUD_SYNC_HISTORY_LIMIT, CloudSyncSettings,
     CloudSyncState, ConnectionStore, KeywordHighlightConfig, NativeServices, TranslationSettings,
@@ -11,7 +11,7 @@ use nyaterm_core::{
 };
 use nyaterm_terminal::TerminalOutputDecoder;
 use nyaterm_transport::{SessionManager, SftpDuplicatePolicy};
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 
 use super::super::settings::{SettingsFeatureFocus, SettingsFeatureState};
@@ -21,10 +21,10 @@ use super::super::{
     QuickCommandFeatureFocus, QuickCommandFeatureState, RecordingFeatureState,
     RemoteOpsFeatureFocus, RemoteOpsFeatureState, SecurityFeatureFocus, SecurityFeatureState,
     SendCommandFeatureFocus, SendCommandFeatureState, SessionFeatureFocus, SessionFeatureState,
-    ShellFeatureState, SyncInputFeatureState, TerminalFeatureFocus, TerminalFeatureState,
-    TextInputRegistry, TransferFeatureFocus, TransferFeatureState, TranslationFeatureState,
-    TunnelFeatureState, UpdateFeatureState, ai_active_profile_drafts, ai_usage_counts,
-    appearance_font_options, quick_command_sort_mode_from_setting,
+    ShellFeatureInit, ShellFeatureState, SyncInputFeatureState, TerminalFeatureFocus,
+    TerminalFeatureState, TextInputRegistry, TransferFeatureFocus, TransferFeatureState,
+    TranslationFeatureState, TunnelFeatureState, UpdateFeatureState, ai_active_profile_drafts,
+    ai_usage_counts, appearance_font_options, quick_command_sort_mode_from_setting,
     quick_command_view_mode_from_setting, spawn_command_persistence_worker,
 };
 use super::NyaTermApp;
@@ -444,17 +444,28 @@ impl NyaTermApp {
                 },
             ),
             text_inputs: TextInputRegistry::default(),
-            shell: ShellFeatureState::new(
-                if settings.ui_serial_send_visible {
+            shell: ShellFeatureState::new(ShellFeatureInit {
+                bottom_panel_mode: if settings.ui_serial_send_visible {
                     BottomPanelMode::CommandSend
                 } else if settings.ui_quick_cmd_visible {
                     BottomPanelMode::QuickCommands
                 } else {
                     BottomPanelMode::Hidden
                 },
-                quick_cmd_height,
-                serial_send_height,
-            ),
+                quick_commands_height: quick_cmd_height,
+                command_send_height: serial_send_height,
+                active_left_panel,
+                active_right_panel,
+                left_open_panels,
+                right_open_panels,
+                panel_stack_sizes,
+                panel_multi_open,
+                left_sidebar_collapsed,
+                right_inspector_collapsed,
+                left_panel_width,
+                right_panel_width,
+                activity_bar_layout,
+            }),
             sync_input: SyncInputFeatureState::new(cx.focus_handle()),
             keyword_highlights,
             settings,
@@ -472,53 +483,6 @@ impl NyaTermApp {
             active_snapshot_password_prompt: None,
             pending_session_events: VecDeque::new(),
             diagnostic_log_last_at: HashMap::new(),
-            last_viewport_size: (1280., 800.),
-            wallpaper_tile_dimensions: None,
-            last_viewport_change_at: None,
-            title_drag_active_until: None,
-            selected_nav: NavItem::Workspace,
-            main_mode: MainMode::Workspace,
-            settings_active_tab: SettingsTab::General,
-            settings_expanded_groups: HashSet::from(["workspace".to_string()]),
-            settings_draft_snapshot: None,
-            settings_window: None,
-            settings_window_open_pending: false,
-            settings_previous_left_collapsed: None,
-            settings_previous_right_collapsed: None,
-            active_left_panel,
-            active_right_panel,
-            left_open_panels,
-            right_open_panels,
-            panel_stack_sizes,
-            panel_multi_open,
-            right_focus: RightFocus::Default,
-            left_sidebar_collapsed,
-            right_inspector_collapsed,
-            mobile_left_open: false,
-            mobile_right_open: false,
-            left_panel_width,
-            right_panel_width,
-            panel_resize: None,
-            panel_stack_resize: None,
-            activity_bar_layout,
-            activity_bar_context_menu: None,
-            title_menu_open: None,
-            title_menu_submenu: None,
-            header_status: HeaderStatusState::default(),
-            open_tabs_menu_open: false,
-            new_session_menu_open: false,
-            new_session_all_sessions_open: false,
-            new_session_group_menu_path: Vec::new(),
-            session_tab_strip_scroll: ScrollHandle::new(),
-            session_tab_scroll_into_view_pending: false,
-            last_connect_failure_name: None,
-            last_connect_failure_error: None,
-            workspace_split: None,
-            workspace_split_resize: None,
-            session_pane_roots: HashMap::new(),
-            session_tab_owner: HashMap::new(),
-            focused_terminal_window_leaf_id: None,
-            workspace_pane_layout_restored: false,
             startup_restore_complete: false,
         }
     }

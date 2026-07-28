@@ -6,14 +6,10 @@ use nyaterm_core::ConnectionStore;
 
 use crate::features::NyaTermApp;
 use crate::models::{
-    BottomPanelMode, NavItem, PanelResizeSide, PanelResizeState, PanelSide,
-    TransferHeightResizeState, panel_collapsed_from_persistence,
+    BottomPanelMode, NavItem, PanelResizeSide, PanelSide, TransferHeightResizeState,
+    panel_collapsed_from_persistence,
 };
 
-const LEFT_PANEL_MIN: f32 = 160.;
-const LEFT_PANEL_MAX: f32 = 720.;
-const RIGHT_PANEL_MIN: f32 = 200.;
-const RIGHT_PANEL_MAX: f32 = 720.;
 const QUICK_CMD_HEIGHT_MIN: f32 = 36.;
 const SERIAL_SEND_HEIGHT_MIN: f32 = 60.;
 const BOTTOM_PANEL_HEIGHT_MAX: f32 = 520.;
@@ -32,15 +28,7 @@ impl NyaTermApp {
         event: &MouseDownEvent,
         cx: &mut Context<Self>,
     ) {
-        let start_width = match side {
-            PanelResizeSide::Left => px(self.left_panel_width),
-            PanelResizeSide::Right => px(self.right_panel_width),
-        };
-        self.panel_resize = Some(PanelResizeState {
-            side,
-            start_x: event.position.x,
-            start_width,
-        });
+        self.shell.panels.start_resize(side, event.position.x);
         self.terminal.view.status = match side {
             PanelResizeSide::Left => "resizing left panel".to_string(),
             PanelResizeSide::Right => "resizing right panel".to_string(),
@@ -53,22 +41,16 @@ impl NyaTermApp {
         event: &MouseMoveEvent,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.panel_resize else {
+        let Some((side, width)) = self.shell.panels.update_resize(event.position.x) else {
             return;
         };
-        let delta = f32::from(event.position.x - state.start_x);
-        let start = f32::from(state.start_width);
-        match state.side {
+        match side {
             PanelResizeSide::Left => {
-                self.left_panel_width = (start + delta).clamp(LEFT_PANEL_MIN, LEFT_PANEL_MAX);
-                self.terminal.view.status =
-                    format!("left panel: {:.0}px", self.left_panel_width.round());
+                self.terminal.view.status = format!("left panel: {:.0}px", width.round());
             }
             PanelResizeSide::Right => {
                 // Right handle sits on the left edge of the right panel: drag left grows width.
-                self.right_panel_width = (start - delta).clamp(RIGHT_PANEL_MIN, RIGHT_PANEL_MAX);
-                self.terminal.view.status =
-                    format!("right panel: {:.0}px", self.right_panel_width.round());
+                self.terminal.view.status = format!("right panel: {:.0}px", width.round());
             }
         }
         cx.notify();
@@ -79,12 +61,12 @@ impl NyaTermApp {
         _event: &MouseUpEvent,
         cx: &mut Context<Self>,
     ) {
-        if self.panel_resize.take().is_some() {
+        if self.shell.panels.finish_resize() {
             self.persist_panel_widths();
             self.terminal.view.status = format!(
                 "panel sizes L{:.0}/R{:.0}",
-                self.left_panel_width.round(),
-                self.right_panel_width.round()
+                self.shell.panels.left_width.round(),
+                self.shell.panels.right_width.round()
             );
             cx.notify();
         }
@@ -95,34 +77,34 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn apply_ui_layout_from_settings(&mut self) {
-        self.left_panel_width = self.settings.ui_left_panel_width as f32;
-        self.right_panel_width = self.settings.ui_right_panel_width as f32;
+        self.shell.panels.left_width = self.settings.ui_left_panel_width as f32;
+        self.shell.panels.right_width = self.settings.ui_right_panel_width as f32;
         self.transfer.panel.height = self.settings.ui_transfer_height as f32;
         self.shell.bottom_panel.quick_commands_height = self.settings.ui_quick_cmd_height as f32;
         self.shell.bottom_panel.command_send_height = self.settings.ui_serial_send_height as f32;
         self.apply_activity_layout_from_settings();
-        self.active_left_panel = self
+        self.shell.panels.active_left = self
             .settings
             .ui_active_left_panel
             .as_deref()
             .and_then(NavItem::from_persistence_id)
             .filter(|item| self.panel_side_for_item(*item) == Some(PanelSide::Left));
-        self.active_right_panel = self
+        self.shell.panels.active_right = self
             .settings
             .ui_active_right_panel
             .as_deref()
             .and_then(NavItem::from_persistence_id)
             .filter(|item| self.panel_side_for_item(*item) == Some(PanelSide::Right));
-        self.left_sidebar_collapsed = panel_collapsed_from_persistence(
+        self.shell.panels.left_collapsed = panel_collapsed_from_persistence(
             self.settings.ui_left_panel_collapsed,
             self.settings.ui_panel_multi_open,
-            self.active_left_panel.is_some(),
+            self.shell.panels.active_left.is_some(),
             !self.settings.ui_left_open_panels.is_empty(),
         );
-        self.right_inspector_collapsed = panel_collapsed_from_persistence(
+        self.shell.panels.right_collapsed = panel_collapsed_from_persistence(
             self.settings.ui_right_panel_collapsed,
             self.settings.ui_panel_multi_open,
-            self.active_right_panel.is_some(),
+            self.shell.panels.active_right.is_some(),
             !self.settings.ui_right_open_panels.is_empty(),
         );
         self.apply_panel_stack_from_settings();
@@ -132,9 +114,10 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn persist_ui_layout(&mut self) {
-        self.settings.ui_left_panel_width = self.left_panel_width.round().clamp(160., 720.) as u32;
+        self.settings.ui_left_panel_width =
+            self.shell.panels.left_width.round().clamp(160., 720.) as u32;
         self.settings.ui_right_panel_width =
-            self.right_panel_width.round().clamp(200., 720.) as u32;
+            self.shell.panels.right_width.round().clamp(200., 720.) as u32;
         self.settings.ui_transfer_height =
             self.transfer.panel.height.round().clamp(60., 600.) as u32;
         self.settings.ui_quick_cmd_height =
@@ -150,13 +133,17 @@ impl NyaTermApp {
                 .round()
                 .clamp(SERIAL_SEND_HEIGHT_MIN, BOTTOM_PANEL_HEIGHT_MAX) as u32;
         self.settings.ui_active_left_panel = self
-            .active_left_panel
+            .shell
+            .panels
+            .active_left
             .map(|item| item.persistence_id().to_string());
         self.settings.ui_active_right_panel = self
-            .active_right_panel
+            .shell
+            .panels
+            .active_right
             .map(|item| item.persistence_id().to_string());
-        self.settings.ui_left_panel_collapsed = self.left_sidebar_collapsed;
-        self.settings.ui_right_panel_collapsed = self.right_inspector_collapsed;
+        self.settings.ui_left_panel_collapsed = self.shell.panels.left_collapsed;
+        self.settings.ui_right_panel_collapsed = self.shell.panels.right_collapsed;
         self.settings.ui_saved_connections_sort_mode = self
             .connection_state
             .list_sort_mode()

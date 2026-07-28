@@ -151,7 +151,7 @@ impl NyaTermApp {
         let error = self
             .active_failed_session()
             .map(|failed| failed.error.clone())
-            .or_else(|| self.last_connect_failure_error.clone())
+            .or_else(|| self.shell.chrome.last_connect_failure_error.clone())
             .unwrap_or_default();
 
         div()

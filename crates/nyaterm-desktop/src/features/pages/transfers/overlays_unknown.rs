@@ -38,7 +38,7 @@ impl NyaTermApp {
         } else {
             state.entry.name.clone()
         };
-        let dialog_width = transfer_dialog_width(self.last_viewport_size.0, 512.);
+        let dialog_width = transfer_dialog_width(self.shell.viewport.size.0, 512.);
         let description = self
             .tr("fileExplorer.unknownFileTypeDesc")
             .replace("{{name}}", &name);

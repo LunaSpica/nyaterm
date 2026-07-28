@@ -365,7 +365,7 @@ impl NyaTermApp {
             .min_w_0()
             .flex()
             .overflow_x_scroll();
-        let tabs_menu_max_height = (self.last_viewport_size.1 - 48.).clamp(160., 360.);
+        let tabs_menu_max_height = (self.shell.viewport.size.1 - 48.).clamp(160., 360.);
         let tabs_menu_bg = if standalone {
             rgb(palette.surface)
         } else {

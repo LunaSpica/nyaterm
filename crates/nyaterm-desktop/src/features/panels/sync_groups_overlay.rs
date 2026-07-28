@@ -17,7 +17,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let (viewport_w, viewport_h) = self.last_viewport_size;
+        let (viewport_w, viewport_h) = self.shell.viewport.size;
         let dialog_width = (viewport_w - 24.).clamp(280., 900.);
         let dialog_height = (viewport_h - 56.).clamp(280., 500.);
         let groups_width = (dialog_width * 0.23).clamp(160., 208.);

@@ -1,8 +1,8 @@
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, mpsc};
 use std::time::Instant;
 
-use gpui::{ScrollHandle, WindowHandle};
+use gpui::WindowHandle;
 use nyaterm_core::{
     AppRuntime, AppSettingsSummary, CommandHistoryEntry, Group, KeywordHighlightConfig,
     NativeServices, OtpEntry, ProxyConfig, ProxyGroup, QuickCommand, QuickCommandCategory,
@@ -21,7 +21,6 @@ use super::remote_editor_window::RemoteFileEditorWindow;
 use super::runtime_jobs::{CommandPersistenceRequest, CommandPersistenceResult};
 use super::session::SessionFeatureState;
 use super::settings::{SecurityFeatureState, SettingsFeatureState};
-use super::settings_window::SettingsWindow;
 use super::shell::ShellFeatureState;
 use super::sync::CloudSyncFeatureState;
 use super::sync_input::SyncInputFeatureState;
@@ -32,11 +31,8 @@ use super::translation::TranslationFeatureState;
 use super::tunnels::TunnelFeatureState;
 use super::update::UpdateFeatureState;
 use crate::models::{
-    ActivityBarContextMenuState, ActivityBarLayoutState, ConfigPathPromptKind,
-    DiagnosticsPathPromptKind, HeaderStatusState, KeywordHighlightPathPromptKind, MainMode,
-    NavItem, PanelResizeState, PanelStackResizeState, RightFocus, SettingsTab,
-    SnapshotPasswordPromptState, StoreStatus, TitleMenu, TitleMenuSubmenu, WorkspacePaneNode,
-    WorkspaceSplitResizeState, WorkspaceSplitState,
+    ConfigPathPromptKind, DiagnosticsPathPromptKind, KeywordHighlightPathPromptKind,
+    SnapshotPasswordPromptState, StoreStatus,
 };
 
 mod construct;
@@ -104,70 +100,5 @@ pub struct NyaTermApp {
     pub(in crate::features) active_snapshot_password_prompt: Option<SnapshotPasswordPromptState>,
     pub(in crate::features) pending_session_events: VecDeque<SessionEvent>,
     pub(in crate::features) diagnostic_log_last_at: HashMap<&'static str, Instant>,
-    pub(in crate::features) last_viewport_size: (f32, f32),
-    /// Cached intrinsic dimensions for the current tiled wallpaper path.
-    pub(in crate::features) wallpaper_tile_dimensions: Option<(String, u32, u32)>,
-    /// When the window viewport last changed (resize/drag geometry).
-    pub(in crate::features) last_viewport_change_at: Option<Instant>,
-    /// Deadline for treating title-bar window dragging as active.
-    pub(in crate::features) title_drag_active_until: Option<Instant>,
-    pub(in crate::features) selected_nav: NavItem,
-    pub(in crate::features) main_mode: MainMode,
-    pub(in crate::features) settings_active_tab: SettingsTab,
-    /// Expanded multi-item groups in the settings sidebar (Tauri keeps this local to the page).
-    pub(in crate::features) settings_expanded_groups: HashSet<String>,
-    /// Committed values captured when the in-window settings page opens.
-    pub(in crate::features) settings_draft_snapshot: Option<SettingsDraftSnapshot>,
-    pub(in crate::features) settings_window: Option<WindowHandle<SettingsWindow>>,
-    pub(in crate::features) settings_window_open_pending: bool,
-    /// Main workspace panel state to restore after leaving the in-window settings page.
-    pub(in crate::features) settings_previous_left_collapsed: Option<bool>,
-    pub(in crate::features) settings_previous_right_collapsed: Option<bool>,
-    pub(in crate::features) active_left_panel: Option<NavItem>,
-    pub(in crate::features) active_right_panel: Option<NavItem>,
-    pub(in crate::features) left_open_panels: Vec<String>,
-    pub(in crate::features) right_open_panels: Vec<String>,
-    pub(in crate::features) panel_stack_sizes: HashMap<String, f32>,
-    pub(in crate::features) panel_multi_open: bool,
-    pub(in crate::features) right_focus: RightFocus,
-    pub(in crate::features) left_sidebar_collapsed: bool,
-    pub(in crate::features) right_inspector_collapsed: bool,
-    pub(in crate::features) mobile_left_open: bool,
-    pub(in crate::features) mobile_right_open: bool,
-    pub(in crate::features) left_panel_width: f32,
-    pub(in crate::features) right_panel_width: f32,
-    pub(in crate::features) panel_resize: Option<PanelResizeState>,
-    pub(in crate::features) panel_stack_resize: Option<PanelStackResizeState>,
-    pub(in crate::features) activity_bar_layout: ActivityBarLayoutState,
-    pub(in crate::features) activity_bar_context_menu: Option<ActivityBarContextMenuState>,
-    pub(in crate::features) title_menu_open: Option<TitleMenu>,
-    pub(in crate::features) title_menu_submenu: Option<TitleMenuSubmenu>,
-    pub(in crate::features) header_status: HeaderStatusState,
-    /// Open-tabs overflow menu (Tauri TabBar expand-more when many tabs).
-    pub(in crate::features) open_tabs_menu_open: bool,
-    /// New-session menu next to the tab strip + control.
-    pub(in crate::features) new_session_menu_open: bool,
-    /// Whether the Tauri-style "All sessions" submenu is expanded.
-    pub(in crate::features) new_session_all_sessions_open: bool,
-    /// Hovered group ids from the root submenu through the deepest open child menu.
-    pub(in crate::features) new_session_group_menu_path: Vec<String>,
-    /// Horizontal scroll handle for the global session tab strip (scroll-into-view).
-    pub(in crate::features) session_tab_strip_scroll: ScrollHandle,
-    /// Request scroll-into-view of the active tab on next paint (Tauri TabBar).
-    pub(in crate::features) session_tab_scroll_into_view_pending: bool,
-    /// Last failed connect name (shown as ephemeral failed tab chrome).
-    pub(in crate::features) last_connect_failure_name: Option<String>,
-    /// Last failed connect error text.
-    pub(in crate::features) last_connect_failure_error: Option<String>,
-    /// Legacy/global active pane tree view: mirrors the active tab's per-tab root when split.
-    pub(in crate::features) workspace_split: Option<WorkspaceSplitState>,
-    pub(in crate::features) workspace_split_resize: Option<WorkspaceSplitResizeState>,
-    /// Per-tab pane trees keyed by tab-root session id (Tauri `Tab.root`).
-    pub(in crate::features) session_pane_roots: HashMap<String, WorkspacePaneNode>,
-    /// Leaf session id → owning tab-root session id (hidden from tab strip when secondary).
-    pub(in crate::features) session_tab_owner: HashMap<String, String>,
-    pub(in crate::features) focused_terminal_window_leaf_id: Option<String>,
-    /// Whether we already attempted startup restore of global workspace pane splits.
-    pub(in crate::features) workspace_pane_layout_restored: bool,
     pub(in crate::features) startup_restore_complete: bool,
 }

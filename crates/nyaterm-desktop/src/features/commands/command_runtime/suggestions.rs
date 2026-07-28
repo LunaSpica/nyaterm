@@ -1154,7 +1154,7 @@ impl NyaTermApp {
             insets.left,
             insets.top,
             self.terminal_gutter_width_px_for_session(session_id),
-            self.last_viewport_size,
+            self.shell.viewport.size,
             cursor_row,
             cursor_col,
             menu_w,

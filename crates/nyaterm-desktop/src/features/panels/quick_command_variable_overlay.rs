@@ -147,7 +147,7 @@ impl NyaTermApp {
             .child(
                 div()
                     .id(SharedString::from("quick-command-variable-dialog"))
-                    .w(px((self.last_viewport_size.0 - 32.).clamp(280., 400.)))
+                    .w(px((self.shell.viewport.size.0 - 32.).clamp(280., 400.)))
                     .max_w_full()
                     .rounded_md()
                     .border_1()
@@ -173,7 +173,7 @@ impl NyaTermApp {
                         div()
                             .id("quick-command-variable-body")
                             .p_5()
-                            .max_h(px((self.last_viewport_size.1 * 0.6).clamp(180., 420.)))
+                            .max_h(px((self.shell.viewport.size.1 * 0.6).clamp(180., 420.)))
                             .overflow_y_scroll()
                             .child(rows)
                             .child(

@@ -63,11 +63,11 @@ impl NyaTermApp {
         let category_sidebar = self.quick_command_category_sidebar(categories, palette, cx);
         let view_mode = self.quick_command_state.list.view_mode;
         let tile_columns = quick_command_tile_column_count(
-            self.last_viewport_size.0,
-            self.left_panel_width,
-            self.right_panel_width,
-            !self.left_sidebar_collapsed,
-            !self.right_inspector_collapsed,
+            self.shell.viewport.size.0,
+            self.shell.panels.left_width,
+            self.shell.panels.right_width,
+            !self.shell.panels.left_collapsed,
+            !self.shell.panels.right_collapsed,
         );
         let logical_row_height = match view_mode {
             QuickCommandViewMode::Tile => 32.,

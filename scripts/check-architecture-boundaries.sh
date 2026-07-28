@@ -129,6 +129,20 @@ check_no_matches \
   crates/nyaterm-desktop/src/features/app_state/mod.rs
 
 check_no_matches \
+  "window shell state must stay grouped under ShellFeatureState" \
+  '^[[:space:]]*pub\(in crate::features\)[[:space:]]+(last_viewport_size|wallpaper_tile_dimensions|last_viewport_change_at|title_drag_active_until|selected_nav|main_mode|settings_active_tab|settings_expanded_groups|settings_draft_snapshot|settings_window|settings_window_open_pending|settings_previous_left_collapsed|settings_previous_right_collapsed|active_left_panel|active_right_panel|left_open_panels|right_open_panels|panel_stack_sizes|panel_multi_open|right_focus|left_sidebar_collapsed|right_inspector_collapsed|mobile_left_open|mobile_right_open|left_panel_width|right_panel_width|panel_resize|panel_stack_resize|activity_bar_layout|activity_bar_context_menu|title_menu_open|title_menu_submenu|header_status|open_tabs_menu_open|new_session_menu_open|new_session_all_sessions_open|new_session_group_menu_path|session_tab_strip_scroll|session_tab_scroll_into_view_pending|last_connect_failure_name|last_connect_failure_error|workspace_split|workspace_split_resize|session_pane_roots|session_tab_owner|focused_terminal_window_leaf_id|workspace_pane_layout_restored)[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/app_state/mod.rs
+
+check_no_matches \
+  "panel resize transitions must stay on ShellPanelState" \
+  'PanelResizeState' \
+  crates/nyaterm-desktop/src/features/shell/panel_resize_runtime.rs
+check_no_matches \
+  "panel stack resize transitions must stay on ShellPanelState" \
+  'PanelStackResizeState' \
+  crates/nyaterm-desktop/src/features/shell/panel_stack_runtime.rs
+
+check_no_matches \
   "screen lock fields must stay grouped under SecurityFeatureState" \
   '^[[:space:]]*pub\(in crate::features\)[[:space:]]+(lock_focus|lock_password_draft|lock_status|is_locked|last_user_activity_at)[[:space:]]*:' \
   crates/nyaterm-desktop/src/features/app_state/mod.rs

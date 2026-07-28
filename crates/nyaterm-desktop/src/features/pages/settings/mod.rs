@@ -21,7 +21,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        self.settings_surface(self.last_viewport_size.0, false, cx)
+        self.settings_surface(self.shell.viewport.size.0, false, cx)
     }
 
     pub(in crate::features) fn settings_window_view(
@@ -61,8 +61,8 @@ impl NyaTermApp {
         // Tauri SettingsPage shell: compact header + narrow nav + scroll content.
         let palette = self.theme_palette();
         let settings_title = self.tr("settings.title");
-        let active_group = self.tr(self.settings_active_tab.group_i18n_key());
-        let active_label = self.tr(self.settings_active_tab.i18n_key());
+        let active_group = self.tr(self.shell.navigation.settings.active_tab.group_i18n_key());
+        let active_label = self.tr(self.shell.navigation.settings.active_tab.i18n_key());
         let back_label = self.tr("common.close");
         div()
             .flex()
@@ -303,9 +303,24 @@ impl NyaTermApp {
         } else {
             224.
         };
-        let workspace_expanded = self.settings_expanded_groups.contains("workspace");
-        let terminal_expanded = self.settings_expanded_groups.contains("terminal_session");
-        let ai_expanded = self.settings_expanded_groups.contains("ai_group");
+        let workspace_expanded = self
+            .shell
+            .navigation
+            .settings
+            .expanded_groups
+            .contains("workspace");
+        let terminal_expanded = self
+            .shell
+            .navigation
+            .settings
+            .expanded_groups
+            .contains("terminal_session");
+        let ai_expanded = self
+            .shell
+            .navigation
+            .settings
+            .expanded_groups
+            .contains("ai_group");
 
         let mut sidebar_nav = div()
             .id(SharedString::from("settings-sidebar-scroll"))
@@ -540,8 +555,14 @@ impl NyaTermApp {
                 this.tooltip(move |_, cx| cx.new(|_| ChromeTooltip::new(title)).into())
             })
             .on_click(cx.listener(move |this, _, _, cx| {
-                if !this.settings_expanded_groups.insert(group.to_string()) {
-                    this.settings_expanded_groups.remove(group);
+                if !this
+                    .shell
+                    .navigation
+                    .settings
+                    .expanded_groups
+                    .insert(group.to_string())
+                {
+                    this.shell.navigation.settings.expanded_groups.remove(group);
                 }
                 cx.notify();
             }))
@@ -556,7 +577,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let selected = self.settings_active_tab == tab;
+        let selected = self.shell.navigation.settings.active_tab == tab;
         let label = self.tr(tab.i18n_key());
 
         // Tauri settings nav item: soft primary fill, no permanent green border.
@@ -619,7 +640,7 @@ impl NyaTermApp {
                 this.tooltip(move |_, cx| cx.new(|_| ChromeTooltip::new(label)).into())
             })
             .on_click(cx.listener(move |this, _, _, cx| {
-                this.settings_active_tab = tab;
+                this.shell.navigation.settings.active_tab = tab;
                 this.settings_state.appearance.menu_open = None;
                 cx.notify();
             }))
@@ -631,7 +652,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let active_tab = self.settings_active_tab;
+        let active_tab = self.shell.navigation.settings.active_tab;
         let active_label = self.tr(active_tab.i18n_key());
         let content = self.settings_tab_content(active_tab, cx);
         let compact = viewport_width < 640.;

@@ -80,8 +80,8 @@ impl NyaTermApp {
         if self.saved_connection_start_is_pending_or_queued(&connection) {
             self.terminal.view.status =
                 format!("{} is already connecting or queued", connection.name);
-            self.selected_nav = NavItem::Workspace;
-            self.main_mode = MainMode::Workspace;
+            self.shell.navigation.selected_nav = NavItem::Workspace;
+            self.shell.navigation.main_mode = MainMode::Workspace;
             cx.notify();
             return;
         }

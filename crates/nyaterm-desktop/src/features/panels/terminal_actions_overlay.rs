@@ -14,7 +14,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let (viewport_w, viewport_h) = self.last_viewport_size;
+        let (viewport_w, viewport_h) = self.shell.viewport.size;
         let visible_text = self.active_terminal_visible_text();
         let buffer_tail = self.active_terminal_buffer_tail();
         let visible_lines = visible_text.lines().count();
@@ -347,7 +347,7 @@ impl NyaTermApp {
                                 self.tr("terminalActions.sessionLog"),
                                 cx.listener(|this, _, _, cx| {
                                     this.terminal.menus.actions_open = false;
-                                    this.right_focus = RightFocus::Recording;
+                                    this.shell.panels.right_focus = RightFocus::Recording;
                                     cx.notify();
                                 }),
                             ))

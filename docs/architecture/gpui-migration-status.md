@@ -9,7 +9,7 @@ Last updated from the working tree on 2026-07-28.
 
 | Metric | Current value | Notes |
 | --- | ---: | --- |
-| `NyaTermApp` fields | 102 | Counted from `features/app_state/mod.rs`; down from 585, still transitional. |
+| `NyaTermApp` fields | 55 | Counted from `features/app_state/mod.rs`; down from 585, still transitional. |
 | `impl NyaTermApp` blocks | 238 | Spread across 233 files under `crates/nyaterm-desktop/src`. |
 | `#[path = "..."]` declarations in desktop | 0 | Cleared. Every directory is a real module; the boundary script fails on any new occurrence. |
 | `use super::*` imports in desktop | 0 | Cleared in production and test modules; guarded crate-wide. |
@@ -331,11 +331,17 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   retains session metadata/host queries, status messages, focus and redraw
   coordination. This state remains transient and changes no session or settings
   persistence format.
-- `ShellFeatureState` is the new owner for cross-view shell interaction state,
-  starting with the bottom-panel mode, quick-command/send-command heights and
-  resize lifecycle. Render helpers stay on views, and `NyaTermApp` still owns
-  settings persistence after a drag completes. This creates the boundary for a
-  later cohesive shell-chrome cut without introducing a mirror.
+- `ShellFeatureState` now owns the complete cross-view window interaction
+  cluster. Its `viewport`, `navigation`, `panels`, `chrome` and `workspace`
+  children contain geometry bookkeeping, settings navigation/window state,
+  side-panel stacks and resize lifecycles, title/tab menus and per-tab pane
+  ownership respectively; the existing `bottom_panel` child still owns its
+  mode, heights and drag state. Forty-seven top-level app fields became these
+  five focused children, so `NyaTermApp` dropped from 102 fields to 55 without
+  creating a writable mirror. Pure viewport, panel resize/stack resize, chrome
+  menu and workspace ownership transitions execute on the child states.
+  Render helpers remain on views, while `NyaTermApp` retains settings
+  persistence, GPUI notification, terminal coordination and event routing.
 - The Entity Store projection layer is gone entirely, in two steps.
 
   First, the six domain stores (`Ai`, `CloudSync`, `Connections`, `RemoteOps`,
@@ -1414,7 +1420,7 @@ honest remaining list.
    compiler-confirmed final pass also removed `features/prelude.rs`, so modules
    cannot regain the same implicit dependency surface through a shared import
    bucket.
-3. Largely done. `NyaTermApp` is down from 585 fields to 102, across seventeen
+3. Largely done. `NyaTermApp` is down from 585 fields to 55, across seventeen
    feature-state structs. The latest cohesive cuts moved sixteen terminal
    command-assistance and credential-prompt fields into
    `TerminalFeatureState::assist`, then seventeen transient settings fields
@@ -1424,9 +1430,11 @@ honest remaining list.
    conflict and GitHub device-flow state, recording and SSH-tunnel runtime
    resources with their job/UI lifecycle state, then the complete live session
    runtime with nested session-start, prompt and dialog ownership, then terminal
-   presentation runtime followed by sync-input, screen-lock and bottom-panel
-   interaction lifecycles. What is left is a long tail, and much of it is
-   genuinely app-level (stores, runtime, services, persisted collections).
+   presentation runtime followed by sync-input and screen-lock interaction
+   lifecycles, and finally forty-seven window interaction fields under the
+   shell's viewport, navigation, panel, chrome and workspace children. What is
+   left is a long tail, and much of it is genuinely app-level (stores, runtime,
+   services, persisted collections).
    Group by cohesion where a cluster exists; do not force the count down for
    its own sake.
    Method ownership is now moving too, which is what grouping the fields alone
@@ -1434,7 +1442,7 @@ honest remaining list.
    it belongs on that state, and the `NyaTermApp` method becomes a forwarder
    that owns `cx.notify()`. That is enforced by the type system rather than by
    convention — a handler taking `&mut TransferBrowserState` cannot reach the
-   session list no matter what a later edit tries. Eighty-four methods or
+   session list no matter what a later edit tries. More than one hundred methods or
    self-contained transitions have moved this way across transfers, security,
    the shell, sync input, the send command bar, AI, quick commands, cloud sync,
    recording, session starts and terminal paste review;
@@ -1445,7 +1453,9 @@ honest remaining list.
    of sync, closing a pending session start cannot update its maps without also
    applying the active pending/failed fallback rules, and paste editing cannot
    mutate its UTF-8 cursor without also clearing stale selection/IME state.
-   Those are the kinds of signals to look for.
+   Shell viewport timing, panel drags, mutually-exclusive tab menus and pane
+   ownership rebuilding now have the same property. Those are the kinds of
+   signals to look for.
    Two caveats worth keeping. Render helpers stay on the view even when they
    read one state — moving element construction onto a data struct trades one
    coupling for a worse one. And a method that reads a state plus `self.tr(...)`

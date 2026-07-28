@@ -16,7 +16,7 @@ impl NyaTermApp {
         let all_command_id = command_id.clone();
         let delete_command_id = command_id.clone();
         let can_send_to_all = self.live_session_count() > 1;
-        let (viewport_w, viewport_h) = self.last_viewport_size;
+        let (viewport_w, viewport_h) = self.shell.viewport.size;
         let (menu_x, menu_y) = quick_command_clamped_menu_position(
             f32::from(menu.x),
             f32::from(menu.y),

@@ -368,7 +368,7 @@ impl NyaTermApp {
                 .then_with(|| left.2.cmp(&right.2))
                 .then_with(|| left.3.cmp(&right.3))
         });
-        if self.session_tab_scroll_into_view_pending {
+        if self.shell.chrome.session_tab_scroll_into_view_pending {
             if let Some(active_id) = self.session.active_id.as_deref() {
                 if let Some(index) = sessions.iter().position(|session| session.id == active_id) {
                     let pending_count = transient_tabs
@@ -376,10 +376,13 @@ impl NyaTermApp {
                         .filter(|(pending_index, _, _, _, _, _)| *pending_index <= index)
                         .count();
                     let child_index = index + pending_count;
-                    self.session_tab_strip_scroll.scroll_to_item(child_index);
+                    self.shell
+                        .chrome
+                        .session_tab_strip_scroll
+                        .scroll_to_item(child_index);
                 }
             }
-            self.session_tab_scroll_into_view_pending = false;
+            self.shell.chrome.session_tab_scroll_into_view_pending = false;
         }
         let mut tabs = div()
             .id("session-tab-strip-scroll")
@@ -391,7 +394,7 @@ impl NyaTermApp {
             // Tauri tab-strip-scroll: horizontal overflow instead of clipping tabs.
             .overflow_x_scroll()
             .overflow_y_hidden()
-            .track_scroll(&self.session_tab_strip_scroll);
+            .track_scroll(&self.shell.chrome.session_tab_strip_scroll);
 
         let mut transient_cursor = 0usize;
         for (tab_index, session) in sessions.into_iter().enumerate() {
@@ -436,7 +439,9 @@ impl NyaTermApp {
                 .as_deref()
                 .is_some_and(|id| self.tab_root_for_session(id) == session.id);
             let leaf_ids = self
-                .session_pane_roots
+                .shell
+                .workspace
+                .pane_roots
                 .get(&session.id)
                 .map(|root| root.session_ids())
                 .unwrap_or_else(|| vec![session.id.clone()]);
@@ -695,11 +700,17 @@ impl NyaTermApp {
         }
 
         // Tauri TabBar trailing chrome: optional open-tabs overflow menu + new session menu.
-        let open_tabs_menu = self.open_tabs_menu_open;
-        let new_session_menu = self.new_session_menu_open;
+        let open_tabs_menu = self.shell.chrome.open_tabs_menu_open;
+        let new_session_menu = self.shell.chrome.new_session_menu_open;
         let open_tabs_label = self.tr("terminal.openTabs").to_string();
         let new_session_label = self.tr("terminal.newSession").to_string();
-        let tab_strip_has_overflow = self.session_tab_strip_scroll.max_offset().width > px(0.);
+        let tab_strip_has_overflow = self
+            .shell
+            .chrome
+            .session_tab_strip_scroll
+            .max_offset()
+            .width
+            > px(0.);
         // Tauri shows Open Tabs only when the strip actually overflows.
         let show_open_tabs_menu = tab_strip_has_overflow || open_tabs_menu;
 

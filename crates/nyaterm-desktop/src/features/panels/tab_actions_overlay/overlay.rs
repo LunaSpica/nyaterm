@@ -69,9 +69,9 @@ impl NyaTermApp {
             .active_id
             .as_deref()
             .map(|id| self.tab_root_for_session(id))
-            .and_then(|root| self.session_pane_roots.get(&root))
+            .and_then(|root| self.shell.workspace.pane_roots.get(&root))
             .is_some_and(|root| root.is_split())
-            || self.workspace_split.is_some();
+            || self.shell.workspace.split.is_some();
         let scroll_offset = self
             .terminal
             .view

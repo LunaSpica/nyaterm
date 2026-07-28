@@ -32,7 +32,7 @@ impl NyaTermApp {
 
         // Dismiss strip menus with Escape (Tauri dropdown dismiss).
         if event.keystroke.key.as_str() == "escape"
-            && (self.open_tabs_menu_open || self.new_session_menu_open)
+            && (self.shell.chrome.open_tabs_menu_open || self.shell.chrome.new_session_menu_open)
         {
             self.close_open_tabs_menu(cx);
             self.close_new_session_menu(cx);

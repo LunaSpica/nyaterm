@@ -25,7 +25,7 @@ impl NyaTermApp {
             .collect::<Vec<_>>();
         if live_ids.is_empty() {
             self.terminal.windows.tree = None;
-            self.focused_terminal_window_leaf_id = None;
+            self.shell.workspace.focused_terminal_leaf_id = None;
             return;
         }
 
@@ -44,7 +44,7 @@ impl NyaTermApp {
         }
 
         if let Some(root) = self.terminal.windows.tree.as_mut() {
-            let preferred = self.focused_terminal_window_leaf_id.clone();
+            let preferred = self.shell.workspace.focused_terminal_leaf_id.clone();
             for tab_id in &live_ids {
                 root.ensure_tab(tab_id, preferred.as_deref());
             }
@@ -52,11 +52,13 @@ impl NyaTermApp {
                 let _ = root.set_active_tab(&active);
             }
             if self
-                .focused_terminal_window_leaf_id
+                .shell
+                .workspace
+                .focused_terminal_leaf_id
                 .as_ref()
                 .is_none_or(|id| !root.leaf_ids().iter().any(|leaf| leaf == id))
             {
-                self.focused_terminal_window_leaf_id = root.first_leaf_id();
+                self.shell.workspace.focused_terminal_leaf_id = root.first_leaf_id();
             }
         }
     }
@@ -75,7 +77,7 @@ impl NyaTermApp {
         }
         let active = self.session.active_id.clone();
         let root = TerminalWindowNode::leaf(tab_ids, active);
-        self.focused_terminal_window_leaf_id = root.first_leaf_id();
+        self.shell.workspace.focused_terminal_leaf_id = root.first_leaf_id();
         self.terminal.windows.tree = Some(root);
     }
 
@@ -90,10 +92,10 @@ impl NyaTermApp {
             let _ = set_leaf_active(root, &leaf_id, &session_id);
             let _ = root.set_active_tab(&session_id);
         }
-        self.focused_terminal_window_leaf_id = Some(leaf_id);
+        self.shell.workspace.focused_terminal_leaf_id = Some(leaf_id);
         self.activate_session_id_with_surface_sync(&session_id, cx);
-        self.selected_nav = NavItem::Workspace;
-        self.main_mode = MainMode::Workspace;
+        self.shell.navigation.selected_nav = NavItem::Workspace;
+        self.shell.navigation.main_mode = MainMode::Workspace;
         cx.notify();
     }
 
@@ -115,7 +117,7 @@ impl NyaTermApp {
         };
         let _ = root.set_active_tab(&tab_id);
         if let Some(leaf_id) = find_leaf_with_tab(root, &tab_id) {
-            self.focused_terminal_window_leaf_id = Some(leaf_id);
+            self.shell.workspace.focused_terminal_leaf_id = Some(leaf_id);
         }
     }
 
@@ -131,7 +133,7 @@ impl NyaTermApp {
         };
         if root.place_tab_before(&tab_id, &before_tab_id) {
             let _ = root.set_active_tab(&tab_id);
-            self.focused_terminal_window_leaf_id =
+            self.shell.workspace.focused_terminal_leaf_id =
                 find_leaf_with_tab(root, &tab_id).or_else(|| root.first_leaf_id());
             self.activate_session_id_with_surface_sync(&tab_id, cx);
             self.terminal.view.status = format!(
@@ -188,11 +190,11 @@ impl NyaTermApp {
             return;
         }
         let _ = root.set_active_tab(&tab_id);
-        self.focused_terminal_window_leaf_id =
+        self.shell.workspace.focused_terminal_leaf_id =
             find_leaf_with_tab(root, &tab_id).or_else(|| root.first_leaf_id());
         self.activate_session_id_with_surface_sync(&tab_id, cx);
-        self.selected_nav = NavItem::Workspace;
-        self.main_mode = MainMode::Workspace;
+        self.shell.navigation.selected_nav = NavItem::Workspace;
+        self.shell.navigation.main_mode = MainMode::Workspace;
         let zone_label = match zone {
             TabDockZone::Center => "merged into leaf".to_string(),
             TabDockZone::Edge(edge) => format!("split to {}", edge.label()),
@@ -224,20 +226,20 @@ impl NyaTermApp {
             return;
         };
         // Clear global pane splits so multi-leaf rendering takes precedence cleanly.
-        self.workspace_split = None;
-        self.workspace_split_resize = None;
+        self.shell.workspace.split = None;
+        self.shell.workspace.split_resize = None;
         if let Some(active) = self.session.active_id.clone() {
             let mut root = layout;
             let _ = root.set_active_tab(&active);
-            self.focused_terminal_window_leaf_id =
+            self.shell.workspace.focused_terminal_leaf_id =
                 find_leaf_with_tab(&root, &active).or_else(|| root.first_leaf_id());
             self.terminal.windows.tree = Some(root);
         } else {
-            self.focused_terminal_window_leaf_id = layout.first_leaf_id();
+            self.shell.workspace.focused_terminal_leaf_id = layout.first_leaf_id();
             self.terminal.windows.tree = Some(layout);
         }
-        self.selected_nav = NavItem::Workspace;
-        self.main_mode = MainMode::Workspace;
+        self.shell.navigation.selected_nav = NavItem::Workspace;
+        self.shell.navigation.main_mode = MainMode::Workspace;
         self.terminal.view.status = format!("applied {}", mode.label().to_ascii_lowercase());
         self.persist_terminal_window_layout();
         // Global pane layout is obsolete while multi-leaf is active.
@@ -296,11 +298,11 @@ impl NyaTermApp {
         if !matches!(restored, TerminalWindowNode::Split { .. }) {
             return;
         }
-        self.focused_terminal_window_leaf_id = restored.first_leaf_id();
+        self.shell.workspace.focused_terminal_leaf_id = restored.first_leaf_id();
         if let Some(active) = self.session.active_id.clone() {
             let mut root = restored;
             let _ = root.set_active_tab(&active);
-            self.focused_terminal_window_leaf_id =
+            self.shell.workspace.focused_terminal_leaf_id =
                 find_leaf_with_tab(&root, &active).or_else(|| root.first_leaf_id());
             self.terminal.windows.tree = Some(root);
         } else {

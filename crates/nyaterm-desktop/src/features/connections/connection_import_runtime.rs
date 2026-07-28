@@ -47,8 +47,8 @@ impl NyaTermApp {
 
         self.connection_state.open_import_dialog();
         self.connection_state.close_list_more_menu();
-        self.title_menu_open = None;
-        self.title_menu_submenu = None;
+        self.shell.chrome.title_menu_open = None;
+        self.shell.chrome.title_menu_submenu = None;
         self.terminal.view.status = "select a connection import source".to_string();
         let import_focus = self.connection_state.import_focus_handle();
         window.focus(&import_focus);

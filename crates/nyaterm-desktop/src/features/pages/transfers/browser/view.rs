@@ -287,7 +287,7 @@ impl NyaTermApp {
         } else {
             // Tauri File Explorer virtual list (30px rows and overscan).
             let viewport_rows = transfer_browser_viewport_rows(
-                self.last_viewport_size.1,
+                self.shell.viewport.size.1,
                 self.transfer.panel.height,
                 self.transfer.browser.viewport_height,
             );
@@ -527,7 +527,7 @@ impl NyaTermApp {
                         let parent_count = usize::from(current_path != "/" && current_path != ".");
                         let total = this.visible_transfer_browser_entries().len() + parent_count;
                         let viewport_rows = transfer_browser_viewport_rows(
-                            this.last_viewport_size.1,
+                            this.shell.viewport.size.1,
                             this.transfer.panel.height,
                             this.transfer.browser.viewport_height,
                         );

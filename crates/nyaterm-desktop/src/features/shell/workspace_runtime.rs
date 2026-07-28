@@ -23,10 +23,10 @@ impl NyaTermApp {
 
     pub(in crate::features) fn prune_workspace_split(&mut self) {
         let live_ids = self.live_session_ids_with_disconnected();
-        let before_roots = self.session_pane_roots.clone();
-        let root_keys: Vec<String> = self.session_pane_roots.keys().cloned().collect();
+        let before_roots = self.shell.workspace.pane_roots.clone();
+        let root_keys: Vec<String> = self.shell.workspace.pane_roots.keys().cloned().collect();
         for tab_root in root_keys {
-            let Some(root) = self.session_pane_roots.remove(&tab_root) else {
+            let Some(root) = self.shell.workspace.pane_roots.remove(&tab_root) else {
                 continue;
             };
             match root.prune(&live_ids) {
@@ -41,7 +41,7 @@ impl NyaTermApp {
                                 .next()
                                 .unwrap_or_else(|| tab_root.clone())
                         };
-                        self.session_pane_roots.insert(key, node);
+                        self.shell.workspace.pane_roots.insert(key, node);
                     }
                     // Single leaf collapses to no stored tree for this tab.
                 }
@@ -49,13 +49,13 @@ impl NyaTermApp {
             }
         }
         // Also prune legacy workspace_split if roots empty (migration path).
-        if self.session_pane_roots.is_empty() {
-            if let Some(root) = self.workspace_split.take() {
+        if self.shell.workspace.pane_roots.is_empty() {
+            if let Some(root) = self.shell.workspace.split.take() {
                 match root.prune(&live_ids) {
                     Some(node) => {
                         if node.is_split() {
                             if let Some(first) = node.session_ids().into_iter().next() {
-                                self.session_pane_roots.insert(first.clone(), node);
+                                self.shell.workspace.pane_roots.insert(first.clone(), node);
                             }
                         } else if let WorkspacePaneNode::Leaf { session_id } = node {
                             if self.session.active_id.is_none() {
@@ -69,7 +69,7 @@ impl NyaTermApp {
         }
         self.rebuild_session_tab_owners();
         self.sync_workspace_split_from_active_tab();
-        if self.session_pane_roots != before_roots {
+        if self.shell.workspace.pane_roots != before_roots {
             self.persist_workspace_pane_layout();
             if self.startup_restore_complete {
                 self.persist_open_tabs();
@@ -89,29 +89,21 @@ impl NyaTermApp {
 
     /// Rebuild leaf→tab-root ownership from `session_pane_roots`.
     pub(in crate::features) fn rebuild_session_tab_owners(&mut self) {
-        self.session_tab_owner.clear();
-        let roots: Vec<(String, WorkspacePaneNode)> = self
-            .session_pane_roots
-            .iter()
-            .map(|(k, v)| (k.clone(), v.clone()))
-            .collect();
-        for (tab_root, tree) in roots {
-            for leaf in tree.session_ids() {
-                self.session_tab_owner.insert(leaf, tab_root.clone());
-            }
-        }
+        self.shell.workspace.rebuild_tab_owners();
     }
 
     /// Expose the active tab's pane tree via `workspace_split` for existing renderers.
     pub(in crate::features) fn sync_workspace_split_from_active_tab(&mut self) {
         let Some(active) = self.session.active_id.clone() else {
-            self.workspace_split = None;
+            self.shell.workspace.split = None;
             self.sync_terminal_frame_snapshot_priority();
             return;
         };
         let tab_root = self.tab_root_for_session(&active);
-        self.workspace_split = self
-            .session_pane_roots
+        self.shell.workspace.split = self
+            .shell
+            .workspace
+            .pane_roots
             .get(&tab_root)
             .filter(|root| root.is_split())
             .cloned();
@@ -123,9 +115,9 @@ impl NyaTermApp {
             return;
         };
         let tab_root = self.tab_root_for_session(&active);
-        if let Some(root) = self.workspace_split.clone() {
+        if let Some(root) = self.shell.workspace.split.clone() {
             if root.is_split() {
-                self.session_pane_roots.insert(tab_root, root);
+                self.shell.workspace.pane_roots.insert(tab_root, root);
                 self.rebuild_session_tab_owners();
             }
         }
@@ -139,7 +131,7 @@ impl NyaTermApp {
     ) {
         let split_id = uuid();
         let tab_root = self.tab_root_for_session(&primary_session_id);
-        if let Some(root) = self.session_pane_roots.get_mut(&tab_root) {
+        if let Some(root) = self.shell.workspace.pane_roots.get_mut(&tab_root) {
             if root.split_leaf(
                 &primary_session_id,
                 secondary_session_id.clone(),
@@ -149,8 +141,8 @@ impl NyaTermApp {
                 self.rebuild_session_tab_owners();
                 self.activate_session_id(&secondary_session_id);
                 self.sync_workspace_split_from_active_tab();
-                self.selected_nav = NavItem::Workspace;
-                self.main_mode = MainMode::Workspace;
+                self.shell.navigation.selected_nav = NavItem::Workspace;
+                self.shell.navigation.main_mode = MainMode::Workspace;
                 self.persist_workspace_pane_layout();
                 if self.startup_restore_complete {
                     self.persist_open_tabs();
@@ -166,12 +158,12 @@ impl NyaTermApp {
             first: Box::new(WorkspacePaneNode::leaf(primary_session_id.clone())),
             second: Box::new(WorkspacePaneNode::leaf(secondary_session_id.clone())),
         };
-        self.session_pane_roots.insert(tab_root, root);
+        self.shell.workspace.pane_roots.insert(tab_root, root);
         self.rebuild_session_tab_owners();
         self.activate_session_id(&secondary_session_id);
         self.sync_workspace_split_from_active_tab();
-        self.selected_nav = NavItem::Workspace;
-        self.main_mode = MainMode::Workspace;
+        self.shell.navigation.selected_nav = NavItem::Workspace;
+        self.shell.navigation.main_mode = MainMode::Workspace;
         self.persist_workspace_pane_layout();
         if self.startup_restore_complete {
             self.persist_open_tabs();
@@ -188,8 +180,8 @@ impl NyaTermApp {
         }
         self.activate_session_id_with_surface_sync(&session_id, cx);
         self.sync_workspace_split_from_active_tab();
-        self.selected_nav = NavItem::Workspace;
-        self.main_mode = MainMode::Workspace;
+        self.shell.navigation.selected_nav = NavItem::Workspace;
+        self.shell.navigation.main_mode = MainMode::Workspace;
         self.terminal.view.status = format!("focused pane {}", short_id(&session_id));
         cx.notify();
     }
@@ -241,18 +233,18 @@ impl NyaTermApp {
             return;
         };
         let tab_root = self.tab_root_for_session(&active_id);
-        let Some(root) = self.session_pane_roots.remove(&tab_root) else {
-            self.workspace_split = None;
+        let Some(root) = self.shell.workspace.pane_roots.remove(&tab_root) else {
+            self.shell.workspace.split = None;
             self.terminal.view.status = "workspace is not split".to_string();
             cx.notify();
             return;
         };
-        self.workspace_split_resize = None;
+        self.shell.workspace.split_resize = None;
 
         if let Some(collapsed) = collapse_around_session(root.clone(), &active_id) {
             match collapsed {
                 WorkspacePaneNode::Split { .. } => {
-                    self.session_pane_roots.insert(tab_root, collapsed);
+                    self.shell.workspace.pane_roots.insert(tab_root, collapsed);
                     self.terminal.view.status = "collapsed focused split".to_string();
                 }
                 WorkspacePaneNode::Leaf { session_id } => {
@@ -295,7 +287,7 @@ impl NyaTermApp {
             ) {
                 (Some(direction), Some(start_ratio)) => (direction, start_ratio),
                 _ => {
-                    let Some(root) = self.workspace_split.as_ref() else {
+                    let Some(root) = self.shell.workspace.split.as_ref() else {
                         return;
                     };
                     let Some(direction) = root.direction_for_split(&split_id) else {
@@ -308,7 +300,7 @@ impl NyaTermApp {
                 }
             }
         } else {
-            let Some(root) = self.workspace_split.as_ref() else {
+            let Some(root) = self.shell.workspace.split.as_ref() else {
                 return;
             };
             let Some(direction) = root.direction_for_split(&split_id) else {
@@ -323,7 +315,7 @@ impl NyaTermApp {
             WorkspaceSplitDirection::Horizontal => event.position.y,
             WorkspaceSplitDirection::Vertical => event.position.x,
         };
-        self.workspace_split_resize = Some(WorkspaceSplitResizeState {
+        self.shell.workspace.split_resize = Some(WorkspaceSplitResizeState {
             split_id,
             direction,
             start_pos,
@@ -339,7 +331,7 @@ impl NyaTermApp {
         event: &MouseMoveEvent,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.workspace_split_resize.clone() else {
+        let Some(state) = self.shell.workspace.split_resize.clone() else {
             return;
         };
         let current = match state.direction {
@@ -365,7 +357,7 @@ impl NyaTermApp {
             }
         }
         if !applied {
-            if let Some(root) = self.workspace_split.as_mut() {
+            if let Some(root) = self.shell.workspace.split.as_mut() {
                 if root.set_ratio_for_split(&state.split_id, next) {
                     applied = true;
                     self.write_back_active_tab_pane_root();
@@ -383,7 +375,7 @@ impl NyaTermApp {
         _event: &MouseUpEvent,
         cx: &mut Context<Self>,
     ) {
-        if let Some(state) = self.workspace_split_resize.take() {
+        if let Some(state) = self.shell.workspace.split_resize.take() {
             let ratio = self
                 .terminal
                 .windows
@@ -391,7 +383,9 @@ impl NyaTermApp {
                 .as_ref()
                 .and_then(|root| root.ratio_for_split(&state.split_id))
                 .or_else(|| {
-                    self.workspace_split
+                    self.shell
+                        .workspace
+                        .split
                         .as_ref()
                         .and_then(|root| root.ratio_for_split(&state.split_id))
                 });
@@ -401,7 +395,9 @@ impl NyaTermApp {
             if self.terminal_windows_is_multi_leaf() {
                 self.persist_terminal_window_layout();
             } else if self
-                .workspace_split
+                .shell
+                .workspace
+                .split
                 .as_ref()
                 .is_some_and(|root| root.is_split())
             {
@@ -472,12 +468,16 @@ impl NyaTermApp {
             .map(|session| session.id)
             .collect::<Vec<_>>();
         let layout = self
-            .workspace_split
+            .shell
+            .workspace
+            .split
             .as_ref()
             .filter(|root| root.is_split())
             .and_then(|root| root.serialize_layout(&ordered))
             .or_else(|| {
-                self.session_pane_roots
+                self.shell
+                    .workspace
+                    .pane_roots
                     .values()
                     .find(|root| root.is_split())
                     .and_then(|root| root.serialize_layout(&ordered))
@@ -496,16 +496,16 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn try_restore_workspace_pane_layout(&mut self) {
-        if self.workspace_pane_layout_restored {
+        if self.shell.workspace.pane_layout_restored {
             return;
         }
         if !self.settings.startup_restore || !self.settings.startup_restore_window_layout {
-            self.workspace_pane_layout_restored = true;
+            self.shell.workspace.pane_layout_restored = true;
             return;
         }
         // Multi-leaf tab windows take visual precedence; skip pane restore when active.
         if self.terminal_windows_is_multi_leaf() {
-            self.workspace_pane_layout_restored = true;
+            self.shell.workspace.pane_layout_restored = true;
             return;
         }
         let ordered = self
@@ -516,11 +516,11 @@ impl NyaTermApp {
         if ordered.len() < 2 {
             // After startup finishes, don't keep waiting forever for a second tab.
             if self.startup_restore_complete {
-                self.workspace_pane_layout_restored = true;
+                self.shell.workspace.pane_layout_restored = true;
             }
             return;
         }
-        self.workspace_pane_layout_restored = true;
+        self.shell.workspace.pane_layout_restored = true;
         let Ok(store) = ConnectionStore::open_with_portable_key_path(
             self.runtime.config_dir(),
             self.runtime.portable_key_path().map(ToOwned::to_owned),
@@ -548,12 +548,12 @@ impl NyaTermApp {
         }
         // Install as a per-tab root under the first leaf (legacy global layout path).
         if let Some(first) = restored.session_ids().into_iter().next() {
-            self.session_pane_roots.insert(first, restored);
+            self.shell.workspace.pane_roots.insert(first, restored);
             self.rebuild_session_tab_owners();
             self.sync_workspace_split_from_active_tab();
         }
-        self.selected_nav = NavItem::Workspace;
-        self.main_mode = MainMode::Workspace;
+        self.shell.navigation.selected_nav = NavItem::Workspace;
+        self.shell.navigation.main_mode = MainMode::Workspace;
         self.terminal.view.status = "restored workspace pane layout".to_string();
     }
 }

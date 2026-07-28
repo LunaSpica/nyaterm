@@ -24,10 +24,18 @@ impl SettingsWindow {
 
 impl Render for SettingsWindow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        if self.app.read(cx).settings_draft_snapshot.is_none() {
+        if self
+            .app
+            .read(cx)
+            .shell
+            .navigation
+            .settings
+            .draft_snapshot
+            .is_none()
+        {
             self.app.update(cx, |app, cx| {
-                app.settings_window = None;
-                app.settings_window_open_pending = false;
+                app.shell.navigation.settings.window = None;
+                app.shell.navigation.settings.window_open_pending = false;
                 cx.notify();
             });
             window.defer(cx, |window, _| window.remove_window());
@@ -77,7 +85,7 @@ impl Render for SettingsWindow {
 
 impl NyaTermApp {
     pub(in crate::features) fn activate_settings_window(&mut self, cx: &mut Context<Self>) -> bool {
-        let Some(handle) = self.settings_window else {
+        let Some(handle) = self.shell.navigation.settings.window else {
             return false;
         };
         let app = cx.entity();
@@ -87,8 +95,14 @@ impl NyaTermApp {
                 .is_err()
             {
                 let _ = app.update(cx, |app, cx| {
-                    if app.settings_window.is_some_and(|current| current == handle) {
-                        app.settings_window = None;
+                    if app
+                        .shell
+                        .navigation
+                        .settings
+                        .window
+                        .is_some_and(|current| current == handle)
+                    {
+                        app.shell.navigation.settings.window = None;
                         cx.notify();
                     }
                 });
@@ -101,15 +115,15 @@ impl NyaTermApp {
         if self.activate_settings_window(cx) {
             return true;
         }
-        if self.settings_window_open_pending {
+        if self.shell.navigation.settings.window_open_pending {
             return true;
         }
 
-        self.settings_window_open_pending = true;
+        self.shell.navigation.settings.window_open_pending = true;
         cx.notify();
         let app = cx.entity();
         cx.defer(move |cx| {
-            let should_open = app.read(cx).settings_window_open_pending;
+            let should_open = app.read(cx).shell.navigation.settings.window_open_pending;
             if should_open {
                 open_settings_window_now_from_app(app, cx);
             }
@@ -119,17 +133,24 @@ impl NyaTermApp {
 }
 
 fn open_settings_window_now_from_app(app: Entity<NyaTermApp>, cx: &mut App) {
-    if app.read(cx).settings_window.is_some() {
+    if app.read(cx).shell.navigation.settings.window.is_some() {
         let _ = app.update(cx, |app, cx| {
-            app.settings_window_open_pending = false;
+            app.shell.navigation.settings.window_open_pending = false;
             app.activate_settings_window(cx);
             cx.notify();
         });
         return;
     }
-    if app.read(cx).settings_draft_snapshot.is_none() {
+    if app
+        .read(cx)
+        .shell
+        .navigation
+        .settings
+        .draft_snapshot
+        .is_none()
+    {
         let _ = app.update(cx, |app, cx| {
-            app.settings_window_open_pending = false;
+            app.shell.navigation.settings.window_open_pending = false;
             cx.notify();
         });
         return;
@@ -152,8 +173,8 @@ fn open_settings_window_now_from_app(app: Entity<NyaTermApp>, cx: &mut App) {
             window.on_window_should_close(cx, move |_, cx| {
                 close_app.update(cx, |app, cx| {
                     app.cancel_settings(cx);
-                    app.settings_window = None;
-                    app.settings_window_open_pending = false;
+                    app.shell.navigation.settings.window = None;
+                    app.shell.navigation.settings.window_open_pending = false;
                 });
                 true
             });
@@ -163,19 +184,19 @@ fn open_settings_window_now_from_app(app: Entity<NyaTermApp>, cx: &mut App) {
 
     let _ = app.update(cx, |app, cx| match result {
         Ok(handle) => {
-            app.settings_window = Some(handle);
-            app.settings_window_open_pending = false;
-            app.settings_previous_left_collapsed = None;
-            app.settings_previous_right_collapsed = None;
+            app.shell.navigation.settings.window = Some(handle);
+            app.shell.navigation.settings.window_open_pending = false;
+            app.shell.navigation.settings.previous_left_collapsed = None;
+            app.shell.navigation.settings.previous_right_collapsed = None;
             cx.notify();
         }
         Err(error) => {
-            app.settings_window = None;
-            app.settings_window_open_pending = false;
-            app.main_mode = MainMode::Page;
-            app.selected_nav = crate::models::NavItem::Settings;
-            app.left_sidebar_collapsed = true;
-            app.right_inspector_collapsed = true;
+            app.shell.navigation.settings.window = None;
+            app.shell.navigation.settings.window_open_pending = false;
+            app.shell.navigation.main_mode = MainMode::Page;
+            app.shell.navigation.selected_nav = crate::models::NavItem::Settings;
+            app.shell.panels.left_collapsed = true;
+            app.shell.panels.right_collapsed = true;
             app.terminal.view.status = format!("failed to open settings window: {error}");
             cx.notify();
         }

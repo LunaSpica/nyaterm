@@ -82,23 +82,23 @@ impl NyaTermApp {
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|this, _, _, cx| {
-                    let changed = this.title_menu_open.is_some()
-                        || this.header_status.menu_open
-                        || this.open_tabs_menu_open
-                        || this.new_session_menu_open
-                        || this.new_session_all_sessions_open
-                        || !this.new_session_group_menu_path.is_empty()
+                    let changed = this.shell.chrome.title_menu_open.is_some()
+                        || this.shell.chrome.header_status.menu_open
+                        || this.shell.chrome.open_tabs_menu_open
+                        || this.shell.chrome.new_session_menu_open
+                        || this.shell.chrome.new_session_all_sessions_open
+                        || !this.shell.chrome.new_session_group_menu_path.is_empty()
                         || this.remote_ops.docker.tab_menu_open
                         || this.remote_ops.docker.header_menu_open
                         || this.connection_state.list_more_menu_is_open();
                     if changed {
-                        this.title_menu_open = None;
-                        this.title_menu_submenu = None;
-                        this.header_status.menu_open = false;
-                        this.open_tabs_menu_open = false;
-                        this.new_session_menu_open = false;
-                        this.new_session_all_sessions_open = false;
-                        this.new_session_group_menu_path.clear();
+                        this.shell.chrome.title_menu_open = None;
+                        this.shell.chrome.title_menu_submenu = None;
+                        this.shell.chrome.header_status.menu_open = false;
+                        this.shell.chrome.open_tabs_menu_open = false;
+                        this.shell.chrome.new_session_menu_open = false;
+                        this.shell.chrome.new_session_all_sessions_open = false;
+                        this.shell.chrome.new_session_group_menu_path.clear();
                         this.remote_ops.docker.tab_menu_open = false;
                         this.remote_ops.docker.header_menu_open = false;
                         this.connection_state.close_list_more_menu();
@@ -205,7 +205,7 @@ impl NyaTermApp {
                 .into();
                 if let Some((tile_width, tile_height)) = wallpaper_tile_size {
                     let (columns, rows) =
-                        wallpaper_tile_grid(self.last_viewport_size, (tile_width, tile_height));
+                        wallpaper_tile_grid(self.shell.viewport.size, (tile_width, tile_height));
                     let mut layer = div()
                         .absolute()
                         .inset_0()
@@ -251,11 +251,12 @@ impl NyaTermApp {
     }
 
     fn wallpaper_tile_size(&mut self, path: &str) -> (f32, f32) {
-        if let Some((cached_path, width, height)) = self.wallpaper_tile_dimensions.as_ref()
+        if let Some((cached_path, width, height)) =
+            self.shell.viewport.wallpaper_tile_dimensions.as_ref()
             && cached_path == path
         {
             return fit_wallpaper_tile_size(
-                self.last_viewport_size,
+                self.shell.viewport.size,
                 (*width as f32, *height as f32),
             );
         }
@@ -263,8 +264,8 @@ impl NyaTermApp {
             .ok()
             .filter(|(width, height)| *width > 0 && *height > 0)
             .unwrap_or((256, 256));
-        self.wallpaper_tile_dimensions = Some((path.to_string(), width, height));
-        fit_wallpaper_tile_size(self.last_viewport_size, (width as f32, height as f32))
+        self.shell.viewport.wallpaper_tile_dimensions = Some((path.to_string(), width, height));
+        fit_wallpaper_tile_size(self.shell.viewport.size, (width as f32, height as f32))
     }
 
     fn workspace_surface(
@@ -273,7 +274,9 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        if self.main_mode == MainMode::Page && self.selected_nav == NavItem::Settings {
+        if self.shell.navigation.main_mode == MainMode::Page
+            && self.shell.navigation.selected_nav == NavItem::Settings
+        {
             div()
                 .flex()
                 .flex_1()
@@ -285,15 +288,15 @@ impl NyaTermApp {
             let compact_layout = !cfg!(target_os = "macos");
             let has_left_activity_items = self.activity_side_has_items(ActivitySide::Left);
             let has_right_activity_items = self.activity_side_has_items(ActivitySide::Right);
-            let left_overlay_mode = compact_layout && self.last_viewport_size.0 < 1024.;
-            let right_overlay_mode = compact_layout && self.last_viewport_size.0 < 768.;
+            let left_overlay_mode = compact_layout && self.shell.viewport.size.0 < 1024.;
+            let right_overlay_mode = compact_layout && self.shell.viewport.size.0 < 768.;
             let left_drawer_open = has_left_activity_items
                 && left_overlay_mode
-                && self.mobile_left_open
+                && self.shell.panels.mobile_left_open
                 && self.left_side_open();
             let right_drawer_open = has_right_activity_items
                 && right_overlay_mode
-                && self.mobile_right_open
+                && self.shell.panels.mobile_right_open
                 && self.right_side_open();
             let mut surface = div()
                 .flex()
@@ -324,7 +327,7 @@ impl NyaTermApp {
                     this.child(self.activity_bar(ActivitySide::Right, cx))
                 });
 
-            if self.terminal_windows_is_multi_leaf() && self.new_session_menu_open {
+            if self.terminal_windows_is_multi_leaf() && self.shell.chrome.new_session_menu_open {
                 surface = surface.child(self.render_new_session_menu(cx));
             }
 
@@ -336,8 +339,8 @@ impl NyaTermApp {
                         .inset_0()
                         .bg(rgba(0x00000080))
                         .on_click(cx.listener(|this, _, _, cx| {
-                            this.mobile_left_open = false;
-                            this.mobile_right_open = false;
+                            this.shell.panels.mobile_left_open = false;
+                            this.shell.panels.mobile_right_open = false;
                             cx.notify();
                         })),
                 );
@@ -439,9 +442,9 @@ impl NyaTermApp {
                     )
                     .on_click(cx.listener(move |this, _, _, cx| {
                         if left {
-                            this.mobile_left_open = false;
+                            this.shell.panels.mobile_left_open = false;
                         } else {
-                            this.mobile_right_open = false;
+                            this.shell.panels.mobile_right_open = false;
                         }
                         cx.notify();
                     })),
@@ -633,9 +636,10 @@ impl NyaTermApp {
             .when(quick_switch_open, |this| {
                 this.child(self.quick_switch_overlay(cx))
             })
-            .when(self.activity_bar_context_menu.is_some(), |this| {
-                this.child(self.activity_bar_context_menu_overlay(cx))
-            })
+            .when(
+                self.shell.chrome.activity_bar_context_menu.is_some(),
+                |this| this.child(self.activity_bar_context_menu_overlay(cx)),
+            )
             .when(overlay.locked, |this| {
                 this.child(self.lock_screen_overlay(window, cx))
             })
@@ -657,8 +661,8 @@ impl NyaTermApp {
     }
 
     fn modal_child_window_open(&self) -> bool {
-        self.settings_window.is_some()
-            || self.settings_window_open_pending
+        self.shell.navigation.settings.window.is_some()
+            || self.shell.navigation.settings.window_open_pending
             || self.quick_command_state.editor.window.is_some()
             || self.quick_command_state.editor.window_open_pending
             || self.connection_state.editor_modal_window_open_or_pending()
@@ -667,9 +671,9 @@ impl NyaTermApp {
     }
 
     fn activate_modal_child_window(&mut self, cx: &mut Context<Self>) -> bool {
-        if self.settings_window.is_some() {
+        if self.shell.navigation.settings.window.is_some() {
             self.activate_settings_window(cx)
-        } else if self.settings_window_open_pending {
+        } else if self.shell.navigation.settings.window_open_pending {
             true
         } else if self.quick_command_state.editor.window.is_some() {
             self.activate_quick_command_window(cx)

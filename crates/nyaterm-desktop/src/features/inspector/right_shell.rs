@@ -9,9 +9,9 @@ impl NyaTermApp {
         window: &mut gpui::Window,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let mut width = self.right_panel_width.clamp(200., 720.);
-        if !cfg!(target_os = "macos") && self.last_viewport_size.0 < 768. {
-            width = width.min((self.last_viewport_size.0 - 80.).max(120.));
+        let mut width = self.shell.panels.right_width.clamp(200., 720.);
+        if !cfg!(target_os = "macos") && self.shell.viewport.size.0 < 768. {
+            width = width.min((self.shell.viewport.size.0 - 80.).max(120.));
         }
         let palette = self.theme_palette();
         div()

@@ -33,7 +33,7 @@ impl NyaTermApp {
         _session_count: usize,
         cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
-        let (viewport_w, viewport_h) = self.last_viewport_size;
+        let (viewport_w, viewport_h) = self.shell.viewport.size;
         let menu_max_height = (viewport_h - 16.).clamp(160., 440.);
         let (menu_x, menu_y) = if let Some((x, y)) = self.session.dialogs.tab_actions_anchor {
             clamp_tab_actions_position(x, y, 240., menu_max_height, viewport_w, viewport_h)

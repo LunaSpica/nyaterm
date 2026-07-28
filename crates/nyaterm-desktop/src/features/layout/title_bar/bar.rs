@@ -28,8 +28,8 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         let macos = cfg!(target_os = "macos");
         let compact_layout = !cfg!(target_os = "macos");
-        let narrow_left = compact_layout && self.last_viewport_size.0 < 1024.;
-        let narrow_right = compact_layout && self.last_viewport_size.0 < 768.;
+        let narrow_left = compact_layout && self.shell.viewport.size.0 < 1024.;
+        let narrow_right = compact_layout && self.shell.viewport.size.0 < 768.;
         let header_status_visible = self.settings.ui_header_status_visible;
         let header_status = self.header_status_content();
         // Match Tauri Header: h-10.
@@ -207,7 +207,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let menu_open = self.header_status.menu_open;
+        let menu_open = self.shell.chrome.header_status.menu_open;
         let select_label = self.tr("headerStatus.select");
 
         div()
@@ -406,14 +406,14 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn toggle_header_status_menu(&mut self, cx: &mut Context<Self>) {
-        self.header_status.menu_open = !self.header_status.menu_open;
-        if self.header_status.menu_open {
-            self.title_menu_open = None;
-            self.title_menu_submenu = None;
-            self.open_tabs_menu_open = false;
-            self.new_session_menu_open = false;
-            self.new_session_all_sessions_open = false;
-            self.new_session_group_menu_path.clear();
+        self.shell.chrome.header_status.menu_open = !self.shell.chrome.header_status.menu_open;
+        if self.shell.chrome.header_status.menu_open {
+            self.shell.chrome.title_menu_open = None;
+            self.shell.chrome.title_menu_submenu = None;
+            self.shell.chrome.open_tabs_menu_open = false;
+            self.shell.chrome.new_session_menu_open = false;
+            self.shell.chrome.new_session_all_sessions_open = false;
+            self.shell.chrome.new_session_group_menu_path.clear();
         }
         cx.notify();
     }
@@ -425,8 +425,8 @@ impl NyaTermApp {
     ) {
         self.settings.ui_header_status_mode = mode.persistence_id().to_string();
         self.settings.ui_header_status_visible = true;
-        self.header_status.menu_open = false;
-        self.header_status.rendered_minute = current_unix_minute();
+        self.shell.chrome.header_status.menu_open = false;
+        self.shell.chrome.header_status.rendered_minute = current_unix_minute();
         self.persist_header_status_settings();
         cx.notify();
     }
@@ -437,13 +437,13 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.settings.ui_header_status_visible = visible;
-        self.header_status.menu_open = false;
+        self.shell.chrome.header_status.menu_open = false;
         self.persist_header_status_settings();
         cx.notify();
     }
 
     fn persist_header_status_settings(&mut self) {
-        if self.settings_draft_snapshot.is_some() {
+        if self.shell.navigation.settings.draft_snapshot.is_some() {
             self.terminal.view.status =
                 "header status changed; apply settings to persist".to_string();
         } else {
@@ -461,14 +461,14 @@ impl NyaTermApp {
         self.settings.ui_header_status_visible
             && HeaderStatusMode::from_setting(&self.settings.ui_header_status_mode)
                 == HeaderStatusMode::DateTime
-            && self.header_status.rendered_minute != current_unix_minute()
+            && self.shell.chrome.header_status.rendered_minute != current_unix_minute()
     }
 
     pub(in crate::features) fn refresh_header_status_clock(&mut self) -> bool {
         if !self.header_status_clock_refresh_due() {
             return false;
         }
-        self.header_status.rendered_minute = current_unix_minute();
+        self.shell.chrome.header_status.rendered_minute = current_unix_minute();
         true
     }
 
@@ -509,7 +509,7 @@ impl NyaTermApp {
         if let Some(failed) = self.failed_session_display_name() {
             return failed;
         }
-        if let Some(failed) = self.last_connect_failure_name.as_ref() {
+        if let Some(failed) = self.shell.chrome.last_connect_failure_name.as_ref() {
             return failed.clone();
         }
         "NyaTerm".to_string()
@@ -530,7 +530,8 @@ impl NyaTermApp {
         if self.has_pending_session_start() {
             return Some("icons/conn/connect.svg");
         }
-        if self.has_failed_session_start() || self.last_connect_failure_name.is_some() {
+        if self.has_failed_session_start() || self.shell.chrome.last_connect_failure_name.is_some()
+        {
             return Some("icons/session/disconnect.svg");
         }
         None
@@ -541,7 +542,7 @@ impl NyaTermApp {
         menu: TitleMenu,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let open = self.title_menu_open == Some(menu);
+        let open = self.shell.chrome.title_menu_open == Some(menu);
         let id_label = menu.label();
         let label = self.tr(menu.i18n_key());
         let palette = self.theme_palette();
@@ -585,25 +586,25 @@ impl NyaTermApp {
         menu: TitleMenu,
         cx: &mut Context<Self>,
     ) {
-        self.title_menu_open = if self.title_menu_open == Some(menu) {
+        self.shell.chrome.title_menu_open = if self.shell.chrome.title_menu_open == Some(menu) {
             None
         } else {
             Some(menu)
         };
-        self.title_menu_submenu = None;
-        if self.title_menu_open.is_some() {
-            self.header_status.menu_open = false;
-            self.open_tabs_menu_open = false;
-            self.new_session_menu_open = false;
-            self.new_session_all_sessions_open = false;
-            self.new_session_group_menu_path.clear();
+        self.shell.chrome.title_menu_submenu = None;
+        if self.shell.chrome.title_menu_open.is_some() {
+            self.shell.chrome.header_status.menu_open = false;
+            self.shell.chrome.open_tabs_menu_open = false;
+            self.shell.chrome.new_session_menu_open = false;
+            self.shell.chrome.new_session_all_sessions_open = false;
+            self.shell.chrome.new_session_group_menu_path.clear();
         }
         cx.notify();
     }
 
     pub(in crate::features) fn close_title_menu(&mut self, cx: &mut Context<Self>) {
-        self.title_menu_submenu = None;
-        if self.title_menu_open.take().is_some() {
+        self.shell.chrome.title_menu_submenu = None;
+        if self.shell.chrome.title_menu_open.take().is_some() {
             cx.notify();
         }
     }
@@ -613,8 +614,8 @@ impl NyaTermApp {
         submenu: TitleMenuSubmenu,
         cx: &mut Context<Self>,
     ) {
-        if self.title_menu_submenu != Some(submenu) {
-            self.title_menu_submenu = Some(submenu);
+        if self.shell.chrome.title_menu_submenu != Some(submenu) {
+            self.shell.chrome.title_menu_submenu = Some(submenu);
             cx.notify();
         }
     }

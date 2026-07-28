@@ -76,7 +76,7 @@ impl NyaTermApp {
     ) {
         self.security.unlock.master_required_prompt_open = false;
         self.security.unlock.pending_action = None;
-        self.settings_active_tab = SettingsTab::Security;
+        self.shell.navigation.settings.active_tab = SettingsTab::Security;
         self.open_page(NavItem::Settings, cx);
     }
 

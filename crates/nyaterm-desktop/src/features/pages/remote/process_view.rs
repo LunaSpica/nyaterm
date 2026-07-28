@@ -99,7 +99,7 @@ impl NyaTermApp {
             .cloned()
             .collect::<Vec<_>>();
         // Responsive mode first so hidden columns do not keep invalid sort keys.
-        let mode = process_display_mode(self.right_panel_width);
+        let mode = process_display_mode(self.shell.panels.right_width);
         if mode != ProcessDisplayMode::Wide
             && self.remote_ops.process.sort_key == RemoteProcessSortKey::User
         {

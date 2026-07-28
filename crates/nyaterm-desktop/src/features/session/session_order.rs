@@ -128,7 +128,9 @@ impl NyaTermApp {
     /// True when this session is a secondary leaf inside another tab's pane tree
     /// (Tauri: multiple SessionPanes under one Tab, only one strip entry).
     pub(in crate::features) fn is_secondary_pane_session(&self, session_id: &str) -> bool {
-        self.session_tab_owner
+        self.shell
+            .workspace
+            .tab_owner
             .get(session_id)
             .is_some_and(|owner| owner != session_id)
     }
@@ -138,7 +140,7 @@ impl NyaTermApp {
         let mut current = session_id.to_string();
         // Flatten owner chains defensively.
         for _ in 0..8 {
-            match self.session_tab_owner.get(&current) {
+            match self.shell.workspace.tab_owner.get(&current) {
                 Some(owner) if owner != &current => current = owner.clone(),
                 _ => break,
             }
@@ -176,7 +178,7 @@ impl NyaTermApp {
                 return active.to_string();
             }
         }
-        if let Some(root) = self.session_pane_roots.get(tab_root) {
+        if let Some(root) = self.shell.workspace.pane_roots.get(tab_root) {
             if let Some(first) = root.session_ids().into_iter().next() {
                 return first;
             }

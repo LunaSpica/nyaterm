@@ -15,12 +15,12 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let Some(menu) = self.activity_bar_context_menu.clone() else {
+        let Some(menu) = self.shell.chrome.activity_bar_context_menu.clone() else {
             return div().into_any_element();
         };
         let entry_id = menu.entry_id.clone();
-        let show_labels = self.activity_bar_layout.show_labels;
-        let (viewport_w, viewport_h) = self.last_viewport_size;
+        let show_labels = self.shell.chrome.activity_bar_layout.show_labels;
+        let (viewport_w, viewport_h) = self.shell.viewport.size;
         let menu_w = 180.;
         let submenu_w = 164.;
         let margin = 8.;
@@ -191,7 +191,7 @@ impl NyaTermApp {
         let bottom_entries = self.activity_entries_for_zone(bottom_zone);
         let top_len = top_entries.len();
         let bottom_len = bottom_entries.len();
-        let show_labels = self.activity_bar_layout.show_labels;
+        let show_labels = self.shell.chrome.activity_bar_layout.show_labels;
         let palette = self.theme_palette();
 
         // Tauri DropZone: gap-0.5 pt-1

@@ -8,10 +8,10 @@ use crate::models::{CloudSyncSecretDraft, MainMode, NavItem, TranslationSecretDr
 
 impl NyaTermApp {
     pub(in crate::features) fn begin_settings_draft(&mut self) {
-        if self.settings_draft_snapshot.is_some() {
+        if self.shell.navigation.settings.draft_snapshot.is_some() {
             return;
         }
-        self.settings_draft_snapshot = Some(SettingsDraftSnapshot {
+        self.shell.navigation.settings.draft_snapshot = Some(SettingsDraftSnapshot {
             settings: self.settings.clone(),
             ai_settings: self.ai.settings.config.clone(),
             ai_model_draft: self.ai.settings.model_draft.clone(),
@@ -28,7 +28,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn settings_draft_dirty(&self) -> bool {
-        let Some(snapshot) = self.settings_draft_snapshot.as_ref() else {
+        let Some(snapshot) = self.shell.navigation.settings.draft_snapshot.as_ref() else {
             return false;
         };
         snapshot.settings != self.settings
@@ -50,7 +50,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> bool {
-        if self.settings_draft_snapshot.is_none() {
+        if self.shell.navigation.settings.draft_snapshot.is_none() {
             return false;
         }
         self.store_status.message = "settings draft changed".to_string();
@@ -241,10 +241,10 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn rebase_open_settings_draft(&mut self) {
-        if self.settings_draft_snapshot.is_none() {
+        if self.shell.navigation.settings.draft_snapshot.is_none() {
             return;
         }
-        self.settings_draft_snapshot = None;
+        self.shell.navigation.settings.draft_snapshot = None;
         self.settings_master_password_enabled = self.settings.has_master_password;
         self.settings_master_password_draft.clear();
         self.begin_settings_draft();
@@ -255,7 +255,7 @@ impl NyaTermApp {
         close_after_apply: bool,
         cx: &mut Context<Self>,
     ) {
-        if self.settings_draft_snapshot.is_none() {
+        if self.shell.navigation.settings.draft_snapshot.is_none() {
             if close_after_apply {
                 self.finish_settings_page(cx);
             }
@@ -357,7 +357,7 @@ impl NyaTermApp {
                         store.save_workspace_pane_layout(None)
                     });
                 }
-                self.settings_draft_snapshot = None;
+                self.shell.navigation.settings.draft_snapshot = None;
                 self.store_status.message = "settings applied".to_string();
                 self.store_status.ready = true;
                 self.terminal.view.status = "settings applied".to_string();
@@ -378,7 +378,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn cancel_settings(&mut self, cx: &mut Context<Self>) {
-        if let Some(snapshot) = self.settings_draft_snapshot.take() {
+        if let Some(snapshot) = self.shell.navigation.settings.draft_snapshot.take() {
             self.apply_gpui_settings(snapshot.settings);
             self.ai.settings.config = snapshot.ai_settings;
             self.ai.settings.model_draft = snapshot.ai_model_draft;
@@ -410,7 +410,7 @@ impl NyaTermApp {
         if self.settings_draft_dirty() {
             self.apply_settings_draft(true, cx);
         } else {
-            self.settings_draft_snapshot = None;
+            self.shell.navigation.settings.draft_snapshot = None;
             self.finish_settings_page(cx);
         }
     }
@@ -454,22 +454,30 @@ impl NyaTermApp {
         self.forget_text_inputs("ai.settings.action.");
         self.forget_text_inputs("ai.settings.manual-model.");
         self.forget_text_inputs("keyword.highlight.");
-        self.settings_window = None;
-        self.settings_window_open_pending = false;
-        if self.main_mode == MainMode::Page && self.selected_nav == NavItem::Settings {
-            self.main_mode = MainMode::Workspace;
-            self.left_sidebar_collapsed = self
-                .settings_previous_left_collapsed
+        self.shell.navigation.settings.window = None;
+        self.shell.navigation.settings.window_open_pending = false;
+        if self.shell.navigation.main_mode == MainMode::Page
+            && self.shell.navigation.selected_nav == NavItem::Settings
+        {
+            self.shell.navigation.main_mode = MainMode::Workspace;
+            self.shell.panels.left_collapsed = self
+                .shell
+                .navigation
+                .settings
+                .previous_left_collapsed
                 .take()
-                .unwrap_or_else(|| self.active_left_panel.is_none());
-            self.right_inspector_collapsed = self
-                .settings_previous_right_collapsed
+                .unwrap_or_else(|| self.shell.panels.active_left.is_none());
+            self.shell.panels.right_collapsed = self
+                .shell
+                .navigation
+                .settings
+                .previous_right_collapsed
                 .take()
-                .unwrap_or_else(|| self.active_right_panel.is_none());
+                .unwrap_or_else(|| self.shell.panels.active_right.is_none());
             self.persist_ui_layout();
         } else {
-            self.settings_previous_left_collapsed = None;
-            self.settings_previous_right_collapsed = None;
+            self.shell.navigation.settings.previous_left_collapsed = None;
+            self.shell.navigation.settings.previous_right_collapsed = None;
         }
         self.terminal.view.status = "settings closed".to_string();
         cx.notify();

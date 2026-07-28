@@ -13,8 +13,8 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let narrow = self.last_viewport_size.0 < 520.;
-        let width = (self.last_viewport_size.0 - 32.).clamp(280., 480.);
+        let narrow = self.shell.viewport.size.0 < 520.;
+        let width = (self.shell.viewport.size.0 - 32.).clamp(280., 480.);
         let docs_url = if self
             .settings
             .language

@@ -77,7 +77,9 @@ impl NyaTermApp {
                         .unwrap_or(("Session", "icons/conn/terminal.svg"));
                     let custom_color = self.session.tab_colors.get(tab_id).copied();
                     let leaf_ids = self
-                        .session_pane_roots
+                        .shell
+                        .workspace
+                        .pane_roots
                         .get(tab_id)
                         .map(|root| root.session_ids())
                         .unwrap_or_else(|| vec![tab_id.clone()]);
@@ -327,7 +329,8 @@ impl NyaTermApp {
                         .on_click(cx.listener({
                             let leaf_id = id.clone();
                             move |this, _, window, cx| {
-                                this.focused_terminal_window_leaf_id = Some(leaf_id.clone());
+                                this.shell.workspace.focused_terminal_leaf_id =
+                                    Some(leaf_id.clone());
                                 this.start_local_session(window, cx);
                             }
                         })),
@@ -396,7 +399,8 @@ impl NyaTermApp {
                         cx.listener({
                             let leaf_id = id.clone();
                             move |this, _, _, cx| {
-                                this.focused_terminal_window_leaf_id = Some(leaf_id.clone());
+                                this.shell.workspace.focused_terminal_leaf_id =
+                                    Some(leaf_id.clone());
                                 cx.notify();
                             }
                         }),
