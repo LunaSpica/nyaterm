@@ -1,6 +1,14 @@
-use super::*;
+use std::collections::HashSet;
+
+use gpui::{
+    Context, InteractiveElement as _, IntoElement, MouseButton, MouseDownEvent, MouseMoveEvent,
+    MouseUpEvent, SharedString, Styled as _, Window, div, px, rgb,
+};
+use nyaterm_core::{ConnectionStore, uuid};
+
+use crate::features::{NyaTermApp, short_id};
 use crate::models::{
-    MainMode, WorkspacePaneNode, WorkspaceSplitDirection, WorkspaceSplitResizeState,
+    MainMode, NavItem, WorkspacePaneNode, WorkspaceSplitDirection, WorkspaceSplitResizeState,
 };
 
 impl NyaTermApp {
@@ -273,7 +281,7 @@ impl NyaTermApp {
     pub(in crate::features) fn start_workspace_split_resize(
         &mut self,
         split_id: String,
-        event: &gpui::MouseDownEvent,
+        event: &MouseDownEvent,
         cx: &mut Context<Self>,
     ) {
         // Prefer multi-leaf tab-window splits when active; otherwise pane splits.
@@ -325,7 +333,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn update_workspace_split_resize(
         &mut self,
-        event: &gpui::MouseMoveEvent,
+        event: &MouseMoveEvent,
         cx: &mut Context<Self>,
     ) {
         let Some(state) = self.workspace_split_resize.clone() else {
@@ -369,7 +377,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn finish_workspace_split_resize(
         &mut self,
-        _event: &gpui::MouseUpEvent,
+        _event: &MouseUpEvent,
         cx: &mut Context<Self>,
     ) {
         if let Some(state) = self.workspace_split_resize.take() {
@@ -422,7 +430,7 @@ impl NyaTermApp {
                 .hover(move |this| this.bg(accent))
                 .on_mouse_down(
                     MouseButton::Left,
-                    cx.listener(move |this, event: &gpui::MouseDownEvent, _, cx| {
+                    cx.listener(move |this, event: &MouseDownEvent, _, cx| {
                         this.start_workspace_split_resize(split_id.clone(), event, cx);
                     }),
                 )
@@ -438,7 +446,7 @@ impl NyaTermApp {
                 .hover(move |this| this.bg(accent))
                 .on_mouse_down(
                     MouseButton::Left,
-                    cx.listener(move |this, event: &gpui::MouseDownEvent, _, cx| {
+                    cx.listener(move |this, event: &MouseDownEvent, _, cx| {
                         this.start_workspace_split_resize(split_id.clone(), event, cx);
                     }),
                 )

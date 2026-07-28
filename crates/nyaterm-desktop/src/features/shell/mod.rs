@@ -1,7 +1,5 @@
 //! Shell chrome, navigation, layout runtime and the GPUI event pump.
 
-use super::*;
-
 mod activity_bar_runtime;
 mod appearance;
 mod event_pump;

@@ -12,7 +12,7 @@ Last updated from the working tree on 2026-07-28.
 | `NyaTermApp` fields | 261 | Counted from `features/app_state/mod.rs`; down from 585, still transitional. |
 | `impl NyaTermApp` blocks | 240 | Spread across 235 files under `crates/nyaterm-desktop/src`. |
 | `#[path = "..."]` declarations in desktop | 0 | Cleared. Every directory is a real module; the boundary script fails on any new occurrence. |
-| `use super::*` imports in desktop | 352 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
+| `use super::*` imports in desktop | 350 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
 | `features/prelude.rs` rough exported-token count | 229 | Still a broad shared prelude; two hundred sixteen low-frequency transport/core/http/model/helper exports are now explicit imports. |
 | Entity Store structs | 4 | `Runtime`, `WindowRuntime`, `StartupRestore`, `Overlay`. Each owns state the app does not. |
 | Snapshot structs | 0 | Cleared. No store is a projection of `NyaTermApp` any more. |
@@ -310,6 +310,13 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   multi-leaf terminal window coordination now names its GPUI context,
   `ConnectionStore`, app adapter, formatting helper and terminal window models
   explicitly.
+- `shell/workspace_runtime.rs` no longer depends on the shell wildcard import;
+  workspace pane ownership and split-resize coordination now name their GPUI
+  event/element traits, storage facade, UUID helper, app adapter and pane models
+  explicitly.
+- `features/shell/mod.rs` no longer imports the feature prelude for child
+  modules. Shell child modules now carry their own explicit dependencies, while
+  the module root only declares submodules and deliberate re-exports.
 - `connection_runtime/helpers.rs` no longer depends on the connection runtime
   wildcard import; its GPUI, app, model, and core dependencies are explicit.
 - `connection_runtime/actions.rs` no longer depends on the connection runtime
