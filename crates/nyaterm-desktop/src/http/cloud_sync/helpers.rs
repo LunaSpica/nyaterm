@@ -1,4 +1,8 @@
-use super::*;
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use nyaterm_core::CloudSyncError;
+use sha2::{Digest as ShaDigest, Sha256};
+use zed_reqwest::header::WWW_AUTHENTICATE;
 
 pub(super) fn map_s3_http_error(error: zed_reqwest::Error) -> CloudSyncError {
     if error.is_timeout() {

@@ -1,4 +1,12 @@
-use super::*;
+use std::time::Duration;
+
+use nyaterm_core::{
+    CloudSyncError, CloudSyncRemote, S3HttpMethod, S3SyncSettings, build_s3_signed_request,
+    s3_payload_sha256,
+};
+use zed_reqwest::{Method, StatusCode};
+
+use super::helpers::map_s3_http_error;
 
 #[derive(Clone)]
 pub struct NativeS3Remote {

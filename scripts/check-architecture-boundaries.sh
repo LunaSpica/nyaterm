@@ -208,6 +208,11 @@ check_no_matches \
   crates/nyaterm-desktop/src/features/remote/remote_runtime/mod.rs
 
 check_no_matches \
+  "cloud sync HTTP module entry point must use named imports and re-exports" \
+  '^[[:space:]]*(pub(\([^)]*\))?[[:space:]]+)?use[[:space:]]+(helpers|aliyun|github_gist_auth|google_drive|onedrive|s3|snippet|webdav)::\*;' \
+  crates/nyaterm-desktop/src/http/cloud_sync/mod.rs
+
+check_no_matches \
   "low-frequency translation UI models must stay out of features/prelude.rs" \
   '(^|[,{[:space:]])(TranslateInputField|TranslationDialogState|TranslationSecretDraft)([},[:space:]]|$)' \
   crates/nyaterm-desktop/src/features/prelude.rs
@@ -547,6 +552,16 @@ check_no_matches 'terminal-gpui #[path] debt' '#\[path\s*=' \
 # lower these counts so the debt cannot return.
 
 declare -A SUPER_BASELINE=(
+  [crates/nyaterm-desktop/src/http/cloud_sync/mod.rs]=0
+  [crates/nyaterm-desktop/src/http/cloud_sync/aliyun.rs]=0
+  [crates/nyaterm-desktop/src/http/cloud_sync/github_gist_auth.rs]=0
+  [crates/nyaterm-desktop/src/http/cloud_sync/google_drive.rs]=0
+  [crates/nyaterm-desktop/src/http/cloud_sync/helpers.rs]=0
+  [crates/nyaterm-desktop/src/http/cloud_sync/onedrive.rs]=0
+  [crates/nyaterm-desktop/src/http/cloud_sync/s3.rs]=0
+  [crates/nyaterm-desktop/src/http/cloud_sync/snippet.rs]=0
+  [crates/nyaterm-desktop/src/http/cloud_sync/tests.rs]=0
+  [crates/nyaterm-desktop/src/http/cloud_sync/webdav.rs]=0
   [crates/nyaterm-desktop/src/features/remote/mod.rs]=0
   [crates/nyaterm-desktop/src/features/remote/state.rs]=0
   [crates/nyaterm-desktop/src/features/remote/remote_runtime/mod.rs]=0
@@ -857,6 +872,7 @@ while IFS=: read -r file _line _text; do
     fail "new use super::* in governed scope: $file"
   fi
 done < <(rg -n --path-separator / '^[[:space:]]*use super::\*;' \
+  crates/nyaterm-desktop/src/http/cloud_sync \
   crates/nyaterm-desktop/src/features/ai \
   crates/nyaterm-desktop/src/features/connections \
   crates/nyaterm-desktop/src/features/commands \

@@ -1,4 +1,23 @@
-use super::*;
+use std::sync::Mutex;
+use std::time::Duration;
+
+use nyaterm_core::{
+    CloudSyncError, CloudSyncRemote, OAuthDriveSyncSettings, drive_remote_segments,
+    google_drive_query_literal,
+};
+use serde_json::json;
+use zed_reqwest::StatusCode;
+use zed_reqwest::blocking::RequestBuilder;
+use zed_reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
+
+use super::helpers::{
+    form_urlencoded, request_nonce, trim_optional, trim_optional_secret, trim_remote_path,
+};
+
+const GOOGLE_DRIVE_FILES_URL: &str = "https://www.googleapis.com/drive/v3/files";
+const GOOGLE_DRIVE_UPLOAD_FILES_URL: &str = "https://www.googleapis.com/upload/drive/v3/files";
+const GOOGLE_OAUTH_TOKEN_URL: &str = "https://oauth2.googleapis.com/token";
+const GOOGLE_DRIVE_FOLDER_MIME: &str = "application/vnd.google-apps.folder";
 
 pub struct NativeGoogleDriveRemote {
     client: zed_reqwest::blocking::Client,

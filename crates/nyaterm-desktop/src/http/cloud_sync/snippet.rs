@@ -1,4 +1,8 @@
-use super::*;
+use std::time::Duration;
+
+use nyaterm_core::{
+    CloudSyncError, SnippetHttpClient, SnippetHttpMethod, SnippetHttpRequest, SnippetHttpResponse,
+};
 
 #[derive(Clone)]
 pub struct NativeSnippetHttpClient {

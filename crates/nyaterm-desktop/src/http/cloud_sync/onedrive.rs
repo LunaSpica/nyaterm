@@ -1,4 +1,21 @@
-use super::*;
+use std::sync::Mutex;
+use std::time::Duration;
+
+use nyaterm_core::{
+    CloudSyncError, CloudSyncRemote, OAuthDriveSyncSettings, drive_remote_segments,
+};
+use serde_json::json;
+use zed_reqwest::StatusCode;
+use zed_reqwest::blocking::RequestBuilder;
+use zed_reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
+
+use super::helpers::{
+    form_urlencoded, percent_encode_path, trim_optional, trim_optional_secret, trim_remote_path,
+};
+
+const MICROSOFT_GRAPH_BASE_URL: &str = "https://graph.microsoft.com/v1.0";
+const MICROSOFT_OAUTH_TOKEN_URL: &str =
+    "https://login.microsoftonline.com/common/oauth2/v2.0/token";
 
 pub struct NativeOneDriveRemote {
     pub(super) client: zed_reqwest::blocking::Client,

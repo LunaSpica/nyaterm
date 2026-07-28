@@ -309,7 +309,10 @@ fn has_gist_scope(scope: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use std::sync::atomic::AtomicBool;
+    use std::time::{Duration, Instant};
+
+    use super::{has_gist_scope, wait_cancelled};
 
     #[test]
     fn gist_scope_parser_accepts_space_or_comma_separated_values() {

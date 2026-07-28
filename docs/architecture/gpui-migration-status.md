@@ -12,7 +12,7 @@ Last updated from the working tree on 2026-07-28.
 | `NyaTermApp` fields | 261 | Counted from `features/app_state/mod.rs`; down from 585, still transitional. |
 | `impl NyaTermApp` blocks | 239 | Spread across 234 files under `crates/nyaterm-desktop/src`. |
 | `#[path = "..."]` declarations in desktop | 0 | Cleared. Every directory is a real module; the boundary script fails on any new occurrence. |
-| `use super::*` imports in desktop | 115 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
+| `use super::*` imports in desktop | 106 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
 | `features/prelude.rs` rough exported-token count | 177 | Still a broad shared prelude; two hundred sixty-eight low-frequency GPUI/transport/core/http/model/helper/widget exports are now explicit imports. |
 | Entity Store structs | 4 | `Runtime`, `WindowRuntime`, `StartupRestore`, `Overlay`. Each owns state the app does not. |
 | Snapshot structs | 0 | Cleared. No store is a projection of `NyaTermApp` any more. |
@@ -521,6 +521,17 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   at zero parent-module wildcard imports. Remote Docker/process/stats jobs,
   cloud-sync provider, history and conflict behavior, persisted sync and
   translation formats, and translation requests/rendering are unchanged.
+- The complete ten-module `http/cloud_sync` adapter tree is now free of
+  `use super::*` imports, including its shared helpers, provider compatibility
+  tests and nested GitHub Gist OAuth tests. WebDAV, S3, Google Drive, OneDrive,
+  Aliyun Drive and snippet adapters name their core, HTTP, hashing, JSON,
+  standard-library and sibling-helper dependencies directly. The module entry
+  point now contains only module declarations and named provider/OAuth
+  re-exports; provider-specific endpoint constants live with their adapters.
+  The architecture script governs the subtree at zero wildcard imports and
+  prevents broad helper/provider re-exports from returning. Provider setting
+  fields, request signing, OAuth refresh/device flow, remote path construction,
+  secret handling and cloud-sync wire behavior are unchanged.
 - `connection_runtime/helpers.rs` no longer depends on the connection runtime
   wildcard import; its GPUI, app, model, and core dependencies are explicit.
 - `connection_runtime/actions.rs` no longer depends on the connection runtime

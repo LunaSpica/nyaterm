@@ -1,4 +1,16 @@
-use super::*;
+use std::sync::Mutex;
+use std::time::Duration;
+
+use nyaterm_core::{
+    AliyunDriveSyncSettings, CloudSyncError, CloudSyncRemote, drive_remote_segments,
+};
+use serde_json::json;
+use zed_reqwest::StatusCode;
+use zed_reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
+
+use super::helpers::{json_string_field, trim_optional, trim_optional_secret, trim_remote_path};
+
+const ALIYUN_DRIVE_BASE_URL: &str = "https://openapi.alipan.com";
 
 pub struct NativeAliyunDriveRemote {
     pub(super) client: zed_reqwest::blocking::Client,
