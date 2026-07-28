@@ -773,6 +773,18 @@ declare -A SUPER_BASELINE=(
   [crates/nyaterm-desktop/src/features/inspector/ai_widgets/history.rs]=0
   [crates/nyaterm-desktop/src/features/inspector/ai_widgets/messages.rs]=0
   [crates/nyaterm-desktop/src/features/inspector/ai_widgets/transcript.rs]=0
+  [crates/nyaterm-desktop/src/features/layout/security_editors/mod.rs]=0
+  [crates/nyaterm-desktop/src/features/layout/security_editors/credential.rs]=0
+  [crates/nyaterm-desktop/src/features/layout/security_editors/key.rs]=0
+  [crates/nyaterm-desktop/src/features/layout/security_editors/otp.rs]=0
+  [crates/nyaterm-desktop/src/features/layout/security_editors/password.rs]=0
+  [crates/nyaterm-desktop/src/features/layout/security_panel/mod.rs]=0
+  [crates/nyaterm-desktop/src/features/layout/security_panel/chrome.rs]=0
+  [crates/nyaterm-desktop/src/features/layout/security_panel/panel/mod.rs]=0
+  [crates/nyaterm-desktop/src/features/layout/security_panel/panel/credentials.rs]=0
+  [crates/nyaterm-desktop/src/features/layout/security_panel/panel/keys.rs]=0
+  [crates/nyaterm-desktop/src/features/layout/security_panel/panel/otp.rs]=0
+  [crates/nyaterm-desktop/src/features/layout/security_panel/panel/passwords.rs]=0
   [crates/nyaterm-desktop/src/features/panels/about_overlay.rs]=0
   [crates/nyaterm-desktop/src/features/panels/active_session_menu_overlay.rs]=0
   [crates/nyaterm-desktop/src/features/panels/connection_import_overlay.rs]=0
@@ -906,6 +918,8 @@ done < <(rg -n --path-separator / '^[[:space:]]*use super::\*;' \
   crates/nyaterm-desktop/src/features/formatting \
   crates/nyaterm-desktop/src/features/icons \
   crates/nyaterm-desktop/src/features/inspector \
+  crates/nyaterm-desktop/src/features/layout/security_editors \
+  crates/nyaterm-desktop/src/features/layout/security_panel \
   crates/nyaterm-desktop/src/features/panels \
   crates/nyaterm-desktop/src/features/remote \
   crates/nyaterm-desktop/src/features/session \

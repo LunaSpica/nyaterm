@@ -1,4 +1,11 @@
-use super::*;
+use gpui::{Context, div, prelude::*, px, rgb};
+use nyaterm_core::truncate_preview;
+
+use crate::features::NyaTermApp;
+use crate::theme::ThemePalette;
+use crate::widgets::{empty_panel, small_button};
+
+use super::{security_auth_body_base, security_tab_toolbar};
 
 impl NyaTermApp {
     pub(super) fn security_keys_body(

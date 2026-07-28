@@ -1,6 +1,12 @@
-use super::*;
+use gpui::{
+    App, ClickEvent, Context, FontWeight, IntoElement, SharedString, Window, div, prelude::*, px,
+    rgb,
+};
 
+use crate::features::NyaTermApp;
+use crate::features::view_widgets::{modal_dialog_footer_localized_danger, modal_dialog_shell};
 use crate::models::{SecurityAuthTab, SecurityDeleteConfirmState};
+use crate::theme::ThemePalette;
 
 mod credentials;
 mod keys;

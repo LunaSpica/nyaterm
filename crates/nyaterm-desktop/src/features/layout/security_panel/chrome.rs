@@ -1,6 +1,11 @@
-use super::*;
+use gpui::{
+    Context, FontWeight, IntoElement, KeyDownEvent, MouseButton, SharedString, div, prelude::*, px,
+    rgb, rgba, svg,
+};
 
+use crate::features::{NyaTermApp, TextInputSetup};
 use crate::models::SecurityAuthTab;
+use crate::widgets::small_button;
 
 impl NyaTermApp {
     pub(in crate::features) fn security_secret_footer(

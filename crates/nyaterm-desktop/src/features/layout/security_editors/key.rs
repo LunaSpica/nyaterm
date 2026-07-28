@@ -1,6 +1,13 @@
-use super::*;
+use gpui::{
+    Context, FontWeight, IntoElement, KeyDownEvent, SharedString, div, prelude::*, px, rgb,
+};
+use nyaterm_core::truncate_preview;
 
+use crate::features::{NyaTermApp, TextInputSetup};
 use crate::models::{SecurityKeyEditorField, SecurityKeyEditorState};
+use crate::widgets::small_button;
+
+use super::super::view_helpers::security_editor_field;
 
 impl NyaTermApp {
     pub(in crate::features) fn security_key_editor_view(

@@ -12,7 +12,7 @@ Last updated from the working tree on 2026-07-28.
 | `NyaTermApp` fields | 261 | Counted from `features/app_state/mod.rs`; down from 585, still transitional. |
 | `impl NyaTermApp` blocks | 239 | Spread across 234 files under `crates/nyaterm-desktop/src`. |
 | `#[path = "..."]` declarations in desktop | 0 | Cleared. Every directory is a real module; the boundary script fails on any new occurrence. |
-| `use super::*` imports in desktop | 96 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
+| `use super::*` imports in desktop | 84 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
 | `features/prelude.rs` rough exported-token count | 163 | Still a broad shared prelude; two hundred eighty-two low-frequency GPUI/transport/core/http/model/helper/widget exports are now explicit imports. |
 | Entity Store structs | 4 | `Runtime`, `WindowRuntime`, `StartupRestore`, `Overlay`. Each owns state the app does not. |
 | Snapshot structs | 0 | Cleared. No store is a projection of `NyaTermApp` any more. |
@@ -134,6 +134,13 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   areas are real module trees, including their nested `security_panel/panel`,
   `workspace/surface`, `quick_commands_panel/panel`, `send_command_bar`,
   `tab_actions_overlay` and `ai_widgets` subtrees.
+- The complete twelve-module security presentation area under
+  `layout/security_panel` and `layout/security_editors` now uses explicit
+  imports instead of `use super::*`; both subtrees are guarded at zero wildcard
+  imports. This is presentation import plumbing only: secret masking, unlock,
+  delete confirmation, OTP refresh, and key/password/credential editor behavior
+  are unchanged. Secret storage, serialization, and encryption formats are
+  untouched.
 - `#[path = "..."]` is gone from `nyaterm-desktop` and `nyaterm-terminal-gpui`.
   The `pages` tree, `http/cloud_sync` and `models/workspace_tabs` were the last
   holdouts; `pages/remote/docker` also stopped aliasing six sibling files and

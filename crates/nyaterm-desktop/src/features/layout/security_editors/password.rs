@@ -1,6 +1,10 @@
-use super::*;
+use gpui::{Context, FontWeight, IntoElement, KeyDownEvent, div, prelude::*, px, rgb};
 
+use crate::features::{NyaTermApp, TextInputSetup};
 use crate::models::SecurityPasswordEditorState;
+use crate::widgets::small_button;
+
+use super::super::view_helpers::security_editor_field;
 
 impl NyaTermApp {
     pub(in crate::features) fn security_password_editor_view(

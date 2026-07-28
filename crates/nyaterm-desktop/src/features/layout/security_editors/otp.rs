@@ -1,6 +1,12 @@
-use super::*;
+use gpui::{
+    Context, FontWeight, IntoElement, KeyDownEvent, SharedString, div, prelude::*, px, rgb,
+};
 
+use crate::features::{NyaTermApp, TextInputSetup};
 use crate::models::SecurityOtpEditorState;
+use crate::widgets::small_button;
+
+use super::super::view_helpers::{security_editor_field, security_type_chip};
 
 impl NyaTermApp {
     pub(in crate::features) fn security_otp_editor_view(
