@@ -1,5 +1,9 @@
 use super::browser_filter::transfer_browser_search_text_for_key;
-use super::*;
+use gpui::{Context, KeyDownEvent, Window};
+use nyaterm_transport::SftpFileType;
+
+use crate::features::NyaTermApp;
+use crate::shortcuts::shortcut_matches;
 
 impl NyaTermApp {
     pub(in crate::features::pages::transfers) fn handle_transfer_browser_key_down(
@@ -69,11 +73,8 @@ impl NyaTermApp {
             return;
         }
 
-        if crate::shortcuts::shortcut_matches(
-            event,
-            "fileExplorer.rename",
-            &self.settings.keybindings,
-        ) && self.selected_transfer_entries().len() == 1
+        if shortcut_matches(event, "fileExplorer.rename", &self.settings.keybindings)
+            && self.selected_transfer_entries().len() == 1
             && self.active_ssh_config.is_some()
             && self.transfer.file_ops.rename.is_none()
         {
