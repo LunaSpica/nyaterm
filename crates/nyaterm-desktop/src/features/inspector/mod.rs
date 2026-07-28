@@ -1,7 +1,5 @@
-use super::*;
-
 mod helpers;
-pub(in crate::features) use helpers::*;
+pub(in crate::features) use helpers::disabled_inspector_panel;
 
 mod ai_ask;
 mod ai_widgets;

@@ -10,10 +10,10 @@ Last updated from the working tree on 2026-07-28.
 | Metric | Current value | Notes |
 | --- | ---: | --- |
 | `NyaTermApp` fields | 261 | Counted from `features/app_state/mod.rs`; down from 585, still transitional. |
-| `impl NyaTermApp` blocks | 240 | Spread across 235 files under `crates/nyaterm-desktop/src`. |
+| `impl NyaTermApp` blocks | 239 | Spread across 234 files under `crates/nyaterm-desktop/src`. |
 | `#[path = "..."]` declarations in desktop | 0 | Cleared. Every directory is a real module; the boundary script fails on any new occurrence. |
-| `use super::*` imports in desktop | 213 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
-| `features/prelude.rs` rough exported-token count | 214 | Still a broad shared prelude; two hundred thirty-one low-frequency transport/core/http/model/helper exports are now explicit imports. |
+| `use super::*` imports in desktop | 201 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
+| `features/prelude.rs` rough exported-token count | 210 | Still a broad shared prelude; two hundred thirty-five low-frequency transport/core/http/model/helper/widget exports are now explicit imports. |
 | Entity Store structs | 4 | `Runtime`, `WindowRuntime`, `StartupRestore`, `Overlay`. Each owns state the app does not. |
 | Snapshot structs | 0 | Cleared. No store is a projection of `NyaTermApp` any more. |
 | `replace_snapshot` methods | 0 | Cleared. |
@@ -464,6 +464,16 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   `use super::*` imports. Persistence calls, validation order, secret masking,
   credential encryption, backup/snapshot compatibility and settings behavior
   are unchanged.
+- The complete `features/inspector` tree is now free of wildcard imports. The
+  AI ask composer, transcript, message bubbles, command cards, agent steps,
+  history/execution overlays, command history and right-panel shell name their
+  GPUI, core, model, formatting, widget and runtime dependencies directly. Both
+  `mod.rs` layers are pure module entry points, the helper export is named, and
+  the empty `impl NyaTermApp {}` placeholder was removed. Three AI core types
+  and `svg_icon_button` also left `features/prelude.rs`. The architecture
+  script governs all 12 Rust modules under `features/inspector` at zero
+  `use super::*` imports. Inspector rendering, AI interaction and command
+  execution behavior are unchanged.
 - `connection_runtime/helpers.rs` no longer depends on the connection runtime
   wildcard import; its GPUI, app, model, and core dependencies are explicit.
 - `connection_runtime/actions.rs` no longer depends on the connection runtime

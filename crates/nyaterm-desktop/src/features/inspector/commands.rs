@@ -1,4 +1,7 @@
-use super::*;
+use gpui::{ClickEvent, Context, IntoElement, SharedString, div, prelude::*, px, rgb};
+use nyaterm_core::truncate_preview;
+
+use crate::features::NyaTermApp;
 
 impl NyaTermApp {
     pub(in crate::features) fn command_history_panel(

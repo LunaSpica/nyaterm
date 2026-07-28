@@ -1,4 +1,12 @@
-use super::*;
+use gpui::{Context, FontWeight, IntoElement, SharedString, div, prelude::*, px, rgb, svg};
+use nyaterm_core::truncate_preview;
+
+use crate::features::NyaTermApp;
+use crate::features::formatting::ai_agent_step_status_style;
+use crate::features::runtime_jobs::{AiAgentStepStatus, AiAgentStepView};
+use crate::features::shell::gpui_code_font_family;
+use crate::features::view_widgets::markdown_content_view;
+use crate::widgets::status_pill;
 
 impl NyaTermApp {
     pub(in crate::features) fn ai_agent_step_card(
@@ -162,7 +170,7 @@ impl NyaTermApp {
                     div()
                         .px_2()
                         .py_1()
-                        .font_family(crate::features::gpui_code_font_family())
+                        .font_family(gpui_code_font_family())
                         .text_size(px(11.))
                         .text_color(rgb(palette.text))
                         .line_height(px(16.))
@@ -216,7 +224,7 @@ impl NyaTermApp {
                             .py_1()
                             .max_h(px(120.))
                             .overflow_hidden()
-                            .font_family(crate::features::gpui_code_font_family())
+                            .font_family(gpui_code_font_family())
                             .text_size(px(10.))
                             .text_color(rgb(palette.text_muted))
                             .line_height(px(14.))
@@ -250,7 +258,7 @@ impl NyaTermApp {
                     .bg(rgb(palette.bg))
                     .px_2()
                     .py_1()
-                    .font_family(crate::features::gpui_code_font_family())
+                    .font_family(gpui_code_font_family())
                     .text_size(px(10.))
                     .text_color(rgb(palette.text_muted))
                     .child(truncate_preview(&obs, 400)),

@@ -1,6 +1,13 @@
-use super::*;
+use gpui::{
+    Context, FontWeight, IntoElement, KeyDownEvent, MouseButton, SharedString, div, prelude::*, px,
+    rgb, rgba, svg,
+};
+use nyaterm_core::{AiAction, AiMode, truncate_preview};
 
-use crate::models::{AiDetectedErrorState, AiPreparedRequest, SettingsTab};
+use crate::features::formatting::{session_kind_label, short_id};
+use crate::features::{NyaTermApp, TextInputSetup};
+use crate::models::{AiDetectedErrorState, AiPreparedRequest, NavItem, SettingsTab};
+use crate::widgets::{mode_button, small_button};
 
 impl NyaTermApp {
     pub(in crate::features) fn dismiss_ai_detected_error(&mut self, cx: &mut Context<Self>) {

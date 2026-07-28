@@ -1,6 +1,7 @@
-use super::*;
+use gpui::{Context, FontWeight, IntoElement, SharedString, div, prelude::*, px, rgb, svg};
 
-use crate::models::SettingsTab;
+use crate::features::NyaTermApp;
+use crate::models::{NavItem, SettingsTab};
 
 impl NyaTermApp {
     pub(in crate::features) fn ai_transcript_body(

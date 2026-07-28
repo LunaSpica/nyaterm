@@ -1,4 +1,4 @@
-use super::*;
+use gpui::{IntoElement, div, prelude::*, px, rgb};
 
 pub(in crate::features) fn disabled_inspector_panel(
     palette: crate::theme::ThemePalette,

@@ -118,7 +118,12 @@ check_no_matches \
 
 check_no_matches \
   "low-frequency core helpers must stay out of features/prelude.rs" \
-  '(^|[,{[:space:]])(AgentApprovalDecision|AgentCapturedOutput|AiChatStreamDelta|AiContext|AiModelDiscovery|AiSession|AppendAiAuditRequest|CLOUD_SYNC_HISTORY_LIMIT|CloudSyncResult|DiagnosticsExportOptions|DiagnosticsRuntimeSnapshot|GiteeSnippetHttpBackend|GithubGistHttpBackend|KeywordHighlightRule|LocalCloudSyncOptions|SearchEngineConfig|SnippetRemote|TerminalMouseReportEligibility|TerminalResizeGeometry|TerminalViewportInsets|TranslateResult|TranslationSettings|agent_response_action|ai_model_id_for_credential|ai_model_id_for_provider|append_cloud_sync_history|assess_agent_command_risk|build_agent_capture_command|build_observation_message|decide_agent_command_execution|export_diagnostics_archive|merge_model_discoveries|parse_agent_model_output|parse_agent_tool_call|parse_model_output|pull_local_snapshot|pull_snapshot_with_remote|push_local_snapshot|push_snapshot_with_remote|read_cloud_sync_history|redact_context|redact_sensitive_text|terminal_mouse_report_should_send|terminal_resize_geometry_for_size_with_insets|terminal_resize_geometry_for_size_with_insets_and_scale|terminal_snapped_cell_height)([},[:space:]]|$)' \
+  '(^|[,{[:space:]])(AgentApprovalDecision|AgentCapturedOutput|AgentCommandExecutionMode|AiChatStreamDelta|AiContext|AiMessage|AiMessageRole|AiModelDiscovery|AiSession|AppendAiAuditRequest|CLOUD_SYNC_HISTORY_LIMIT|CloudSyncResult|DiagnosticsExportOptions|DiagnosticsRuntimeSnapshot|GiteeSnippetHttpBackend|GithubGistHttpBackend|KeywordHighlightRule|LocalCloudSyncOptions|SearchEngineConfig|SnippetRemote|TerminalMouseReportEligibility|TerminalResizeGeometry|TerminalViewportInsets|TranslateResult|TranslationSettings|agent_response_action|ai_model_id_for_credential|ai_model_id_for_provider|append_cloud_sync_history|assess_agent_command_risk|build_agent_capture_command|build_observation_message|decide_agent_command_execution|export_diagnostics_archive|merge_model_discoveries|parse_agent_model_output|parse_agent_tool_call|parse_model_output|pull_local_snapshot|pull_snapshot_with_remote|push_local_snapshot|push_snapshot_with_remote|read_cloud_sync_history|redact_context|redact_sensitive_text|terminal_mouse_report_should_send|terminal_resize_geometry_for_size_with_insets|terminal_resize_geometry_for_size_with_insets_and_scale|terminal_snapped_cell_height)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
+  "low-frequency widgets must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])svg_icon_button([},[:space:]]|$)' \
   crates/nyaterm-desktop/src/features/prelude.rs
 
 check_no_matches \
@@ -626,6 +631,18 @@ declare -A SUPER_BASELINE=(
   [crates/nyaterm-desktop/src/features/settings/settings_runtime/recording_transfer.rs]=0
   [crates/nyaterm-desktop/src/features/settings/settings_runtime/search_engines.rs]=0
   [crates/nyaterm-desktop/src/features/settings/settings_runtime/terminal_remote.rs]=0
+  [crates/nyaterm-desktop/src/features/inspector/mod.rs]=0
+  [crates/nyaterm-desktop/src/features/inspector/ai_ask.rs]=0
+  [crates/nyaterm-desktop/src/features/inspector/commands.rs]=0
+  [crates/nyaterm-desktop/src/features/inspector/helpers.rs]=0
+  [crates/nyaterm-desktop/src/features/inspector/right_domain.rs]=0
+  [crates/nyaterm-desktop/src/features/inspector/right_shell.rs]=0
+  [crates/nyaterm-desktop/src/features/inspector/ai_widgets/mod.rs]=0
+  [crates/nyaterm-desktop/src/features/inspector/ai_widgets/agent.rs]=0
+  [crates/nyaterm-desktop/src/features/inspector/ai_widgets/cards.rs]=0
+  [crates/nyaterm-desktop/src/features/inspector/ai_widgets/history.rs]=0
+  [crates/nyaterm-desktop/src/features/inspector/ai_widgets/messages.rs]=0
+  [crates/nyaterm-desktop/src/features/inspector/ai_widgets/transcript.rs]=0
   [crates/nyaterm-desktop/src/features/commands/mod.rs]=0
   [crates/nyaterm-desktop/src/features/commands/state.rs]=0
   [crates/nyaterm-desktop/src/features/commands/command_runtime/helpers.rs]=0
@@ -693,6 +710,7 @@ done < <(rg -n --path-separator / '^[[:space:]]*use super::\*;' \
   crates/nyaterm-desktop/src/features/ai \
   crates/nyaterm-desktop/src/features/connections \
   crates/nyaterm-desktop/src/features/commands \
+  crates/nyaterm-desktop/src/features/inspector \
   crates/nyaterm-desktop/src/features/settings \
   crates/nyaterm-desktop/src/features/pages/mod.rs \
   crates/nyaterm-desktop/src/features/pages/connections \

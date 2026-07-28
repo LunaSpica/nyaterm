@@ -1,4 +1,13 @@
-use super::*;
+use gpui::{
+    Context, FontWeight, IntoElement, KeyDownEvent, MouseButton, SharedString, Window, div,
+    prelude::*, px, rgb, rgba, svg,
+};
+use nyaterm_core::{AgentCommandExecutionMode, truncate_preview};
+
+use crate::features::formatting::group_ai_sessions_by_date;
+use crate::features::view_widgets::{dialog_action_button, tab_menu_separator};
+use crate::features::{NyaTermApp, TextInputSetup};
+use crate::widgets::{small_button, svg_icon_button};
 
 impl NyaTermApp {
     pub(in crate::features) fn open_ai_clear_history_confirm(

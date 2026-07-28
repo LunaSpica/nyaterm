@@ -5,17 +5,16 @@ pub(super) use gpui::{
     Window, WindowControlArea, WindowHandle, div, prelude::*, px, rgb, rgba, svg,
 };
 pub(super) use nyaterm_core::{
-    AgentCommandExecutionMode, AgentOutputCaptureProcessor, AiAction, AiCommandCard,
-    AiExecutionProfile, AiMessage, AiMessageRole, AiMode, AiSettings, AppRuntime,
-    AppSettingsSummary, CloudSyncError, CloudSyncHistoryEntry, CloudSyncSettings, CloudSyncState,
-    CommandHistoryEntry, CommandObservation, ConnectionAuth, ConnectionStore, ConnectionType,
-    CredentialPromptKind, DecryptedOtpEntry, Group, InputSelectionRange, KeywordHighlightConfig,
-    KnownHostCheck, NativeServices, NativeUpdateInfo, OtpEntry, ProxyConfig, ProxyGroup,
-    QuickCommand, QuickCommandCategory, RuntimeMode, SavedConnection, SavedCredential,
-    SavedPassword, SshKey, TerminalInputState, TerminalWireWriteKind, TunnelConfig, TunnelGroup,
-    apply_terminal_input_data, build_move_input_cursor_data, can_suggest_from_tracker,
-    delete_terminal_input_range, terminal_input_fanout_status, terminal_wire_write_disposition,
-    truncate_preview, uuid,
+    AgentOutputCaptureProcessor, AiAction, AiCommandCard, AiExecutionProfile, AiMode, AiSettings,
+    AppRuntime, AppSettingsSummary, CloudSyncError, CloudSyncHistoryEntry, CloudSyncSettings,
+    CloudSyncState, CommandHistoryEntry, CommandObservation, ConnectionAuth, ConnectionStore,
+    ConnectionType, CredentialPromptKind, DecryptedOtpEntry, Group, InputSelectionRange,
+    KeywordHighlightConfig, KnownHostCheck, NativeServices, NativeUpdateInfo, OtpEntry,
+    ProxyConfig, ProxyGroup, QuickCommand, QuickCommandCategory, RuntimeMode, SavedConnection,
+    SavedCredential, SavedPassword, SshKey, TerminalInputState, TerminalWireWriteKind,
+    TunnelConfig, TunnelGroup, apply_terminal_input_data, build_move_input_cursor_data,
+    can_suggest_from_tracker, delete_terminal_input_range, terminal_input_fanout_status,
+    terminal_wire_write_disposition, truncate_preview, uuid,
 };
 #[cfg(feature = "migration-dashboard")]
 pub(super) use nyaterm_legacy::LegacyProject;
@@ -67,5 +66,4 @@ pub(super) use crate::terminal::{
 };
 pub(super) use crate::widgets::{
     capability_line, empty_panel, mode_button, session_info_row, small_button, status_pill,
-    svg_icon_button,
 };

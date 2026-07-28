@@ -1,4 +1,13 @@
-use super::*;
+use gpui::{
+    App, ClickEvent, ClipboardItem, Context, FontWeight, SharedString, Window, div, prelude::*, px,
+    rgb,
+};
+use nyaterm_core::{AiCommandCard, truncate_preview};
+
+use crate::features::NyaTermApp;
+use crate::features::formatting::risk_label;
+use crate::features::shell::gpui_code_font_family;
+use crate::widgets::{small_button, status_pill};
 
 impl NyaTermApp {
     pub(in crate::features) fn ai_command_card_list(
@@ -168,7 +177,7 @@ impl NyaTermApp {
                     .bg(rgb(palette.surface))
                     .px_2()
                     .py_1()
-                    .font_family(crate::features::gpui_code_font_family())
+                    .font_family(gpui_code_font_family())
                     .text_size(px(11.))
                     .text_color(rgb(palette.text))
                     .line_height(px(16.))

@@ -1,5 +1,12 @@
-use super::*;
+use gpui::{
+    App, ClickEvent, ClipboardItem, Context, FontWeight, IntoElement, MouseButton, MouseDownEvent,
+    SharedString, Window, div, prelude::*, px, rgb, svg,
+};
+use nyaterm_core::{AiMessage, AiMessageRole, truncate_preview};
 
+use crate::features::NyaTermApp;
+use crate::features::formatting::extract_think_content;
+use crate::features::view_widgets::markdown_content_view;
 use crate::models::AiMessageMenuState;
 
 fn ai_message_menu_position(
