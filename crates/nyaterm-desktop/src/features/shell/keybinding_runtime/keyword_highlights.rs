@@ -1,9 +1,10 @@
-use super::*;
+use gpui::{AppContext, Context, KeyDownEvent, PathPromptOptions, SharedString, Window};
+use nyaterm_core::{ConnectionStore, KeywordHighlightRule};
 
+use crate::features::{NyaTermApp, TextInputSetup};
 use crate::models::{
     KeywordHighlightEditorField, KeywordHighlightPathPromptKind, KeywordHighlightPathPromptResult,
 };
-use nyaterm_core::KeywordHighlightRule;
 
 const MAX_KEYWORD_HIGHLIGHT_IMPORT_BYTES: u64 = 4 * 1024 * 1024;
 
@@ -468,7 +469,8 @@ fn normalize_keyword_highlight_color(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{normalize_keyword_highlight_color, parse_keyword_highlight_text_input_id};
+    use crate::models::KeywordHighlightEditorField;
 
     #[test]
     fn parses_keyword_highlight_rule_ids_containing_dots() {
