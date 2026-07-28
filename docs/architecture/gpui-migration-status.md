@@ -214,7 +214,12 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   while their existing load/save, masking and fallback paths are unchanged.
   Native update runtime also moved out of the settings module into its own
   normal module tree, and both feature-specific job event types left the shared
-  `runtime_jobs.rs` bucket.
+  `runtime_jobs.rs` bucket. A later method-ownership pass made both channels
+  private and moved job admission, bounded event draining, dialog transitions,
+  translation input/secret routing, and the settings/secret-draft/target-language
+  synchronization invariant onto those owners. `NyaTermApp` now retains the
+  native HTTP/thread launch, persistence and clipboard adapters, terminal-status
+  mirroring and GPUI notification only.
 - Cloud-sync configuration, compatibility state, history, conflicts, secret
   drafts and GitHub device-flow runtime now have one authoritative
   `CloudSyncFeatureState` owner with a focused `github` child. Fifteen app
@@ -1503,8 +1508,11 @@ honest remaining list.
    applying the active pending/failed fallback rules, and paste editing cannot
    mutate its UTF-8 cursor without also clearing stale selection/IME state.
    Shell viewport timing, panel drags, mutually-exclusive tab menus and pane
-   ownership rebuilding now have the same property. Those are the kinds of
-   signals to look for.
+   ownership rebuilding now have the same property. Translation and native
+   update job admission/event completion now also stay coupled to their own
+   pending/status/result state, and translation settings replacement cannot
+   desynchronize the secret draft or active target language. Those are the
+   kinds of signals to look for.
    Two caveats worth keeping. Render helpers stay on the view even when they
    read one state — moving element construction onto a data struct trades one
    coupling for a worse one. And a method that reads a state plus `self.tr(...)`

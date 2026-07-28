@@ -113,8 +113,7 @@ impl NyaTermApp {
                                 label,
                                 selected,
                                 cx.listener(move |this, _, _, cx| {
-                                    this.translation.settings.target_language = code.to_string();
-                                    this.translation.target_language = code.to_string();
+                                    this.translation.select_target_language(code);
                                     this.save_translation_settings(cx);
                                 }),
                             )

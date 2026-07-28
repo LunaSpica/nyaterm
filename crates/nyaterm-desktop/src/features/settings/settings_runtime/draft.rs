@@ -326,14 +326,14 @@ impl NyaTermApp {
                 self.settings.rebase_master_password();
                 self.ai.settings.config = saved_ai_settings;
                 self.cloud_sync.settings = saved_cloud_sync_settings;
-                self.translation.settings = saved_translation_settings;
+                self.translation.replace_settings(
+                    saved_translation_settings,
+                    TranslationSecretDraft::default(),
+                );
                 self.settings.keyword_config = saved_keyword_highlights;
-                self.translation.secret_draft = TranslationSecretDraft::default();
                 self.cloud_sync.secret_draft = CloudSyncSecretDraft::default();
                 self.ai.settings.secret_draft.clear();
                 self.sync_ai_drafts_from_active_profile();
-                self.translation.target_language =
-                    self.translation.settings.target_language.clone();
                 self.recording
                     .manager
                     .set_memory_limit(self.settings.summary.recording_memory_limit_bytes as usize);
@@ -390,8 +390,10 @@ impl NyaTermApp {
             self.ai.settings.secret_draft = snapshot.ai_secret_draft;
             self.cloud_sync.settings = snapshot.cloud_sync_settings;
             self.cloud_sync.secret_draft = snapshot.cloud_sync_secret_draft;
-            self.translation.settings = snapshot.translation_settings;
-            self.translation.secret_draft = snapshot.translation_secret_draft;
+            self.translation.replace_settings(
+                snapshot.translation_settings,
+                snapshot.translation_secret_draft,
+            );
             self.settings.keyword_config = snapshot.keyword_highlights;
             self.settings.master_password.enabled = snapshot.master_password_enabled;
             self.settings.master_password.draft = snapshot.master_password_draft;
@@ -405,7 +407,6 @@ impl NyaTermApp {
             self.invalidate_terminal_cell_metrics(cx);
             self.invalidate_paint_theme_caches();
             self.sync_ai_drafts_from_active_profile();
-            self.translation.target_language = self.translation.settings.target_language.clone();
             self.refresh_visible_terminal_surfaces(cx);
         }
         self.finish_settings_page(cx);

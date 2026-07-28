@@ -10,10 +10,20 @@ pub(super) struct TranslateJobResult {
     pub result: Result<TranslateResult, String>,
 }
 
+pub(super) struct TranslateJobRequest {
+    pub tx: mpsc::Sender<TranslateJobResult>,
+    pub provider: String,
+    pub target_language: String,
+    pub text: String,
+    pub settings: TranslationSettings,
+}
+
+const TRANSLATE_EVENT_DRAIN_LIMIT: usize = 8;
+
 pub(in crate::features) struct TranslationFeatureState {
     pub dialog: Option<TranslationDialogState>,
-    pub(super) tx: mpsc::Sender<TranslateJobResult>,
-    pub(super) rx: mpsc::Receiver<TranslateJobResult>,
+    tx: mpsc::Sender<TranslateJobResult>,
+    rx: mpsc::Receiver<TranslateJobResult>,
     pub provider: String,
     pub settings: TranslationSettings,
     pub secret_draft: TranslationSecretDraft,
@@ -44,13 +54,167 @@ impl TranslationFeatureState {
             focused_field: TranslateInputField::Text,
         }
     }
+
+    pub(super) fn begin_run(&mut self) -> Option<TranslateJobRequest> {
+        if self.pending {
+            self.status = "translation already running".to_string();
+            return None;
+        }
+        if self.input.trim().is_empty() {
+            self.status = "type text before translating".to_string();
+            return None;
+        }
+
+        self.pending = true;
+        self.status = format!("translating with {}", self.provider);
+        Some(TranslateJobRequest {
+            tx: self.tx.clone(),
+            provider: self.provider.clone(),
+            target_language: self.target_language.clone(),
+            text: self.input.clone(),
+            settings: self.settings.clone(),
+        })
+    }
+
+    pub(in crate::features) fn replace_settings(
+        &mut self,
+        settings: TranslationSettings,
+        secret_draft: TranslationSecretDraft,
+    ) {
+        self.settings = settings;
+        self.secret_draft = secret_draft;
+        self.target_language = self.settings.target_language.clone();
+    }
+
+    pub(in crate::features) fn select_target_language(&mut self, language: &str) {
+        self.settings.target_language = language.to_string();
+        self.target_language = language.to_string();
+    }
+
+    pub(super) fn settings_staged(&mut self, settings: TranslationSettings) {
+        self.replace_settings(settings, TranslationSecretDraft::default());
+        self.status = "translation settings staged".to_string();
+    }
+
+    pub(super) fn settings_saved(&mut self, settings: TranslationSettings) {
+        self.replace_settings(settings, TranslationSecretDraft::default());
+        self.status = "translation settings saved".to_string();
+    }
+
+    pub(super) fn settings_save_failed(&mut self, error: impl std::fmt::Display) {
+        self.status = format!("translation settings save failed: {error}");
+    }
+
+    pub(super) fn clear_secret(&mut self, provider: &str) {
+        match provider {
+            "deepl" => {
+                self.settings.deepl_api_key.clear();
+                self.secret_draft.deepl_api_key.clear();
+            }
+            "baidu" => {
+                self.settings.baidu_app_key.clear();
+                self.secret_draft.baidu_app_key.clear();
+            }
+            "ali" => {
+                self.settings.ali_app_key.clear();
+                self.secret_draft.ali_app_key.clear();
+            }
+            "youdao" => {
+                self.settings.youdao_app_key.clear();
+                self.secret_draft.youdao_app_key.clear();
+            }
+            _ => {}
+        }
+        self.status = format!("{provider} translation secret cleared; save to persist");
+    }
+
+    pub(super) fn edit_input(&mut self, field: TranslateInputField, text: String) {
+        self.focused_field = field;
+        *self.input_value_mut() = text;
+        self.status = if field.is_settings_field() {
+            "translation settings edited".to_string()
+        } else {
+            "translation input edited".to_string()
+        };
+    }
+
+    fn input_value_mut(&mut self) -> &mut String {
+        match self.focused_field {
+            TranslateInputField::TargetLanguage => &mut self.target_language,
+            TranslateInputField::Text => &mut self.input,
+            TranslateInputField::DeeplApiKey => &mut self.secret_draft.deepl_api_key,
+            TranslateInputField::BaiduAppId => &mut self.settings.baidu_app_id,
+            TranslateInputField::BaiduAppKey => &mut self.secret_draft.baidu_app_key,
+            TranslateInputField::AliAppId => &mut self.settings.ali_app_id,
+            TranslateInputField::AliAppKey => &mut self.secret_draft.ali_app_key,
+            TranslateInputField::YoudaoAppId => &mut self.settings.youdao_app_id,
+            TranslateInputField::YoudaoAppKey => &mut self.secret_draft.youdao_app_key,
+        }
+    }
+
+    pub(super) fn open_dialog(
+        &mut self,
+        text: String,
+        provider: String,
+        provider_label: String,
+    ) -> bool {
+        let text = text.trim().to_string();
+        if text.is_empty() {
+            self.status = "no text to translate".to_string();
+            return false;
+        }
+        self.dialog = Some(TranslationDialogState {
+            source_text: text.clone(),
+            provider: provider.clone(),
+            provider_label,
+        });
+        self.provider = provider;
+        self.input = text;
+        self.result = None;
+        self.status = format!("translating with {}", self.provider);
+        true
+    }
+
+    pub(super) fn close_dialog(&mut self) -> bool {
+        self.dialog.take().is_some()
+    }
+
+    pub(super) fn drain_events(&mut self) -> bool {
+        if !self.pending {
+            return false;
+        }
+        let mut dirty = false;
+        for _ in 0..TRANSLATE_EVENT_DRAIN_LIMIT {
+            let Ok(event) = self.rx.try_recv() else {
+                break;
+            };
+            dirty = true;
+            self.pending = false;
+            match event.result {
+                Ok(result) => {
+                    self.status = format!(
+                        "translated {} character(s) from {}",
+                        result.original.chars().count(),
+                        result.detected_language
+                    );
+                    self.result = Some(result);
+                }
+                Err(error) => {
+                    self.status = format!("translation failed: {error}");
+                }
+            }
+        }
+        dirty
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use nyaterm_core::TranslationSettings;
+    use nyaterm_core::{TranslateResult, TranslationSettings};
 
-    use super::TranslationFeatureState;
+    use crate::models::TranslateInputField;
+
+    use super::{TranslateJobResult, TranslationFeatureState, TranslationSecretDraft};
 
     #[test]
     fn translation_state_owns_job_channel_and_loaded_settings() {
@@ -66,5 +230,91 @@ mod tests {
         assert!(state.rx.try_recv().is_err());
         assert!(!state.pending);
         assert!(state.dialog.is_none());
+    }
+
+    #[test]
+    fn translation_job_admission_captures_request_and_blocks_overlap() {
+        let mut state = TranslationFeatureState::new(TranslationSettings::default());
+        assert!(state.begin_run().is_none());
+        assert_eq!(state.status, "type text before translating");
+
+        state.provider = "deepl".to_string();
+        state.target_language = "ja".to_string();
+        state.input = "hello".to_string();
+        let request = state.begin_run().expect("non-empty input should start");
+        assert_eq!(request.provider, "deepl");
+        assert_eq!(request.target_language, "ja");
+        assert_eq!(request.text, "hello");
+        assert!(state.pending);
+        assert!(state.begin_run().is_none());
+        assert_eq!(state.status, "translation already running");
+    }
+
+    #[test]
+    fn translation_inputs_and_secrets_transition_inside_owner() {
+        let mut state = TranslationFeatureState::new(TranslationSettings::default());
+        state.edit_input(TranslateInputField::BaiduAppId, "app-id".to_string());
+        assert_eq!(state.settings.baidu_app_id, "app-id");
+        assert_eq!(state.status, "translation settings edited");
+
+        state.settings.baidu_app_key = "stored".to_string();
+        state.secret_draft.baidu_app_key = "draft".to_string();
+        state.clear_secret("baidu");
+        assert!(state.settings.baidu_app_key.is_empty());
+        assert!(state.secret_draft.baidu_app_key.is_empty());
+        assert_eq!(
+            state.status,
+            "baidu translation secret cleared; save to persist"
+        );
+
+        state.select_target_language("ko");
+        assert_eq!(state.settings.target_language, "ko");
+        assert_eq!(state.target_language, "ko");
+
+        let restored_draft = TranslationSecretDraft {
+            deepl_api_key: "restored".to_string(),
+            ..TranslationSecretDraft::default()
+        };
+        state.replace_settings(
+            TranslationSettings {
+                target_language: "fr".to_string(),
+                ..TranslationSettings::default()
+            },
+            restored_draft,
+        );
+        assert_eq!(state.target_language, "fr");
+        assert_eq!(state.secret_draft.deepl_api_key, "restored");
+    }
+
+    #[test]
+    fn translation_dialog_and_job_completion_share_one_state_machine() {
+        let mut state = TranslationFeatureState::new(TranslationSettings::default());
+        assert!(!state.open_dialog("  ".to_string(), "google".to_string(), "Google".to_string()));
+        assert!(state.dialog.is_none());
+
+        assert!(state.open_dialog(
+            " hello ".to_string(),
+            "google".to_string(),
+            "Google".to_string()
+        ));
+        let request = state.begin_run().expect("dialog input should start");
+        request
+            .tx
+            .send(TranslateJobResult {
+                result: Ok(TranslateResult {
+                    original: "hello".to_string(),
+                    translated: "你好".to_string(),
+                    detected_language: "en".to_string(),
+                    provider: "google".to_string(),
+                }),
+            })
+            .expect("state should retain its event receiver");
+
+        assert!(state.drain_events());
+        assert!(!state.pending);
+        assert_eq!(state.result.as_ref().unwrap().translated, "你好");
+        assert_eq!(state.status, "translated 5 character(s) from en");
+        assert!(state.close_dialog());
+        assert!(!state.close_dialog());
     }
 }
