@@ -1,6 +1,8 @@
-use super::*;
+use gpui::{Context, KeyDownEvent, Window};
 
-use crate::models::{BottomPanelMode, StartupCommandAction};
+use crate::features::NyaTermApp;
+use crate::models::{BottomPanelMode, NavItem, StartupCommandAction};
+use crate::shortcuts::shortcut_matches;
 
 impl NyaTermApp {
     pub(in crate::features) fn handle_global_shortcut(

@@ -436,6 +436,11 @@ check_no_matches \
   '(^|[,{[:space:]])(SendCommandControlFocus|SendCommandDataType|SendCommandLineEnding|SendCommandMode|SendCommandTarget)([},[:space:]]|$)' \
   crates/nyaterm-desktop/src/features/prelude.rs
 
+check_no_matches \
+  "shortcut matching helper must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(shortcut_matches)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
 # Keep the terminal GPUI crate root's public surface explicit. These modules
 # are implementation details; callers use the named facade exports below.
 check_no_matches \
@@ -510,6 +515,7 @@ declare -A SUPER_BASELINE=(
   [crates/nyaterm-desktop/src/features/pages/tunnels/tunnel/row.rs]=0
   [crates/nyaterm-desktop/src/features/pages/tunnels/tunnel/sections.rs]=0
   [crates/nyaterm-desktop/src/features/shell/mod.rs]=1
+  [crates/nyaterm-desktop/src/features/shell/global_shortcut_runtime.rs]=0
   [crates/nyaterm-desktop/src/features/shell/event_pump/mod.rs]=0
   [crates/nyaterm-desktop/src/features/shell/event_pump/bridge.rs]=0
   [crates/nyaterm-desktop/src/features/shell/event_pump/helpers.rs]=0

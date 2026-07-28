@@ -60,7 +60,7 @@ pub(super) use crate::models::{
 pub(super) use crate::send_command::{
     build_send_command_units_for, format_send_command_hex_display, parse_send_command_hex,
 };
-pub(super) use crate::shortcuts::{event_to_hotkey_string, shortcut_matches};
+pub(super) use crate::shortcuts::event_to_hotkey_string;
 pub(super) use crate::terminal::{
     NyaTerminalElement, NyaTerminalLayoutCache, TerminalBufferMatch, TerminalKeyMode,
     TerminalKeywordHighlightSnapshot, TerminalKeywordHighlighter, TerminalLineDecorations,
