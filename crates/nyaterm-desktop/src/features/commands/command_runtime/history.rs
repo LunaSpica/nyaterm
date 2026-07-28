@@ -295,7 +295,8 @@ impl NyaTermApp {
             }
         }
         if !self
-            .command_runtime
+            .commands
+            .runtime
             .queue(CommandPersistenceRequest::AppendHistory(submitted))
         {
             self.store_status.message = "command history worker is unavailable".to_string();
@@ -305,12 +306,13 @@ impl NyaTermApp {
 
     pub(in crate::features) fn queue_quick_command_use_count(&mut self, command_id: String) {
         if self
-            .command_runtime
+            .commands
+            .runtime
             .queue(CommandPersistenceRequest::IncrementQuickCommand(
                 command_id.clone(),
             ))
         {
-            if let Some(command) = Arc::make_mut(&mut self.quick_commands)
+            if let Some(command) = Arc::make_mut(&mut self.commands.catalog.commands)
                 .iter_mut()
                 .find(|command| command.id == command_id)
             {
@@ -325,7 +327,7 @@ impl NyaTermApp {
     pub(in crate::features) fn drain_command_persistence_events(&mut self) -> bool {
         let mut dirty = false;
         for _ in 0..COMMAND_PERSISTENCE_EVENT_DRAIN_LIMIT {
-            let event = match self.command_runtime.poll() {
+            let event = match self.commands.runtime.poll() {
                 CommandPersistencePoll::Event(event) => event,
                 CommandPersistencePoll::Empty => break,
                 CommandPersistencePoll::Disconnected { had_pending } => {
@@ -341,7 +343,7 @@ impl NyaTermApp {
             dirty = true;
             match event {
                 CommandPersistenceResult::History(Ok(history)) => {
-                    self.command_history = Arc::from(history);
+                    self.commands.history = Arc::from(history);
                 }
                 CommandPersistenceResult::History(Err(error)) => {
                     self.store_status.message = format!("command history save failed: {error}");
@@ -349,7 +351,7 @@ impl NyaTermApp {
                 }
                 CommandPersistenceResult::QuickCommandUseCount { command_id, result } => {
                     if let Err(error) = result {
-                        if let Some(command) = Arc::make_mut(&mut self.quick_commands)
+                        if let Some(command) = Arc::make_mut(&mut self.commands.catalog.commands)
                             .iter_mut()
                             .find(|command| command.id == command_id)
                         {

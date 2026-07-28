@@ -203,6 +203,11 @@ check_no_matches \
   crates/nyaterm-desktop/src/features/app_state/mod.rs
 
 check_no_matches \
+  "command catalog, UI, history and runtime fields must stay grouped under CommandFeatureState" \
+  '^[[:space:]]*pub\(in crate::features\)[[:space:]]+(quick_commands|quick_command_categories|quick_command_state|command_history|command_runtime)[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/app_state/mod.rs
+
+check_no_matches \
   "live session runtime state must stay grouped under SessionFeatureState" \
   '^[[:space:]]*pub\(in crate::features\)[[:space:]]+(session_manager|session_event_bridge|session_start|session_command_history|active_sessions_search_draft|active_session_menu|active_session_busy_actions|active_session_id|active_ssh_config|active_ai_execution_profile|session_order|session_metadata|session_custom_names|session_dynamic_titles|session_cwds|zmodem_sessions|trzsz_sessions|session_tab_colors|ssh_multiplex_handles)[[:space:]]*:' \
   crates/nyaterm-desktop/src/features/app_state/mod.rs

@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use gpui::{Context, KeyDownEvent, Window};
 use nyaterm_core::ConnectionStore;
 
@@ -17,14 +15,14 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.quick_command_state.list.row_menu = None;
-        self.quick_command_state.editor.draft = Some(QuickCommandEditorState::blank());
+        self.commands.quick.list.row_menu = None;
+        self.commands.quick.editor.draft = Some(QuickCommandEditorState::blank());
         // The boxes own their text, so they have to be dropped for the next
         // command to seed from its own values.
         self.forget_text_inputs("quick-command.editor.");
         self.terminal.view.status = "quick command editor opened".to_string();
         if !self.open_quick_command_window(cx) {
-            window.focus(&self.quick_command_state.editor.focus);
+            window.focus(&self.commands.quick.editor.focus);
         }
         cx.notify();
     }
@@ -35,9 +33,11 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.quick_command_state.list.row_menu = None;
+        self.commands.quick.list.row_menu = None;
         let Some(command) = self
-            .quick_commands
+            .commands
+            .catalog
+            .commands
             .iter()
             .find(|command| command.id == command_id)
             .cloned()
@@ -46,23 +46,22 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        self.quick_command_state.editor.draft =
-            Some(QuickCommandEditorState::from_command(command));
+        self.commands.quick.editor.draft = Some(QuickCommandEditorState::from_command(command));
         // The boxes own their text, so they have to be dropped for the next
         // command to seed from its own values.
         self.forget_text_inputs("quick-command.editor.");
         self.terminal.view.status = "quick command editor opened".to_string();
         if !self.open_quick_command_window(cx) {
-            window.focus(&self.quick_command_state.editor.focus);
+            window.focus(&self.commands.quick.editor.focus);
         }
         cx.notify();
     }
 
     pub(in crate::features) fn close_quick_command_editor(&mut self, cx: &mut Context<Self>) {
-        self.quick_command_state.editor.draft = None;
+        self.commands.quick.editor.draft = None;
         self.forget_text_inputs("quick-command.editor.");
-        self.quick_command_state.editor.window = None;
-        self.quick_command_state.editor.window_open_pending = false;
+        self.commands.quick.editor.window = None;
+        self.commands.quick.editor.window_open_pending = false;
         self.terminal.view.status = "quick command editor closed".to_string();
         cx.notify();
     }
@@ -75,9 +74,11 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.quick_command_state.list.row_menu = None;
+        self.commands.quick.list.row_menu = None;
         let Some(command) = self
-            .quick_commands
+            .commands
+            .catalog
+            .commands
             .iter()
             .find(|command| command.id == command_id)
             .cloned()
@@ -86,19 +87,19 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        self.quick_command_state.dialogs.details = Some(QuickCommandDetailsState {
-            category: quick_command_category_label(&self.quick_command_categories, &command),
+        self.commands.quick.dialogs.details = Some(QuickCommandDetailsState {
+            category: quick_command_category_label(&self.commands.catalog.categories, &command),
             command,
             x,
             y,
         });
         self.terminal.view.status = "quick command details opened".to_string();
-        window.focus(&self.quick_command_state.dialogs.details_focus);
+        window.focus(&self.commands.quick.dialogs.details_focus);
         cx.notify();
     }
 
     pub(in crate::features) fn close_quick_command_details(&mut self, cx: &mut Context<Self>) {
-        self.quick_command_state.dialogs.details = None;
+        self.commands.quick.dialogs.details = None;
         self.terminal.view.status = "quick command details closed".to_string();
         cx.notify();
     }
@@ -108,9 +109,11 @@ impl NyaTermApp {
         command_id: String,
         cx: &mut Context<Self>,
     ) {
-        self.quick_command_state.list.row_menu = None;
+        self.commands.quick.list.row_menu = None;
         let Some(command) = self
-            .quick_commands
+            .commands
+            .catalog
+            .commands
             .iter()
             .find(|command| command.id == command_id)
             .cloned()
@@ -119,7 +122,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        self.quick_command_state.dialogs.delete = Some(QuickCommandDeleteState {
+        self.commands.quick.dialogs.delete = Some(QuickCommandDeleteState {
             id: command.id,
             label: command.label,
         });
@@ -128,13 +131,13 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn cancel_delete_quick_command(&mut self, cx: &mut Context<Self>) {
-        self.quick_command_state.dialogs.delete = None;
+        self.commands.quick.dialogs.delete = None;
         self.terminal.view.status = "quick command delete cancelled".to_string();
         cx.notify();
     }
 
     pub(in crate::features) fn confirm_delete_quick_command(&mut self, cx: &mut Context<Self>) {
-        let Some(delete) = self.quick_command_state.dialogs.delete.clone() else {
+        let Some(delete) = self.commands.quick.dialogs.delete.clone() else {
             return;
         };
         match ConnectionStore::open_with_portable_key_path(
@@ -150,9 +153,10 @@ impl NyaTermApp {
             Ok((config, deleted))
         }) {
             Ok((config, deleted)) => {
-                self.quick_commands = Arc::from(config.commands);
-                self.quick_command_categories = config.categories;
-                self.quick_command_state.dialogs.delete = None;
+                self.commands
+                    .catalog
+                    .replace(config.commands, config.categories);
+                self.commands.quick.dialogs.delete = None;
                 self.store_status.message = if deleted {
                     format!("quick command '{}' deleted", delete.label)
                 } else {
@@ -176,7 +180,9 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(category) = self
-            .quick_command_categories
+            .commands
+            .catalog
+            .categories
             .iter()
             .find(|category| category.id == category_id)
             .cloned()
@@ -186,11 +192,13 @@ impl NyaTermApp {
             return;
         };
         let command_count = self
-            .quick_commands
+            .commands
+            .catalog
+            .commands
             .iter()
             .filter(|command| command.category_id.as_deref() == Some(category.id.as_str()))
             .count();
-        self.quick_command_state.dialogs.category_delete = Some(QuickCommandCategoryDeleteState {
+        self.commands.quick.dialogs.category_delete = Some(QuickCommandCategoryDeleteState {
             id: category.id,
             name: category.name,
             command_count,
@@ -203,7 +211,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        self.quick_command_state.dialogs.category_delete = None;
+        self.commands.quick.dialogs.category_delete = None;
         self.terminal.view.status = "quick command category delete cancelled".to_string();
         cx.notify();
     }
@@ -212,7 +220,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        let Some(delete) = self.quick_command_state.dialogs.category_delete.clone() else {
+        let Some(delete) = self.commands.quick.dialogs.category_delete.clone() else {
             return;
         };
         match ConnectionStore::open_with_portable_key_path(
@@ -235,13 +243,14 @@ impl NyaTermApp {
             Ok((config, deleted_category, deleted_commands))
         }) {
             Ok((config, deleted_category, deleted_commands)) => {
-                self.quick_commands = Arc::from(config.commands);
-                self.quick_command_categories = config.categories;
-                self.quick_command_state.dialogs.category_delete = None;
-                if self.quick_command_state.list.selected_category == delete.id {
-                    self.quick_command_state.list.selected_category = "all".to_string();
+                self.commands
+                    .catalog
+                    .replace(config.commands, config.categories);
+                self.commands.quick.dialogs.category_delete = None;
+                if self.commands.quick.list.selected_category == delete.id {
+                    self.commands.quick.list.selected_category = "all".to_string();
                 }
-                if let Some(editor) = self.quick_command_state.editor.draft.as_mut()
+                if let Some(editor) = self.commands.quick.editor.draft.as_mut()
                     && editor.category_id.as_deref() == Some(delete.id.as_str())
                 {
                     editor.category_id = None;
@@ -278,7 +287,9 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(category) = self
-            .quick_command_categories
+            .commands
+            .catalog
+            .categories
             .iter()
             .find(|category| category.id == category_id)
             .cloned()
@@ -287,14 +298,14 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        self.quick_command_state.dialogs.category_rename = Some(QuickCommandCategoryRenameState {
+        self.commands.quick.dialogs.category_rename = Some(QuickCommandCategoryRenameState {
             id: category.id,
             original_name: category.name.clone(),
             draft: category.name,
             error: None,
         });
         self.terminal.view.status = "quick command category rename opened".to_string();
-        window.focus(&self.quick_command_state.dialogs.category_rename_focus);
+        window.focus(&self.commands.quick.dialogs.category_rename_focus);
         cx.notify();
     }
 
@@ -302,7 +313,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        self.quick_command_state.dialogs.category_rename = None;
+        self.commands.quick.dialogs.category_rename = None;
         self.terminal.view.status = "quick command category rename cancelled".to_string();
         cx.notify();
     }
@@ -311,23 +322,23 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        let Some(rename) = self.quick_command_state.dialogs.category_rename.clone() else {
+        let Some(rename) = self.commands.quick.dialogs.category_rename.clone() else {
             return;
         };
         let name = rename.draft.trim().to_string();
         if name.is_empty() {
             let message = self.tr("quickCommands.categoryNameRequired").to_string();
-            if let Some(state) = self.quick_command_state.dialogs.category_rename.as_mut() {
+            if let Some(state) = self.commands.quick.dialogs.category_rename.as_mut() {
                 state.error = Some(message);
             }
             cx.notify();
             return;
         }
-        if self.quick_command_categories.iter().any(|category| {
+        if self.commands.catalog.categories.iter().any(|category| {
             category.id != rename.id && category.name.trim().eq_ignore_ascii_case(name.as_str())
         }) {
             let message = self.tr("quickCommands.categoryNameDuplicated").to_string();
-            if let Some(state) = self.quick_command_state.dialogs.category_rename.as_mut() {
+            if let Some(state) = self.commands.quick.dialogs.category_rename.as_mut() {
                 state.error = Some(message);
             }
             cx.notify();
@@ -344,7 +355,7 @@ impl NyaTermApp {
                 category.id != rename.id && category.name.trim().eq_ignore_ascii_case(name.as_str())
             }) {
                 let message = self.tr("quickCommands.categoryNameDuplicated").to_string();
-                if let Some(state) = self.quick_command_state.dialogs.category_rename.as_mut() {
+                if let Some(state) = self.commands.quick.dialogs.category_rename.as_mut() {
                     state.error = Some(message);
                 }
                 return Ok((config, false));
@@ -362,18 +373,17 @@ impl NyaTermApp {
             Ok((config, renamed))
         }) {
             Ok((config, renamed)) => {
-                self.quick_commands = Arc::from(config.commands);
-                self.quick_command_categories = config.categories;
+                self.commands
+                    .catalog
+                    .replace(config.commands, config.categories);
                 if renamed {
-                    self.quick_command_state.dialogs.category_rename = None;
+                    self.commands.quick.dialogs.category_rename = None;
                     self.store_status.message = format!(
                         "quick command category '{}' renamed to '{}'",
                         rename.original_name, name
                     );
                     self.store_status.ready = true;
-                } else if let Some(state) =
-                    self.quick_command_state.dialogs.category_rename.as_mut()
-                {
+                } else if let Some(state) = self.commands.quick.dialogs.category_rename.as_mut() {
                     state.error = Some("Category is no longer available".to_string());
                     self.store_status.message =
                         "quick command category rename failed: category missing".to_string();
@@ -382,7 +392,7 @@ impl NyaTermApp {
                 self.terminal.view.status = self.store_status.message.clone();
             }
             Err(error) => {
-                if let Some(state) = self.quick_command_state.dialogs.category_rename.as_mut() {
+                if let Some(state) = self.commands.quick.dialogs.category_rename.as_mut() {
                     state.error = Some(error.to_string());
                 }
                 self.store_status.message =
@@ -423,7 +433,7 @@ impl NyaTermApp {
         text: String,
         cx: &mut Context<Self>,
     ) {
-        let Some(rename) = self.quick_command_state.dialogs.category_rename.as_mut() else {
+        let Some(rename) = self.commands.quick.dialogs.category_rename.as_mut() else {
             return;
         };
         rename.draft = text;

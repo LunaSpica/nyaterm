@@ -231,7 +231,7 @@ impl NyaTermApp {
                     .child(capability_line(
                         palette,
                         "Quick Commands",
-                        self.quick_commands.len().to_string(),
+                        self.commands.catalog.commands.len().to_string(),
                     ))
                     .child(capability_line(
                         palette,

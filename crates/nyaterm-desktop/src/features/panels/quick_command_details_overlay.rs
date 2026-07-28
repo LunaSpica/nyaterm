@@ -13,7 +13,8 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         let details = self
-            .quick_command_state
+            .commands
+            .quick
             .dialogs
             .details
             .clone()
@@ -69,9 +70,9 @@ impl NyaTermApp {
                     .border_color(rgba((palette.border << 8) | 0x99))
                     .bg(self.shell_surface_color(palette.surface))
                     .shadow_lg()
-                    .track_focus(&self.quick_command_state.dialogs.details_focus)
+                    .track_focus(&self.commands.quick.dialogs.details_focus)
                     .on_click(cx.listener(|this, _, window, cx| {
-                        window.focus(&this.quick_command_state.dialogs.details_focus);
+                        window.focus(&this.commands.quick.dialogs.details_focus);
                         cx.stop_propagation();
                         cx.notify();
                     }))

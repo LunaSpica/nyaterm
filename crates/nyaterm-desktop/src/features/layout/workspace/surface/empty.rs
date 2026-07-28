@@ -79,7 +79,7 @@ impl NyaTermApp {
                                 show_commands,
                                 cx.listener(|this, _, window, cx| {
                                     this.set_bottom_panel_mode(BottomPanelMode::QuickCommands);
-                                    let search = this.quick_command_state.list.search_draft.clone();
+                                    let search = this.commands.quick.list.search_draft.clone();
                                     let field = this.text_input(
                                         "quick-command.search",
                                         &search,

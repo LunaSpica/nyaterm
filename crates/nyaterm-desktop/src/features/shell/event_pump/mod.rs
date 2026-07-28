@@ -486,7 +486,7 @@ impl NyaTermApp {
             && self.recording.pending_auto_start.is_none()
             && !self.tunnel_state.has_pending()
             && self.transfer.queue.jobs.is_empty()
-            && self.command_runtime.is_idle()
+            && self.commands.runtime.is_idle()
             && !self.terminal.view.runtime.open_tabs_persist_dirty
             && !self.terminal.view.runtime.window_layout_persist_dirty
             && self.terminal.windows.restored

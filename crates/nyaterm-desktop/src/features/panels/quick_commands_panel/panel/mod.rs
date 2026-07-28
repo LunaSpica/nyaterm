@@ -17,22 +17,24 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let filtered_commands = filtered_quick_commands(
-            &self.quick_commands,
-            &self.quick_command_categories,
-            &self.quick_command_state.list.search_draft,
-            &self.quick_command_state.list.selected_category,
-            self.quick_command_state.list.sort_mode,
+            &self.commands.catalog.commands,
+            &self.commands.catalog.categories,
+            &self.commands.quick.list.search_draft,
+            &self.commands.quick.list.selected_category,
+            self.commands.quick.list.sort_mode,
         );
-        let total_commands = self.quick_commands.len();
+        let total_commands = self.commands.catalog.commands.len();
         let visible_commands = filtered_commands.len();
         let _pinned_commands = self
-            .quick_commands
+            .commands
+            .catalog
+            .commands
             .iter()
             .filter(|command| command.pinned.unwrap_or_default())
             .count();
         let categories = quick_command_category_options(
-            &self.quick_commands,
-            &self.quick_command_categories,
+            &self.commands.catalog.commands,
+            &self.commands.catalog.categories,
             self.tr("quickCommands.allCategories"),
             self.tr("quickCommands.uncategorized"),
         );
@@ -41,7 +43,7 @@ impl NyaTermApp {
         let input_bg = self.shell_surface_color(palette.bg);
         let search_field = self.text_input(
             "quick-command.search",
-            &self.quick_command_state.list.search_draft.clone(),
+            &self.commands.quick.list.search_draft.clone(),
             TextInputSetup::placeholder(self.tr("quickCommands.search")),
             cx,
         );
@@ -49,19 +51,19 @@ impl NyaTermApp {
         let ai_prompt_input = self
             .text_input_box(
                 "quick-command.ai-prompt",
-                &self.quick_command_state.ai.prompt_draft.clone(),
+                &self.commands.quick.ai.prompt_draft.clone(),
                 TextInputSetup::placeholder(self.tr("ai.placeholder")),
                 cx,
             )
             .into_any_element();
-        let view_icon = match self.quick_command_state.list.view_mode {
+        let view_icon = match self.commands.quick.list.view_mode {
             QuickCommandViewMode::List => "icons/view-list.svg",
             QuickCommandViewMode::Compact => "icons/view-compact.svg",
             QuickCommandViewMode::Tile => "icons/view-grid.svg",
         };
 
         let category_sidebar = self.quick_command_category_sidebar(categories, palette, cx);
-        let view_mode = self.quick_command_state.list.view_mode;
+        let view_mode = self.commands.quick.list.view_mode;
         let tile_columns = quick_command_tile_column_count(
             self.shell.viewport.size.0,
             self.shell.panels.left_width,
@@ -235,9 +237,8 @@ impl NyaTermApp {
                             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
                                 if event.keystroke.key == "escape" {
                                     cx.stop_propagation();
-                                    this.quick_command_state.list.search_draft.clear();
-                                    this.quick_command_state.list.selected_category =
-                                        "all".to_string();
+                                    this.commands.quick.list.search_draft.clear();
+                                    this.commands.quick.list.selected_category = "all".to_string();
                                     this.reset_text_input("quick-command.search", "", cx);
                                     this.terminal.view.status =
                                         "quick command filters cleared".to_string();
@@ -268,8 +269,8 @@ impl NyaTermApp {
                     .child(quick_command_sort_menu_button(
                         palette,
                         popover_bg,
-                        self.quick_command_state.list.sort_mode,
-                        self.quick_command_state.list.sort_menu_open,
+                        self.commands.quick.list.sort_mode,
+                        self.commands.quick.list.sort_menu_open,
                         self.tr("quickCommands.sort"),
                         self.tr("quickCommands.sortByCreated"),
                         self.tr("quickCommands.sortByName"),
@@ -279,9 +280,9 @@ impl NyaTermApp {
                     .child(quick_command_view_menu_button(
                         palette,
                         popover_bg,
-                        self.quick_command_state.list.view_mode,
+                        self.commands.quick.list.view_mode,
                         view_icon,
-                        self.quick_command_state.list.view_menu_open,
+                        self.commands.quick.list.view_menu_open,
                         self.tr("quickCommands.viewMode"),
                         self.tr("quickCommands.listMode"),
                         self.tr("quickCommands.compactListMode"),
@@ -304,7 +305,7 @@ impl NyaTermApp {
                         palette,
                         "quick-command-import",
                         "icons/import.svg",
-                        self.quick_command_state.import.path_prompt.is_some(),
+                        self.commands.quick.import.path_prompt.is_some(),
                         self.tr("quickCommands.import"),
                         cx.listener(|this, _, window, cx| {
                             this.close_quick_command_toolbar_popovers();
@@ -315,8 +316,8 @@ impl NyaTermApp {
                     .child(quick_command_ai_popover_button(
                         palette,
                         popover_bg,
-                        self.quick_command_state.ai.popover_open,
-                        self.quick_command_state.ai.prompt_draft.clone(),
+                        self.commands.quick.ai.popover_open,
+                        self.commands.quick.ai.prompt_draft.clone(),
                         ai_prompt_input,
                         self.tr("ai.generateCommand"),
                         self.tr("ai.generate"),
@@ -331,9 +332,9 @@ impl NyaTermApp {
                     .on_mouse_down(
                         MouseButton::Left,
                         cx.listener(|this, _, _, cx| {
-                            let changed = this.quick_command_state.list.sort_menu_open
-                                || this.quick_command_state.list.view_menu_open
-                                || this.quick_command_state.ai.popover_open;
+                            let changed = this.commands.quick.list.sort_menu_open
+                                || this.commands.quick.list.view_menu_open
+                                || this.commands.quick.ai.popover_open;
                             this.close_quick_command_toolbar_popovers();
                             if changed {
                                 cx.notify();
@@ -380,12 +381,11 @@ fn quick_command_sort_menu_button(
                 quick_command_sort_mode_label(current, created_label, name_label, usage_label)
             ),
             cx.listener(|this, _, _, cx| {
-                this.quick_command_state.list.sort_menu_open =
-                    !this.quick_command_state.list.sort_menu_open;
-                if this.quick_command_state.list.sort_menu_open {
-                    this.quick_command_state.list.view_menu_open = false;
-                    this.quick_command_state.ai.popover_open = false;
-                    this.quick_command_state.list.row_menu = None;
+                this.commands.quick.list.sort_menu_open = !this.commands.quick.list.sort_menu_open;
+                if this.commands.quick.list.sort_menu_open {
+                    this.commands.quick.list.view_menu_open = false;
+                    this.commands.quick.ai.popover_open = false;
+                    this.commands.quick.list.row_menu = None;
                 }
                 cx.notify();
             }),
@@ -449,12 +449,11 @@ fn quick_command_view_menu_button(
                 quick_command_view_mode_label(current, list_label, compact_label, tile_label)
             ),
             cx.listener(|this, _, _, cx| {
-                this.quick_command_state.list.view_menu_open =
-                    !this.quick_command_state.list.view_menu_open;
-                if this.quick_command_state.list.view_menu_open {
-                    this.quick_command_state.list.sort_menu_open = false;
-                    this.quick_command_state.ai.popover_open = false;
-                    this.quick_command_state.list.row_menu = None;
+                this.commands.quick.list.view_menu_open = !this.commands.quick.list.view_menu_open;
+                if this.commands.quick.list.view_menu_open {
+                    this.commands.quick.list.sort_menu_open = false;
+                    this.commands.quick.ai.popover_open = false;
+                    this.commands.quick.list.row_menu = None;
                 }
                 cx.notify();
             }),

@@ -9,7 +9,7 @@ Last updated from the working tree on 2026-07-28.
 
 | Metric | Current value | Notes |
 | --- | ---: | --- |
-| `NyaTermApp` fields | 32 | Counted from `features/app_state/mod.rs`; down from 585, still transitional. |
+| `NyaTermApp` fields | 28 | Counted from `features/app_state/mod.rs`; down from 585, still transitional. |
 | `impl NyaTermApp` blocks | 238 | Spread across 233 files under `crates/nyaterm-desktop/src`. |
 | `#[path = "..."]` declarations in desktop | 0 | Cleared. Every directory is a real module; the boundary script fails on any new occurrence. |
 | `use super::*` imports in desktop | 0 | Cleared in production and test modules; guarded crate-wide. |
@@ -181,9 +181,8 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   the `ConnectionFeatureState` pattern: list, editor, dialogs, import and AI
   popover sub-structs, built from one `QuickCommandFeatureFocus` bundle.
   Twenty-seven `NyaTermApp` fields collapse into one, and `app_state` no longer
-  imports any of the eleven quick command UI model types. The persisted
-  `quick_commands` and `quick_command_categories` collections deliberately stay
-  on `NyaTermApp`, as with connections.
+  imports any of the eleven quick command UI model types. This UI owner is now
+  nested under the unified `CommandFeatureState` described below.
 - Remote page state is grouped into `RemoteOpsFeatureState` with one struct per
   pane: `docker`, `process` and `stats`. The three panes turn out to share the
   same refresh bookkeeping (job id, owning session, pending flag, failure
@@ -366,6 +365,14 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   43 fields to 32. `ConnectionStore` remains the persistence implementation;
   table names, keys, serialized fields, encryption and fallback behavior did
   not change.
+- Command state now has one top-level `CommandFeatureState` owner. Its
+  `catalog`, `quick`, `history` and `runtime` children replace the separate
+  quick-command collections, UI state, command-history collection and
+  persistence runtime fields, taking `NyaTermApp` from 32 fields to 28. The
+  owner constructs the command persistence worker and provides grouped
+  load/clear transitions, while catalog writes replace commands and categories
+  together. Quick-command serialization, command-history storage, portable-key
+  handling and worker behavior are unchanged.
 - The Entity Store projection layer is gone entirely, in two steps.
 
   First, the six domain stores (`Ai`, `CloudSync`, `Connections`, `RemoteOps`,
@@ -1445,7 +1452,7 @@ honest remaining list.
    compiler-confirmed final pass also removed `features/prelude.rs`, so modules
    cannot regain the same implicit dependency surface through a shared import
    bucket.
-3. Largely done. `NyaTermApp` is down from 585 fields to 32, across nineteen
+3. Largely done. `NyaTermApp` is down from 585 fields to 28, across eighteen
    feature-state structs. The latest cohesive cuts moved sixteen terminal
    command-assistance and credential-prompt fields into
    `TerminalFeatureState::assist`, then seventeen transient settings fields
@@ -1463,9 +1470,10 @@ honest remaining list.
    remote-editor window ownership to focused states. The connection convergence
    batch then moved saved connection/group/serial catalogs, security catalogs,
    tunnel/proxy catalogs and queued saved-connection starts to their domain
-   owners. What is left is a shorter tail, and much of it is genuinely
-   app-level (stores, runtime, services, feature owners and the remaining
-   compatibility-sensitive settings/command collections).
+   owners. The command convergence batch then unified the quick-command catalog
+   and UI, command history and persistence worker under one owner. What is left
+   is a shorter tail, and much of it is genuinely app-level (stores, runtime,
+   services, feature owners and compatibility-sensitive settings collections).
    Group by cohesion where a cluster exists; do not force the count down for
    its own sake.
    Method ownership is now moving too, which is what grouping the fields alone

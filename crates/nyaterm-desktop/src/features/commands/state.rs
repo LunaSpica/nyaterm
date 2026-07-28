@@ -1,10 +1,10 @@
-//! Grouped quick command UI state.
-//!
-//! The persisted collections (`quick_commands`, `quick_command_categories`)
-//! stay on `NyaTermApp`; everything here is transient panel, overlay and editor
-//! state that only the quick command feature owns.
+//! Authoritative command catalog, history, runtime and quick-command UI state.
+
+use std::path::PathBuf;
+use std::sync::Arc;
 
 use gpui::{FocusHandle, WindowHandle};
+use nyaterm_core::{CommandHistoryEntry, QuickCommand, QuickCommandCategory};
 
 use crate::features::QuickCommandWindow;
 use crate::models::{
@@ -14,12 +14,86 @@ use crate::models::{
     QuickCommandSortMode, QuickCommandVariablePromptState, QuickCommandViewMode,
 };
 
+use super::runtime_state::CommandRuntimeState;
+
+pub(in crate::features) struct CommandFeatureState {
+    pub catalog: CommandCatalogState,
+    pub quick: QuickCommandFeatureState,
+    pub history: Arc<[CommandHistoryEntry]>,
+    pub runtime: CommandRuntimeState,
+}
+
+pub(in crate::features) struct CommandFeatureInit {
+    pub commands: Vec<QuickCommand>,
+    pub categories: Vec<QuickCommandCategory>,
+    pub history: Vec<CommandHistoryEntry>,
+    pub sort_mode: QuickCommandSortMode,
+    pub view_mode: QuickCommandViewMode,
+    pub focus: QuickCommandFeatureFocus,
+    pub config_dir: PathBuf,
+    pub portable_key_path: Option<PathBuf>,
+}
+
+pub(in crate::features) struct CommandCatalogState {
+    pub commands: Arc<[QuickCommand]>,
+    pub categories: Vec<QuickCommandCategory>,
+}
+
 pub(in crate::features) struct QuickCommandFeatureState {
     pub list: QuickCommandListState,
     pub editor: QuickCommandEditorFeatureState,
     pub dialogs: QuickCommandDialogState,
     pub import: QuickCommandImportState,
     pub ai: QuickCommandAiState,
+}
+
+impl CommandFeatureState {
+    pub(in crate::features) fn new(init: CommandFeatureInit) -> Self {
+        Self {
+            catalog: CommandCatalogState::new(init.commands, init.categories),
+            quick: QuickCommandFeatureState::new(init.sort_mode, init.view_mode, init.focus),
+            history: Arc::from(init.history),
+            runtime: CommandRuntimeState::new(init.config_dir, init.portable_key_path),
+        }
+    }
+
+    pub(in crate::features) fn replace_loaded(
+        &mut self,
+        commands: Vec<QuickCommand>,
+        categories: Vec<QuickCommandCategory>,
+        history: Vec<CommandHistoryEntry>,
+    ) {
+        self.catalog.replace(commands, categories);
+        self.history = Arc::from(history);
+    }
+
+    pub(in crate::features) fn clear_loaded(&mut self) {
+        self.catalog.clear();
+        self.history = Arc::default();
+    }
+}
+
+impl CommandCatalogState {
+    fn new(commands: Vec<QuickCommand>, categories: Vec<QuickCommandCategory>) -> Self {
+        Self {
+            commands: Arc::from(commands),
+            categories,
+        }
+    }
+
+    pub(in crate::features) fn replace(
+        &mut self,
+        commands: Vec<QuickCommand>,
+        categories: Vec<QuickCommandCategory>,
+    ) {
+        self.commands = Arc::from(commands);
+        self.categories = categories;
+    }
+
+    fn clear(&mut self) {
+        self.commands = Arc::default();
+        self.categories.clear();
+    }
 }
 
 /// Focus handles the quick command state needs at construction time.
@@ -131,5 +205,50 @@ impl QuickCommandFeatureState {
         self.list.view_menu_open = false;
         self.list.category_menu = None;
         self.ai.popover_open = false;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use nyaterm_core::{QuickCommand, QuickCommandCategory};
+
+    use super::CommandCatalogState;
+
+    fn command(id: &str) -> QuickCommand {
+        QuickCommand {
+            id: id.to_string(),
+            label: id.to_string(),
+            command: "pwd".to_string(),
+            category_id: Some("category-1".to_string()),
+            description: None,
+            color_tag: None,
+            icon_tag: None,
+            pinned: None,
+            execution_mode: None,
+            source: None,
+            risk_level: None,
+            updated_at: None,
+            created_at: None,
+            use_count: None,
+        }
+    }
+
+    #[test]
+    fn command_catalog_replaces_and_clears_commands_with_categories() {
+        let mut catalog = CommandCatalogState::new(Vec::new(), Vec::new());
+        catalog.replace(
+            vec![command("command-1")],
+            vec![QuickCommandCategory {
+                id: "category-1".to_string(),
+                name: "Common".to_string(),
+            }],
+        );
+
+        assert_eq!(catalog.commands.len(), 1);
+        assert_eq!(catalog.categories.len(), 1);
+
+        catalog.clear();
+        assert!(catalog.commands.is_empty());
+        assert!(catalog.categories.is_empty());
     }
 }

@@ -27,10 +27,11 @@ impl NyaTermApp {
         for option in categories {
             let id = option.id.clone();
             let menu_id = option.id.clone();
-            let selected = self.quick_command_state.list.selected_category == option.id;
+            let selected = self.commands.quick.list.selected_category == option.id;
             let manageable = option.manageable;
             let menu_open = self
-                .quick_command_state
+                .commands
+                .quick
                 .list
                 .category_menu
                 .as_ref()
@@ -93,9 +94,9 @@ impl NyaTermApp {
                             .child(option.count.to_string()),
                     )
                     .on_click(cx.listener(move |this, _, _, cx| {
-                        this.quick_command_state.list.selected_category = id.clone();
-                        this.quick_command_state.list.row_menu = None;
-                        this.quick_command_state.list.category_menu = None;
+                        this.commands.quick.list.selected_category = id.clone();
+                        this.commands.quick.list.row_menu = None;
+                        this.commands.quick.list.category_menu = None;
                         cx.notify();
                     }))
                     .when(manageable, |this| {
@@ -103,8 +104,8 @@ impl NyaTermApp {
                             MouseButton::Right,
                             cx.listener(move |this, event: &gpui::MouseDownEvent, _, cx| {
                                 cx.stop_propagation();
-                                this.quick_command_state.list.row_menu = None;
-                                this.quick_command_state.list.category_menu =
+                                this.commands.quick.list.row_menu = None;
+                                this.commands.quick.list.category_menu =
                                     Some(QuickCommandCategoryMenuState {
                                         category_id: menu_id.clone(),
                                         x: event.position.x,

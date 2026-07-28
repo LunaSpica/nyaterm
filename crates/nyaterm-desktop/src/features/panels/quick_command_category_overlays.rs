@@ -14,7 +14,8 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         let delete = self
-            .quick_command_state
+            .commands
+            .quick
             .dialogs
             .category_delete
             .clone()
@@ -98,7 +99,8 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         let rename = self
-            .quick_command_state
+            .commands
+            .quick
             .dialogs
             .category_rename
             .clone()

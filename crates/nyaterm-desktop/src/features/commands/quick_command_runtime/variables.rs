@@ -10,7 +10,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        self.quick_command_state.dialogs.variable_prompt = None;
+        self.commands.quick.dialogs.variable_prompt = None;
         self.terminal.view.status = "quick command variables cancelled".to_string();
         cx.notify();
     }
@@ -19,7 +19,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        let Some(prompt) = self.quick_command_state.dialogs.variable_prompt.take() else {
+        let Some(prompt) = self.commands.quick.dialogs.variable_prompt.take() else {
             return;
         };
         let mut command_text = prompt.command.clone();
@@ -41,7 +41,7 @@ impl NyaTermApp {
         index: usize,
         cx: &mut Context<Self>,
     ) {
-        let Some(prompt) = self.quick_command_state.dialogs.variable_prompt.as_mut() else {
+        let Some(prompt) = self.commands.quick.dialogs.variable_prompt.as_mut() else {
             return;
         };
         if index < prompt.variables.len() {
@@ -56,7 +56,7 @@ impl NyaTermApp {
         delta: isize,
         cx: &mut Context<Self>,
     ) {
-        let Some(prompt) = self.quick_command_state.dialogs.variable_prompt.as_mut() else {
+        let Some(prompt) = self.commands.quick.dialogs.variable_prompt.as_mut() else {
             return;
         };
         let Some(variable) = prompt.variables.get_mut(index) else {
@@ -97,12 +97,12 @@ impl NyaTermApp {
             "escape" => self.cancel_quick_command_variable_prompt(cx),
             "enter" => self.submit_quick_command_variable_prompt(cx),
             "left" | "up" => {
-                if let Some(prompt) = self.quick_command_state.dialogs.variable_prompt.as_ref() {
+                if let Some(prompt) = self.commands.quick.dialogs.variable_prompt.as_ref() {
                     self.cycle_quick_command_variable_option(prompt.focused_index, -1, cx);
                 }
             }
             "right" | "down" => {
-                if let Some(prompt) = self.quick_command_state.dialogs.variable_prompt.as_ref() {
+                if let Some(prompt) = self.commands.quick.dialogs.variable_prompt.as_ref() {
                     self.cycle_quick_command_variable_option(prompt.focused_index, 1, cx);
                 }
             }
@@ -117,7 +117,7 @@ impl NyaTermApp {
         text: String,
         cx: &mut Context<Self>,
     ) {
-        let Some(prompt) = self.quick_command_state.dialogs.variable_prompt.as_mut() else {
+        let Some(prompt) = self.commands.quick.dialogs.variable_prompt.as_mut() else {
             return;
         };
         if index >= prompt.variables.len() {

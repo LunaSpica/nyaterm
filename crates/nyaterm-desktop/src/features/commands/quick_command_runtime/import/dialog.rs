@@ -11,15 +11,15 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.quick_command_state.import.path_prompt.is_some() {
+        if self.commands.quick.import.path_prompt.is_some() {
             self.terminal.view.status = "quick command import picker is already open".to_string();
             cx.notify();
             return;
         }
 
-        self.quick_command_state.import.dialog_open = true;
+        self.commands.quick.import.dialog_open = true;
         self.terminal.view.status = "select a quick command import source".to_string();
-        window.focus(&self.quick_command_state.import.focus);
+        window.focus(&self.commands.quick.import.focus);
         cx.notify();
     }
 
@@ -27,7 +27,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        self.quick_command_state.import.dialog_open = false;
+        self.commands.quick.import.dialog_open = false;
         cx.notify();
     }
 
@@ -36,7 +36,7 @@ impl NyaTermApp {
         kind: QuickCommandImportPathPromptKind,
         cx: &mut Context<Self>,
     ) {
-        self.quick_command_state.import.dialog_open = false;
+        self.commands.quick.import.dialog_open = false;
         self.prompt_quick_command_import(kind, cx);
     }
 
@@ -45,7 +45,7 @@ impl NyaTermApp {
         kind: QuickCommandImportPathPromptKind,
         cx: &mut Context<Self>,
     ) {
-        if self.quick_command_state.import.path_prompt.is_some() {
+        if self.commands.quick.import.path_prompt.is_some() {
             self.terminal.view.status = "quick command import picker is already open".to_string();
             cx.notify();
             return;
@@ -60,7 +60,7 @@ impl NyaTermApp {
         let receiver = cx.prompt_for_paths(options);
         let config_dir = self.runtime.config_dir().to_path_buf();
         let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
-        self.quick_command_state.import.path_prompt = Some(kind);
+        self.commands.quick.import.path_prompt = Some(kind);
         self.terminal.view.status = kind.selecting_status().to_string();
 
         cx.spawn(async move |this, cx| {
@@ -102,7 +102,7 @@ impl NyaTermApp {
     }
 
     fn apply_quick_command_import_result(&mut self, result: QuickCommandImportPathPromptResult) {
-        self.quick_command_state.import.path_prompt = None;
+        self.commands.quick.import.path_prompt = None;
         match result {
             QuickCommandImportPathPromptResult::Imported {
                 imported_commands,

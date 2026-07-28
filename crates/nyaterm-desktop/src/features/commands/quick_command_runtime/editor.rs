@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use gpui::{Context, KeyDownEvent, Window};
 use nyaterm_core::{ConnectionStore, QuickCommand, QuickCommandCategory, uuid};
 
@@ -15,10 +13,10 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some(editor) = self.quick_command_state.editor.draft.as_mut() {
+        if let Some(editor) = self.commands.quick.editor.draft.as_mut() {
             editor.focused_field = field;
             editor.error = None;
-            window.focus(&self.quick_command_state.editor.focus);
+            window.focus(&self.commands.quick.editor.focus);
             cx.notify();
         }
     }
@@ -28,7 +26,7 @@ impl NyaTermApp {
         category_id: Option<String>,
         cx: &mut Context<Self>,
     ) {
-        if let Some(editor) = self.quick_command_state.editor.draft.as_mut() {
+        if let Some(editor) = self.commands.quick.editor.draft.as_mut() {
             editor.category_id = category_id;
             editor.category_draft.clear();
             editor.error = None;
@@ -40,7 +38,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        let Some(editor) = self.quick_command_state.editor.draft.as_mut() else {
+        let Some(editor) = self.commands.quick.editor.draft.as_mut() else {
             return;
         };
         let draft = editor.category_draft.trim().to_string();
@@ -48,7 +46,9 @@ impl NyaTermApp {
             return;
         }
         if let Some(existing) = self
-            .quick_command_categories
+            .commands
+            .catalog
+            .categories
             .iter()
             .find(|category| category.name.eq_ignore_ascii_case(&draft))
         {
@@ -67,7 +67,7 @@ impl NyaTermApp {
         color_tag: Option<&'static str>,
         cx: &mut Context<Self>,
     ) {
-        if let Some(editor) = self.quick_command_state.editor.draft.as_mut() {
+        if let Some(editor) = self.commands.quick.editor.draft.as_mut() {
             editor.color_tag = color_tag.map(ToOwned::to_owned);
             editor.icon_tag = None;
             editor.error = None;
@@ -80,7 +80,7 @@ impl NyaTermApp {
         icon_tag: Option<&'static str>,
         cx: &mut Context<Self>,
     ) {
-        if let Some(editor) = self.quick_command_state.editor.draft.as_mut() {
+        if let Some(editor) = self.commands.quick.editor.draft.as_mut() {
             editor.icon_tag = icon_tag.map(ToOwned::to_owned);
             if icon_tag.is_some() {
                 editor.color_tag = None;
@@ -94,7 +94,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        if let Some(editor) = self.quick_command_state.editor.draft.as_mut() {
+        if let Some(editor) = self.commands.quick.editor.draft.as_mut() {
             editor.pinned = !editor.pinned;
             editor.error = None;
             cx.notify();
@@ -106,7 +106,7 @@ impl NyaTermApp {
         mode: &'static str,
         cx: &mut Context<Self>,
     ) {
-        if let Some(editor) = self.quick_command_state.editor.draft.as_mut() {
+        if let Some(editor) = self.commands.quick.editor.draft.as_mut() {
             editor.execution_mode = if mode == "append" {
                 "append".to_string()
             } else {
@@ -120,7 +120,7 @@ impl NyaTermApp {
     pub(in crate::features) fn save_quick_command_editor(&mut self, cx: &mut Context<Self>) {
         let label_required = self.tr("quickCommands.errorLabelRequired").to_string();
         let command_required = self.tr("quickCommands.errorCommandRequired").to_string();
-        let Some(editor) = self.quick_command_state.editor.draft.as_mut() else {
+        let Some(editor) = self.commands.quick.editor.draft.as_mut() else {
             return;
         };
         let label = editor.label.trim().to_string();
@@ -144,7 +144,9 @@ impl NyaTermApp {
         let (category_id, new_category) = if category_draft.is_empty() {
             (editor.category_id.clone(), None)
         } else if let Some(existing) = self
-            .quick_command_categories
+            .commands
+            .catalog
+            .categories
             .iter()
             .find(|category| category.name.eq_ignore_ascii_case(&category_draft))
         {
@@ -188,17 +190,18 @@ impl NyaTermApp {
         .and_then(|store| store.upsert_quick_command(command.clone(), new_category))
         {
             Ok(config) => {
-                self.quick_commands = Arc::from(config.commands);
-                self.quick_command_categories = config.categories;
-                self.quick_command_state.editor.draft = None;
-                self.quick_command_state.editor.window = None;
-                self.quick_command_state.editor.window_open_pending = false;
+                self.commands
+                    .catalog
+                    .replace(config.commands, config.categories);
+                self.commands.quick.editor.draft = None;
+                self.commands.quick.editor.window = None;
+                self.commands.quick.editor.window_open_pending = false;
                 self.store_status.message = format!("quick command '{}' saved", command.label);
                 self.store_status.ready = true;
                 self.terminal.view.status = self.store_status.message.clone();
             }
             Err(error) => {
-                if let Some(editor) = self.quick_command_state.editor.draft.as_mut() {
+                if let Some(editor) = self.commands.quick.editor.draft.as_mut() {
                     editor.error = Some(error.to_string());
                 }
                 self.store_status.message = format!("quick command save failed: {error}");
@@ -249,7 +252,7 @@ impl NyaTermApp {
             "description" => QuickCommandEditorField::Description,
             _ => return,
         };
-        let Some(editor) = self.quick_command_state.editor.draft.as_mut() else {
+        let Some(editor) = self.commands.quick.editor.draft.as_mut() else {
             return;
         };
         editor.focused_field = field;

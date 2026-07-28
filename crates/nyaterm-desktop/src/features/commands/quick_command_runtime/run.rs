@@ -148,7 +148,9 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(command) = self
-            .quick_commands
+            .commands
+            .catalog
+            .commands
             .iter()
             .find(|command| command.id == command_id)
             .cloned()
@@ -182,7 +184,9 @@ impl NyaTermApp {
             return;
         }
         let Some(command) = self
-            .quick_commands
+            .commands
+            .catalog
+            .commands
             .iter()
             .find(|command| command.id == command_id)
             .cloned()
@@ -199,16 +203,15 @@ impl NyaTermApp {
         }
         let variables = parse_quick_command_variables(&command_text);
         if !variables.is_empty() {
-            self.quick_command_state.dialogs.variable_prompt =
-                Some(QuickCommandVariablePromptState {
-                    command_id: command.id,
-                    label: command.label,
-                    command: command_text,
-                    execute,
-                    send_to_all,
-                    variables,
-                    focused_index: 0,
-                });
+            self.commands.quick.dialogs.variable_prompt = Some(QuickCommandVariablePromptState {
+                command_id: command.id,
+                label: command.label,
+                command: command_text,
+                execute,
+                send_to_all,
+                variables,
+                focused_index: 0,
+            });
             self.terminal.view.status = "fill quick command variables".to_string();
             cx.notify();
             return;

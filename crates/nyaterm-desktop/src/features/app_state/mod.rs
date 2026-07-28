@@ -1,13 +1,8 @@
-use std::sync::Arc;
-
-use nyaterm_core::{
-    AppRuntime, AppSettingsSummary, CommandHistoryEntry, KeywordHighlightConfig, NativeServices,
-    QuickCommand, QuickCommandCategory,
-};
+use nyaterm_core::{AppRuntime, AppSettingsSummary, KeywordHighlightConfig, NativeServices};
 use nyaterm_legacy::MigrationInventory;
 
 use super::ai::AiFeatureState;
-use super::commands::{CommandRuntimeState, QuickCommandFeatureState};
+use super::commands::CommandFeatureState;
 use super::connections::{ConnectionCatalogState, ConnectionFeatureState};
 use super::panels::SendCommandFeatureState;
 use super::recording::RecordingFeatureState;
@@ -40,9 +35,7 @@ pub struct NyaTermApp {
     /// Real text inputs for the panels that have not been given their own,
     /// keyed by an id the panel picks. See `features::text_inputs`.
     pub(in crate::features) text_inputs: TextInputRegistry,
-    pub(in crate::features) quick_commands: Arc<[QuickCommand]>,
-    pub(in crate::features) quick_command_categories: Vec<QuickCommandCategory>,
-    pub(in crate::features) quick_command_state: QuickCommandFeatureState,
+    pub(in crate::features) commands: CommandFeatureState,
     pub(in crate::features) remote_ops: RemoteOpsFeatureState,
     pub(in crate::features) security: SecurityFeatureState,
     pub(in crate::features) settings_state: SettingsFeatureState,
@@ -53,8 +46,6 @@ pub struct NyaTermApp {
     pub(in crate::features) translation: TranslationFeatureState,
     pub(in crate::features) update: UpdateFeatureState,
     pub(in crate::features) cloud_sync: CloudSyncFeatureState,
-    pub(in crate::features) command_history: Arc<[CommandHistoryEntry]>,
-    pub(in crate::features) command_runtime: CommandRuntimeState,
     pub(in crate::features) session: SessionFeatureState,
     pub(in crate::features) shell: ShellFeatureState,
     pub(in crate::features) sync_input: SyncInputFeatureState,

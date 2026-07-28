@@ -16,16 +16,16 @@ use std::sync::Arc;
 
 use super::super::settings::{SettingsFeatureFocus, SettingsFeatureState};
 use super::super::{
-    AiFeatureFocus, AiFeatureState, CloudSyncFeatureState, CommandRuntimeState,
+    AiFeatureFocus, AiFeatureState, CloudSyncFeatureState, CommandFeatureInit, CommandFeatureState,
     ConnectionCatalogState, ConnectionFeatureFocus, ConnectionFeatureState,
     INITIAL_TERMINAL_BANNER, LEGACY_ROOT, NativeOtpProvider, QuickCommandFeatureFocus,
-    QuickCommandFeatureState, RecordingFeatureState, RemoteOpsFeatureFocus, RemoteOpsFeatureState,
-    SecurityCatalogState, SecurityFeatureFocus, SecurityFeatureState, SendCommandFeatureFocus,
-    SendCommandFeatureState, SessionFeatureFocus, SessionFeatureState, ShellFeatureInit,
-    ShellFeatureState, SyncInputFeatureState, TerminalFeatureFocus, TerminalFeatureState,
-    TextInputRegistry, TransferFeatureFocus, TransferFeatureState, TranslationFeatureState,
-    TunnelCatalogState, TunnelFeatureState, UpdateFeatureState, ai_active_profile_drafts,
-    ai_usage_counts, appearance_font_options, quick_command_sort_mode_from_setting,
+    RecordingFeatureState, RemoteOpsFeatureFocus, RemoteOpsFeatureState, SecurityCatalogState,
+    SecurityFeatureFocus, SecurityFeatureState, SendCommandFeatureFocus, SendCommandFeatureState,
+    SessionFeatureFocus, SessionFeatureState, ShellFeatureInit, ShellFeatureState,
+    SyncInputFeatureState, TerminalFeatureFocus, TerminalFeatureState, TextInputRegistry,
+    TransferFeatureFocus, TransferFeatureState, TranslationFeatureState, TunnelCatalogState,
+    TunnelFeatureState, UpdateFeatureState, ai_active_profile_drafts, ai_usage_counts,
+    appearance_font_options, quick_command_sort_mode_from_setting,
     quick_command_view_mode_from_setting,
 };
 use super::NyaTermApp;
@@ -56,10 +56,6 @@ impl NyaTermApp {
             command_modules: 0,
             copied_vendor_roots: Vec::new(),
         };
-        let command_runtime = CommandRuntimeState::new(
-            runtime.config_dir().to_path_buf(),
-            runtime.portable_key_path().map(ToOwned::to_owned),
-        );
         let (
             connections,
             connection_groups,
@@ -294,6 +290,8 @@ impl NyaTermApp {
 
         let connections_filter_placeholder =
             crate::i18n::text(&settings.language, "savedConnections.filter");
+        let command_config_dir = runtime.config_dir().to_path_buf();
+        let command_portable_key_path = runtime.portable_key_path().map(ToOwned::to_owned);
 
         Self {
             stores,
@@ -314,19 +312,22 @@ impl NyaTermApp {
                 },
                 cx,
             ),
-            quick_commands: Arc::from(quick_commands),
-            quick_command_categories,
-            quick_command_state: QuickCommandFeatureState::new(
-                quick_command_sort_mode_from_setting(&settings.ui_quick_cmd_sort_mode),
-                quick_command_view_mode_from_setting(&settings.ui_quick_cmd_view_mode),
-                QuickCommandFeatureFocus {
+            commands: CommandFeatureState::new(CommandFeatureInit {
+                commands: quick_commands,
+                categories: quick_command_categories,
+                history: command_history,
+                sort_mode: quick_command_sort_mode_from_setting(&settings.ui_quick_cmd_sort_mode),
+                view_mode: quick_command_view_mode_from_setting(&settings.ui_quick_cmd_view_mode),
+                focus: QuickCommandFeatureFocus {
                     editor: cx.focus_handle(),
                     details: cx.focus_handle(),
                     category_rename: cx.focus_handle(),
                     variable: cx.focus_handle(),
                     import: cx.focus_handle(),
                 },
-            ),
+                config_dir: command_config_dir,
+                portable_key_path: command_portable_key_path,
+            }),
             send_command: SendCommandFeatureState::new(SendCommandFeatureFocus {
                 editor: cx.focus_handle(),
             }),
@@ -420,8 +421,6 @@ impl NyaTermApp {
                 cloud_sync_state,
                 cloud_sync_history,
             ),
-            command_history: Arc::from(command_history),
-            command_runtime,
             session: SessionFeatureState::new(
                 session_manager,
                 session_event_bridge,

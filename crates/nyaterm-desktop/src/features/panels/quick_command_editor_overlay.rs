@@ -36,7 +36,8 @@ impl NyaTermApp {
     ) -> AnyElement {
         let palette = self.theme_palette();
         let editor = self
-            .quick_command_state
+            .commands
+            .quick
             .editor
             .draft
             .clone()
@@ -91,7 +92,9 @@ impl NyaTermApp {
             .category_id
             .as_deref()
             .and_then(|id| {
-                self.quick_command_categories
+                self.commands
+                    .catalog
+                    .categories
                     .iter()
                     .find(|category| category.id == id)
             })
@@ -100,7 +103,9 @@ impl NyaTermApp {
         let category_draft = editor.category_draft.trim().to_string();
         let category_query = category_draft.to_lowercase();
         let exact_category_match = self
-            .quick_command_categories
+            .commands
+            .catalog
+            .categories
             .iter()
             .any(|category| category.name.eq_ignore_ascii_case(&category_draft));
         let category_display = if category_draft.is_empty() {
@@ -156,7 +161,9 @@ impl NyaTermApp {
             ));
         }
         for category in self
-            .quick_command_categories
+            .commands
+            .catalog
+            .categories
             .clone()
             .into_iter()
             .filter(|category| {
@@ -215,7 +222,7 @@ impl NyaTermApp {
             .when(!native_window, |this| this.justify_center())
             .when(native_window, |this| this.justify_start())
             .overflow_y_scroll()
-            .track_focus(&self.quick_command_state.editor.focus)
+            .track_focus(&self.commands.quick.editor.focus)
             // No blanket focus grab: it kept the surface "focused" for the old
             // label-div fields, and would now steal focus back from whichever
             // box the pointer just landed on, since click follows mouse-down.

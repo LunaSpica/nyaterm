@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use gpui::{AppContext, Context, KeyDownEvent, PathPromptOptions, SharedString, Window};
 use nyaterm_core::{
     AppSettingsSummary, ConnectionStore, KeywordHighlightConfig, TranslationSettings,
@@ -538,10 +536,11 @@ impl NyaTermApp {
                         self.tunnel_state.catalog.proxy_groups =
                             store.list_proxy_groups().unwrap_or_default();
                         let quick_commands = store.load_quick_commands().unwrap_or_default();
-                        self.quick_commands = Arc::from(quick_commands.commands);
-                        self.quick_command_categories = quick_commands.categories;
-                        self.command_history =
-                            Arc::from(store.list_command_history(64).unwrap_or_default());
+                        self.commands.replace_loaded(
+                            quick_commands.commands,
+                            quick_commands.categories,
+                            store.list_command_history(64).unwrap_or_default(),
+                        );
                         self.keyword_highlights =
                             store.load_keyword_highlights().unwrap_or_default();
                         self.apply_gpui_settings(
@@ -595,9 +594,7 @@ impl NyaTermApp {
                         self.tunnel_state.catalog.tunnel_groups.clear();
                         self.tunnel_state.catalog.proxies.clear();
                         self.tunnel_state.catalog.proxy_groups.clear();
-                        self.quick_commands = Arc::default();
-                        self.quick_command_categories.clear();
-                        self.command_history = Arc::default();
+                        self.commands.clear_loaded();
                         self.keyword_highlights = KeywordHighlightConfig::default();
                         self.apply_gpui_settings(AppSettingsSummary::default());
                         self.translation.settings = TranslationSettings::default();
@@ -618,9 +615,7 @@ impl NyaTermApp {
                 self.tunnel_state.catalog.tunnel_groups.clear();
                 self.tunnel_state.catalog.proxies.clear();
                 self.tunnel_state.catalog.proxy_groups.clear();
-                self.quick_commands = Arc::default();
-                self.quick_command_categories.clear();
-                self.command_history = Arc::default();
+                self.commands.clear_loaded();
                 self.apply_gpui_settings(AppSettingsSummary::default());
                 self.translation.settings = TranslationSettings::default();
                 self.translation.secret_draft = TranslationSecretDraft::default();

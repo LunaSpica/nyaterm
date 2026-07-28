@@ -568,8 +568,8 @@ impl NyaTermApp {
             pattern_chars,
             min_chars,
             max_chars,
-            history: self.command_history.clone(),
-            quick_commands: self.quick_commands.clone(),
+            history: self.commands.history.clone(),
+            quick_commands: self.commands.catalog.commands.clone(),
             started_at,
             popup_visible_at_start,
             timing,
@@ -749,8 +749,8 @@ impl NyaTermApp {
             outcome,
             pattern_chars,
             result_count,
-            command_history_count = self.command_history.len(),
-            quick_command_count = self.quick_commands.len(),
+            command_history_count = self.commands.history.len(),
+            quick_command_count = self.commands.catalog.commands.len(),
             tracker_value_bytes = self.terminal.assist.command_input_tracker.value.len(),
             tracker_desynced = self.terminal.assist.command_input_tracker.desynced,
             tracker_multiline = self.terminal.assist.command_input_tracker.multiline,
@@ -903,7 +903,7 @@ impl NyaTermApp {
                     cx.notify();
                     return;
                 }
-                self.command_history =
+                self.commands.history =
                     Arc::from(store.list_command_history(64).unwrap_or_default());
                 for history in self.session.command_history.values_mut() {
                     history.retain(|entry| entry != &command);

@@ -15,7 +15,8 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         let prompt = self
-            .quick_command_state
+            .commands
+            .quick
             .dialogs
             .variable_prompt
             .clone()
@@ -112,7 +113,7 @@ impl NyaTermApp {
                     .cursor_pointer()
                     .on_click(cx.listener(move |this, _, window, cx| {
                         this.focus_quick_command_variable(index, cx);
-                        window.focus(&this.quick_command_state.dialogs.variable_focus);
+                        window.focus(&this.commands.quick.dialogs.variable_focus);
                     }))
                     .child(
                         div()
@@ -135,9 +136,9 @@ impl NyaTermApp {
             .flex()
             .items_center()
             .justify_center()
-            .track_focus(&self.quick_command_state.dialogs.variable_focus)
+            .track_focus(&self.commands.quick.dialogs.variable_focus)
             .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(&this.quick_command_state.dialogs.variable_focus);
+                window.focus(&this.commands.quick.dialogs.variable_focus);
                 cx.notify();
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
