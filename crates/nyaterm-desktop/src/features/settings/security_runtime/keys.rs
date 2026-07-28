@@ -50,13 +50,9 @@ impl NyaTermApp {
                 error: None,
             }
         };
-        self.security.editors.key = Some(editor);
-        self.security.editors.otp = None;
-        self.security.editors.password = None;
-        self.security.editors.credential = None;
-        self.security.delete_confirm = None;
-        self.security.status = "SSH key editor opened".to_string();
-        window.focus(&self.security.editors.key_focus);
+        self.security
+            .open_key_editor(editor, "SSH key editor opened".to_string());
+        window.focus(self.security.key_editor_focus());
         cx.notify();
     }
 
@@ -72,11 +68,11 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some(editor) = self.security.editors.key.as_mut() {
+        if let Some(editor) = self.security.key_editor_mut() {
             editor.focused_field = field;
             editor.error = None;
         }
-        window.focus(&self.security.editors.key_focus);
+        window.focus(self.security.key_editor_focus());
         cx.notify();
     }
 
@@ -111,19 +107,19 @@ impl NyaTermApp {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(editor) = self.security.editors.key.clone() else {
+        let Some(editor) = self.security.key_editor().cloned() else {
             return;
         };
         let name = editor.name.trim().to_string();
         if name.is_empty() {
-            if let Some(editor) = self.security.editors.key.as_mut() {
+            if let Some(editor) = self.security.key_editor_mut() {
                 editor.error = Some("key name is required".to_string());
             }
             cx.notify();
             return;
         }
         if editor.id.is_none() && editor.key_file_path.trim().is_empty() && !editor.has_key_data {
-            if let Some(editor) = self.security.editors.key.as_mut() {
+            if let Some(editor) = self.security.key_editor_mut() {
                 editor.error = Some("select a private key file".to_string());
             }
             cx.notify();
@@ -136,7 +132,7 @@ impl NyaTermApp {
         ) {
             Ok(store) => store,
             Err(error) => {
-                if let Some(editor) = self.security.editors.key.as_mut() {
+                if let Some(editor) = self.security.key_editor_mut() {
                     editor.error = Some(error.to_string());
                 }
                 cx.notify();
@@ -171,12 +167,12 @@ impl NyaTermApp {
         match store.save_ssh_key(key) {
             Ok(id) => {
                 self.refresh_security_catalog();
-                self.security.editors.key = None;
-                self.security.status = format!("SSH key saved ({})", compact_id(&id));
+                self.security
+                    .finish_key_editor(format!("SSH key saved ({})", compact_id(&id)));
                 self.terminal.view.status = "SSH key saved".to_string();
             }
             Err(error) => {
-                if let Some(editor) = self.security.editors.key.as_mut() {
+                if let Some(editor) = self.security.key_editor_mut() {
                     editor.error = Some(error.to_string());
                 }
             }
@@ -196,7 +192,7 @@ impl NyaTermApp {
             .find(|key| key.id == key_id)
             .map(|key| key.name.clone())
             .unwrap_or_else(|| key_id.clone());
-        self.security.delete_confirm = Some(SecurityDeleteConfirmState {
+        self.security.request_delete(SecurityDeleteConfirmState {
             kind: SecurityAuthTab::Keys,
             id: key_id,
             label,
@@ -234,7 +230,7 @@ impl NyaTermApp {
             let _ = this.update(cx, |this, cx| {
                 if let Some(path) = selected {
                     let path = path.display().to_string();
-                    if let Some(editor) = this.security.editors.key.as_mut() {
+                    if let Some(editor) = this.security.key_editor_mut() {
                         if is_cert {
                             editor.cert_file_path = path;
                             editor.has_cert_data = true;

@@ -34,7 +34,7 @@ impl NyaTermApp {
             .flex()
             .flex_col()
             .gap_2()
-            .track_focus(&self.security.editors.credential_focus)
+            .track_focus(self.security.credential_editor_focus())
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 this.handle_security_credential_editor_key_down(event, window, cx);
             }))

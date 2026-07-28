@@ -1551,8 +1551,13 @@ honest remaining list.
    batch then made SSH keys, OTP entries, saved passwords and credentials
    private, routed consumers through read-only slices, and grouped store refresh
    and failure clearing on `SecurityFeatureState` without widening
-   secret-bearing `Debug` exposure. What remains at the composition root is
-   stores, runtime and focused feature owners.
+   secret-bearing `Debug` exposure. The following security-editor lifecycle
+   batch made the four mutually-exclusive editor drafts, QR-import admission
+   and delete-confirmation state private too; input routing and editor
+   open/finish/close transitions now enter through `SecurityFeatureState`,
+   while GPUI focus, rendering, file decoding and persistence remain in their
+   existing adapters. What remains at the composition root is stores, runtime
+   and focused feature owners.
    Group by cohesion where a cluster exists; do not force the count down for
    its own sake.
    Method ownership is now moving too, which is what grouping the fields alone

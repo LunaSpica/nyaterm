@@ -19,12 +19,12 @@ impl NyaTermApp {
             self.tr("passwordManager.title"),
             "security-add-password",
             self.tr("passwordManager.add"),
-            self.security.editors.password.is_none(),
+            self.security.password_editor().is_none(),
             cx.listener(|this, _, window, cx| {
                 this.open_security_password_editor(None, window, cx);
             }),
         ));
-        if let Some(editor) = self.security.editors.password.clone() {
+        if let Some(editor) = self.security.password_editor().cloned() {
             body = body.child(self.security_password_editor_view(editor, cx));
         } else if self.security.passwords().is_empty() {
             body = body.child(empty_panel(

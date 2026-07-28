@@ -19,12 +19,12 @@ impl NyaTermApp {
             self.tr("credentialManager.title"),
             "security-add-credential",
             self.tr("credentialManager.add"),
-            self.security.editors.credential.is_none(),
+            self.security.credential_editor().is_none(),
             cx.listener(|this, _, window, cx| {
                 this.open_security_credential_editor(None, window, cx);
             }),
         ));
-        if let Some(editor) = self.security.editors.credential.clone() {
+        if let Some(editor) = self.security.credential_editor().cloned() {
             body = body.child(self.security_credential_editor_view(editor, cx));
         } else if self.security.credentials().is_empty() {
             body = body.child(empty_panel(

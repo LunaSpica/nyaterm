@@ -10,7 +10,8 @@ use crate::models::{
 
 impl NyaTermApp {
     pub(in crate::features) fn import_security_otp_from_qr(&mut self, cx: &mut Context<Self>) {
-        if self.security.editors.otp_qr_importing || self.security.editors.otp.is_some() {
+        let scanning_status = self.tr("otpManager.scanningQr").to_string();
+        if !self.security.begin_otp_qr_import(scanning_status) {
             return;
         }
         let options = PathPromptOptions {
@@ -20,8 +21,6 @@ impl NyaTermApp {
             prompt: Some(SharedString::from(self.tr("otpManager.selectQrImage"))),
         };
         let receiver = cx.prompt_for_paths(options);
-        self.security.editors.otp_qr_importing = true;
-        self.security.status = self.tr("otpManager.scanningQr").to_string();
         cx.spawn(async move |this, cx| {
             let selected = match receiver.await {
                 Ok(Ok(Some(paths))) => paths.into_iter().next(),
@@ -35,15 +34,11 @@ impl NyaTermApp {
                 None => Ok(None),
             };
             let _ = this.update(cx, |this, cx| {
-                this.security.editors.otp_qr_importing = false;
+                this.security.finish_otp_qr_import();
                 match result {
                     Ok(Some(editor)) => {
-                        this.security.editors.otp = Some(editor);
-                        this.security.editors.key = None;
-                        this.security.editors.password = None;
-                        this.security.editors.credential = None;
-                        this.security.delete_confirm = None;
-                        this.security.status = this.tr("otpManager.scanQr").to_string();
+                        let status = this.tr("otpManager.scanQr").to_string();
+                        this.security.open_otp_editor(editor, status);
                     }
                     Ok(None) => {
                         this.security.status = this.tr("common.cancel").to_string();
@@ -164,13 +159,9 @@ impl NyaTermApp {
                 error: None,
             }
         };
-        self.security.editors.otp = Some(editor);
-        self.security.editors.key = None;
-        self.security.editors.password = None;
-        self.security.editors.credential = None;
-        self.security.delete_confirm = None;
-        self.security.status = "OTP editor opened".to_string();
-        window.focus(&self.security.editors.otp_focus);
+        self.security
+            .open_otp_editor(editor, "OTP editor opened".to_string());
+        window.focus(self.security.otp_editor_focus());
         cx.notify();
     }
 
@@ -185,7 +176,7 @@ impl NyaTermApp {
         otp_type: &'static str,
         cx: &mut Context<Self>,
     ) {
-        if let Some(editor) = self.security.editors.otp.as_mut() {
+        if let Some(editor) = self.security.otp_editor_mut() {
             editor.otp_type = otp_type.to_string();
         }
         cx.notify();
@@ -227,11 +218,11 @@ impl NyaTermApp {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(editor) = self.security.editors.otp.clone() else {
+        let Some(editor) = self.security.otp_editor().cloned() else {
             return;
         };
         if editor.id.is_none() && editor.secret.trim().is_empty() {
-            if let Some(editor) = self.security.editors.otp.as_mut() {
+            if let Some(editor) = self.security.otp_editor_mut() {
                 editor.error = Some("OTP secret is required".to_string());
             }
             cx.notify();
@@ -247,7 +238,7 @@ impl NyaTermApp {
         ) {
             Ok(store) => store,
             Err(error) => {
-                if let Some(editor) = self.security.editors.otp.as_mut() {
+                if let Some(editor) = self.security.otp_editor_mut() {
                     editor.error = Some(error.to_string());
                 }
                 cx.notify();
@@ -279,12 +270,12 @@ impl NyaTermApp {
         match store.save_otp_entry(entry) {
             Ok(id) => {
                 self.refresh_security_catalog();
-                self.security.editors.otp = None;
-                self.security.status = format!("OTP entry saved ({})", compact_id(&id));
+                self.security
+                    .finish_otp_editor(format!("OTP entry saved ({})", compact_id(&id)));
                 self.terminal.view.status = "OTP entry saved".to_string();
             }
             Err(error) => {
-                if let Some(editor) = self.security.editors.otp.as_mut() {
+                if let Some(editor) = self.security.otp_editor_mut() {
                     editor.error = Some(error.to_string());
                 }
             }
@@ -320,7 +311,7 @@ impl NyaTermApp {
                 }
             })
             .unwrap_or_else(|| otp_id.clone());
-        self.security.delete_confirm = Some(SecurityDeleteConfirmState {
+        self.security.request_delete(SecurityDeleteConfirmState {
             kind: SecurityAuthTab::Otp,
             id: otp_id,
             label,

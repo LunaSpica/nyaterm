@@ -19,12 +19,12 @@ impl NyaTermApp {
             self.tr("securityAuth.keyManagement"),
             "security-add-key",
             self.tr("securityAuth.addKey"),
-            self.security.editors.key.is_none(),
+            self.security.key_editor().is_none(),
             cx.listener(|this, _, window, cx| {
                 this.open_security_key_editor(None, window, cx);
             }),
         ));
-        if let Some(editor) = self.security.editors.key.clone() {
+        if let Some(editor) = self.security.key_editor().cloned() {
             body = body.child(self.security_key_editor_view(editor, cx));
         } else if self.security.ssh_keys().is_empty() {
             body = body.child(empty_panel(

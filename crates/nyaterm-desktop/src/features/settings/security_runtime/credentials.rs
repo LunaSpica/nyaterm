@@ -62,13 +62,9 @@ impl NyaTermApp {
                 error: None,
             }
         };
-        self.security.editors.credential = Some(editor);
-        self.security.editors.key = None;
-        self.security.editors.otp = None;
-        self.security.editors.password = None;
-        self.security.delete_confirm = None;
-        self.security.status = "credential editor opened".to_string();
-        window.focus(&self.security.editors.credential_focus);
+        self.security
+            .open_credential_editor(editor, "credential editor opened".to_string());
+        window.focus(self.security.credential_editor_focus());
         cx.notify();
     }
 
@@ -82,7 +78,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        if let Some(editor) = self.security.editors.credential.as_mut() {
+        if let Some(editor) = self.security.credential_editor_mut() {
             editor.enabled = !editor.enabled;
         }
         cx.notify();
@@ -174,12 +170,12 @@ impl NyaTermApp {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(editor) = self.security.editors.credential.clone() else {
+        let Some(editor) = self.security.credential_editor().cloned() else {
             return;
         };
         let name = editor.name.trim().to_string();
         if name.is_empty() {
-            if let Some(editor) = self.security.editors.credential.as_mut() {
+            if let Some(editor) = self.security.credential_editor_mut() {
                 editor.error = Some("credential name is required".to_string());
             }
             cx.notify();
@@ -191,7 +187,7 @@ impl NyaTermApp {
         ) {
             Ok(store) => store,
             Err(error) => {
-                if let Some(editor) = self.security.editors.credential.as_mut() {
+                if let Some(editor) = self.security.credential_editor_mut() {
                     editor.error = Some(error.to_string());
                 }
                 cx.notify();
@@ -215,12 +211,12 @@ impl NyaTermApp {
         match store.save_credential(entry) {
             Ok(id) => {
                 self.refresh_security_catalog();
-                self.security.editors.credential = None;
-                self.security.status = format!("credential saved ({})", compact_id(&id));
+                self.security
+                    .finish_credential_editor(format!("credential saved ({})", compact_id(&id)));
                 self.terminal.view.status = "credential saved".to_string();
             }
             Err(error) => {
-                if let Some(editor) = self.security.editors.credential.as_mut() {
+                if let Some(editor) = self.security.credential_editor_mut() {
                     editor.error = Some(error.to_string());
                 }
             }
@@ -250,7 +246,7 @@ impl NyaTermApp {
             .find(|entry| entry.id == credential_id)
             .map(|entry| entry.name.clone())
             .unwrap_or_else(|| credential_id.clone());
-        self.security.delete_confirm = Some(SecurityDeleteConfirmState {
+        self.security.request_delete(SecurityDeleteConfirmState {
             kind: SecurityAuthTab::Credentials,
             id: credential_id,
             label,

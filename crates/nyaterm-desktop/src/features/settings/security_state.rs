@@ -20,8 +20,8 @@ use crate::models::{
 pub(in crate::features) struct SecurityFeatureState {
     catalog: SecurityCatalogState,
     pub auth_tab: SecurityAuthTab,
-    pub editors: SecurityEditorState,
-    pub delete_confirm: Option<SecurityDeleteConfirmState>,
+    editors: SecurityEditorState,
+    delete_confirm: Option<SecurityDeleteConfirmState>,
     pub revealed: SecurityRevealedState,
     pub status: String,
     pub unlock: SecurityUnlockState,
@@ -66,16 +66,16 @@ pub(in crate::features) struct SecurityFeatureFocus {
 }
 
 /// The four security editors, each an optional draft plus its focus handle.
-pub(in crate::features) struct SecurityEditorState {
-    pub key: Option<SecurityKeyEditorState>,
-    pub key_focus: FocusHandle,
-    pub otp: Option<SecurityOtpEditorState>,
-    pub otp_focus: FocusHandle,
-    pub otp_qr_importing: bool,
-    pub password: Option<SecurityPasswordEditorState>,
-    pub password_focus: FocusHandle,
-    pub credential: Option<SecurityCredentialEditorState>,
-    pub credential_focus: FocusHandle,
+struct SecurityEditorState {
+    key: Option<SecurityKeyEditorState>,
+    key_focus: FocusHandle,
+    otp: Option<SecurityOtpEditorState>,
+    otp_focus: FocusHandle,
+    otp_qr_importing: bool,
+    password: Option<SecurityPasswordEditorState>,
+    password_focus: FocusHandle,
+    credential: Option<SecurityCredentialEditorState>,
+    credential_focus: FocusHandle,
 }
 
 /// Values the user has explicitly revealed, plus generated OTP codes.
@@ -184,6 +184,209 @@ impl SecurityFeatureState {
     pub(in crate::features) fn clear_catalog(&mut self) {
         self.replace_catalog(Vec::new(), Vec::new(), Vec::new(), Vec::new());
     }
+
+    pub(in crate::features) fn key_editor(&self) -> Option<&SecurityKeyEditorState> {
+        self.editors.key.as_ref()
+    }
+
+    pub(in crate::features) fn key_editor_mut(&mut self) -> Option<&mut SecurityKeyEditorState> {
+        self.editors.key.as_mut()
+    }
+
+    pub(in crate::features) fn key_editor_focus(&self) -> &FocusHandle {
+        &self.editors.key_focus
+    }
+
+    pub(in crate::features) fn otp_editor(&self) -> Option<&SecurityOtpEditorState> {
+        self.editors.otp.as_ref()
+    }
+
+    pub(in crate::features) fn otp_editor_mut(&mut self) -> Option<&mut SecurityOtpEditorState> {
+        self.editors.otp.as_mut()
+    }
+
+    pub(in crate::features) fn otp_editor_focus(&self) -> &FocusHandle {
+        &self.editors.otp_focus
+    }
+
+    pub(in crate::features) fn otp_qr_importing(&self) -> bool {
+        self.editors.otp_qr_importing
+    }
+
+    pub(in crate::features) fn password_editor(&self) -> Option<&SecurityPasswordEditorState> {
+        self.editors.password.as_ref()
+    }
+
+    pub(in crate::features) fn password_editor_mut(
+        &mut self,
+    ) -> Option<&mut SecurityPasswordEditorState> {
+        self.editors.password.as_mut()
+    }
+
+    pub(in crate::features) fn password_editor_focus(&self) -> &FocusHandle {
+        &self.editors.password_focus
+    }
+
+    pub(in crate::features) fn credential_editor(&self) -> Option<&SecurityCredentialEditorState> {
+        self.editors.credential.as_ref()
+    }
+
+    pub(in crate::features) fn credential_editor_mut(
+        &mut self,
+    ) -> Option<&mut SecurityCredentialEditorState> {
+        self.editors.credential.as_mut()
+    }
+
+    pub(in crate::features) fn credential_editor_focus(&self) -> &FocusHandle {
+        &self.editors.credential_focus
+    }
+
+    pub(in crate::features) fn open_key_editor(
+        &mut self,
+        editor: SecurityKeyEditorState,
+        status: String,
+    ) {
+        self.clear_editors();
+        self.editors.key = Some(editor);
+        self.delete_confirm = None;
+        self.status = status;
+    }
+
+    pub(in crate::features) fn open_otp_editor(
+        &mut self,
+        editor: SecurityOtpEditorState,
+        status: String,
+    ) {
+        self.clear_editors();
+        self.editors.otp = Some(editor);
+        self.delete_confirm = None;
+        self.status = status;
+    }
+
+    pub(in crate::features) fn open_password_editor(
+        &mut self,
+        editor: SecurityPasswordEditorState,
+        status: String,
+    ) {
+        self.clear_editors();
+        self.editors.password = Some(editor);
+        self.delete_confirm = None;
+        self.status = status;
+    }
+
+    pub(in crate::features) fn open_credential_editor(
+        &mut self,
+        editor: SecurityCredentialEditorState,
+        status: String,
+    ) {
+        self.clear_editors();
+        self.editors.credential = Some(editor);
+        self.delete_confirm = None;
+        self.status = status;
+    }
+
+    pub(in crate::features) fn finish_key_editor(&mut self, status: String) {
+        self.editors.key = None;
+        self.status = status;
+    }
+
+    pub(in crate::features) fn finish_otp_editor(&mut self, status: String) {
+        self.editors.otp = None;
+        self.status = status;
+    }
+
+    pub(in crate::features) fn finish_password_editor(&mut self, status: String) {
+        self.editors.password = None;
+        self.status = status;
+    }
+
+    pub(in crate::features) fn finish_credential_editor(&mut self, status: String) {
+        self.editors.credential = None;
+        self.status = status;
+    }
+
+    pub(in crate::features) fn begin_otp_qr_import(&mut self, status: String) -> bool {
+        if self.editors.otp_qr_importing || self.editors.otp.is_some() {
+            return false;
+        }
+        self.editors.otp_qr_importing = true;
+        self.status = status;
+        true
+    }
+
+    pub(in crate::features) fn finish_otp_qr_import(&mut self) {
+        self.editors.otp_qr_importing = false;
+    }
+
+    pub(in crate::features) fn delete_confirm(&self) -> Option<&SecurityDeleteConfirmState> {
+        self.delete_confirm.as_ref()
+    }
+
+    pub(in crate::features) fn request_delete(&mut self, confirm: SecurityDeleteConfirmState) {
+        self.delete_confirm = Some(confirm);
+    }
+
+    pub(in crate::features) fn apply_editor_input(&mut self, id: &str, text: String) -> bool {
+        match id {
+            "key-name" | "key-passphrase" => {
+                let Some(editor) = self.key_editor_mut() else {
+                    return false;
+                };
+                match id {
+                    "key-name" => editor.name = text,
+                    _ => editor.passphrase = text,
+                }
+            }
+            "pw-name" | "pw-value" => {
+                let Some(editor) = self.password_editor_mut() else {
+                    return false;
+                };
+                match id {
+                    "pw-name" => editor.name = text,
+                    _ => editor.password = text,
+                }
+            }
+            "otp-issuer" | "otp-username" | "otp-secret" | "otp-digits" | "otp-period"
+            | "otp-counter" => {
+                let Some(editor) = self.otp_editor_mut() else {
+                    return false;
+                };
+                match id {
+                    "otp-issuer" => editor.issuer = text,
+                    "otp-username" => editor.username = text,
+                    "otp-secret" => editor.secret = text,
+                    "otp-digits" => editor.digits = digits_only(&text),
+                    "otp-period" => editor.period = digits_only(&text),
+                    _ => editor.counter = digits_only(&text),
+                }
+            }
+            "cred-name" | "cred-user" | "cred-pass" | "cred-user-re" | "cred-pass-re" => {
+                let Some(editor) = self.credential_editor_mut() else {
+                    return false;
+                };
+                match id {
+                    "cred-name" => editor.name = text,
+                    "cred-user" => editor.username = text,
+                    "cred-pass" => editor.password = text,
+                    "cred-user-re" => editor.username_prompt_regex = text,
+                    _ => editor.password_prompt_regex = text,
+                }
+            }
+            _ => return false,
+        }
+        true
+    }
+
+    fn clear_editors(&mut self) {
+        self.editors.key = None;
+        self.editors.otp = None;
+        self.editors.password = None;
+        self.editors.credential = None;
+    }
+}
+
+fn digits_only(text: &str) -> String {
+    text.chars().filter(char::is_ascii_digit).collect()
 }
 
 impl SecurityScreenLockState {
@@ -229,6 +432,10 @@ mod tests {
     use nyaterm_core::{OtpEntry, SavedCredential, SavedPassword, SshKey};
 
     use super::{SecurityCatalogState, SecurityFeatureFocus, SecurityFeatureState};
+    use crate::models::{
+        SecurityAuthTab, SecurityDeleteConfirmState, SecurityKeyEditorField,
+        SecurityKeyEditorState, SecurityPasswordEditorField, SecurityPasswordEditorState,
+    };
 
     fn security_state() -> SecurityFeatureState {
         let cx = TestAppContext::single();
@@ -305,6 +512,73 @@ mod tests {
         assert!(security.otp_entries().is_empty());
         assert!(security.passwords().is_empty());
         assert!(security.credentials().is_empty());
+    }
+
+    #[test]
+    fn opening_an_editor_replaces_the_previous_editor_and_delete_confirmation() {
+        let mut security = security_state();
+        security.request_delete(SecurityDeleteConfirmState {
+            kind: SecurityAuthTab::Passwords,
+            id: "password-id".to_string(),
+            label: "password".to_string(),
+        });
+
+        security.open_password_editor(
+            SecurityPasswordEditorState {
+                id: None,
+                name: String::new(),
+                password: String::new(),
+                has_password: false,
+                show_password: false,
+                focused_field: SecurityPasswordEditorField::Name,
+                error: None,
+            },
+            "password editor opened".to_string(),
+        );
+        assert!(security.password_editor().is_some());
+        assert!(security.delete_confirm().is_none());
+
+        security.open_key_editor(
+            SecurityKeyEditorState {
+                id: None,
+                name: String::new(),
+                key_file_path: String::new(),
+                cert_file_path: String::new(),
+                passphrase: String::new(),
+                has_key_data: false,
+                has_cert_data: false,
+                focused_field: SecurityKeyEditorField::Name,
+                error: None,
+            },
+            "SSH key editor opened".to_string(),
+        );
+
+        assert!(security.password_editor().is_none());
+        assert!(security.key_editor().is_some());
+        assert!(security.otp_editor().is_none());
+        assert!(security.credential_editor().is_none());
+        assert!(security.apply_editor_input("key-name", "new key".to_string()));
+        assert_eq!(
+            security.key_editor().map(|editor| editor.name.as_str()),
+            Some("new key")
+        );
+
+        security.finish_key_editor("saved".to_string());
+        assert!(security.key_editor().is_none());
+        assert_eq!(security.status, "saved");
+    }
+
+    #[test]
+    fn otp_qr_import_admission_is_owned_by_security_state() {
+        let mut security = security_state();
+
+        assert!(security.begin_otp_qr_import("scanning".to_string()));
+        assert!(!security.begin_otp_qr_import("duplicate".to_string()));
+        assert!(security.otp_qr_importing());
+        assert_eq!(security.status, "scanning");
+
+        security.finish_otp_qr_import();
+        assert!(!security.otp_qr_importing());
     }
 
     #[test]

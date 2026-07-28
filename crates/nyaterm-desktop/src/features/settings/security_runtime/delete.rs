@@ -11,7 +11,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn confirm_security_delete(&mut self, cx: &mut Context<Self>) {
-        let Some(confirm) = self.security.delete_confirm.clone() else {
+        let Some(confirm) = self.security.delete_confirm().cloned() else {
             return;
         };
         let store = match ConnectionStore::open_with_portable_key_path(
@@ -46,7 +46,7 @@ impl NyaTermApp {
                     SecurityAuthTab::Keys => {}
                 }
                 self.refresh_security_catalog();
-                self.security.delete_confirm = None;
+                self.security.cancel_delete();
                 self.security.status = format!("{} deleted", confirm.label);
                 self.terminal.view.status = self.security.status.clone();
             }

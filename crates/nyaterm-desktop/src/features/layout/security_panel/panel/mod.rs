@@ -66,7 +66,7 @@ impl NyaTermApp {
                 ),
                 |this| this.child(self.security_secret_footer(cx)),
             )
-            .when_some(self.security.delete_confirm.clone(), |this, confirm| {
+            .when_some(self.security.delete_confirm().cloned(), |this, confirm| {
                 this.child(self.security_delete_confirm_panel(confirm, cx))
             })
             .when(self.security.unlock.prompt_open, |this| {

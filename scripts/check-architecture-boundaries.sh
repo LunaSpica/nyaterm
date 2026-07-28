@@ -315,6 +315,14 @@ check_no_multiline_matches \
   "security catalog access must use SecurityFeatureState methods" \
   '(self|this|app)\.security[[:space:]]*\.[[:space:]]*catalog' \
   crates/nyaterm-desktop/src/features
+check_no_matches \
+  "SecurityFeatureState must not expose editor or delete-confirmation state" \
+  '^[[:space:]]*pub([[:space:]]|\([^)]*\))[[:space:]]+(editors|delete_confirm)[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/settings/security_state.rs
+check_no_multiline_matches \
+  "security editor transitions must use SecurityFeatureState methods" \
+  '(self|this|app)\.security[[:space:]]*\.[[:space:]]*(editors|delete_confirm)([[:space:]]*\.|[[:space:]]*=)' \
+  crates/nyaterm-desktop/src/features
 
 check_no_matches \
   "command catalog, UI, history and runtime fields must stay grouped under CommandFeatureState" \
