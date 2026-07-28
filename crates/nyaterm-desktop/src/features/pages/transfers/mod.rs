@@ -6,21 +6,20 @@ use nyaterm_transport::{SftpAttributeUpdate, SftpFileEntry, SftpFileType, SftpSe
 
 use crate::models::{
     TransferBrowserBreadcrumbSegment, TransferBrowserChildrenMenuStatus,
-    TransferBrowserContextMenuState, TransferBrowserFavoritesMenuState,
-    TransferBrowserPathMenuKind, TransferBrowserPathMenuState, TransferBrowserUploadMenuState,
-    TransferDeleteState, TransferEditorField, TransferEditorState, TransferEditorWorkspaceState,
+    TransferBrowserPathMenuKind, TransferBrowserPathMenuState, TransferDeleteState,
+    TransferEditorField, TransferEditorState, TransferEditorWorkspaceState,
     TransferExternalSyncPromptState, TransferJobEvent, TransferJobKind, TransferJobOutput,
     TransferJobResult, TransferJobState, TransferJobStatus, TransferMoveState,
-    TransferNewFileState, TransferNewFolderState, TransferNewSymlinkState, TransferPathPromptKind,
+    TransferNewFileState, TransferNewFolderState, TransferNewSymlinkState,
     TransferPermissionTarget, TransferPropertiesField, TransferPropertiesState,
     TransferRenameState, TransferSymlinkField, TransferUnknownFileState,
 };
-use crate::widgets::{small_button, status_pill};
+use crate::widgets::small_button;
 use nyaterm_core::AiCustomActionConfig;
 
 use super::super::{
     NyaTermApp, RemoteTextEditor, TextInputSetup, dialog_action_button, format_file_size,
-    panel_header_with_actions, transfer_entry_icon, truncate_preview,
+    transfer_entry_icon, truncate_preview,
 };
 
 mod browser;

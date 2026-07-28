@@ -1,4 +1,17 @@
-use super::*;
+use gpui::{
+    App, ClickEvent, Context, Div, FontWeight, InteractiveElement as _, IntoElement,
+    ParentElement as _, SharedString, StatefulInteractiveElement as _, Styled as _, Window, div,
+    prelude::FluentBuilder as _, px, rgb,
+};
+use nyaterm_core::truncate_preview;
+use nyaterm_transport::SftpFileType;
+
+use crate::features::{NyaTermApp, gpui_code_font_family};
+use crate::models::{TransferBrowserContextMenuState, TransferPathPromptKind};
+use crate::theme::ThemePalette;
+use crate::widgets::status_pill;
+
+use super::{TransferPathPart, transfer_menu_position};
 
 impl NyaTermApp {
     pub(in crate::features) fn transfer_browser_context_menu_overlay(
@@ -111,7 +124,7 @@ impl NyaTermApp {
                             .child(
                                 div()
                                     .min_w_0()
-                                    .font_family(crate::features::gpui_code_font_family())
+                                    .font_family(gpui_code_font_family())
                                     .text_xs()
                                     .text_color(rgb(palette.text))
                                     .child(truncate_preview(&state.name, 34)),
@@ -499,7 +512,7 @@ impl NyaTermApp {
     }
 }
 
-fn context_menu_group(palette: crate::theme::ThemePalette) -> gpui::Div {
+fn context_menu_group(palette: ThemePalette) -> Div {
     div()
         .flex()
         .flex_col()
@@ -510,7 +523,7 @@ fn context_menu_group(palette: crate::theme::ThemePalette) -> gpui::Div {
 }
 
 fn context_menu_button(
-    palette: crate::theme::ThemePalette,
+    palette: ThemePalette,
     id: impl Into<String>,
     label: impl Into<SharedString>,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,

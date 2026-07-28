@@ -1,4 +1,15 @@
-use super::*;
+use gpui::{
+    App, ClickEvent, Context, FontWeight, InteractiveElement as _, IntoElement, MouseDownEvent,
+    ParentElement as _, SharedString, StatefulInteractiveElement as _, Styled as _, Window, div,
+    prelude::FluentBuilder as _, px, rgb, svg,
+};
+use nyaterm_core::truncate_preview;
+
+use crate::features::{NyaTermApp, gpui_code_font_family};
+use crate::models::TransferBrowserFavoritesMenuState;
+use crate::theme::ThemePalette;
+
+use super::{normalized_transfer_browser_path, transfer_menu_position};
 
 impl NyaTermApp {
     pub(in crate::features::pages::transfers) fn open_transfer_browser_favorites_menu(
@@ -93,7 +104,7 @@ impl NyaTermApp {
                         div()
                             .min_w_0()
                             .flex_1()
-                            .font_family(crate::features::gpui_code_font_family())
+                            .font_family(gpui_code_font_family())
                             .text_size(px(10.))
                             .text_color(if is_current {
                                 rgb(0x93c5fd)
@@ -210,7 +221,7 @@ impl NyaTermApp {
 }
 
 fn favorite_menu_button(
-    palette: crate::theme::ThemePalette,
+    palette: ThemePalette,
     id: impl Into<String>,
     label: impl Into<SharedString>,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,

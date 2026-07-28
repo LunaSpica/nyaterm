@@ -1,4 +1,14 @@
-use super::*;
+use gpui::{
+    App, ClickEvent, Context, InteractiveElement as _, IntoElement, MouseDownEvent,
+    ParentElement as _, SharedString, StatefulInteractiveElement as _, Styled as _, Window, div,
+    px, rgb, svg,
+};
+
+use crate::features::NyaTermApp;
+use crate::models::{TransferBrowserUploadMenuState, TransferPathPromptKind};
+use crate::theme::ThemePalette;
+
+use super::transfer_menu_position;
 
 impl NyaTermApp {
     pub(in crate::features::pages::transfers) fn open_transfer_browser_upload_menu(
@@ -109,7 +119,7 @@ impl NyaTermApp {
 }
 
 fn upload_menu_item(
-    palette: crate::theme::ThemePalette,
+    palette: ThemePalette,
     id: impl Into<String>,
     icon_path: &'static str,
     label: &'static str,

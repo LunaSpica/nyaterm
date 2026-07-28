@@ -1,4 +1,15 @@
-use super::*;
+use gpui::{
+    AppContext as _, Context, InteractiveElement as _, IntoElement, KeyDownEvent,
+    ParentElement as _, SharedString, StatefulInteractiveElement as _, Styled as _, div, px, rgb,
+};
+use nyaterm_core::truncate_preview;
+
+use crate::features::{
+    ChromeTooltip, NyaTermApp, gpui_code_font_family, panel_header_with_actions,
+};
+use crate::models::{TransferJobState, TransferJobStatus};
+
+use super::helpers::{queue_action_button, transfer_job_row};
 
 impl NyaTermApp {
     pub(super) fn transfer_queue_view(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -193,17 +204,14 @@ impl NyaTermApp {
                             .id(SharedString::from("transfer-download-path-footer"))
                             .min_w_0()
                             .flex_1()
-                            .font_family(crate::features::gpui_code_font_family())
+                            .font_family(gpui_code_font_family())
                             .text_size(px(11.))
                             .text_color(rgb(palette.text_muted))
                             .cursor_pointer()
                             .hover(|this| this.text_color(rgb(palette.text)))
                             .tooltip({
                                 let label = self.tr("fileTransfer.downloadPath").to_string();
-                                move |_, cx| {
-                                    cx.new(|_| crate::features::ChromeTooltip::new(label.clone()))
-                                        .into()
-                                }
+                                move |_, cx| cx.new(|_| ChromeTooltip::new(label.clone())).into()
                             })
                             .child(download_path)
                             .on_click(cx.listener(|this, _, _, cx| {
