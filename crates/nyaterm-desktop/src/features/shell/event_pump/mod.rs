@@ -1,7 +1,22 @@
-use super::*;
-use futures::StreamExt;
+use std::time::{Duration, Instant};
 
-use crate::models::{TerminalSearchMode, terminal_frame_search_result_is_current};
+use futures::StreamExt;
+use gpui::{Context, Timer, Window};
+
+use crate::features::shell::event_pump::helpers::{
+    PENDING_SESSION_STATUS_INTERVAL, PENDING_SESSION_STILL_CONNECTING_AFTER,
+    PendingSessionAuthWait, RUNTIME_IDLE_TICK_INTERVAL, RUNTIME_QUIET_TICK_INTERVAL,
+    SLOW_DIAGNOSTIC_THROTTLE, TITLE_DRAG_ACTIVE_HOLD, TRANSFER_AUTO_SYNC_CWD_INTERVAL_SECONDS,
+    connect_settle_active, connect_settle_deadline, diagnostic_log_due,
+    pending_session_status_message, remote_refresh_due, runtime_output_pressure_active_from_counts,
+    runtime_tick_interval_for_pressure, runtime_ui_notify_allowed,
+    terminal_cell_metrics_refresh_needed, terminal_input_idle_remaining_delay, title_drag_active,
+    viewport_change_terminal_session_ids, window_geometry_churn_active,
+};
+use crate::features::{
+    NyaTermApp, TextInputSetup, credential_prompt_target, keyboard_interactive_prompt_target,
+};
+use crate::models::{NavItem, TerminalSearchMode, terminal_frame_search_result_is_current};
 
 mod bridge;
 mod helpers;
@@ -9,7 +24,6 @@ mod planes;
 mod session_events;
 
 use crate::features::terminal::terminal_runtime::TERMINAL_INPUT_LATENCY_WINDOW;
-use helpers::*;
 
 // These intervals produce wake deadlines at 4ms, 12ms, and 24ms. `Timer::after`
 // calls below are sequential, so storing the absolute deadlines here would
