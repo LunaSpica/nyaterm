@@ -1,6 +1,8 @@
-use super::*;
+use gpui::{Context, KeyDownEvent, Window};
+use nyaterm_core::ConnectionStore;
 
-use crate::models::{SecurityAuthTab, SecurityUnlockAction, SettingsTab};
+use crate::features::{NyaTermApp, TextInputSetup};
+use crate::models::{NavItem, SecurityAuthTab, SecurityUnlockAction, SettingsTab};
 
 impl NyaTermApp {
     pub(in crate::features) fn security_secrets_locked(&self) -> bool {

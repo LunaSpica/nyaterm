@@ -1,4 +1,6 @@
-use super::*;
+use gpui::Context;
+
+use crate::features::NyaTermApp;
 
 mod credentials;
 mod delete;

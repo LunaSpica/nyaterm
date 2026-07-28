@@ -1,4 +1,7 @@
-use super::*;
+use gpui::Context;
+use nyaterm_core::{ConnectionStore, TerminalInputState};
+
+use crate::features::NyaTermApp;
 
 impl NyaTermApp {
     /// Apply an edit from the X11 display box.

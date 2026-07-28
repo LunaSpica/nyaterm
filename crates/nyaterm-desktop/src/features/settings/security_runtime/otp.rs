@@ -1,5 +1,9 @@
-use super::*;
+use gpui::{
+    AppContext, ClipboardItem, Context, KeyDownEvent, PathPromptOptions, SharedString, Window,
+};
+use nyaterm_core::{ConnectionStore, OtpEntry};
 
+use crate::features::{NyaTermApp, compact_id};
 use crate::models::{
     SecurityAuthTab, SecurityDeleteConfirmState, SecurityOtpEditorField, SecurityOtpEditorState,
 };

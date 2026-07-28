@@ -1,7 +1,10 @@
-use super::*;
+use gpui::Context;
 
+use crate::features::NyaTermApp;
 use crate::models::SearchEngineEditorField;
 use nyaterm_core::SearchEngineConfig;
+
+use super::helpers::{open_external_url_simple, urlencoding_query};
 
 impl NyaTermApp {
     /// Apply an edit from one of the engine editor's inputs.

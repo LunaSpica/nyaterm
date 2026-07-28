@@ -1,5 +1,7 @@
-use super::*;
+use gpui::Context;
+use nyaterm_core::ConnectionStore;
 
+use crate::features::NyaTermApp;
 use crate::models::SecurityAuthTab;
 
 impl NyaTermApp {

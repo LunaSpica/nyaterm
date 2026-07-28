@@ -1,4 +1,10 @@
-use super::*;
+use gpui::Context;
+use nyaterm_core::ConnectionStore;
+use nyaterm_transport::SftpDuplicatePolicy;
+
+use crate::features::{NyaTermApp, duplicate_policy_label};
+
+use super::helpers::adjust_u32_setting;
 
 impl NyaTermApp {
     pub(in crate::features) fn update_host_key_policy(

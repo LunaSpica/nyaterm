@@ -1,4 +1,9 @@
-use super::*;
+use std::time::Instant;
+
+use gpui::Context;
+use nyaterm_core::{ConnectionStore, TerminalInputState};
+
+use crate::features::NyaTermApp;
 
 impl NyaTermApp {
     pub(in crate::features) fn update_ui_language(

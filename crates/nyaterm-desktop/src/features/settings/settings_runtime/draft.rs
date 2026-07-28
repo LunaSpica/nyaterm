@@ -1,7 +1,10 @@
-use super::*;
+use gpui::Context;
+use nyaterm_core::{CloudSyncSettings, ConnectionStore, TerminalInputState, TranslationSettings};
+use nyaterm_transport::SftpDuplicatePolicy;
+
+use crate::features::NyaTermApp;
 use crate::features::app_state::SettingsDraftSnapshot;
-use crate::models::{CloudSyncSecretDraft, MainMode, TranslationSecretDraft};
-use nyaterm_core::TranslationSettings;
+use crate::models::{CloudSyncSecretDraft, MainMode, NavItem, TranslationSecretDraft};
 
 impl NyaTermApp {
     pub(in crate::features) fn begin_settings_draft(&mut self) {

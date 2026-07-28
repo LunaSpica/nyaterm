@@ -1,5 +1,6 @@
-use super::*;
+use gpui::Context;
 
+use crate::features::{NyaTermApp, UpdateJobResult};
 use crate::http::update::check_native_update;
 
 const UPDATE_EVENT_DRAIN_LIMIT: usize = 4;

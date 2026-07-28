@@ -1,5 +1,7 @@
-use super::*;
+use gpui::{ClipboardItem, Context, KeyDownEvent, Window};
+use nyaterm_core::{ConnectionStore, SavedCredential};
 
+use crate::features::{NyaTermApp, compact_id, none_if_blank};
 use crate::models::{
     SecurityAuthTab, SecurityCredentialEditorField, SecurityCredentialEditorState,
     SecurityDeleteConfirmState, SecurityUnlockAction,

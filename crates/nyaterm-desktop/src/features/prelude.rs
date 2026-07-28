@@ -14,8 +14,8 @@ pub(super) use nyaterm_core::{
     QuickCommand, QuickCommandCategory, RuntimeMode, SavedConnection, SavedCredential,
     SavedPassword, SshKey, TerminalInputState, TerminalWireWriteKind, TunnelConfig, TunnelGroup,
     apply_terminal_input_data, build_move_input_cursor_data, can_suggest_from_tracker,
-    delete_terminal_input_range, export_diagnostics_archive, terminal_input_fanout_status,
-    terminal_wire_write_disposition, truncate_preview, uuid,
+    delete_terminal_input_range, terminal_input_fanout_status, terminal_wire_write_disposition,
+    truncate_preview, uuid,
 };
 #[cfg(feature = "migration-dashboard")]
 pub(super) use nyaterm_legacy::LegacyProject;

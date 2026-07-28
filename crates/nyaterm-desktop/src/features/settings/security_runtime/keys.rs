@@ -1,5 +1,7 @@
-use super::*;
+use gpui::{Context, KeyDownEvent, PathPromptOptions, SharedString, Window};
+use nyaterm_core::{ConnectionStore, SshKey};
 
+use crate::features::{NyaTermApp, compact_id};
 use crate::models::{
     SecurityAuthTab, SecurityDeleteConfirmState, SecurityKeyEditorField, SecurityKeyEditorState,
 };

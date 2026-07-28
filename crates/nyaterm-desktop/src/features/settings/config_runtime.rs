@@ -1,10 +1,16 @@
-use super::*;
+use std::sync::Arc;
 
+use gpui::{AppContext, Context, KeyDownEvent, PathPromptOptions, SharedString, Window};
+use nyaterm_core::{
+    AppSettingsSummary, ConnectionStore, KeywordHighlightConfig, TranslationSettings,
+};
+use nyaterm_transport::SftpDuplicatePolicy;
+
+use crate::features::{NyaTermApp, TextInputSetup};
 use crate::models::{
     CloudSyncSecretDraft, ConfigPathPromptKind, ConfigPathPromptResult, SnapshotPasswordPromptKind,
     SnapshotPasswordPromptState, StoreStatus, TranslationSecretDraft,
 };
-use nyaterm_core::TranslationSettings;
 
 impl NyaTermApp {
     pub(in crate::features) fn prompt_config_export(&mut self, cx: &mut Context<Self>) {

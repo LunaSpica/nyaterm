@@ -12,8 +12,8 @@ Last updated from the working tree on 2026-07-28.
 | `NyaTermApp` fields | 261 | Counted from `features/app_state/mod.rs`; down from 585, still transitional. |
 | `impl NyaTermApp` blocks | 240 | Spread across 235 files under `crates/nyaterm-desktop/src`. |
 | `#[path = "..."]` declarations in desktop | 0 | Cleared. Every directory is a real module; the boundary script fails on any new occurrence. |
-| `use super::*` imports in desktop | 230 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
-| `features/prelude.rs` rough exported-token count | 215 | Still a broad shared prelude; two hundred thirty low-frequency transport/core/http/model/helper exports are now explicit imports. |
+| `use super::*` imports in desktop | 213 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
+| `features/prelude.rs` rough exported-token count | 214 | Still a broad shared prelude; two hundred thirty-one low-frequency transport/core/http/model/helper exports are now explicit imports. |
 | Entity Store structs | 4 | `Runtime`, `WindowRuntime`, `StartupRestore`, `Overlay`. Each owns state the app does not. |
 | Snapshot structs | 0 | Cleared. No store is a projection of `NyaTermApp` any more. |
 | `replace_snapshot` methods | 0 | Cleared. |
@@ -453,6 +453,17 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   `features/ai` at zero `use super::*` imports. AI requests, streaming events,
   audit, risk decisions, model discovery, background execution and history
   storage behavior are unchanged.
+- The complete `features/settings` runtime tree is now free of wildcard
+  imports. Configuration backup and portable snapshot flows, diagnostics,
+  updates, settings drafts, terminal/interaction/recording/transfer settings,
+  search engines, and SSH key/password/credential/OTP security runtimes name
+  their GPUI, core, transport, model and sibling-helper dependencies directly.
+  The three runtime `mod.rs` layers no longer act as implicit preludes, and
+  `export_diagnostics_archive` also left `features/prelude.rs`. The architecture
+  script governs all 19 Rust modules under `features/settings` at zero
+  `use super::*` imports. Persistence calls, validation order, secret masking,
+  credential encryption, backup/snapshot compatibility and settings behavior
+  are unchanged.
 - `connection_runtime/helpers.rs` no longer depends on the connection runtime
   wildcard import; its GPUI, app, model, and core dependencies are explicit.
 - `connection_runtime/actions.rs` no longer depends on the connection runtime

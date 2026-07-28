@@ -1,13 +1,16 @@
-use super::*;
+use gpui::Context;
+
+use crate::features::NyaTermApp;
 
 mod helpers;
-use helpers::*;
 
 mod draft;
 mod general_interaction;
 mod recording_transfer;
 mod search_engines;
 mod terminal_remote;
+
+use helpers::open_external_url_simple;
 
 impl NyaTermApp {
     pub(in crate::features) fn open_external_url_for_ui(
