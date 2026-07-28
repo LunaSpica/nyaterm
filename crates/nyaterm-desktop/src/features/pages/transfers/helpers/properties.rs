@@ -1,10 +1,20 @@
-use super::*;
+use gpui::{
+    AnyElement, App, ClickEvent, FontWeight, InteractiveElement as _, IntoElement,
+    ParentElement as _, SharedString, StatefulInteractiveElement as _, Styled as _, Window, div,
+    prelude::FluentBuilder as _, px, rgb,
+};
+use nyaterm_transport::SftpFileEntry;
+
+use crate::models::{TransferPropertiesField, TransferPropertiesState};
+use crate::theme::ThemePalette;
+
+use super::format_permissions_octal;
 
 pub(in crate::features::pages::transfers) fn symlink_input_row(
-    palette: crate::theme::ThemePalette,
+    palette: ThemePalette,
     label: &'static str,
     invalid: bool,
-    input: gpui::AnyElement,
+    input: AnyElement,
 ) -> impl IntoElement {
     div()
         .flex()
@@ -33,7 +43,7 @@ pub(in crate::features::pages::transfers) fn symlink_input_row(
 }
 
 pub(in crate::features::pages::transfers) fn property_row(
-    palette: crate::theme::ThemePalette,
+    palette: ThemePalette,
     label: &'static str,
     value: impl Into<SharedString>,
 ) -> impl IntoElement {
@@ -59,7 +69,7 @@ pub(in crate::features::pages::transfers) fn property_row(
 }
 
 pub(in crate::features::pages::transfers) fn property_section_heading(
-    palette: crate::theme::ThemePalette,
+    palette: ThemePalette,
     label: &'static str,
 ) -> impl IntoElement {
     div()
@@ -71,10 +81,10 @@ pub(in crate::features::pages::transfers) fn property_section_heading(
 }
 
 pub(in crate::features::pages::transfers) fn property_input_row(
-    palette: crate::theme::ThemePalette,
+    palette: ThemePalette,
     id: &'static str,
     label: &'static str,
-    input: gpui::AnyElement,
+    input: AnyElement,
     disabled: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
