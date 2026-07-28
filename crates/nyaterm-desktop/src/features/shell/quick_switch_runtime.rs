@@ -88,7 +88,8 @@ impl NyaTermApp {
         }
 
         let mut transient_items = self
-            .pending_session_starts
+            .session_start
+            .pending
             .iter()
             .filter(|(_, pending)| pending.reconnect_session_id.is_none())
             .map(|(request_id, pending)| {
@@ -118,7 +119,7 @@ impl NyaTermApp {
                             self.tr("sessionQuickSwitcher.connecting"),
                             session_kind_label(pending.kind)
                         ),
-                        active: self.active_pending_session_start.as_deref()
+                        active: self.session_start.active_pending.as_deref()
                             == Some(request_id.as_str()),
                         failed: false,
                         search_detail: None,
@@ -126,7 +127,8 @@ impl NyaTermApp {
                 )
             })
             .chain(
-                self.failed_session_starts
+                self.session_start
+                    .failed
                     .iter()
                     .map(|(request_id, failed)| {
                         let pending = &failed.pending;
@@ -156,7 +158,7 @@ impl NyaTermApp {
                                     self.tr("terminal.connectionFailed"),
                                     session_kind_label(pending.kind)
                                 ),
-                                active: self.active_failed_session_start.as_deref()
+                                active: self.session_start.active_failed.as_deref()
                                     == Some(request_id.as_str()),
                                 failed: true,
                                 search_detail: Some(failed.error.clone()),

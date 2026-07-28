@@ -7,6 +7,7 @@ use nyaterm_transport::{
     SshMultiplexHandle, SshSessionConfig, TelnetSessionConfig, open_ssh_multiplex_handle,
 };
 
+use super::super::state::{failed_session_start_display_name, pending_session_start_display_name};
 use super::PendingSessionStartRegistration;
 use crate::features::formatting::{session_kind_label, short_id, ssh_multiplex_key};
 use crate::features::{
@@ -20,67 +21,25 @@ use crate::models::{
 
 const SESSION_START_EVENT_DRAIN_LIMIT: usize = 8;
 
-fn pending_session_start_display_name(pending: &PendingSessionStart) -> String {
-    pending
-        .custom_name
-        .as_deref()
-        .map(str::trim)
-        .filter(|name| !name.is_empty())
-        .unwrap_or(&pending.connection_name)
-        .to_string()
-}
-
-fn failed_session_start_display_name(failed: &FailedSessionStart) -> String {
-    pending_session_start_display_name(&failed.pending)
-}
-
 impl NyaTermApp {
     pub(in crate::features) fn has_pending_session_start(&self) -> bool {
-        !self.pending_session_starts.is_empty()
+        self.session_start.has_pending()
     }
 
     pub(in crate::features) fn has_failed_session_start(&self) -> bool {
-        !self.failed_session_starts.is_empty()
+        self.session_start.has_failed()
     }
 
     pub(in crate::features) fn pending_session_display_name(&self) -> Option<String> {
-        self.active_pending_session_start
-            .as_deref()
-            .and_then(|request_id| self.pending_session_starts.get(request_id))
-            .or_else(|| {
-                self.pending_session_starts
-                    .values()
-                    .filter(|pending| pending.reconnect_session_id.is_none())
-                    .min_by(|left, right| {
-                        left.requested_at
-                            .cmp(&right.requested_at)
-                            .then_with(|| left.connection_name.cmp(&right.connection_name))
-                    })
-            })
-            .map(pending_session_start_display_name)
+        self.session_start.pending_display_name()
     }
 
     pub(in crate::features) fn active_failed_session(&self) -> Option<&FailedSessionStart> {
-        self.active_failed_session_start
-            .as_deref()
-            .and_then(|request_id| self.failed_session_starts.get(request_id))
+        self.session_start.active_failed()
     }
 
     pub(in crate::features) fn failed_session_display_name(&self) -> Option<String> {
-        self.active_failed_session()
-            .or_else(|| {
-                self.failed_session_starts.values().min_by(|left, right| {
-                    left.pending
-                        .requested_at
-                        .cmp(&right.pending.requested_at)
-                        .then_with(|| {
-                            left.pending
-                                .connection_name
-                                .cmp(&right.pending.connection_name)
-                        })
-                })
-            })
-            .map(failed_session_start_display_name)
+        self.session_start.failed_display_name()
     }
 
     pub(in crate::features) fn select_pending_session_start(
@@ -88,11 +47,9 @@ impl NyaTermApp {
         request_id: String,
         cx: &mut Context<Self>,
     ) {
-        if !self.pending_session_starts.contains_key(&request_id) {
+        if !self.session_start.select_pending(&request_id) {
             return;
         }
-        self.active_pending_session_start = Some(request_id);
-        self.active_failed_session_start = None;
         self.open_tabs_menu_open = false;
         self.new_session_menu_open = false;
         self.selected_nav = NavItem::Workspace;
@@ -105,36 +62,9 @@ impl NyaTermApp {
         request_id: String,
         cx: &mut Context<Self>,
     ) {
-        let Some(pending) = self.pending_session_starts.remove(&request_id) else {
+        let Some(pending) = self.session_start.close_pending(&request_id) else {
             return;
         };
-        self.cancelled_session_start_requests
-            .insert(request_id.clone());
-        self.session_pane_states.remove(&request_id);
-        if self.active_pending_session_start.as_deref() == Some(request_id.as_str()) {
-            self.active_pending_session_start = self
-                .pending_session_starts
-                .iter()
-                .filter(|(_, pending)| pending.reconnect_session_id.is_none())
-                .max_by(|(left_id, left), (right_id, right)| {
-                    left.requested_at
-                        .cmp(&right.requested_at)
-                        .then_with(|| left_id.cmp(right_id))
-                })
-                .map(|(request_id, _)| request_id.clone());
-            if self.active_pending_session_start.is_none() {
-                self.active_failed_session_start = self
-                    .failed_session_starts
-                    .iter()
-                    .max_by(|(left_id, left), (right_id, right)| {
-                        left.pending
-                            .requested_at
-                            .cmp(&right.pending.requested_at)
-                            .then_with(|| left_id.cmp(right_id))
-                    })
-                    .map(|(request_id, _)| request_id.clone());
-            }
-        }
         self.terminal.view.status = format!(
             "cancelled connection {}",
             pending_session_start_display_name(&pending)
@@ -147,11 +77,9 @@ impl NyaTermApp {
         request_id: String,
         cx: &mut Context<Self>,
     ) {
-        if !self.failed_session_starts.contains_key(&request_id) {
+        if !self.session_start.select_failed(&request_id) {
             return;
         }
-        self.active_failed_session_start = Some(request_id);
-        self.active_pending_session_start = None;
         self.open_tabs_menu_open = false;
         self.new_session_menu_open = false;
         self.selected_nav = NavItem::Workspace;
@@ -164,36 +92,10 @@ impl NyaTermApp {
         request_id: String,
         cx: &mut Context<Self>,
     ) {
-        let Some(failed) = self.failed_session_starts.remove(&request_id) else {
+        let Some(failed) = self.session_start.close_failed(&request_id) else {
             return;
         };
-        self.session_pane_states.remove(&request_id);
-        if self.active_failed_session_start.as_deref() == Some(request_id.as_str()) {
-            self.active_failed_session_start = None;
-            self.active_pending_session_start = self
-                .pending_session_starts
-                .iter()
-                .filter(|(_, pending)| pending.reconnect_session_id.is_none())
-                .max_by(|(left_id, left), (right_id, right)| {
-                    left.requested_at
-                        .cmp(&right.requested_at)
-                        .then_with(|| left_id.cmp(right_id))
-                })
-                .map(|(request_id, _)| request_id.clone());
-            if self.active_pending_session_start.is_none() {
-                self.active_failed_session_start = self
-                    .failed_session_starts
-                    .iter()
-                    .max_by(|(left_id, left), (right_id, right)| {
-                        left.pending
-                            .requested_at
-                            .cmp(&right.pending.requested_at)
-                            .then_with(|| left_id.cmp(right_id))
-                    })
-                    .map(|(request_id, _)| request_id.clone());
-            }
-        }
-        if self.failed_session_starts.is_empty() {
+        if !self.session_start.has_failed() {
             self.last_connect_failure_name = None;
             self.last_connect_failure_error = None;
         }
@@ -205,14 +107,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn pending_session_status_source(&self) -> Option<(String, Instant)> {
-        self.pending_session_starts
-            .values()
-            .min_by(|left, right| {
-                left.requested_at
-                    .cmp(&right.requested_at)
-                    .then_with(|| left.connection_name.cmp(&right.connection_name))
-            })
-            .map(|pending| (pending.connection_name.clone(), pending.requested_at))
+        self.session_start.pending_status_source()
     }
 
     pub(in crate::features) fn register_pending_session_start(
@@ -222,7 +117,7 @@ impl NyaTermApp {
     ) -> String {
         let request_id = uuid();
         let requested_at = Instant::now();
-        let reconnect_session_id = self.pending_reconnect_replace_id.clone();
+        let reconnect_session_id = self.session_start.reconnect_replace_id.clone();
         let PendingSessionStartRegistration {
             connection_name,
             launch_config,
@@ -244,7 +139,7 @@ impl NyaTermApp {
             self.last_connect_failure_name = None;
             self.last_connect_failure_error = None;
         }
-        self.session_pane_states.insert(
+        self.session_start.panes.insert(
             request_id.clone(),
             SessionPaneState::Connecting {
                 request_id: request_id.clone(),
@@ -252,7 +147,7 @@ impl NyaTermApp {
                 kind,
             },
         );
-        self.pending_session_starts.insert(
+        self.session_start.pending.insert(
             request_id.clone(),
             PendingSessionStart {
                 connection_name: connection_name.clone(),
@@ -272,8 +167,8 @@ impl NyaTermApp {
             },
         );
         if reconnect_session_id.is_none() {
-            self.active_pending_session_start = Some(request_id.clone());
-            self.active_failed_session_start = None;
+            self.session_start.active_pending = Some(request_id.clone());
+            self.session_start.active_failed = None;
         }
         self.terminal.view.status = status_message;
         // Status + connecting tab already show progress; avoid full terminal decode
@@ -321,7 +216,7 @@ impl NyaTermApp {
         );
 
         let session_manager = self.session_manager.clone();
-        let session_start_tx = self.session_start_tx.clone();
+        let session_start_tx = self.session_start.sender();
         let request_id_for_worker = request_id.clone();
         std::thread::spawn(move || {
             let worker_started_at = Instant::now();
@@ -361,7 +256,7 @@ impl NyaTermApp {
         config.deferred_pty = true;
         let geometry_session_hint = after_session_id
             .as_deref()
-            .or(self.pending_reconnect_replace_id.as_deref());
+            .or(self.session_start.reconnect_replace_id.as_deref());
         if let Some(geometry) =
             self.desired_terminal_resize_geometry_for_session_hint(geometry_session_hint)
         {
@@ -391,7 +286,7 @@ impl NyaTermApp {
         );
 
         let session_manager = self.session_manager.clone();
-        let session_start_tx = self.session_start_tx.clone();
+        let session_start_tx = self.session_start.sender();
         let request_id_for_worker = request_id.clone();
         std::thread::spawn(move || {
             let worker_started_at = Instant::now();
@@ -431,7 +326,7 @@ impl NyaTermApp {
         config.deferred_pty = true;
         let geometry_session_hint = after_session_id
             .as_deref()
-            .or(self.pending_reconnect_replace_id.as_deref());
+            .or(self.session_start.reconnect_replace_id.as_deref());
         if let Some(geometry) =
             self.desired_terminal_resize_geometry_for_session_hint(geometry_session_hint)
         {
@@ -462,7 +357,7 @@ impl NyaTermApp {
         );
 
         let session_manager = self.session_manager.clone();
-        let session_start_tx = self.session_start_tx.clone();
+        let session_start_tx = self.session_start.sender();
         let request_id_for_worker = request_id.clone();
         std::thread::spawn(move || {
             let worker_started_at = Instant::now();
@@ -528,16 +423,13 @@ impl NyaTermApp {
     ) -> bool {
         let mut dirty = false;
         for _ in 0..SESSION_START_EVENT_DRAIN_LIMIT {
-            let Ok(event) = self.session_start_rx.try_recv() else {
+            let Ok(event) = self.session_start.try_recv() else {
                 break;
             };
             dirty = true;
             let request_id = event.request_id.clone();
-            if self
-                .cancelled_session_start_requests
-                .remove(&event.request_id)
-            {
-                self.session_pane_states.remove(&event.request_id);
+            if self.session_start.cancelled.remove(&event.request_id) {
+                self.session_start.panes.remove(&event.request_id);
                 if let Ok(success) = event.result {
                     let session_id = success.session_info.id;
                     if let Err(error) = self.session_manager.close(&session_id) {
@@ -556,10 +448,10 @@ impl NyaTermApp {
                 continue;
             }
             let was_active_pending =
-                self.active_pending_session_start.as_deref() == Some(event.request_id.as_str());
-            let pending = self.pending_session_starts.remove(&event.request_id);
+                self.session_start.active_pending.as_deref() == Some(event.request_id.as_str());
+            let pending = self.session_start.pending.remove(&event.request_id);
             if was_active_pending {
-                self.active_pending_session_start = None;
+                self.session_start.active_pending = None;
             }
             let connection_name = event.connection_name.clone();
             let kind = pending
@@ -586,8 +478,8 @@ impl NyaTermApp {
                         .as_deref()
                         .is_some_and(|stale_id| !self.session_metadata.contains_key(stale_id))
                     {
-                        let _ = self.pending_reconnect_replace_id.take();
-                        self.session_pane_states.remove(&request_id);
+                        let _ = self.session_start.reconnect_replace_id.take();
+                        self.session_start.panes.remove(&request_id);
                         if let Err(error) = self.session_manager.close(&session_id) {
                             tracing::warn!(
                                 request_id = %request_id,
@@ -699,7 +591,7 @@ impl NyaTermApp {
                         self.move_session_to_index(&session_id, insert_index);
                     }
                     if let Some(stale_id) = reconnect_session_id {
-                        let _ = self.pending_reconnect_replace_id.take();
+                        let _ = self.session_start.reconnect_replace_id.take();
                         if stale_id != session_id {
                             self.migrate_reconnected_session_state(&stale_id, &session_id);
                             self.remove_session_state(&stale_id);
@@ -707,14 +599,14 @@ impl NyaTermApp {
                             self.persist_terminal_window_layout();
                         }
                     }
-                    self.session_pane_states.insert(
+                    self.session_start.panes.insert(
                         event.request_id.clone(),
                         SessionPaneState::Live {
                             session_id: session_id.clone(),
                         },
                     );
                     if was_active_pending
-                        || (self.active_pending_session_start.is_none()
+                        || (self.session_start.active_pending.is_none()
                             && self.active_session_id.is_none())
                     {
                         self.activate_session_id(&session_id);
@@ -786,7 +678,7 @@ impl NyaTermApp {
                         .and_then(|pending| pending.reconnect_session_id.clone());
                     let reconnect_failure = reconnect_session_id.is_some();
                     if reconnect_failure {
-                        let _ = self.pending_reconnect_replace_id.take();
+                        let _ = self.session_start.reconnect_replace_id.take();
                     }
                     if !reconnect_failure {
                         self.last_connect_failure_name = Some(connection_name.clone());
@@ -794,12 +686,13 @@ impl NyaTermApp {
                     }
                     if let Some(session_id) = reconnect_session_id {
                         if self.session_metadata.contains_key(&session_id) {
-                            self.reconnect_session_failures
+                            self.session_start
+                                .reconnect_failures
                                 .insert(session_id, error.clone());
                         }
-                        self.session_pane_states.remove(&request_id);
+                        self.session_start.panes.remove(&request_id);
                     } else if let Some(pending) = pending {
-                        self.failed_session_starts.insert(
+                        self.session_start.failed.insert(
                             request_id.clone(),
                             FailedSessionStart {
                                 pending,
@@ -807,11 +700,11 @@ impl NyaTermApp {
                             },
                         );
                         if was_active_pending {
-                            self.active_failed_session_start = Some(request_id.clone());
+                            self.session_start.active_failed = Some(request_id.clone());
                         }
                     }
                     if !reconnect_failure {
-                        self.session_pane_states.insert(
+                        self.session_start.panes.insert(
                             request_id.clone(),
                             SessionPaneState::Failed {
                                 name: connection_name.clone(),

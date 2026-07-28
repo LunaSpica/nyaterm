@@ -19,13 +19,11 @@ use super::panels::SendCommandFeatureState;
 use super::recording::RecordingFeatureState;
 use super::remote::RemoteOpsFeatureState;
 use super::remote_editor_window::RemoteFileEditorWindow;
-use super::runtime_jobs::{
-    CommandPersistenceRequest, CommandPersistenceResult, SessionStartResult,
-};
+use super::runtime_jobs::{CommandPersistenceRequest, CommandPersistenceResult};
 use super::session::{
     CredentialPromptBroker, CredentialPromptState, HostKeyPromptBroker, HostKeyPromptRequest,
-    KeyboardInteractivePromptState, NativeOtpProvider, SftpDuplicatePromptBroker,
-    SftpDuplicatePromptState,
+    KeyboardInteractivePromptState, NativeOtpProvider, SessionStartFeatureState,
+    SftpDuplicatePromptBroker, SftpDuplicatePromptState,
 };
 use super::settings::{SecurityFeatureState, SettingsFeatureState};
 use super::settings_window::SettingsWindow;
@@ -44,15 +42,15 @@ use crate::models::{
     PanelStackResizeState, RightFocus, SessionEventBridge, SessionRuntimeMetadata, SettingsTab,
     SnapshotPasswordPromptState, StartupCommandAction, StoreStatus, SyncInputGroup,
     TabActionsSubmenu, TerminalFrameEvent, TitleMenu, TitleMenuSubmenu, WorkspacePaneNode,
-    WorkspaceSplitDirection, WorkspaceSplitResizeState, WorkspaceSplitState,
+    WorkspaceSplitResizeState, WorkspaceSplitState,
 };
 
 mod construct;
 mod types;
 
 pub(in crate::features) use types::{
-    FailedSessionStart, PendingSavedConnectionStart, PendingSessionStart,
-    SavedConnectionStartOptions, SessionPaneState, SettingsDraftSnapshot, TerminalRuntimeUiState,
+    PendingSavedConnectionStart, SavedConnectionStartOptions, SettingsDraftSnapshot,
+    TerminalRuntimeUiState,
 };
 
 pub struct NyaTermApp {
@@ -125,8 +123,7 @@ pub struct NyaTermApp {
     pub(in crate::features) session_manager: Arc<SessionManager>,
     pub(in crate::features) session_event_bridge: SessionEventBridge,
     pub(in crate::features) recording: RecordingFeatureState,
-    pub(in crate::features) session_start_tx: mpsc::Sender<SessionStartResult>,
-    pub(in crate::features) session_start_rx: mpsc::Receiver<SessionStartResult>,
+    pub(in crate::features) session_start: SessionStartFeatureState,
     pub(in crate::features) tunnel_runtime: TunnelFeatureState,
     pub(in crate::features) about_open: bool,
     pub(in crate::features) remote_editor_window: Option<WindowHandle<RemoteFileEditorWindow>>,
@@ -137,18 +134,6 @@ pub struct NyaTermApp {
     pub(in crate::features) active_snapshot_password_prompt: Option<SnapshotPasswordPromptState>,
     pub(in crate::features) duplicate_prompts: Arc<SftpDuplicatePromptBroker>,
     pub(in crate::features) active_duplicate_prompt: Option<SftpDuplicatePromptState>,
-    pub(in crate::features) pending_session_starts: HashMap<String, PendingSessionStart>,
-    pub(in crate::features) active_pending_session_start: Option<String>,
-    pub(in crate::features) failed_session_starts: HashMap<String, FailedSessionStart>,
-    pub(in crate::features) active_failed_session_start: Option<String>,
-    /// Session starts removed from the UI while their worker may still finish.
-    pub(in crate::features) cancelled_session_start_requests: HashSet<String>,
-    pub(in crate::features) session_pane_states: HashMap<String, SessionPaneState>,
-    /// Disconnected session id being replaced by an in-flight reconnect.
-    pub(in crate::features) pending_reconnect_replace_id: Option<String>,
-    /// Reconnect failures rendered in their original workspace panes.
-    pub(in crate::features) reconnect_session_failures: HashMap<String, String>,
-    pub(in crate::features) pending_workspace_split: Option<(WorkspaceSplitDirection, String)>,
     pub(in crate::features) host_key_prompts: Arc<HostKeyPromptBroker>,
     pub(in crate::features) active_host_key_prompt: Option<HostKeyPromptRequest>,
     pub(in crate::features) credential_prompts: Arc<CredentialPromptBroker>,

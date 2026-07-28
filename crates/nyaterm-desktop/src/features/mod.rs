@@ -44,10 +44,7 @@ pub(in crate::features) use ai::{
     is_agent_command_card,
 };
 pub use app_state::NyaTermApp;
-pub(in crate::features) use app_state::{
-    FailedSessionStart, PendingSavedConnectionStart, PendingSessionStart,
-    SavedConnectionStartOptions, SessionPaneState,
-};
+pub(in crate::features) use app_state::{PendingSavedConnectionStart, SavedConnectionStartOptions};
 pub(in crate::features) use commands::{
     QUICK_COMMAND_COLOR_OPTIONS, QuickCommandFeatureFocus, QuickCommandFeatureState,
     quick_command_category_label, quick_command_sort_mode_from_setting,
@@ -83,7 +80,8 @@ pub(in crate::features) use runtime_jobs::{
     spawn_command_persistence_worker,
 };
 pub(in crate::features) use session::{
-    CredentialPromptBroker, HostKeyPromptBroker, NativeOtpProvider, SftpDuplicatePromptBroker,
+    CredentialPromptBroker, FailedSessionStart, HostKeyPromptBroker, NativeOtpProvider,
+    PendingSessionStart, SessionPaneState, SessionStartFeatureState, SftpDuplicatePromptBroker,
     credential_prompt_target, keyboard_interactive_prompt_target,
 };
 pub(in crate::features) use settings::{SecurityFeatureFocus, SecurityFeatureState};

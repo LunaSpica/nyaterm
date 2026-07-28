@@ -293,7 +293,7 @@ impl NyaTermApp {
                 frame_event_count = self.terminal.view.frame_pipeline.queued_event_count(),
                 frame_event_wake_count = self.terminal.view.frame_pipeline.event_wake_count(),
                 pending_frame_events = self.pending_terminal_frame_events.len(),
-                pending_session_starts = self.pending_session_starts.len(),
+                pending_session_starts = self.session_start.pending.len(),
                 queued_saved_connection_starts = self.pending_saved_connection_queue.len(),
                 output_pressure,
                 next_tick_delay_ms = self.window_runtime_tick_delay().as_millis(),
@@ -447,8 +447,8 @@ impl NyaTermApp {
         let mut dirty = false;
 
         // Common idle path: no connecting sessions and no auth/SFTP prompts.
-        if self.pending_session_starts.is_empty()
-            && self.cancelled_session_start_requests.is_empty()
+        if !self.session_start.has_pending()
+            && self.session_start.cancelled.is_empty()
             && self.pending_saved_connection_queue.is_empty()
             && self.active_host_key_prompt.is_none()
             && self.active_credential_prompt.is_none()
@@ -622,7 +622,7 @@ impl NyaTermApp {
         // Layout restore opens the config DB — never do it while sessions are
         // still connecting or the data plane is under pressure.
         if !self.terminal.windows.restored
-            && self.pending_session_starts.is_empty()
+            && !self.session_start.has_pending()
             && !self.runtime_output_pressure_active()
             && !connect_settle
         {
@@ -632,7 +632,7 @@ impl NyaTermApp {
             }
         }
         // Auto-recording opens files; keep it off the first calm frames after connect.
-        if self.pending_session_starts.is_empty()
+        if !self.session_start.has_pending()
             && !self.runtime_output_pressure_active()
             && !connect_settle
             && let Some((session_id, session_name)) = self.recording.pending_auto_start.take()

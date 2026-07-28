@@ -1,5 +1,5 @@
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::sync::{Arc, mpsc};
+use std::sync::Arc;
 use std::time::Instant;
 
 use crate::models::{
@@ -24,10 +24,10 @@ use super::super::{
     HostKeyPromptBroker, INITIAL_TERMINAL_BANNER, LEGACY_ROOT, NativeOtpProvider,
     QuickCommandFeatureFocus, QuickCommandFeatureState, RecordingFeatureState,
     RemoteOpsFeatureFocus, RemoteOpsFeatureState, SecurityFeatureFocus, SecurityFeatureState,
-    SendCommandFeatureFocus, SendCommandFeatureState, SftpDuplicatePromptBroker,
-    TerminalFeatureFocus, TerminalFeatureState, TextInputRegistry, TransferFeatureFocus,
-    TransferFeatureState, TranslationFeatureState, TunnelFeatureState, UpdateFeatureState,
-    ai_active_profile_drafts, ai_usage_counts, appearance_font_options,
+    SendCommandFeatureFocus, SendCommandFeatureState, SessionStartFeatureState,
+    SftpDuplicatePromptBroker, TerminalFeatureFocus, TerminalFeatureState, TextInputRegistry,
+    TransferFeatureFocus, TransferFeatureState, TranslationFeatureState, TunnelFeatureState,
+    UpdateFeatureState, ai_active_profile_drafts, ai_usage_counts, appearance_font_options,
     quick_command_sort_mode_from_setting, quick_command_view_mode_from_setting,
     spawn_command_persistence_worker,
 };
@@ -59,7 +59,6 @@ impl NyaTermApp {
             command_modules: 0,
             copied_vendor_roots: Vec::new(),
         };
-        let (session_start_tx, session_start_rx) = mpsc::channel();
         let (command_persistence_tx, command_persistence_rx) = spawn_command_persistence_worker(
             runtime.config_dir().to_path_buf(),
             runtime.portable_key_path().map(ToOwned::to_owned),
@@ -464,8 +463,7 @@ impl NyaTermApp {
             session_manager,
             session_event_bridge,
             recording,
-            session_start_tx,
-            session_start_rx,
+            session_start: SessionStartFeatureState::new(),
             tunnel_runtime: TunnelFeatureState::new(),
             about_open: false,
             remote_editor_window: None,
@@ -476,15 +474,6 @@ impl NyaTermApp {
             active_snapshot_password_prompt: None,
             duplicate_prompts: Arc::new(SftpDuplicatePromptBroker::default()),
             active_duplicate_prompt: None,
-            pending_session_starts: HashMap::new(),
-            active_pending_session_start: None,
-            failed_session_starts: HashMap::new(),
-            active_failed_session_start: None,
-            cancelled_session_start_requests: HashSet::new(),
-            session_pane_states: HashMap::new(),
-            pending_reconnect_replace_id: None,
-            reconnect_session_failures: HashMap::new(),
-            pending_workspace_split: None,
             host_key_prompts: Arc::new(HostKeyPromptBroker::default()),
             active_host_key_prompt: None,
             credential_prompts: Arc::new(CredentialPromptBroker::default()),

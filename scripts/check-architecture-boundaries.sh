@@ -153,6 +153,16 @@ check_no_matches \
   '^[[:space:]]*pub\(in crate::features\)[[:space:]]+(tunnel_manager|tunnel_tx|tunnel_rx|pending_tunnels)[[:space:]]*:' \
   crates/nyaterm-desktop/src/features/app_state/mod.rs
 
+check_no_matches \
+  "session start state must stay grouped under SessionStartFeatureState" \
+  '^[[:space:]]*pub\(in crate::features\)[[:space:]]+(session_start_tx|session_start_rx|pending_session_starts|active_pending_session_start|failed_session_starts|active_failed_session_start|cancelled_session_start_requests|session_pane_states|pending_reconnect_replace_id|reconnect_session_failures|pending_workspace_split)[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/app_state/mod.rs
+
+check_no_matches \
+  "session start models must stay with SessionStartFeatureState" \
+  '(struct[[:space:]]+(PendingSessionStart|FailedSessionStart)|enum[[:space:]]+SessionPaneState)' \
+  crates/nyaterm-desktop/src/features/app_state/types.rs
+
 # These low-frequency transport helpers have explicit imports at their call
 # sites. Keep them out of the shared feature prelude so new modules do not
 # acquire unrelated transport dependencies implicitly.

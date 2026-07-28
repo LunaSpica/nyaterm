@@ -10,6 +10,7 @@ mod session_order;
 mod session_runtime;
 mod session_state;
 mod startup_restore_runtime;
+mod state;
 mod temporary_ssh_link;
 mod trzsz_runtime;
 mod zmodem_runtime;
@@ -24,6 +25,9 @@ pub(in crate::features) use prompt_runtime::{
     credential_prompt_id, credential_prompt_target, credential_text_input_id,
     keyboard_interactive_prompt_id, keyboard_interactive_prompt_target,
     keyboard_interactive_text_input_id, sftp_duplicate_prompt_id, uuid_like_prompt_id,
+};
+pub(in crate::features) use state::{
+    FailedSessionStart, PendingSessionStart, SessionPaneState, SessionStartFeatureState,
 };
 pub(in crate::features) use trzsz_runtime::TrzszSessionState;
 pub(in crate::features) use zmodem_runtime::ZmodemSessionState;

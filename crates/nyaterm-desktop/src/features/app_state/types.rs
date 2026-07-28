@@ -2,14 +2,11 @@ use std::collections::HashSet;
 use std::time::{Duration, Instant};
 
 use nyaterm_core::{
-    AiExecutionProfile, AiSettings, AppSettingsSummary, CloudSyncSettings, KeywordHighlightConfig,
-    SavedConnection, TranslationSettings,
+    AiSettings, AppSettingsSummary, CloudSyncSettings, KeywordHighlightConfig, SavedConnection,
+    TranslationSettings,
 };
-use nyaterm_transport::SessionKind;
 
-use crate::models::{
-    CloudSyncSecretDraft, SessionLaunchConfig, StartupCommandRequest, TranslationSecretDraft,
-};
+use crate::models::{CloudSyncSecretDraft, StartupCommandRequest, TranslationSecretDraft};
 
 #[derive(Debug, Clone)]
 pub(in crate::features) struct SettingsDraftSnapshot {
@@ -100,53 +97,6 @@ pub(in crate::features) struct TerminalRuntimeUiState {
     pub cursor_blink_on: bool,
     pub cursor_blink_next_at: Option<Instant>,
     pub visual_bell_ticks: u8,
-}
-
-#[derive(Debug, Clone)]
-pub(in crate::features) enum SessionPaneState {
-    Connecting {
-        request_id: String,
-        name: String,
-        kind: SessionKind,
-    },
-    Live {
-        session_id: String,
-    },
-    Failed {
-        name: String,
-        error: String,
-    },
-    Disconnected {
-        session_id: String,
-    },
-}
-
-pub(in crate::features) struct PendingSessionStart {
-    pub connection_name: String,
-    pub launch_config: Option<SessionLaunchConfig>,
-    pub requested_at: Instant,
-    pub kind: SessionKind,
-    pub ai_execution_profile: AiExecutionProfile,
-    pub custom_name: Option<String>,
-    pub tab_color: Option<u32>,
-    pub after_session_id: Option<String>,
-    pub insert_index: Option<usize>,
-    pub seed_output: Option<String>,
-    pub startup_command: Option<StartupCommandRequest>,
-    pub multiplex_key: Option<String>,
-    pub source_connection_id: Option<String>,
-    /// Existing pane being replaced by this request, when this is a reconnect.
-    pub reconnect_session_id: Option<String>,
-}
-
-/// A session start that remains visible after its worker failed.
-///
-/// Tauri keeps the failed pane in its original tab, so the GPUI shell must
-/// retain the pending metadata instead of reducing the failure to a global
-/// banner.
-pub(in crate::features) struct FailedSessionStart {
-    pub pending: PendingSessionStart,
-    pub error: String,
 }
 
 #[derive(Clone, Default)]

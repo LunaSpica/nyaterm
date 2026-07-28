@@ -471,7 +471,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn runtime_quiet_tick_allowed(&self) -> bool {
         !self.runtime_output_pressure_active()
-            && self.pending_session_starts.is_empty()
+            && !self.session_start.has_pending()
             && self.pending_saved_connection_queue.is_empty()
             && self.pending_session_events.is_empty()
             && !self.session_event_bridge.has_pending_ui_work()

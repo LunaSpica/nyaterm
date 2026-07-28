@@ -238,8 +238,8 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn activate_session_id(&mut self, session_id: &str) -> Option<String> {
-        self.active_pending_session_start = None;
-        self.active_failed_session_start = None;
+        self.session_start.active_pending = None;
+        self.session_start.active_failed = None;
         self.open_tabs_menu_open = false;
         self.new_session_menu_open = false;
         self.new_session_all_sessions_open = false;
