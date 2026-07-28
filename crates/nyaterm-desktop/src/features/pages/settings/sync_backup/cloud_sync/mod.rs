@@ -25,7 +25,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let palette = self.theme_palette();
-        let menu_open = self.cloud_sync_provider_menu_open && enabled;
+        let menu_open = self.cloud_sync.provider_menu_open && enabled;
         let providers = [
             ("webdav", "WebDAV"),
             ("s3", "S3 Compatible"),
@@ -112,8 +112,8 @@ impl NyaTermApp {
                         this.cursor_pointer()
                             .hover(move |this| this.bg(rgb(palette.hover)))
                             .on_click(cx.listener(|this, _, _, cx| {
-                                this.cloud_sync_provider_menu_open =
-                                    !this.cloud_sync_provider_menu_open;
+                                this.cloud_sync.provider_menu_open =
+                                    !this.cloud_sync.provider_menu_open;
                                 cx.notify();
                             }))
                     }),
@@ -157,13 +157,15 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         let provider_action = conflict.provider_action;
         let local_hash = self
-            .cloud_sync_state
+            .cloud_sync
+            .state
             .last_synced_payload_hash
             .as_deref()
             .map(compact_id)
             .unwrap_or_else(|| "unsynced".to_string());
         let remote_revision = self
-            .cloud_sync_state
+            .cloud_sync
+            .state
             .last_applied_remote_revision
             .as_deref()
             .map(compact_id)
@@ -266,13 +268,13 @@ impl NyaTermApp {
                         | SnapshotPasswordPromptKind::CloudProviderForcePull
                 )
             });
-        let cloud_conflict = self.cloud_sync_conflict.clone();
-        let active_cloud_provider = configured_cloud_sync_provider(&self.cloud_sync_settings);
+        let cloud_conflict = self.cloud_sync.conflict.clone();
+        let active_cloud_provider = configured_cloud_sync_provider(&self.cloud_sync.settings);
         let form_enabled = self.cloud_sync_form_enabled();
-        let auto_sync_enabled = form_enabled && self.cloud_sync_settings.enabled;
-        let debounce_enabled = auto_sync_enabled && self.cloud_sync_settings.auto_push_on_change;
+        let auto_sync_enabled = form_enabled && self.cloud_sync.settings.enabled;
+        let debounce_enabled = auto_sync_enabled && self.cloud_sync.settings.auto_push_on_change;
         let validation_key = cloud_sync_validation_key(&self.pending_cloud_sync_settings());
-        let validation_message = (form_enabled && self.cloud_sync_settings.enabled)
+        let validation_message = (form_enabled && self.cloud_sync.settings.enabled)
             .then(|| validation_key.map(|key| self.tr(key)))
             .flatten();
         let settings_dirty = self.settings_draft_dirty();
@@ -283,66 +285,74 @@ impl NyaTermApp {
         } else {
             validation_key.map(|key| self.tr(key))
         };
-        let actions_busy = cloud_snapshot_prompt.is_some() || self.cloud_sync_job_running;
+        let actions_busy = cloud_snapshot_prompt.is_some() || self.cloud_sync.job_running;
         let can_run_actions = action_block_message.is_none() && !actions_busy;
-        let can_run_enabled_actions = can_run_actions && self.cloud_sync_settings.enabled;
+        let can_run_enabled_actions = can_run_actions && self.cloud_sync.settings.enabled;
         let sync_state_key = cloud_sync_state_i18n_key(
-            self.cloud_sync_settings.enabled,
+            self.cloud_sync.settings.enabled,
             cloud_conflict.is_some(),
-            &self.cloud_sync_status,
+            &self.cloud_sync.status,
         );
         let sync_running = sync_state_key == "settings.syncState.running";
         let current_operation = if sync_running {
-            self.cloud_sync_status.clone()
+            self.cloud_sync.status.clone()
         } else {
             self.tr("settings.none").to_string()
         };
         let provider_label = cloud_sync_provider_label(&active_cloud_provider).to_string();
         let last_checked = self
-            .cloud_sync_state
+            .cloud_sync
+            .state
             .last_checked_at_ms
             .map(format_history_timestamp_ms)
             .unwrap_or_else(|| self.tr("settings.never").to_string());
         let last_synced = self
-            .cloud_sync_state
+            .cloud_sync
+            .state
             .last_synced_at_ms
             .map(format_history_timestamp_ms)
             .unwrap_or_else(|| self.tr("settings.never").to_string());
-        let webdav_password_value = self.cloud_sync_secret_draft.webdav_password.clone();
-        let s3_access_key_value = self.cloud_sync_secret_draft.s3_access_key_id.clone();
-        let s3_secret_key_value = self.cloud_sync_secret_draft.s3_secret_access_key.clone();
-        let s3_session_token_value = self.cloud_sync_secret_draft.s3_session_token.clone();
+        let webdav_password_value = self.cloud_sync.secret_draft.webdav_password.clone();
+        let s3_access_key_value = self.cloud_sync.secret_draft.s3_access_key_id.clone();
+        let s3_secret_key_value = self.cloud_sync.secret_draft.s3_secret_access_key.clone();
+        let s3_session_token_value = self.cloud_sync.secret_draft.s3_session_token.clone();
         let google_drive_access_token_value = self
-            .cloud_sync_secret_draft
+            .cloud_sync
+            .secret_draft
             .google_drive_access_token
             .clone();
         let google_drive_refresh_token_value = self
-            .cloud_sync_secret_draft
+            .cloud_sync
+            .secret_draft
             .google_drive_refresh_token
             .clone();
         let google_drive_client_secret_value = self
-            .cloud_sync_secret_draft
+            .cloud_sync
+            .secret_draft
             .google_drive_client_secret
             .clone();
         let onedrive_access_token_value =
-            self.cloud_sync_secret_draft.onedrive_access_token.clone();
+            self.cloud_sync.secret_draft.onedrive_access_token.clone();
         let onedrive_refresh_token_value =
-            self.cloud_sync_secret_draft.onedrive_refresh_token.clone();
+            self.cloud_sync.secret_draft.onedrive_refresh_token.clone();
         let onedrive_client_secret_value =
-            self.cloud_sync_secret_draft.onedrive_client_secret.clone();
+            self.cloud_sync.secret_draft.onedrive_client_secret.clone();
         let aliyun_drive_access_token_value = self
-            .cloud_sync_secret_draft
+            .cloud_sync
+            .secret_draft
             .aliyun_drive_access_token
             .clone();
         let aliyun_drive_refresh_token_value = self
-            .cloud_sync_secret_draft
+            .cloud_sync
+            .secret_draft
             .aliyun_drive_refresh_token
             .clone();
         let aliyun_drive_client_secret_value = self
-            .cloud_sync_secret_draft
+            .cloud_sync
+            .secret_draft
             .aliyun_drive_client_secret
             .clone();
-        let gitee_token_value = self.cloud_sync_secret_draft.gitee_token.clone();
+        let gitee_token_value = self.cloud_sync.secret_draft.gitee_token.clone();
         let provider_fields = match active_cloud_provider.as_str() {
             "webdav" => self.cloud_sync_webdav_provider_fields(webdav_password_value, cx),
             "s3" => self.cloud_sync_s3_provider_fields(
@@ -395,7 +405,7 @@ impl NyaTermApp {
                         settings_switch_with_enabled(
                             palette,
                             "cloud-sync-enabled",
-                            self.cloud_sync_settings.enabled,
+                            self.cloud_sync.settings.enabled,
                             form_enabled,
                             cx.listener(|this, _, _, cx| {
                                 this.toggle_cloud_sync_enabled(cx);
@@ -459,7 +469,7 @@ impl NyaTermApp {
                         self.cloud_sync_input(
                             "cloud-sync-device-name",
                             self.tr("settings.deviceName"),
-                            self.cloud_sync_settings.device_name.clone(),
+                            self.cloud_sync.settings.device_name.clone(),
                             CloudSyncInputField::DeviceName,
                             cx,
                         ),
@@ -471,7 +481,7 @@ impl NyaTermApp {
                         self.cloud_sync_input(
                             "cloud-sync-remote-root",
                             self.tr("settings.remoteNamespace"),
-                            self.cloud_sync_settings.remote_root.clone(),
+                            self.cloud_sync.settings.remote_root.clone(),
                             CloudSyncInputField::RemoteRoot,
                             cx,
                         ),
@@ -509,7 +519,7 @@ impl NyaTermApp {
                         settings_switch_with_enabled(
                             palette,
                             "cloud-auto-check",
-                            self.cloud_sync_settings.auto_check_on_startup,
+                            self.cloud_sync.settings.auto_check_on_startup,
                             auto_sync_enabled,
                             cx.listener(|this, _, _, cx| {
                                 this.toggle_cloud_sync_auto_check(cx);
@@ -523,7 +533,7 @@ impl NyaTermApp {
                         settings_switch_with_enabled(
                             palette,
                             "cloud-auto-push",
-                            self.cloud_sync_settings.auto_push_on_change,
+                            self.cloud_sync.settings.auto_push_on_change,
                             auto_sync_enabled,
                             cx.listener(|this, _, _, cx| {
                                 this.toggle_cloud_sync_auto_push(cx);
@@ -538,7 +548,7 @@ impl NyaTermApp {
                         )),
                         cloud_sync_number_stepper(
                             palette,
-                            self.cloud_sync_settings.sync_debounce_seconds,
+                            self.cloud_sync.settings.sync_debounce_seconds,
                             debounce_enabled,
                             cx.listener(|this, _, _, cx| {
                                 this.adjust_cloud_sync_debounce(-1, cx);
@@ -588,7 +598,7 @@ impl NyaTermApp {
                                 current_operation,
                             )),
                     )
-                    .when(!self.cloud_sync_status.is_empty(), |this| {
+                    .when(!self.cloud_sync.status.is_empty(), |this| {
                         this.child(
                             div()
                                 .min_w_0()
@@ -600,7 +610,7 @@ impl NyaTermApp {
                                 .py_2()
                                 .text_size(px(12.))
                                 .text_color(rgb(palette.text_muted))
-                                .child(self.cloud_sync_status.clone()),
+                                .child(self.cloud_sync.status.clone()),
                         )
                     })
                     .child(

@@ -23,7 +23,7 @@ impl NyaTermApp {
             )
             .into_any_element();
         let master_password_enabled = self.settings_master_password_enabled;
-        let master_password_switch_enabled = !self.cloud_sync_settings.enabled;
+        let master_password_switch_enabled = !self.cloud_sync.settings.enabled;
         let has_stored_master_password = self.settings.has_master_password;
         let idle_minutes = self.settings.idle_lock_minutes;
         let host_key_policy = match self.settings.host_key_policy.as_str() {

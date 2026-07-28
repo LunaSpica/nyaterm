@@ -133,6 +133,16 @@ check_no_matches \
   'struct[[:space:]]+(TranslateJobResult|UpdateJobResult)' \
   crates/nyaterm-desktop/src/features/runtime_jobs.rs
 
+check_no_matches \
+  "cloud sync state must stay grouped under CloudSyncFeatureState" \
+  '^[[:space:]]*pub\(in crate::features\)[[:space:]]+(cloud_sync_settings|cloud_sync_state|cloud_sync_history|cloud_sync_history_expanded|cloud_sync_conflict|cloud_sync_secret_draft|cloud_sync_status|cloud_sync_job_running|cloud_sync_focused_field|cloud_sync_provider_menu_open|github_gist_auth|github_gist_auth_tx|github_gist_auth_rx|github_gist_auth_job_id|github_gist_auth_cancel)[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/app_state/mod.rs
+
+check_no_matches \
+  "cloud sync input mutation must stay on CloudSyncFeatureState" \
+  'fn[[:space:]]+cloud_sync_input_value_mut[[:space:]]*\(' \
+  crates/nyaterm-desktop/src/features
+
 # These low-frequency transport helpers have explicit imports at their call
 # sites. Keep them out of the shared feature prelude so new modules do not
 # acquire unrelated transport dependencies implicitly.

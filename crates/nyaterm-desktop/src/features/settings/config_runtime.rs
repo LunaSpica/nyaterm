@@ -552,10 +552,10 @@ impl NyaTermApp {
                             self.translation.settings.target_language.clone();
                         self.recording_manager
                             .set_memory_limit(self.settings.recording_memory_limit_bytes as usize);
-                        self.cloud_sync_settings = store
+                        self.cloud_sync.settings = store
                             .load_cloud_sync_settings()
-                            .unwrap_or_else(|_| self.cloud_sync_settings.clone());
-                        self.cloud_sync_secret_draft = CloudSyncSecretDraft::default();
+                            .unwrap_or_else(|_| self.cloud_sync.settings.clone());
+                        self.cloud_sync.secret_draft = CloudSyncSecretDraft::default();
                         self.ai.settings.config = store
                             .load_ai_settings()
                             .unwrap_or_else(|_| self.ai.settings.config.clone());
@@ -563,9 +563,9 @@ impl NyaTermApp {
                         self.sync_ai_drafts_from_active_profile();
                         self.settings_master_password_enabled = self.settings.has_master_password;
                         self.settings_master_password_draft.clear();
-                        self.cloud_sync_state = store
+                        self.cloud_sync.state = store
                             .load_cloud_sync_state()
-                            .unwrap_or_else(|_| self.cloud_sync_state.clone());
+                            .unwrap_or_else(|_| self.cloud_sync.state.clone());
                         self.transfer.paths.duplicate_policy =
                             SftpDuplicatePolicy::from_legacy_value(
                                 &self.settings.transfer_duplicate_strategy,

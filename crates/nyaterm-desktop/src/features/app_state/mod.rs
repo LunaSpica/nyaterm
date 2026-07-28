@@ -1,13 +1,13 @@
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::sync::{Arc, atomic::AtomicBool, mpsc};
+use std::sync::{Arc, mpsc};
 use std::time::Instant;
 
 use gpui::{FocusHandle, ScrollHandle, WindowHandle};
 use nyaterm_core::{
-    AiExecutionProfile, AppRuntime, AppSettingsSummary, CloudSyncHistoryEntry, CloudSyncSettings,
-    CloudSyncState, CommandHistoryEntry, Group, KeywordHighlightConfig, NativeServices, OtpEntry,
-    ProxyConfig, ProxyGroup, QuickCommand, QuickCommandCategory, SavedConnection, SavedCredential,
-    SavedPassword, SshKey, TunnelConfig, TunnelGroup,
+    AiExecutionProfile, AppRuntime, AppSettingsSummary, CommandHistoryEntry, Group,
+    KeywordHighlightConfig, NativeServices, OtpEntry, ProxyConfig, ProxyGroup, QuickCommand,
+    QuickCommandCategory, SavedConnection, SavedCredential, SavedPassword, SshKey, TunnelConfig,
+    TunnelGroup,
 };
 use nyaterm_legacy::MigrationInventory;
 use nyaterm_transport::{
@@ -31,6 +31,7 @@ use super::session::{
 };
 use super::settings::{SecurityFeatureState, SettingsFeatureState};
 use super::settings_window::SettingsWindow;
+use super::sync::CloudSyncFeatureState;
 use super::terminal::TerminalFeatureState;
 use super::text_inputs::TextInputRegistry;
 use super::transfers::TransferFeatureState;
@@ -39,8 +40,7 @@ use super::update::UpdateFeatureState;
 use crate::models::{
     ActionLinkMenuState, ActionLinkTooltipState, ActiveSessionMenuState,
     ActivityBarContextMenuState, ActivityBarLayoutState, BottomPanelMode, BottomPanelResizeState,
-    CloudSyncConflictState, CloudSyncInputField, CloudSyncSecretDraft, ConfigPathPromptKind,
-    DiagnosticsPathPromptKind, GithubGistAuthJobEvent, GithubGistAuthState, HeaderStatusState,
+    ConfigPathPromptKind, DiagnosticsPathPromptKind, HeaderStatusState,
     KeywordHighlightPathPromptKind, MainMode, MultiLinePasteDraft, NavItem, PanelResizeState,
     PanelStackResizeState, RecordingPathPromptKind, RecordingWritePipeline, RightFocus,
     SessionEventBridge, SessionRuntimeMetadata, SettingsTab, SnapshotPasswordPromptState,
@@ -90,6 +90,7 @@ pub struct NyaTermApp {
     pub(in crate::features) transfer: TransferFeatureState,
     pub(in crate::features) translation: TranslationFeatureState,
     pub(in crate::features) update: UpdateFeatureState,
+    pub(in crate::features) cloud_sync: CloudSyncFeatureState,
     pub(in crate::features) command_history: Arc<[CommandHistoryEntry]>,
     pub(in crate::features) command_persistence_tx: mpsc::Sender<CommandPersistenceRequest>,
     pub(in crate::features) command_persistence_rx: mpsc::Receiver<CommandPersistenceResult>,
@@ -148,22 +149,6 @@ pub struct NyaTermApp {
     pub(in crate::features) diagnostics_path_prompt: Option<DiagnosticsPathPromptKind>,
     pub(in crate::features) keyword_highlight_path_prompt: Option<KeywordHighlightPathPromptKind>,
     pub(in crate::features) active_snapshot_password_prompt: Option<SnapshotPasswordPromptState>,
-    pub(in crate::features) cloud_sync_settings: CloudSyncSettings,
-    pub(in crate::features) cloud_sync_state: CloudSyncState,
-    pub(in crate::features) cloud_sync_history: Vec<CloudSyncHistoryEntry>,
-    pub(in crate::features) cloud_sync_history_expanded: HashSet<String>,
-    pub(in crate::features) cloud_sync_conflict: Option<CloudSyncConflictState>,
-    pub(in crate::features) cloud_sync_secret_draft: CloudSyncSecretDraft,
-    pub(in crate::features) cloud_sync_status: String,
-    /// Prevent overlapping network jobs from applying cloud state out of order.
-    pub(in crate::features) cloud_sync_job_running: bool,
-    pub(in crate::features) cloud_sync_focused_field: CloudSyncInputField,
-    pub(in crate::features) cloud_sync_provider_menu_open: bool,
-    pub(in crate::features) github_gist_auth: GithubGistAuthState,
-    pub(in crate::features) github_gist_auth_tx: mpsc::Sender<GithubGistAuthJobEvent>,
-    pub(in crate::features) github_gist_auth_rx: mpsc::Receiver<GithubGistAuthJobEvent>,
-    pub(in crate::features) github_gist_auth_job_id: u64,
-    pub(in crate::features) github_gist_auth_cancel: Option<Arc<AtomicBool>>,
     pub(in crate::features) duplicate_prompts: Arc<SftpDuplicatePromptBroker>,
     pub(in crate::features) active_duplicate_prompt: Option<SftpDuplicatePromptState>,
     pub(in crate::features) pending_session_starts: HashMap<String, PendingSessionStart>,

@@ -3,10 +3,9 @@ use std::sync::{Arc, mpsc};
 use std::time::Instant;
 
 use crate::models::{
-    ActivityBarLayoutState, BottomPanelMode, CloudSyncInputField, CloudSyncSecretDraft,
-    GithubGistAuthState, HeaderStatusState, MainMode, NavItem, PanelSide, RecordingWritePipeline,
-    RightFocus, SessionEventBridge, SettingsTab, StartupCommandAction, StoreStatus,
-    TerminalFramePipeline,
+    ActivityBarLayoutState, BottomPanelMode, HeaderStatusState, MainMode, NavItem, PanelSide,
+    RecordingWritePipeline, RightFocus, SessionEventBridge, SettingsTab, StartupCommandAction,
+    StoreStatus, TerminalFramePipeline,
 };
 use crate::terminal::initial_terminal_screen;
 use gpui::{Context, ScrollHandle};
@@ -20,14 +19,14 @@ use nyaterm_transport::{RecordingManager, SessionManager, SftpDuplicatePolicy, S
 
 use super::super::settings::{SettingsFeatureFocus, SettingsFeatureState};
 use super::super::{
-    AiFeatureFocus, AiFeatureState, ConnectionFeatureFocus, ConnectionFeatureState,
-    CredentialPromptBroker, DEFAULT_DUPLICATE_STARTUP_DELAY_MS, HostKeyPromptBroker,
-    INITIAL_TERMINAL_BANNER, LEGACY_ROOT, NativeOtpProvider, QuickCommandFeatureFocus,
-    QuickCommandFeatureState, RemoteOpsFeatureFocus, RemoteOpsFeatureState, SecurityFeatureFocus,
-    SecurityFeatureState, SendCommandFeatureFocus, SendCommandFeatureState,
-    SftpDuplicatePromptBroker, TerminalFeatureFocus, TerminalFeatureState, TextInputRegistry,
-    TransferFeatureFocus, TransferFeatureState, TranslationFeatureState, UpdateFeatureState,
-    ai_active_profile_drafts, ai_usage_counts, appearance_font_options,
+    AiFeatureFocus, AiFeatureState, CloudSyncFeatureState, ConnectionFeatureFocus,
+    ConnectionFeatureState, CredentialPromptBroker, DEFAULT_DUPLICATE_STARTUP_DELAY_MS,
+    HostKeyPromptBroker, INITIAL_TERMINAL_BANNER, LEGACY_ROOT, NativeOtpProvider,
+    QuickCommandFeatureFocus, QuickCommandFeatureState, RemoteOpsFeatureFocus,
+    RemoteOpsFeatureState, SecurityFeatureFocus, SecurityFeatureState, SendCommandFeatureFocus,
+    SendCommandFeatureState, SftpDuplicatePromptBroker, TerminalFeatureFocus, TerminalFeatureState,
+    TextInputRegistry, TransferFeatureFocus, TransferFeatureState, TranslationFeatureState,
+    UpdateFeatureState, ai_active_profile_drafts, ai_usage_counts, appearance_font_options,
     quick_command_sort_mode_from_setting, quick_command_view_mode_from_setting,
     spawn_command_persistence_worker,
 };
@@ -61,7 +60,6 @@ impl NyaTermApp {
         };
         let (session_start_tx, session_start_rx) = mpsc::channel();
         let (tunnel_tx, tunnel_rx) = mpsc::channel();
-        let (github_gist_auth_tx, github_gist_auth_rx) = mpsc::channel();
         let (command_persistence_tx, command_persistence_rx) = spawn_command_persistence_worker(
             runtime.config_dir().to_path_buf(),
             runtime.portable_key_path().map(ToOwned::to_owned),
@@ -427,6 +425,11 @@ impl NyaTermApp {
             remote_ops: RemoteOpsFeatureState::new(RemoteOpsFeatureFocus {}),
             translation: TranslationFeatureState::new(translation_settings),
             update: UpdateFeatureState::new(),
+            cloud_sync: CloudSyncFeatureState::new(
+                cloud_sync_settings,
+                cloud_sync_state,
+                cloud_sync_history,
+            ),
             command_history: Arc::from(command_history),
             command_persistence_tx,
             command_persistence_rx,
@@ -483,21 +486,6 @@ impl NyaTermApp {
             diagnostics_path_prompt: None,
             keyword_highlight_path_prompt: None,
             active_snapshot_password_prompt: None,
-            cloud_sync_settings,
-            cloud_sync_state,
-            cloud_sync_history,
-            cloud_sync_history_expanded: HashSet::new(),
-            cloud_sync_conflict: None,
-            cloud_sync_secret_draft: CloudSyncSecretDraft::default(),
-            cloud_sync_status: "local provider ready".to_string(),
-            cloud_sync_job_running: false,
-            cloud_sync_focused_field: CloudSyncInputField::RemoteRoot,
-            cloud_sync_provider_menu_open: false,
-            github_gist_auth: GithubGistAuthState::default(),
-            github_gist_auth_tx,
-            github_gist_auth_rx,
-            github_gist_auth_job_id: 0,
-            github_gist_auth_cancel: None,
             duplicate_prompts: Arc::new(SftpDuplicatePromptBroker::default()),
             active_duplicate_prompt: None,
             pending_session_starts: HashMap::new(),

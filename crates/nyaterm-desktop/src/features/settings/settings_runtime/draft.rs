@@ -17,8 +17,8 @@ impl NyaTermApp {
             ai_model_draft: self.ai.settings.model_draft.clone(),
             ai_base_url_draft: self.ai.settings.base_url_draft.clone(),
             ai_secret_draft: self.ai.settings.secret_draft.clone(),
-            cloud_sync_settings: self.cloud_sync_settings.clone(),
-            cloud_sync_secret_draft: self.cloud_sync_secret_draft.clone(),
+            cloud_sync_settings: self.cloud_sync.settings.clone(),
+            cloud_sync_secret_draft: self.cloud_sync.secret_draft.clone(),
             translation_settings: self.translation.settings.clone(),
             translation_secret_draft: self.translation.secret_draft.clone(),
             keyword_highlights: self.keyword_highlights.clone(),
@@ -36,8 +36,8 @@ impl NyaTermApp {
             || snapshot.ai_model_draft != self.ai.settings.model_draft
             || snapshot.ai_base_url_draft != self.ai.settings.base_url_draft
             || snapshot.ai_secret_draft != self.ai.settings.secret_draft
-            || snapshot.cloud_sync_settings != self.cloud_sync_settings
-            || snapshot.cloud_sync_secret_draft != self.cloud_sync_secret_draft
+            || snapshot.cloud_sync_settings != self.cloud_sync.settings
+            || snapshot.cloud_sync_secret_draft != self.cloud_sync.secret_draft
             || snapshot.translation_settings != self.translation.settings
             || snapshot.translation_secret_draft != self.translation.secret_draft
             || snapshot.keyword_highlights != self.keyword_highlights
@@ -78,8 +78,8 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn pending_cloud_sync_settings(&self) -> CloudSyncSettings {
-        let mut next = self.cloud_sync_settings.clone();
-        let draft = &self.cloud_sync_secret_draft;
+        let mut next = self.cloud_sync.settings.clone();
+        let draft = &self.cloud_sync.secret_draft;
         if !draft.webdav_password.is_empty() {
             next.webdav.password = Some(draft.webdav_password.clone());
         }
@@ -220,8 +220,8 @@ impl NyaTermApp {
         if !self.settings_draft_dirty() {
             return false;
         }
-        self.cloud_sync_status = "apply settings before running cloud sync".to_string();
-        self.terminal.view.status = self.cloud_sync_status.clone();
+        self.cloud_sync.status = "apply settings before running cloud sync".to_string();
+        self.terminal.view.status = self.cloud_sync.status.clone();
         cx.notify();
         true
     }
@@ -325,11 +325,11 @@ impl NyaTermApp {
                 self.settings_master_password_enabled = self.settings.has_master_password;
                 self.settings_master_password_draft.clear();
                 self.ai.settings.config = saved_ai_settings;
-                self.cloud_sync_settings = saved_cloud_sync_settings;
+                self.cloud_sync.settings = saved_cloud_sync_settings;
                 self.translation.settings = saved_translation_settings;
                 self.keyword_highlights = saved_keyword_highlights;
                 self.translation.secret_draft = TranslationSecretDraft::default();
-                self.cloud_sync_secret_draft = CloudSyncSecretDraft::default();
+                self.cloud_sync.secret_draft = CloudSyncSecretDraft::default();
                 self.ai.settings.secret_draft.clear();
                 self.sync_ai_drafts_from_active_profile();
                 self.translation.target_language =
@@ -383,8 +383,8 @@ impl NyaTermApp {
             self.ai.settings.model_draft = snapshot.ai_model_draft;
             self.ai.settings.base_url_draft = snapshot.ai_base_url_draft;
             self.ai.settings.secret_draft = snapshot.ai_secret_draft;
-            self.cloud_sync_settings = snapshot.cloud_sync_settings;
-            self.cloud_sync_secret_draft = snapshot.cloud_sync_secret_draft;
+            self.cloud_sync.settings = snapshot.cloud_sync_settings;
+            self.cloud_sync.secret_draft = snapshot.cloud_sync_secret_draft;
             self.translation.settings = snapshot.translation_settings;
             self.translation.secret_draft = snapshot.translation_secret_draft;
             self.keyword_highlights = snapshot.keyword_highlights;
@@ -414,7 +414,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn toggle_settings_master_password(&mut self, cx: &mut Context<Self>) {
-        if self.cloud_sync_settings.enabled && self.settings_master_password_enabled {
+        if self.cloud_sync.settings.enabled && self.settings_master_password_enabled {
             self.terminal.view.status =
                 "disable cloud sync before removing the master password".to_string();
             cx.notify();

@@ -2,7 +2,7 @@ use gpui::{Context, Window};
 use nyaterm_core::CloudSyncError;
 
 use crate::features::NyaTermApp;
-use crate::models::{CloudSyncConflictState, SnapshotPasswordPromptKind};
+use crate::models::SnapshotPasswordPromptKind;
 
 impl NyaTermApp {
     pub(in crate::features) fn prompt_provider_cloud_sync_push(
@@ -91,12 +91,7 @@ impl NyaTermApp {
         provider: String,
         provider_action: bool,
     ) {
-        if let CloudSyncError::Conflict(message) = error {
-            self.cloud_sync_conflict = Some(CloudSyncConflictState {
-                provider,
-                message: message.clone(),
-                provider_action,
-            });
-        }
+        self.cloud_sync
+            .capture_conflict(error, provider, provider_action);
     }
 }
