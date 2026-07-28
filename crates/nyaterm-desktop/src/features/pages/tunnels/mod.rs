@@ -25,26 +25,22 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         let open_tunnels = self
             .tunnel_state
-            .manager
-            .list()
-            .unwrap_or_default()
+            .open_tunnels()
             .into_iter()
             .map(|info| (info.id.clone(), info))
             .collect::<HashMap<_, _>>();
         let sections = tunnel_sections(
-            &self.tunnel_state.catalog.tunnels,
-            &self.tunnel_state.catalog.tunnel_groups,
+            self.tunnel_state.tunnels(),
+            self.tunnel_state.tunnel_groups(),
             self.tr("network.ungrouped"),
         );
         let proxy_sections = proxy_sections(
-            &self.tunnel_state.catalog.proxies,
-            &self.tunnel_state.catalog.proxy_groups,
+            self.tunnel_state.proxies(),
+            self.tunnel_state.proxy_groups(),
             self.tr("network.ungrouped"),
         );
         let mut tunnel_list = div().flex().flex_col().gap_2();
-        if self.tunnel_state.catalog.tunnels.is_empty()
-            && self.tunnel_state.catalog.tunnel_groups.is_empty()
-        {
+        if self.tunnel_state.tunnels().is_empty() && self.tunnel_state.tunnel_groups().is_empty() {
             let (title, description) = if self.connection_catalog.connections.is_empty() {
                 (
                     self.tr("network.noConnections").to_string(),
@@ -70,9 +66,7 @@ impl NyaTermApp {
         }
 
         let mut proxy_list = div().flex().flex_col().gap_2();
-        if self.tunnel_state.catalog.proxies.is_empty()
-            && self.tunnel_state.catalog.proxy_groups.is_empty()
-        {
+        if self.tunnel_state.proxies().is_empty() && self.tunnel_state.proxy_groups().is_empty() {
             proxy_list = proxy_list.child(network_empty_state(
                 palette,
                 "icons/network.svg",

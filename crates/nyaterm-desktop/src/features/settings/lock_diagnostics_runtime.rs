@@ -203,12 +203,7 @@ impl NyaTermApp {
             }
         }
 
-        let open_tunnels = self
-            .tunnel_state
-            .manager
-            .list()
-            .map(|items| items.len())
-            .unwrap_or(0);
+        let open_tunnels = self.tunnel_state.open_count();
         let mut running_transfers = 0;
         let mut paused_transfers = 0;
         let mut completed_transfers = 0;
@@ -235,7 +230,7 @@ impl NyaTermApp {
             open_tunnels,
             pending_tunnels: self.tunnel_state.pending_count(),
             saved_connections: self.connection_catalog.connections.len(),
-            saved_tunnels: self.tunnel_state.catalog.tunnels.len(),
+            saved_tunnels: self.tunnel_state.tunnels().len(),
             running_transfers,
             paused_transfers,
             completed_transfers,

@@ -528,14 +528,12 @@ impl NyaTermApp {
                             store.list_passwords().unwrap_or_default();
                         self.security.catalog.credentials =
                             store.list_credentials().unwrap_or_default();
-                        self.tunnel_state.catalog.tunnels =
-                            store.list_tunnels().unwrap_or_default();
-                        self.tunnel_state.catalog.tunnel_groups =
-                            store.list_tunnel_groups().unwrap_or_default();
-                        self.tunnel_state.catalog.proxies =
-                            store.list_proxies().unwrap_or_default();
-                        self.tunnel_state.catalog.proxy_groups =
-                            store.list_proxy_groups().unwrap_or_default();
+                        self.tunnel_state.replace_loaded_catalog(
+                            store.list_tunnels().unwrap_or_default(),
+                            store.list_tunnel_groups().unwrap_or_default(),
+                            store.list_proxies().unwrap_or_default(),
+                            store.list_proxy_groups().unwrap_or_default(),
+                        );
                         let quick_commands = store.load_quick_commands().unwrap_or_default();
                         self.commands.replace_loaded(
                             quick_commands.commands,
@@ -592,10 +590,7 @@ impl NyaTermApp {
                         self.security.catalog.otp_entries.clear();
                         self.security.catalog.passwords.clear();
                         self.security.catalog.credentials.clear();
-                        self.tunnel_state.catalog.tunnels.clear();
-                        self.tunnel_state.catalog.tunnel_groups.clear();
-                        self.tunnel_state.catalog.proxies.clear();
-                        self.tunnel_state.catalog.proxy_groups.clear();
+                        self.tunnel_state.clear_catalog();
                         self.commands.clear_loaded();
                         self.settings.keyword_config = KeywordHighlightConfig::default();
                         self.apply_gpui_settings(AppSettingsSummary::default());
@@ -613,10 +608,7 @@ impl NyaTermApp {
             }
             Err(error) => {
                 self.connection_catalog.connections.clear();
-                self.tunnel_state.catalog.tunnels.clear();
-                self.tunnel_state.catalog.tunnel_groups.clear();
-                self.tunnel_state.catalog.proxies.clear();
-                self.tunnel_state.catalog.proxy_groups.clear();
+                self.tunnel_state.clear_catalog();
                 self.commands.clear_loaded();
                 self.apply_gpui_settings(AppSettingsSummary::default());
                 self.translation.replace_settings(

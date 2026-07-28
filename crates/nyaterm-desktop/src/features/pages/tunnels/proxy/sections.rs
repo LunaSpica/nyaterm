@@ -106,7 +106,7 @@ pub(in crate::features::pages::tunnels) fn proxy_section(
                             palette,
                             proxy.id.clone(),
                             proxy.group_id.clone(),
-                            &app.tunnel_state.catalog.proxy_groups,
+                            app.tunnel_state.proxy_groups(),
                             app,
                             cx,
                         ))

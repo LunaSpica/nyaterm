@@ -339,7 +339,7 @@ impl NyaTermApp {
         let details_rows: Arc<[(&'static str, String)]> = connection_detail_rows(
             &connection,
             &self.connection_catalog.connections,
-            &self.tunnel_state.catalog.proxies,
+            self.tunnel_state.proxies(),
         )
         .into();
         let row_group = SharedString::from(format!("connection-row-group-{}", connection.id));

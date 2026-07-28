@@ -266,6 +266,14 @@ check_no_matches \
   "tunnel runtime state must stay grouped under TunnelFeatureState" \
   '^[[:space:]]*pub\(in crate::features\)[[:space:]]+(tunnel_manager|tunnel_tx|tunnel_rx|pending_tunnels)[[:space:]]*:' \
   crates/nyaterm-desktop/src/features/app_state/mod.rs
+check_no_matches \
+  "TunnelFeatureState and TunnelCatalogState must expose methods, not writable fields" \
+  '^[[:space:]]*pub([[:space:]]|\([^)]*\))[[:space:]]+(catalog|manager|tx|rx|pending|tunnels|tunnel_groups|proxies|proxy_groups)[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/tunnels/state.rs
+check_no_matches \
+  "tunnel catalog and manager access must use TunnelFeatureState methods" \
+  '(self|this|app)\.tunnel_state\.(catalog|manager)(\.|[[:space:]]*=)' \
+  crates/nyaterm-desktop/src/features
 
 check_no_matches \
   "connection catalogs must stay in their authoritative feature owners" \

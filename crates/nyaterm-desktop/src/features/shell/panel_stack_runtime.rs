@@ -570,8 +570,8 @@ impl NyaTermApp {
             // Tauri NetworkPanel header shows active tab profile count.
             NavItem::Tunnels => {
                 let count = match self.connection_state.network_active_tab() {
-                    NetworkTab::Tunnels => self.tunnel_state.catalog.tunnels.len(),
-                    NetworkTab::Proxies => self.tunnel_state.catalog.proxies.len(),
+                    NetworkTab::Tunnels => self.tunnel_state.tunnels().len(),
+                    NetworkTab::Proxies => self.tunnel_state.proxies().len(),
                 };
                 SharedString::from(count.to_string())
             }

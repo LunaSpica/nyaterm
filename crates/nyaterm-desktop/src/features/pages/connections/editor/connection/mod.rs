@@ -164,8 +164,7 @@ impl NyaTermApp {
             .as_deref()
             .and_then(|id| {
                 self.tunnel_state
-                    .catalog
-                    .proxies
+                    .proxies()
                     .iter()
                     .find(|proxy| proxy.id == id)
                     .map(|proxy| {
@@ -264,7 +263,7 @@ impl NyaTermApp {
             label: self.tr("dialog.noProxy").to_string(),
             selected: editor.proxy_id.is_none(),
         }];
-        proxy_options.extend(self.tunnel_state.catalog.proxies.iter().map(|proxy| {
+        proxy_options.extend(self.tunnel_state.proxies().iter().map(|proxy| {
             ConnectionEditorChoice {
                 value: Some(proxy.id.clone()),
                 label: proxy.name.clone(),

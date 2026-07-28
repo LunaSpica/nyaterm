@@ -15,8 +15,7 @@ impl NyaTermApp {
         let proxy = match proxy_id.as_deref() {
             Some(id) => self
                 .tunnel_state
-                .catalog
-                .proxies
+                .proxies()
                 .iter()
                 .find(|proxy| proxy.id == id)
                 .cloned(),
@@ -105,8 +104,7 @@ impl NyaTermApp {
     pub(in crate::features) fn cycle_network_proxy_group(&mut self, cx: &mut Context<Self>) {
         if self.connection_state.cycle_network_proxy_group(
             self.tunnel_state
-                .catalog
-                .proxy_groups
+                .proxy_groups()
                 .iter()
                 .map(|group| group.id.as_str()),
         ) {
@@ -172,13 +170,9 @@ impl NyaTermApp {
         } else {
             editor.password_id
         };
-        let group_id = editor.group_id.filter(|id| {
-            self.tunnel_state
-                .catalog
-                .proxy_groups
-                .iter()
-                .any(|group| group.id.as_str() == id.as_str())
-        });
+        let group_id = editor
+            .group_id
+            .filter(|id| self.tunnel_state.has_proxy_group(id));
 
         let id = editor.id.clone().unwrap_or_else(uuid);
         let proxy = ProxyConfig {
@@ -193,12 +187,7 @@ impl NyaTermApp {
             password_id,
             group_id,
         };
-        let mut next_proxies = self.tunnel_state.catalog.proxies.clone();
-        if let Some(existing) = next_proxies.iter_mut().find(|proxy| proxy.id == id) {
-            *existing = proxy;
-        } else {
-            next_proxies.push(proxy);
-        }
+        let next_proxies = self.tunnel_state.proxies_with_upsert(proxy);
 
         match ConnectionStore::open_with_portable_key_path(
             self.runtime.config_dir(),
@@ -207,7 +196,7 @@ impl NyaTermApp {
         .and_then(|store| store.replace_proxies(&next_proxies))
         {
             Ok(()) => {
-                self.tunnel_state.catalog.proxies = next_proxies;
+                self.tunnel_state.commit_proxies(next_proxies);
                 self.connection_state.close_network_proxy_editor();
                 self.terminal.view.status = format!("proxy '{name}' saved");
                 self.settings.store_status.message = self.terminal.view.status.clone();

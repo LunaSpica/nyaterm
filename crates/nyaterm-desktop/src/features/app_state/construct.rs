@@ -441,12 +441,12 @@ impl NyaTermApp {
                 },
             ),
             recording,
-            tunnel_state: TunnelFeatureState::new(TunnelCatalogState {
+            tunnel_state: TunnelFeatureState::new(TunnelCatalogState::new(
                 tunnels,
                 tunnel_groups,
                 proxies,
                 proxy_groups,
-            }),
+            )),
         }
     }
 }

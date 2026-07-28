@@ -36,8 +36,7 @@ impl NyaTermApp {
         let tunnel = match tunnel_id.as_deref() {
             Some(id) => self
                 .tunnel_state
-                .catalog
-                .tunnels
+                .tunnels()
                 .iter()
                 .find(|tunnel| tunnel.id == id)
                 .cloned(),
@@ -145,8 +144,7 @@ impl NyaTermApp {
     pub(in crate::features) fn cycle_network_tunnel_group(&mut self, cx: &mut Context<Self>) {
         if self.connection_state.cycle_network_tunnel_group(
             self.tunnel_state
-                .catalog
-                .tunnel_groups
+                .tunnel_groups()
                 .iter()
                 .map(|group| group.id.as_str()),
         ) {
@@ -226,16 +224,11 @@ impl NyaTermApp {
             };
             port
         };
-        let group_id = editor.group_id.filter(|id| {
-            self.tunnel_state
-                .catalog
-                .tunnel_groups
-                .iter()
-                .any(|group| group.id.as_str() == id.as_str())
-        });
+        let group_id = editor
+            .group_id
+            .filter(|id| self.tunnel_state.has_tunnel_group(id));
 
         let id = editor.id.clone().unwrap_or_else(uuid);
-        let mut next_tunnels = self.tunnel_state.catalog.tunnels.clone();
         let tunnel = TunnelConfig {
             id: id.clone(),
             name: name.clone(),
@@ -249,11 +242,7 @@ impl NyaTermApp {
             bind_localhost: editor.bind_localhost,
             group_id,
         };
-        if let Some(existing) = next_tunnels.iter_mut().find(|tunnel| tunnel.id == id) {
-            *existing = tunnel;
-        } else {
-            next_tunnels.push(tunnel);
-        }
+        let next_tunnels = self.tunnel_state.tunnels_with_upsert(tunnel);
 
         match ConnectionStore::open_with_portable_key_path(
             self.runtime.config_dir(),
@@ -262,7 +251,7 @@ impl NyaTermApp {
         .and_then(|store| store.replace_tunnels(&next_tunnels))
         {
             Ok(()) => {
-                self.tunnel_state.catalog.tunnels = next_tunnels;
+                self.tunnel_state.commit_tunnels(next_tunnels);
                 self.connection_state.close_network_tunnel_editor();
                 self.terminal.view.status = format!("tunnel '{name}' saved");
                 self.settings.store_status.message = self.terminal.view.status.clone();

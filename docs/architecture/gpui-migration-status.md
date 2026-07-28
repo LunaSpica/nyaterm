@@ -255,10 +255,13 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   action admission/completion, deferred auto-start, path-prompt admission,
   manager access and write-pipeline access execute through owner methods. The
   tunnel owner constructs its manager/job channel and owns pending-job
-  admission and completion. `NyaTermApp` remains responsible for GPUI prompts,
-  notifications, session policy and job-result routing. Recording output
-  behavior, tunnel transport execution and persisted tunnel configuration
-  formats are unchanged.
+  admission and completion. Its manager, channel, pending list and nested
+  tunnel/proxy catalog are now private. Catalog move/upsert/delete candidates
+  are produced by the owner and become authoritative only through explicit
+  commit methods after persistence succeeds. `NyaTermApp` remains responsible
+  for GPUI prompts, notifications, session policy, `ConnectionStore` calls and
+  job-result routing. Recording output behavior, tunnel transport execution and
+  persisted tunnel configuration formats are unchanged.
 - Live session runtime now has one top-level `SessionFeatureState` owner. The
   session manager and event bridge, command history/search/menu/busy state,
   active session/SSH/AI profile, order and runtime metadata, custom and dynamic
@@ -404,8 +407,10 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   fields. `ConnectionCatalogState` authoritatively owns saved connections,
   groups and runtime-discovered serial ports; `SecurityFeatureState::catalog`
   owns SSH-key, OTP, password and credential catalogs without deriving
-  `Debug`; and `TunnelFeatureState::catalog` owns tunnel/proxy configs and
-  groups alongside their existing runtime owner. The queued-saved-connection
+  `Debug`; and the private catalog inside `TunnelFeatureState` owns tunnel/proxy
+  configs and groups alongside their existing runtime owner. Read-only slices,
+  candidate transformations and post-persistence commits form its public
+  feature API. The queued-saved-connection
   lifecycle and its request models moved from `app_state` to
   `SessionStartFeatureState`. Twelve old top-level fields became one focused
   top-level catalog plus children of existing owners, taking `NyaTermApp` from
@@ -1349,14 +1354,14 @@ Current ownership map:
 | OTP entries | `NyaTermApp.security.catalog.otp_entries` | Secret-adjacent persisted catalog | Do not log secrets or widen Debug exposure. |
 | Saved passwords/credentials | `NyaTermApp.security.catalog.passwords`, `credentials` | Secret-bearing persisted catalogs | Credential autofill and security settings read the same authoritative values through the security owner. |
 | Serial ports | `NyaTermApp.connection_catalog.serial_ports` | Runtime/discovered state | Refreshed by the session manager and never persisted. |
-| Tunnel/proxy configs | `NyaTermApp.tunnel_state.catalog` | Persisted network config | Tunnel/proxy persistence and runtime operations now meet at one feature owner; the Network page UI remains separate transient state. |
+| Tunnel/proxy configs | Private catalog in `NyaTermApp.tunnel_state` | Persisted network config | Views use read-only slices; pure move/upsert/delete candidates and successful commits stay on `TunnelFeatureState`. The Network page UI remains separate transient state. |
 | Queued saved-connection starts | `NyaTermApp.session.start` private queue | Transient session-start state | Admission, duplicate detection, draining and runtime cadence reads go through `SessionStartFeatureState` methods. |
 | List search/sort/hover/selection/DnD | `NyaTermApp.connection_state` private list child | Temporary UI state | Runtime and rendering enter through `ConnectionFeatureState` methods; state is not persisted except sort setting remains synced to settings as before. |
 | Connection import dialog | `NyaTermApp.connection_state` private import child | Temporary UI/runtime prompt state | File import still runs through existing runtime paths; runtime and rendering enter through `ConnectionFeatureState` methods. |
 | Connection editor | `NyaTermApp.connection_state` private editor child | Editing draft/window UI state | Runtime key handling, window lifecycle, rendering popovers, and sideband projection use `ConnectionFeatureState` methods; draft remains separate from saved connection data. |
 | Group editor | `NyaTermApp.connection_state` private group-editor child | Editing draft UI state | Draft remains separate from saved groups; runtime and rendering enter through `ConnectionFeatureState` methods. |
 | Delete/open confirmations | `NyaTermApp.connection_state` private confirmations child | Temporary UI state | Rendering and runtime actions enter through `ConnectionFeatureState` methods; persisted data changes only after existing confirm actions run. |
-| Network page UI | `NyaTermApp.connection_state` private network child | Temporary UI/editor state | Page rendering, editor focus, confirm/editor draft reads, and panel-count projection use `ConnectionFeatureState` methods. Persisted configs live under `TunnelFeatureState::catalog`. |
+| Network page UI | `NyaTermApp.connection_state` private network child | Temporary UI/editor state | Page rendering, editor focus, confirm/editor draft reads, and panel-count projection use `ConnectionFeatureState` methods. Persisted configs live in the private `TunnelFeatureState` catalog. |
 
 This round changed desktop-side state ownership, UI state plumbing, and module
 boundaries. Final reports should avoid broad statements that sound like no
@@ -1533,8 +1538,11 @@ honest remaining list.
    fields. The recording/sync-input encapsulation batch then made both owners
    method-only boundaries: fourteen previously writable fields became private,
    with recording job/prompt/pipeline transitions and sync-group reads routed
-   through focused APIs. It did not move or change persisted data. What remains
-   at the composition root is stores, runtime and focused feature owners.
+   through focused APIs. The tunnel encapsulation batch then made its runtime
+   resources and four persisted catalogs method-only as well, moving pure
+   catalog candidate construction and coupled group/member removal onto the
+   owner while retaining the existing persistence adapter and formats. What
+   remains at the composition root is stores, runtime and focused feature owners.
    Group by cohesion where a cluster exists; do not force the count down for
    its own sake.
    Method ownership is now moving too, which is what grouping the fields alone
@@ -1552,7 +1560,9 @@ honest remaining list.
    recording cleanup can no longer leave its manager, busy map and pipeline out
    of sync; recording action and path-prompt admission are atomic owner
    transitions, and sync-input views cannot mutate group/broadcast state while
-   rendering. Closing a pending session start cannot update its maps without
+   rendering. Tunnel/proxy views likewise cannot mutate persisted catalogs, and
+   group/member removal commits together only after both existing store writes
+   succeed. Closing a pending session start cannot update its maps without
    also applying the active pending/failed fallback rules, and paste editing
    cannot mutate its UTF-8 cursor without also clearing stale selection/IME state.
    Shell viewport timing, panel drags, mutually-exclusive tab menus and pane

@@ -236,7 +236,7 @@ impl NyaTermApp {
                     .child(capability_line(
                         palette,
                         "Tunnels",
-                        self.tunnel_state.catalog.tunnels.len().to_string(),
+                        self.tunnel_state.tunnels().len().to_string(),
                     )),
             )
             .child(

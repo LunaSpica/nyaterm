@@ -138,7 +138,7 @@ pub(in crate::features::pages::tunnels) fn tunnel_section(
                         connection_label,
                         open_info,
                         pending,
-                        app.tunnel_state.catalog.tunnel_groups.len(),
+                        app.tunnel_state.tunnel_groups().len(),
                         menu_open,
                         app.tr("common.more"),
                         app.tr("common.edit"),
@@ -187,7 +187,7 @@ pub(in crate::features::pages::tunnels) fn tunnel_section(
                             palette,
                             tunnel.id.clone(),
                             current_group_id,
-                            &app.tunnel_state.catalog.tunnel_groups,
+                            app.tunnel_state.tunnel_groups(),
                             app,
                             cx,
                         ))

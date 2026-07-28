@@ -28,8 +28,7 @@ pub(in crate::features::pages::tunnels) fn network_tunnel_editor_panel(
         .as_deref()
         .and_then(|id| {
             app.tunnel_state
-                .catalog
-                .tunnel_groups
+                .tunnel_groups()
                 .iter()
                 .find(|group| group.id == id)
                 .map(|group| group.name.clone())

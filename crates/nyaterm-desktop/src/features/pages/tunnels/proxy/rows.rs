@@ -83,7 +83,7 @@ pub(in crate::features::pages::tunnels) fn proxy_network_row(
             app.tr("common.edit"),
             app.tr("network.moveToGroup"),
             app.tr("common.delete"),
-            !app.tunnel_state.catalog.proxy_groups.is_empty(),
+            !app.tunnel_state.proxy_groups().is_empty(),
             cx.listener({
                 let id = proxy.id.clone();
                 move |this, _, _, cx| {
