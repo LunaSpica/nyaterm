@@ -1,4 +1,12 @@
-use super::*;
+use gpui::{Context, Window};
+use nyaterm_core::ConnectionStore;
+
+use std::collections::VecDeque;
+
+use crate::features::NyaTermApp;
+use crate::models::{TransferBrowserNavigationSnapshot, TransferBrowserSessionCacheState};
+
+use super::{normalized_transfer_browser_path, remote_file_name, remote_parent_path};
 
 impl NyaTermApp {
     pub(in crate::features) fn cache_transfer_browser_session(&mut self, session_id: &str) {

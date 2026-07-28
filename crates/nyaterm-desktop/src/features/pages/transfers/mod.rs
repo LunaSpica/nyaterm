@@ -6,25 +6,24 @@ use gpui::{
 };
 use nyaterm_transport::{SftpAttributeUpdate, SftpFileEntry, SftpFileType, SftpService};
 
-use std::collections::{HashSet, VecDeque};
+use std::collections::HashSet;
 use std::time::Duration;
 
 use crate::models::{
     TransferBrowserBreadcrumbSegment, TransferBrowserChildrenMenuStatus,
     TransferBrowserColumnWidths, TransferBrowserContextMenuState,
     TransferBrowserDragSelectionState, TransferBrowserFavoritesMenuState,
-    TransferBrowserNavigationSnapshot, TransferBrowserPathMenuKind, TransferBrowserPathMenuState,
-    TransferBrowserPendingRenameState, TransferBrowserSessionCacheState, TransferBrowserSortColumn,
-    TransferBrowserUploadMenuState, TransferDeleteState, TransferEditorField, TransferEditorState,
-    TransferEditorWorkspaceState, TransferExternalSyncPromptState, TransferInputField,
-    TransferJobEvent, TransferJobKind, TransferJobOutput, TransferJobResult, TransferJobState,
-    TransferJobStatus, TransferMoveState, TransferNewFileState, TransferNewFolderState,
-    TransferNewSymlinkState, TransferPathPromptKind, TransferPermissionTarget,
-    TransferPropertiesField, TransferPropertiesState, TransferRenameState, TransferSymlinkField,
-    TransferUnknownFileState,
+    TransferBrowserPathMenuKind, TransferBrowserPathMenuState, TransferBrowserPendingRenameState,
+    TransferBrowserSortColumn, TransferBrowserUploadMenuState, TransferDeleteState,
+    TransferEditorField, TransferEditorState, TransferEditorWorkspaceState,
+    TransferExternalSyncPromptState, TransferInputField, TransferJobEvent, TransferJobKind,
+    TransferJobOutput, TransferJobResult, TransferJobState, TransferJobStatus, TransferMoveState,
+    TransferNewFileState, TransferNewFolderState, TransferNewSymlinkState, TransferPathPromptKind,
+    TransferPermissionTarget, TransferPropertiesField, TransferPropertiesState,
+    TransferRenameState, TransferSymlinkField, TransferUnknownFileState,
 };
 use crate::widgets::{small_button, status_pill};
-use nyaterm_core::{AiCustomActionConfig, ConnectionStore};
+use nyaterm_core::AiCustomActionConfig;
 
 use super::super::{
     NyaTermApp, RemoteTextEditor, TextInputSetup, dialog_action_button, format_file_size,

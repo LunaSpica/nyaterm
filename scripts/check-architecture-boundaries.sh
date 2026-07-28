@@ -517,6 +517,7 @@ declare -A SUPER_BASELINE=(
   [crates/nyaterm-desktop/src/features/pages/transfers/browser_columns.rs]=0
   [crates/nyaterm-desktop/src/features/pages/transfers/browser_filter.rs]=0
   [crates/nyaterm-desktop/src/features/pages/transfers/browser_keys.rs]=0
+  [crates/nyaterm-desktop/src/features/pages/transfers/browser_navigation.rs]=0
   [crates/nyaterm-desktop/src/features/pages/transfers/helpers/browser.rs]=0
   [crates/nyaterm-desktop/src/features/pages/transfers/helpers/editor.rs]=0
   [crates/nyaterm-desktop/src/features/pages/transfers/helpers/job_row.rs]=0
@@ -568,6 +569,7 @@ done < <(rg -n --path-separator / '^[[:space:]]*use super::\*;' \
   crates/nyaterm-desktop/src/features/pages/transfers/browser_columns.rs \
   crates/nyaterm-desktop/src/features/pages/transfers/browser_filter.rs \
   crates/nyaterm-desktop/src/features/pages/transfers/browser_keys.rs \
+  crates/nyaterm-desktop/src/features/pages/transfers/browser_navigation.rs \
   crates/nyaterm-desktop/src/features/pages/transfers/helpers \
   crates/nyaterm-desktop/src/features/shell/mod.rs \
   crates/nyaterm-desktop/src/features/shell/activity_bar_runtime.rs \
