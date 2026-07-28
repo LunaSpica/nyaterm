@@ -1,10 +1,14 @@
-use super::*;
+use gpui::{
+    Context, IntoElement, MouseDownEvent, ParentElement as _, Render, Styled as _, Window, div, px,
+    rgb, rgba,
+};
+use nyaterm_core::truncate_preview;
+
+use crate::features::{ActivitySide, NyaTermApp, mono_icon};
 use crate::models::{
     ActivityBarContextMenuState, ActivityBarEntry, ActivityBarLayoutState, ActivityBarZone,
-    BottomPanelMode, MainMode,
+    BottomPanelMode, MainMode, NavItem, PanelSide,
 };
-use gpui::{FontWeight, Render, Window, rgba};
-use nyaterm_core::truncate_preview;
 
 #[derive(Clone, Debug)]
 pub(in crate::features) struct ActivityBarDragPayload {
@@ -48,11 +52,7 @@ impl Render for ActivityBarDragPreview {
                     .border_color(rgb(0x334155))
                     .bg(rgba(0x151b24dd))
                     .shadow_lg()
-                    .child(crate::features::mono_icon(
-                        self.payload.icon_path,
-                        rgb(0x93c5fd).into(),
-                        14.,
-                    ))
+                    .child(mono_icon(self.payload.icon_path, rgb(0x93c5fd).into(), 14.))
                     .child(
                         div()
                             .min_w_0()
