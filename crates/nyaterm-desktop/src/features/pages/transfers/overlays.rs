@@ -1,6 +1,18 @@
-use super::*;
-use crate::models::{TransferJobDeleteState, TransferJobMenuState};
-use gpui::rgba;
+use gpui::{
+    App, ClickEvent, Context, FontWeight, InteractiveElement as _, IntoElement, KeyDownEvent,
+    ParentElement as _, SharedString, StatefulInteractiveElement as _, Styled as _, Window, div,
+    prelude::FluentBuilder as _, px, rgb, rgba,
+};
+
+use crate::features::{NyaTermApp, dialog_action_button};
+use crate::models::{TransferJobDeleteState, TransferJobMenuState, TransferJobStatus};
+use crate::theme::ThemePalette;
+use crate::widgets::small_button;
+
+use super::{
+    transfer_dialog_width, transfer_job_can_retry, transfer_job_has_local_target,
+    transfer_menu_position,
+};
 
 impl NyaTermApp {
     pub(in crate::features) fn transfer_job_delete_overlay(
@@ -246,7 +258,7 @@ impl NyaTermApp {
 }
 
 fn transfer_job_menu_button(
-    palette: crate::theme::ThemePalette,
+    palette: ThemePalette,
     id: impl Into<String>,
     label: &'static str,
     enabled: bool,

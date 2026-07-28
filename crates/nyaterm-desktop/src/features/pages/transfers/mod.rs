@@ -10,9 +10,8 @@ use crate::models::{
     TransferEditorField, TransferEditorState, TransferEditorWorkspaceState,
     TransferExternalSyncPromptState, TransferJobEvent, TransferJobKind, TransferJobOutput,
     TransferJobResult, TransferJobState, TransferJobStatus, TransferMoveState,
-    TransferNewFileState, TransferNewFolderState, TransferNewSymlinkState,
-    TransferPermissionTarget, TransferPropertiesField, TransferRenameState, TransferSymlinkField,
-    TransferUnknownFileState,
+    TransferNewFileState, TransferNewFolderState, TransferNewSymlinkState, TransferPropertiesField,
+    TransferRenameState, TransferSymlinkField, TransferUnknownFileState,
 };
 use crate::widgets::small_button;
 use nyaterm_core::AiCustomActionConfig;

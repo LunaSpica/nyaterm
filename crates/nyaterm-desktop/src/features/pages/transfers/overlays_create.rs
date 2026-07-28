@@ -1,4 +1,21 @@
-use super::*;
+use gpui::{
+    App, ClickEvent, Context, FontWeight, InteractiveElement as _, IntoElement, KeyDownEvent,
+    ParentElement as _, SharedString, StatefulInteractiveElement as _, Styled as _, Window, div,
+    prelude::FluentBuilder as _, px, rgb, rgba, svg,
+};
+
+use crate::features::{NyaTermApp, TextInputSetup, dialog_action_button, gpui_code_font_family};
+use crate::models::{
+    TransferNewFileState, TransferNewFolderState, TransferNewSymlinkState,
+    TransferPermissionTarget, TransferSymlinkField,
+};
+use crate::theme::ThemePalette;
+use crate::widgets::small_button;
+
+use super::{
+    format_permissions_octal, parse_transfer_mode, symlink_input_row, transfer_dialog_width,
+    valid_remote_child_name,
+};
 
 impl NyaTermApp {
     pub(in crate::features) fn transfer_new_folder_overlay(
@@ -36,7 +53,7 @@ impl NyaTermApp {
             .bottom_0()
             .left_0()
             .right_0()
-            .bg(gpui::rgba(0x00000080))
+            .bg(rgba(0x00000080))
             .flex()
             .items_center()
             .justify_center()
@@ -241,7 +258,7 @@ impl NyaTermApp {
             .bottom_0()
             .left_0()
             .right_0()
-            .bg(gpui::rgba(0x00000080))
+            .bg(rgba(0x00000080))
             .flex()
             .items_center()
             .justify_center()
@@ -454,7 +471,7 @@ impl NyaTermApp {
             .bottom_0()
             .left_0()
             .right_0()
-            .bg(gpui::rgba(0x00000080))
+            .bg(rgba(0x00000080))
             .flex()
             .items_center()
             .justify_center()
@@ -543,7 +560,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn transfer_permission_grid(
         &self,
-        palette: crate::theme::ThemePalette,
+        palette: ThemePalette,
         mode: u32,
         target: TransferPermissionTarget,
         cx: &mut Context<Self>,
@@ -652,7 +669,7 @@ impl NyaTermApp {
                     .child(self.tr("fileExplorer.octal"))
                     .child(
                         div()
-                            .font_family(crate::features::gpui_code_font_family())
+                            .font_family(gpui_code_font_family())
                             .text_color(rgb(palette.text))
                             .child(format_permissions_octal(mode)),
                     ),
@@ -691,7 +708,7 @@ impl NyaTermApp {
 }
 
 fn permission_toggle(
-    palette: crate::theme::ThemePalette,
+    palette: ThemePalette,
     id: String,
     label: String,
     active: bool,
