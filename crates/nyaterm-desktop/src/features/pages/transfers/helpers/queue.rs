@@ -1,7 +1,16 @@
-use super::*;
+use gpui::{
+    App, AppContext as _, ClickEvent, InteractiveElement as _, IntoElement, ParentElement as _,
+    SharedString, StatefulInteractiveElement as _, Styled as _, Window, div,
+    prelude::FluentBuilder as _, px, rgb, svg,
+};
+use nyaterm_transport::SftpTransferProgress;
+
+use crate::features::ChromeTooltip;
+use crate::models::{TransferJobKind, TransferJobState, TransferJobStatus};
+use crate::theme::ThemePalette;
 
 pub(in crate::features::pages::transfers) fn queue_action_button(
-    palette: crate::theme::ThemePalette,
+    palette: ThemePalette,
     id: impl Into<String>,
     icon_path: &'static str,
     tooltip: impl Into<String>,
@@ -29,10 +38,7 @@ pub(in crate::features::pages::transfers) fn queue_action_button(
         })
         .when(!enabled, |this| this.opacity(0.45))
         .when(enabled, |this| this.on_click(on_click))
-        .tooltip(move |_, cx| {
-            cx.new(|_| crate::features::ChromeTooltip::new(tooltip.clone()))
-                .into()
-        })
+        .tooltip(move |_, cx| cx.new(|_| ChromeTooltip::new(tooltip.clone())).into())
         .child(
             svg()
                 .size(px(16.))
@@ -131,7 +137,9 @@ pub(in crate::features::pages::transfers) fn transfer_progress_ratio(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use nyaterm_transport::SftpTransferProgress;
+
+    use super::transfer_progress_ratio;
 
     fn progress(
         bytes_transferred: u64,
