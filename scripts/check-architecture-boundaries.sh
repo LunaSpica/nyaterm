@@ -520,6 +520,7 @@ declare -A SUPER_BASELINE=(
   [crates/nyaterm-desktop/src/features/shell/keybinding_runtime/mod.rs]=0
   [crates/nyaterm-desktop/src/features/shell/keybinding_runtime/keybindings.rs]=0
   [crates/nyaterm-desktop/src/features/shell/keybinding_runtime/keyword_highlights.rs]=0
+  [crates/nyaterm-desktop/src/features/shell/panel_resize_runtime.rs]=0
   [crates/nyaterm-desktop/src/features/shell/event_pump/mod.rs]=0
   [crates/nyaterm-desktop/src/features/shell/event_pump/bridge.rs]=0
   [crates/nyaterm-desktop/src/features/shell/event_pump/helpers.rs]=0

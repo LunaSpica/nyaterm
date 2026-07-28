@@ -1,9 +1,14 @@
-use super::*;
-use crate::models::{
-    BottomPanelMode, BottomPanelResizeState, PanelResizeSide, PanelResizeState,
-    TransferHeightResizeState,
+use gpui::{
+    Context, InteractiveElement as _, IntoElement, MouseButton, MouseDownEvent, MouseMoveEvent,
+    MouseUpEvent, SharedString, Styled as _, div, prelude::FluentBuilder as _, px, rgb,
 };
-use gpui::{MouseDownEvent, MouseMoveEvent, MouseUpEvent};
+use nyaterm_core::ConnectionStore;
+
+use crate::features::NyaTermApp;
+use crate::models::{
+    BottomPanelMode, BottomPanelResizeState, NavItem, PanelResizeSide, PanelResizeState, PanelSide,
+    TransferHeightResizeState, panel_collapsed_from_persistence,
+};
 
 const LEFT_PANEL_MIN: f32 = 160.;
 const LEFT_PANEL_MAX: f32 = 720.;
