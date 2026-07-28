@@ -81,7 +81,9 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let selected = self.selected_connections();
+        let selected = self
+            .connection_state
+            .selected_connections(&self.connections);
         if selected.is_empty() {
             self.terminal.view.status = "select saved connections before connecting".to_string();
             cx.notify();

@@ -211,7 +211,10 @@ impl NyaTermApp {
             .iter()
             .find(|connection| connection.id == state.connection_id)
             .cloned();
-        let selected_count = self.selected_connections().len();
+        let selected = self
+            .connection_state
+            .selected_connections(&self.connections);
+        let selected_count = selected.len();
         let connect_label = if selected_count > 1
             && connection
                 .as_ref()
@@ -238,7 +241,7 @@ impl NyaTermApp {
                 .connection_state
                 .list_contains_selected_id(&state.connection_id)
         {
-            self.selected_connections()
+            selected
                 .into_iter()
                 .map(|connection| connection.id)
                 .collect()
@@ -257,7 +260,9 @@ impl NyaTermApp {
                 false,
                 cx.listener(move |this, _, window, cx| {
                     this.close_connection_context_menus(cx);
-                    let selected = this.selected_connections();
+                    let selected = this
+                        .connection_state
+                        .selected_connections(&this.connections);
                     if selected.len() > 1 && selected.iter().any(|conn| conn.id == connection_id) {
                         this.start_selected_saved_connections(window, cx);
                     } else if let Some(connection) = connection_for_connect.clone() {
@@ -306,7 +311,12 @@ impl NyaTermApp {
                 false,
                 cx.listener(move |this, _, _, cx| {
                     this.close_connection_context_menus(cx);
-                    if this.selected_connections().len() > 1 {
+                    if this
+                        .connection_state
+                        .selected_connections(&this.connections)
+                        .len()
+                        > 1
+                    {
                         this.copy_selected_connections(cx);
                     } else {
                         this.copy_connection_by_id(connection_for_copy.clone(), cx);
@@ -337,7 +347,12 @@ impl NyaTermApp {
                 true,
                 cx.listener(move |this, _, _, cx| {
                     this.close_connection_context_menus(cx);
-                    if this.selected_connections().len() > 1 {
+                    if this
+                        .connection_state
+                        .selected_connections(&this.connections)
+                        .len()
+                        > 1
+                    {
                         this.delete_selected_connections(cx);
                     } else {
                         this.open_connection_delete_confirm(connection_for_delete.clone(), cx);
@@ -502,7 +517,9 @@ impl NyaTermApp {
                 x: px(24.),
                 y: px(24.),
             });
-        let selected = self.selected_connections();
+        let selected = self
+            .connection_state
+            .selected_connections(&self.connections);
         let selected_count = selected.len();
         let move_submenu_open = self.connection_state.list_move_submenu_is_open();
         let move_ids = selected

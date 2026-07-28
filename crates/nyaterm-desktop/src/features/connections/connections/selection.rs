@@ -4,11 +4,6 @@ use nyaterm_core::{ConnectionStore, SavedConnection, uuid};
 use crate::features::NyaTermApp;
 
 impl NyaTermApp {
-    pub(in crate::features) fn selected_connections(&self) -> Vec<SavedConnection> {
-        self.connection_state
-            .selected_connections(&self.connections)
-    }
-
     /// Tauri connection selection: plain click replaces, Ctrl/Cmd toggles, Shift ranges.
 
     pub(in crate::features) fn select_connection(
@@ -18,7 +13,9 @@ impl NyaTermApp {
         range: bool,
         cx: &mut Context<Self>,
     ) {
-        let visible_ids = self.visible_connection_ids();
+        let visible_ids = self
+            .connection_state
+            .visible_connection_ids(&self.connections, &self.connection_groups);
         let count = self.connection_state.select_list_connection(
             connection_id,
             &visible_ids,
@@ -33,11 +30,6 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::features) fn visible_connection_ids(&self) -> Vec<String> {
-        self.connection_state
-            .visible_connection_ids(&self.connections, &self.connection_groups)
-    }
-
     pub(in crate::features) fn clear_selected_connections(&mut self, cx: &mut Context<Self>) {
         self.connection_state.clear_list_selection();
         self.terminal.view.status = "connection selection cleared".to_string();
@@ -45,7 +37,9 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn copy_selected_connections(&mut self, cx: &mut Context<Self>) {
-        let selected = self.selected_connections();
+        let selected = self
+            .connection_state
+            .selected_connections(&self.connections);
         if selected.is_empty() {
             self.terminal.view.status = "select saved connections before copying".to_string();
             cx.notify();

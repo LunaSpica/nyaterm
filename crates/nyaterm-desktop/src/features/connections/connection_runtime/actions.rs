@@ -174,7 +174,9 @@ impl NyaTermApp {
     /// Returns whether the key was consumed, so the caller does not also feed it
     /// to the text field.
     fn step_connection_keyboard_active(&mut self, forward: bool, cx: &mut Context<Self>) -> bool {
-        let visible = self.visible_connection_ids();
+        let visible = self
+            .connection_state
+            .visible_connection_ids(&self.connections, &self.connection_groups);
         if visible.is_empty() {
             return false;
         }
@@ -200,7 +202,9 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        let visible = self.visible_connection_ids();
+        let visible = self
+            .connection_state
+            .visible_connection_ids(&self.connections, &self.connection_groups);
         let Some(target) = self
             .connection_state
             .list_keyboard_active_connection_id()
@@ -232,7 +236,8 @@ impl NyaTermApp {
             return;
         };
         if !self
-            .visible_connection_ids()
+            .connection_state
+            .visible_connection_ids(&self.connections, &self.connection_groups)
             .iter()
             .any(|candidate| candidate == &active)
         {
@@ -296,7 +301,9 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn delete_selected_connections(&mut self, cx: &mut Context<Self>) {
-        let selected = self.selected_connections();
+        let selected = self
+            .connection_state
+            .selected_connections(&self.connections);
         if selected.is_empty() {
             self.terminal.view.status = "select saved connections before deleting".to_string();
             cx.notify();

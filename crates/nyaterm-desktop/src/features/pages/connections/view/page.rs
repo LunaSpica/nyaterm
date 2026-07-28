@@ -280,10 +280,12 @@ impl NyaTermApp {
         });
         let more_open = self.connection_state.list_more_menu_is_open();
         let can_clear_all = !self.connections.is_empty();
-        let selected_count = self.selected_connections().len();
+        let selected = self
+            .connection_state
+            .selected_connections(&self.connections);
+        let selected_count = selected.len();
         let move_submenu_open = self.connection_state.list_move_submenu_is_open();
-        let selected_ids = self
-            .selected_connections()
+        let selected_ids = selected
             .into_iter()
             .map(|connection| connection.id)
             .collect::<Vec<_>>();

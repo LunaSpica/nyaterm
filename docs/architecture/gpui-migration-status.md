@@ -342,10 +342,10 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   are pruned against the loaded connection/group IDs through
   `ConnectionFeatureState` methods backed by its private list child.
 - Selected-connection and visible-connection-id derivation now live behind
-  `ConnectionFeatureState` and `state/list_logic.rs`. `NyaTermApp` keeps narrow
-  adapter methods for callers that need its persisted connection/group
-  collections, while list filtering, sorting, expanded-group traversal and
-  selection projection stay out of the app coordinator.
+  `ConnectionFeatureState` and `state/list_logic.rs`. Callers that need those
+  projections pass the persisted connection/group collections into
+  `ConnectionFeatureState`; list filtering, sorting, expanded-group traversal
+  and selection projection stay out of the app coordinator.
 - Connection row hover intent, hover dismissal, and group hover transitions now
   route through `ConnectionFeatureState`, leaving the rows view to forward UI
   events instead of mutating transient list fields directly.
