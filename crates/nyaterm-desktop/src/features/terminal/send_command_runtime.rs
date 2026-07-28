@@ -509,7 +509,11 @@ impl NyaTermApp {
                     .collect()
             }
             SendCommandTarget::Group(group_id) => {
-                let Some(group) = self.sync_groups.iter().find(|group| &group.id == group_id)
+                let Some(group) = self
+                    .sync_input
+                    .groups
+                    .iter()
+                    .find(|group| &group.id == group_id)
                 else {
                     return Vec::new();
                 };
@@ -561,7 +565,8 @@ impl NyaTermApp {
             .iter()
             .map(|session| (session.id.as_str(), session.kind))
             .collect();
-        self.sync_groups
+        self.sync_input
+            .groups
             .iter()
             .filter(|group| group.enabled)
             .filter_map(|group| {
@@ -601,7 +606,8 @@ impl NyaTermApp {
             SendCommandTarget::Current => "Current".to_string(),
             SendCommandTarget::AllCompatible => "All compatible".to_string(),
             SendCommandTarget::Group(id) => self
-                .sync_groups
+                .sync_input
+                .groups
                 .iter()
                 .find(|group| &group.id == id)
                 .map(|group| format!("Group: {}", group.name))

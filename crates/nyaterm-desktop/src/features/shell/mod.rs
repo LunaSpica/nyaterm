@@ -9,6 +9,7 @@ mod navigation_runtime;
 mod panel_resize_runtime;
 mod panel_stack_runtime;
 mod quick_switch_runtime;
+mod state;
 mod tab_mouse;
 mod tab_windows_runtime;
 mod workspace_runtime;
@@ -19,6 +20,7 @@ pub(in crate::features) use activity_bar_runtime::{
 pub(in crate::features) use appearance::{
     appearance_font_options, appearance_font_stack, gpui_code_font_family,
 };
+pub(in crate::features) use state::ShellFeatureState;
 pub(in crate::features) use tab_mouse::{
     ChromeTooltip, SessionTabDragPayload, SessionTabDragPreview, SessionTabTooltip,
     TAB_MOUSE_ACTIONS, TabMouseActionTarget,

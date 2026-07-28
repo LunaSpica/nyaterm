@@ -469,7 +469,7 @@ impl NyaTermApp {
             command_suggestions_open: self.terminal.assist.command_suggestions.is_some(),
             credential_suggestions_open: self.terminal.assist.credential_suggestions.is_some(),
             close_all_sessions_confirm_open: self.session.dialogs.close_all_sessions_confirm_open,
-            locked: self.is_locked,
+            locked: self.security.screen_lock.locked,
         };
         let quick_switch_open = self.quick_switch_open(cx);
         let transfer_properties_open = self
@@ -583,7 +583,7 @@ impl NyaTermApp {
             .when(overlay.credential_suggestions_open, |this| {
                 this.child(self.credential_suggestions_overlay(cx))
             })
-            .when(self.sync_groups_open, |this| {
+            .when(self.sync_input.open, |this| {
                 this.child(self.sync_groups_overlay(cx))
             })
             .when_some(

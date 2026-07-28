@@ -20,7 +20,11 @@ impl NyaTermApp {
 
         // Tauri SendCommandPanel: title row + labeled control groups + editor with floating action.
         div()
-            .h(px(self.serial_send_height.clamp(60., 520.)))
+            .h(px(self
+                .shell
+                .bottom_panel
+                .command_send_height
+                .clamp(60., 520.)))
             .flex_none()
             .flex()
             .flex_col()

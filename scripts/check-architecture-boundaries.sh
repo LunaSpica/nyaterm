@@ -119,6 +119,31 @@ check_no_matches \
   crates/nyaterm-desktop/src/features/app_state/mod.rs
 
 check_no_matches \
+  "sync input fields must stay grouped under SyncInputFeatureState" \
+  '^[[:space:]]*pub\(in crate::features\)[[:space:]]+(sync_groups|sync_groups_open|sync_groups_focus|sync_groups_search_draft|sync_groups_selected_id|sync_groups_delete_pending|broadcast_to_all)[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/app_state/mod.rs
+
+check_no_matches \
+  "bottom panel fields must stay grouped under ShellFeatureState" \
+  '^[[:space:]]*pub\(in crate::features\)[[:space:]]+(bottom_panel|quick_cmd_height|serial_send_height|bottom_panel_resize)[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/app_state/mod.rs
+
+check_no_matches \
+  "screen lock fields must stay grouped under SecurityFeatureState" \
+  '^[[:space:]]*pub\(in crate::features\)[[:space:]]+(lock_focus|lock_password_draft|lock_status|is_locked|last_user_activity_at)[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/app_state/mod.rs
+
+check_no_matches \
+  "sync input pure mutations must stay on SyncInputFeatureState" \
+  'fn[[:space:]]+(delete_selected_sync_group|selected_sync_group_mut|next_sync_group_color)[[:space:]]*\(' \
+  crates/nyaterm-desktop/src/features
+
+check_no_matches \
+  "session lifecycle must update sync membership through SyncInputFeatureState" \
+  '&mut[[:space:]]+self\.sync_input\.groups' \
+  crates/nyaterm-desktop/src/features/session/session_lifecycle.rs
+
+check_no_matches \
   "settings transient UI fields must stay grouped under SettingsFeatureState" \
   '^[[:space:]]*pub\(in crate::features\)[[:space:]]+(search_engine_edit_index|search_engine_expanded_index|search_engine_icon_picker_index|search_engine_actions_index|search_engine_edit_field|search_engine_focus|keyword_highlight_expanded_id|keyword_highlight_edit_id|keyword_highlight_edit_field|keyword_highlight_focus|appearance_menu_open|appearance_ui_font_options|appearance_terminal_font_options|keybinding_recording_id|keybinding_pending_keys|keybinding_search_draft|keybindings_focus)[[:space:]]*:' \
   crates/nyaterm-desktop/src/features/app_state/mod.rs

@@ -9,7 +9,7 @@ Last updated from the working tree on 2026-07-28.
 
 | Metric | Current value | Notes |
 | --- | ---: | --- |
-| `NyaTermApp` fields | 116 | Counted from `features/app_state/mod.rs`; down from 585, still transitional. |
+| `NyaTermApp` fields | 102 | Counted from `features/app_state/mod.rs`; down from 585, still transitional. |
 | `impl NyaTermApp` blocks | 238 | Spread across 233 files under `crates/nyaterm-desktop/src`. |
 | `#[path = "..."]` declarations in desktop | 0 | Cleared. Every directory is a real module; the boundary script fails on any new occurrence. |
 | `use super::*` imports in desktop | 0 | Cleared in production and test modules; guarded crate-wide. |
@@ -193,8 +193,11 @@ these as staged extraction candidates, not as formatting-only refactor targets.
 - Security panel state is grouped into `SecurityFeatureState`: the four editors
   and their focus handles in `editors`, revealed passwords/credentials and
   generated OTP codes in `revealed`, and the master password prompt in
-  `unlock`. Secrets themselves still live in `nyaterm-core`; this is the panel's
-  view state only, cleared through the same paths as before.
+  `unlock`. The separate `screen_lock` child now owns the whole-application
+  locked flag, password draft, focus, status and idle timer; its lifecycle
+  transitions cannot mutate other app state. Secrets themselves still live in
+  `nyaterm-core`; this is view/runtime state only, cleared through the same
+  paths as before.
 - Settings interaction state is grouped into `SettingsFeatureState`: custom
   search-engine row/editor menus, keyword-highlight editor expansion/focus,
   appearance menu and discovered font options, and keybinding search/recording
@@ -321,6 +324,18 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   the three phases the bar actually has: `composer` (payload and caret),
   `options` (how it is interpreted and delivered, plus the menus that set
   those), and `progress` (in-flight send, cancellation, counters).
+- Sync-input groups now have one authoritative `SyncInputFeatureState` owner.
+  The group collection, overlay/search/selection/delete state and broadcast-all
+  flag moved together. Pure group lifecycle, membership, pause, peer fan-out
+  and disconnected-session cleanup now execute on that owner; `NyaTermApp`
+  retains session metadata/host queries, status messages, focus and redraw
+  coordination. This state remains transient and changes no session or settings
+  persistence format.
+- `ShellFeatureState` is the new owner for cross-view shell interaction state,
+  starting with the bottom-panel mode, quick-command/send-command heights and
+  resize lifecycle. Render helpers stay on views, and `NyaTermApp` still owns
+  settings persistence after a drag completes. This creates the boundary for a
+  later cohesive shell-chrome cut without introducing a mirror.
 - The Entity Store projection layer is gone entirely, in two steps.
 
   First, the six domain stores (`Ai`, `CloudSync`, `Connections`, `RemoteOps`,
@@ -1399,7 +1414,7 @@ honest remaining list.
    compiler-confirmed final pass also removed `features/prelude.rs`, so modules
    cannot regain the same implicit dependency surface through a shared import
    bucket.
-3. Largely done. `NyaTermApp` is down from 585 fields to 116, across fifteen
+3. Largely done. `NyaTermApp` is down from 585 fields to 102, across seventeen
    feature-state structs. The latest cohesive cuts moved sixteen terminal
    command-assistance and credential-prompt fields into
    `TerminalFeatureState::assist`, then seventeen transient settings fields
@@ -1408,8 +1423,9 @@ honest remaining list.
    owners, followed by cloud-sync configuration, secret drafts, history,
    conflict and GitHub device-flow state, recording and SSH-tunnel runtime
    resources with their job/UI lifecycle state, then the complete live session
-   runtime with nested session-start, prompt and dialog ownership. What is left
-   is a long tail, and much of it is
+   runtime with nested session-start, prompt and dialog ownership, then terminal
+   presentation runtime followed by sync-input, screen-lock and bottom-panel
+   interaction lifecycles. What is left is a long tail, and much of it is
    genuinely app-level (stores, runtime, services, persisted collections).
    Group by cohesion where a cluster exists; do not force the count down for
    its own sake.
@@ -1418,9 +1434,10 @@ honest remaining list.
    it belongs on that state, and the `NyaTermApp` method becomes a forwarder
    that owns `cx.notify()`. That is enforced by the type system rather than by
    convention — a handler taking `&mut TransferBrowserState` cannot reach the
-   session list no matter what a later edit tries. Forty-eight methods have
-   moved this way across transfers, security, the send command bar, AI, quick
-   commands, cloud sync, recording, session starts and terminal paste review;
+   session list no matter what a later edit tries. Eighty-four methods or
+   self-contained transitions have moved this way across transfers, security,
+   the shell, sync input, the send command bar, AI, quick commands, cloud sync,
+   recording, session starts and terminal paste review;
    the transfer browser one made `TransferBrowserColumnResizeState` stop leaking
    into the page layer, while cloud sync made secret-field routing inaccessible
    outside its owner, and

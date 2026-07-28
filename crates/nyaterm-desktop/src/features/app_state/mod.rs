@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::{Arc, mpsc};
 use std::time::Instant;
 
-use gpui::{FocusHandle, ScrollHandle, WindowHandle};
+use gpui::{ScrollHandle, WindowHandle};
 use nyaterm_core::{
     AppRuntime, AppSettingsSummary, CommandHistoryEntry, Group, KeywordHighlightConfig,
     NativeServices, OtpEntry, ProxyConfig, ProxyGroup, QuickCommand, QuickCommandCategory,
@@ -22,7 +22,9 @@ use super::runtime_jobs::{CommandPersistenceRequest, CommandPersistenceResult};
 use super::session::SessionFeatureState;
 use super::settings::{SecurityFeatureState, SettingsFeatureState};
 use super::settings_window::SettingsWindow;
+use super::shell::ShellFeatureState;
 use super::sync::CloudSyncFeatureState;
+use super::sync_input::SyncInputFeatureState;
 use super::terminal::TerminalFeatureState;
 use super::text_inputs::TextInputRegistry;
 use super::transfers::TransferFeatureState;
@@ -30,11 +32,11 @@ use super::translation::TranslationFeatureState;
 use super::tunnels::TunnelFeatureState;
 use super::update::UpdateFeatureState;
 use crate::models::{
-    ActivityBarContextMenuState, ActivityBarLayoutState, BottomPanelMode, BottomPanelResizeState,
-    ConfigPathPromptKind, DiagnosticsPathPromptKind, HeaderStatusState,
-    KeywordHighlightPathPromptKind, MainMode, NavItem, PanelResizeState, PanelStackResizeState,
-    RightFocus, SettingsTab, SnapshotPasswordPromptState, StoreStatus, SyncInputGroup, TitleMenu,
-    TitleMenuSubmenu, WorkspacePaneNode, WorkspaceSplitResizeState, WorkspaceSplitState,
+    ActivityBarContextMenuState, ActivityBarLayoutState, ConfigPathPromptKind,
+    DiagnosticsPathPromptKind, HeaderStatusState, KeywordHighlightPathPromptKind, MainMode,
+    NavItem, PanelResizeState, PanelStackResizeState, RightFocus, SettingsTab,
+    SnapshotPasswordPromptState, StoreStatus, TitleMenu, TitleMenuSubmenu, WorkspacePaneNode,
+    WorkspaceSplitResizeState, WorkspaceSplitState,
 };
 
 mod construct;
@@ -84,18 +86,8 @@ pub struct NyaTermApp {
     pub(in crate::features) command_persistence_rx: mpsc::Receiver<CommandPersistenceResult>,
     pub(in crate::features) command_persistence_pending: usize,
     pub(in crate::features) session: SessionFeatureState,
-    pub(in crate::features) bottom_panel: BottomPanelMode,
-    pub(in crate::features) quick_cmd_height: f32,
-    pub(in crate::features) serial_send_height: f32,
-    pub(in crate::features) bottom_panel_resize: Option<BottomPanelResizeState>,
-    pub(in crate::features) sync_groups: Vec<SyncInputGroup>,
-    pub(in crate::features) sync_groups_open: bool,
-    pub(in crate::features) sync_groups_focus: FocusHandle,
-    pub(in crate::features) sync_groups_search_draft: String,
-    pub(in crate::features) sync_groups_selected_id: Option<String>,
-    pub(in crate::features) sync_groups_delete_pending: Option<String>,
-    /// Broadcast keyboard input to every live session (Tauri broadcastToAll).
-    pub(in crate::features) broadcast_to_all: bool,
+    pub(in crate::features) shell: ShellFeatureState,
+    pub(in crate::features) sync_input: SyncInputFeatureState,
     pub(in crate::features) keyword_highlights: KeywordHighlightConfig,
     pub(in crate::features) settings: AppSettingsSummary,
     pub(in crate::features) settings_master_password_enabled: bool,
@@ -110,9 +102,6 @@ pub struct NyaTermApp {
     pub(in crate::features) diagnostics_path_prompt: Option<DiagnosticsPathPromptKind>,
     pub(in crate::features) keyword_highlight_path_prompt: Option<KeywordHighlightPathPromptKind>,
     pub(in crate::features) active_snapshot_password_prompt: Option<SnapshotPasswordPromptState>,
-    pub(in crate::features) lock_focus: FocusHandle,
-    pub(in crate::features) lock_password_draft: String,
-    pub(in crate::features) lock_status: String,
     pub(in crate::features) pending_session_events: VecDeque<SessionEvent>,
     pub(in crate::features) diagnostic_log_last_at: HashMap<&'static str, Instant>,
     pub(in crate::features) last_viewport_size: (f32, f32),
@@ -181,6 +170,4 @@ pub struct NyaTermApp {
     /// Whether we already attempted startup restore of global workspace pane splits.
     pub(in crate::features) workspace_pane_layout_restored: bool,
     pub(in crate::features) startup_restore_complete: bool,
-    pub(in crate::features) is_locked: bool,
-    pub(in crate::features) last_user_activity_at: Instant,
 }

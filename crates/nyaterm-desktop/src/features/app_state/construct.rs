@@ -1,7 +1,3 @@
-use std::collections::{HashMap, HashSet, VecDeque};
-use std::sync::Arc;
-use std::time::Instant;
-
 use crate::models::{
     ActivityBarLayoutState, BottomPanelMode, HeaderStatusState, MainMode, NavItem, PanelSide,
     RightFocus, SessionEventBridge, SettingsTab, StoreStatus, TerminalFramePipeline,
@@ -15,6 +11,8 @@ use nyaterm_core::{
 };
 use nyaterm_terminal::TerminalOutputDecoder;
 use nyaterm_transport::{SessionManager, SftpDuplicatePolicy};
+use std::collections::{HashMap, HashSet, VecDeque};
+use std::sync::Arc;
 
 use super::super::settings::{SettingsFeatureFocus, SettingsFeatureState};
 use super::super::{
@@ -23,11 +21,11 @@ use super::super::{
     QuickCommandFeatureFocus, QuickCommandFeatureState, RecordingFeatureState,
     RemoteOpsFeatureFocus, RemoteOpsFeatureState, SecurityFeatureFocus, SecurityFeatureState,
     SendCommandFeatureFocus, SendCommandFeatureState, SessionFeatureFocus, SessionFeatureState,
-    TerminalFeatureFocus, TerminalFeatureState, TextInputRegistry, TransferFeatureFocus,
-    TransferFeatureState, TranslationFeatureState, TunnelFeatureState, UpdateFeatureState,
-    ai_active_profile_drafts, ai_usage_counts, appearance_font_options,
-    quick_command_sort_mode_from_setting, quick_command_view_mode_from_setting,
-    spawn_command_persistence_worker,
+    ShellFeatureState, SyncInputFeatureState, TerminalFeatureFocus, TerminalFeatureState,
+    TextInputRegistry, TransferFeatureFocus, TransferFeatureState, TranslationFeatureState,
+    TunnelFeatureState, UpdateFeatureState, ai_active_profile_drafts, ai_usage_counts,
+    appearance_font_options, quick_command_sort_mode_from_setting,
+    quick_command_view_mode_from_setting, spawn_command_persistence_worker,
 };
 use super::NyaTermApp;
 use crate::models::panel_collapsed_from_persistence;
@@ -406,6 +404,7 @@ impl NyaTermApp {
                     password_editor: cx.focus_handle(),
                     credential_editor: cx.focus_handle(),
                     unlock: cx.focus_handle(),
+                    screen_lock: cx.focus_handle(),
                 },
             ),
             settings_state: SettingsFeatureState::new(
@@ -445,23 +444,18 @@ impl NyaTermApp {
                 },
             ),
             text_inputs: TextInputRegistry::default(),
-            bottom_panel: if settings.ui_serial_send_visible {
-                BottomPanelMode::CommandSend
-            } else if settings.ui_quick_cmd_visible {
-                BottomPanelMode::QuickCommands
-            } else {
-                BottomPanelMode::Hidden
-            },
-            quick_cmd_height,
-            serial_send_height,
-            bottom_panel_resize: None,
-            sync_groups: Vec::new(),
-            sync_groups_open: false,
-            sync_groups_focus: cx.focus_handle(),
-            sync_groups_search_draft: String::new(),
-            sync_groups_selected_id: None,
-            sync_groups_delete_pending: None,
-            broadcast_to_all: false,
+            shell: ShellFeatureState::new(
+                if settings.ui_serial_send_visible {
+                    BottomPanelMode::CommandSend
+                } else if settings.ui_quick_cmd_visible {
+                    BottomPanelMode::QuickCommands
+                } else {
+                    BottomPanelMode::Hidden
+                },
+                quick_cmd_height,
+                serial_send_height,
+            ),
+            sync_input: SyncInputFeatureState::new(cx.focus_handle()),
             keyword_highlights,
             settings,
             settings_master_password_enabled,
@@ -476,9 +470,6 @@ impl NyaTermApp {
             diagnostics_path_prompt: None,
             keyword_highlight_path_prompt: None,
             active_snapshot_password_prompt: None,
-            lock_focus: cx.focus_handle(),
-            lock_password_draft: String::new(),
-            lock_status: String::new(),
             pending_session_events: VecDeque::new(),
             diagnostic_log_last_at: HashMap::new(),
             last_viewport_size: (1280., 800.),
@@ -529,8 +520,6 @@ impl NyaTermApp {
             focused_terminal_window_leaf_id: None,
             workspace_pane_layout_restored: false,
             startup_restore_complete: false,
-            is_locked: false,
-            last_user_activity_at: Instant::now(),
         }
     }
 }

@@ -8,11 +8,15 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
-        match self.bottom_panel {
+        match self.shell.bottom_panel.mode {
             BottomPanelMode::QuickCommands => {
                 let palette = self.theme_palette();
                 div()
-                    .h(px(self.quick_cmd_height.clamp(36., 520.)))
+                    .h(px(self
+                        .shell
+                        .bottom_panel
+                        .quick_commands_height
+                        .clamp(36., 520.)))
                     .flex_none()
                     .border_t_1()
                     .border_color(rgb(palette.border))

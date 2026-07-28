@@ -87,12 +87,13 @@ pub(in crate::features) use session::{
 pub(in crate::features) use settings::{SecurityFeatureFocus, SecurityFeatureState};
 pub(in crate::features) use shell::{
     ChromeTooltip, SessionTabDragPayload, SessionTabDragPreview, SessionTabTooltip,
-    TAB_MOUSE_ACTIONS, TabMouseActionTarget,
+    ShellFeatureState, TAB_MOUSE_ACTIONS, TabMouseActionTarget,
 };
 pub(in crate::features) use shell::{
     appearance_font_options, appearance_font_stack, gpui_code_font_family,
 };
 pub(in crate::features) use sync::CloudSyncFeatureState;
+pub(in crate::features) use sync_input::SyncInputFeatureState;
 pub(in crate::features) use terminal::{
     TerminalFeatureFocus, TerminalFeatureState, full_shell_paint_count,
     terminal_surface_paint_count,

@@ -1,5 +1,3 @@
-use std::time::Instant;
-
 use gpui::Context;
 use nyaterm_core::ConnectionStore;
 
@@ -251,7 +249,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn toggle_screen_lock_enabled(&mut self, cx: &mut Context<Self>) {
         self.settings.enable_screen_lock = !self.settings.enable_screen_lock;
-        self.last_user_activity_at = Instant::now();
+        self.security.screen_lock.reset_idle_timer();
         self.save_screen_lock_settings(cx);
     }
 
@@ -263,7 +261,7 @@ impl NyaTermApp {
         let current = self.settings.idle_lock_minutes as i32;
         let next = (current + delta).clamp(0, 1440);
         self.settings.idle_lock_minutes = next as u32;
-        self.last_user_activity_at = Instant::now();
+        self.security.screen_lock.reset_idle_timer();
         self.save_screen_lock_settings(cx);
     }
 

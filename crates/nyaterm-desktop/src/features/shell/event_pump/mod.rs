@@ -89,9 +89,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn mark_user_activity(&mut self) {
-        if !self.is_locked {
-            self.last_user_activity_at = Instant::now();
-        }
+        self.security.screen_lock.record_user_activity();
     }
 
     pub(in crate::features) fn arm_terminal_input_wake(&mut self, cx: &mut Context<Self>) {
@@ -263,25 +261,24 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        if self.is_locked
+        if self.security.screen_lock.locked
             || !self.settings.enable_screen_lock
             || self.settings.idle_lock_minutes == 0
         {
             return false;
         }
-        let idle_for = self.last_user_activity_at.elapsed();
+        let idle_for = self.security.screen_lock.last_user_activity_at.elapsed();
         let lock_after = Duration::from_secs(u64::from(self.settings.idle_lock_minutes) * 60);
         if idle_for < lock_after {
             return false;
         }
-        self.is_locked = true;
-        self.lock_password_draft.clear();
-        self.forget_text_inputs("lock-screen.password");
-        self.lock_status = if self.settings.has_master_password {
+        let lock_status = if self.settings.has_master_password {
             "Enter the master password to unlock.".to_string()
         } else {
             "No master password is configured.".to_string()
         };
+        self.security.screen_lock.activate(lock_status);
+        self.forget_text_inputs("lock-screen.password");
         self.terminal.view.status = format!(
             "screen locked after {} minute(s) idle",
             self.settings.idle_lock_minutes
@@ -290,7 +287,7 @@ impl NyaTermApp {
             let field = self.text_input("lock-screen.password", "", TextInputSetup::masked(), cx);
             window.focus(&field.read(cx).focus_handle());
         } else {
-            window.focus(&self.lock_focus);
+            window.focus(&self.security.screen_lock.focus);
         }
         true
     }

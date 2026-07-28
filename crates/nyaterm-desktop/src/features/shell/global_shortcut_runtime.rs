@@ -11,7 +11,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        if self.is_locked {
+        if self.security.screen_lock.locked {
             return false;
         }
 

@@ -455,7 +455,7 @@ impl NyaTermApp {
             let sync_paused = leaf_ids
                 .iter()
                 .any(|id| self.is_session_paused_in_active_sync_group(id));
-            let show_sync_indicator = self.broadcast_to_all || sync_group.is_some();
+            let show_sync_indicator = self.sync_input.broadcast_to_all || sync_group.is_some();
             let sync_indicator_color = sync_group
                 .map(|group| group.color)
                 .unwrap_or(palette.primary);

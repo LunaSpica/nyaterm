@@ -477,19 +477,7 @@ impl NyaTermApp {
         if let Some(root) = self.terminal.windows.tree.as_mut() {
             root.replace_tab_id(old_id, new_id);
         }
-        for group in &mut self.sync_groups {
-            for session_id in &mut group.session_ids {
-                if session_id == old_id {
-                    *session_id = new_id.to_string();
-                }
-            }
-            if group.paused_session_ids.iter().any(|id| id == old_id) {
-                group.paused_session_ids.retain(|id| id != old_id);
-                if !group.paused_session_ids.iter().any(|id| id == new_id) {
-                    group.paused_session_ids.push(new_id.to_string());
-                }
-            }
-        }
+        self.sync_input.replace_session_id(old_id, new_id);
         if self.session.active_id.as_deref() == Some(old_id) {
             self.activate_session_id(new_id);
         }

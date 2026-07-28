@@ -6,7 +6,7 @@ use nyaterm_core::ConnectionStore;
 
 use crate::features::NyaTermApp;
 use crate::models::{
-    BottomPanelMode, BottomPanelResizeState, NavItem, PanelResizeSide, PanelResizeState, PanelSide,
+    BottomPanelMode, NavItem, PanelResizeSide, PanelResizeState, PanelSide,
     TransferHeightResizeState, panel_collapsed_from_persistence,
 };
 
@@ -20,7 +20,7 @@ const BOTTOM_PANEL_HEIGHT_MAX: f32 = 520.;
 
 impl NyaTermApp {
     pub(in crate::features) fn set_bottom_panel_mode(&mut self, mode: BottomPanelMode) {
-        self.bottom_panel = mode;
+        self.shell.bottom_panel.mode = mode;
         self.settings.ui_quick_cmd_visible = mode == BottomPanelMode::QuickCommands;
         self.settings.ui_serial_send_visible = mode == BottomPanelMode::CommandSend;
         self.persist_ui_layout();
@@ -98,8 +98,8 @@ impl NyaTermApp {
         self.left_panel_width = self.settings.ui_left_panel_width as f32;
         self.right_panel_width = self.settings.ui_right_panel_width as f32;
         self.transfer.panel.height = self.settings.ui_transfer_height as f32;
-        self.quick_cmd_height = self.settings.ui_quick_cmd_height as f32;
-        self.serial_send_height = self.settings.ui_serial_send_height as f32;
+        self.shell.bottom_panel.quick_commands_height = self.settings.ui_quick_cmd_height as f32;
+        self.shell.bottom_panel.command_send_height = self.settings.ui_serial_send_height as f32;
         self.apply_activity_layout_from_settings();
         self.active_left_panel = self
             .settings
@@ -138,11 +138,15 @@ impl NyaTermApp {
         self.settings.ui_transfer_height =
             self.transfer.panel.height.round().clamp(60., 600.) as u32;
         self.settings.ui_quick_cmd_height =
-            self.quick_cmd_height
+            self.shell
+                .bottom_panel
+                .quick_commands_height
                 .round()
                 .clamp(QUICK_CMD_HEIGHT_MIN, BOTTOM_PANEL_HEIGHT_MAX) as u32;
         self.settings.ui_serial_send_height =
-            self.serial_send_height
+            self.shell
+                .bottom_panel
+                .command_send_height
                 .round()
                 .clamp(SERIAL_SEND_HEIGHT_MIN, BOTTOM_PANEL_HEIGHT_MAX) as u32;
         self.settings.ui_active_left_panel = self
@@ -288,17 +292,9 @@ impl NyaTermApp {
         event: &MouseDownEvent,
         cx: &mut Context<Self>,
     ) {
-        let mode = self.bottom_panel;
-        let start_height = match mode {
-            BottomPanelMode::QuickCommands => self.quick_cmd_height,
-            BottomPanelMode::CommandSend => self.serial_send_height,
-            BottomPanelMode::Hidden => return,
-        };
-        self.bottom_panel_resize = Some(BottomPanelResizeState {
-            mode,
-            start_y: event.position.y,
-            start_height: px(start_height),
-        });
+        if !self.shell.bottom_panel.start_resize(event.position.y) {
+            return;
+        }
         self.terminal.view.status = "resizing bottom panel".to_string();
         cx.notify();
     }
@@ -308,23 +304,9 @@ impl NyaTermApp {
         event: &MouseMoveEvent,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.bottom_panel_resize else {
+        let Some(next) = self.shell.bottom_panel.update_resize(event.position.y) else {
             return;
         };
-        let delta = f32::from(event.position.y - state.start_y);
-        let next = (f32::from(state.start_height) - delta).clamp(
-            match state.mode {
-                BottomPanelMode::QuickCommands => QUICK_CMD_HEIGHT_MIN,
-                BottomPanelMode::CommandSend => SERIAL_SEND_HEIGHT_MIN,
-                BottomPanelMode::Hidden => return,
-            },
-            BOTTOM_PANEL_HEIGHT_MAX,
-        );
-        match state.mode {
-            BottomPanelMode::QuickCommands => self.quick_cmd_height = next,
-            BottomPanelMode::CommandSend => self.serial_send_height = next,
-            BottomPanelMode::Hidden => return,
-        }
         self.terminal.view.status = format!("bottom panel: {:.0}px", next.round());
         cx.notify();
     }
@@ -334,7 +316,7 @@ impl NyaTermApp {
         _event: &MouseUpEvent,
         cx: &mut Context<Self>,
     ) {
-        if self.bottom_panel_resize.take().is_some() {
+        if self.shell.bottom_panel.finish_resize() {
             self.persist_ui_layout();
             self.terminal.view.status = "bottom panel size saved".to_string();
             cx.notify();
@@ -354,9 +336,10 @@ impl NyaTermApp {
             .bg(rgb(palette.border))
             .cursor_row_resize()
             .hover(|this| this.bg(rgb(0x58a6ff)))
-            .when(self.bottom_panel == BottomPanelMode::Hidden, |this| {
-                this.h_0()
-            })
+            .when(
+                self.shell.bottom_panel.mode == BottomPanelMode::Hidden,
+                |this| this.h_0(),
+            )
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|this, event: &MouseDownEvent, _, cx| {

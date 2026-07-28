@@ -305,7 +305,7 @@ impl NyaTermApp {
                 cx.notify();
             }
             ActivityBarEntry::QuickCommands => {
-                let mode = if self.bottom_panel == BottomPanelMode::QuickCommands {
+                let mode = if self.shell.bottom_panel.mode == BottomPanelMode::QuickCommands {
                     BottomPanelMode::Hidden
                 } else {
                     BottomPanelMode::QuickCommands
@@ -314,7 +314,7 @@ impl NyaTermApp {
                 cx.notify();
             }
             ActivityBarEntry::CommandSend => {
-                let mode = if self.bottom_panel == BottomPanelMode::CommandSend {
+                let mode = if self.shell.bottom_panel.mode == BottomPanelMode::CommandSend {
                     BottomPanelMode::Hidden
                 } else {
                     BottomPanelMode::CommandSend
@@ -348,12 +348,16 @@ impl NyaTermApp {
                 self.settings_window.is_some() || self.main_mode == MainMode::Page
             }
             ActivityBarEntry::Panel(item) => self.panel_entry_selected(item),
-            ActivityBarEntry::QuickCommands => self.bottom_panel == BottomPanelMode::QuickCommands,
-            ActivityBarEntry::CommandSend => self.bottom_panel == BottomPanelMode::CommandSend,
+            ActivityBarEntry::QuickCommands => {
+                self.shell.bottom_panel.mode == BottomPanelMode::QuickCommands
+            }
+            ActivityBarEntry::CommandSend => {
+                self.shell.bottom_panel.mode == BottomPanelMode::CommandSend
+            }
             ActivityBarEntry::Recording => {
                 self.panel_entry_selected(NavItem::Recording) || self.recording.active_count > 0
             }
-            ActivityBarEntry::Lock => self.is_locked,
+            ActivityBarEntry::Lock => self.security.screen_lock.locked,
         }
     }
 
