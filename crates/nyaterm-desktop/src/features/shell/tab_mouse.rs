@@ -1,4 +1,11 @@
-use super::*;
+use gpui::{
+    ClickEvent, ClipboardItem, Context, FontWeight, InteractiveElement as _, IntoElement,
+    MouseButton, ParentElement as _, Render, SharedString, StatefulInteractiveElement as _,
+    Styled as _, Window, div, prelude::FluentBuilder as _, px, rgb, rgba,
+};
+use nyaterm_core::truncate_preview;
+
+use crate::features::{NyaTermApp, mono_icon, short_id};
 
 #[derive(Clone, Debug)]
 pub(in crate::features) struct SessionTabDragPayload {
@@ -120,11 +127,7 @@ impl Render for SessionTabTooltip {
                             .text_color(rgb(0x8f98aa))
                             .hover(|style| style.bg(rgb(0x334155)).text_color(rgb(0xe5edf7)))
                             .cursor_pointer()
-                            .child(crate::features::mono_icon(
-                                "icons/copy.svg",
-                                rgb(0x8f98aa).into(),
-                                11.,
-                            ))
+                            .child(mono_icon("icons/copy.svg", rgb(0x8f98aa).into(), 11.))
                             .on_click(cx.listener(move |_, _, _, cx| {
                                 cx.stop_propagation();
                                 cx.write_to_clipboard(ClipboardItem::new_string(
