@@ -1,5 +1,23 @@
-use super::*;
-use crate::features::terminal::terminal_runtime::TERMINAL_USER_SCROLL_ACTIVE_WINDOW;
+use std::time::{Duration, Instant};
+
+use gpui::{Context, Window};
+
+use crate::features::shell::event_pump::helpers::{
+    CURSOR_BLINK_INTERVAL, RUNTIME_BACKGROUND_EVENT_DRAIN_SLOW, RUNTIME_TICK_SLOW_THRESHOLD,
+    RuntimeBackgroundDrainTimings, RuntimeControlPlaneDrainTimings, RuntimeControlPlaneResult,
+    RuntimeDataPlaneResult, RuntimeIdlePlaneResult, RuntimeVisualPlaneResult,
+    TERMINAL_PERF_HEARTBEAT_INTERVAL, connect_settle_active, diagnostic_log_due,
+    runtime_background_event_drain_budget_exhausted,
+    runtime_background_should_defer_terminal_frames, runtime_cursor_blink_allowed,
+    runtime_idle_plane_allowed, runtime_ui_notify_allowed, terminal_frame_apply_should_defer,
+    terminal_performance_tick_session_ids, terminal_render_work_pressure_active,
+    terminal_user_scroll_frame_apply_pending, window_geometry_churn_active,
+};
+use crate::features::terminal::terminal_runtime::{
+    TERMINAL_INPUT_LATENCY_WINDOW, TERMINAL_USER_SCROLL_ACTIVE_WINDOW,
+};
+use crate::features::{NyaTermApp, full_shell_paint_count, terminal_surface_paint_count};
+use crate::models::NavItem;
 
 impl NyaTermApp {
     fn drive_startup_restore_queue_tick(
