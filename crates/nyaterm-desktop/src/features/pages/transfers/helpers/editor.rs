@@ -1,5 +1,3 @@
-use super::*;
-
 pub(in crate::features::pages::transfers) fn editor_content_preview(
     content: &str,
     query: &str,
