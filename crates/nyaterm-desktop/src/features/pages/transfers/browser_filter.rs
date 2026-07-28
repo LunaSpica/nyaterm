@@ -1,4 +1,10 @@
-use super::*;
+use gpui::{Context, KeyDownEvent, Window};
+use nyaterm_transport::SftpFileEntry;
+
+use crate::features::{NyaTermApp, TextInputSetup};
+use crate::models::TransferBrowserSortColumn;
+
+use super::helpers::{compare_transfer_browser_entries, transfer_browser_search_status};
 
 impl NyaTermApp {
     pub(in crate::features::pages::transfers) fn visible_transfer_browser_entries(
