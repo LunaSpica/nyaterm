@@ -1,15 +1,11 @@
 use gpui::{
     AnyElement, App, Bounds, ClickEvent, ClipboardItem, Context, Element, Entity, FontWeight,
-    GlobalElementId, Hsla, InspectorElementId, IntoElement, KeyDownEvent, LayoutId, MouseButton,
+    GlobalElementId, InspectorElementId, IntoElement, KeyDownEvent, LayoutId, MouseButton,
     MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, ScrollDelta, ScrollWheelEvent,
     SharedString, Timer, Window, div, prelude::*, px, rgb, svg,
 };
-use nyaterm_transport::{
-    SftpAttributeUpdate, SftpDuplicatePolicy, SftpFileEntry, SftpFileType, SftpService,
-    SftpTransferProgress,
-};
+use nyaterm_transport::{SftpAttributeUpdate, SftpFileEntry, SftpFileType, SftpService};
 
-use std::cmp::Ordering;
 use std::collections::{HashSet, VecDeque};
 use std::time::Duration;
 
@@ -19,21 +15,20 @@ use crate::models::{
     TransferBrowserDragSelectionState, TransferBrowserFavoritesMenuState,
     TransferBrowserNavigationSnapshot, TransferBrowserPathMenuKind, TransferBrowserPathMenuState,
     TransferBrowserPendingRenameState, TransferBrowserSessionCacheState, TransferBrowserSortColumn,
-    TransferBrowserSortDirection, TransferBrowserUploadMenuState, TransferDeleteState,
-    TransferEditorField, TransferEditorState, TransferEditorWorkspaceState,
-    TransferExternalSyncPromptState, TransferInputField, TransferJobEvent, TransferJobKind,
-    TransferJobOutput, TransferJobResult, TransferJobState, TransferJobStatus, TransferMoveState,
-    TransferNewFileState, TransferNewFolderState, TransferNewSymlinkState, TransferPathPromptKind,
-    TransferPermissionTarget, TransferPropertiesField, TransferPropertiesState,
-    TransferRenameState, TransferSymlinkField, TransferUnknownFileState,
+    TransferBrowserUploadMenuState, TransferDeleteState, TransferEditorField, TransferEditorState,
+    TransferEditorWorkspaceState, TransferExternalSyncPromptState, TransferInputField,
+    TransferJobEvent, TransferJobKind, TransferJobOutput, TransferJobResult, TransferJobState,
+    TransferJobStatus, TransferMoveState, TransferNewFileState, TransferNewFolderState,
+    TransferNewSymlinkState, TransferPathPromptKind, TransferPermissionTarget,
+    TransferPropertiesField, TransferPropertiesState, TransferRenameState, TransferSymlinkField,
+    TransferUnknownFileState,
 };
 use crate::widgets::{small_button, status_pill};
 use nyaterm_core::{AiCustomActionConfig, ConnectionStore};
 
 use super::super::{
     NyaTermApp, RemoteTextEditor, TextInputSetup, dialog_action_button, format_file_size,
-    panel_header_with_actions, transfer_entry_icon, transfer_job_title, transfer_status_label,
-    truncate_preview,
+    panel_header_with_actions, transfer_entry_icon, truncate_preview,
 };
 
 mod browser;

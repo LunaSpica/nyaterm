@@ -341,7 +341,8 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   SFTP entry/file-type dependencies explicitly.
 - `pages/transfers/helpers` no longer contains any `use super::*`; the helper
   module root no longer imports its parent as a directory-level migration
-  prelude, and the architecture script now governs the whole helper directory.
+  prelude, the transfers page parent no longer carries helper-only sort/job
+  imports, and the architecture script now governs the whole helper directory.
 - `connection_runtime/helpers.rs` no longer depends on the connection runtime
   wildcard import; its GPUI, app, model, and core dependencies are explicit.
 - `connection_runtime/actions.rs` no longer depends on the connection runtime
