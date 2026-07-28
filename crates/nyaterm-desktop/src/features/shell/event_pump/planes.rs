@@ -182,7 +182,7 @@ impl NyaTermApp {
             && !remote_panels_need_poll
             && self.transfer.queue.jobs.is_empty()
             && !self.tunnel_state.has_pending()
-            && self.recording.pending_auto_start.is_none()
+            && !self.recording.has_pending_auto_start()
             && !self.terminal.view.runtime.open_tabs_persist_dirty
             && !self.terminal.view.runtime.window_layout_persist_dirty
             && self.terminal.windows.restored
@@ -632,7 +632,7 @@ impl NyaTermApp {
         if !self.session.start.has_pending()
             && !self.runtime_output_pressure_active()
             && !connect_settle
-            && let Some((session_id, session_name)) = self.recording.pending_auto_start.take()
+            && let Some((session_id, session_name)) = self.recording.take_pending_auto_start()
         {
             self.maybe_auto_start_recording(&session_id, &session_name, cx);
         }

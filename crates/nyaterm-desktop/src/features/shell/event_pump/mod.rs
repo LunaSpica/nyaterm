@@ -474,7 +474,7 @@ impl NyaTermApp {
             && self.session.trzsz.is_empty()
             && !self.session.prompts.has_pending_or_active_prompt()
             && self.terminal.menus.action_link_hover_pending.is_none()
-            && self.recording.pending_auto_start.is_none()
+            && !self.recording.has_pending_auto_start()
             && !self.tunnel_state.has_pending()
             && self.transfer.queue.jobs.is_empty()
             && self.commands.runtime.is_idle()

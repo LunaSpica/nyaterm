@@ -613,8 +613,8 @@ impl NyaTermApp {
                     // on connect success — that competes with the first SSH/PTY frames.
                     // Auto-recording file open is deferred to the idle plane.
                     if self.settings.summary.recording_auto_start {
-                        self.recording.pending_auto_start =
-                            Some((session_id.clone(), session_info.name.clone()));
+                        self.recording
+                            .schedule_auto_start(session_id.clone(), session_info.name.clone());
                     }
                     if let Some(startup_command) =
                         pending.and_then(|pending| pending.startup_command)

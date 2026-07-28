@@ -403,7 +403,7 @@ impl NyaTermApp {
                 self.shell.bottom_panel.mode == BottomPanelMode::CommandSend
             }
             ActivityBarEntry::Recording => {
-                self.panel_entry_selected(NavItem::Recording) || self.recording.active_count > 0
+                self.panel_entry_selected(NavItem::Recording) || self.recording.active_count() > 0
             }
             ActivityBarEntry::Lock => self.security.screen_lock.locked,
         }

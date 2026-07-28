@@ -3,16 +3,19 @@ use std::sync::Arc;
 
 use nyaterm_transport::RecordingManager;
 
-use crate::models::{RecordingPathPromptKind, RecordingWriteHandle, RecordingWritePipeline};
+use crate::models::{
+    RecordingHistorySearchKey, RecordingPathPromptKind, RecordingWriteEvent, RecordingWriteHandle,
+    RecordingWritePipeline,
+};
 
 pub(in crate::features) struct RecordingFeatureState {
-    pub manager: Arc<RecordingManager>,
-    pub active_count: usize,
-    pub pending_auto_start: Option<(String, String)>,
-    pub pipeline: RecordingWritePipeline,
-    pub search_draft: String,
-    pub busy_actions: HashMap<String, String>,
-    pub path_prompt: Option<RecordingPathPromptKind>,
+    manager: Arc<RecordingManager>,
+    active_count: usize,
+    pending_auto_start: Option<(String, String)>,
+    pipeline: RecordingWritePipeline,
+    search_draft: String,
+    busy_actions: HashMap<String, String>,
+    path_prompt: Option<RecordingPathPromptKind>,
 }
 
 impl RecordingFeatureState {
@@ -35,6 +38,115 @@ impl RecordingFeatureState {
         self.pipeline.writer()
     }
 
+    pub(in crate::features) fn manager_for_job(&self) -> Arc<RecordingManager> {
+        Arc::clone(&self.manager)
+    }
+
+    pub(in crate::features) fn set_memory_limit(&self, memory_limit_bytes: usize) {
+        self.manager.set_memory_limit(memory_limit_bytes);
+    }
+
+    pub(in crate::features) fn active_count(&self) -> usize {
+        self.active_count
+    }
+
+    pub(in crate::features) fn is_recording(&self, session_id: &str) -> bool {
+        self.manager.is_recording(session_id)
+    }
+
+    pub(in crate::features) fn busy_action(&self, session_id: &str) -> Option<&str> {
+        self.busy_actions.get(session_id).map(String::as_str)
+    }
+
+    pub(in crate::features) fn begin_action(&mut self, session_id: &str, action: &str) -> bool {
+        if self.busy_actions.contains_key(session_id) {
+            return false;
+        }
+        self.busy_actions
+            .insert(session_id.to_string(), action.to_string());
+        true
+    }
+
+    pub(in crate::features) fn finish_action(&mut self, session_id: &str) {
+        self.busy_actions.remove(session_id);
+    }
+
+    pub(in crate::features) fn search_draft(&self) -> &str {
+        &self.search_draft
+    }
+
+    pub(in crate::features) fn set_search_draft(&mut self, text: String) {
+        self.search_draft = text;
+    }
+
+    pub(in crate::features) fn clear_search_draft(&mut self) {
+        self.search_draft.clear();
+    }
+
+    pub(in crate::features) fn begin_path_prompt(&mut self, kind: RecordingPathPromptKind) -> bool {
+        if self.path_prompt.is_some() {
+            return false;
+        }
+        self.path_prompt = Some(kind);
+        true
+    }
+
+    pub(in crate::features) fn finish_path_prompt(&mut self) {
+        self.path_prompt = None;
+    }
+
+    pub(in crate::features) fn has_pending_auto_start(&self) -> bool {
+        self.pending_auto_start.is_some()
+    }
+
+    pub(in crate::features) fn schedule_auto_start(
+        &mut self,
+        session_id: String,
+        session_name: String,
+    ) {
+        self.pending_auto_start = Some((session_id, session_name));
+    }
+
+    pub(in crate::features) fn take_pending_auto_start(&mut self) -> Option<(String, String)> {
+        self.pending_auto_start.take()
+    }
+
+    pub(in crate::features) fn cleanup_writer_session(&self, session_id: &str) {
+        self.pipeline.cleanup_session(session_id.to_string());
+    }
+
+    pub(in crate::features) fn write_output(
+        &self,
+        session_id: impl Into<String>,
+        text: impl Into<String>,
+    ) {
+        self.pipeline.write_output(session_id, text);
+    }
+
+    pub(in crate::features) fn write_input(
+        &self,
+        session_id: impl Into<String>,
+        data: impl Into<Vec<u8>>,
+    ) {
+        self.pipeline.write_input(session_id, data);
+    }
+
+    pub(in crate::features) fn write_raw_input(
+        &self,
+        session_id: impl Into<String>,
+        data: impl Into<Vec<u8>>,
+    ) {
+        self.pipeline.write_raw_input(session_id, data);
+    }
+
+    pub(in crate::features) fn request_history_search(&self, key: RecordingHistorySearchKey) {
+        self.pipeline.request_history_search(key);
+    }
+
+    pub(in crate::features) fn try_recv_event(&self) -> Option<RecordingWriteEvent> {
+        self.pipeline.try_recv_event()
+    }
+
     pub(in crate::features) fn refresh_active_count(&mut self) {
         self.active_count = self.manager.list_recording_sessions().len();
     }
@@ -55,23 +167,25 @@ mod tests {
     #[test]
     fn recording_state_owns_runtime_and_session_cleanup_state() {
         let mut recording = RecordingFeatureState::new(1024);
-        recording
-            .busy_actions
-            .insert("session-1".to_string(), "record".to_string());
-        recording.pending_auto_start = Some(("session-1".to_string(), "local shell".to_string()));
+        assert!(recording.begin_action("session-1", "record"));
+        assert!(!recording.begin_action("session-1", "save"));
+        recording.schedule_auto_start("session-1".to_string(), "local shell".to_string());
+        assert!(recording.begin_path_prompt(crate::models::RecordingPathPromptKind::Start));
+        assert!(!recording.begin_path_prompt(crate::models::RecordingPathPromptKind::Start));
 
         let _writer = recording.writer();
         recording.cleanup_session("session-1");
 
-        assert_eq!(recording.active_count, 0);
-        assert!(!recording.busy_actions.contains_key("session-1"));
+        assert_eq!(recording.active_count(), 0);
+        assert!(recording.busy_action("session-1").is_none());
         assert_eq!(
             recording
-                .pending_auto_start
+                .take_pending_auto_start()
                 .as_ref()
                 .map(|value| value.0.as_str()),
             Some("session-1")
         );
-        assert!(recording.path_prompt.is_none());
+        recording.finish_path_prompt();
+        assert!(recording.begin_path_prompt(crate::models::RecordingPathPromptKind::Start));
     }
 }

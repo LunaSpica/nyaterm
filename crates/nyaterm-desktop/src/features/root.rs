@@ -588,7 +588,7 @@ impl NyaTermApp {
             .when(overlay.credential_suggestions_open, |this| {
                 this.child(self.credential_suggestions_overlay(cx))
             })
-            .when(self.sync_input.open, |this| {
+            .when(self.sync_input.is_open(), |this| {
                 this.child(self.sync_groups_overlay(cx))
             })
             .when_some(

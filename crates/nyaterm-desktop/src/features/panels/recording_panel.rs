@@ -49,9 +49,10 @@ impl NyaTermApp {
         let no_matches_label = self.tr("activeSessions.noMatches").to_string();
         let search_placeholder = self.tr("recording.searchPlaceholder").to_string();
         let recording_label = self.tr("recording.recording").to_string();
+        let search_draft = self.recording.search_draft().to_string();
         let search_field = self.text_input(
             "recording.search",
-            &self.recording.search_draft.clone(),
+            &search_draft,
             TextInputSetup::placeholder(search_placeholder),
             cx,
         );
@@ -83,8 +84,8 @@ impl NyaTermApp {
                 let start_session_name = session_name.clone();
                 let save_session_name = session_name.clone();
                 let is_current = active_session_id.as_deref() == Some(session.id.as_str());
-                let session_is_recording = self.recording.manager.is_recording(&session.id);
-                let busy_action = self.recording.busy_actions.get(&session.id).cloned();
+                let session_is_recording = self.recording.is_recording(&session.id);
+                let busy_action = self.recording.busy_action(&session.id).map(str::to_string);
                 let is_busy = busy_action.is_some();
                 let kind = session_kind_label(session.kind).to_ascii_uppercase();
                 let short = short_id(&session.id).to_string();
@@ -207,14 +208,10 @@ impl NyaTermApp {
                                     !is_busy,
                                     cx.listener(move |this, _, _, cx| {
                                         cx.stop_propagation();
-                                        if this
-                                            .recording
-                                            .busy_actions
-                                            .contains_key(&start_session_id)
-                                        {
+                                        if this.recording.busy_action(&start_session_id).is_some() {
                                             return;
                                         }
-                                        if this.recording.manager.is_recording(&start_session_id) {
+                                        if this.recording.is_recording(&start_session_id) {
                                             this.stop_recording_for_session(&start_session_id, cx);
                                         } else {
                                             this.prompt_recording_path_for_session(
@@ -239,11 +236,7 @@ impl NyaTermApp {
                                     !is_busy,
                                     cx.listener(move |this, _, _, cx| {
                                         cx.stop_propagation();
-                                        if this
-                                            .recording
-                                            .busy_actions
-                                            .contains_key(&save_session_id)
-                                        {
+                                        if this.recording.busy_action(&save_session_id).is_some() {
                                             return;
                                         }
                                         this.prompt_recording_path_for_session(
@@ -306,7 +299,7 @@ impl NyaTermApp {
                                 .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
                                     if event.keystroke.key == "escape" {
                                         cx.stop_propagation();
-                                        this.recording.search_draft.clear();
+                                        this.recording.clear_search_draft();
                                         this.reset_text_input("recording.search", "", cx);
                                         this.terminal.view.status =
                                             "recording search cleared".to_string();
@@ -343,7 +336,7 @@ impl NyaTermApp {
     }
 
     fn recording_session_filter_query(&self) -> String {
-        self.recording.search_draft.trim().to_lowercase()
+        self.recording.search_draft().trim().to_lowercase()
     }
 }
 

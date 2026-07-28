@@ -95,7 +95,7 @@ impl NyaTermApp {
                     let sync_group = self.active_sync_group_for_session(tab_id);
                     let sync_paused = self.is_session_paused_in_active_sync_group(tab_id);
                     let show_sync_indicator =
-                        self.sync_input.broadcast_to_all || sync_group.is_some();
+                        self.sync_input.broadcast_to_all() || sync_group.is_some();
                     let sync_indicator_color =
                         sync_group.map(|group| group.color).unwrap_or(palette.link);
                     let accent = if let Some(custom_color) = custom_color {

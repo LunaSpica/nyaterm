@@ -276,7 +276,6 @@ impl NyaTermApp {
                 self.ai.settings.secret_draft.clear();
                 self.sync_ai_drafts_from_active_profile();
                 self.recording
-                    .manager
                     .set_memory_limit(self.settings.summary.recording_memory_limit_bytes as usize);
                 self.transfer.paths.duplicate_policy = SftpDuplicatePolicy::from_legacy_value(
                     &self.settings.summary.transfer_duplicate_strategy,
@@ -341,7 +340,6 @@ impl NyaTermApp {
             self.settings.master_password.enabled = snapshot.master_password_enabled;
             self.settings.master_password.draft = snapshot.master_password_draft;
             self.recording
-                .manager
                 .set_memory_limit(self.settings.summary.recording_memory_limit_bytes as usize);
             self.transfer.paths.duplicate_policy = SftpDuplicatePolicy::from_legacy_value(
                 &self.settings.summary.transfer_duplicate_strategy,

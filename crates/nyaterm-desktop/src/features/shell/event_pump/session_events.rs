@@ -363,7 +363,6 @@ impl NyaTermApp {
         view.note_output_discontinuity(bytes);
         let marker = terminal_output_dropped_marker(bytes);
         self.recording
-            .pipeline
             .write_output(session_id.clone(), marker.clone());
         self.append_terminal_log_for_session(Some(&session_id), &marker, true);
         if self.session.active_id.as_deref() == Some(session_id.as_str()) {
@@ -393,9 +392,7 @@ impl NyaTermApp {
         let log_reason = terminal_log_plain_text(&reason);
         let log = format!("\n# session disconnected: {log_reason}\n");
         if !session_id.is_empty() {
-            self.recording
-                .pipeline
-                .write_output(session_id.clone(), log.clone());
+            self.recording.write_output(session_id.clone(), log.clone());
             self.append_terminal_log_for_session(Some(&session_id), &log, true);
         }
         self.clear_trzsz_session(&session_id);
@@ -424,9 +421,7 @@ impl NyaTermApp {
         let log = format!("\n# session error: {log_message}\n");
         if !session_id.is_empty() {
             self.sync_session_event_bridge_session_policy(&session_id);
-            self.recording
-                .pipeline
-                .write_output(session_id.clone(), log.clone());
+            self.recording.write_output(session_id.clone(), log.clone());
         }
         if session_id.is_empty() || self.session.active_id.as_deref() == Some(session_id.as_str()) {
             self.terminal.view.status = format!("session error: {message}");

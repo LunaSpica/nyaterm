@@ -35,18 +35,17 @@ impl NyaTermApp {
         } else {
             (None, None)
         };
+        let search_draft = self.sync_input.search_draft().to_string();
         let search_input = self.text_input(
             "sync.groups.search",
-            &self.sync_input.search_draft.clone(),
+            &search_draft,
             TextInputSetup::placeholder(self.tr("syncGroup.searchPlaceholder")),
             cx,
         );
         let search_focus = search_input.read(cx).focus_handle();
         let pending_delete_name = self
             .sync_input
-            .delete_pending
-            .as_deref()
-            .and_then(|id| self.sync_input.groups.iter().find(|group| group.id == id))
+            .pending_delete_group()
             .map(|group| group.name.clone());
         let pending_delete_message = pending_delete_name.as_ref().map(|name| {
             self.tr("syncGroup.deleteGroupConfirm")
@@ -61,7 +60,7 @@ impl NyaTermApp {
             .flex()
             .flex_col()
             .gap_2();
-        if self.sync_input.groups.is_empty() {
+        if self.sync_input.groups().is_empty() {
             group_list = group_list.child(
                 div()
                     .rounded_sm()
@@ -74,7 +73,7 @@ impl NyaTermApp {
                     .child(self.tr("syncGroup.noGroups")),
             );
         }
-        for group in self.sync_input.groups.clone() {
+        for group in self.sync_input.groups().to_vec() {
             let selected = selected_group_id.as_deref() == Some(group.id.as_str());
             let session_count = group.session_ids.len();
             group_list = group_list.child(
@@ -168,7 +167,7 @@ impl NyaTermApp {
             .flex()
             .flex_col()
             .gap_2();
-        let query = self.sync_input.search_draft.trim().to_ascii_lowercase();
+        let query = self.sync_input.search_draft().trim().to_ascii_lowercase();
         let all_sessions = self.ordered_sessions();
         let has_sessions = !all_sessions.is_empty();
         let sessions = all_sessions
@@ -337,14 +336,14 @@ impl NyaTermApp {
             .flex()
             .items_center()
             .justify_center()
-            .track_focus(&self.sync_input.focus)
+            .track_focus(self.sync_input.focus())
             .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(&this.sync_input.focus);
+                window.focus(this.sync_input.focus());
                 cx.notify();
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
                 cx.stop_propagation();
-                if this.sync_input.delete_pending.is_some() {
+                if this.sync_input.has_delete_pending() {
                     match event.keystroke.key.as_str() {
                         "escape" => this.cancel_delete_sync_group(cx),
                         "enter" => this.confirm_delete_sync_group(cx),

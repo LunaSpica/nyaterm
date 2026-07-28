@@ -244,6 +244,23 @@ check_no_matches \
   "recording runtime state must stay grouped under RecordingFeatureState" \
   '^[[:space:]]*pub\(in crate::features\)[[:space:]]+(recording_manager|recording_active_count|pending_auto_recording_session|recording_write_pipeline|recording_search_draft|recording_busy_actions|recording_path_prompt)[[:space:]]*:' \
   crates/nyaterm-desktop/src/features/app_state/mod.rs
+check_no_matches \
+  "RecordingFeatureState must expose methods, not writable fields" \
+  '^[[:space:]]*pub([[:space:]]|\([^)]*\))[[:space:]]+(manager|active_count|pending_auto_start|pipeline|search_draft|busy_actions|path_prompt)[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/recording/state.rs
+check_no_matches \
+  "recording runtime transitions must use RecordingFeatureState methods" \
+  '(self|this)\.recording\.(manager|active_count|pending_auto_start|pipeline|search_draft|busy_actions|path_prompt)(\.|[[:space:]]*=)' \
+  crates/nyaterm-desktop/src/features
+
+check_no_matches \
+  "SyncInputFeatureState must expose methods, not writable fields" \
+  '^[[:space:]]*pub([[:space:]]|\([^)]*\))[[:space:]]+(groups|open|focus|search_draft|selected_id|delete_pending|broadcast_to_all)[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/sync_input.rs
+check_no_matches \
+  "sync input transitions must use SyncInputFeatureState methods" \
+  '(self|this)\.sync_input\.(groups|open|focus|search_draft|selected_id|delete_pending|broadcast_to_all)(\.|[[:space:]]*=)' \
+  crates/nyaterm-desktop/src/features
 
 check_no_matches \
   "tunnel runtime state must stay grouped under TunnelFeatureState" \

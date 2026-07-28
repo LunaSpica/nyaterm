@@ -251,11 +251,14 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   `RecordingFeatureState` and `TunnelFeatureState` owners. Eleven app fields
   became two feature fields: the recording owner constructs the manager/write
   pipeline and retains active-count, deferred auto-start, busy/search and path
-  prompt state, while the tunnel owner constructs its manager/job channel and
-  owns pending-job admission and completion. `NyaTermApp` remains responsible
-  for GPUI prompts, notifications, session policy and job-result routing.
-  Recording output behavior, tunnel transport execution and persisted tunnel
-  configuration formats are unchanged.
+  prompt state, and all of those recording fields are now private. Recording
+  action admission/completion, deferred auto-start, path-prompt admission,
+  manager access and write-pipeline access execute through owner methods. The
+  tunnel owner constructs its manager/job channel and owns pending-job
+  admission and completion. `NyaTermApp` remains responsible for GPUI prompts,
+  notifications, session policy and job-result routing. Recording output
+  behavior, tunnel transport execution and persisted tunnel configuration
+  formats are unchanged.
 - Live session runtime now has one top-level `SessionFeatureState` owner. The
   session manager and event bridge, command history/search/menu/busy state,
   active session/SSH/AI profile, order and runtime metadata, custom and dynamic
@@ -368,11 +371,12 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   those), and `progress` (in-flight send, cancellation, counters).
 - Sync-input groups now have one authoritative `SyncInputFeatureState` owner.
   The group collection, overlay/search/selection/delete state and broadcast-all
-  flag moved together. Pure group lifecycle, membership, pause, peer fan-out
-  and disconnected-session cleanup now execute on that owner; `NyaTermApp`
-  retains session metadata/host queries, status messages, focus and redraw
-  coordination. This state remains transient and changes no session or settings
-  persistence format.
+  flag moved together and all owner fields are now private. Views and command
+  routing use read-only accessors, while group lifecycle, membership, pause,
+  peer fan-out, broadcast toggles and disconnected-session cleanup execute on
+  the owner. `NyaTermApp` retains session metadata/host queries, status messages,
+  focus and redraw coordination. This state remains transient and changes no
+  session or settings persistence format.
 - `ShellFeatureState` now owns the complete cross-view window interaction
   cluster. Its `viewport`, `navigation`, `panels`, `chrome` and `workspace`
   children contain geometry bookkeeping, settings navigation/window state,
@@ -1526,8 +1530,11 @@ honest remaining list.
    master-password transitions. The remote-runtime convergence batch then
    unified Docker, process and host-stats job identity/channel/failure timing in
    typed state owned by each pane instead of twenty-one independently writable
-   fields. What remains at the composition root is stores, runtime and focused
-   feature owners.
+   fields. The recording/sync-input encapsulation batch then made both owners
+   method-only boundaries: fourteen previously writable fields became private,
+   with recording job/prompt/pipeline transitions and sync-group reads routed
+   through focused APIs. It did not move or change persisted data. What remains
+   at the composition root is stores, runtime and focused feature owners.
    Group by cohesion where a cluster exists; do not force the count down for
    its own sake.
    Method ownership is now moving too, which is what grouping the fields alone
@@ -1543,9 +1550,11 @@ honest remaining list.
    into the page layer, while cloud sync made secret-field routing inaccessible
    outside its owner, and
    recording cleanup can no longer leave its manager, busy map and pipeline out
-   of sync, closing a pending session start cannot update its maps without also
-   applying the active pending/failed fallback rules, and paste editing cannot
-   mutate its UTF-8 cursor without also clearing stale selection/IME state.
+   of sync; recording action and path-prompt admission are atomic owner
+   transitions, and sync-input views cannot mutate group/broadcast state while
+   rendering. Closing a pending session start cannot update its maps without
+   also applying the active pending/failed fallback rules, and paste editing
+   cannot mutate its UTF-8 cursor without also clearing stale selection/IME state.
    Shell viewport timing, panel drags, mutually-exclusive tab menus and pane
    ownership rebuilding now have the same property. Translation and native
    update job admission/event completion now also stay coupled to their own

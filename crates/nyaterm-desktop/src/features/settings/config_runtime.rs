@@ -558,7 +558,7 @@ impl NyaTermApp {
                             translation_settings,
                             TranslationSecretDraft::default(),
                         );
-                        self.recording.manager.set_memory_limit(
+                        self.recording.set_memory_limit(
                             self.settings.summary.recording_memory_limit_bytes as usize,
                         );
                         let cloud_sync_settings = store

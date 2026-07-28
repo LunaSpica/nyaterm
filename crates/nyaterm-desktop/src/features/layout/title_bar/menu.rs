@@ -165,7 +165,7 @@ impl NyaTermApp {
                         palette,
                         "title-term-broadcast",
                         Some("icons/menu/broadcast.svg"),
-                        self.sync_input.broadcast_to_all,
+                        self.sync_input.broadcast_to_all(),
                         tr("menu.broadcastToAll"),
                         None,
                         cx.listener(|this, _, _, cx| {

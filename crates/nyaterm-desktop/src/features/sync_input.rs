@@ -8,13 +8,13 @@ use super::{NyaTermApp, SYNC_GROUP_COLORS};
 use crate::models::SyncInputGroup;
 
 pub(in crate::features) struct SyncInputFeatureState {
-    pub groups: Vec<SyncInputGroup>,
-    pub open: bool,
-    pub focus: FocusHandle,
-    pub search_draft: String,
-    pub selected_id: Option<String>,
-    pub delete_pending: Option<String>,
-    pub broadcast_to_all: bool,
+    groups: Vec<SyncInputGroup>,
+    open: bool,
+    focus: FocusHandle,
+    search_draft: String,
+    selected_id: Option<String>,
+    delete_pending: Option<String>,
+    broadcast_to_all: bool,
 }
 
 pub(in crate::features) enum SyncSessionPauseResult {
@@ -44,6 +44,36 @@ impl SyncInputFeatureState {
         if self.selected_id.is_none() {
             self.selected_id = self.groups.first().map(|group| group.id.clone());
         }
+    }
+
+    pub(in crate::features) fn groups(&self) -> &[SyncInputGroup] {
+        &self.groups
+    }
+
+    pub(in crate::features) fn is_open(&self) -> bool {
+        self.open
+    }
+
+    pub(in crate::features) fn focus(&self) -> &FocusHandle {
+        &self.focus
+    }
+
+    pub(in crate::features) fn search_draft(&self) -> &str {
+        &self.search_draft
+    }
+
+    pub(in crate::features) fn has_delete_pending(&self) -> bool {
+        self.delete_pending.is_some()
+    }
+
+    pub(in crate::features) fn pending_delete_group(&self) -> Option<&SyncInputGroup> {
+        self.delete_pending
+            .as_deref()
+            .and_then(|id| self.groups.iter().find(|group| group.id == id))
+    }
+
+    pub(in crate::features) fn broadcast_to_all(&self) -> bool {
+        self.broadcast_to_all
     }
 
     pub(in crate::features) fn close(&mut self) {
@@ -121,7 +151,7 @@ impl SyncInputFeatureState {
             .and_then(|id| self.groups.iter().find(|group| group.id == id))
     }
 
-    pub(in crate::features) fn selected_group_mut(&mut self) -> Option<&mut SyncInputGroup> {
+    fn selected_group_mut(&mut self) -> Option<&mut SyncInputGroup> {
         let selected_id = self.selected_id.clone()?;
         self.groups.iter_mut().find(|group| group.id == selected_id)
     }
@@ -335,7 +365,7 @@ impl SyncInputFeatureState {
         }
     }
 
-    pub(in crate::features) fn repair_selection(&mut self) {
+    fn repair_selection(&mut self) {
         if self
             .selected_id
             .as_deref()
@@ -364,7 +394,7 @@ impl NyaTermApp {
         self.forget_text_inputs("sync.groups.search");
         self.forget_text_inputs("sync.group-name.");
         self.terminal.view.status = "sync groups opened".to_string();
-        window.focus(&self.sync_input.focus);
+        window.focus(self.sync_input.focus());
         cx.notify();
     }
 
@@ -445,7 +475,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn add_filtered_sync_group_sessions(&mut self, cx: &mut Context<Self>) {
-        let query = self.sync_input.search_draft.trim().to_ascii_lowercase();
+        let query = self.sync_input.search_draft().trim().to_ascii_lowercase();
         let session_ids = self
             .ordered_sessions()
             .into_iter()
@@ -461,7 +491,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        let query = self.sync_input.search_draft.trim().to_ascii_lowercase();
+        let query = self.sync_input.search_draft().trim().to_ascii_lowercase();
         let remove_ids = self
             .ordered_sessions()
             .into_iter()
@@ -712,8 +742,8 @@ mod tests {
         state.groups = vec![group("one", "One"), group("two", "Two")];
 
         assert!(state.rename_group("two", "Renamed".to_string()));
-        assert_eq!(state.groups[0].name, "One");
-        assert_eq!(state.groups[1].name, "Renamed");
+        assert_eq!(state.groups()[0].name, "One");
+        assert_eq!(state.groups()[1].name, "Renamed");
         assert!(!state.rename_group("missing", "Ignored".to_string()));
     }
 
@@ -728,13 +758,16 @@ mod tests {
         state.selected_id = Some("one".to_string());
 
         state.purge_session("session-a");
-        assert_eq!(state.groups.len(), 1);
-        assert_eq!(state.selected_id.as_deref(), Some("two"));
+        assert_eq!(state.groups().len(), 1);
+        assert_eq!(
+            state.selected_group().map(|group| group.id.as_str()),
+            Some("two")
+        );
 
         assert!(state.request_delete_selected());
         assert!(state.confirm_delete());
-        assert!(state.groups.is_empty());
-        assert!(state.selected_id.is_none());
+        assert!(state.groups().is_empty());
+        assert!(state.selected_group().is_none());
     }
 
     #[test]
@@ -747,8 +780,8 @@ mod tests {
 
         state.replace_session_id("old", "new");
 
-        assert_eq!(state.groups[0].session_ids, ["new", "peer"]);
-        assert_eq!(state.groups[0].paused_session_ids, ["new"]);
+        assert_eq!(state.groups()[0].session_ids, ["new", "peer"]);
+        assert_eq!(state.groups()[0].paused_session_ids, ["new"]);
     }
 
     #[test]
@@ -772,7 +805,7 @@ mod tests {
             vec!["peer-a".to_string()]
         );
 
-        state.broadcast_to_all = true;
+        assert!(state.toggle_broadcast_to_all());
         assert_eq!(
             state.peer_session_ids("primary", &live_ids),
             vec![
