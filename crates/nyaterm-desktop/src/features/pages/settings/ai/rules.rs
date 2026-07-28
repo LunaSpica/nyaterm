@@ -1,6 +1,14 @@
-use super::*;
+use gpui::{
+    AnyElement, App, ClickEvent, Context, FontWeight, IntoElement, KeyDownEvent, SharedString,
+    Window, div, prelude::*, px, rgb,
+};
 
+use crate::features::{NyaTermApp, TextInputSetup};
 use crate::models::{AiActionEditorField, AiActionListKind};
+use crate::theme::ThemePalette;
+use crate::widgets::small_button;
+
+use super::super::{settings_form_row, settings_form_section, settings_switch};
 
 impl NyaTermApp {
     pub(in crate::features) fn ai_rules_settings_section(

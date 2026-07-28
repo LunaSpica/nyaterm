@@ -1,7 +1,20 @@
-use super::*;
+use gpui::{
+    AnyElement, App, ClickEvent, Context, FontWeight, IntoElement, SharedString, Window, div,
+    prelude::*, px, rgb, rgba, svg,
+};
+use nyaterm_core::CloudSyncSettings;
 
-use crate::features::{dialog_action_button, format_cloud_provider};
-use crate::models::{SettingsTab, SnapshotPasswordPromptKind};
+use crate::features::{
+    NyaTermApp, compact_id, configured_cloud_sync_provider, dialog_action_button,
+    format_cloud_provider, format_history_timestamp_ms, secret_input_setup,
+};
+use crate::models::{
+    CloudSyncConflictState, CloudSyncInputField, SettingsTab, SnapshotPasswordPromptKind,
+};
+use crate::theme::ThemePalette;
+use crate::widgets::small_button;
+
+use super::super::{settings_form_row, settings_form_section, settings_switch_with_enabled};
 
 mod providers;
 impl NyaTermApp {

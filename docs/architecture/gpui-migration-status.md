@@ -12,7 +12,7 @@ Last updated from the working tree on 2026-07-28.
 | `NyaTermApp` fields | 261 | Counted from `features/app_state/mod.rs`; down from 585, still transitional. |
 | `impl NyaTermApp` blocks | 240 | Spread across 235 files under `crates/nyaterm-desktop/src`. |
 | `#[path = "..."]` declarations in desktop | 0 | Cleared. Every directory is a real module; the boundary script fails on any new occurrence. |
-| `use super::*` imports in desktop | 255 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
+| `use super::*` imports in desktop | 244 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
 | `features/prelude.rs` rough exported-token count | 221 | Still a broad shared prelude; two hundred twenty-four low-frequency transport/core/http/model/helper exports are now explicit imports. |
 | Entity Store structs | 4 | `Runtime`, `WindowRuntime`, `StartupRestore`, `Overlay`. Each owns state the app does not. |
 | Snapshot structs | 0 | Cleared. No store is a projection of `NyaTermApp` any more. |
@@ -418,13 +418,15 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   `pages/remote/mod.rs` as a pure module entry point. All 13 wildcard imports
   were removed across roughly 3,800 lines, so the boundary script now governs
   the complete `pages/remote` tree.
-- The settings `transfer`, `terminal` and `workspace` subtrees no longer use
-  wildcard imports. Fourteen module boundaries across roughly 4,773 lines now
-  name their GPUI traits, settings form helpers, text-input setup, shortcut,
-  theme and transport model dependencies directly. Their `mod.rs` files are
-  module entry points rather than implicit child preludes, and `settings/mod.rs`
-  no longer carries the SFTP duplicate policy or tab-mouse models used only by
-  those children. The boundary script governs all three complete subtrees.
+- The complete settings page tree no longer uses wildcard imports. Its AI,
+  security, translation, cloud-sync/backup, transfer, terminal and workspace
+  modules name their GPUI traits, settings form helpers, text-input setup,
+  theme, core and model dependencies directly. The nested AI and sync/backup
+  `mod.rs` files are pure module entry points, and `settings/mod.rs` no longer
+  carries child-only AI, translation, cloud-sync or widget imports. The
+  boundary script governs all 27 Rust modules under `pages/settings` at zero
+  `use super::*` imports. Cloud-sync provider fields, secret masking,
+  validation and request/storage behavior are unchanged.
 - The quick-command import runtime no longer uses wildcard imports or flattened
   child-module globs. Its dialog calls the source adapter directly; source
   parsing depends directionally on JSON, merge and helper modules; merge names
@@ -1205,7 +1207,7 @@ Items 1, 3 and 4 are done. What follows is the honest remaining list.
    cohesive, while still resolving each file's dependency set explicitly with
    compiler guidance. Run formatting, boundary checks, compilation and tests
    once for the completed batch rather than committing one file at a time.
-3. Largely done. `NyaTermApp` is down from 585 fields to 284, across eight
+3. Largely done. `NyaTermApp` is down from 585 fields to 261, across eight
    feature-state structs. What is left is a long tail — the biggest remaining
    domain is eighteen fields, and much of the rest is genuinely app-level
    (stores, runtime, services, persisted collections). Group by cohesion where

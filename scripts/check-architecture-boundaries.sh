@@ -565,12 +565,25 @@ declare -A SUPER_BASELINE=(
   [crates/nyaterm-desktop/src/features/pages/remote/docker_view.rs]=0
   [crates/nyaterm-desktop/src/features/pages/remote/mod.rs]=0
   [crates/nyaterm-desktop/src/features/pages/remote/stats_view.rs]=0
+  [crates/nyaterm-desktop/src/features/pages/settings/mod.rs]=0
+  [crates/nyaterm-desktop/src/features/pages/settings/ai/mod.rs]=0
+  [crates/nyaterm-desktop/src/features/pages/settings/ai/models/credential_rows.rs]=0
+  [crates/nyaterm-desktop/src/features/pages/settings/ai/models/mod.rs]=0
+  [crates/nyaterm-desktop/src/features/pages/settings/ai/models/model_groups.rs]=0
+  [crates/nyaterm-desktop/src/features/pages/settings/ai/rules.rs]=0
+  [crates/nyaterm-desktop/src/features/pages/settings/ai/section.rs]=0
+  [crates/nyaterm-desktop/src/features/pages/settings/security.rs]=0
+  [crates/nyaterm-desktop/src/features/pages/settings/sync_backup/mod.rs]=0
+  [crates/nyaterm-desktop/src/features/pages/settings/sync_backup/cloud_sync/mod.rs]=0
+  [crates/nyaterm-desktop/src/features/pages/settings/sync_backup/cloud_sync/providers.rs]=0
+  [crates/nyaterm-desktop/src/features/pages/settings/translation.rs]=0
   [crates/nyaterm-desktop/src/features/pages/settings/transfer/advanced.rs]=0
   [crates/nyaterm-desktop/src/features/pages/settings/transfer/editor.rs]=0
   [crates/nyaterm-desktop/src/features/pages/settings/transfer/files.rs]=0
   [crates/nyaterm-desktop/src/features/pages/settings/transfer/mod.rs]=0
   [crates/nyaterm-desktop/src/features/pages/settings/transfer/recording.rs]=0
   [crates/nyaterm-desktop/src/features/pages/settings/terminal/general.rs]=0
+  [crates/nyaterm-desktop/src/features/pages/settings/terminal/helpers.rs]=0
   [crates/nyaterm-desktop/src/features/pages/settings/terminal/keywords.rs]=0
   [crates/nyaterm-desktop/src/features/pages/settings/terminal/mod.rs]=0
   [crates/nyaterm-desktop/src/features/pages/settings/terminal/search.rs]=0
@@ -650,9 +663,7 @@ done < <(rg -n --path-separator / '^[[:space:]]*use super::\*;' \
   crates/nyaterm-desktop/src/features/pages/tunnels \
   crates/nyaterm-desktop/src/features/pages/transfers \
   crates/nyaterm-desktop/src/features/pages/remote \
-  crates/nyaterm-desktop/src/features/pages/settings/transfer \
-  crates/nyaterm-desktop/src/features/pages/settings/terminal \
-  crates/nyaterm-desktop/src/features/pages/settings/workspace \
+  crates/nyaterm-desktop/src/features/pages/settings \
   crates/nyaterm-desktop/src/features/shell/mod.rs \
   crates/nyaterm-desktop/src/features/shell/activity_bar_runtime.rs \
   crates/nyaterm-desktop/src/features/shell/appearance.rs \

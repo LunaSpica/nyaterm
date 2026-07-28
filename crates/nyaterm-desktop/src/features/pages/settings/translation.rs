@@ -1,4 +1,10 @@
-use super::*;
+use gpui::{AnyElement, Context, FontWeight, IntoElement, div, prelude::*, px, rgb};
+
+use crate::features::{NyaTermApp, TextInputSetup, secret_input_setup};
+use crate::models::TranslateInputField;
+use crate::widgets::{small_button, status_pill};
+
+use super::{settings_choice_chip, settings_form_section};
 
 impl NyaTermApp {
     fn translation_input(

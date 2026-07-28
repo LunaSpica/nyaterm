@@ -1,4 +1,13 @@
-use super::*;
+use gpui::{
+    AnyElement, Context, FontWeight, IntoElement, KeyDownEvent, SharedString, div, prelude::*, px,
+    rgb,
+};
+use nyaterm_core::truncate_preview;
+
+use crate::features::{NyaTermApp, TextInputSetup};
+use crate::widgets::small_button;
+
+use super::super::super::settings_switch;
 
 impl NyaTermApp {
     pub(super) fn ai_model_groups(

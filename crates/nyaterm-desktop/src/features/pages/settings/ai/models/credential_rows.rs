@@ -1,4 +1,11 @@
-use super::*;
+use gpui::{
+    Context, FontWeight, IntoElement, KeyDownEvent, SharedString, div, prelude::*, px, rgb,
+};
+
+use crate::features::{NyaTermApp, TextInputSetup};
+use crate::widgets::small_button;
+
+use super::super::super::settings_switch;
 
 impl NyaTermApp {
     pub(super) fn ai_credential_rows(

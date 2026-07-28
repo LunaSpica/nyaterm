@@ -1,4 +1,12 @@
-use super::*;
+use gpui::{Context, FontWeight, IntoElement, SharedString, div, prelude::*, px, rgb};
+
+use crate::features::{ChromeTooltip, NyaTermApp, TextInputSetup};
+use crate::widgets::small_button;
+
+use super::{
+    settings_choice_chip, settings_form_row, settings_form_section, settings_switch,
+    settings_switch_with_enabled,
+};
 
 impl NyaTermApp {
     pub(in crate::features) fn security_settings_section(

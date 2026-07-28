@@ -1,5 +1,10 @@
-use super::*;
-use gpui::MouseButton;
+use gpui::{Context, IntoElement, KeyDownEvent, MouseButton, div, prelude::*, px, rgb};
+
+use crate::features::{NyaTermApp, TextInputSetup};
+use crate::theme::ThemePalette;
+use crate::widgets::small_button;
+
+use super::super::settings_form_section;
 
 mod credential_rows;
 mod model_groups;
