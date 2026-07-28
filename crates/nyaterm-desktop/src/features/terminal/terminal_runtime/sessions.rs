@@ -205,7 +205,7 @@ impl NyaTermApp {
         let open_sessions = self.ordered_sessions().len();
         if self.settings.summary.confirm_on_close && open_sessions > 0 {
             // Reuse close-all confirmation as quit-with-sessions gate (Tauri confirm_on_close).
-            self.session.dialogs.pending_quit_after_close_all = true;
+            self.session.dialogs.request_quit_after_close_all();
             self.open_close_all_sessions_confirm(window, cx);
             self.terminal.view.status =
                 format!("confirm close: {open_sessions} session(s) still open");
@@ -229,12 +229,9 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        self.session.dialogs.tab_actions_session_id = None;
-        self.session.dialogs.tab_actions_anchor = None;
-        self.session.dialogs.tab_actions_submenu = None;
-        self.session.dialogs.close_all_sessions_confirm_open = true;
+        self.session.dialogs.open_close_all_sessions_confirm();
         self.terminal.view.status = "close all sessions confirmation opened".to_string();
-        window.focus(&self.session.dialogs.close_all_sessions_confirm_focus);
+        window.focus(self.session.dialogs.close_all_sessions_confirm_focus());
         cx.notify();
     }
 
@@ -242,9 +239,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        self.session.dialogs.close_all_sessions_confirm_open = false;
-        self.session.dialogs.pending_quit_after_close_all = false;
-        self.session.dialogs.pending_window_quit = false;
+        self.session.dialogs.cancel_close_all_sessions_confirm();
         self.terminal.view.status = "close all sessions cancelled".to_string();
         cx.notify();
     }
@@ -254,10 +249,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.session.dialogs.close_all_sessions_confirm_open = false;
-        let quit_after = self.session.dialogs.pending_quit_after_close_all;
-        self.session.dialogs.pending_quit_after_close_all = false;
-        self.session.dialogs.pending_window_quit = false;
+        let quit_after = self.session.dialogs.take_close_all_sessions_confirm();
         self.close_all_sessions(cx);
         if quit_after {
             if self.settings.summary.startup_restore {

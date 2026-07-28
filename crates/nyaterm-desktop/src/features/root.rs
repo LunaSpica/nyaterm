@@ -463,12 +463,12 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
         let overlay = OverlayFlags {
-            tab_actions_open: self.session.dialogs.tab_actions_session_id.is_some(),
-            rename_open: self.session.dialogs.rename_session_id.is_some(),
-            color_picker_open: self.session.dialogs.color_picker_open,
-            session_info_open: self.session.dialogs.session_info_open,
-            startup_command_open: self.session.dialogs.startup_command_open,
-            temporary_ssh_link_open: self.session.dialogs.temporary_ssh_link_open,
+            tab_actions_open: self.session.dialogs.tab_actions_session_id().is_some(),
+            rename_open: self.session.dialogs.rename_is_open(),
+            color_picker_open: self.session.dialogs.color_picker_is_open(),
+            session_info_open: self.session.dialogs.session_info_is_open(),
+            startup_command_open: self.session.dialogs.startup_command_is_open(),
+            temporary_ssh_link_open: self.session.dialogs.temporary_ssh_link_is_open(),
             multi_line_paste_open: self.terminal.paste.draft.is_some(),
             terminal_actions_open: self.terminal.menus.actions_open,
             terminal_context_menu_open: self.terminal.menus.context_menu.is_some(),
@@ -476,7 +476,10 @@ impl NyaTermApp {
             action_link_tooltip_open: self.terminal.menus.action_link_tooltip.is_some(),
             command_suggestions_open: self.terminal.assist.command_suggestions.is_some(),
             credential_suggestions_open: self.terminal.assist.credential_suggestions.is_some(),
-            close_all_sessions_confirm_open: self.session.dialogs.close_all_sessions_confirm_open,
+            close_all_sessions_confirm_open: self
+                .session
+                .dialogs
+                .close_all_sessions_confirm_is_open(),
             locked: self.security.screen_lock.locked,
         };
         let quick_switch_open = self.quick_switch_open(cx);

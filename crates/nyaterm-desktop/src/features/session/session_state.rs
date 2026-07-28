@@ -488,18 +488,14 @@ impl NyaTermApp {
         if self.session.active_id.as_deref() != Some(session_id.as_str()) {
             return;
         }
-        self.session.dialogs.tab_actions_session_id = Some(session_id);
-        self.session.dialogs.tab_actions_anchor = anchor;
-        self.session.dialogs.tab_actions_submenu = None;
+        self.session.dialogs.open_tab_actions(session_id, anchor);
         self.terminal.view.status = "tab actions opened".to_string();
-        window.focus(&self.session.dialogs.tab_actions_focus);
+        window.focus(self.session.dialogs.tab_actions_focus());
         cx.notify();
     }
 
     pub(in crate::features) fn close_tab_actions(&mut self, cx: &mut Context<Self>) {
-        self.session.dialogs.tab_actions_session_id = None;
-        self.session.dialogs.tab_actions_anchor = None;
-        self.session.dialogs.tab_actions_submenu = None;
+        self.session.dialogs.close_tab_actions();
         self.terminal.view.status = "tab actions closed".to_string();
         cx.notify();
     }
@@ -546,16 +542,16 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        self.session.dialogs.session_info_open = true;
+        self.session.dialogs.open_session_info();
         self.terminal.view.status = self
             .active_session_info_line()
             .unwrap_or_else(|| "session info opened".to_string());
-        window.focus(&self.session.dialogs.session_info_focus);
+        window.focus(self.session.dialogs.session_info_focus());
         cx.notify();
     }
 
     pub(in crate::features) fn close_active_session_info(&mut self, cx: &mut Context<Self>) {
-        self.session.dialogs.session_info_open = false;
+        self.session.dialogs.close_session_info();
         self.terminal.view.status = "session info closed".to_string();
         cx.notify();
     }
@@ -577,7 +573,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn close_tab_color_picker(&mut self, cx: &mut Context<Self>) {
-        self.session.dialogs.color_picker_open = false;
+        self.session.dialogs.close_color_picker();
         self.terminal.view.status = "tab color picker closed".to_string();
         cx.notify();
     }
@@ -602,7 +598,7 @@ impl NyaTermApp {
                 self.terminal.view.status = "tab color reset".to_string();
             }
         }
-        self.session.dialogs.color_picker_open = false;
+        self.session.dialogs.close_color_picker();
         cx.notify();
     }
 }

@@ -91,30 +91,36 @@ pub(in crate::features) struct SessionPromptState {
 
 /// Session-scoped overlays, confirmations and editing dialogs.
 pub(in crate::features) struct SessionDialogState {
-    pub tab_actions_session_id: Option<String>,
-    pub tab_actions_anchor: Option<(f32, f32)>,
-    pub tab_actions_submenu: Option<TabActionsSubmenu>,
-    pub tab_actions_focus: FocusHandle,
-    pub close_all_sessions_confirm_open: bool,
-    pub pending_quit_after_close_all: bool,
-    pub pending_window_quit: bool,
-    pub close_all_sessions_confirm_focus: FocusHandle,
-    pub rename_session_id: Option<String>,
-    pub rename_draft: String,
-    pub rename_focus: FocusHandle,
-    pub color_picker_open: bool,
-    pub color_picker_focus: FocusHandle,
-    pub session_info_open: bool,
-    pub session_info_focus: FocusHandle,
-    pub startup_command_open: bool,
-    pub startup_command_action: StartupCommandAction,
-    pub startup_command_draft: String,
-    pub startup_command_delay_ms: u64,
-    pub startup_command_focus: FocusHandle,
-    pub temporary_ssh_link_open: bool,
-    pub temporary_ssh_link_draft: String,
-    pub temporary_ssh_link_error: Option<&'static str>,
-    pub temporary_ssh_link_focus: FocusHandle,
+    tab_actions_session_id: Option<String>,
+    tab_actions_anchor: Option<(f32, f32)>,
+    tab_actions_submenu: Option<TabActionsSubmenu>,
+    tab_actions_focus: FocusHandle,
+    close_all_sessions_confirm_open: bool,
+    pending_quit_after_close_all: bool,
+    pending_window_quit: bool,
+    close_all_sessions_confirm_focus: FocusHandle,
+    rename_session_id: Option<String>,
+    rename_draft: String,
+    rename_focus: FocusHandle,
+    color_picker_open: bool,
+    color_picker_focus: FocusHandle,
+    session_info_open: bool,
+    session_info_focus: FocusHandle,
+    startup_command_open: bool,
+    startup_command_action: StartupCommandAction,
+    startup_command_draft: String,
+    startup_command_delay_ms: u64,
+    startup_command_focus: FocusHandle,
+    temporary_ssh_link_open: bool,
+    temporary_ssh_link_draft: String,
+    temporary_ssh_link_error: Option<&'static str>,
+    temporary_ssh_link_focus: FocusHandle,
+}
+
+pub(in crate::features) enum RenameSessionSubmission {
+    Inactive,
+    Empty,
+    Ready { session_id: String, name: String },
 }
 
 impl SessionFeatureState {
@@ -203,6 +209,172 @@ impl SessionRestoreState {
 }
 
 impl SessionDialogState {
+    pub(in crate::features) fn tab_actions_session_id(&self) -> Option<&str> {
+        self.tab_actions_session_id.as_deref()
+    }
+
+    pub(in crate::features) fn tab_actions_anchor(&self) -> Option<(f32, f32)> {
+        self.tab_actions_anchor
+    }
+
+    pub(in crate::features) fn tab_actions_submenu(&self) -> Option<TabActionsSubmenu> {
+        self.tab_actions_submenu
+    }
+
+    pub(in crate::features) fn tab_actions_focus(&self) -> &FocusHandle {
+        &self.tab_actions_focus
+    }
+
+    pub(in crate::features) fn open_tab_actions(
+        &mut self,
+        session_id: String,
+        anchor: Option<(f32, f32)>,
+    ) {
+        self.tab_actions_session_id = Some(session_id);
+        self.tab_actions_anchor = anchor;
+        self.tab_actions_submenu = None;
+    }
+
+    pub(in crate::features) fn close_tab_actions(&mut self) {
+        self.tab_actions_session_id = None;
+        self.tab_actions_anchor = None;
+        self.tab_actions_submenu = None;
+    }
+
+    pub(in crate::features) fn select_tab_actions_submenu(
+        &mut self,
+        submenu: TabActionsSubmenu,
+    ) -> bool {
+        if self.tab_actions_submenu == Some(submenu) {
+            return false;
+        }
+        self.tab_actions_submenu = Some(submenu);
+        true
+    }
+
+    pub(in crate::features) fn close_all_sessions_confirm_is_open(&self) -> bool {
+        self.close_all_sessions_confirm_open
+    }
+
+    pub(in crate::features) fn should_quit_after_close_all(&self) -> bool {
+        self.pending_quit_after_close_all
+    }
+
+    pub(in crate::features) fn close_all_sessions_confirm_focus(&self) -> &FocusHandle {
+        &self.close_all_sessions_confirm_focus
+    }
+
+    pub(in crate::features) fn request_quit_after_close_all(&mut self) {
+        self.pending_quit_after_close_all = true;
+    }
+
+    pub(in crate::features) fn open_close_all_sessions_confirm(&mut self) {
+        self.close_tab_actions();
+        self.close_all_sessions_confirm_open = true;
+    }
+
+    pub(in crate::features) fn cancel_close_all_sessions_confirm(&mut self) {
+        self.close_all_sessions_confirm_open = false;
+        self.pending_quit_after_close_all = false;
+        self.pending_window_quit = false;
+    }
+
+    pub(in crate::features) fn take_close_all_sessions_confirm(&mut self) -> bool {
+        self.close_all_sessions_confirm_open = false;
+        let quit_after = self.pending_quit_after_close_all;
+        self.pending_quit_after_close_all = false;
+        self.pending_window_quit = false;
+        quit_after
+    }
+
+    pub(in crate::features) fn rename_is_open(&self) -> bool {
+        self.rename_session_id.is_some()
+    }
+
+    pub(in crate::features) fn rename_draft(&self) -> &str {
+        &self.rename_draft
+    }
+
+    pub(in crate::features) fn rename_focus(&self) -> &FocusHandle {
+        &self.rename_focus
+    }
+
+    pub(in crate::features) fn open_rename(&mut self, session_id: String, current_name: &str) {
+        self.rename_session_id = Some(session_id);
+        self.rename_draft = current_name.chars().take(64).collect();
+    }
+
+    pub(in crate::features) fn cancel_rename(&mut self) {
+        self.rename_session_id = None;
+        self.rename_draft.clear();
+    }
+
+    pub(in crate::features) fn take_rename_submission(&mut self) -> RenameSessionSubmission {
+        let Some(session_id) = self.rename_session_id.take() else {
+            return RenameSessionSubmission::Inactive;
+        };
+        let name = self
+            .rename_draft
+            .trim()
+            .chars()
+            .take(64)
+            .collect::<String>();
+        self.rename_draft.clear();
+        if name.is_empty() {
+            self.rename_session_id = Some(session_id);
+            return RenameSessionSubmission::Empty;
+        }
+        RenameSessionSubmission::Ready { session_id, name }
+    }
+
+    pub(in crate::features) fn color_picker_is_open(&self) -> bool {
+        self.color_picker_open
+    }
+
+    pub(in crate::features) fn color_picker_focus(&self) -> &FocusHandle {
+        &self.color_picker_focus
+    }
+
+    pub(in crate::features) fn close_color_picker(&mut self) {
+        self.color_picker_open = false;
+    }
+
+    pub(in crate::features) fn session_info_is_open(&self) -> bool {
+        self.session_info_open
+    }
+
+    pub(in crate::features) fn session_info_focus(&self) -> &FocusHandle {
+        &self.session_info_focus
+    }
+
+    pub(in crate::features) fn open_session_info(&mut self) {
+        self.session_info_open = true;
+    }
+
+    pub(in crate::features) fn close_session_info(&mut self) {
+        self.session_info_open = false;
+    }
+
+    pub(in crate::features) fn startup_command_is_open(&self) -> bool {
+        self.startup_command_open
+    }
+
+    pub(in crate::features) fn startup_command_action(&self) -> StartupCommandAction {
+        self.startup_command_action
+    }
+
+    pub(in crate::features) fn startup_command_draft(&self) -> &str {
+        &self.startup_command_draft
+    }
+
+    pub(in crate::features) fn startup_command_delay_ms(&self) -> u64 {
+        self.startup_command_delay_ms
+    }
+
+    pub(in crate::features) fn startup_command_focus(&self) -> &FocusHandle {
+        &self.startup_command_focus
+    }
+
     pub(in crate::features) fn open_startup_command(
         &mut self,
         action: StartupCommandAction,
@@ -244,6 +416,46 @@ impl SessionDialogState {
     pub(in crate::features) fn adjust_startup_command_delay(&mut self, delta_ms: i64) {
         let next = (self.startup_command_delay_ms as i64 + delta_ms).clamp(0, 60_000);
         self.startup_command_delay_ms = next as u64;
+    }
+
+    pub(in crate::features) fn reset_startup_command_delay(&mut self) {
+        self.startup_command_delay_ms = 0;
+    }
+
+    pub(in crate::features) fn temporary_ssh_link_is_open(&self) -> bool {
+        self.temporary_ssh_link_open
+    }
+
+    pub(in crate::features) fn temporary_ssh_link_draft(&self) -> &str {
+        &self.temporary_ssh_link_draft
+    }
+
+    pub(in crate::features) fn temporary_ssh_link_error(&self) -> Option<&'static str> {
+        self.temporary_ssh_link_error
+    }
+
+    pub(in crate::features) fn temporary_ssh_link_focus(&self) -> &FocusHandle {
+        &self.temporary_ssh_link_focus
+    }
+
+    pub(in crate::features) fn open_temporary_ssh_link(&mut self) {
+        self.temporary_ssh_link_open = true;
+        self.temporary_ssh_link_error = None;
+    }
+
+    pub(in crate::features) fn close_temporary_ssh_link(&mut self) {
+        self.temporary_ssh_link_open = false;
+        self.temporary_ssh_link_draft.clear();
+        self.temporary_ssh_link_error = None;
+    }
+
+    pub(in crate::features) fn reject_temporary_ssh_link(&mut self, error: &'static str) {
+        self.temporary_ssh_link_error = Some(error);
+    }
+
+    pub(in crate::features) fn apply_temporary_ssh_link(&mut self, text: String) {
+        self.temporary_ssh_link_draft = text;
+        self.temporary_ssh_link_error = None;
     }
 
     pub(in crate::features) fn apply_text_input(&mut self, field: &str, text: String) -> bool {
@@ -552,11 +764,14 @@ mod tests {
     use nyaterm_transport::{SessionKind, SessionManager};
 
     use crate::features::runtime_jobs::SessionStartResult;
-    use crate::models::{SessionEventBridge, StartupCommandAction, TerminalFramePipeline};
+    use crate::models::{
+        SessionEventBridge, StartupCommandAction, TabActionsSubmenu, TerminalFramePipeline,
+    };
 
     use super::{
-        FailedSessionStart, NativeOtpProvider, PendingSessionStart, SavedConnectionStartOptions,
-        SessionFeatureFocus, SessionFeatureState, SessionRestoreState, SessionStartFeatureState,
+        FailedSessionStart, NativeOtpProvider, PendingSessionStart, RenameSessionSubmission,
+        SavedConnectionStartOptions, SessionFeatureFocus, SessionFeatureState, SessionRestoreState,
+        SessionStartFeatureState,
     };
 
     #[test]
@@ -663,14 +878,14 @@ mod tests {
                 .active_keyboard_interactive_prompt
                 .is_none()
         );
-        assert!(!sessions.dialogs.close_all_sessions_confirm_open);
-        assert!(sessions.dialogs.rename_session_id.is_none());
-        assert!(!sessions.dialogs.startup_command_open);
+        assert!(!sessions.dialogs.close_all_sessions_confirm_is_open());
+        assert!(!sessions.dialogs.rename_is_open());
+        assert!(!sessions.dialogs.startup_command_is_open());
 
         sessions
             .dialogs
             .open_startup_command(StartupCommandAction::Multiplex, 75_000);
-        assert_eq!(sessions.dialogs.startup_command_delay_ms, 60_000);
+        assert_eq!(sessions.dialogs.startup_command_delay_ms(), 60_000);
         assert!(
             sessions
                 .dialogs
@@ -683,11 +898,63 @@ mod tests {
         assert_eq!(action, StartupCommandAction::Multiplex);
         assert_eq!(request.command, "uptime");
         assert_eq!(request.delay_ms, 60_000);
-        assert!(!sessions.dialogs.startup_command_open);
+        assert!(!sessions.dialogs.startup_command_is_open());
         assert_eq!(
-            sessions.dialogs.startup_command_action,
+            sessions.dialogs.startup_command_action(),
             StartupCommandAction::Duplicate
         );
+
+        sessions
+            .dialogs
+            .open_tab_actions("session-a".to_string(), Some((10.0, 20.0)));
+        assert!(
+            sessions
+                .dialogs
+                .select_tab_actions_submenu(TabActionsSubmenu::Ai)
+        );
+        sessions.dialogs.request_quit_after_close_all();
+        sessions.dialogs.open_close_all_sessions_confirm();
+        assert!(sessions.dialogs.tab_actions_session_id().is_none());
+        assert!(sessions.dialogs.take_close_all_sessions_confirm());
+        assert!(!sessions.dialogs.should_quit_after_close_all());
+
+        sessions
+            .dialogs
+            .open_rename("session-a".to_string(), "original");
+        assert!(
+            sessions
+                .dialogs
+                .apply_text_input("rename", "   ".to_string())
+        );
+        assert!(matches!(
+            sessions.dialogs.take_rename_submission(),
+            RenameSessionSubmission::Empty
+        ));
+        assert!(sessions.dialogs.rename_is_open());
+        assert!(
+            sessions
+                .dialogs
+                .apply_text_input("rename", "renamed".to_string())
+        );
+        assert!(matches!(
+            sessions.dialogs.take_rename_submission(),
+            RenameSessionSubmission::Ready { session_id, name }
+                if session_id == "session-a" && name == "renamed"
+        ));
+
+        sessions.dialogs.open_temporary_ssh_link();
+        sessions
+            .dialogs
+            .apply_temporary_ssh_link("user@example.test".to_string());
+        sessions
+            .dialogs
+            .reject_temporary_ssh_link("temporarySsh.invalid");
+        assert_eq!(
+            sessions.dialogs.temporary_ssh_link_error(),
+            Some("temporarySsh.invalid")
+        );
+        sessions.dialogs.close_temporary_ssh_link();
+        assert!(sessions.dialogs.temporary_ssh_link_draft().is_empty());
     }
 
     #[test]

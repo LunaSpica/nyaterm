@@ -5,6 +5,8 @@ use gpui::{Context, KeyDownEvent, Window};
 use crate::features::{NyaTermApp, TextInputSetup};
 use crate::models::{SessionLaunchConfig, StartupCommandAction};
 
+use super::state::RenameSessionSubmission;
+
 impl NyaTermApp {
     pub(in crate::features) fn open_rename_session(
         &mut self,
@@ -17,12 +19,12 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        self.session.dialogs.rename_session_id = Some(session_id);
-        self.session.dialogs.rename_draft = current_name.chars().take(64).collect();
+        self.session.dialogs.open_rename(session_id, &current_name);
         self.forget_text_inputs("session.rename");
+        let rename_draft = self.session.dialogs.rename_draft().to_string();
         let field = self.text_input(
             "session.rename",
-            &self.session.dialogs.rename_draft.clone(),
+            &rename_draft,
             TextInputSetup::placeholder(self.tr("tabCtx.renamePlaceholder")),
             cx,
         );
@@ -33,34 +35,26 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn close_rename_session(&mut self, cx: &mut Context<Self>) {
-        self.session.dialogs.rename_session_id = None;
-        self.session.dialogs.rename_draft.clear();
+        self.session.dialogs.cancel_rename();
         self.forget_text_inputs("session.rename");
         self.terminal.view.status = "rename tab cancelled".to_string();
         cx.notify();
     }
 
     pub(in crate::features) fn submit_rename_session(&mut self, cx: &mut Context<Self>) {
-        let Some(session_id) = self.session.dialogs.rename_session_id.take() else {
-            self.terminal.view.status = "no tab rename is active".to_string();
-            cx.notify();
-            return;
+        let (session_id, trimmed) = match self.session.dialogs.take_rename_submission() {
+            RenameSessionSubmission::Inactive => {
+                self.terminal.view.status = "no tab rename is active".to_string();
+                cx.notify();
+                return;
+            }
+            RenameSessionSubmission::Empty => {
+                self.terminal.view.status = "tab name cannot be empty".to_string();
+                cx.notify();
+                return;
+            }
+            RenameSessionSubmission::Ready { session_id, name } => (session_id, name),
         };
-        let trimmed = self
-            .session
-            .dialogs
-            .rename_draft
-            .trim()
-            .chars()
-            .take(64)
-            .collect::<String>();
-        self.session.dialogs.rename_draft.clear();
-        if trimmed.is_empty() {
-            self.terminal.view.status = "tab name cannot be empty".to_string();
-            self.session.dialogs.rename_session_id = Some(session_id);
-            cx.notify();
-            return;
-        }
         self.forget_text_inputs("session.rename");
         self.session
             .custom_names

@@ -20,12 +20,12 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        self.session.dialogs.temporary_ssh_link_open = true;
-        self.session.dialogs.temporary_ssh_link_error = None;
+        self.session.dialogs.open_temporary_ssh_link();
         self.forget_text_inputs("temporary-ssh.link");
+        let draft = self.session.dialogs.temporary_ssh_link_draft().to_string();
         let field = self.text_input(
             "temporary-ssh.link",
-            &self.session.dialogs.temporary_ssh_link_draft.clone(),
+            &draft,
             TextInputSetup::placeholder(self.tr("temporarySsh.placeholder")),
             cx,
         );
@@ -35,9 +35,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn close_temporary_ssh_link_dialog(&mut self, cx: &mut Context<Self>) {
-        self.session.dialogs.temporary_ssh_link_open = false;
-        self.session.dialogs.temporary_ssh_link_draft.clear();
-        self.session.dialogs.temporary_ssh_link_error = None;
+        self.session.dialogs.close_temporary_ssh_link();
         self.forget_text_inputs("temporary-ssh.link");
         self.terminal.view.status = "temporary SSH link cancelled".to_string();
         cx.notify();
@@ -49,27 +47,29 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if self.has_pending_session_start() {
-            self.session.dialogs.temporary_ssh_link_error = Some("temporarySsh.connecting");
+            self.session
+                .dialogs
+                .reject_temporary_ssh_link("temporarySsh.connecting");
             self.terminal.view.status =
                 "wait for the pending session to finish connecting".to_string();
             cx.notify();
             return;
         }
 
-        let parsed = match parse_temporary_ssh_link(&self.session.dialogs.temporary_ssh_link_draft)
+        let parsed = match parse_temporary_ssh_link(self.session.dialogs.temporary_ssh_link_draft())
         {
             Ok(parsed) => parsed,
             Err(error) => {
-                self.session.dialogs.temporary_ssh_link_error = Some(error.locale_key());
+                self.session
+                    .dialogs
+                    .reject_temporary_ssh_link(error.locale_key());
                 self.terminal.view.status = "temporary SSH link is invalid".to_string();
                 cx.notify();
                 return;
             }
         };
         let config = self.temporary_ssh_session_config(parsed.clone());
-        self.session.dialogs.temporary_ssh_link_open = false;
-        self.session.dialogs.temporary_ssh_link_draft.clear();
-        self.session.dialogs.temporary_ssh_link_error = None;
+        self.session.dialogs.close_temporary_ssh_link();
         self.forget_text_inputs("temporary-ssh.link");
         self.begin_background_ssh_start(
             parsed.name,
@@ -106,8 +106,7 @@ impl NyaTermApp {
         text: String,
         cx: &mut Context<Self>,
     ) {
-        self.session.dialogs.temporary_ssh_link_draft = text;
-        self.session.dialogs.temporary_ssh_link_error = None;
+        self.session.dialogs.apply_temporary_ssh_link(text);
         cx.notify();
     }
 

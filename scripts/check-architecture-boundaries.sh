@@ -248,6 +248,10 @@ check_no_matches \
   "session dialogs must stay grouped under SessionDialogState" \
   '^[[:space:]]*pub\(in crate::features\)[[:space:]]+(tab_actions_session_id|tab_actions_anchor|tab_actions_submenu|tab_actions_focus|close_all_sessions_confirm_open|pending_quit_after_close_all|pending_window_quit|close_all_sessions_confirm_focus|rename_session_id|rename_draft|rename_focus|color_picker_open|color_picker_focus|session_info_open|session_info_focus|startup_command_open|startup_command_action|startup_command_draft|startup_command_delay_ms|startup_command_focus|temporary_ssh_link_open|temporary_ssh_link_draft|temporary_ssh_link_error|temporary_ssh_link_focus)[[:space:]]*:' \
   crates/nyaterm-desktop/src/features/app_state/mod.rs
+check_no_matches \
+  "SessionDialogState fields must remain private; use owner transitions and read-only getters" \
+  '^[[:space:]]*pub([[:space:]]|\([^)]*\))[[:space:]]+(tab_actions_session_id|tab_actions_anchor|tab_actions_submenu|tab_actions_focus|close_all_sessions_confirm_open|pending_quit_after_close_all|pending_window_quit|close_all_sessions_confirm_focus|rename_session_id|rename_draft|rename_focus|color_picker_open|color_picker_focus|session_info_open|session_info_focus|startup_command_open|startup_command_action|startup_command_draft|startup_command_delay_ms|startup_command_focus|temporary_ssh_link_open|temporary_ssh_link_draft|temporary_ssh_link_error|temporary_ssh_link_focus)[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/session/state.rs
 
 check_no_matches \
   "session start state must stay grouped under SessionStartFeatureState" \

@@ -262,9 +262,12 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   prompts, OTP provider and prompt focus; `SessionDialogState` owns tab
   actions, close-all/quit confirmation, rename, color, info, startup-command
   and temporary-SSH-link dialogs. This removes another thirty-four app fields.
-  Startup-command open/cancel/submit, delay and text-input transitions execute
-  on the dialog owner, while `NyaTermApp` retains worker spawning, navigation,
-  event routing, translation/status updates and GPUI notifications. Credential
+  A later ownership pass made all twenty-four dialog fields private. Tab-action
+  and submenu lifecycle, close-all/quit confirmation, rename validation, color
+  and info close/open state, startup-command delay, and temporary-SSH draft/
+  error cleanup now execute through owner transitions and read-only getters.
+  `NyaTermApp` retains worker spawning, navigation, session policy, text-field
+  setup, event routing, status updates and GPUI notifications. Credential
   storage, session creation, reconnect, terminal protocol and transport
   behavior are unchanged.
 - Transfer state is grouped into `TransferFeatureState`. Seventy-eight fields
@@ -1525,8 +1528,11 @@ honest remaining list.
    pending/status/result state, and translation settings replacement cannot
    desynchronize the secret draft or active target language. The three remote
    panes now share the same typed job lifecycle, so a stale Docker/process/stats
-   event cannot clear the pending owner of a newer session job. Those are the
-   kinds of signals to look for.
+   event cannot clear the pending owner of a newer session job. Session dialogs
+   now expose no writable fields at all: close-all confirmation clears tab menu
+   ownership atomically, invalid rename submission keeps its dialog identity,
+   and temporary-SSH close clears draft and error together. Those are the kinds
+   of signals to look for.
    Two caveats worth keeping. Render helpers stay on the view even when they
    read one state — moving element construction onto a data struct trades one
    coupling for a worse one. And a method that reads a state plus `self.tr(...)`

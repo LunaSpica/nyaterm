@@ -14,7 +14,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let draft = self.session.dialogs.temporary_ssh_link_draft.clone();
+        let draft = self.session.dialogs.temporary_ssh_link_draft().to_string();
         let input = self.text_input(
             "temporary-ssh.link",
             &draft,
@@ -24,7 +24,7 @@ impl NyaTermApp {
         let input_focus = input.read(cx).focus_handle();
         let parsed = parse_temporary_ssh_link(&draft);
         let can_submit = draft.trim().len() > 0 && parsed.is_ok();
-        let error_key = self.session.dialogs.temporary_ssh_link_error.or_else(|| {
+        let error_key = self.session.dialogs.temporary_ssh_link_error().or_else(|| {
             if draft.trim().is_empty() {
                 None
             } else {
@@ -43,9 +43,9 @@ impl NyaTermApp {
             .flex()
             .items_center()
             .justify_center()
-            .track_focus(&self.session.dialogs.temporary_ssh_link_focus)
+            .track_focus(self.session.dialogs.temporary_ssh_link_focus())
             .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(&this.session.dialogs.temporary_ssh_link_focus);
+                window.focus(this.session.dialogs.temporary_ssh_link_focus());
                 cx.notify();
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
