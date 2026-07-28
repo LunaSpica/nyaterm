@@ -1,4 +1,13 @@
-use super::*;
+use gpui::{Context, Window};
+use nyaterm_transport::{SftpService, SshSessionConfig};
+
+use crate::features::NyaTermApp;
+use crate::models::{
+    TransferEditorState, TransferEditorWorkspaceState, TransferJobEvent, TransferJobKind,
+    TransferJobOutput, TransferJobResult, TransferJobState, TransferJobStatus,
+};
+
+use super::super::NATIVE_EDITOR_MAX_BYTES;
 
 impl NyaTermApp {
     pub(in crate::features) fn active_transfer_editor_tab(&self) -> Option<&TransferEditorState> {

@@ -1,4 +1,16 @@
-use super::*;
+use gpui::{Context, KeyDownEvent, Window};
+use nyaterm_transport::SftpService;
+
+use crate::features::NyaTermApp;
+use crate::models::{
+    TransferJobEvent, TransferJobKind, TransferJobOutput, TransferJobResult, TransferJobState,
+    TransferJobStatus, TransferNewSymlinkState, TransferRenameState, TransferSymlinkField,
+};
+
+use super::super::helpers::{
+    remote_child_path, remote_file_name, remote_parent_path, remote_sibling_path,
+    valid_remote_child_name,
+};
 
 impl NyaTermApp {
     pub(in crate::features) fn open_transfer_new_symlink_dialog(

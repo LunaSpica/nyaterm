@@ -2,19 +2,14 @@ use gpui::{
     AnyElement, App, ClickEvent, ClipboardItem, Context, Entity, FontWeight, IntoElement,
     KeyDownEvent, MouseButton, MouseDownEvent, SharedString, Window, div, prelude::*, px, rgb, svg,
 };
-use nyaterm_transport::{SftpFileEntry, SftpFileType, SftpService};
+use nyaterm_transport::{SftpFileEntry, SftpFileType};
 
 use crate::models::{
     TransferBrowserBreadcrumbSegment, TransferBrowserChildrenMenuStatus,
-    TransferBrowserPathMenuKind, TransferBrowserPathMenuState, TransferDeleteState,
-    TransferEditorField, TransferEditorState, TransferEditorWorkspaceState,
-    TransferExternalSyncPromptState, TransferJobEvent, TransferJobKind, TransferJobOutput,
-    TransferJobResult, TransferJobState, TransferJobStatus, TransferMoveState,
-    TransferNewFileState, TransferNewFolderState, TransferNewSymlinkState, TransferRenameState,
-    TransferSymlinkField, TransferUnknownFileState,
+    TransferBrowserPathMenuKind, TransferBrowserPathMenuState, TransferEditorField,
+    TransferEditorState, TransferEditorWorkspaceState, TransferExternalSyncPromptState,
 };
 use crate::widgets::small_button;
-use nyaterm_core::AiCustomActionConfig;
 
 use super::super::{
     NyaTermApp, RemoteTextEditor, TextInputSetup, dialog_action_button, format_file_size,

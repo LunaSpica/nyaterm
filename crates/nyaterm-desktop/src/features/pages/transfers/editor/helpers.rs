@@ -1,4 +1,16 @@
-use super::*;
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::process::Command;
+use std::time::{Instant, SystemTime};
+
+use nyaterm_transport::{SftpService, SftpTransferControl, SftpTransferOptions, SshSessionConfig};
+
+use crate::models::{TransferJobEvent, TransferJobOutput, TransferJobResult};
+
+use super::{
+    EXTERNAL_EDITOR_STARTUP_SUPPRESSION, EXTERNAL_EDITOR_UPLOAD_SETTLE,
+    EXTERNAL_EDITOR_WATCH_INTERVAL,
+};
 
 pub(super) fn sanitize_local_open_segment(input: &str) -> String {
     let sanitized: String = input

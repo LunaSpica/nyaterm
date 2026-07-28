@@ -1,4 +1,13 @@
-use super::*;
+use gpui::{Context, KeyDownEvent, Window};
+use nyaterm_transport::SftpService;
+
+use crate::features::NyaTermApp;
+use crate::models::{
+    TransferDeleteState, TransferJobEvent, TransferJobKind, TransferJobOutput, TransferJobResult,
+    TransferJobState, TransferJobStatus, TransferMoveState,
+};
+
+use super::super::helpers::{remote_file_name, remote_parent_path};
 
 impl NyaTermApp {
     pub(in crate::features) fn open_transfer_move_dialog(

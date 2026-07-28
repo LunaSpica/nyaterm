@@ -1,4 +1,13 @@
-use super::*;
+use gpui::{Context, KeyDownEvent, Window};
+use nyaterm_transport::SftpService;
+
+use crate::features::NyaTermApp;
+use crate::models::{
+    TransferJobEvent, TransferJobKind, TransferJobOutput, TransferJobResult, TransferJobState,
+    TransferJobStatus, TransferNewFileState, TransferNewFolderState,
+};
+
+use super::super::helpers::{remote_child_path, valid_remote_child_name};
 
 impl NyaTermApp {
     pub(in crate::features) fn open_transfer_new_folder_dialog(

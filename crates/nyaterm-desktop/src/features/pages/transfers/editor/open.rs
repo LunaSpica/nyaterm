@@ -1,4 +1,24 @@
-use super::*;
+use std::path::PathBuf;
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use gpui::{Context, Window};
+use nyaterm_core::AiCustomActionConfig;
+use nyaterm_transport::{
+    SftpFileEntry, SftpFileType, SftpService, SftpTransferControl, SshSessionConfig,
+};
+
+use crate::features::NyaTermApp;
+use crate::models::{
+    NavItem, TransferEditorField, TransferEditorState, TransferEditorWorkspaceState,
+    TransferJobEvent, TransferJobKind, TransferJobOutput, TransferJobResult, TransferJobState,
+    TransferJobStatus, TransferUnknownFileState,
+};
+
+use super::super::helpers::remote_file_name;
+use super::helpers::{
+    RemoteFileTextKind, is_known_binary_file, open_local_path_with_editor, remote_file_text_kind,
+    sanitize_local_open_segment, watch_external_editor_file,
+};
 
 impl NyaTermApp {
     pub(in crate::features) fn enabled_transfer_file_ai_actions_for_entry(

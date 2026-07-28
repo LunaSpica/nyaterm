@@ -1,4 +1,12 @@
-use super::*;
+use std::path::PathBuf;
+
+use gpui::{Context, KeyDownEvent, Window};
+
+use crate::features::NyaTermApp;
+use crate::models::{TransferEditorField, TransferExternalSyncPromptState};
+
+use super::super::helpers::editor_search_matches;
+use super::helpers::{external_editor_watch_key, upload_external_editor_file};
 
 impl NyaTermApp {
     pub(in crate::features) fn handle_transfer_editor_key_down(
