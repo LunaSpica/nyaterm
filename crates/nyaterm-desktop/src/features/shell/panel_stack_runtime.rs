@@ -1,8 +1,19 @@
-use super::*;
-use crate::models::{
-    ActivityBarZone, MainMode, NetworkTab, PanelStackResizeState, RightFocus, SecurityAuthTab,
-    SettingsTab,
+use std::collections::HashSet;
+
+use gpui::{
+    AnyElement, App, AppContext as _, ClickEvent, Context, InteractiveElement as _, IntoElement,
+    MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement as _, SharedString,
+    StatefulInteractiveElement as _, Styled as _, Window, div, prelude::FluentBuilder as _, px,
+    rgb, svg,
 };
+use nyaterm_core::{AgentCommandExecutionMode, truncate_preview};
+
+use crate::features::{ChromeTooltip, NyaTermApp, TextInputSetup, panel_header_with_actions};
+use crate::models::{
+    ActivityBarZone, MainMode, NavItem, NetworkTab, PanelSide, PanelStackResizeState, RightFocus,
+    SecurityAuthTab, SettingsTab,
+};
+use crate::theme::ThemePalette;
 
 const EXCLUSIVE_PANEL_IDS: &[&str] = &["aiAssistant"];
 const NON_PANEL_IDS: &[&str] = &["settings", "lock", "quickCmdBar", "serialSend"];
@@ -310,7 +321,7 @@ impl NyaTermApp {
         side: PanelSide,
         above_id: String,
         below_id: String,
-        event: &gpui::MouseDownEvent,
+        event: &MouseDownEvent,
         container_height: f32,
         cx: &mut Context<Self>,
     ) {
@@ -329,7 +340,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn update_panel_stack_resize(
         &mut self,
-        event: &gpui::MouseMoveEvent,
+        event: &MouseMoveEvent,
         cx: &mut Context<Self>,
     ) {
         let Some(state) = self.panel_stack_resize.clone() else {
@@ -354,7 +365,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn finish_panel_stack_resize(
         &mut self,
-        _event: &gpui::MouseUpEvent,
+        _event: &MouseUpEvent,
         cx: &mut Context<Self>,
     ) {
         if self.panel_stack_resize.take().is_some() {
@@ -411,7 +422,7 @@ impl NyaTermApp {
     pub(in crate::features) fn side_panel_stack(
         &mut self,
         side: PanelSide,
-        window: &mut gpui::Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         use gpui::relative;
@@ -504,7 +515,7 @@ impl NyaTermApp {
         &mut self,
         side: PanelSide,
         panel: NavItem,
-        window: &mut gpui::Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> gpui::Div {
         let meta = self.side_panel_meta(side, panel);
@@ -883,7 +894,7 @@ impl NyaTermApp {
             .hover(|this| this.bg(rgb(0x58a6ff)))
             .on_mouse_down(
                 MouseButton::Left,
-                cx.listener(move |this, event: &gpui::MouseDownEvent, _, cx| {
+                cx.listener(move |this, event: &MouseDownEvent, _, cx| {
                     let open = this.side_open_panel_ids(side);
                     let total_weight: f32 = open.iter().map(|id| this.panel_stack_weight(id)).sum();
                     let container_height = 480.0_f32.max(total_weight * 120.);
