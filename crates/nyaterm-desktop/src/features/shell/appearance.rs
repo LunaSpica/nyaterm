@@ -1,5 +1,12 @@
-use super::*;
+use std::{path::Path, sync::Arc};
 
+use gpui::{App, Context, PathPromptOptions, SharedString, font, px, rgb, rgba};
+use nyaterm_core::{
+    AppSettingsSummary, ConnectionStore, ResolvedKeywordHighlightRule,
+    merge_keyword_highlight_rules_for_paint,
+};
+
+use crate::features::NyaTermApp;
 pub(in crate::features) use crate::theme::{ThemePalette, theme_palette};
 
 const TERMINAL_FONT_SIZE_MIN: i16 = 8;
@@ -37,25 +44,25 @@ impl NyaTermApp {
             .background_image_path
             .as_deref()
             .map(str::trim)
-            .is_some_and(|path| !path.is_empty() && std::path::Path::new(path).is_file())
+            .is_some_and(|path| !path.is_empty() && Path::new(path).is_file())
     }
 
     /// Wallpaper opacity applies to surface backgrounds, not their contents.
     pub(in crate::features) fn shell_surface_color(&self, color: u32) -> gpui::Rgba {
         if !self.wallpaper_enabled() {
-            return gpui::rgb(color);
+            return rgb(color);
         }
         let alpha = ((self.settings.background_content_opacity.min(100) as f32 / 100.0) * 255.0)
             .round() as u32;
-        gpui::rgba((color << 8) | alpha.min(0xff))
+        rgba((color << 8) | alpha.min(0xff))
     }
 
     /// Tauri's terminal and explicitly transparent surfaces reveal wallpaper.
     pub(in crate::features) fn shell_transparent_color(&self, color: u32) -> gpui::Rgba {
         if self.wallpaper_enabled() {
-            gpui::rgba(color << 8)
+            rgba(color << 8)
         } else {
-            gpui::rgb(color)
+            rgb(color)
         }
     }
 
@@ -70,18 +77,18 @@ impl NyaTermApp {
 
     pub(in crate::features) fn resolved_keyword_highlight_rules(
         &self,
-    ) -> std::sync::Arc<Vec<nyaterm_core::ResolvedKeywordHighlightRule>> {
+    ) -> Arc<Vec<ResolvedKeywordHighlightRule>> {
         if self.settings.terminal_low_latency_mode {
-            return std::sync::Arc::new(Vec::new());
+            return Arc::new(Vec::new());
         }
         if let Some(cached) = self.cached_keyword_highlight_rules.as_ref() {
             return cached.clone();
         }
         // Cache miss (settings path / first call without ensure): build once without storing.
         if !self.keyword_highlights.enabled {
-            return std::sync::Arc::new(Vec::new());
+            return Arc::new(Vec::new());
         }
-        std::sync::Arc::new(nyaterm_core::merge_keyword_highlight_rules_for_paint(
+        Arc::new(merge_keyword_highlight_rules_for_paint(
             &self.keyword_highlights.rules,
             &self.keyword_highlights.builtin_rules,
             self.terminal_theme_is_dark(),
@@ -96,18 +103,18 @@ impl NyaTermApp {
 
     fn ensure_keyword_highlight_rules_cache(&mut self) {
         if self.settings.terminal_low_latency_mode {
-            self.cached_keyword_highlight_rules = Some(std::sync::Arc::new(Vec::new()));
+            self.cached_keyword_highlight_rules = Some(Arc::new(Vec::new()));
             return;
         }
         if self.cached_keyword_highlight_rules.is_some() {
             return;
         }
         let rules = if !self.keyword_highlights.enabled {
-            std::sync::Arc::new(Vec::new())
+            Arc::new(Vec::new())
         } else {
             // terminal_theme_is_dark uses palette; ensure palette first.
             self.ensure_terminal_theme_palette_cache();
-            std::sync::Arc::new(nyaterm_core::merge_keyword_highlight_rules_for_paint(
+            Arc::new(merge_keyword_highlight_rules_for_paint(
                 &self.keyword_highlights.rules,
                 &self.keyword_highlights.builtin_rules,
                 self.terminal_theme_is_dark(),
@@ -624,7 +631,7 @@ pub(in crate::features) fn appearance_font_options(cx: &App) -> (Vec<String>, Ve
 
     push_unique_font(&mut terminal_fonts, "JetBrains Mono".to_string());
     for family in &system_fonts {
-        let font_id = text_system.resolve_font(&gpui::font(SharedString::from(family.clone())));
+        let font_id = text_system.resolve_font(&font(SharedString::from(family.clone())));
         let font_size = px(14.);
         let widths = ['i', 'W', '0']
             .into_iter()
@@ -736,7 +743,9 @@ fn windows_gpui_font_should_fallback(family: &str, monospace: bool) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{
+        appearance_font_stack, gpui_code_font_family, gpui_platform_font_family_for_target,
+    };
 
     #[test]
     fn windows_terminal_font_family_uses_primary_stack_entry() {
