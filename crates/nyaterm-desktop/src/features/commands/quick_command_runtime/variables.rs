@@ -1,5 +1,8 @@
-use super::*;
+use std::collections::{HashMap, HashSet};
 
+use gpui::{Context, KeyDownEvent};
+
+use crate::features::NyaTermApp;
 use crate::models::{QuickCommandVariableDef, QuickCommandVariablePromptState};
 
 impl NyaTermApp {
@@ -202,7 +205,9 @@ fn sync_quick_command_variable_value(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::models::QuickCommandVariablePromptState;
+
+    use super::{parse_quick_command_variables, sync_quick_command_variable_value};
 
     #[test]
     fn parses_quick_command_variables_like_tauri_dialog() {

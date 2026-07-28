@@ -579,6 +579,19 @@ declare -A SUPER_BASELINE=(
   [crates/nyaterm-desktop/src/features/pages/settings/workspace/interaction.rs]=0
   [crates/nyaterm-desktop/src/features/pages/settings/workspace/keybindings.rs]=0
   [crates/nyaterm-desktop/src/features/pages/settings/workspace/mod.rs]=0
+  [crates/nyaterm-desktop/src/features/commands/mod.rs]=0
+  [crates/nyaterm-desktop/src/features/commands/state.rs]=0
+  [crates/nyaterm-desktop/src/features/commands/command_runtime/helpers.rs]=0
+  [crates/nyaterm-desktop/src/features/commands/command_runtime/history.rs]=0
+  [crates/nyaterm-desktop/src/features/commands/command_runtime/mod.rs]=0
+  [crates/nyaterm-desktop/src/features/commands/command_runtime/suggestions.rs]=0
+  [crates/nyaterm-desktop/src/features/commands/quick_command_runtime/catalog.rs]=0
+  [crates/nyaterm-desktop/src/features/commands/quick_command_runtime/dialogs.rs]=0
+  [crates/nyaterm-desktop/src/features/commands/quick_command_runtime/editor.rs]=0
+  [crates/nyaterm-desktop/src/features/commands/quick_command_runtime/helpers.rs]=0
+  [crates/nyaterm-desktop/src/features/commands/quick_command_runtime/mod.rs]=0
+  [crates/nyaterm-desktop/src/features/commands/quick_command_runtime/run.rs]=0
+  [crates/nyaterm-desktop/src/features/commands/quick_command_runtime/variables.rs]=0
   [crates/nyaterm-desktop/src/features/commands/quick_command_runtime/import/dialog.rs]=0
   [crates/nyaterm-desktop/src/features/commands/quick_command_runtime/import/helpers.rs]=0
   [crates/nyaterm-desktop/src/features/commands/quick_command_runtime/import/json.rs]=0
@@ -631,7 +644,7 @@ while IFS=: read -r file _line _text; do
   fi
 done < <(rg -n --path-separator / '^[[:space:]]*use super::\*;' \
   crates/nyaterm-desktop/src/features/connections \
-  crates/nyaterm-desktop/src/features/commands/quick_command_runtime/import \
+  crates/nyaterm-desktop/src/features/commands \
   crates/nyaterm-desktop/src/features/pages/mod.rs \
   crates/nyaterm-desktop/src/features/pages/connections \
   crates/nyaterm-desktop/src/features/pages/tunnels \

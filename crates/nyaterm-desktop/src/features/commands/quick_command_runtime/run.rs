@@ -1,7 +1,13 @@
-use super::*;
+use gpui::Context;
+use nyaterm_core::{
+    AiCommandCard, AppendAiAuditRequest, ConnectionStore, QuickCommand, QuickCommandCategory, uuid,
+};
 
+use crate::features::NyaTermApp;
 use crate::models::QuickCommandVariablePromptState;
-use nyaterm_core::AppendAiAuditRequest;
+
+use super::helpers::{ai_command_card_category_name, unique_quick_command_category_id};
+use super::variables::parse_quick_command_variables;
 
 impl NyaTermApp {
     pub(in crate::features) fn save_ai_command_card(

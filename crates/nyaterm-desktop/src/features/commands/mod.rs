@@ -1,7 +1,5 @@
 //! Command history/suggestion runtime and quick command runtime.
 
-use super::*;
-
 mod command_runtime;
 mod quick_command_runtime;
 mod state;

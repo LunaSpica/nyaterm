@@ -1,9 +1,15 @@
-use super::*;
+use std::sync::Arc;
 
+use gpui::{Context, KeyDownEvent, Window};
+use nyaterm_core::ConnectionStore;
+
+use crate::features::NyaTermApp;
 use crate::models::{
     QuickCommandCategoryDeleteState, QuickCommandCategoryRenameState, QuickCommandDeleteState,
     QuickCommandDetailsState, QuickCommandEditorState,
 };
+
+use super::helpers::quick_command_category_label;
 
 impl NyaTermApp {
     pub(in crate::features) fn open_new_quick_command_editor(

@@ -12,8 +12,8 @@ Last updated from the working tree on 2026-07-28.
 | `NyaTermApp` fields | 261 | Counted from `features/app_state/mod.rs`; down from 585, still transitional. |
 | `impl NyaTermApp` blocks | 240 | Spread across 235 files under `crates/nyaterm-desktop/src`. |
 | `#[path = "..."]` declarations in desktop | 0 | Cleared. Every directory is a real module; the boundary script fails on any new occurrence. |
-| `use super::*` imports in desktop | 270 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
-| `features/prelude.rs` rough exported-token count | 228 | Still a broad shared prelude; two hundred seventeen low-frequency transport/core/http/model/helper exports are now explicit imports. |
+| `use super::*` imports in desktop | 255 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
+| `features/prelude.rs` rough exported-token count | 221 | Still a broad shared prelude; two hundred twenty-four low-frequency transport/core/http/model/helper exports are now explicit imports. |
 | Entity Store structs | 4 | `Runtime`, `WindowRuntime`, `StartupRestore`, `Overlay`. Each owns state the app does not. |
 | Snapshot structs | 0 | Cleared. No store is a projection of `NyaTermApp` any more. |
 | `replace_snapshot` methods | 0 | Cleared. |
@@ -432,6 +432,15 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   import only the parser/merge API they exercise. `QuickCommandsConfig` also
   left `features/prelude.rs`. NyaTerm, WindTerm and Xshell input shapes, the
   4 MiB limit, merge behavior and storage path are unchanged.
+- The complete `features/commands` tree is now free of wildcard imports. The
+  command history, suggestion hot path, quick-command catalog/dialog/editor/run
+  modules and their tests name their GPUI, core, model and sibling-helper
+  dependencies directly; both runtime `mod.rs` layers are narrow composition
+  entry points. Seven command-suggestion helpers also left
+  `features/prelude.rs`, and the architecture script governs the whole subtree
+  at zero `use super::*` imports. Command execution, history persistence,
+  suggestion timing/search behavior and quick-command compatibility are
+  unchanged.
 - `connection_runtime/helpers.rs` no longer depends on the connection runtime
   wildcard import; its GPUI, app, model, and core dependencies are explicit.
 - `connection_runtime/actions.rs` no longer depends on the connection runtime
@@ -1188,12 +1197,14 @@ Items 1, 3 and 4 are done. What follows is the honest remaining list.
 
 1. Done. `#[path = "..."]` no longer appears in `nyaterm-desktop` or
    `nyaterm-terminal-gpui`, and a crate-wide guard keeps it that way.
-2. Drop the `use super::*` chain in favor of explicit imports, starting with the
-   leaf files of a directory and working up to its `mod.rs`. Now that each
+2. Drop the `use super::*` chain in favor of explicit imports, working from the
+   leaf files of a coherent directory up to its `mod.rs`. Now that each
    directory is a real module, this is what actually narrows visibility; before
    the module tree existed it only moved names between two flat namespaces.
-   Note this one does not batch: every file needs its own dependency set
-   resolved, so it is 355 small compiler-guided edits rather than one sweep.
+   Batch complete subtrees where the behavior and validation surface are
+   cohesive, while still resolving each file's dependency set explicitly with
+   compiler guidance. Run formatting, boundary checks, compilation and tests
+   once for the completed batch rather than committing one file at a time.
 3. Largely done. `NyaTermApp` is down from 585 fields to 284, across eight
    feature-state structs. What is left is a long tail — the biggest remaining
    domain is eighteen fields, and much of the rest is genuinely app-level

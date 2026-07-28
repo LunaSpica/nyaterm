@@ -1,7 +1,24 @@
-use super::*;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+
+use gpui::{
+    Bounds, Context, FontWeight, IntoElement, KeyDownEvent, Pixels, SharedString, Timer, div,
+    prelude::*, px, rgb, rgba, svg,
+};
+use nyaterm_core::{
+    CommandHistoryEntry, ConnectionStore, QuickCommand, TerminalInputState,
+    apply_terminal_input_data, can_suggest_from_tracked_command,
+    command_starts_suggestion_suppressing_program, get_tracked_command,
+    get_tracked_submission_command, resync_from_terminal_line, search_command_sources,
+    terminal_input_tracker_below_min_chars,
+};
+
+use crate::features::NyaTermApp;
 use crate::features::terminal::terminal_runtime::TERMINAL_INPUT_LATENCY_WINDOW;
 use crate::models::{CommandSuggestionItem, CommandSuggestionState};
-use gpui::{Bounds, Pixels};
+use crate::terminal::terminal_byte_index_for_cell_col;
+
+use super::helpers::command_suggestion_highlight_parts;
 
 const COMMAND_SUGGESTION_INPUT_SLOW_THRESHOLD: Duration = Duration::from_millis(4);
 const COMMAND_SUGGESTION_REFRESH_SLOW_THRESHOLD: Duration = Duration::from_millis(8);
@@ -1132,8 +1149,9 @@ pub(in crate::features) fn suggestion_overlay_position(
 
 #[cfg(test)]
 mod overlay_position_tests {
-    use super::*;
-    use gpui::{point, size};
+    use gpui::{Bounds, point, px, size};
+
+    use super::suggestion_overlay_position;
 
     #[test]
     fn suggestion_overlay_position_anchors_below_cursor() {
@@ -1181,8 +1199,19 @@ fn terminal_line_prefix_for_cell_col(line: &str, cell_col: usize) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use std::time::{Duration, Instant};
+
+    use nyaterm_core::{TerminalInputState, apply_terminal_input_data};
+
     use crate::features::terminal::terminal_runtime::TERMINAL_INPUT_LATENCY_WINDOW;
+    use crate::models::{CommandSuggestionItem, CommandSuggestionState};
+
+    use super::{
+        command_history_input_update, command_suggestion_input_can_defer_refresh,
+        command_suggestion_input_candidate_chars, command_suggestion_input_obvious_pager_prefix,
+        command_suggestion_refresh_input_delay, command_suggestion_state_changed,
+        terminal_line_prefix_for_cell_col,
+    };
 
     #[test]
     fn terminal_line_prefix_uses_terminal_cells_for_wide_chars() {

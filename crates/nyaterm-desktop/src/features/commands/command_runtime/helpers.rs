@@ -1,4 +1,9 @@
-use super::*;
+use std::collections::HashSet;
+
+use gpui::{FontWeight, IntoElement, div, prelude::*, rgb};
+use nyaterm_core::truncate_preview;
+
+use crate::theme::ThemePalette;
 
 pub(super) fn command_suggestion_highlight_parts(
     text: &str,

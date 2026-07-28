@@ -1,4 +1,12 @@
-use super::*;
+use std::sync::{Arc, mpsc};
+
+use gpui::Context;
+use nyaterm_core::{AiCommandCard, truncate_preview};
+
+use crate::features::{
+    AiAgentStepStatus, CommandPersistenceRequest, CommandPersistenceResult, NyaTermApp,
+    SESSION_COMMAND_HISTORY_LIMIT, is_agent_command_card,
+};
 
 const COMMAND_PERSISTENCE_EVENT_DRAIN_LIMIT: usize = 32;
 

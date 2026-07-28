@@ -1,6 +1,12 @@
-use super::*;
+use std::sync::Arc;
 
+use gpui::{Context, KeyDownEvent, Window};
+use nyaterm_core::{ConnectionStore, QuickCommand, QuickCommandCategory, uuid};
+
+use crate::features::{NyaTermApp, non_empty_string};
 use crate::models::QuickCommandEditorField;
+
+use super::helpers::unix_millis_now;
 
 impl NyaTermApp {
     pub(in crate::features) fn focus_quick_command_editor_field(

@@ -1,5 +1,3 @@
-use crate::theme::ThemePalette;
-use gpui::{FontWeight, IntoElement, div, prelude::*, px, rgb};
 use nyaterm_transport::SessionKind;
 
 #[derive(Debug, Clone, PartialEq, Eq)]

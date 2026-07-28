@@ -1,6 +1,12 @@
-use super::*;
+use std::sync::Arc;
 
-use crate::models::{QuickCommandSortMode, QuickCommandViewMode};
+use gpui::{Context, KeyDownEvent, Window};
+use nyaterm_core::ConnectionStore;
+
+use crate::features::{NyaTermApp, TextInputSetup};
+use crate::models::{NavItem, QuickCommandSortMode, QuickCommandViewMode};
+
+use super::helpers::{quick_command_sort_mode_setting, quick_command_view_mode_setting};
 
 impl NyaTermApp {
     pub(in crate::features) fn close_quick_command_toolbar_popovers(&mut self) {
