@@ -12,7 +12,7 @@ Last updated from the working tree on 2026-07-28.
 | `NyaTermApp` fields | 261 | Counted from `features/app_state/mod.rs`; down from 585, still transitional. |
 | `impl NyaTermApp` blocks | 240 | Spread across 235 files under `crates/nyaterm-desktop/src`. |
 | `#[path = "..."]` declarations in desktop | 0 | Cleared. Every directory is a real module; the boundary script fails on any new occurrence. |
-| `use super::*` imports in desktop | 371 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
+| `use super::*` imports in desktop | 370 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
 | `features/prelude.rs` rough exported-token count | 230 | Still a broad shared prelude; two hundred fifteen low-frequency transport/core/http/model exports are now explicit imports. |
 | Entity Store structs | 4 | `Runtime`, `WindowRuntime`, `StartupRestore`, `Overlay`. Each owns state the app does not. |
 | Snapshot structs | 0 | Cleared. No store is a projection of `NyaTermApp` any more. |
@@ -268,6 +268,9 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   explicit.
 - `shell/event_pump/bridge.rs` no longer depends on the shell/event-pump
   wildcard import; its app dependency is explicit.
+- `shell/event_pump/helpers.rs` test coverage no longer depends on a nested
+  wildcard import; the helper/constant surface used by those tests is explicit,
+  and the file's guarded baseline is down to one remaining production wildcard.
 - `connection_runtime` now lives under the `features/connections` module tree
   and uses normal `mod` declarations for helpers, actions, editor, and groups
   instead of `#[path = "..."]`.

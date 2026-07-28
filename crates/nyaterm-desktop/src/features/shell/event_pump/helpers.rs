@@ -412,7 +412,32 @@ pub(super) fn terminal_log_plain_text(text: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use std::collections::VecDeque;
+    use std::time::{Duration, Instant};
+
+    use nyaterm_transport::SessionEvent;
+
+    use super::{
+        CONNECT_SETTLE_HOLD, PendingSessionAuthWait, RUNTIME_BACKGROUND_EVENT_DRAIN_WALL_BUDGET,
+        RUNTIME_IDLE_TICK_INTERVAL, RUNTIME_PRESSURE_TICK_INTERVAL, SESSION_EVENT_DRAIN_BATCH,
+        SESSION_EVENT_DRAIN_IDLE_OUTPUT_BUDGET, SESSION_EVENT_DRAIN_PRESSURE_OUTPUT_BUDGET,
+        SESSION_EVENT_DRAIN_SLOW_CHUNK, SESSION_EVENT_DRAIN_SLOW_TOTAL,
+        SESSION_EVENT_DRAIN_WALL_BUDGET, SLOW_DIAGNOSTIC_THROTTLE,
+        TERMINAL_FRAME_APPLY_PRESSURE_INTERVAL, UI_PAINT_THROTTLE, WINDOW_GEOMETRY_CHURN_HOLD,
+        connect_settle_active, connect_settle_deadline, diagnostic_log_due,
+        pending_session_status_message, runtime_background_event_drain_budget_exhausted,
+        runtime_background_should_defer_terminal_frames, runtime_cursor_blink_allowed,
+        runtime_idle_plane_allowed, runtime_output_pressure_active_from_counts,
+        runtime_tick_interval_for_pressure, runtime_ui_notify_allowed,
+        session_event_backlog_active, session_event_drain_budget, session_event_drain_is_slow,
+        session_event_drain_should_yield, session_event_input_wake_drain_budget,
+        session_events_output_bytes, terminal_cell_metrics_refresh_needed,
+        terminal_frame_apply_should_defer, terminal_frame_backlog_active_from_counts,
+        terminal_input_idle_remaining_delay, terminal_log_plain_text,
+        terminal_output_dropped_marker, terminal_performance_tick_session_ids,
+        terminal_render_work_pressure_active, terminal_user_scroll_frame_apply_pending,
+        title_drag_active, viewport_change_terminal_session_ids, window_geometry_churn_active,
+    };
 
     #[test]
     fn output_dropped_marker_is_plain_terminal_text() {
