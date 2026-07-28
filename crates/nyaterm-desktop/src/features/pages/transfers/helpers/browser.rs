@@ -1,4 +1,15 @@
-use super::*;
+use std::cmp::Ordering;
+
+use gpui::{
+    ClickEvent, Context, FontWeight, InteractiveElement as _, IntoElement, MouseButton,
+    MouseDownEvent, ParentElement as _, Pixels, Rgba, SharedString,
+    StatefulInteractiveElement as _, Styled as _, div, px, rgb, rgba,
+};
+use nyaterm_transport::{SftpFileEntry, SftpFileType};
+
+use crate::features::NyaTermApp;
+use crate::models::{TransferBrowserSortColumn, TransferBrowserSortDirection};
+use crate::theme::ThemePalette;
 
 pub(in crate::features::pages::transfers) fn transfer_browser_search_status(
     query: &str,
@@ -13,10 +24,10 @@ pub(in crate::features::pages::transfers) fn transfer_browser_search_status(
 }
 
 pub(in crate::features::pages::transfers) fn sort_header_cell(
-    palette: crate::theme::ThemePalette,
-    header_bg: gpui::Rgba,
+    palette: ThemePalette,
+    header_bg: Rgba,
     column: TransferBrowserSortColumn,
-    width: gpui::Pixels,
+    width: Pixels,
     active_column: TransferBrowserSortColumn,
     direction: TransferBrowserSortDirection,
     resizing_column: Option<TransferBrowserSortColumn>,
@@ -46,7 +57,7 @@ pub(in crate::features::pages::transfers) fn sort_header_cell(
         .border_color(rgb(palette.surface_elevated))
         .cursor_pointer()
         .bg(if is_active {
-            gpui::rgba((palette.primary << 8) | 0x14)
+            rgba((palette.primary << 8) | 0x14)
         } else {
             header_bg
         })
