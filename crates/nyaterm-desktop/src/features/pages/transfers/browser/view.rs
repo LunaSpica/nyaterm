@@ -6,12 +6,12 @@ use gpui::{
 use nyaterm_core::truncate_preview;
 use nyaterm_transport::SftpFileType;
 
-use crate::features::{NyaTermApp, TextInputSetup};
+use crate::features::{NyaTermApp, TextInputSetup, format_file_size};
 use crate::models::TransferBrowserSortColumn;
 
 use super::super::{
-    format_file_size, normalized_transfer_browser_path, sort_header_cell,
-    transfer_browser_entry_row, transfer_browser_parent_entry_row, transfer_browser_table_width,
+    normalized_transfer_browser_path, sort_header_cell, transfer_browser_entry_row,
+    transfer_browser_parent_entry_row, transfer_browser_table_width,
 };
 use super::helpers::{
     compact_transfer_footer_button, compact_transfer_footer_button_active,

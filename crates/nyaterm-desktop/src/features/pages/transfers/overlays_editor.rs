@@ -1,5 +1,16 @@
-use super::*;
-use gpui::rgba;
+use gpui::{
+    AnyElement, App, ClickEvent, Context, Entity, FontWeight, IntoElement, KeyDownEvent,
+    MouseButton, SharedString, Window, div, prelude::*, px, rgb, rgba, svg,
+};
+
+use crate::features::{NyaTermApp, RemoteTextEditor, dialog_action_button, truncate_preview};
+use crate::models::{
+    TransferEditorField, TransferEditorState, TransferEditorWorkspaceState,
+    TransferExternalSyncPromptState,
+};
+use crate::widgets::small_button;
+
+use super::helpers::{editor_content_preview, editor_search_matches};
 
 #[derive(Clone, Copy)]
 enum ExternalSyncButtonStyle {

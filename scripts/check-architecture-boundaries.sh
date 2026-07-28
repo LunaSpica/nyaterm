@@ -532,14 +532,17 @@ declare -A SUPER_BASELINE=(
   [crates/nyaterm-desktop/src/features/pages/transfers/file_ops/mod.rs]=0
   [crates/nyaterm-desktop/src/features/pages/transfers/file_ops/move_delete.rs]=0
   [crates/nyaterm-desktop/src/features/pages/transfers/file_ops/symlink_rename.rs]=0
+  [crates/nyaterm-desktop/src/features/pages/transfers/mod.rs]=0
   [crates/nyaterm-desktop/src/features/pages/transfers/overlays.rs]=0
   [crates/nyaterm-desktop/src/features/pages/transfers/overlays_context.rs]=0
   [crates/nyaterm-desktop/src/features/pages/transfers/overlays_create.rs]=0
   [crates/nyaterm-desktop/src/features/pages/transfers/overlays_delete_move.rs]=0
+  [crates/nyaterm-desktop/src/features/pages/transfers/overlays_editor.rs]=0
   [crates/nyaterm-desktop/src/features/pages/transfers/overlays_favorites.rs]=0
   [crates/nyaterm-desktop/src/features/pages/transfers/overlays_properties.rs]=0
   [crates/nyaterm-desktop/src/features/pages/transfers/overlays_unknown.rs]=0
   [crates/nyaterm-desktop/src/features/pages/transfers/overlays_upload.rs]=0
+  [crates/nyaterm-desktop/src/features/pages/transfers/path_bar.rs]=0
   [crates/nyaterm-desktop/src/features/pages/transfers/properties.rs]=0
   [crates/nyaterm-desktop/src/features/pages/transfers/queue.rs]=0
   [crates/nyaterm-desktop/src/features/pages/transfers/helpers/browser.rs]=0
@@ -590,26 +593,7 @@ done < <(rg -n --path-separator / '^[[:space:]]*use super::\*;' \
   crates/nyaterm-desktop/src/features/pages/mod.rs \
   crates/nyaterm-desktop/src/features/pages/connections \
   crates/nyaterm-desktop/src/features/pages/tunnels \
-  crates/nyaterm-desktop/src/features/pages/transfers/browser_columns.rs \
-  crates/nyaterm-desktop/src/features/pages/transfers/browser_filter.rs \
-  crates/nyaterm-desktop/src/features/pages/transfers/browser_keys.rs \
-  crates/nyaterm-desktop/src/features/pages/transfers/browser_navigation.rs \
-  crates/nyaterm-desktop/src/features/pages/transfers/browser_selection.rs \
-  crates/nyaterm-desktop/src/features/pages/transfers/browser \
-  crates/nyaterm-desktop/src/features/pages/transfers/editor \
-  crates/nyaterm-desktop/src/features/pages/transfers/entry_row.rs \
-  crates/nyaterm-desktop/src/features/pages/transfers/file_ops \
-  crates/nyaterm-desktop/src/features/pages/transfers/overlays.rs \
-  crates/nyaterm-desktop/src/features/pages/transfers/overlays_context.rs \
-  crates/nyaterm-desktop/src/features/pages/transfers/overlays_create.rs \
-  crates/nyaterm-desktop/src/features/pages/transfers/overlays_delete_move.rs \
-  crates/nyaterm-desktop/src/features/pages/transfers/overlays_favorites.rs \
-  crates/nyaterm-desktop/src/features/pages/transfers/overlays_properties.rs \
-  crates/nyaterm-desktop/src/features/pages/transfers/overlays_unknown.rs \
-  crates/nyaterm-desktop/src/features/pages/transfers/overlays_upload.rs \
-  crates/nyaterm-desktop/src/features/pages/transfers/properties.rs \
-  crates/nyaterm-desktop/src/features/pages/transfers/queue.rs \
-  crates/nyaterm-desktop/src/features/pages/transfers/helpers \
+  crates/nyaterm-desktop/src/features/pages/transfers \
   crates/nyaterm-desktop/src/features/shell/mod.rs \
   crates/nyaterm-desktop/src/features/shell/activity_bar_runtime.rs \
   crates/nyaterm-desktop/src/features/shell/appearance.rs \

@@ -1,4 +1,17 @@
-use super::*;
+use gpui::{
+    ClipboardItem, Context, IntoElement, KeyDownEvent, MouseButton, MouseDownEvent, SharedString,
+    Window, div, prelude::*, px, rgb, svg,
+};
+use nyaterm_transport::{SftpFileEntry, SftpFileType};
+
+use crate::features::{NyaTermApp, TextInputSetup, truncate_preview};
+use crate::models::{
+    TransferBrowserBreadcrumbSegment, TransferBrowserChildrenMenuStatus,
+    TransferBrowserPathMenuKind, TransferBrowserPathMenuState,
+};
+
+use super::helpers::{natural_compare_ascii, normalized_transfer_browser_path, remote_child_path};
+use super::transfer_menu_position;
 
 impl NyaTermApp {
     pub(super) fn transfer_browser_path_row(
@@ -901,7 +914,12 @@ fn expand_transfer_browser_home_path(path: &str, home_dir: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use nyaterm_transport::{SftpFileEntry, SftpFileType};
+
+    use super::{
+        build_transfer_browser_breadcrumbs, collapse_transfer_browser_breadcrumbs,
+        transfer_browser_child_directories,
+    };
 
     fn entry(name: &str, path: &str, file_type: SftpFileType) -> SftpFileEntry {
         SftpFileEntry {
