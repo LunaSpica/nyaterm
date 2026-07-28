@@ -1,5 +1,8 @@
-use super::*;
+use std::collections::VecDeque;
 use std::fmt::Write as _;
+use std::time::{Duration, Instant};
+
+use nyaterm_transport::SessionEvent;
 
 pub(super) const TRANSFER_AUTO_SYNC_CWD_INTERVAL_SECONDS: u32 = 3;
 pub(super) const SESSION_EVENT_DRAIN_BATCH: usize = 256;
