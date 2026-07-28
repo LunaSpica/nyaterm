@@ -168,9 +168,16 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   commands and state, editable path/history/breadcrumb navigation, resizable
   sortable columns, range/additive selection and context actions, transfer
   progress and queue controls, and keyboard handling. The desktop state and
-  pure helpers are covered by `nyaterm-desktop` tests. A real remote SFTP E2E
-  pass is still required on a machine with a reachable SSH server; it was not
-  possible in the current environment.
+  pure helpers are covered by `nyaterm-desktop` tests. Real remote verification
+  is complete against a disposable localhost OpenSSH server. The opt-in
+  `sftp_service_round_trips_file_manager_operations` test covers directory and
+  file creation, text read/write, properties, rename, upload, download,
+  listing, and recursive cleanup. The live GPUI pass covered session restore,
+  the browser toolbar and hidden-file toggle, path/history navigation, natural
+  and column sorting, column resizing, additive selection, the context menu,
+  and loading remote file properties. The transfer queue remains covered by
+  desktop state tests, while its upload/download transport path is covered by
+  the remote E2E test.
 - AI state is grouped into `AiFeatureState`: provider `settings`, the `chat`
   composer and transcript, session `history`, model `discovery`, the agent
   `loop`, and `panel` chrome. Note that `SettingsDraftSnapshot` deliberately
