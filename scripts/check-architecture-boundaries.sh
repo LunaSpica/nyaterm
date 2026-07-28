@@ -517,6 +517,9 @@ declare -A SUPER_BASELINE=(
   [crates/nyaterm-desktop/src/features/shell/mod.rs]=1
   [crates/nyaterm-desktop/src/features/shell/global_shortcut_runtime.rs]=0
   [crates/nyaterm-desktop/src/features/shell/navigation_runtime.rs]=0
+  [crates/nyaterm-desktop/src/features/shell/keybinding_runtime/mod.rs]=1
+  [crates/nyaterm-desktop/src/features/shell/keybinding_runtime/keybindings.rs]=0
+  [crates/nyaterm-desktop/src/features/shell/keybinding_runtime/keyword_highlights.rs]=2
   [crates/nyaterm-desktop/src/features/shell/event_pump/mod.rs]=0
   [crates/nyaterm-desktop/src/features/shell/event_pump/bridge.rs]=0
   [crates/nyaterm-desktop/src/features/shell/event_pump/helpers.rs]=0
@@ -546,6 +549,7 @@ done < <(rg -n --path-separator / '^[[:space:]]*use super::\*;' \
   crates/nyaterm-desktop/src/features/pages/tunnels \
   crates/nyaterm-desktop/src/features/shell/mod.rs \
   crates/nyaterm-desktop/src/features/shell/event_pump \
+  crates/nyaterm-desktop/src/features/shell/keybinding_runtime \
   crates/nyaterm-desktop/src/features/tunnels 2>/dev/null || true)
 
 # Connection list selection invariants are owned by ConnectionFeatureState's

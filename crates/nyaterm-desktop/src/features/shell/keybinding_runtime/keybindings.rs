@@ -1,4 +1,10 @@
-use super::*;
+use std::collections::HashMap;
+
+use gpui::{Context, KeyDownEvent, Window};
+use nyaterm_core::ConnectionStore;
+
+use crate::features::NyaTermApp;
+use crate::shortcuts::event_to_hotkey_string;
 
 impl NyaTermApp {
     /// First display chord for empty-workspace / UI labels (Tauri-style chips).
