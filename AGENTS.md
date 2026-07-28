@@ -60,7 +60,8 @@ manifest rather than by hand.
 `NyaTermApp` is still the central GPUI state owner, but it is no longer just one
 flat migration bucket. Major transient UI domains are grouped into focused
 feature-state structs, including connections, quick commands, remote ops,
-security, AI, terminal presentation, send-command, and transfers.
+security, settings interaction, AI, terminal presentation, send-command, and
+transfers.
 
 Persisted collections and compatibility-sensitive catalogs may still live on
 `NyaTermApp` until an explicit ownership migration is tested. Examples include

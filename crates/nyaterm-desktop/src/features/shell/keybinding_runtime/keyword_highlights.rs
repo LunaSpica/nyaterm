@@ -12,7 +12,7 @@ impl NyaTermApp {
     pub(in crate::features) fn toggle_keyword_highlights(&mut self, cx: &mut Context<Self>) {
         self.keyword_highlights.enabled = !self.keyword_highlights.enabled;
         if !self.keyword_highlights.enabled {
-            self.keyword_highlight_edit_id = None;
+            self.settings_state.keyword_highlights.edit_id = None;
             self.forget_text_inputs("keyword.highlight.");
         }
         self.save_keyword_highlights(cx);
@@ -200,16 +200,22 @@ impl NyaTermApp {
         rule_id: String,
         cx: &mut Context<Self>,
     ) {
-        if self.keyword_highlight_expanded_id.as_deref() == Some(rule_id.as_str()) {
-            self.keyword_highlight_expanded_id = None;
-            self.keyword_highlight_edit_id = None;
+        if self
+            .settings_state
+            .keyword_highlights
+            .expanded_id
+            .as_deref()
+            == Some(rule_id.as_str())
+        {
+            self.settings_state.keyword_highlights.expanded_id = None;
+            self.settings_state.keyword_highlights.edit_id = None;
             self.forget_text_inputs(&keyword_highlight_text_input_prefix(&rule_id));
         } else {
-            if let Some(previous_id) = self.keyword_highlight_expanded_id.take() {
+            if let Some(previous_id) = self.settings_state.keyword_highlights.expanded_id.take() {
                 self.forget_text_inputs(&keyword_highlight_text_input_prefix(&previous_id));
             }
-            self.keyword_highlight_expanded_id = Some(rule_id);
-            self.keyword_highlight_edit_id = None;
+            self.settings_state.keyword_highlights.expanded_id = Some(rule_id);
+            self.settings_state.keyword_highlights.edit_id = None;
         }
         cx.notify();
     }
@@ -234,9 +240,9 @@ impl NyaTermApp {
             color_light: "#0969da".to_string(),
             enabled: true,
         });
-        self.keyword_highlight_expanded_id = Some(id.clone());
-        self.keyword_highlight_edit_id = Some(id.clone());
-        self.keyword_highlight_edit_field = KeywordHighlightEditorField::Name;
+        self.settings_state.keyword_highlights.expanded_id = Some(id.clone());
+        self.settings_state.keyword_highlights.edit_id = Some(id.clone());
+        self.settings_state.keyword_highlights.edit_field = KeywordHighlightEditorField::Name;
         let input = self.text_input(
             keyword_highlight_text_input_id(&id, KeywordHighlightEditorField::Name),
             "New rule",
@@ -255,11 +261,17 @@ impl NyaTermApp {
         self.keyword_highlights
             .rules
             .retain(|rule| rule.id != rule_id);
-        if self.keyword_highlight_expanded_id.as_deref() == Some(rule_id.as_str()) {
-            self.keyword_highlight_expanded_id = None;
+        if self
+            .settings_state
+            .keyword_highlights
+            .expanded_id
+            .as_deref()
+            == Some(rule_id.as_str())
+        {
+            self.settings_state.keyword_highlights.expanded_id = None;
         }
-        if self.keyword_highlight_edit_id.as_deref() == Some(rule_id.as_str()) {
-            self.keyword_highlight_edit_id = None;
+        if self.settings_state.keyword_highlights.edit_id.as_deref() == Some(rule_id.as_str()) {
+            self.settings_state.keyword_highlights.edit_id = None;
         }
         self.forget_text_inputs(&keyword_highlight_text_input_prefix(&rule_id));
         self.save_keyword_highlights(cx);
@@ -336,9 +348,9 @@ impl NyaTermApp {
             setup,
             cx,
         );
-        self.keyword_highlight_expanded_id = Some(rule_id.clone());
-        self.keyword_highlight_edit_id = Some(rule_id);
-        self.keyword_highlight_edit_field = field;
+        self.settings_state.keyword_highlights.expanded_id = Some(rule_id.clone());
+        self.settings_state.keyword_highlights.edit_id = Some(rule_id);
+        self.settings_state.keyword_highlights.edit_field = field;
         window.focus(&input.read(cx).focus_handle());
         cx.notify();
     }
@@ -350,14 +362,14 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         cx.stop_propagation();
-        let Some(rule_id) = self.keyword_highlight_edit_id.clone() else {
+        let Some(rule_id) = self.settings_state.keyword_highlights.edit_id.clone() else {
             return;
         };
-        let field = self.keyword_highlight_edit_field;
+        let field = self.settings_state.keyword_highlights.edit_field;
         match event.keystroke.key.as_str() {
             "escape" => {
-                self.keyword_highlight_edit_id = None;
-                window.focus(&self.keyword_highlight_focus);
+                self.settings_state.keyword_highlights.edit_id = None;
+                window.focus(&self.settings_state.keyword_highlights.focus);
                 self.terminal.view.status = "keyword rule edit cancelled".to_string();
                 cx.notify();
                 return;
@@ -376,8 +388,8 @@ impl NyaTermApp {
                 return;
             }
             "enter" => {
-                self.keyword_highlight_edit_id = None;
-                window.focus(&self.keyword_highlight_focus);
+                self.settings_state.keyword_highlights.edit_id = None;
+                window.focus(&self.settings_state.keyword_highlights.focus);
                 self.save_keyword_highlights(cx);
                 return;
             }
@@ -419,8 +431,8 @@ impl NyaTermApp {
                 rule.color_light = normalized_color.clone().unwrap_or_default();
             }
         }
-        self.keyword_highlight_edit_id = Some(rule_id.to_string());
-        self.keyword_highlight_edit_field = field;
+        self.settings_state.keyword_highlights.edit_id = Some(rule_id.to_string());
+        self.settings_state.keyword_highlights.edit_field = field;
         if let Some(color) = normalized_color {
             self.reset_text_input(&keyword_highlight_text_input_id(rule_id, field), &color, cx);
         }

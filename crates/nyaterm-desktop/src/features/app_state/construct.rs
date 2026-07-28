@@ -4,10 +4,9 @@ use std::time::Instant;
 
 use crate::models::{
     ActivityBarLayoutState, BottomPanelMode, CloudSyncInputField, CloudSyncSecretDraft,
-    GithubGistAuthState, HeaderStatusState, KeywordHighlightEditorField, MainMode, NavItem,
-    PanelSide, RecordingWritePipeline, RightFocus, SearchEngineEditorField, SessionEventBridge,
-    SettingsTab, StartupCommandAction, StoreStatus, TerminalFramePipeline, TranslateInputField,
-    TranslationSecretDraft,
+    GithubGistAuthState, HeaderStatusState, MainMode, NavItem, PanelSide, RecordingWritePipeline,
+    RightFocus, SessionEventBridge, SettingsTab, StartupCommandAction, StoreStatus,
+    TerminalFramePipeline, TranslateInputField, TranslationSecretDraft,
 };
 use crate::terminal::initial_terminal_screen;
 use gpui::{Context, ScrollHandle};
@@ -19,6 +18,7 @@ use nyaterm_core::{
 use nyaterm_terminal::TerminalOutputDecoder;
 use nyaterm_transport::{RecordingManager, SessionManager, SftpDuplicatePolicy, SshTunnelManager};
 
+use super::super::settings::{SettingsFeatureFocus, SettingsFeatureState};
 use super::super::{
     AiFeatureFocus, AiFeatureState, ConnectionFeatureFocus, ConnectionFeatureState,
     CredentialPromptBroker, DEFAULT_DUPLICATE_STARTUP_DELAY_MS, HostKeyPromptBroker,
@@ -417,6 +417,15 @@ impl NyaTermApp {
                     unlock: cx.focus_handle(),
                 },
             ),
+            settings_state: SettingsFeatureState::new(
+                appearance_ui_font_options,
+                appearance_terminal_font_options,
+                SettingsFeatureFocus {
+                    search_engine: cx.focus_handle(),
+                    keyword_highlight: cx.focus_handle(),
+                    keybindings: cx.focus_handle(),
+                },
+            ),
             remote_ops: RemoteOpsFeatureState::new(RemoteOpsFeatureFocus {}),
             command_history: Arc::from(command_history),
             command_persistence_tx,
@@ -426,12 +435,6 @@ impl NyaTermApp {
             active_sessions_search_draft: String::new(),
             active_session_menu: None,
             active_session_busy_actions: HashMap::new(),
-            search_engine_edit_index: None,
-            search_engine_expanded_index: None,
-            search_engine_icon_picker_index: None,
-            search_engine_actions_index: None,
-            search_engine_edit_field: SearchEngineEditorField::Name,
-            search_engine_focus: cx.focus_handle(),
             text_inputs: TextInputRegistry::default(),
             action_link_menu: None,
             action_link_tooltip: None,
@@ -455,20 +458,9 @@ impl NyaTermApp {
             sync_groups_delete_pending: None,
             broadcast_to_all: false,
             keyword_highlights,
-            keyword_highlight_expanded_id: None,
-            keyword_highlight_edit_id: None,
-            keyword_highlight_edit_field: KeywordHighlightEditorField::Name,
-            keyword_highlight_focus: cx.focus_handle(),
             settings,
             settings_master_password_enabled,
             settings_master_password_draft: String::new(),
-            appearance_menu_open: None,
-            appearance_ui_font_options,
-            appearance_terminal_font_options,
-            keybinding_recording_id: None,
-            keybinding_pending_keys: None,
-            keybinding_search_draft: String::new(),
-            keybindings_focus: cx.focus_handle(),
             store_status,
             session_manager,
             session_event_bridge,

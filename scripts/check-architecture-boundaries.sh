@@ -113,6 +113,11 @@ check_no_matches \
   '^[[:space:]]*pub\(in crate::features\)[[:space:]]+(command_suggestions|command_input_tracker|command_suggestions_suppressed|pending_command_history_entry|command_suggestion_search_gen|command_suggestion_refresh_task|credential_suggestions|credential_autofill_buffer|credential_autofill_recent|credential_autofill_pending|credential_autofill_detection_pending|credential_autofill_next_request_id|credential_autofill_pending_request|credential_autofill_match_pipeline|credential_autofill_sending|credential_prompt_input_until_ms)[[:space:]]*:' \
   crates/nyaterm-desktop/src/features/app_state/mod.rs
 
+check_no_matches \
+  "settings transient UI fields must stay grouped under SettingsFeatureState" \
+  '^[[:space:]]*pub\(in crate::features\)[[:space:]]+(search_engine_edit_index|search_engine_expanded_index|search_engine_icon_picker_index|search_engine_actions_index|search_engine_edit_field|search_engine_focus|keyword_highlight_expanded_id|keyword_highlight_edit_id|keyword_highlight_edit_field|keyword_highlight_focus|appearance_menu_open|appearance_ui_font_options|appearance_terminal_font_options|keybinding_recording_id|keybinding_pending_keys|keybinding_search_draft|keybindings_focus)[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/app_state/mod.rs
+
 # These low-frequency transport helpers have explicit imports at their call
 # sites. Keep them out of the shared feature prelude so new modules do not
 # acquire unrelated transport dependencies implicitly.

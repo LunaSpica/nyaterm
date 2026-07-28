@@ -30,7 +30,7 @@ use super::session::{
     KeyboardInteractivePromptState, NativeOtpProvider, SftpDuplicatePromptBroker,
     SftpDuplicatePromptState,
 };
-use super::settings::SecurityFeatureState;
+use super::settings::{SecurityFeatureState, SettingsFeatureState};
 use super::settings_window::SettingsWindow;
 use super::terminal::TerminalFeatureState;
 use super::text_inputs::TextInputRegistry;
@@ -40,13 +40,13 @@ use crate::models::{
     ActivityBarContextMenuState, ActivityBarLayoutState, BottomPanelMode, BottomPanelResizeState,
     CloudSyncConflictState, CloudSyncInputField, CloudSyncSecretDraft, ConfigPathPromptKind,
     DiagnosticsPathPromptKind, GithubGistAuthJobEvent, GithubGistAuthState, HeaderStatusState,
-    KeywordHighlightEditorField, KeywordHighlightPathPromptKind, MainMode, MultiLinePasteDraft,
-    NavItem, PanelResizeState, PanelStackResizeState, RecordingPathPromptKind,
-    RecordingWritePipeline, RightFocus, SearchEngineEditorField, SessionEventBridge,
-    SessionRuntimeMetadata, SettingsTab, SnapshotPasswordPromptState, StartupCommandAction,
-    StoreStatus, SyncInputGroup, TabActionsSubmenu, TerminalFrameEvent, TitleMenu,
-    TitleMenuSubmenu, TranslateInputField, TranslationDialogState, TranslationSecretDraft,
-    WorkspacePaneNode, WorkspaceSplitDirection, WorkspaceSplitResizeState, WorkspaceSplitState,
+    KeywordHighlightPathPromptKind, MainMode, MultiLinePasteDraft, NavItem, PanelResizeState,
+    PanelStackResizeState, RecordingPathPromptKind, RecordingWritePipeline, RightFocus,
+    SessionEventBridge, SessionRuntimeMetadata, SettingsTab, SnapshotPasswordPromptState,
+    StartupCommandAction, StoreStatus, SyncInputGroup, TabActionsSubmenu, TerminalFrameEvent,
+    TitleMenu, TitleMenuSubmenu, TranslateInputField, TranslationDialogState,
+    TranslationSecretDraft, WorkspacePaneNode, WorkspaceSplitDirection, WorkspaceSplitResizeState,
+    WorkspaceSplitState,
 };
 use nyaterm_core::{TranslateResult, TranslationSettings};
 
@@ -84,6 +84,7 @@ pub struct NyaTermApp {
     pub(in crate::features) quick_command_state: QuickCommandFeatureState,
     pub(in crate::features) remote_ops: RemoteOpsFeatureState,
     pub(in crate::features) security: SecurityFeatureState,
+    pub(in crate::features) settings_state: SettingsFeatureState,
     pub(in crate::features) ai: AiFeatureState,
     pub(in crate::features) terminal: TerminalFeatureState,
     pub(in crate::features) send_command: SendCommandFeatureState,
@@ -98,13 +99,6 @@ pub struct NyaTermApp {
     pub(in crate::features) active_session_menu: Option<ActiveSessionMenuState>,
     /// Per-session reconnect/disconnect busy state ("reconnect" | "disconnect").
     pub(in crate::features) active_session_busy_actions: HashMap<String, String>,
-    /// Which search engine row is focused for name/url editing (Settings → Search).
-    pub(in crate::features) search_engine_edit_index: Option<usize>,
-    pub(in crate::features) search_engine_expanded_index: Option<usize>,
-    pub(in crate::features) search_engine_icon_picker_index: Option<usize>,
-    pub(in crate::features) search_engine_actions_index: Option<usize>,
-    pub(in crate::features) search_engine_edit_field: SearchEngineEditorField,
-    pub(in crate::features) search_engine_focus: FocusHandle,
     pub(in crate::features) action_link_menu: Option<ActionLinkMenuState>,
     pub(in crate::features) action_link_tooltip: Option<ActionLinkTooltipState>,
     /// Pending action-link hover (Tauri 250ms delay before showing tooltip).
@@ -125,20 +119,9 @@ pub struct NyaTermApp {
     /// Broadcast keyboard input to every live session (Tauri broadcastToAll).
     pub(in crate::features) broadcast_to_all: bool,
     pub(in crate::features) keyword_highlights: KeywordHighlightConfig,
-    pub(in crate::features) keyword_highlight_expanded_id: Option<String>,
-    pub(in crate::features) keyword_highlight_edit_id: Option<String>,
-    pub(in crate::features) keyword_highlight_edit_field: KeywordHighlightEditorField,
-    pub(in crate::features) keyword_highlight_focus: FocusHandle,
     pub(in crate::features) settings: AppSettingsSummary,
     pub(in crate::features) settings_master_password_enabled: bool,
     pub(in crate::features) settings_master_password_draft: String,
-    pub(in crate::features) appearance_menu_open: Option<String>,
-    pub(in crate::features) appearance_ui_font_options: Vec<String>,
-    pub(in crate::features) appearance_terminal_font_options: Vec<String>,
-    pub(in crate::features) keybinding_recording_id: Option<String>,
-    pub(in crate::features) keybinding_pending_keys: Option<String>,
-    pub(in crate::features) keybinding_search_draft: String,
-    pub(in crate::features) keybindings_focus: FocusHandle,
     pub(in crate::features) store_status: StoreStatus,
     pub(in crate::features) session_manager: Arc<SessionManager>,
     pub(in crate::features) session_event_bridge: SessionEventBridge,

@@ -48,11 +48,11 @@ impl NyaTermApp {
                 show_in_menu: true,
             },
         );
-        self.search_engine_expanded_index = Some(0);
-        self.search_engine_edit_index = Some(0);
-        self.search_engine_icon_picker_index = None;
-        self.search_engine_actions_index = None;
-        self.search_engine_edit_field = SearchEngineEditorField::Name;
+        self.settings_state.search_engines.expanded_index = Some(0);
+        self.settings_state.search_engines.edit_index = Some(0);
+        self.settings_state.search_engines.icon_picker_index = None;
+        self.settings_state.search_engines.actions_index = None;
+        self.settings_state.search_engines.edit_field = SearchEngineEditorField::Name;
         // The inputs are keyed by row index and every row just shifted down, so
         // they have to be rebuilt from the engines they now stand for.
         self.forget_text_inputs("settings.search-engine.");
@@ -69,20 +69,20 @@ impl NyaTermApp {
             return;
         }
         self.settings.search_custom_engines.remove(index);
-        self.search_engine_icon_picker_index = None;
-        self.search_engine_actions_index = None;
-        if self.search_engine_expanded_index == Some(index) {
-            self.search_engine_expanded_index = None;
-        } else if let Some(edit) = self.search_engine_expanded_index {
+        self.settings_state.search_engines.icon_picker_index = None;
+        self.settings_state.search_engines.actions_index = None;
+        if self.settings_state.search_engines.expanded_index == Some(index) {
+            self.settings_state.search_engines.expanded_index = None;
+        } else if let Some(edit) = self.settings_state.search_engines.expanded_index {
             if edit > index {
-                self.search_engine_expanded_index = Some(edit - 1);
+                self.settings_state.search_engines.expanded_index = Some(edit - 1);
             }
         }
-        if let Some(edit) = self.search_engine_edit_index {
+        if let Some(edit) = self.settings_state.search_engines.edit_index {
             if edit == index {
-                self.search_engine_edit_index = None;
+                self.settings_state.search_engines.edit_index = None;
             } else if edit > index {
-                self.search_engine_edit_index = Some(edit - 1);
+                self.settings_state.search_engines.edit_index = Some(edit - 1);
             }
         }
         self.forget_text_inputs("settings.search-engine.");
@@ -100,7 +100,7 @@ impl NyaTermApp {
             return;
         };
         engine.icon = icon.map(str::to_string);
-        self.search_engine_icon_picker_index = None;
+        self.settings_state.search_engines.icon_picker_index = None;
         self.save_terminal_settings(cx);
         self.terminal.view.status = "search engine icon updated".to_string();
     }
@@ -122,16 +122,16 @@ impl NyaTermApp {
         index: usize,
         cx: &mut Context<Self>,
     ) {
-        if self.search_engine_expanded_index == Some(index) {
-            self.search_engine_expanded_index = None;
-            self.search_engine_edit_index = None;
+        if self.settings_state.search_engines.expanded_index == Some(index) {
+            self.settings_state.search_engines.expanded_index = None;
+            self.settings_state.search_engines.edit_index = None;
             self.normalize_search_engines();
             self.save_terminal_settings(cx);
         } else {
-            self.search_engine_expanded_index = Some(index);
+            self.settings_state.search_engines.expanded_index = Some(index);
         }
-        self.search_engine_icon_picker_index = None;
-        self.search_engine_actions_index = None;
+        self.settings_state.search_engines.icon_picker_index = None;
+        self.settings_state.search_engines.actions_index = None;
         cx.notify();
     }
 

@@ -447,7 +447,7 @@ impl NyaTermApp {
         self.cancel_github_gist_auth(cx);
         self.ai.settings.action_edit = None;
         self.ai.settings.manual_model_edit_group = None;
-        self.keyword_highlight_edit_id = None;
+        self.settings_state.keyword_highlights.edit_id = None;
         self.forget_text_inputs("ai.settings.action.");
         self.forget_text_inputs("ai.settings.manual-model.");
         self.forget_text_inputs("keyword.highlight.");

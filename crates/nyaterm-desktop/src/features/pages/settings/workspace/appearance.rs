@@ -248,7 +248,7 @@ impl NyaTermApp {
                 self.tr("settings.terminalFontFamilyDesc"),
                 self.settings.terminal_font_family.clone(),
                 "JetBrains Mono",
-                self.appearance_terminal_font_options.clone(),
+                self.settings_state.appearance.terminal_font_options.clone(),
             )
         } else {
             (
@@ -256,7 +256,7 @@ impl NyaTermApp {
                 self.tr("settings.uiFontFamilyDesc"),
                 self.settings.ui_font_family.clone(),
                 "Inter",
-                self.appearance_ui_font_options.clone(),
+                self.settings_state.appearance.ui_font_options.clone(),
             )
         };
         let fonts = appearance_font_stack(&raw, fallback);
@@ -268,7 +268,7 @@ impl NyaTermApp {
                 options.insert(0, family.clone());
             }
         }
-        let menu_open = self.appearance_menu_open.clone();
+        let menu_open = self.settings_state.appearance.menu_open.clone();
         let kind = if terminal { "terminal" } else { "ui" };
         let add_id = if terminal {
             "appearance-terminal-font-add"
@@ -304,12 +304,13 @@ impl NyaTermApp {
                     let menu_id_for_toggle = menu_id.clone();
                     let toggle: AppearanceClickHandler =
                         Box::new(cx.listener(move |this, _, _, cx| {
-                            if this.appearance_menu_open.as_deref()
+                            if this.settings_state.appearance.menu_open.as_deref()
                                 == Some(menu_id_for_toggle.as_str())
                             {
-                                this.appearance_menu_open = None;
+                                this.settings_state.appearance.menu_open = None;
                             } else {
-                                this.appearance_menu_open = Some(menu_id_for_toggle.clone());
+                                this.settings_state.appearance.menu_open =
+                                    Some(menu_id_for_toggle.clone());
                             }
                             cx.notify();
                         }));
@@ -542,7 +543,7 @@ impl NyaTermApp {
         let mut options = Vec::new();
         if terminal {
             let handler: AppearanceClickHandler = Box::new(cx.listener(|this, _, _, cx| {
-                this.appearance_menu_open = None;
+                this.settings_state.appearance.menu_open = None;
                 this.set_terminal_theme(None, cx);
             }));
             options.push(AppearancePlainSelectOption {
@@ -557,12 +558,12 @@ impl NyaTermApp {
             let theme = (*theme_id).to_string();
             let handler: AppearanceClickHandler = if terminal {
                 Box::new(cx.listener(move |this, _, _, cx| {
-                    this.appearance_menu_open = None;
+                    this.settings_state.appearance.menu_open = None;
                     this.set_terminal_theme(Some(&theme), cx);
                 }))
             } else {
                 Box::new(cx.listener(move |this, _, _, cx| {
-                    this.appearance_menu_open = None;
+                    this.settings_state.appearance.menu_open = None;
                     this.update_appearance_theme(&theme, cx);
                 }))
             };
@@ -577,7 +578,7 @@ impl NyaTermApp {
             palette,
             id,
             value,
-            self.appearance_menu_open.as_deref() == Some(id),
+            self.settings_state.appearance.menu_open.as_deref() == Some(id),
             true,
             appearance_menu_toggle_handler(id, cx),
             options,
@@ -600,7 +601,7 @@ impl NyaTermApp {
             .map(|ratio| {
                 let handler: AppearanceClickHandler =
                     Box::new(cx.listener(move |this, _, _, cx| {
-                        this.appearance_menu_open = None;
+                        this.settings_state.appearance.menu_open = None;
                         this.set_minimum_contrast_ratio(ratio, cx);
                     }));
                 AppearancePlainSelectOption {
@@ -614,7 +615,7 @@ impl NyaTermApp {
             palette,
             id,
             label_for(&current).to_string(),
-            self.appearance_menu_open.as_deref() == Some(id),
+            self.settings_state.appearance.menu_open.as_deref() == Some(id),
             true,
             appearance_menu_toggle_handler(id, cx),
             options,
@@ -645,7 +646,7 @@ impl NyaTermApp {
             .map(|fit| {
                 let handler: AppearanceClickHandler =
                     Box::new(cx.listener(move |this, _, _, cx| {
-                        this.appearance_menu_open = None;
+                        this.settings_state.appearance.menu_open = None;
                         this.set_background_image_fit(fit, cx);
                     }));
                 AppearancePlainSelectOption {
@@ -659,7 +660,7 @@ impl NyaTermApp {
             palette,
             id,
             label_for(current).to_string(),
-            self.appearance_menu_open.as_deref() == Some(id),
+            self.settings_state.appearance.menu_open.as_deref() == Some(id),
             enabled,
             appearance_menu_toggle_handler(id, cx),
             options,
@@ -695,12 +696,12 @@ impl NyaTermApp {
             .map(|weight| {
                 let handler: AppearanceClickHandler = if bold {
                     Box::new(cx.listener(move |this, _, _, cx| {
-                        this.appearance_menu_open = None;
+                        this.settings_state.appearance.menu_open = None;
                         this.set_terminal_font_weight_bold(weight, cx);
                     }))
                 } else {
                     Box::new(cx.listener(move |this, _, _, cx| {
-                        this.appearance_menu_open = None;
+                        this.settings_state.appearance.menu_open = None;
                         this.set_terminal_font_weight(weight, cx);
                     }))
                 };
@@ -715,7 +716,7 @@ impl NyaTermApp {
             palette,
             id,
             label_for(current).to_string(),
-            self.appearance_menu_open.as_deref() == Some(id),
+            self.settings_state.appearance.menu_open.as_deref() == Some(id),
             true,
             appearance_menu_toggle_handler(id, cx),
             options,
@@ -736,7 +737,7 @@ impl NyaTermApp {
             .map(|style| {
                 let handler: AppearanceClickHandler =
                     Box::new(cx.listener(move |this, _, _, cx| {
-                        this.appearance_menu_open = None;
+                        this.settings_state.appearance.menu_open = None;
                         this.set_cursor_style(style, cx);
                     }));
                 AppearancePlainSelectOption {
@@ -750,7 +751,7 @@ impl NyaTermApp {
             palette,
             id,
             label_for(&current).to_string(),
-            self.appearance_menu_open.as_deref() == Some(id),
+            self.settings_state.appearance.menu_open.as_deref() == Some(id),
             true,
             appearance_menu_toggle_handler(id, cx),
             options,
@@ -765,10 +766,10 @@ fn appearance_menu_toggle_handler(
     cx: &mut Context<NyaTermApp>,
 ) -> AppearanceClickHandler {
     Box::new(cx.listener(move |this, _, _, cx| {
-        if this.appearance_menu_open.as_deref() == Some(id) {
-            this.appearance_menu_open = None;
+        if this.settings_state.appearance.menu_open.as_deref() == Some(id) {
+            this.settings_state.appearance.menu_open = None;
         } else {
-            this.appearance_menu_open = Some(id.to_string());
+            this.settings_state.appearance.menu_open = Some(id.to_string());
         }
         cx.notify();
     }))

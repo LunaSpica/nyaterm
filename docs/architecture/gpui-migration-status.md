@@ -9,7 +9,7 @@ Last updated from the working tree on 2026-07-28.
 
 | Metric | Current value | Notes |
 | --- | ---: | --- |
-| `NyaTermApp` fields | 245 | Counted from `features/app_state/mod.rs`; down from 585, still transitional. |
+| `NyaTermApp` fields | 229 | Counted from `features/app_state/mod.rs`; down from 585, still transitional. |
 | `impl NyaTermApp` blocks | 238 | Spread across 233 files under `crates/nyaterm-desktop/src`. |
 | `#[path = "..."]` declarations in desktop | 0 | Cleared. Every directory is a real module; the boundary script fails on any new occurrence. |
 | `use super::*` imports in desktop | 0 | Cleared in production and test modules; guarded crate-wide. |
@@ -195,6 +195,13 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   generated OTP codes in `revealed`, and the master password prompt in
   `unlock`. Secrets themselves still live in `nyaterm-core`; this is the panel's
   view state only, cleared through the same paths as before.
+- Settings interaction state is grouped into `SettingsFeatureState`: custom
+  search-engine row/editor menus, keyword-highlight editor expansion/focus,
+  appearance menu and discovered font options, and keybinding search/recording
+  state live in four focused child structs. Seventeen transient fields became
+  one composition-root field. Persisted `AppSettingsSummary` and
+  `KeywordHighlightConfig` remain on `NyaTermApp`; their save/load formats and
+  storage paths are unchanged.
 - Transfer state is grouped into `TransferFeatureState`. Seventy-eight fields
   turned out to be five separate things sharing one panel: the job `queue`, the
   SFTP `browser`, the file operation dialogs (`file_ops`), the built-in remote
@@ -1338,13 +1345,14 @@ honest remaining list.
    compiler-confirmed final pass also removed `features/prelude.rs`, so modules
    cannot regain the same implicit dependency surface through a shared import
    bucket.
-3. Largely done. `NyaTermApp` is down from 585 fields to 245, across eight
-   feature-state structs. The latest cohesive cut moved sixteen terminal
+3. Largely done. `NyaTermApp` is down from 585 fields to 229, across nine
+   feature-state structs. The latest cohesive cuts moved sixteen terminal
    command-assistance and credential-prompt fields into
-   `TerminalFeatureState::assist`. What is left is a long tail, and much of it
-   is genuinely app-level (stores, runtime, services, persisted collections).
-   Group by cohesion where a cluster exists; do not force the count down for
-   its own sake.
+   `TerminalFeatureState::assist`, then seventeen transient settings fields
+   into four `SettingsFeatureState` children. What is left is a long tail, and
+   much of it is genuinely app-level (stores, runtime, services, persisted
+   collections). Group by cohesion where a cluster exists; do not force the
+   count down for its own sake.
    Method ownership is now moving too, which is what grouping the fields alone
    did not buy. The rule: if a method only reads and writes one feature state,
    it belongs on that state, and the `NyaTermApp` method becomes a forwarder

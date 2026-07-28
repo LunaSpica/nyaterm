@@ -26,11 +26,11 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         let engines = self.settings.search_custom_engines.clone();
-        let edit_index = self.search_engine_edit_index;
-        let expanded_index = self.search_engine_expanded_index;
-        let icon_picker_index = self.search_engine_icon_picker_index;
-        let actions_index = self.search_engine_actions_index;
-        let edit_field = self.search_engine_edit_field;
+        let edit_index = self.settings_state.search_engines.edit_index;
+        let expanded_index = self.settings_state.search_engines.expanded_index;
+        let icon_picker_index = self.settings_state.search_engines.icon_picker_index;
+        let actions_index = self.settings_state.search_engines.actions_index;
+        let edit_field = self.settings_state.search_engines.edit_field;
         // Built before the row closure, which only has `&self`: the inputs are
         // entities the app has to create, and only the expanded row shows them.
         let mut editor_inputs = expanded_index.and_then(|index| {
@@ -63,7 +63,7 @@ impl NyaTermApp {
             true,
             cx.listener(|this, _, window, cx| {
                 this.add_search_engine(cx);
-                window.focus(&this.search_engine_focus);
+                window.focus(&this.settings_state.search_engines.focus);
             }),
         )
         .into_any_element();
@@ -186,16 +186,16 @@ impl NyaTermApp {
                                                         .into_any_element(),
                                                     })
                                                     .on_click(cx.listener(move |this, _, _, cx| {
-                                                        if this.search_engine_icon_picker_index
+                                                        if this.settings_state.search_engines.icon_picker_index
                                                             == Some(index)
                                                         {
-                                                            this.search_engine_icon_picker_index =
+                                                            this.settings_state.search_engines.icon_picker_index =
                                                                 None;
                                                         } else {
-                                                            this.search_engine_icon_picker_index =
+                                                            this.settings_state.search_engines.icon_picker_index =
                                                                 Some(index);
                                                         }
-                                                        this.search_engine_actions_index = None;
+                                                        this.settings_state.search_engines.actions_index = None;
                                                         cx.notify();
                                                     })),
                                             )
@@ -287,16 +287,16 @@ impl NyaTermApp {
                                                         actions_label,
                                                         actions_open,
                                                         cx.listener(move |this, _, _, cx| {
-                                                            if this.search_engine_actions_index
+                                                            if this.settings_state.search_engines.actions_index
                                                                 == Some(index)
                                                             {
-                                                                this.search_engine_actions_index =
+                                                                this.settings_state.search_engines.actions_index =
                                                                     None;
                                                             } else {
-                                                                this.search_engine_actions_index =
+                                                                this.settings_state.search_engines.actions_index =
                                                                     Some(index);
                                                             }
-                                                            this.search_engine_icon_picker_index =
+                                                            this.settings_state.search_engines.icon_picker_index =
                                                                 None;
                                                             cx.notify();
                                                         }),
@@ -346,7 +346,7 @@ impl NyaTermApp {
                                                     false,
                                                     has_placeholder,
                                                     cx.listener(move |this, _, _, cx| {
-                                                        this.search_engine_actions_index = None;
+                                                        this.settings_state.search_engines.actions_index = None;
                                                         this.test_search_engine(index, cx);
                                                     }),
                                                 ))
