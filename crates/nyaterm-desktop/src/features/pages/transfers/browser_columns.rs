@@ -1,4 +1,7 @@
-use super::*;
+use gpui::{Context, MouseDownEvent, MouseMoveEvent, MouseUpEvent};
+
+use crate::features::NyaTermApp;
+use crate::models::TransferBrowserSortColumn;
 
 impl NyaTermApp {
     pub(in crate::features::pages::transfers) fn start_transfer_browser_column_resize(
