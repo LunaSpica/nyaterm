@@ -1,11 +1,17 @@
-use super::*;
+use std::collections::HashMap;
+
+use gpui::{Context, KeyDownEvent, Window};
+use nyaterm_core::fuzzy_search_items;
+
+use crate::entities::{OverlayStore, QuickSwitchState};
+use crate::features::{NyaTermApp, TextInputSetup, session_kind_label, short_id};
 use crate::models::QuickSwitchItem;
 
 impl NyaTermApp {
     pub(in crate::features) fn quick_switch_state(
         &self,
         cx: &mut Context<Self>,
-    ) -> crate::entities::QuickSwitchState {
+    ) -> QuickSwitchState {
         self.stores
             .overlays
             .read_with(cx, |store, _| store.quick_switch().clone())
@@ -18,7 +24,7 @@ impl NyaTermApp {
     pub(in crate::features) fn update_quick_switch_state(
         &mut self,
         cx: &mut Context<Self>,
-        update: impl FnOnce(&mut crate::entities::OverlayStore) -> bool,
+        update: impl FnOnce(&mut OverlayStore) -> bool,
     ) -> bool {
         let changed = self.stores.overlays.update(cx, |store, cx| {
             let changed = update(store);
@@ -209,7 +215,7 @@ impl NyaTermApp {
             .iter()
             .map(|(display, id)| (display.as_str(), id.as_str()))
             .collect::<Vec<_>>();
-        let matches = nyaterm_core::fuzzy_search_items(
+        let matches = fuzzy_search_items(
             &candidate_refs,
             &query,
             "sessionQuickSwitcher",

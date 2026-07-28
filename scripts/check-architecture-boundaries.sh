@@ -518,6 +518,7 @@ declare -A SUPER_BASELINE=(
   [crates/nyaterm-desktop/src/features/shell/activity_bar_runtime.rs]=0
   [crates/nyaterm-desktop/src/features/shell/global_shortcut_runtime.rs]=0
   [crates/nyaterm-desktop/src/features/shell/navigation_runtime.rs]=0
+  [crates/nyaterm-desktop/src/features/shell/quick_switch_runtime.rs]=0
   [crates/nyaterm-desktop/src/features/shell/tab_mouse.rs]=0
   [crates/nyaterm-desktop/src/features/shell/keybinding_runtime/mod.rs]=0
   [crates/nyaterm-desktop/src/features/shell/keybinding_runtime/keybindings.rs]=0
@@ -552,6 +553,7 @@ done < <(rg -n --path-separator / '^[[:space:]]*use super::\*;' \
   crates/nyaterm-desktop/src/features/pages/tunnels \
   crates/nyaterm-desktop/src/features/shell/mod.rs \
   crates/nyaterm-desktop/src/features/shell/activity_bar_runtime.rs \
+  crates/nyaterm-desktop/src/features/shell/quick_switch_runtime.rs \
   crates/nyaterm-desktop/src/features/shell/tab_mouse.rs \
   crates/nyaterm-desktop/src/features/shell/event_pump \
   crates/nyaterm-desktop/src/features/shell/keybinding_runtime \
