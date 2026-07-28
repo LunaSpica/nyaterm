@@ -19,9 +19,9 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         let is_dark = self.terminal_theme_is_dark();
-        let rules = self.keyword_highlights.rules.clone();
-        let keyword_highlighting_enabled = self.keyword_highlights.enabled;
-        let expanded = self.settings_state.keyword_highlights.expanded_id.clone();
+        let rules = self.settings.keyword_config.rules.clone();
+        let keyword_highlighting_enabled = self.settings.keyword_config.enabled;
+        let expanded = self.settings.keyword_highlights.expanded_id.clone();
         let builtin_ids = nyaterm_core::builtin_keyword_rule_ids();
         let pattern_count_template = self.tr("settings.keywordHighlightPatternCount");
         let untitled_rule_label = self.tr("settings.keywordHighlightNewRule");
@@ -63,7 +63,7 @@ impl NyaTermApp {
                                 settings_switch_with_enabled(
                                     palette,
                                     "settings-keyword-highlights-wrap",
-                                    self.keyword_highlights.across_wrapped_lines,
+                                    self.settings.keyword_config.across_wrapped_lines,
                                     keyword_highlighting_enabled,
                                     cx.listener(|this, _, _, cx| {
                                         this.toggle_keyword_highlights_wrapped(cx);
@@ -106,7 +106,7 @@ impl NyaTermApp {
                                                         &id, is_dark,
                                                     );
                                                 let enabled = self
-                                                    .keyword_highlights
+                                                    .settings.keyword_config
                                                     .builtin_rules
                                                     .get(&id)
                                                     .copied()
@@ -546,7 +546,7 @@ impl NyaTermApp {
                                                 .gap_3()
                                                 .when(keyword_highlighting_enabled, |this| {
                                                     this.track_focus(
-                                                        &self.settings_state.keyword_highlights.focus,
+                                                        &self.settings.keyword_highlights.focus,
                                                     )
                                                     .on_key_down(cx.listener(
                                                         |this,

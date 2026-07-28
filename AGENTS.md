@@ -61,12 +61,12 @@ feature-state structs, including connections, quick commands, remote ops,
 security, settings interaction, AI, terminal presentation, send-command, and
 transfers.
 
-Persisted collections and compatibility-sensitive catalogs may stay on a
-focused feature owner or directly on `NyaTermApp` until an explicit ownership
-migration is tested. `AppSettingsSummary` and `KeywordHighlightConfig` are the
-main compatibility-sensitive values still held directly by the composition
-root; connection, security, tunnel/proxy, command, cloud-sync and session
-catalogs now live under their domain owners.
+Persisted collections and compatibility-sensitive catalogs belong on focused
+feature owners. `SettingsFeatureState` owns `AppSettingsSummary`,
+`KeywordHighlightConfig`, the staged master-password state, and storage status;
+connection, security, tunnel/proxy, command, cloud-sync and session catalogs
+likewise live under their domain owners. Keep their persistence formats and
+fallback readers in `nyaterm-core`.
 
 The remaining Entity stores own state the app does not:
 

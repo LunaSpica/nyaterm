@@ -354,7 +354,7 @@ impl NyaTermApp {
                 div()
                     .rounded_md()
                     .border_1()
-                    .border_color(if self.store_status.ready {
+                    .border_color(if self.settings.store_status.ready {
                         rgb(palette.hover)
                     } else {
                         rgb(palette.hover)
@@ -371,19 +371,19 @@ impl NyaTermApp {
                         div()
                             .mt_1()
                             .text_sm()
-                            .text_color(if self.store_status.ready {
+                            .text_color(if self.settings.store_status.ready {
                                 rgb(palette.success)
                             } else {
                                 rgb(palette.danger)
                             })
-                            .child(self.store_status.message.clone()),
+                            .child(self.settings.store_status.message.clone()),
                     )
                     .child(
                         div()
                             .mt_2()
                             .text_xs()
                             .text_color(rgb(palette.text_muted))
-                            .child(self.store_status.path.clone()),
+                            .child(self.settings.store_status.path.clone()),
                     ),
             )
     }

@@ -48,7 +48,7 @@ impl Render for SettingsWindow {
             (
                 app.theme_palette(),
                 app.gpui_ui_font_family(),
-                app.settings.ui_font_size.clamp(12, 24) as f32,
+                app.settings.summary.ui_font_size.clamp(12, 24) as f32,
                 app.tr("settings.title").to_string(),
             )
         });

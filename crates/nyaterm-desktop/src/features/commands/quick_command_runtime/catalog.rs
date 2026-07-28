@@ -24,8 +24,9 @@ impl NyaTermApp {
                     .replace(config.commands, config.categories);
             }
             Err(error) => {
-                self.store_status.message = format!("quick command refresh failed: {error}");
-                self.store_status.ready = false;
+                self.settings.store_status.message =
+                    format!("quick command refresh failed: {error}");
+                self.settings.store_status.ready = false;
             }
         }
     }
@@ -38,7 +39,8 @@ impl NyaTermApp {
         self.commands.quick.list.row_menu = None;
         self.close_quick_command_toolbar_popovers();
         self.commands.quick.list.view_mode = mode;
-        self.settings.ui_quick_cmd_view_mode = quick_command_view_mode_setting(mode).to_string();
+        self.settings.summary.ui_quick_cmd_view_mode =
+            quick_command_view_mode_setting(mode).to_string();
         self.save_quick_command_ui_settings(cx);
     }
 
@@ -50,7 +52,8 @@ impl NyaTermApp {
         self.commands.quick.list.row_menu = None;
         self.close_quick_command_toolbar_popovers();
         self.commands.quick.list.sort_mode = mode;
-        self.settings.ui_quick_cmd_sort_mode = quick_command_sort_mode_setting(mode).to_string();
+        self.settings.summary.ui_quick_cmd_sort_mode =
+            quick_command_sort_mode_setting(mode).to_string();
         self.save_quick_command_ui_settings(cx);
     }
 
@@ -59,19 +62,19 @@ impl NyaTermApp {
             self.runtime.config_dir(),
             self.runtime.portable_key_path().map(ToOwned::to_owned),
         )
-        .and_then(|store| store.save_quick_command_ui_settings(&self.settings))
+        .and_then(|store| store.save_quick_command_ui_settings(&self.settings.summary))
         {
             Ok(settings) => {
                 self.apply_gpui_settings(settings);
-                self.store_status.message = "quick command UI settings saved".to_string();
-                self.store_status.ready = true;
+                self.settings.store_status.message = "quick command UI settings saved".to_string();
+                self.settings.store_status.ready = true;
                 self.terminal.view.status = "quick command UI settings saved".to_string();
             }
             Err(error) => {
-                self.store_status.message =
+                self.settings.store_status.message =
                     format!("quick command UI settings save failed: {error}");
-                self.store_status.ready = false;
-                self.terminal.view.status = self.store_status.message.clone();
+                self.settings.store_status.ready = false;
+                self.terminal.view.status = self.settings.store_status.message.clone();
             }
         }
         cx.notify();

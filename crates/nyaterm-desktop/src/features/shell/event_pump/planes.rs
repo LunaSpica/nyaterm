@@ -692,7 +692,7 @@ impl NyaTermApp {
         // can stay slow without stretching cursor blink to multi-second periods.
         // Under output pressure / connect settle, keep last blink phase.
         let mut surface_visual_dirty = false;
-        if runtime_cursor_blink_allowed(output_pressure, self.settings.cursor_blink) {
+        if runtime_cursor_blink_allowed(output_pressure, self.settings.summary.cursor_blink) {
             let next_blink_at = self
                 .terminal
                 .view
@@ -707,7 +707,7 @@ impl NyaTermApp {
             } else {
                 self.terminal.view.runtime.cursor_blink_next_at = Some(next_blink_at);
             }
-        } else if !self.settings.cursor_blink {
+        } else if !self.settings.summary.cursor_blink {
             if !self.terminal.view.runtime.cursor_blink_on {
                 surface_visual_dirty = true;
             }

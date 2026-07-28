@@ -11,7 +11,7 @@ use crate::models::{DiagnosticsPathPromptKind, DiagnosticsPathPromptResult};
 
 impl NyaTermApp {
     pub(in crate::features) fn lock_app(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let lock_status = if self.settings.has_master_password {
+        let lock_status = if self.settings.summary.has_master_password {
             self.tr("lockScreen.passwordPlaceholder").to_string()
         } else {
             String::new()
@@ -19,7 +19,7 @@ impl NyaTermApp {
         self.security.screen_lock.activate(lock_status);
         self.forget_text_inputs("lock-screen.password");
         self.terminal.view.status = "screen locked".to_string();
-        if self.settings.has_master_password {
+        if self.settings.summary.has_master_password {
             let field = self.text_input("lock-screen.password", "", TextInputSetup::masked(), cx);
             window.focus(&field.read(cx).focus_handle());
         } else {
@@ -36,7 +36,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn submit_lock_unlock(&mut self, cx: &mut Context<Self>) {
-        if !self.settings.has_master_password {
+        if !self.settings.summary.has_master_password {
             self.unlock_app(cx);
             return;
         }
@@ -77,7 +77,7 @@ impl NyaTermApp {
 
         match keystroke.key.as_str() {
             "enter" => self.submit_lock_unlock(cx),
-            "escape" if !self.settings.has_master_password => self.unlock_app(cx),
+            "escape" if !self.settings.summary.has_master_password => self.unlock_app(cx),
             "escape" => {
                 let status = self.tr("lockScreen.passwordPlaceholder").to_string();
                 self.security.screen_lock.clear_password_with_status(status);
@@ -113,7 +113,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn prompt_diagnostics_export(&mut self, cx: &mut Context<Self>) {
-        if self.settings_state.prompts.diagnostics_path.is_some() {
+        if self.settings.prompts.diagnostics_path.is_some() {
             self.terminal.view.status = "diagnostics path picker is already open".to_string();
             cx.notify();
             return;
@@ -123,7 +123,7 @@ impl NyaTermApp {
         let receiver = cx.prompt_for_new_path(&directory, Some("nyaterm-diagnostics.zip"));
         let runtime = self.runtime.clone();
         let options = self.diagnostics_export_options();
-        self.settings_state.prompts.diagnostics_path = Some(DiagnosticsPathPromptKind::Export);
+        self.settings.prompts.diagnostics_path = Some(DiagnosticsPathPromptKind::Export);
         self.terminal.view.status = "selecting diagnostics export destination".to_string();
         cx.spawn(async move |this, cx| {
             let result = match receiver.await {
@@ -153,7 +153,7 @@ impl NyaTermApp {
         &mut self,
         result: DiagnosticsPathPromptResult,
     ) {
-        self.settings_state.prompts.diagnostics_path = None;
+        self.settings.prompts.diagnostics_path = None;
         match result {
             DiagnosticsPathPromptResult::Exported(info) => {
                 self.terminal.view.status = format!(
@@ -179,9 +179,9 @@ impl NyaTermApp {
     pub(in crate::features) fn diagnostics_export_options(&self) -> DiagnosticsExportOptions {
         DiagnosticsExportOptions {
             app_version: env!("CARGO_PKG_VERSION").to_string(),
-            language: self.settings.language.clone(),
-            log_level: self.settings.diagnostics_level.clone(),
-            retention_days: self.settings.diagnostics_retention_days,
+            language: self.settings.summary.language.clone(),
+            log_level: self.settings.summary.diagnostics_level.clone(),
+            retention_days: self.settings.summary.diagnostics_retention_days,
             runtime_snapshot: self.diagnostics_runtime_snapshot(),
         }
     }

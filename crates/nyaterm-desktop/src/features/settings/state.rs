@@ -1,13 +1,21 @@
-//! Grouped transient state for the settings experience.
+//! Authoritative application settings and grouped state for the settings experience.
 
 use gpui::FocusHandle;
+use nyaterm_core::{AppSettingsSummary, KeywordHighlightConfig};
 
 use crate::models::{
     ConfigPathPromptKind, DiagnosticsPathPromptKind, KeywordHighlightEditorField,
     KeywordHighlightPathPromptKind, SearchEngineEditorField, SnapshotPasswordPromptState,
 };
 
+use super::catalog::{SettingsMasterPasswordState, StoreStatus};
+
 pub(in crate::features) struct SettingsFeatureState {
+    /// Compatibility-sensitive values loaded and persisted through `nyaterm-core`.
+    pub summary: AppSettingsSummary,
+    pub keyword_config: KeywordHighlightConfig,
+    pub master_password: SettingsMasterPasswordState,
+    pub store_status: StoreStatus,
     pub search_engines: SearchEngineSettingsState,
     pub keyword_highlights: KeywordHighlightSettingsState,
     pub appearance: AppearanceSettingsState,
@@ -60,11 +68,19 @@ pub(in crate::features) struct KeybindingSettingsState {
 
 impl SettingsFeatureState {
     pub(in crate::features) fn new(
+        summary: AppSettingsSummary,
+        keyword_config: KeywordHighlightConfig,
+        store_status: StoreStatus,
         ui_font_options: Vec<String>,
         terminal_font_options: Vec<String>,
         focus: SettingsFeatureFocus,
     ) -> Self {
+        let master_password = SettingsMasterPasswordState::new(summary.has_master_password);
         Self {
+            summary,
+            keyword_config,
+            master_password,
+            store_status,
             search_engines: SearchEngineSettingsState {
                 edit_index: None,
                 expanded_index: None,
@@ -92,5 +108,9 @@ impl SettingsFeatureState {
             },
             prompts: SettingsPromptState::default(),
         }
+    }
+
+    pub fn rebase_master_password(&mut self) {
+        self.master_password.reset(self.summary.has_master_password);
     }
 }

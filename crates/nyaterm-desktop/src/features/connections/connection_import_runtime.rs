@@ -40,7 +40,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if self.connection_state.import_path_prompt_active()
-            || self.settings_state.prompts.config_path.is_some()
+            || self.settings.prompts.config_path.is_some()
         {
             self.terminal.view.status = "connection import picker is already open".to_string();
             cx.notify();
@@ -148,8 +148,8 @@ impl NyaTermApp {
                     .tr("savedConnections.importSuccess")
                     .replace("{{count}}", &count.to_string());
                 self.terminal.view.status = message.clone();
-                self.store_status.message = message;
-                self.store_status.ready = true;
+                self.settings.store_status.message = message;
+                self.settings.store_status.ready = true;
             }
             ConnectionImportResult::Cancelled => {
                 self.terminal.view.status = "connection import cancelled".to_string();
@@ -159,8 +159,8 @@ impl NyaTermApp {
                     .tr("savedConnections.importFailed")
                     .replace("{{error}}", &error);
                 self.terminal.view.status = message.clone();
-                self.store_status.message = message;
-                self.store_status.ready = false;
+                self.settings.store_status.message = message;
+                self.settings.store_status.ready = false;
             }
             ConnectionImportResult::Closed => {
                 self.terminal.view.status = "connection import picker closed".to_string();

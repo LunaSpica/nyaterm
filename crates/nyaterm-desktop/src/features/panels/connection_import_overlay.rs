@@ -17,6 +17,7 @@ impl NyaTermApp {
         let width = (self.shell.viewport.size.0 - 32.).clamp(280., 480.);
         let docs_url = if self
             .settings
+            .summary
             .language
             .to_ascii_lowercase()
             .starts_with("zh")

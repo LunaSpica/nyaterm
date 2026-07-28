@@ -353,12 +353,12 @@ impl NyaTermApp {
             } else {
                 selected.end
             };
-            if self.settings.interaction_copy_on_select {
+            if self.settings.summary.interaction_copy_on_select {
                 let _ = self.copy_terminal_selection(cx);
             }
             let _ = self.move_smart_input_cursor(target, cx);
             self.clear_terminal_selection(cx);
-        } else if self.settings.interaction_copy_on_select {
+        } else if self.settings.summary.interaction_copy_on_select {
             let _ = self.copy_terminal_selection(cx);
         } else if self.terminal.selection.selection.is_some() {
             // One shell notify for status after drag ends (not per mouse move).
@@ -453,7 +453,7 @@ impl NyaTermApp {
         }
         let idx = cell.col.min(cells.len().saturating_sub(1));
         // xterm wordSeparator semantics: characters listed are separators, not word body.
-        let separators = self.settings.interaction_word_separators.as_str();
+        let separators = self.settings.summary.interaction_word_separators.as_str();
         let is_word = |cell: &TerminalTextCell| terminal_text_cell_is_word(cell, separators);
         if !is_word(&cells[idx]) {
             return (idx, idx.saturating_add(1));

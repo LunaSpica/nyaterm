@@ -1,5 +1,5 @@
 use crate::models::{
-    ActivityBarLayoutState, BottomPanelMode, NavItem, PanelSide, SessionEventBridge, StoreStatus,
+    ActivityBarLayoutState, BottomPanelMode, NavItem, PanelSide, SessionEventBridge,
     TerminalFramePipeline,
 };
 use crate::terminal::initial_terminal_screen;
@@ -14,7 +14,7 @@ use nyaterm_transport::{SessionManager, SftpDuplicatePolicy};
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use super::super::settings::{SettingsFeatureFocus, SettingsFeatureState};
+use super::super::settings::{SettingsFeatureFocus, SettingsFeatureState, StoreStatus};
 use super::super::{
     AiFeatureFocus, AiFeatureState, CloudSyncFeatureState, CommandFeatureInit, CommandFeatureState,
     ConnectionCatalogState, ConnectionFeatureFocus, ConnectionFeatureState,
@@ -254,7 +254,6 @@ impl NyaTermApp {
             .filter_map(|(key, value)| (*value > 0).then(|| (key.clone(), (*value as f32) / 1000.)))
             .collect::<HashMap<_, _>>();
         let panel_multi_open = settings.ui_panel_multi_open;
-        let settings_master_password_enabled = settings.has_master_password;
         let mut terminal_output_decoder = TerminalOutputDecoder::default();
         terminal_output_decoder.set_encoding(&settings.interaction_default_encoding);
         let mut terminal_screen = initial_terminal_screen();
@@ -382,15 +381,6 @@ impl NyaTermApp {
                     screen_lock: cx.focus_handle(),
                 },
             ),
-            settings_state: SettingsFeatureState::new(
-                appearance_ui_font_options,
-                appearance_terminal_font_options,
-                SettingsFeatureFocus {
-                    search_engine: cx.focus_handle(),
-                    keyword_highlight: cx.focus_handle(),
-                    keybindings: cx.focus_handle(),
-                },
-            ),
             remote_ops: RemoteOpsFeatureState::new(RemoteOpsFeatureFocus {}),
             translation: TranslationFeatureState::new(translation_settings),
             update: UpdateFeatureState::new(),
@@ -438,11 +428,18 @@ impl NyaTermApp {
                 activity_bar_layout,
             }),
             sync_input: SyncInputFeatureState::new(cx.focus_handle()),
-            keyword_highlights,
-            settings,
-            settings_master_password_enabled,
-            settings_master_password_draft: String::new(),
-            store_status,
+            settings: SettingsFeatureState::new(
+                settings,
+                keyword_highlights,
+                store_status,
+                appearance_ui_font_options,
+                appearance_terminal_font_options,
+                SettingsFeatureFocus {
+                    search_engine: cx.focus_handle(),
+                    keyword_highlight: cx.focus_handle(),
+                    keybindings: cx.focus_handle(),
+                },
+            ),
             recording,
             tunnel_state: TunnelFeatureState::new(TunnelCatalogState {
                 tunnels,

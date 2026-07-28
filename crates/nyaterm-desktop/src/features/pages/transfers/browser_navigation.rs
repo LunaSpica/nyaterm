@@ -310,20 +310,24 @@ impl NyaTermApp {
         };
         let enabled = self
             .settings
+            .summary
             .ui_file_explorer_auto_sync_cwd_connection_ids
             .iter()
             .any(|id| id == &connection_id);
         if enabled {
             self.settings
+                .summary
                 .ui_file_explorer_auto_sync_cwd_connection_ids
                 .retain(|id| id != &connection_id);
             self.transfer.browser.status = "Auto CWD disabled for this connection".to_string();
             self.transfer.browser.auto_sync_cwd_last_at = None;
         } else {
             self.settings
+                .summary
                 .ui_file_explorer_auto_sync_cwd_connection_ids
                 .retain(|id| id != &connection_id);
             self.settings
+                .summary
                 .ui_file_explorer_auto_sync_cwd_connection_ids
                 .push(connection_id);
             self.transfer.browser.status = "Auto CWD enabled for this connection".to_string();
@@ -341,9 +345,9 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        self.settings.ui_file_explorer_show_hidden_files =
-            !self.settings.ui_file_explorer_show_hidden_files;
-        if !self.settings.ui_file_explorer_show_hidden_files {
+        self.settings.summary.ui_file_explorer_show_hidden_files =
+            !self.settings.summary.ui_file_explorer_show_hidden_files;
+        if !self.settings.summary.ui_file_explorer_show_hidden_files {
             self.transfer
                 .browser
                 .selected_remote_paths
@@ -359,7 +363,7 @@ impl NyaTermApp {
             }
         }
         self.transfer.browser.list_offset = 0;
-        self.transfer.browser.status = if self.settings.ui_file_explorer_show_hidden_files {
+        self.transfer.browser.status = if self.settings.summary.ui_file_explorer_show_hidden_files {
             "hidden files shown".to_string()
         } else {
             "hidden files hidden".to_string()
@@ -373,6 +377,7 @@ impl NyaTermApp {
             return false;
         };
         self.settings
+            .summary
             .ui_file_explorer_auto_sync_cwd_connection_ids
             .iter()
             .any(|id| id == &connection_id)
@@ -385,6 +390,7 @@ impl NyaTermApp {
         };
         self.transfer.browser.favorites = self
             .settings
+            .summary
             .ui_file_explorer_favorite_dirs_by_connection_id
             .get(&connection_id)
             .cloned()
@@ -419,10 +425,12 @@ impl NyaTermApp {
             .collect::<Vec<_>>();
         if favorites.is_empty() {
             self.settings
+                .summary
                 .ui_file_explorer_favorite_dirs_by_connection_id
                 .remove(&connection_id);
         } else {
             self.settings
+                .summary
                 .ui_file_explorer_favorite_dirs_by_connection_id
                 .insert(connection_id, favorites);
         }
@@ -435,17 +443,18 @@ impl NyaTermApp {
             self.runtime.config_dir(),
             self.runtime.portable_key_path().map(ToOwned::to_owned),
         )
-        .and_then(|store| store.save_file_explorer_favorite_dirs(&self.settings))
+        .and_then(|store| store.save_file_explorer_favorite_dirs(&self.settings.summary))
         {
             Ok(settings) => {
                 self.apply_gpui_settings(settings);
-                self.store_status.message = "file explorer favorites saved".to_string();
-                self.store_status.ready = true;
+                self.settings.store_status.message = "file explorer favorites saved".to_string();
+                self.settings.store_status.ready = true;
             }
             Err(error) => {
-                self.store_status.message = format!("file explorer favorites save failed: {error}");
-                self.store_status.ready = false;
-                self.transfer.browser.status = self.store_status.message.clone();
+                self.settings.store_status.message =
+                    format!("file explorer favorites save failed: {error}");
+                self.settings.store_status.ready = false;
+                self.transfer.browser.status = self.settings.store_status.message.clone();
             }
         }
     }

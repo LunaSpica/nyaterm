@@ -168,7 +168,7 @@ impl NyaTermApp {
         entry: &SftpFileEntry,
     ) -> bool {
         entry.file_type != SftpFileType::Directory
-            && self.settings.transfer_editor_type == "external"
+            && self.settings.summary.transfer_editor_type == "external"
             && !is_known_binary_file(&entry.name)
     }
 
@@ -177,7 +177,7 @@ impl NyaTermApp {
         entry: &SftpFileEntry,
     ) -> bool {
         entry.file_type != SftpFileType::Directory
-            && self.settings.transfer_editor_type == "internal"
+            && self.settings.summary.transfer_editor_type == "internal"
     }
 
     pub(in crate::features) fn open_transfer_default(
@@ -186,7 +186,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.settings.transfer_editor_type == "internal" {
+        if self.settings.summary.transfer_editor_type == "internal" {
             self.open_transfer_editor(entry, window, cx);
         } else {
             self.open_transfer_external(entry, window, cx);
@@ -376,7 +376,7 @@ impl NyaTermApp {
         self.transfer.paths.remote = entry.path.clone();
         let remote_path = entry.path.clone();
         let local_path = self.transfer_external_open_path(&entry, session_id.as_deref());
-        let default_editor = self.settings.transfer_default_editor.clone();
+        let default_editor = self.settings.summary.transfer_default_editor.clone();
         let transfer_options = self.sftp_transfer_options();
         let id = self.next_transfer_id("sftp-open-external");
         let control = SftpTransferControl::new();

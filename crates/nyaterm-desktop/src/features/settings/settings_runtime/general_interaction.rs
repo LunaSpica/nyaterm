@@ -9,12 +9,12 @@ impl NyaTermApp {
         language: &'static str,
         cx: &mut Context<Self>,
     ) {
-        self.settings.language = language.to_string();
+        self.settings.summary.language = language.to_string();
         self.save_general_settings(cx);
     }
 
     pub(in crate::features) fn toggle_startup_restore(&mut self, cx: &mut Context<Self>) {
-        self.settings.startup_restore = !self.settings.startup_restore;
+        self.settings.summary.startup_restore = !self.settings.summary.startup_restore;
         self.save_general_settings(cx);
     }
 
@@ -22,9 +22,10 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        self.settings.startup_restore_window_layout = !self.settings.startup_restore_window_layout;
+        self.settings.summary.startup_restore_window_layout =
+            !self.settings.summary.startup_restore_window_layout;
         self.save_general_settings(cx);
-        if !self.settings.startup_restore_window_layout
+        if !self.settings.summary.startup_restore_window_layout
             && self.shell.navigation.settings.draft_snapshot.is_none()
         {
             // Clear stored layouts when the user disables restore.
@@ -40,12 +41,12 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn toggle_confirm_on_close(&mut self, cx: &mut Context<Self>) {
-        self.settings.confirm_on_close = !self.settings.confirm_on_close;
+        self.settings.summary.confirm_on_close = !self.settings.summary.confirm_on_close;
         self.save_general_settings(cx);
     }
 
     pub(in crate::features) fn toggle_minimize_to_tray(&mut self, cx: &mut Context<Self>) {
-        self.settings.minimize_to_tray = !self.settings.minimize_to_tray;
+        self.settings.summary.minimize_to_tray = !self.settings.summary.minimize_to_tray;
         self.save_general_settings(cx);
     }
 
@@ -58,10 +59,10 @@ impl NyaTermApp {
             "warn" | "debug" => level,
             _ => "info",
         };
-        if self.settings.diagnostics_level == level {
+        if self.settings.summary.diagnostics_level == level {
             return;
         }
-        self.settings.diagnostics_level = level.to_string();
+        self.settings.summary.diagnostics_level = level.to_string();
         self.save_diagnostics_settings(cx);
     }
 
@@ -74,10 +75,10 @@ impl NyaTermApp {
             3 | 7 | 14 | 30 => days,
             _ => 7,
         };
-        if self.settings.diagnostics_retention_days == days {
+        if self.settings.summary.diagnostics_retention_days == days {
             return;
         }
-        self.settings.diagnostics_retention_days = days;
+        self.settings.summary.diagnostics_retention_days = days;
         self.save_diagnostics_settings(cx);
     }
 
@@ -89,18 +90,19 @@ impl NyaTermApp {
             self.runtime.config_dir(),
             self.runtime.portable_key_path().map(ToOwned::to_owned),
         )
-        .and_then(|store| store.save_diagnostics_settings(&self.settings))
+        .and_then(|store| store.save_diagnostics_settings(&self.settings.summary))
         {
             Ok(settings) => {
                 self.apply_gpui_settings(settings);
-                self.store_status.message = "diagnostics settings saved".to_string();
-                self.store_status.ready = true;
+                self.settings.store_status.message = "diagnostics settings saved".to_string();
+                self.settings.store_status.ready = true;
                 self.terminal.view.status = "diagnostics settings saved".to_string();
             }
             Err(error) => {
-                self.store_status.message = format!("diagnostics settings save failed: {error}");
-                self.store_status.ready = false;
-                self.terminal.view.status = self.store_status.message.clone();
+                self.settings.store_status.message =
+                    format!("diagnostics settings save failed: {error}");
+                self.settings.store_status.ready = false;
+                self.terminal.view.status = self.settings.store_status.message.clone();
             }
         }
         cx.notify();
@@ -114,18 +116,19 @@ impl NyaTermApp {
             self.runtime.config_dir(),
             self.runtime.portable_key_path().map(ToOwned::to_owned),
         )
-        .and_then(|store| store.save_general_settings(&self.settings))
+        .and_then(|store| store.save_general_settings(&self.settings.summary))
         {
             Ok(settings) => {
                 self.apply_gpui_settings(settings);
-                self.store_status.message = "general settings saved".to_string();
-                self.store_status.ready = true;
+                self.settings.store_status.message = "general settings saved".to_string();
+                self.settings.store_status.ready = true;
                 self.terminal.view.status = "general settings saved".to_string();
             }
             Err(error) => {
-                self.store_status.message = format!("general settings save failed: {error}");
-                self.store_status.ready = false;
-                self.terminal.view.status = self.store_status.message.clone();
+                self.settings.store_status.message =
+                    format!("general settings save failed: {error}");
+                self.settings.store_status.ready = false;
+                self.terminal.view.status = self.settings.store_status.message.clone();
             }
         }
         cx.notify();
@@ -135,7 +138,8 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        self.settings.interaction_copy_on_select = !self.settings.interaction_copy_on_select;
+        self.settings.summary.interaction_copy_on_select =
+            !self.settings.summary.interaction_copy_on_select;
         self.save_interaction_settings(cx);
     }
 
@@ -143,14 +147,22 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        self.settings.interaction_right_click_paste = !self.settings.interaction_right_click_paste;
+        self.settings.summary.interaction_right_click_paste =
+            !self.settings.summary.interaction_right_click_paste;
         self.save_interaction_settings(cx);
     }
 
     pub(in crate::features) fn toggle_command_suggestions(&mut self, cx: &mut Context<Self>) {
-        self.settings.interaction_command_suggestions_enabled =
-            !self.settings.interaction_command_suggestions_enabled;
-        if !self.settings.interaction_command_suggestions_enabled
+        self.settings
+            .summary
+            .interaction_command_suggestions_enabled = !self
+            .settings
+            .summary
+            .interaction_command_suggestions_enabled;
+        if !self
+            .settings
+            .summary
+            .interaction_command_suggestions_enabled
             && self.shell.navigation.settings.draft_snapshot.is_none()
         {
             self.terminal.assist.clear_command_tracking();
@@ -163,10 +175,19 @@ impl NyaTermApp {
         delta: i32,
         cx: &mut Context<Self>,
     ) {
-        let max_chars = self.settings.interaction_command_suggestion_max_chars;
-        let next = (self.settings.interaction_command_suggestion_min_chars as i32 + delta)
+        let max_chars = self
+            .settings
+            .summary
+            .interaction_command_suggestion_max_chars;
+        let next = (self
+            .settings
+            .summary
+            .interaction_command_suggestion_min_chars as i32
+            + delta)
             .clamp(1, max_chars as i32) as u32;
-        self.settings.interaction_command_suggestion_min_chars = next;
+        self.settings
+            .summary
+            .interaction_command_suggestion_min_chars = next;
         self.save_interaction_settings(cx);
     }
 
@@ -175,10 +196,19 @@ impl NyaTermApp {
         delta: i32,
         cx: &mut Context<Self>,
     ) {
-        let min_chars = self.settings.interaction_command_suggestion_min_chars;
-        let next = (self.settings.interaction_command_suggestion_max_chars as i32 + delta)
+        let min_chars = self
+            .settings
+            .summary
+            .interaction_command_suggestion_min_chars;
+        let next = (self
+            .settings
+            .summary
+            .interaction_command_suggestion_max_chars as i32
+            + delta)
             .clamp(min_chars as i32, 500) as u32;
-        self.settings.interaction_command_suggestion_max_chars = next;
+        self.settings
+            .summary
+            .interaction_command_suggestion_max_chars = next;
         self.save_interaction_settings(cx);
     }
 
@@ -187,20 +217,27 @@ impl NyaTermApp {
         delta_ms: i32,
         cx: &mut Context<Self>,
     ) {
-        let next = (self.settings.interaction_duplicate_session_command_delay_ms as i32 + delta_ms)
+        let next = (self
+            .settings
+            .summary
+            .interaction_duplicate_session_command_delay_ms as i32
+            + delta_ms)
             .clamp(0, 60_000) as u32;
-        self.settings.interaction_duplicate_session_command_delay_ms = next;
+        self.settings
+            .summary
+            .interaction_duplicate_session_command_delay_ms = next;
         self.save_interaction_settings(cx);
     }
 
     pub(in crate::features) fn toggle_alt_as_meta(&mut self, cx: &mut Context<Self>) {
-        self.settings.interaction_alt_as_meta = !self.settings.interaction_alt_as_meta;
+        self.settings.summary.interaction_alt_as_meta =
+            !self.settings.summary.interaction_alt_as_meta;
         self.save_interaction_settings(cx);
     }
 
     pub(in crate::features) fn toggle_mac_ime_compatibility(&mut self, cx: &mut Context<Self>) {
-        self.settings.interaction_mac_ime_compatibility =
-            !self.settings.interaction_mac_ime_compatibility;
+        self.settings.summary.interaction_mac_ime_compatibility =
+            !self.settings.summary.interaction_mac_ime_compatibility;
         self.save_interaction_settings(cx);
     }
 
@@ -209,7 +246,7 @@ impl NyaTermApp {
         encoding: &'static str,
         cx: &mut Context<Self>,
     ) {
-        self.settings.interaction_default_encoding = encoding.to_string();
+        self.settings.summary.interaction_default_encoding = encoding.to_string();
         self.sync_terminal_encodings_from_settings();
         self.save_interaction_settings(cx);
     }
@@ -220,7 +257,7 @@ impl NyaTermApp {
         text: String,
         cx: &mut Context<Self>,
     ) {
-        self.settings.interaction_word_separators = text;
+        self.settings.summary.interaction_word_separators = text;
         cx.notify();
     }
 
@@ -232,25 +269,26 @@ impl NyaTermApp {
             self.runtime.config_dir(),
             self.runtime.portable_key_path().map(ToOwned::to_owned),
         )
-        .and_then(|store| store.save_interaction_settings(&self.settings))
+        .and_then(|store| store.save_interaction_settings(&self.settings.summary))
         {
             Ok(settings) => {
                 self.apply_gpui_settings(settings);
-                self.store_status.message = "interaction settings saved".to_string();
-                self.store_status.ready = true;
+                self.settings.store_status.message = "interaction settings saved".to_string();
+                self.settings.store_status.ready = true;
                 self.terminal.view.status = "interaction settings saved".to_string();
             }
             Err(error) => {
-                self.store_status.message = format!("interaction settings save failed: {error}");
-                self.store_status.ready = false;
-                self.terminal.view.status = self.store_status.message.clone();
+                self.settings.store_status.message =
+                    format!("interaction settings save failed: {error}");
+                self.settings.store_status.ready = false;
+                self.terminal.view.status = self.settings.store_status.message.clone();
             }
         }
         cx.notify();
     }
 
     pub(in crate::features) fn toggle_screen_lock_enabled(&mut self, cx: &mut Context<Self>) {
-        self.settings.enable_screen_lock = !self.settings.enable_screen_lock;
+        self.settings.summary.enable_screen_lock = !self.settings.summary.enable_screen_lock;
         self.security.screen_lock.reset_idle_timer();
         self.save_screen_lock_settings(cx);
     }
@@ -260,9 +298,9 @@ impl NyaTermApp {
         delta: i32,
         cx: &mut Context<Self>,
     ) {
-        let current = self.settings.idle_lock_minutes as i32;
+        let current = self.settings.summary.idle_lock_minutes as i32;
         let next = (current + delta).clamp(0, 1440);
-        self.settings.idle_lock_minutes = next as u32;
+        self.settings.summary.idle_lock_minutes = next as u32;
         self.security.screen_lock.reset_idle_timer();
         self.save_screen_lock_settings(cx);
     }
@@ -275,18 +313,19 @@ impl NyaTermApp {
             self.runtime.config_dir(),
             self.runtime.portable_key_path().map(ToOwned::to_owned),
         )
-        .and_then(|store| store.save_screen_lock_settings(&self.settings))
+        .and_then(|store| store.save_screen_lock_settings(&self.settings.summary))
         {
             Ok(settings) => {
                 self.apply_gpui_settings(settings);
-                self.store_status.message = "screen lock settings saved".to_string();
-                self.store_status.ready = true;
+                self.settings.store_status.message = "screen lock settings saved".to_string();
+                self.settings.store_status.ready = true;
                 self.terminal.view.status = "screen lock settings saved".to_string();
             }
             Err(error) => {
-                self.store_status.message = format!("screen lock settings save failed: {error}");
-                self.store_status.ready = false;
-                self.terminal.view.status = self.store_status.message.clone();
+                self.settings.store_status.message =
+                    format!("screen lock settings save failed: {error}");
+                self.settings.store_status.ready = false;
+                self.terminal.view.status = self.settings.store_status.message.clone();
             }
         }
         cx.notify();

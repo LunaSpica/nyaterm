@@ -38,7 +38,7 @@ impl NyaTermApp {
             };
             let _ = this.update(cx, |this, cx| {
                 if let Some(path) = path {
-                    this.settings.transfer_download_path = path.display().to_string();
+                    this.settings.summary.transfer_download_path = path.display().to_string();
                     this.save_transfer_settings("transfer download path saved", cx);
                 } else {
                     this.terminal.view.status = "download path selection cancelled".to_string();
@@ -66,7 +66,7 @@ impl NyaTermApp {
             };
             let _ = this.update(cx, |this, cx| {
                 if let Some(path) = path {
-                    this.settings.recording_path = path.display().to_string();
+                    this.settings.summary.recording_path = path.display().to_string();
                     this.save_recording_settings(cx);
                 } else {
                     this.terminal.view.status = "recording path selection cancelled".to_string();
@@ -97,7 +97,7 @@ impl NyaTermApp {
             };
             let _ = this.update(cx, |this, cx| {
                 if let Some(path) = path {
-                    this.settings.transfer_default_editor = path.display().to_string();
+                    this.settings.summary.transfer_default_editor = path.display().to_string();
                     this.save_transfer_settings("transfer editor path saved", cx);
                 } else {
                     this.terminal.view.status = "editor path selection cancelled".to_string();
@@ -110,7 +110,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn resolved_transfer_download_dir(&self) -> Option<PathBuf> {
-        let configured = self.settings.transfer_download_path.trim();
+        let configured = self.settings.summary.transfer_download_path.trim();
         if configured.is_empty() {
             return default_transfer_download_dir();
         }
@@ -160,7 +160,7 @@ impl NyaTermApp {
         if value.is_empty() {
             let file_name =
                 download_file_name_from_remote_path(&self.normalized_transfer_remote_path());
-            let download_path = self.settings.transfer_download_path.trim();
+            let download_path = self.settings.summary.transfer_download_path.trim();
             if download_path.is_empty() {
                 PathBuf::from(file_name)
             } else {

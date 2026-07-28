@@ -125,13 +125,13 @@ impl NyaTermApp {
                 if self.ai.panel.status.trim().is_empty() {
                     self.ai.panel.status = "AI settings saved".to_string();
                 }
-                self.store_status.message = self.ai.panel.status.clone();
-                self.store_status.ready = true;
+                self.settings.store_status.message = self.ai.panel.status.clone();
+                self.settings.store_status.ready = true;
             }
             Err(error) => {
                 self.ai.panel.status = format!("AI settings save failed: {error}");
-                self.store_status.message = self.ai.panel.status.clone();
-                self.store_status.ready = false;
+                self.settings.store_status.message = self.ai.panel.status.clone();
+                self.settings.store_status.ready = false;
             }
         }
         cx.notify();

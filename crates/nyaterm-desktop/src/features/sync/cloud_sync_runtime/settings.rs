@@ -23,9 +23,9 @@ impl NyaTermApp {
 
     pub(in crate::features) fn toggle_cloud_sync_enabled(&mut self, cx: &mut Context<Self>) {
         if !self.cloud_sync.settings.enabled
-            && (!self.settings_master_password_enabled
-                || (!self.settings.has_master_password
-                    && self.settings_master_password_draft.is_empty()))
+            && (!self.settings.master_password.enabled
+                || (!self.settings.summary.has_master_password
+                    && self.settings.master_password.draft.is_empty()))
         {
             self.shell.navigation.settings.active_tab = SettingsTab::Security;
             self.cloud_sync.status =
@@ -112,8 +112,8 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn cloud_sync_form_enabled(&self) -> bool {
-        self.settings_master_password_enabled
-            && (self.settings.has_master_password
-                || !self.settings_master_password_draft.is_empty())
+        self.settings.master_password.enabled
+            && (self.settings.summary.has_master_password
+                || !self.settings.master_password.draft.is_empty())
     }
 }

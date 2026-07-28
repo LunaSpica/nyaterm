@@ -15,8 +15,8 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let font_size_label = self.settings.terminal_font_size.to_string();
-        let ui_font_size_label = self.settings.ui_font_size.to_string();
+        let font_size_label = self.settings.summary.terminal_font_size.to_string();
+        let ui_font_size_label = self.settings.summary.ui_font_size.to_string();
 
         div()
             .flex()
@@ -71,6 +71,7 @@ impl NyaTermApp {
                 {
                     let path_label = self
                         .settings
+                        .summary
                         .background_image_path
                         .as_deref()
                         .map(|p| {
@@ -90,7 +91,7 @@ impl NyaTermApp {
                             }
                         })
                         .unwrap_or_else(|| self.tr("settings.backgroundImageEmpty").to_string());
-                    let has_image = self.settings.background_image_path.is_some();
+                    let has_image = self.settings.summary.background_image_path.is_some();
                     div()
                         .flex()
                         .flex_col()
@@ -227,7 +228,7 @@ impl NyaTermApp {
                         settings_switch(
                             palette,
                             "appearance-cursor-blink",
-                            self.settings.cursor_blink,
+                            self.settings.summary.cursor_blink,
                             cx.listener(|this, _, _, cx| {
                                 this.toggle_cursor_blink(cx);
                             }),
@@ -246,17 +247,17 @@ impl NyaTermApp {
             (
                 self.tr("settings.terminalFontFamily"),
                 self.tr("settings.terminalFontFamilyDesc"),
-                self.settings.terminal_font_family.clone(),
+                self.settings.summary.terminal_font_family.clone(),
                 "JetBrains Mono",
-                self.settings_state.appearance.terminal_font_options.clone(),
+                self.settings.appearance.terminal_font_options.clone(),
             )
         } else {
             (
                 self.tr("settings.uiFontFamily"),
                 self.tr("settings.uiFontFamilyDesc"),
-                self.settings.ui_font_family.clone(),
+                self.settings.summary.ui_font_family.clone(),
                 "Inter",
-                self.settings_state.appearance.ui_font_options.clone(),
+                self.settings.appearance.ui_font_options.clone(),
             )
         };
         let fonts = appearance_font_stack(&raw, fallback);
@@ -268,7 +269,7 @@ impl NyaTermApp {
                 options.insert(0, family.clone());
             }
         }
-        let menu_open = self.settings_state.appearance.menu_open.clone();
+        let menu_open = self.settings.appearance.menu_open.clone();
         let kind = if terminal { "terminal" } else { "ui" };
         let add_id = if terminal {
             "appearance-terminal-font-add"
@@ -304,12 +305,12 @@ impl NyaTermApp {
                     let menu_id_for_toggle = menu_id.clone();
                     let toggle: AppearanceClickHandler =
                         Box::new(cx.listener(move |this, _, _, cx| {
-                            if this.settings_state.appearance.menu_open.as_deref()
+                            if this.settings.appearance.menu_open.as_deref()
                                 == Some(menu_id_for_toggle.as_str())
                             {
-                                this.settings_state.appearance.menu_open = None;
+                                this.settings.appearance.menu_open = None;
                             } else {
-                                this.settings_state.appearance.menu_open =
+                                this.settings.appearance.menu_open =
                                     Some(menu_id_for_toggle.clone());
                             }
                             cx.notify();
@@ -415,9 +416,9 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         let value = if content {
-            self.settings.background_content_opacity
+            self.settings.summary.background_content_opacity
         } else {
-            self.settings.background_image_opacity
+            self.settings.summary.background_image_opacity
         };
         let label = if content {
             self.tr("settings.backgroundContentOpacity")
@@ -530,11 +531,12 @@ impl NyaTermApp {
         };
         let current = if terminal {
             self.settings
+                .summary
                 .terminal_theme
                 .as_deref()
                 .filter(|theme| !theme.trim().is_empty())
         } else {
-            Some(self.settings.theme.as_str())
+            Some(self.settings.summary.theme.as_str())
         };
         let value = current
             .map(appearance_theme_label)
@@ -543,7 +545,7 @@ impl NyaTermApp {
         let mut options = Vec::new();
         if terminal {
             let handler: AppearanceClickHandler = Box::new(cx.listener(|this, _, _, cx| {
-                this.settings_state.appearance.menu_open = None;
+                this.settings.appearance.menu_open = None;
                 this.set_terminal_theme(None, cx);
             }));
             options.push(AppearancePlainSelectOption {
@@ -558,12 +560,12 @@ impl NyaTermApp {
             let theme = (*theme_id).to_string();
             let handler: AppearanceClickHandler = if terminal {
                 Box::new(cx.listener(move |this, _, _, cx| {
-                    this.settings_state.appearance.menu_open = None;
+                    this.settings.appearance.menu_open = None;
                     this.set_terminal_theme(Some(&theme), cx);
                 }))
             } else {
                 Box::new(cx.listener(move |this, _, _, cx| {
-                    this.settings_state.appearance.menu_open = None;
+                    this.settings.appearance.menu_open = None;
                     this.update_appearance_theme(&theme, cx);
                 }))
             };
@@ -578,7 +580,7 @@ impl NyaTermApp {
             palette,
             id,
             value,
-            self.settings_state.appearance.menu_open.as_deref() == Some(id),
+            self.settings.appearance.menu_open.as_deref() == Some(id),
             true,
             appearance_menu_toggle_handler(id, cx),
             options,
@@ -588,7 +590,7 @@ impl NyaTermApp {
     fn appearance_contrast_select(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = self.theme_palette();
         let id = "appearance-minimum-contrast";
-        let current = self.settings.minimum_contrast_ratio.clone();
+        let current = self.settings.summary.minimum_contrast_ratio.clone();
         let label_for = |ratio: &str| match ratio {
             "3" => self.tr("settings.minimumContrastRatio_3"),
             "4.5" => self.tr("settings.minimumContrastRatio_4_5"),
@@ -601,7 +603,7 @@ impl NyaTermApp {
             .map(|ratio| {
                 let handler: AppearanceClickHandler =
                     Box::new(cx.listener(move |this, _, _, cx| {
-                        this.settings_state.appearance.menu_open = None;
+                        this.settings.appearance.menu_open = None;
                         this.set_minimum_contrast_ratio(ratio, cx);
                     }));
                 AppearancePlainSelectOption {
@@ -615,7 +617,7 @@ impl NyaTermApp {
             palette,
             id,
             label_for(&current).to_string(),
-            self.settings_state.appearance.menu_open.as_deref() == Some(id),
+            self.settings.appearance.menu_open.as_deref() == Some(id),
             true,
             appearance_menu_toggle_handler(id, cx),
             options,
@@ -629,7 +631,7 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         let id = "appearance-background-fit";
-        let current = match self.settings.background_image_fit.as_str() {
+        let current = match self.settings.summary.background_image_fit.as_str() {
             "contain" => "contain",
             "stretch" | "fill" => "stretch",
             "tile" => "tile",
@@ -646,7 +648,7 @@ impl NyaTermApp {
             .map(|fit| {
                 let handler: AppearanceClickHandler =
                     Box::new(cx.listener(move |this, _, _, cx| {
-                        this.settings_state.appearance.menu_open = None;
+                        this.settings.appearance.menu_open = None;
                         this.set_background_image_fit(fit, cx);
                     }));
                 AppearancePlainSelectOption {
@@ -660,7 +662,7 @@ impl NyaTermApp {
             palette,
             id,
             label_for(current).to_string(),
-            self.settings_state.appearance.menu_open.as_deref() == Some(id),
+            self.settings.appearance.menu_open.as_deref() == Some(id),
             enabled,
             appearance_menu_toggle_handler(id, cx),
             options,
@@ -679,9 +681,9 @@ impl NyaTermApp {
             "appearance-font-weight"
         };
         let current = if bold {
-            self.settings.terminal_font_weight_bold
+            self.settings.summary.terminal_font_weight_bold
         } else {
-            self.settings.terminal_font_weight
+            self.settings.summary.terminal_font_weight
         };
         let label_for = |weight| match weight {
             300 => self.tr("settings.fontWeight_300"),
@@ -696,12 +698,12 @@ impl NyaTermApp {
             .map(|weight| {
                 let handler: AppearanceClickHandler = if bold {
                     Box::new(cx.listener(move |this, _, _, cx| {
-                        this.settings_state.appearance.menu_open = None;
+                        this.settings.appearance.menu_open = None;
                         this.set_terminal_font_weight_bold(weight, cx);
                     }))
                 } else {
                     Box::new(cx.listener(move |this, _, _, cx| {
-                        this.settings_state.appearance.menu_open = None;
+                        this.settings.appearance.menu_open = None;
                         this.set_terminal_font_weight(weight, cx);
                     }))
                 };
@@ -716,7 +718,7 @@ impl NyaTermApp {
             palette,
             id,
             label_for(current).to_string(),
-            self.settings_state.appearance.menu_open.as_deref() == Some(id),
+            self.settings.appearance.menu_open.as_deref() == Some(id),
             true,
             appearance_menu_toggle_handler(id, cx),
             options,
@@ -726,7 +728,7 @@ impl NyaTermApp {
     fn appearance_cursor_style_select(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = self.theme_palette();
         let id = "appearance-cursor-style";
-        let current = self.settings.cursor_style.clone();
+        let current = self.settings.summary.cursor_style.clone();
         let label_for = |style: &str| match style {
             "underline" => self.tr("settings.cursorUnderline"),
             "bar" => self.tr("settings.cursorBar"),
@@ -737,7 +739,7 @@ impl NyaTermApp {
             .map(|style| {
                 let handler: AppearanceClickHandler =
                     Box::new(cx.listener(move |this, _, _, cx| {
-                        this.settings_state.appearance.menu_open = None;
+                        this.settings.appearance.menu_open = None;
                         this.set_cursor_style(style, cx);
                     }));
                 AppearancePlainSelectOption {
@@ -751,7 +753,7 @@ impl NyaTermApp {
             palette,
             id,
             label_for(&current).to_string(),
-            self.settings_state.appearance.menu_open.as_deref() == Some(id),
+            self.settings.appearance.menu_open.as_deref() == Some(id),
             true,
             appearance_menu_toggle_handler(id, cx),
             options,
@@ -766,10 +768,10 @@ fn appearance_menu_toggle_handler(
     cx: &mut Context<NyaTermApp>,
 ) -> AppearanceClickHandler {
     Box::new(cx.listener(move |this, _, _, cx| {
-        if this.settings_state.appearance.menu_open.as_deref() == Some(id) {
-            this.settings_state.appearance.menu_open = None;
+        if this.settings.appearance.menu_open.as_deref() == Some(id) {
+            this.settings.appearance.menu_open = None;
         } else {
-            this.settings_state.appearance.menu_open = Some(id.to_string());
+            this.settings.appearance.menu_open = Some(id.to_string());
         }
         cx.notify();
     }))

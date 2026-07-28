@@ -12,7 +12,7 @@ impl NyaTermApp {
             return;
         }
         self.shell.navigation.settings.draft_snapshot = Some(SettingsDraftSnapshot {
-            settings: self.settings.clone(),
+            settings: self.settings.summary.clone(),
             ai_settings: self.ai.settings.config.clone(),
             ai_model_draft: self.ai.settings.model_draft.clone(),
             ai_base_url_draft: self.ai.settings.base_url_draft.clone(),
@@ -21,9 +21,9 @@ impl NyaTermApp {
             cloud_sync_secret_draft: self.cloud_sync.secret_draft.clone(),
             translation_settings: self.translation.settings.clone(),
             translation_secret_draft: self.translation.secret_draft.clone(),
-            keyword_highlights: self.keyword_highlights.clone(),
-            master_password_enabled: self.settings_master_password_enabled,
-            master_password_draft: self.settings_master_password_draft.clone(),
+            keyword_highlights: self.settings.keyword_config.clone(),
+            master_password_enabled: self.settings.master_password.enabled,
+            master_password_draft: self.settings.master_password.draft.clone(),
         });
     }
 
@@ -31,7 +31,7 @@ impl NyaTermApp {
         let Some(snapshot) = self.shell.navigation.settings.draft_snapshot.as_ref() else {
             return false;
         };
-        snapshot.settings != self.settings
+        snapshot.settings != self.settings.summary
             || snapshot.ai_settings != self.ai.settings.config
             || snapshot.ai_model_draft != self.ai.settings.model_draft
             || snapshot.ai_base_url_draft != self.ai.settings.base_url_draft
@@ -40,9 +40,9 @@ impl NyaTermApp {
             || snapshot.cloud_sync_secret_draft != self.cloud_sync.secret_draft
             || snapshot.translation_settings != self.translation.settings
             || snapshot.translation_secret_draft != self.translation.secret_draft
-            || snapshot.keyword_highlights != self.keyword_highlights
-            || snapshot.master_password_enabled != self.settings_master_password_enabled
-            || snapshot.master_password_draft != self.settings_master_password_draft
+            || snapshot.keyword_highlights != self.settings.keyword_config
+            || snapshot.master_password_enabled != self.settings.master_password.enabled
+            || snapshot.master_password_draft != self.settings.master_password.draft
     }
 
     /// Returns true when a settings save should stay in the in-memory draft.
@@ -53,8 +53,8 @@ impl NyaTermApp {
         if self.shell.navigation.settings.draft_snapshot.is_none() {
             return false;
         }
-        self.store_status.message = "settings draft changed".to_string();
-        self.store_status.ready = true;
+        self.settings.store_status.message = "settings draft changed".to_string();
+        self.settings.store_status.ready = true;
         self.terminal.view.status = "settings draft changed; apply to persist".to_string();
         cx.notify();
         true
@@ -133,10 +133,12 @@ impl NyaTermApp {
         if !settings.enabled {
             return None;
         }
-        if !self.settings_master_password_enabled {
+        if !self.settings.master_password.enabled {
             return Some("Enable a master password before enabling cloud sync".to_string());
         }
-        if !self.settings.has_master_password && self.settings_master_password_draft.is_empty() {
+        if !self.settings.summary.has_master_password
+            && self.settings.master_password.draft.is_empty()
+        {
             return Some("Enter a master password before enabling cloud sync".to_string());
         }
         let missing = match settings.provider.as_str() {
@@ -234,8 +236,8 @@ impl NyaTermApp {
             return false;
         }
         self.terminal.view.status = "apply or cancel settings before importing".to_string();
-        self.store_status.message = self.terminal.view.status.clone();
-        self.store_status.ready = false;
+        self.settings.store_status.message = self.terminal.view.status.clone();
+        self.settings.store_status.ready = false;
         cx.notify();
         true
     }
@@ -245,8 +247,7 @@ impl NyaTermApp {
             return;
         }
         self.shell.navigation.settings.draft_snapshot = None;
-        self.settings_master_password_enabled = self.settings.has_master_password;
-        self.settings_master_password_draft.clear();
+        self.settings.rebase_master_password();
         self.begin_settings_draft();
     }
 
@@ -262,23 +263,23 @@ impl NyaTermApp {
             return;
         }
         if let Some(error) = self.pending_settings_cloud_error() {
-            self.store_status.message = error.clone();
-            self.store_status.ready = false;
+            self.settings.store_status.message = error.clone();
+            self.settings.store_status.ready = false;
             self.terminal.view.status = format!("settings apply blocked: {error}");
             cx.notify();
             return;
         }
 
-        let settings = self.settings.clone();
+        let settings = self.settings.summary.clone();
         let ai_settings = self.pending_ai_settings();
         let cloud_sync_settings = self.pending_cloud_sync_settings();
         let translation_settings = self.pending_translation_settings();
-        let keyword_highlights = self.keyword_highlights.clone();
-        let master_password_update = if self.settings_master_password_draft.is_empty() {
-            (self.settings.has_master_password && !self.settings_master_password_enabled)
+        let keyword_highlights = self.settings.keyword_config.clone();
+        let master_password_update = if self.settings.master_password.draft.is_empty() {
+            (self.settings.summary.has_master_password && !self.settings.master_password.enabled)
                 .then_some(None)
         } else {
-            Some(Some(self.settings_master_password_draft.clone()))
+            Some(Some(self.settings.master_password.draft.clone()))
         };
         let result = ConnectionStore::open_with_portable_key_path(
             self.runtime.config_dir(),
@@ -322,12 +323,11 @@ impl NyaTermApp {
                 saved_ai_settings,
             )) => {
                 self.apply_gpui_settings(saved_settings);
-                self.settings_master_password_enabled = self.settings.has_master_password;
-                self.settings_master_password_draft.clear();
+                self.settings.rebase_master_password();
                 self.ai.settings.config = saved_ai_settings;
                 self.cloud_sync.settings = saved_cloud_sync_settings;
                 self.translation.settings = saved_translation_settings;
-                self.keyword_highlights = saved_keyword_highlights;
+                self.settings.keyword_config = saved_keyword_highlights;
                 self.translation.secret_draft = TranslationSecretDraft::default();
                 self.cloud_sync.secret_draft = CloudSyncSecretDraft::default();
                 self.ai.settings.secret_draft.clear();
@@ -336,18 +336,22 @@ impl NyaTermApp {
                     self.translation.settings.target_language.clone();
                 self.recording
                     .manager
-                    .set_memory_limit(self.settings.recording_memory_limit_bytes as usize);
+                    .set_memory_limit(self.settings.summary.recording_memory_limit_bytes as usize);
                 self.transfer.paths.duplicate_policy = SftpDuplicatePolicy::from_legacy_value(
-                    &self.settings.transfer_duplicate_strategy,
+                    &self.settings.summary.transfer_duplicate_strategy,
                 );
                 self.sync_terminal_encodings_from_settings();
                 self.enforce_terminal_scrollback_limit();
-                if !self.settings.interaction_command_suggestions_enabled {
+                if !self
+                    .settings
+                    .summary
+                    .interaction_command_suggestions_enabled
+                {
                     self.terminal.assist.clear_command_tracking();
                 }
                 self.invalidate_terminal_cell_metrics(cx);
                 self.refresh_visible_terminal_surfaces(cx);
-                if !self.settings.startup_restore_window_layout {
+                if !self.settings.summary.startup_restore_window_layout {
                     let _ = ConnectionStore::open_with_portable_key_path(
                         self.runtime.config_dir(),
                         self.runtime.portable_key_path().map(ToOwned::to_owned),
@@ -358,8 +362,8 @@ impl NyaTermApp {
                     });
                 }
                 self.shell.navigation.settings.draft_snapshot = None;
-                self.store_status.message = "settings applied".to_string();
-                self.store_status.ready = true;
+                self.settings.store_status.message = "settings applied".to_string();
+                self.settings.store_status.ready = true;
                 self.terminal.view.status = "settings applied".to_string();
                 if close_after_apply {
                     self.finish_settings_page(cx);
@@ -369,9 +373,9 @@ impl NyaTermApp {
                 }
             }
             Err(error) => {
-                self.store_status.message = format!("settings apply failed: {error}");
-                self.store_status.ready = false;
-                self.terminal.view.status = self.store_status.message.clone();
+                self.settings.store_status.message = format!("settings apply failed: {error}");
+                self.settings.store_status.ready = false;
+                self.terminal.view.status = self.settings.store_status.message.clone();
                 cx.notify();
             }
         }
@@ -388,14 +392,15 @@ impl NyaTermApp {
             self.cloud_sync.secret_draft = snapshot.cloud_sync_secret_draft;
             self.translation.settings = snapshot.translation_settings;
             self.translation.secret_draft = snapshot.translation_secret_draft;
-            self.keyword_highlights = snapshot.keyword_highlights;
-            self.settings_master_password_enabled = snapshot.master_password_enabled;
-            self.settings_master_password_draft = snapshot.master_password_draft;
+            self.settings.keyword_config = snapshot.keyword_highlights;
+            self.settings.master_password.enabled = snapshot.master_password_enabled;
+            self.settings.master_password.draft = snapshot.master_password_draft;
             self.recording
                 .manager
-                .set_memory_limit(self.settings.recording_memory_limit_bytes as usize);
-            self.transfer.paths.duplicate_policy =
-                SftpDuplicatePolicy::from_legacy_value(&self.settings.transfer_duplicate_strategy);
+                .set_memory_limit(self.settings.summary.recording_memory_limit_bytes as usize);
+            self.transfer.paths.duplicate_policy = SftpDuplicatePolicy::from_legacy_value(
+                &self.settings.summary.transfer_duplicate_strategy,
+            );
             self.sync_terminal_encodings_from_settings();
             self.invalidate_terminal_cell_metrics(cx);
             self.invalidate_paint_theme_caches();
@@ -416,18 +421,14 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn toggle_settings_master_password(&mut self, cx: &mut Context<Self>) {
-        if self.cloud_sync.settings.enabled && self.settings_master_password_enabled {
-            self.terminal.view.status =
-                "disable cloud sync before removing the master password".to_string();
-            cx.notify();
-            return;
-        }
-        self.settings_master_password_enabled = !self.settings_master_password_enabled;
-        self.settings_master_password_draft.clear();
-        self.terminal.view.status = if self.settings_master_password_enabled {
-            "master password enabled; enter a password".to_string()
-        } else {
-            "master password removal staged".to_string()
+        self.terminal.view.status = match self
+            .settings
+            .master_password
+            .toggle(self.cloud_sync.settings.enabled)
+        {
+            Ok(true) => "master password enabled; enter a password".to_string(),
+            Ok(false) => "master password removal staged".to_string(),
+            Err(error) => error.to_string(),
         };
         cx.notify();
     }
@@ -438,10 +439,9 @@ impl NyaTermApp {
         text: String,
         cx: &mut Context<Self>,
     ) {
-        if !self.settings_master_password_enabled {
+        if !self.settings.master_password.edit_draft(text) {
             return;
         }
-        self.settings_master_password_draft = text;
         self.terminal.view.status = "master password edited; apply to persist".to_string();
         cx.notify();
     }
@@ -450,7 +450,7 @@ impl NyaTermApp {
         self.cancel_github_gist_auth(cx);
         self.ai.settings.action_edit = None;
         self.ai.settings.manual_model_edit_group = None;
-        self.settings_state.keyword_highlights.edit_id = None;
+        self.settings.keyword_highlights.edit_id = None;
         self.forget_text_inputs("ai.settings.action.");
         self.forget_text_inputs("ai.settings.manual-model.");
         self.forget_text_inputs("keyword.highlight.");

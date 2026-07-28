@@ -16,12 +16,13 @@ impl NyaTermApp {
         let recording_path_input = self
             .text_input_box(
                 "settings.recording.path",
-                &self.settings.recording_path.clone(),
+                &self.settings.summary.recording_path.clone(),
                 TextInputSetup::placeholder(self.tr("settings.recordingPath")),
                 cx,
             )
             .into_any_element();
-        let memory_mib = (self.settings.recording_memory_limit_bytes / (1024 * 1024)).max(1);
+        let memory_mib =
+            (self.settings.summary.recording_memory_limit_bytes / (1024 * 1024)).max(1);
 
         div().flex().flex_col().gap_3().child(settings_form_section(
             palette,
@@ -60,7 +61,7 @@ impl NyaTermApp {
                     settings_switch(
                         palette,
                         "settings-recording-auto",
-                        self.settings.recording_auto_start,
+                        self.settings.summary.recording_auto_start,
                         cx.listener(|this, _, _, cx| {
                             this.toggle_recording_auto_start(cx);
                         }),
@@ -75,7 +76,7 @@ impl NyaTermApp {
                     settings_switch(
                         palette,
                         "settings-recording-labels",
-                        self.settings.recording_include_io_labels,
+                        self.settings.summary.recording_include_io_labels,
                         cx.listener(|this, _, _, cx| {
                             this.toggle_recording_io_labels(cx);
                         }),
@@ -90,7 +91,7 @@ impl NyaTermApp {
                     settings_switch(
                         palette,
                         "settings-recording-timestamps",
-                        self.settings.recording_include_timestamps,
+                        self.settings.summary.recording_include_timestamps,
                         cx.listener(|this, _, _, cx| {
                             this.toggle_recording_timestamps(cx);
                         }),

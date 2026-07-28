@@ -13,7 +13,11 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let permissions = self.settings.transfer_default_file_permissions.clone();
+        let permissions = self
+            .settings
+            .summary
+            .transfer_default_file_permissions
+            .clone();
 
         div().flex().flex_col().gap_3().child(settings_form_section(
             palette,
@@ -49,7 +53,7 @@ impl NyaTermApp {
                                 .text_size(px(12.))
                                 .font_weight(FontWeight(700.))
                                 .text_color(rgb(palette.text))
-                                .child(self.settings.transfer_download_threads.to_string()),
+                                .child(self.settings.summary.transfer_download_threads.to_string()),
                         )
                         .child(small_button(
                             palette,
@@ -86,7 +90,7 @@ impl NyaTermApp {
                                 .text_size(px(12.))
                                 .font_weight(FontWeight(700.))
                                 .text_color(rgb(palette.text))
-                                .child(self.settings.transfer_upload_threads.to_string()),
+                                .child(self.settings.summary.transfer_upload_threads.to_string()),
                         )
                         .child(small_button(
                             palette,
@@ -123,7 +127,7 @@ impl NyaTermApp {
                                 .text_size(px(12.))
                                 .font_weight(FontWeight(700.))
                                 .text_color(rgb(palette.text))
-                                .child(self.settings.transfer_max_retries.to_string()),
+                                .child(self.settings.summary.transfer_max_retries.to_string()),
                         )
                         .child(small_button(
                             palette,
@@ -160,7 +164,7 @@ impl NyaTermApp {
                                 .text_size(px(12.))
                                 .font_weight(FontWeight(700.))
                                 .text_color(rgb(palette.text))
-                                .child(self.settings.transfer_buffer_size.to_string()),
+                                .child(self.settings.summary.transfer_buffer_size.to_string()),
                         )
                         .child(small_button(
                             palette,
@@ -180,7 +184,7 @@ impl NyaTermApp {
                     settings_switch(
                         palette,
                         "settings-transfer-preserve-timestamps",
-                        self.settings.transfer_preserve_timestamps,
+                        self.settings.summary.transfer_preserve_timestamps,
                         cx.listener(|this, _, _, cx| {
                             this.toggle_transfer_preserve_timestamps(cx);
                         }),
@@ -195,7 +199,7 @@ impl NyaTermApp {
                     settings_switch(
                         palette,
                         "settings-transfer-resume-broken",
-                        self.settings.transfer_resume_broken_transfer,
+                        self.settings.summary.transfer_resume_broken_transfer,
                         cx.listener(|this, _, _, cx| {
                             this.toggle_transfer_resume_broken(cx);
                         }),

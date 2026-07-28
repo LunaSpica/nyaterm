@@ -15,7 +15,7 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         // Tauri GeneralTab: language, nested startup layout, tray, confirm, diagnostics.
-        let language = self.settings.language.clone();
+        let language = self.settings.summary.language.clone();
         let language_label = match language.as_str() {
             "zh-CN" | "zh" => "简体中文",
             "zh-TW" => "繁體中文",
@@ -23,12 +23,12 @@ impl NyaTermApp {
             "ja" => "日本語",
             other => other,
         };
-        let diagnostics_level = self.settings.diagnostics_level.clone();
-        let retention = self.settings.diagnostics_retention_days;
+        let diagnostics_level = self.settings.summary.diagnostics_level.clone();
+        let retention = self.settings.summary.diagnostics_retention_days;
         let days_unit = self.tr("common.days");
         let header_status_mode =
-            HeaderStatusMode::from_setting(&self.settings.ui_header_status_mode);
-        let header_status_visible = self.settings.ui_header_status_visible;
+            HeaderStatusMode::from_setting(&self.settings.summary.ui_header_status_mode);
+        let header_status_visible = self.settings.summary.ui_header_status_visible;
 
         div()
             .flex()
@@ -121,13 +121,13 @@ impl NyaTermApp {
                         settings_switch(
                             palette,
                             "general-startup-restore",
-                            self.settings.startup_restore,
+                            self.settings.summary.startup_restore,
                             cx.listener(|this, _, _, cx| {
                                 this.toggle_startup_restore(cx);
                             }),
                         ),
                     ))
-                    .when(self.settings.startup_restore, |this| {
+                    .when(self.settings.summary.startup_restore, |this| {
                         this.child(
                             div()
                                 .pl_3()
@@ -143,7 +143,7 @@ impl NyaTermApp {
                                     settings_switch(
                                         palette,
                                         "general-startup-restore-window-layout",
-                                        self.settings.startup_restore_window_layout,
+                                        self.settings.summary.startup_restore_window_layout,
                                         cx.listener(|this, _, _, cx| {
                                             this.toggle_startup_restore_window_layout(cx);
                                         }),
@@ -158,7 +158,7 @@ impl NyaTermApp {
                         settings_switch(
                             palette,
                             "general-minimize-to-tray",
-                            self.settings.minimize_to_tray,
+                            self.settings.summary.minimize_to_tray,
                             cx.listener(|this, _, _, cx| {
                                 this.toggle_minimize_to_tray(cx);
                             }),
@@ -171,7 +171,7 @@ impl NyaTermApp {
                         settings_switch(
                             palette,
                             "general-confirm-close",
-                            self.settings.confirm_on_close,
+                            self.settings.summary.confirm_on_close,
                             cx.listener(|this, _, _, cx| {
                                 this.toggle_confirm_on_close(cx);
                             }),

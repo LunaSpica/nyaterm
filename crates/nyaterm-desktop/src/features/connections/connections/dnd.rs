@@ -97,8 +97,8 @@ impl NyaTermApp {
             }
             Err(error) => {
                 self.terminal.view.status = format!("reorder connection failed: {error}");
-                self.store_status.message = self.terminal.view.status.clone();
-                self.store_status.ready = false;
+                self.settings.store_status.message = self.terminal.view.status.clone();
+                self.settings.store_status.ready = false;
             }
         }
         self.connection_state.clear_list_drop_target();
@@ -169,8 +169,8 @@ impl NyaTermApp {
             }
             Err(error) => {
                 self.terminal.view.status = format!("reorder connection failed: {error}");
-                self.store_status.message = self.terminal.view.status.clone();
-                self.store_status.ready = false;
+                self.settings.store_status.message = self.terminal.view.status.clone();
+                self.settings.store_status.ready = false;
             }
         }
         self.connection_state.clear_list_drop_target();
@@ -220,8 +220,8 @@ impl NyaTermApp {
             }
             Err(error) => {
                 self.terminal.view.status = format!("move connection failed: {error}");
-                self.store_status.message = self.terminal.view.status.clone();
-                self.store_status.ready = false;
+                self.settings.store_status.message = self.terminal.view.status.clone();
+                self.settings.store_status.ready = false;
             }
         }
         cx.notify();
@@ -270,8 +270,8 @@ impl NyaTermApp {
             }
             Err(error) => {
                 self.terminal.view.status = format!("move connections failed: {error}");
-                self.store_status.message = self.terminal.view.status.clone();
-                self.store_status.ready = false;
+                self.settings.store_status.message = self.terminal.view.status.clone();
+                self.settings.store_status.ready = false;
             }
         }
         cx.notify();

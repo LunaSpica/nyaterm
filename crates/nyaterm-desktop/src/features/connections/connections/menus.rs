@@ -70,8 +70,8 @@ impl NyaTermApp {
             }
             Err(error) => {
                 self.terminal.view.status = format!("copy connection failed: {error}");
-                self.store_status.message = self.terminal.view.status.clone();
-                self.store_status.ready = false;
+                self.settings.store_status.message = self.terminal.view.status.clone();
+                self.settings.store_status.ready = false;
             }
         }
         cx.notify();

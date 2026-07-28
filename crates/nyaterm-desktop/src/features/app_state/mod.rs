@@ -1,4 +1,4 @@
-use nyaterm_core::{AppRuntime, AppSettingsSummary, KeywordHighlightConfig};
+use nyaterm_core::AppRuntime;
 
 use super::ai::AiFeatureState;
 use super::commands::CommandFeatureState;
@@ -17,7 +17,6 @@ use super::transfers::TransferFeatureState;
 use super::translation::TranslationFeatureState;
 use super::tunnels::TunnelFeatureState;
 use super::update::UpdateFeatureState;
-use crate::models::StoreStatus;
 
 mod construct;
 mod types;
@@ -35,7 +34,7 @@ pub struct NyaTermApp {
     pub(in crate::features) commands: CommandFeatureState,
     pub(in crate::features) remote_ops: RemoteOpsFeatureState,
     pub(in crate::features) security: SecurityFeatureState,
-    pub(in crate::features) settings_state: SettingsFeatureState,
+    pub(in crate::features) settings: SettingsFeatureState,
     pub(in crate::features) ai: AiFeatureState,
     pub(in crate::features) terminal: TerminalFeatureState,
     pub(in crate::features) send_command: SendCommandFeatureState,
@@ -46,11 +45,6 @@ pub struct NyaTermApp {
     pub(in crate::features) session: SessionFeatureState,
     pub(in crate::features) shell: ShellFeatureState,
     pub(in crate::features) sync_input: SyncInputFeatureState,
-    pub(in crate::features) keyword_highlights: KeywordHighlightConfig,
-    pub(in crate::features) settings: AppSettingsSummary,
-    pub(in crate::features) settings_master_password_enabled: bool,
-    pub(in crate::features) settings_master_password_draft: String,
-    pub(in crate::features) store_status: StoreStatus,
     pub(in crate::features) recording: RecordingFeatureState,
     pub(in crate::features) tunnel_state: TunnelFeatureState,
 }

@@ -30,7 +30,11 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        let target = recording_file_path(&self.settings, self.runtime.config_dir(), &session_name);
+        let target = recording_file_path(
+            &self.settings.summary,
+            self.runtime.config_dir(),
+            &session_name,
+        );
         let directory = target
             .parent()
             .map(ToOwned::to_owned)
@@ -109,9 +113,9 @@ impl NyaTermApp {
         let manager = Arc::clone(&self.recording.manager);
         let writer = self.recording.writer();
         let job_session_id = session_id.to_string();
-        let memory_limit = self.settings.recording_memory_limit_bytes as usize;
-        let include_io_labels = self.settings.recording_include_io_labels;
-        let include_timestamps = self.settings.recording_include_timestamps;
+        let memory_limit = self.settings.summary.recording_memory_limit_bytes as usize;
+        let include_io_labels = self.settings.summary.recording_include_io_labels;
+        let include_timestamps = self.settings.summary.recording_include_timestamps;
         let task = cx.background_spawn(async move {
             writer.flush();
             manager.set_memory_limit(memory_limit);
@@ -218,9 +222,9 @@ impl NyaTermApp {
         let manager = Arc::clone(&self.recording.manager);
         let writer = self.recording.writer();
         let job_session_id = session_id.to_string();
-        let memory_limit = self.settings.recording_memory_limit_bytes as usize;
-        let include_io_labels = self.settings.recording_include_io_labels;
-        let include_timestamps = self.settings.recording_include_timestamps;
+        let memory_limit = self.settings.summary.recording_memory_limit_bytes as usize;
+        let include_io_labels = self.settings.summary.recording_include_io_labels;
+        let include_timestamps = self.settings.summary.recording_include_timestamps;
         let task = cx.background_spawn(async move {
             writer.flush();
             manager.set_memory_limit(memory_limit);
@@ -260,10 +264,14 @@ impl NyaTermApp {
         session_name: &str,
         cx: &mut Context<Self>,
     ) {
-        if !self.settings.recording_auto_start {
+        if !self.settings.summary.recording_auto_start {
             return;
         }
-        let path = recording_file_path(&self.settings, self.runtime.config_dir(), session_name);
+        let path = recording_file_path(
+            &self.settings.summary,
+            self.runtime.config_dir(),
+            session_name,
+        );
         self.start_recording_to_path(session_id, path.display().to_string(), cx);
     }
 

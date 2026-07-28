@@ -25,6 +25,6 @@ pub(in crate::features) use markdown::{
 
 impl NyaTermApp {
     pub(in crate::features) fn tr(&self, key: &'static str) -> &'static str {
-        crate::i18n::text(&self.settings.language, key)
+        crate::i18n::text(&self.settings.summary.language, key)
     }
 }

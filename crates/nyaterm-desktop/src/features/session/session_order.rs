@@ -17,7 +17,7 @@ impl NyaTermApp {
         self.session
             .metadata
             .insert(session_id.to_string(), metadata);
-        let encoding = self.settings.interaction_default_encoding.clone();
+        let encoding = self.settings.summary.interaction_default_encoding.clone();
         let view = self
             .terminal
             .view

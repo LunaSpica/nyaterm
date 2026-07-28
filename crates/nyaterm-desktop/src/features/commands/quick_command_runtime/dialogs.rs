@@ -157,18 +157,19 @@ impl NyaTermApp {
                     .catalog
                     .replace(config.commands, config.categories);
                 self.commands.quick.dialogs.delete = None;
-                self.store_status.message = if deleted {
+                self.settings.store_status.message = if deleted {
                     format!("quick command '{}' deleted", delete.label)
                 } else {
                     format!("quick command '{}' was already deleted", delete.label)
                 };
-                self.store_status.ready = deleted;
-                self.terminal.view.status = self.store_status.message.clone();
+                self.settings.store_status.ready = deleted;
+                self.terminal.view.status = self.settings.store_status.message.clone();
             }
             Err(error) => {
-                self.store_status.message = format!("quick command delete failed: {error}");
-                self.store_status.ready = false;
-                self.terminal.view.status = self.store_status.message.clone();
+                self.settings.store_status.message =
+                    format!("quick command delete failed: {error}");
+                self.settings.store_status.ready = false;
+                self.terminal.view.status = self.settings.store_status.message.clone();
             }
         }
         cx.notify();
@@ -256,7 +257,7 @@ impl NyaTermApp {
                     editor.category_id = None;
                     editor.category_draft.clear();
                 }
-                self.store_status.message = if deleted_category {
+                self.settings.store_status.message = if deleted_category {
                     format!(
                         "quick command category '{}' deleted with {} command(s)",
                         delete.name, deleted_commands
@@ -267,14 +268,14 @@ impl NyaTermApp {
                         delete.name
                     )
                 };
-                self.store_status.ready = deleted_category;
-                self.terminal.view.status = self.store_status.message.clone();
+                self.settings.store_status.ready = deleted_category;
+                self.terminal.view.status = self.settings.store_status.message.clone();
             }
             Err(error) => {
-                self.store_status.message =
+                self.settings.store_status.message =
                     format!("quick command category delete failed: {error}");
-                self.store_status.ready = false;
-                self.terminal.view.status = self.store_status.message.clone();
+                self.settings.store_status.ready = false;
+                self.terminal.view.status = self.settings.store_status.message.clone();
             }
         }
         cx.notify();
@@ -378,27 +379,27 @@ impl NyaTermApp {
                     .replace(config.commands, config.categories);
                 if renamed {
                     self.commands.quick.dialogs.category_rename = None;
-                    self.store_status.message = format!(
+                    self.settings.store_status.message = format!(
                         "quick command category '{}' renamed to '{}'",
                         rename.original_name, name
                     );
-                    self.store_status.ready = true;
+                    self.settings.store_status.ready = true;
                 } else if let Some(state) = self.commands.quick.dialogs.category_rename.as_mut() {
                     state.error = Some("Category is no longer available".to_string());
-                    self.store_status.message =
+                    self.settings.store_status.message =
                         "quick command category rename failed: category missing".to_string();
-                    self.store_status.ready = false;
+                    self.settings.store_status.ready = false;
                 }
-                self.terminal.view.status = self.store_status.message.clone();
+                self.terminal.view.status = self.settings.store_status.message.clone();
             }
             Err(error) => {
                 if let Some(state) = self.commands.quick.dialogs.category_rename.as_mut() {
                     state.error = Some(error.to_string());
                 }
-                self.store_status.message =
+                self.settings.store_status.message =
                     format!("quick command category rename failed: {error}");
-                self.store_status.ready = false;
-                self.terminal.view.status = self.store_status.message.clone();
+                self.settings.store_status.ready = false;
+                self.terminal.view.status = self.settings.store_status.message.clone();
             }
         }
         cx.notify();

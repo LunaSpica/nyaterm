@@ -10,7 +10,7 @@ impl NyaTermApp {
     /// First display chord for empty-workspace / UI labels (Tauri-style chips).
     pub(in crate::features) fn display_shortcut_for(&self, id: &str, fallback: &str) -> String {
         use crate::shortcuts::{format_hotkey_for_display, shortcut_keys_for};
-        let raw = shortcut_keys_for(id, &self.settings.keybindings)
+        let raw = shortcut_keys_for(id, &self.settings.summary.keybindings)
             .unwrap_or_else(|| fallback.to_string());
         let display = format_hotkey_for_display(&raw);
         display
@@ -27,41 +27,41 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.settings_state.keybindings.recording_id = Some(shortcut_id);
-        self.settings_state.keybindings.pending_keys = None;
+        self.settings.keybindings.recording_id = Some(shortcut_id);
+        self.settings.keybindings.pending_keys = None;
         self.terminal.view.status = "recording shortcut".to_string();
-        window.focus(&self.settings_state.keybindings.focus);
+        window.focus(&self.settings.keybindings.focus);
         cx.notify();
     }
 
     pub(in crate::features) fn cancel_keybinding_recording(&mut self, cx: &mut Context<Self>) {
-        self.settings_state.keybindings.recording_id = None;
-        self.settings_state.keybindings.pending_keys = None;
+        self.settings.keybindings.recording_id = None;
+        self.settings.keybindings.pending_keys = None;
         self.terminal.view.status = "shortcut recording cancelled".to_string();
         cx.notify();
     }
 
     pub(in crate::features) fn confirm_keybinding_recording(&mut self, cx: &mut Context<Self>) {
-        let Some(shortcut_id) = self.settings_state.keybindings.recording_id.take() else {
+        let Some(shortcut_id) = self.settings.keybindings.recording_id.take() else {
             self.terminal.view.status = "no shortcut recording is active".to_string();
             cx.notify();
             return;
         };
-        let Some(keys) = self.settings_state.keybindings.pending_keys.take() else {
-            self.settings_state.keybindings.recording_id = Some(shortcut_id);
+        let Some(keys) = self.settings.keybindings.pending_keys.take() else {
+            self.settings.keybindings.recording_id = Some(shortcut_id);
             self.terminal.view.status = "press a shortcut before saving".to_string();
             cx.notify();
             return;
         };
 
         if let Some(conflict) = self.keybinding_conflict_label(&keys, &shortcut_id) {
-            self.settings_state.keybindings.recording_id = Some(shortcut_id);
-            self.settings_state.keybindings.pending_keys = Some(keys);
+            self.settings.keybindings.recording_id = Some(shortcut_id);
+            self.settings.keybindings.pending_keys = Some(keys);
             self.terminal.view.status = format!("shortcut conflicts with {conflict}");
             cx.notify();
             return;
         }
-        let mut keybindings = self.settings.keybindings.clone();
+        let mut keybindings = self.settings.summary.keybindings.clone();
         let is_default = crate::shortcuts::SHORTCUT_REGISTRY
             .iter()
             .find(|s| s.id == shortcut_id)
@@ -79,7 +79,7 @@ impl NyaTermApp {
         shortcut_id: String,
         cx: &mut Context<Self>,
     ) {
-        let mut keybindings = self.settings.keybindings.clone();
+        let mut keybindings = self.settings.summary.keybindings.clone();
         keybindings.remove(&shortcut_id);
         self.save_keybindings(keybindings, format!("shortcut {shortcut_id} reset"), cx);
     }
@@ -94,10 +94,10 @@ impl NyaTermApp {
         success_message: String,
         cx: &mut Context<Self>,
     ) {
-        self.settings.keybindings = keybindings.clone();
+        self.settings.summary.keybindings = keybindings.clone();
         if self.defer_settings_persistence(cx) {
-            self.settings_state.keybindings.recording_id = None;
-            self.settings_state.keybindings.pending_keys = None;
+            self.settings.keybindings.recording_id = None;
+            self.settings.keybindings.pending_keys = None;
             self.terminal.view.status = success_message.replace("saved", "staged");
             return;
         }
@@ -109,16 +109,16 @@ impl NyaTermApp {
         {
             Ok(settings) => {
                 self.apply_gpui_settings(settings);
-                self.settings_state.keybindings.recording_id = None;
-                self.settings_state.keybindings.pending_keys = None;
-                self.store_status.message = success_message.clone();
-                self.store_status.ready = true;
+                self.settings.keybindings.recording_id = None;
+                self.settings.keybindings.pending_keys = None;
+                self.settings.store_status.message = success_message.clone();
+                self.settings.store_status.ready = true;
                 self.terminal.view.status = success_message;
             }
             Err(error) => {
-                self.store_status.message = format!("shortcut save failed: {error}");
-                self.store_status.ready = false;
-                self.terminal.view.status = self.store_status.message.clone();
+                self.settings.store_status.message = format!("shortcut save failed: {error}");
+                self.settings.store_status.ready = false;
+                self.terminal.view.status = self.settings.store_status.message.clone();
             }
         }
         cx.notify();
@@ -130,7 +130,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         cx.stop_propagation();
-        let Some(recording_id) = self.settings_state.keybindings.recording_id.clone() else {
+        let Some(recording_id) = self.settings.keybindings.recording_id.clone() else {
             return;
         };
         match event.keystroke.key.as_str() {
@@ -138,7 +138,7 @@ impl NyaTermApp {
                 self.cancel_keybinding_recording(cx);
                 return;
             }
-            "enter" if self.settings_state.keybindings.pending_keys.is_some() => {
+            "enter" if self.settings.keybindings.pending_keys.is_some() => {
                 self.confirm_keybinding_recording(cx);
                 return;
             }
@@ -150,12 +150,12 @@ impl NyaTermApp {
         };
         if recording_id == "tab.switchTo" && !crate::shortcuts::is_indexed_shortcut_template(&keys)
         {
-            self.settings_state.keybindings.pending_keys = None;
+            self.settings.keybindings.pending_keys = None;
             self.terminal.view.status = "tab switch shortcut must end with number 1".to_string();
             cx.notify();
             return;
         }
-        self.settings_state.keybindings.pending_keys = Some(keys);
+        self.settings.keybindings.pending_keys = Some(keys);
         self.terminal.view.status = "shortcut captured; press Enter or Save".to_string();
         cx.notify();
     }
@@ -178,9 +178,11 @@ impl NyaTermApp {
             if shortcut.id == exclude_id {
                 continue;
             }
-            let existing =
-                crate::shortcuts::shortcut_keys_for(shortcut.id, &self.settings.keybindings)
-                    .unwrap_or_else(|| shortcut.default_keys.to_string());
+            let existing = crate::shortcuts::shortcut_keys_for(
+                shortcut.id,
+                &self.settings.summary.keybindings,
+            )
+            .unwrap_or_else(|| shortcut.default_keys.to_string());
             let normalized_existing = existing
                 .split(',')
                 .map(str::trim)
@@ -202,7 +204,7 @@ impl NyaTermApp {
         text: String,
         cx: &mut Context<Self>,
     ) {
-        self.settings_state.keybindings.search_draft = text;
+        self.settings.keybindings.search_draft = text;
         cx.notify();
     }
 }

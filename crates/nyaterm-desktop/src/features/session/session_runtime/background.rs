@@ -580,7 +580,7 @@ impl NyaTermApp {
                             session_id.clone(),
                             TerminalViewState::from_output_with_encoding(
                                 seed_output,
-                                &self.settings.interaction_default_encoding,
+                                &self.settings.summary.interaction_default_encoding,
                             ),
                         );
                     }
@@ -631,7 +631,7 @@ impl NyaTermApp {
                     // Do not append local log text through the full terminal decode path
                     // on connect success — that competes with the first SSH/PTY frames.
                     // Auto-recording file open is deferred to the idle plane.
-                    if self.settings.recording_auto_start {
+                    if self.settings.summary.recording_auto_start {
                         self.recording.pending_auto_start =
                             Some((session_id.clone(), session_info.name.clone()));
                     }

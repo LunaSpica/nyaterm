@@ -23,7 +23,7 @@ impl NyaTermApp {
         let Ok(index) = index.parse::<usize>() else {
             return;
         };
-        let Some(engine) = self.settings.search_custom_engines.get_mut(index) else {
+        let Some(engine) = self.settings.summary.search_custom_engines.get_mut(index) else {
             return;
         };
         match field {
@@ -39,7 +39,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn add_search_engine(&mut self, cx: &mut Context<Self>) {
-        self.settings.search_custom_engines.insert(
+        self.settings.summary.search_custom_engines.insert(
             0,
             SearchEngineConfig {
                 name: "New Engine".to_string(),
@@ -48,11 +48,11 @@ impl NyaTermApp {
                 show_in_menu: true,
             },
         );
-        self.settings_state.search_engines.expanded_index = Some(0);
-        self.settings_state.search_engines.edit_index = Some(0);
-        self.settings_state.search_engines.icon_picker_index = None;
-        self.settings_state.search_engines.actions_index = None;
-        self.settings_state.search_engines.edit_field = SearchEngineEditorField::Name;
+        self.settings.search_engines.expanded_index = Some(0);
+        self.settings.search_engines.edit_index = Some(0);
+        self.settings.search_engines.icon_picker_index = None;
+        self.settings.search_engines.actions_index = None;
+        self.settings.search_engines.edit_field = SearchEngineEditorField::Name;
         // The inputs are keyed by row index and every row just shifted down, so
         // they have to be rebuilt from the engines they now stand for.
         self.forget_text_inputs("settings.search-engine.");
@@ -65,24 +65,24 @@ impl NyaTermApp {
         index: usize,
         cx: &mut Context<Self>,
     ) {
-        if index >= self.settings.search_custom_engines.len() {
+        if index >= self.settings.summary.search_custom_engines.len() {
             return;
         }
-        self.settings.search_custom_engines.remove(index);
-        self.settings_state.search_engines.icon_picker_index = None;
-        self.settings_state.search_engines.actions_index = None;
-        if self.settings_state.search_engines.expanded_index == Some(index) {
-            self.settings_state.search_engines.expanded_index = None;
-        } else if let Some(edit) = self.settings_state.search_engines.expanded_index {
+        self.settings.summary.search_custom_engines.remove(index);
+        self.settings.search_engines.icon_picker_index = None;
+        self.settings.search_engines.actions_index = None;
+        if self.settings.search_engines.expanded_index == Some(index) {
+            self.settings.search_engines.expanded_index = None;
+        } else if let Some(edit) = self.settings.search_engines.expanded_index {
             if edit > index {
-                self.settings_state.search_engines.expanded_index = Some(edit - 1);
+                self.settings.search_engines.expanded_index = Some(edit - 1);
             }
         }
-        if let Some(edit) = self.settings_state.search_engines.edit_index {
+        if let Some(edit) = self.settings.search_engines.edit_index {
             if edit == index {
-                self.settings_state.search_engines.edit_index = None;
+                self.settings.search_engines.edit_index = None;
             } else if edit > index {
-                self.settings_state.search_engines.edit_index = Some(edit - 1);
+                self.settings.search_engines.edit_index = Some(edit - 1);
             }
         }
         self.forget_text_inputs("settings.search-engine.");
@@ -96,11 +96,11 @@ impl NyaTermApp {
         icon: Option<&str>,
         cx: &mut Context<Self>,
     ) {
-        let Some(engine) = self.settings.search_custom_engines.get_mut(index) else {
+        let Some(engine) = self.settings.summary.search_custom_engines.get_mut(index) else {
             return;
         };
         engine.icon = icon.map(str::to_string);
-        self.settings_state.search_engines.icon_picker_index = None;
+        self.settings.search_engines.icon_picker_index = None;
         self.save_terminal_settings(cx);
         self.terminal.view.status = "search engine icon updated".to_string();
     }
@@ -110,7 +110,7 @@ impl NyaTermApp {
         index: usize,
         cx: &mut Context<Self>,
     ) {
-        let Some(engine) = self.settings.search_custom_engines.get_mut(index) else {
+        let Some(engine) = self.settings.summary.search_custom_engines.get_mut(index) else {
             return;
         };
         engine.show_in_menu = !engine.show_in_menu;
@@ -122,21 +122,21 @@ impl NyaTermApp {
         index: usize,
         cx: &mut Context<Self>,
     ) {
-        if self.settings_state.search_engines.expanded_index == Some(index) {
-            self.settings_state.search_engines.expanded_index = None;
-            self.settings_state.search_engines.edit_index = None;
+        if self.settings.search_engines.expanded_index == Some(index) {
+            self.settings.search_engines.expanded_index = None;
+            self.settings.search_engines.edit_index = None;
             self.normalize_search_engines();
             self.save_terminal_settings(cx);
         } else {
-            self.settings_state.search_engines.expanded_index = Some(index);
+            self.settings.search_engines.expanded_index = Some(index);
         }
-        self.settings_state.search_engines.icon_picker_index = None;
-        self.settings_state.search_engines.actions_index = None;
+        self.settings.search_engines.icon_picker_index = None;
+        self.settings.search_engines.actions_index = None;
         cx.notify();
     }
 
     pub(in crate::features) fn test_search_engine(&mut self, index: usize, cx: &mut Context<Self>) {
-        let Some(engine) = self.settings.search_custom_engines.get(index) else {
+        let Some(engine) = self.settings.summary.search_custom_engines.get(index) else {
             self.terminal.view.status = "search engine not found".to_string();
             cx.notify();
             return;
@@ -161,7 +161,8 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn toggle_terminal_action_links(&mut self, cx: &mut Context<Self>) {
-        self.settings.terminal_action_links_enabled = !self.settings.terminal_action_links_enabled;
+        self.settings.summary.terminal_action_links_enabled =
+            !self.settings.summary.terminal_action_links_enabled;
         self.save_terminal_settings(cx);
     }
 
@@ -172,16 +173,22 @@ impl NyaTermApp {
     ) {
         match which {
             "ipv4" => {
-                self.settings.terminal_action_links_matchers.ipv4 =
-                    !self.settings.terminal_action_links_matchers.ipv4;
+                self.settings.summary.terminal_action_links_matchers.ipv4 =
+                    !self.settings.summary.terminal_action_links_matchers.ipv4;
             }
             "archive" => {
-                self.settings.terminal_action_links_matchers.archive =
-                    !self.settings.terminal_action_links_matchers.archive;
+                self.settings.summary.terminal_action_links_matchers.archive =
+                    !self.settings.summary.terminal_action_links_matchers.archive;
             }
             "host_port" => {
-                self.settings.terminal_action_links_matchers.host_port =
-                    !self.settings.terminal_action_links_matchers.host_port;
+                self.settings
+                    .summary
+                    .terminal_action_links_matchers
+                    .host_port = !self
+                    .settings
+                    .summary
+                    .terminal_action_links_matchers
+                    .host_port;
             }
             _ => return,
         }
@@ -204,7 +211,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn normalize_search_engines(&mut self) {
-        for engine in &mut self.settings.search_custom_engines {
+        for engine in &mut self.settings.summary.search_custom_engines {
             engine.name = engine.name.trim().to_string();
             engine.url_template = engine.url_template.trim().to_string();
         }

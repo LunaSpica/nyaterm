@@ -157,13 +157,6 @@ impl TerminalSearchMode {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct StoreStatus {
-    pub(crate) path: String,
-    pub(crate) message: String,
-    pub(crate) ready: bool,
-}
-
-#[derive(Debug, Clone)]
 pub(crate) struct MultiLinePasteDraft {
     pub(crate) text: String,
 }

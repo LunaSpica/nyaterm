@@ -127,7 +127,11 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        let delay_ms = u64::from(self.settings.interaction_duplicate_session_command_delay_ms);
+        let delay_ms = u64::from(
+            self.settings
+                .summary
+                .interaction_duplicate_session_command_delay_ms,
+        );
         self.session.dialogs.open_startup_command(action, delay_ms);
         self.forget_text_inputs("session.startup-command");
         let field = self.text_input(

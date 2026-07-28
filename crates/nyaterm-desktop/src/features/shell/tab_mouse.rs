@@ -225,22 +225,22 @@ impl NyaTermApp {
         let action = normalize_tab_mouse_action(action);
         match target {
             TabMouseActionTarget::Double => {
-                if self.settings.interaction_tab_double_click_action == action {
+                if self.settings.summary.interaction_tab_double_click_action == action {
                     return;
                 }
-                self.settings.interaction_tab_double_click_action = action.to_string();
+                self.settings.summary.interaction_tab_double_click_action = action.to_string();
             }
             TabMouseActionTarget::Middle => {
-                if self.settings.interaction_tab_middle_click_action == action {
+                if self.settings.summary.interaction_tab_middle_click_action == action {
                     return;
                 }
-                self.settings.interaction_tab_middle_click_action = action.to_string();
+                self.settings.summary.interaction_tab_middle_click_action = action.to_string();
             }
             TabMouseActionTarget::Right => {
-                if self.settings.interaction_tab_right_click_action == action {
+                if self.settings.summary.interaction_tab_right_click_action == action {
                     return;
                 }
-                self.settings.interaction_tab_right_click_action = action.to_string();
+                self.settings.summary.interaction_tab_right_click_action = action.to_string();
             }
         }
         self.save_interaction_settings(cx);
@@ -258,7 +258,11 @@ impl NyaTermApp {
                 mouse.down.button == MouseButton::Middle && mouse.up.button == MouseButton::Middle;
             if is_middle_click {
                 cx.stop_propagation();
-                let action = self.settings.interaction_tab_middle_click_action.clone();
+                let action = self
+                    .settings
+                    .summary
+                    .interaction_tab_middle_click_action
+                    .clone();
                 if action == "none" {
                     self.terminal.view.status = "middle-click tab action is disabled".to_string();
                     cx.notify();
@@ -270,7 +274,11 @@ impl NyaTermApp {
 
             if event.is_right_click() {
                 cx.stop_propagation();
-                let action = self.settings.interaction_tab_right_click_action.clone();
+                let action = self
+                    .settings
+                    .summary
+                    .interaction_tab_right_click_action
+                    .clone();
                 if action == "none" {
                     let anchor = if let ClickEvent::Mouse(mouse) = event {
                         Some((
@@ -291,7 +299,11 @@ impl NyaTermApp {
                 && mouse.up.button == MouseButton::Left
                 && event.click_count() >= 2;
             if is_left_double_click {
-                let action = self.settings.interaction_tab_double_click_action.clone();
+                let action = self
+                    .settings
+                    .summary
+                    .interaction_tab_double_click_action
+                    .clone();
                 if action != "none" {
                     cx.stop_propagation();
                     self.run_tab_mouse_action(session_id, action, window, cx);

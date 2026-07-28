@@ -129,7 +129,7 @@ impl NyaTermApp {
             x11_forwarding: false,
             x11_display: String::new(),
             deferred_pty: true,
-            keep_alive_interval_secs: self.settings.terminal_keep_alive_interval,
+            keep_alive_interval_secs: self.settings.summary.terminal_keep_alive_interval,
             cols: 80,
             rows: 24,
             pixel_width: 0,
@@ -137,7 +137,7 @@ impl NyaTermApp {
             host_key_verifier: Some(Arc::new(NativeHostKeyVerifier {
                 config_dir: self.runtime.config_dir().to_path_buf(),
                 portable_key_path: self.runtime.portable_key_path().map(ToOwned::to_owned),
-                policy: self.settings.host_key_policy.clone(),
+                policy: self.settings.summary.host_key_policy.clone(),
                 prompt_broker: self.session.prompts.host_key_prompts.clone(),
             })),
             credential_provider: Some(self.session.prompts.credential_prompts.clone()),

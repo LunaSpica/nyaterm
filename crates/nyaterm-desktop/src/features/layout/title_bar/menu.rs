@@ -333,7 +333,7 @@ impl NyaTermApp {
         match submenu {
             TitleMenuSubmenu::Theme => {
                 for &theme in crate::theme::APPEARANCE_THEME_IDS {
-                    let current = self.settings.theme.as_str();
+                    let current = self.settings.summary.theme.as_str();
                     let selected = current == theme
                         || (current == "catppuccin" && theme == "catppuccin-mocha");
                     let label = crate::theme::appearance_theme_label(theme);
@@ -352,8 +352,8 @@ impl NyaTermApp {
                 }
             }
             TitleMenuSubmenu::Language => {
-                let english = matches!(self.settings.language.as_str(), "en" | "en-US");
-                let chinese = matches!(self.settings.language.as_str(), "zh" | "zh-CN");
+                let english = matches!(self.settings.summary.language.as_str(), "en" | "en-US");
+                let chinese = matches!(self.settings.summary.language.as_str(), "zh" | "zh-CN");
                 menu = menu
                     .child(title_menu_item(
                         palette,

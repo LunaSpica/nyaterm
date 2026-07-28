@@ -17,7 +17,7 @@ impl NyaTermApp {
         let download_path_input = self
             .text_input_box(
                 "settings.transfer.download-path",
-                &self.settings.transfer_download_path.clone(),
+                &self.settings.summary.transfer_download_path.clone(),
                 TextInputSetup::placeholder(self.tr("settings.downloadPath")),
                 cx,
             )
@@ -63,7 +63,7 @@ impl NyaTermApp {
                         settings_switch(
                             palette,
                             "transfer-ask-save",
-                            self.settings.transfer_ask_save_location,
+                            self.settings.summary.transfer_ask_save_location,
                             cx.listener(|this, _, _, cx| {
                                 this.toggle_transfer_ask_save_location(cx);
                             }),

@@ -247,7 +247,7 @@ impl NyaTermApp {
         let status = if path == current_path {
             TransferBrowserChildrenMenuStatus::Ready(transfer_browser_child_directories(
                 &self.transfer.browser.entries,
-                self.settings.ui_file_explorer_show_hidden_files,
+                self.settings.summary.ui_file_explorer_show_hidden_files,
             ))
         } else {
             TransferBrowserChildrenMenuStatus::Loading

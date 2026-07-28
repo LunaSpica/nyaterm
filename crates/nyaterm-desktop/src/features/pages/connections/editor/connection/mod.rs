@@ -53,7 +53,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let palette = self.theme_palette();
-        let language = self.settings.language.clone();
+        let language = self.settings.summary.language.clone();
         let fields = ConnectionEditorFields::new(
             self.connection_state.editor_fields().clone(),
             self.connection_state.editor_menu_focus_handle(),

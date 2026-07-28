@@ -9,7 +9,7 @@ Last updated from the working tree on 2026-07-28.
 
 | Metric | Current value | Notes |
 | --- | ---: | --- |
-| `NyaTermApp` fields | 26 | Counted from `features/app_state/mod.rs`; down from 585, still transitional. |
+| `NyaTermApp` fields | 21 | Counted from `features/app_state/mod.rs`; down from 585. The remaining fields are composition services and focused feature owners. |
 | `impl NyaTermApp` blocks | 237 | Spread across 232 files under `crates/nyaterm-desktop/src`. |
 | `#[path = "..."]` declarations in desktop | 0 | Cleared. Every directory is a real module; the boundary script fails on any new occurrence. |
 | `use super::*` imports in desktop | 0 | Cleared in production and test modules; guarded crate-wide. |
@@ -202,9 +202,10 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   search-engine row/editor menus, keyword-highlight editor expansion/focus,
   appearance menu and discovered font options, and keybinding search/recording
   state live in four focused child structs. Seventeen transient fields became
-  one composition-root field. Persisted `AppSettingsSummary` and
-  `KeywordHighlightConfig` remain on `NyaTermApp`; their save/load formats and
-  storage paths are unchanged.
+  one composition-root field. A later convergence pass moved the persisted
+  `AppSettingsSummary`, `KeywordHighlightConfig`, staged master-password state,
+  and global storage status into the same authoritative feature owner. Their
+  save/load formats, encryption behavior, and storage paths are unchanged.
 - Translation and native-update background state now have authoritative
   `TranslationFeatureState` and `UpdateFeatureState` owners. Eighteen app fields
   became two feature fields; each owner constructs and retains its own job
@@ -1457,7 +1458,7 @@ honest remaining list.
    compiler-confirmed final pass also removed `features/prelude.rs`, so modules
    cannot regain the same implicit dependency surface through a shared import
    bucket.
-3. Largely done. `NyaTermApp` is down from 585 fields to 26, across eighteen
+3. Largely done. `NyaTermApp` is down from 585 fields to 21, across eighteen
    feature-state structs. The latest cohesive cuts moved sixteen terminal
    command-assistance and credential-prompt fields into
    `TerminalFeatureState::assist`, then seventeen transient settings fields
@@ -1478,9 +1479,11 @@ honest remaining list.
    owners. The command convergence batch then unified the quick-command catalog
    and UI, command history and persistence worker under one owner. The
    migration-only exit batch then removed the inventory/service fields with the
-   dashboard and its unused runtime store. What is left is a shorter tail, and
-   much of it is genuinely app-level (stores, runtime, feature owners and
-   compatibility-sensitive settings collections).
+   dashboard and its unused runtime store. The settings-catalog convergence
+   batch then folded the last five direct compatibility settings/status fields
+   into `SettingsFeatureState`, including pure tested ownership of staged
+   master-password transitions. What remains at the composition root is stores,
+   runtime and focused feature owners.
    Group by cohesion where a cluster exists; do not force the count down for
    its own sake.
    Method ownership is now moving too, which is what grouping the fields alone

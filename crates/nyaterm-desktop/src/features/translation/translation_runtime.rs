@@ -66,13 +66,13 @@ impl NyaTermApp {
                 self.translation.target_language =
                     self.translation.settings.target_language.clone();
                 self.translation.status = "translation settings saved".to_string();
-                self.store_status.message = "translation settings saved".to_string();
-                self.store_status.ready = true;
+                self.settings.store_status.message = "translation settings saved".to_string();
+                self.settings.store_status.ready = true;
             }
             Err(error) => {
                 self.translation.status = format!("translation settings save failed: {error}");
-                self.store_status.message = self.translation.status.clone();
-                self.store_status.ready = false;
+                self.settings.store_status.message = self.translation.status.clone();
+                self.settings.store_status.ready = false;
             }
         }
         cx.notify();

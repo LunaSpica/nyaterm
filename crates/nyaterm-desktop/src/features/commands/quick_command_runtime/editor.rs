@@ -196,17 +196,18 @@ impl NyaTermApp {
                 self.commands.quick.editor.draft = None;
                 self.commands.quick.editor.window = None;
                 self.commands.quick.editor.window_open_pending = false;
-                self.store_status.message = format!("quick command '{}' saved", command.label);
-                self.store_status.ready = true;
-                self.terminal.view.status = self.store_status.message.clone();
+                self.settings.store_status.message =
+                    format!("quick command '{}' saved", command.label);
+                self.settings.store_status.ready = true;
+                self.terminal.view.status = self.settings.store_status.message.clone();
             }
             Err(error) => {
                 if let Some(editor) = self.commands.quick.editor.draft.as_mut() {
                     editor.error = Some(error.to_string());
                 }
-                self.store_status.message = format!("quick command save failed: {error}");
-                self.store_status.ready = false;
-                self.terminal.view.status = self.store_status.message.clone();
+                self.settings.store_status.message = format!("quick command save failed: {error}");
+                self.settings.store_status.ready = false;
+                self.terminal.view.status = self.settings.store_status.message.clone();
             }
         }
         cx.notify();

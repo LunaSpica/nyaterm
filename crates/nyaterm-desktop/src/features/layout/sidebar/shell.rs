@@ -50,7 +50,7 @@ impl NyaTermApp {
             NavItem::AiAssistant => self.ai_assistant_panel(cx).into_any_element(),
             NavItem::ActiveSessions => self.active_sessions_panel(cx).into_any_element(),
             NavItem::CommandHistory => self.command_history_panel(cx).into_any_element(),
-            NavItem::Stats if self.settings.ui_show_remote_stats => {
+            NavItem::Stats if self.settings.summary.ui_show_remote_stats => {
                 self.stats_view(cx).into_any_element()
             }
             NavItem::Stats => crate::features::inspector::disabled_inspector_panel(
@@ -58,7 +58,7 @@ impl NyaTermApp {
                 self.tr("panel.resourceMonitorDisabled"),
             )
             .into_any_element(),
-            NavItem::Processes if self.settings.ui_show_process_manager => {
+            NavItem::Processes if self.settings.summary.ui_show_process_manager => {
                 self.processes_view(cx).into_any_element()
             }
             NavItem::Processes => crate::features::inspector::disabled_inspector_panel(
@@ -66,7 +66,7 @@ impl NyaTermApp {
                 self.tr("processManager.disabled"),
             )
             .into_any_element(),
-            NavItem::Docker if self.settings.ui_show_docker_manager => {
+            NavItem::Docker if self.settings.summary.ui_show_docker_manager => {
                 self.docker_view(cx).into_any_element()
             }
             NavItem::Docker => crate::features::inspector::disabled_inspector_panel(

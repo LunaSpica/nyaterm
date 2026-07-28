@@ -15,8 +15,8 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let overrides = self.settings.keybindings.len();
-        let search = self.settings_state.keybindings.search_draft.clone();
+        let overrides = self.settings.summary.keybindings.len();
+        let search = self.settings.keybindings.search_draft.clone();
         let search_field = self.text_input(
             "settings.keybindings.search",
             &search,
@@ -34,9 +34,9 @@ impl NyaTermApp {
             .flex()
             .flex_col()
             .gap_3()
-            .track_focus(&self.settings_state.keybindings.focus)
+            .track_focus(&self.settings.keybindings.focus)
             .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(&this.settings_state.keybindings.focus);
+                window.focus(&this.settings.keybindings.focus);
                 cx.notify();
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
@@ -70,7 +70,7 @@ impl NyaTermApp {
                             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
                                 if event.keystroke.key == "escape" {
                                     cx.stop_propagation();
-                                    this.settings_state.keybindings.search_draft.clear();
+                                    this.settings.keybindings.search_draft.clear();
                                     this.reset_text_input("settings.keybindings.search", "", cx);
                                     cx.notify();
                                 }
@@ -106,7 +106,7 @@ impl NyaTermApp {
                 if needle.is_empty() {
                     return true;
                 }
-                let keys = shortcut_keys_for(shortcut.id, &self.settings.keybindings)
+                let keys = shortcut_keys_for(shortcut.id, &self.settings.summary.keybindings)
                     .unwrap_or_else(|| shortcut.default_keys.to_string());
                 let display = format_hotkey_for_display(&keys).to_ascii_lowercase();
                 shortcut.label.to_ascii_lowercase().contains(&needle)
@@ -140,13 +140,12 @@ impl NyaTermApp {
                 ShortcutNativeStatus::Contextual => "contextual",
             },
         );
-        let is_custom = self.settings.keybindings.contains_key(shortcut.id);
-        let is_recording =
-            self.settings_state.keybindings.recording_id.as_deref() == Some(shortcut.id);
-        let effective_keys = shortcut_keys_for(shortcut.id, &self.settings.keybindings)
+        let is_custom = self.settings.summary.keybindings.contains_key(shortcut.id);
+        let is_recording = self.settings.keybindings.recording_id.as_deref() == Some(shortcut.id);
+        let effective_keys = shortcut_keys_for(shortcut.id, &self.settings.summary.keybindings)
             .unwrap_or_else(|| shortcut.default_keys.to_string());
         let conflict = if is_recording {
-            self.settings_state
+            self.settings
                 .keybindings
                 .pending_keys
                 .as_deref()
@@ -159,7 +158,7 @@ impl NyaTermApp {
         let reset_label = self.tr("settings.keybindingsReset");
         let indexed_hint = self.tr("settings.keybindingsIndexedHint");
         let key_display = if is_recording {
-            self.settings_state
+            self.settings
                 .keybindings
                 .pending_keys
                 .as_deref()

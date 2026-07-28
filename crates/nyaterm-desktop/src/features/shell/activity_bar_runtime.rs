@@ -90,25 +90,25 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn sync_activity_layout_to_settings(&mut self) {
-        self.settings.ui_activity_bar_left_top =
+        self.settings.summary.ui_activity_bar_left_top =
             self.shell.chrome.activity_bar_layout.left_top.clone();
-        self.settings.ui_activity_bar_left_bottom =
+        self.settings.summary.ui_activity_bar_left_bottom =
             self.shell.chrome.activity_bar_layout.left_bottom.clone();
-        self.settings.ui_activity_bar_right_top =
+        self.settings.summary.ui_activity_bar_right_top =
             self.shell.chrome.activity_bar_layout.right_top.clone();
-        self.settings.ui_activity_bar_right_bottom =
+        self.settings.summary.ui_activity_bar_right_bottom =
             self.shell.chrome.activity_bar_layout.right_bottom.clone();
-        self.settings.ui_activity_bar_show_labels =
+        self.settings.summary.ui_activity_bar_show_labels =
             self.shell.chrome.activity_bar_layout.show_labels;
     }
 
     pub(in crate::features) fn apply_activity_layout_from_settings(&mut self) {
         self.shell.chrome.activity_bar_layout = ActivityBarLayoutState {
-            left_top: self.settings.ui_activity_bar_left_top.clone(),
-            left_bottom: self.settings.ui_activity_bar_left_bottom.clone(),
-            right_top: self.settings.ui_activity_bar_right_top.clone(),
-            right_bottom: self.settings.ui_activity_bar_right_bottom.clone(),
-            show_labels: self.settings.ui_activity_bar_show_labels,
+            left_top: self.settings.summary.ui_activity_bar_left_top.clone(),
+            left_bottom: self.settings.summary.ui_activity_bar_left_bottom.clone(),
+            right_top: self.settings.summary.ui_activity_bar_right_top.clone(),
+            right_bottom: self.settings.summary.ui_activity_bar_right_bottom.clone(),
+            show_labels: self.settings.summary.ui_activity_bar_show_labels,
         };
         self.normalize_activity_bar_layout();
     }

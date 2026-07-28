@@ -145,7 +145,7 @@ impl NyaTermApp {
             .sum();
         let search_active = !self.transfer.browser.search.trim().is_empty();
         let search_expanded = self.transfer.browser.search_expanded || search_active;
-        let show_hidden_files = self.settings.ui_file_explorer_show_hidden_files;
+        let show_hidden_files = self.settings.summary.ui_file_explorer_show_hidden_files;
         let search_input = search_expanded.then(|| {
             let field = self.text_input(
                 "transfer.browser.search",

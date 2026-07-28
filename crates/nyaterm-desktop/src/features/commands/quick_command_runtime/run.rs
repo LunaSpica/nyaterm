@@ -122,13 +122,13 @@ impl NyaTermApp {
                 self.refresh_quick_commands();
                 self.ai.panel.status =
                     format!("Saved AI command card '{}' to Quick Commands", label);
-                self.store_status.message = self.ai.panel.status.clone();
-                self.store_status.ready = true;
+                self.settings.store_status.message = self.ai.panel.status.clone();
+                self.settings.store_status.ready = true;
             }
             Err(error) => {
                 self.ai.panel.status = format!("Quick command save failed: {error}");
-                self.store_status.message = self.ai.panel.status.clone();
-                self.store_status.ready = false;
+                self.settings.store_status.message = self.ai.panel.status.clone();
+                self.settings.store_status.ready = false;
             }
         }
         cx.notify();

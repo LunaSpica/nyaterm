@@ -180,8 +180,8 @@ impl NyaTermApp {
         cx.spawn(async move |this, cx| {
             if let Err(error) = task.await {
                 let _ = this.update(cx, |this, cx| {
-                    this.store_status.message = format!("AI audit save failed: {error}");
-                    this.store_status.ready = false;
+                    this.settings.store_status.message = format!("AI audit save failed: {error}");
+                    this.settings.store_status.ready = false;
                     cx.notify();
                 });
             } else {
@@ -621,8 +621,11 @@ impl NyaTermApp {
             self.ai.agent.loop_state = Some(state);
             return;
         }
-        let observation_message =
-            build_observation_message(&observation, &state.command, &self.settings.language);
+        let observation_message = build_observation_message(
+            &observation,
+            &state.command,
+            &self.settings.summary.language,
+        );
         let settings = self.ai.settings.config.clone();
         let terminal_session_id = state.terminal_session_id.clone();
         let request = AiChatRequest {

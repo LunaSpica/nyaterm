@@ -248,7 +248,9 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn persist_terminal_window_layout(&mut self) {
-        if !self.settings.startup_restore || !self.settings.startup_restore_window_layout {
+        if !self.settings.summary.startup_restore
+            || !self.settings.summary.startup_restore_window_layout
+        {
             return;
         }
         // Defer disk write — layout changes must not open redb on the UI hot path.
@@ -259,7 +261,9 @@ impl NyaTermApp {
         if self.terminal.windows.restored {
             return;
         }
-        if !self.settings.startup_restore || !self.settings.startup_restore_window_layout {
+        if !self.settings.summary.startup_restore
+            || !self.settings.summary.startup_restore_window_layout
+        {
             self.terminal.windows.restored = true;
             return;
         }

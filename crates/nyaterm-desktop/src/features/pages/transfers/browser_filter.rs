@@ -20,7 +20,7 @@ impl NyaTermApp {
                 transfer_browser_entry_is_visible(
                     entry,
                     &query,
-                    self.settings.ui_file_explorer_show_hidden_files,
+                    self.settings.summary.ui_file_explorer_show_hidden_files,
                 )
             })
             .cloned()

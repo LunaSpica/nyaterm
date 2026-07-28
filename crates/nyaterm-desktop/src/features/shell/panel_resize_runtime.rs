@@ -17,8 +17,8 @@ const BOTTOM_PANEL_HEIGHT_MAX: f32 = 520.;
 impl NyaTermApp {
     pub(in crate::features) fn set_bottom_panel_mode(&mut self, mode: BottomPanelMode) {
         self.shell.bottom_panel.mode = mode;
-        self.settings.ui_quick_cmd_visible = mode == BottomPanelMode::QuickCommands;
-        self.settings.ui_serial_send_visible = mode == BottomPanelMode::CommandSend;
+        self.settings.summary.ui_quick_cmd_visible = mode == BottomPanelMode::QuickCommands;
+        self.settings.summary.ui_serial_send_visible = mode == BottomPanelMode::CommandSend;
         self.persist_ui_layout();
     }
 
@@ -77,74 +77,78 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn apply_ui_layout_from_settings(&mut self) {
-        self.shell.panels.left_width = self.settings.ui_left_panel_width as f32;
-        self.shell.panels.right_width = self.settings.ui_right_panel_width as f32;
-        self.transfer.panel.height = self.settings.ui_transfer_height as f32;
-        self.shell.bottom_panel.quick_commands_height = self.settings.ui_quick_cmd_height as f32;
-        self.shell.bottom_panel.command_send_height = self.settings.ui_serial_send_height as f32;
+        self.shell.panels.left_width = self.settings.summary.ui_left_panel_width as f32;
+        self.shell.panels.right_width = self.settings.summary.ui_right_panel_width as f32;
+        self.transfer.panel.height = self.settings.summary.ui_transfer_height as f32;
+        self.shell.bottom_panel.quick_commands_height =
+            self.settings.summary.ui_quick_cmd_height as f32;
+        self.shell.bottom_panel.command_send_height =
+            self.settings.summary.ui_serial_send_height as f32;
         self.apply_activity_layout_from_settings();
         self.shell.panels.active_left = self
             .settings
+            .summary
             .ui_active_left_panel
             .as_deref()
             .and_then(NavItem::from_persistence_id)
             .filter(|item| self.panel_side_for_item(*item) == Some(PanelSide::Left));
         self.shell.panels.active_right = self
             .settings
+            .summary
             .ui_active_right_panel
             .as_deref()
             .and_then(NavItem::from_persistence_id)
             .filter(|item| self.panel_side_for_item(*item) == Some(PanelSide::Right));
         self.shell.panels.left_collapsed = panel_collapsed_from_persistence(
-            self.settings.ui_left_panel_collapsed,
-            self.settings.ui_panel_multi_open,
+            self.settings.summary.ui_left_panel_collapsed,
+            self.settings.summary.ui_panel_multi_open,
             self.shell.panels.active_left.is_some(),
-            !self.settings.ui_left_open_panels.is_empty(),
+            !self.settings.summary.ui_left_open_panels.is_empty(),
         );
         self.shell.panels.right_collapsed = panel_collapsed_from_persistence(
-            self.settings.ui_right_panel_collapsed,
-            self.settings.ui_panel_multi_open,
+            self.settings.summary.ui_right_panel_collapsed,
+            self.settings.summary.ui_panel_multi_open,
             self.shell.panels.active_right.is_some(),
-            !self.settings.ui_right_open_panels.is_empty(),
+            !self.settings.summary.ui_right_open_panels.is_empty(),
         );
         self.apply_panel_stack_from_settings();
-        if !self.settings.has_master_password {
+        if !self.settings.summary.has_master_password {
             self.security.unlock.secrets_unlocked = true;
         }
     }
 
     pub(in crate::features) fn persist_ui_layout(&mut self) {
-        self.settings.ui_left_panel_width =
+        self.settings.summary.ui_left_panel_width =
             self.shell.panels.left_width.round().clamp(160., 720.) as u32;
-        self.settings.ui_right_panel_width =
+        self.settings.summary.ui_right_panel_width =
             self.shell.panels.right_width.round().clamp(200., 720.) as u32;
-        self.settings.ui_transfer_height =
+        self.settings.summary.ui_transfer_height =
             self.transfer.panel.height.round().clamp(60., 600.) as u32;
-        self.settings.ui_quick_cmd_height =
+        self.settings.summary.ui_quick_cmd_height =
             self.shell
                 .bottom_panel
                 .quick_commands_height
                 .round()
                 .clamp(QUICK_CMD_HEIGHT_MIN, BOTTOM_PANEL_HEIGHT_MAX) as u32;
-        self.settings.ui_serial_send_height =
+        self.settings.summary.ui_serial_send_height =
             self.shell
                 .bottom_panel
                 .command_send_height
                 .round()
                 .clamp(SERIAL_SEND_HEIGHT_MIN, BOTTOM_PANEL_HEIGHT_MAX) as u32;
-        self.settings.ui_active_left_panel = self
+        self.settings.summary.ui_active_left_panel = self
             .shell
             .panels
             .active_left
             .map(|item| item.persistence_id().to_string());
-        self.settings.ui_active_right_panel = self
+        self.settings.summary.ui_active_right_panel = self
             .shell
             .panels
             .active_right
             .map(|item| item.persistence_id().to_string());
-        self.settings.ui_left_panel_collapsed = self.shell.panels.left_collapsed;
-        self.settings.ui_right_panel_collapsed = self.shell.panels.right_collapsed;
-        self.settings.ui_saved_connections_sort_mode = self
+        self.settings.summary.ui_left_panel_collapsed = self.shell.panels.left_collapsed;
+        self.settings.summary.ui_right_panel_collapsed = self.shell.panels.right_collapsed;
+        self.settings.summary.ui_saved_connections_sort_mode = self
             .connection_state
             .list_sort_mode()
             .persistence_id()
@@ -155,15 +159,16 @@ impl NyaTermApp {
             self.runtime.config_dir(),
             self.runtime.portable_key_path().map(ToOwned::to_owned),
         ) {
-            match store.save_ui_layout_settings(&self.settings) {
+            match store.save_ui_layout_settings(&self.settings.summary) {
                 Ok(summary) => {
                     self.apply_gpui_settings(summary);
-                    self.store_status.ready = true;
-                    self.store_status.message = "panel layout saved".to_string();
+                    self.settings.store_status.ready = true;
+                    self.settings.store_status.message = "panel layout saved".to_string();
                 }
                 Err(error) => {
-                    self.store_status.ready = false;
-                    self.store_status.message = format!("failed to save panel layout: {error}");
+                    self.settings.store_status.ready = false;
+                    self.settings.store_status.message =
+                        format!("failed to save panel layout: {error}");
                 }
             }
         }

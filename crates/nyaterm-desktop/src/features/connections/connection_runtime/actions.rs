@@ -38,8 +38,8 @@ impl NyaTermApp {
             Err(error) => {
                 self.connection_state.close_clear_all();
                 self.terminal.view.status = format!("clear saved connections failed: {error}");
-                self.store_status.message = self.terminal.view.status.clone();
-                self.store_status.ready = false;
+                self.settings.store_status.message = self.terminal.view.status.clone();
+                self.settings.store_status.ready = false;
             }
         }
         cx.notify();
@@ -167,7 +167,8 @@ impl NyaTermApp {
 
     pub(in crate::features) fn cycle_connection_sort_mode(&mut self, cx: &mut Context<Self>) {
         let sort_mode = self.connection_state.cycle_list_sort_mode();
-        self.settings.ui_saved_connections_sort_mode = sort_mode.persistence_id().to_string();
+        self.settings.summary.ui_saved_connections_sort_mode =
+            sort_mode.persistence_id().to_string();
         self.persist_ui_layout();
         self.terminal.view.status = format!("connections sorted by {}", sort_mode.label());
         cx.notify();

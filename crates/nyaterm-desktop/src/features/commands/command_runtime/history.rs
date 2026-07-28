@@ -299,8 +299,9 @@ impl NyaTermApp {
             .runtime
             .queue(CommandPersistenceRequest::AppendHistory(submitted))
         {
-            self.store_status.message = "command history worker is unavailable".to_string();
-            self.store_status.ready = false;
+            self.settings.store_status.message =
+                "command history worker is unavailable".to_string();
+            self.settings.store_status.ready = false;
         }
     }
 
@@ -319,8 +320,9 @@ impl NyaTermApp {
                 command.use_count = Some(command.use_count.unwrap_or_default().saturating_add(1));
             }
         } else {
-            self.store_status.message = "command persistence worker is unavailable".to_string();
-            self.store_status.ready = false;
+            self.settings.store_status.message =
+                "command persistence worker is unavailable".to_string();
+            self.settings.store_status.ready = false;
         }
     }
 
@@ -332,9 +334,9 @@ impl NyaTermApp {
                 CommandPersistencePoll::Empty => break,
                 CommandPersistencePoll::Disconnected { had_pending } => {
                     if had_pending {
-                        self.store_status.message =
+                        self.settings.store_status.message =
                             "command persistence worker disconnected".to_string();
-                        self.store_status.ready = false;
+                        self.settings.store_status.ready = false;
                         dirty = true;
                     }
                     break;
@@ -346,8 +348,9 @@ impl NyaTermApp {
                     self.commands.history = Arc::from(history);
                 }
                 CommandPersistenceResult::History(Err(error)) => {
-                    self.store_status.message = format!("command history save failed: {error}");
-                    self.store_status.ready = false;
+                    self.settings.store_status.message =
+                        format!("command history save failed: {error}");
+                    self.settings.store_status.ready = false;
                 }
                 CommandPersistenceResult::QuickCommandUseCount { command_id, result } => {
                     if let Err(error) = result {
@@ -358,9 +361,9 @@ impl NyaTermApp {
                             command.use_count =
                                 Some(command.use_count.unwrap_or_default().saturating_sub(1));
                         }
-                        self.store_status.message =
+                        self.settings.store_status.message =
                             format!("quick command use count update failed: {error}");
-                        self.store_status.ready = false;
+                        self.settings.store_status.ready = false;
                     }
                 }
             }

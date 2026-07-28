@@ -115,16 +115,16 @@ impl NyaTermApp {
                 self.terminal.view.status = format!(
                     "imported {imported_commands} quick command(s), updated {updated_commands}, categories +{imported_categories}, total {total_commands}/{total_categories}"
                 );
-                self.store_status.message = self.terminal.view.status.clone();
-                self.store_status.ready = true;
+                self.settings.store_status.message = self.terminal.view.status.clone();
+                self.settings.store_status.ready = true;
             }
             QuickCommandImportPathPromptResult::Cancelled => {
                 self.terminal.view.status = "quick command import cancelled".to_string();
             }
             QuickCommandImportPathPromptResult::Failed(error) => {
                 self.terminal.view.status = format!("quick command import failed: {error}");
-                self.store_status.message = self.terminal.view.status.clone();
-                self.store_status.ready = false;
+                self.settings.store_status.message = self.terminal.view.status.clone();
+                self.settings.store_status.ready = false;
             }
             QuickCommandImportPathPromptResult::Closed => {
                 self.terminal.view.status =

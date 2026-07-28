@@ -715,8 +715,10 @@ impl NyaTermApp {
         if track_suggestions {
             if terminal_should_track_command_suggestion_input(
                 track_suggestions,
-                self.settings.terminal_low_latency_mode,
-                self.settings.interaction_command_suggestions_enabled,
+                self.settings.summary.terminal_low_latency_mode,
+                self.settings
+                    .summary
+                    .interaction_command_suggestions_enabled,
             ) {
                 self.note_command_suggestion_input(&bytes, cx);
             } else {
@@ -851,8 +853,10 @@ impl NyaTermApp {
         if track_suggestions {
             if terminal_should_track_command_suggestion_input(
                 track_suggestions,
-                self.settings.terminal_low_latency_mode,
-                self.settings.interaction_command_suggestions_enabled,
+                self.settings.summary.terminal_low_latency_mode,
+                self.settings
+                    .summary
+                    .interaction_command_suggestions_enabled,
             ) {
                 self.note_command_suggestion_input(&primary_bytes, cx);
             } else {
@@ -1394,7 +1398,7 @@ impl NyaTermApp {
 
     /// Keep all live terminal screens on the current interaction encoding.
     pub(in crate::features) fn sync_terminal_encodings_from_settings(&mut self) {
-        let label = self.settings.interaction_default_encoding.clone();
+        let label = self.settings.summary.interaction_default_encoding.clone();
         self.terminal.view.screen.set_encoding(&label);
         self.terminal.view.output_decoder.set_encoding(&label);
         for view in self.terminal.view.views.values_mut() {
@@ -1630,7 +1634,7 @@ impl NyaTermApp {
         terminal_key_bytes_for_mode_and_settings(
             event,
             self.terminal_key_mode_for_session(session_id),
-            self.settings.interaction_alt_as_meta,
+            self.settings.summary.interaction_alt_as_meta,
         )
     }
 
@@ -1639,7 +1643,7 @@ impl NyaTermApp {
         event: &KeyDownEvent,
     ) -> bool {
         terminal_should_defer_key_text_to_input_handler_for_state(
-            self.settings.interaction_mac_ime_compatibility,
+            self.settings.summary.interaction_mac_ime_compatibility,
             &self.terminal.input.ime_marked_text,
             event,
         )
@@ -1716,8 +1720,10 @@ impl NyaTermApp {
         let Some(view) = self.terminal.view.views.get(session_id) else {
             return;
         };
-        let matcher_key =
-            terminal_action_link_matcher_key(true, &self.settings.terminal_action_links_matchers);
+        let matcher_key = terminal_action_link_matcher_key(
+            true,
+            &self.settings.summary.terminal_action_links_matchers,
+        );
         if view.frame_action_links.as_ref().is_some_and(|links| {
             links.matcher_key == matcher_key && links.covers_all_snapshot_rows(snapshot.as_ref())
         }) {
@@ -1726,7 +1732,7 @@ impl NyaTermApp {
         let Some(action_links) = crate::models::prepare_terminal_frame_action_links(
             snapshot.as_ref(),
             true,
-            &self.settings.terminal_action_links_matchers,
+            &self.settings.summary.terminal_action_links_matchers,
         ) else {
             return;
         };
@@ -1774,8 +1780,8 @@ impl NyaTermApp {
         ) else {
             return false;
         };
-        let action_links_enabled =
-            self.settings.terminal_action_links_enabled && !self.settings.terminal_low_latency_mode;
+        let action_links_enabled = self.settings.summary.terminal_action_links_enabled
+            && !self.settings.summary.terminal_low_latency_mode;
         self.ensure_terminal_live_action_links_for_snapshot(
             session_id,
             display_offset,
@@ -1788,12 +1794,12 @@ impl NyaTermApp {
         let palette = self.terminal_theme_palette();
         let transparent_background = self.wallpaper_enabled();
         let font_family = self.gpui_terminal_font_family();
-        let font_size = self.settings.terminal_font_size as f32;
-        let normal_weight = self.settings.terminal_font_weight as f32;
-        let bold_weight = self.settings.terminal_font_weight_bold as f32;
-        let show_line_numbers = self.settings.terminal_show_line_numbers;
-        let show_timestamps = self.settings.terminal_show_timestamps;
-        let show_timestamp_ms = self.settings.terminal_show_timestamp_milliseconds;
+        let font_size = self.settings.summary.terminal_font_size as f32;
+        let normal_weight = self.settings.summary.terminal_font_weight as f32;
+        let bold_weight = self.settings.summary.terminal_font_weight_bold as f32;
+        let show_line_numbers = self.settings.summary.terminal_show_line_numbers;
+        let show_timestamps = self.settings.summary.terminal_show_timestamps;
+        let show_timestamp_ms = self.settings.summary.terminal_show_timestamp_milliseconds;
         let (cell_w, cell_h) = self
             .terminal
             .layout
@@ -1802,14 +1808,15 @@ impl NyaTermApp {
         let is_active = self.session.active_id.as_deref() == Some(session_id);
         let visual_bell = is_active && self.terminal.view.runtime.visual_bell_ticks > 0;
         let layout_cache = view.render_cache.layout_cache.clone();
-        let render_degraded = view.render_degraded || self.settings.terminal_low_latency_mode;
+        let render_degraded =
+            view.render_degraded || self.settings.summary.terminal_low_latency_mode;
         let has_new = view.has_new_while_scrolled;
         let performance_overlay = view.performance_overlay;
         let skipped = view.skipped_output_chars;
         let protocol_state = view.protocol_state;
         let search_matches = if is_active
             && !input_latency_active
-            && !self.settings.terminal_low_latency_mode
+            && !self.settings.summary.terminal_low_latency_mode
             && self.terminal.search.open
             && self.terminal.search.mode == TerminalSearchMode::Buffer
         {
@@ -1819,7 +1826,7 @@ impl NyaTermApp {
         };
         let action_link_matcher_key = terminal_action_link_matcher_key(
             action_links_enabled,
-            &self.settings.terminal_action_links_matchers,
+            &self.settings.summary.terminal_action_links_matchers,
         );
         let frame_action_links = action_links_enabled
             .then(|| {
@@ -1844,7 +1851,7 @@ impl NyaTermApp {
             &frame_action_links,
             action_links_enabled,
             action_links_enabled,
-            is_active && !input_latency_active && !self.settings.terminal_low_latency_mode,
+            is_active && !input_latency_active && !self.settings.summary.terminal_low_latency_mode,
         );
         let has_action_link_decorations =
             crate::features::terminal::terminal_surface::terminal_action_links_have_ranges_for_snapshot(
@@ -1990,7 +1997,7 @@ impl NyaTermApp {
             || mode == TerminalPerformanceMode::Overloaded
             || user_scroll_active
             || input_latency_active
-            || self.settings.terminal_low_latency_mode;
+            || self.settings.summary.terminal_low_latency_mode;
         let render_degraded = render_degraded_view || render_pressure;
         let configured_keyword_rules = self.resolved_keyword_highlight_rules();
         let clear_keyword_highlights = configured_keyword_rules.is_empty();
@@ -2035,8 +2042,8 @@ impl NyaTermApp {
             retained_surface_snapshot,
         );
         let snapshot_duration = snapshot_started_at.elapsed();
-        let action_links_enabled =
-            self.settings.terminal_action_links_enabled && !self.settings.terminal_low_latency_mode;
+        let action_links_enabled = self.settings.summary.terminal_action_links_enabled
+            && !self.settings.summary.terminal_low_latency_mode;
         if let Some(snapshot) = snapshot.as_ref() {
             self.ensure_terminal_live_action_links_for_snapshot(
                 session_id,
@@ -2049,12 +2056,12 @@ impl NyaTermApp {
         let palette = self.terminal_theme_palette();
         let transparent_background = self.wallpaper_enabled();
         let font_family = self.gpui_terminal_font_family();
-        let font_size = self.settings.terminal_font_size as f32;
-        let normal_weight = self.settings.terminal_font_weight as f32;
-        let bold_weight = self.settings.terminal_font_weight_bold as f32;
-        let show_line_numbers = self.settings.terminal_show_line_numbers;
-        let show_timestamps = self.settings.terminal_show_timestamps;
-        let show_timestamp_ms = self.settings.terminal_show_timestamp_milliseconds;
+        let font_size = self.settings.summary.terminal_font_size as f32;
+        let normal_weight = self.settings.summary.terminal_font_weight as f32;
+        let bold_weight = self.settings.summary.terminal_font_weight_bold as f32;
+        let show_line_numbers = self.settings.summary.terminal_show_line_numbers;
+        let show_timestamps = self.settings.summary.terminal_show_timestamps;
+        let show_timestamp_ms = self.settings.summary.terminal_show_timestamp_milliseconds;
         let (cell_w, cell_h) = self
             .terminal
             .layout
@@ -2132,7 +2139,7 @@ impl NyaTermApp {
         let remote_cursor_visible = snapshot.cursor.visible
             && snapshot.cursor.shape != nyaterm_terminal::CursorShape::Hidden
             && cursor_row != usize::MAX;
-        let blink_enabled = self.settings.cursor_blink || snapshot.cursor.blinking;
+        let blink_enabled = self.settings.summary.cursor_blink || snapshot.cursor.blinking;
         let show_cursor = terminal_cursor_visible_for_display_offset(
             is_active,
             is_disconnected,
@@ -2144,8 +2151,8 @@ impl NyaTermApp {
         let cursor_style = match snapshot.cursor.shape {
             nyaterm_terminal::CursorShape::Underline => "underline".to_string(),
             nyaterm_terminal::CursorShape::Beam => "bar".to_string(),
-            nyaterm_terminal::CursorShape::Hidden => self.settings.cursor_style.clone(),
-            nyaterm_terminal::CursorShape::Block => self.settings.cursor_style.clone(),
+            nyaterm_terminal::CursorShape::Hidden => self.settings.summary.cursor_style.clone(),
+            nyaterm_terminal::CursorShape::Block => self.settings.summary.cursor_style.clone(),
         };
 
         let search_mapping_started_at = Instant::now();
@@ -2160,7 +2167,7 @@ impl NyaTermApp {
         let enhanced = paint_policy.enhanced_decorations;
         let action_link_matcher_key = terminal_action_link_matcher_key(
             action_links_enabled,
-            &self.settings.terminal_action_links_matchers,
+            &self.settings.summary.terminal_action_links_matchers,
         );
         let frame_action_links = action_links_enabled
             .then(|| {

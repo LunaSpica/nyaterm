@@ -163,6 +163,11 @@ check_no_matches \
   crates/nyaterm-desktop/src/features/app_state/mod.rs
 
 check_no_matches \
+  "compatibility-sensitive settings must stay grouped under SettingsFeatureState" \
+  '(AppSettingsSummary|KeywordHighlightConfig|SettingsMasterPasswordState|StoreStatus|settings_master_password_(enabled|draft))' \
+  crates/nyaterm-desktop/src/features/app_state/mod.rs
+
+check_no_matches \
   "translation state must stay grouped under TranslationFeatureState" \
   '^[[:space:]]*pub\(in crate::features\)[[:space:]]+(translation_dialog|translate_tx|translate_rx|translate_provider|translation_settings|translation_secret_draft|translate_target_language|translate_input|translate_result|translate_status|translate_pending|translate_focused_field)[[:space:]]*:' \
   crates/nyaterm-desktop/src/features/app_state/mod.rs

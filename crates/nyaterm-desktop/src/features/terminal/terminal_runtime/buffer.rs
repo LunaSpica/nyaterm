@@ -185,7 +185,10 @@ fn terminal_scroll_snapshot_request_action_links_enabled(
 
 impl NyaTermApp {
     pub(in crate::features) fn terminal_scrollback_line_limit(&self) -> usize {
-        self.settings.terminal_scrollback_lines.clamp(100, 100_000) as usize
+        self.settings
+            .summary
+            .terminal_scrollback_lines
+            .clamp(100, 100_000) as usize
     }
 
     pub(in crate::features) fn sync_terminal_scrollback_limits(&mut self) {
@@ -213,7 +216,7 @@ impl NyaTermApp {
         self.terminal.view.frame_pipeline.submit_output(
             session_id.to_string(),
             data,
-            self.settings.interaction_default_encoding.clone(),
+            self.settings.summary.interaction_default_encoding.clone(),
             self.terminal_scrollback_line_limit(),
         );
     }
@@ -225,7 +228,7 @@ impl NyaTermApp {
         if outputs.is_empty() {
             return;
         }
-        let encoding = self.settings.interaction_default_encoding.clone();
+        let encoding = self.settings.summary.interaction_default_encoding.clone();
         let scrollback_limit = self.terminal_scrollback_line_limit();
         let submissions = outputs
             .into_iter()
@@ -268,8 +271,9 @@ impl NyaTermApp {
         self.terminal.view.frame_pipeline.request_snapshot(
             session_id.to_string(),
             offset,
-            self.settings.terminal_action_links_enabled && !self.settings.terminal_low_latency_mode,
-            self.settings.terminal_action_links_matchers.clone(),
+            self.settings.summary.terminal_action_links_enabled
+                && !self.settings.summary.terminal_low_latency_mode,
+            self.settings.summary.terminal_action_links_matchers.clone(),
         );
         true
     }
@@ -295,7 +299,7 @@ impl NyaTermApp {
             session_id.to_string(),
             offset,
             false,
-            self.settings.terminal_action_links_matchers.clone(),
+            self.settings.summary.terminal_action_links_matchers.clone(),
         );
         true
     }
@@ -386,21 +390,21 @@ impl NyaTermApp {
         if priority {
             let action_links_enabled = terminal_scroll_snapshot_request_action_links_enabled(
                 priority,
-                self.settings.terminal_action_links_enabled,
-                self.settings.terminal_low_latency_mode,
+                self.settings.summary.terminal_action_links_enabled,
+                self.settings.summary.terminal_low_latency_mode,
             );
             self.terminal.view.frame_pipeline.request_priority_snapshot(
                 session_id.to_string(),
                 offset,
                 action_links_enabled,
-                self.settings.terminal_action_links_matchers.clone(),
+                self.settings.summary.terminal_action_links_matchers.clone(),
             );
         } else {
             self.terminal.view.frame_pipeline.request_snapshot(
                 session_id.to_string(),
                 offset,
                 false,
-                self.settings.terminal_action_links_matchers.clone(),
+                self.settings.summary.terminal_action_links_matchers.clone(),
             );
         }
         true
@@ -414,13 +418,15 @@ impl NyaTermApp {
     ) -> bool {
         if session_id.is_empty()
             || offset == 0
-            || !self.settings.terminal_action_links_enabled
-            || self.settings.terminal_low_latency_mode
+            || !self.settings.summary.terminal_action_links_enabled
+            || self.settings.summary.terminal_low_latency_mode
         {
             return false;
         }
-        let matcher_key =
-            terminal_action_link_matcher_key(true, &self.settings.terminal_action_links_matchers);
+        let matcher_key = terminal_action_link_matcher_key(
+            true,
+            &self.settings.summary.terminal_action_links_matchers,
+        );
         let Some(view) = self.terminal.view.views.get_mut(session_id) else {
             return false;
         };
@@ -446,7 +452,7 @@ impl NyaTermApp {
             session_id.to_string(),
             offset,
             true,
-            self.settings.terminal_action_links_matchers.clone(),
+            self.settings.summary.terminal_action_links_matchers.clone(),
         );
         true
     }
@@ -484,7 +490,7 @@ impl NyaTermApp {
         self.terminal.view.frame_pipeline.seed_session(
             session_id.to_string(),
             output,
-            self.settings.interaction_default_encoding.clone(),
+            self.settings.summary.interaction_default_encoding.clone(),
             self.terminal_scrollback_line_limit(),
         );
     }
@@ -991,12 +997,12 @@ impl NyaTermApp {
             "terminal frame snapshot row reuse"
         );
         // Snapshot applies only dirties the surface, not chrome.
-        let current_action_link_matcher_key = (self.settings.terminal_action_links_enabled
-            && !self.settings.terminal_low_latency_mode)
+        let current_action_link_matcher_key = (self.settings.summary.terminal_action_links_enabled
+            && !self.settings.summary.terminal_low_latency_mode)
             .then(|| {
                 terminal_action_link_matcher_key(
                     true,
-                    &self.settings.terminal_action_links_matchers,
+                    &self.settings.summary.terminal_action_links_matchers,
                 )
             });
         let should_paint = self.terminal_session_has_visible_surface(&frame.session_id)
@@ -1158,7 +1164,7 @@ impl NyaTermApp {
         session_id: &str,
         data: &[u8],
     ) -> String {
-        let encoding = self.settings.interaction_default_encoding.clone();
+        let encoding = self.settings.summary.interaction_default_encoding.clone();
         let view = self
             .terminal
             .view
@@ -1207,7 +1213,7 @@ impl NyaTermApp {
 
         if let Some(session_id) = session_id {
             let is_active = self.session.active_id.as_deref() == Some(session_id);
-            let encoding = self.settings.interaction_default_encoding.clone();
+            let encoding = self.settings.summary.interaction_default_encoding.clone();
             let view = self
                 .terminal
                 .view
