@@ -1,7 +1,14 @@
-use super::*;
+use gpui::{
+    App, AppContext as _, ClickEvent, Context, InteractiveElement as _, IntoElement, MouseButton,
+    MouseDownEvent, ParentElement as _, SharedString, StatefulInteractiveElement as _, Styled as _,
+    Window, div, prelude::*, px, rgb, svg,
+};
+
+use crate::features::{ChromeTooltip, NyaTermApp};
+use crate::theme::ThemePalette;
 
 pub(super) fn compact_transfer_footer_button(
-    palette: crate::theme::ThemePalette,
+    palette: ThemePalette,
     id: impl Into<String>,
     icon_path: &'static str,
     tooltip: impl Into<String>,
@@ -22,10 +29,7 @@ pub(super) fn compact_transfer_footer_button(
             this.bg(rgb(palette.surface_elevated))
                 .text_color(rgb(palette.text))
         })
-        .tooltip(move |_, cx| {
-            cx.new(|_| crate::features::ChromeTooltip::new(tooltip.clone()))
-                .into()
-        })
+        .tooltip(move |_, cx| cx.new(|_| ChromeTooltip::new(tooltip.clone())).into())
         .child(
             svg()
                 .size(px(14.))
@@ -42,7 +46,7 @@ pub(super) fn compact_transfer_footer_button(
 }
 
 pub(super) fn compact_transfer_footer_button_active(
-    palette: crate::theme::ThemePalette,
+    palette: ThemePalette,
     id: impl Into<String>,
     icon_path: &'static str,
     tooltip: impl Into<String>,
@@ -77,10 +81,7 @@ pub(super) fn compact_transfer_footer_button_active(
                     rgb(palette.text)
                 })
         })
-        .tooltip(move |_, cx| {
-            cx.new(|_| crate::features::ChromeTooltip::new(tooltip.clone()))
-                .into()
-        })
+        .tooltip(move |_, cx| cx.new(|_| ChromeTooltip::new(tooltip.clone())).into())
         .child(
             svg()
                 .size(px(14.))
@@ -97,7 +98,7 @@ pub(super) fn compact_transfer_footer_button_active(
 }
 
 pub(super) fn compact_transfer_upload_menu_button(
-    palette: crate::theme::ThemePalette,
+    palette: ThemePalette,
     tooltip: impl Into<String>,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
@@ -116,10 +117,7 @@ pub(super) fn compact_transfer_upload_menu_button(
             this.bg(rgb(palette.surface_elevated))
                 .text_color(rgb(palette.text))
         })
-        .tooltip(move |_, cx| {
-            cx.new(|_| crate::features::ChromeTooltip::new(tooltip.clone()))
-                .into()
-        })
+        .tooltip(move |_, cx| cx.new(|_| ChromeTooltip::new(tooltip.clone())).into())
         .child(
             svg()
                 .size(px(16.))
@@ -136,7 +134,7 @@ pub(super) fn compact_transfer_upload_menu_button(
 }
 
 pub(super) fn compact_transfer_toolbar_button(
-    palette: crate::theme::ThemePalette,
+    palette: ThemePalette,
     id: impl Into<String>,
     icon_path: &'static str,
     tooltip: impl Into<String>,
@@ -157,10 +155,7 @@ pub(super) fn compact_transfer_toolbar_button(
             this.bg(rgb(palette.surface_elevated))
                 .text_color(rgb(palette.text))
         })
-        .tooltip(move |_, cx| {
-            cx.new(|_| crate::features::ChromeTooltip::new(tooltip.clone()))
-                .into()
-        })
+        .tooltip(move |_, cx| cx.new(|_| ChromeTooltip::new(tooltip.clone())).into())
         .child(
             svg()
                 .size(px(16.))
@@ -172,7 +167,7 @@ pub(super) fn compact_transfer_toolbar_button(
 }
 
 pub(super) fn compact_transfer_toolbar_button_enabled(
-    palette: crate::theme::ThemePalette,
+    palette: ThemePalette,
     id: impl Into<String>,
     icon_path: &'static str,
     tooltip: impl Into<String>,
@@ -193,10 +188,7 @@ pub(super) fn compact_transfer_toolbar_button_enabled(
             rgb(palette.text_dimmed)
         })
         .opacity(if enabled { 1.0 } else { 0.45 })
-        .tooltip(move |_, cx| {
-            cx.new(|_| crate::features::ChromeTooltip::new(tooltip.clone()))
-                .into()
-        })
+        .tooltip(move |_, cx| cx.new(|_| ChromeTooltip::new(tooltip.clone())).into())
         .child(
             svg()
                 .size(px(16.))
@@ -219,7 +211,7 @@ pub(super) fn compact_transfer_toolbar_button_enabled(
 }
 
 pub(super) fn compact_transfer_toolbar_button_active(
-    palette: crate::theme::ThemePalette,
+    palette: ThemePalette,
     id: impl Into<String>,
     icon_path: &'static str,
     tooltip: impl Into<String>,
@@ -254,10 +246,7 @@ pub(super) fn compact_transfer_toolbar_button_active(
                     rgb(palette.text)
                 })
         })
-        .tooltip(move |_, cx| {
-            cx.new(|_| crate::features::ChromeTooltip::new(tooltip.clone()))
-                .into()
-        })
+        .tooltip(move |_, cx| cx.new(|_| ChromeTooltip::new(tooltip.clone())).into())
         .child(
             svg()
                 .size(px(16.))
@@ -268,7 +257,7 @@ pub(super) fn compact_transfer_toolbar_button_active(
         .on_click(on_click)
 }
 
-pub(super) fn transfer_toolbar_divider(palette: crate::theme::ThemePalette) -> impl IntoElement {
+pub(super) fn transfer_toolbar_divider(palette: ThemePalette) -> impl IntoElement {
     div()
         .h(px(16.))
         .w(px(1.))
