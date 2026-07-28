@@ -1,4 +1,15 @@
-use super::*;
+use std::collections::{HashMap, HashSet};
+
+use gpui::{
+    AnyElement, Context, FontWeight, IntoElement, MouseButton, SharedString, div, prelude::*, px,
+    rgb, rgba, svg,
+};
+use nyaterm_core::{ConnectionType, Group, SavedConnection, truncate_preview};
+
+use crate::features::NyaTermApp;
+use crate::theme::ThemePalette;
+
+use super::super::super::view_helpers::session_kind_icon_path;
 
 const NEW_SESSION_MENU_WIDTH: f32 = 300.;
 const NEW_SESSION_SUBMENU_WIDTH: f32 = 260.;
@@ -839,7 +850,12 @@ impl NyaTermApp {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use nyaterm_core::{ConnectionType, Group, SavedConnection};
+
+    use super::{
+        new_session_connections_for_group, new_session_groups_for_parent,
+        new_session_visible_group_ids,
+    };
 
     fn group(id: &str, name: &str, parent_id: Option<&str>, sort_order: i32) -> Group {
         Group {

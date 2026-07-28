@@ -1,4 +1,16 @@
-use super::*;
+use std::time::{Duration, Instant};
+
+use gpui::{
+    AnimationExt, ClickEvent, Context, FontWeight, IntoElement, MouseButton, SharedString, div,
+    prelude::*, px, rgb, rgba, svg,
+};
+use nyaterm_core::truncate_preview;
+
+use crate::features::NyaTermApp;
+use crate::features::formatting::session_kind_label;
+use crate::features::shell::{SessionTabDragPayload, SessionTabDragPreview, SessionTabTooltip};
+
+use super::super::super::view_helpers::session_kind_icon_path;
 
 fn pending_tab_insert_index(
     session_count: usize,

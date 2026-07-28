@@ -1,4 +1,7 @@
-use super::*;
+use gpui::{Context, IntoElement, div, prelude::*, px, rgb};
+
+use crate::features::NyaTermApp;
+use crate::models::{NavItem, PanelSide};
 
 impl NyaTermApp {
     pub(in crate::features) fn sidebar(

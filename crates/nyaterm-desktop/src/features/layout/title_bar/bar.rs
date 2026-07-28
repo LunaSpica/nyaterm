@@ -11,7 +11,8 @@ use crate::features::{
 };
 use crate::models::{HeaderStatusMode, TitleMenu, TitleMenuSubmenu};
 
-use super::super::{session_kind_icon_path, title_menu_item, title_menu_separator};
+use super::super::title_menu_helpers::{title_menu_item, title_menu_separator};
+use super::super::view_helpers::session_kind_icon_path;
 
 struct HeaderStatusContent {
     icon_path: &'static str,

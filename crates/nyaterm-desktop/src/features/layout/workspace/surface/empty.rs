@@ -1,6 +1,12 @@
-use super::*;
+use std::time::Duration;
 
+use gpui::{AnimationExt, Context, FontWeight, IntoElement, div, prelude::*, px, rgb, svg};
+use nyaterm_core::truncate_preview;
+
+use crate::features::view_widgets::{empty_workspace_action, nyaterm_logo_mark};
+use crate::features::{NyaTermApp, TextInputSetup};
 use crate::models::BottomPanelMode;
+use crate::models::NavItem;
 
 impl NyaTermApp {
     pub(in crate::features) fn empty_workspace_state(

@@ -1,4 +1,4 @@
-use super::*;
+use gpui::{App, ClickEvent, IntoElement, SharedString, Window, div, prelude::*, px, rgb, svg};
 
 pub(super) fn title_menu_item(
     palette: crate::theme::ThemePalette,

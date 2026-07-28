@@ -1,19 +1,18 @@
 pub(super) use gpui::{
-    AnimationExt, AnyElement, App, ClickEvent, ClipboardItem, Context, Entity, FocusHandle,
-    FontWeight, IntoElement, KeyDownEvent, KeyUpEvent, MouseButton, MouseDownEvent, Render,
-    ScrollDelta, ScrollHandle, ScrollWheelEvent, SharedString, Timer, Window, WindowHandle, div,
-    prelude::*, px, rgb, rgba, svg,
+    App, ClickEvent, ClipboardItem, Context, Entity, FocusHandle, FontWeight, IntoElement,
+    KeyDownEvent, KeyUpEvent, MouseButton, Render, ScrollDelta, ScrollHandle, ScrollWheelEvent,
+    SharedString, Timer, Window, WindowHandle, div, prelude::*, px, rgb, rgba, svg,
 };
 pub(super) use nyaterm_core::{
     AgentOutputCaptureProcessor, AiCommandCard, AiExecutionProfile, AiMode, AiSettings, AppRuntime,
     AppSettingsSummary, CloudSyncHistoryEntry, CloudSyncSettings, CloudSyncState,
-    CommandHistoryEntry, CommandObservation, ConnectionStore, ConnectionType, Group,
-    InputSelectionRange, KeywordHighlightConfig, NativeServices, NativeUpdateInfo, OtpEntry,
-    ProxyConfig, ProxyGroup, QuickCommand, QuickCommandCategory, RuntimeMode, SavedConnection,
-    SavedCredential, SavedPassword, SshKey, TerminalInputState, TerminalWireWriteKind,
-    TunnelConfig, TunnelGroup, apply_terminal_input_data, build_move_input_cursor_data,
-    can_suggest_from_tracker, delete_terminal_input_range, terminal_input_fanout_status,
-    terminal_wire_write_disposition, truncate_preview, uuid,
+    CommandHistoryEntry, CommandObservation, ConnectionStore, Group, InputSelectionRange,
+    KeywordHighlightConfig, NativeServices, NativeUpdateInfo, OtpEntry, ProxyConfig, ProxyGroup,
+    QuickCommand, QuickCommandCategory, SavedConnection, SavedCredential, SavedPassword, SshKey,
+    TerminalInputState, TerminalWireWriteKind, TunnelConfig, TunnelGroup,
+    apply_terminal_input_data, build_move_input_cursor_data, can_suggest_from_tracker,
+    delete_terminal_input_range, terminal_input_fanout_status, terminal_wire_write_disposition,
+    truncate_preview, uuid,
 };
 #[cfg(feature = "migration-dashboard")]
 pub(super) use nyaterm_legacy::LegacyProject;
@@ -24,8 +23,7 @@ pub(super) use nyaterm_terminal::{
 pub(super) use nyaterm_transport::{
     DockerComposeService, DockerContainerDetails, RecordingManager, RemoteDockerOverview,
     RemoteProcess, RemoteStats, SessionEvent, SessionInfo, SessionKind, SessionManager,
-    SftpDuplicateDecision, SftpDuplicatePolicy, SshCredentialPromptKind, SshCredentialPromptReason,
-    SshMultiplexHandle, SshSessionConfig, SshTunnelInfo, SshTunnelManager,
+    SftpDuplicatePolicy, SshMultiplexHandle, SshSessionConfig, SshTunnelInfo, SshTunnelManager,
 };
 
 pub(super) use std::collections::{HashMap, HashSet, VecDeque};
@@ -52,4 +50,4 @@ pub(super) use crate::terminal::{
     terminal_key_release_bytes_with_mode, terminal_keyword_highlight_expanded_rows,
     terminal_keyword_rules_key, terminal_text_cell_slice, terminal_text_cells,
 };
-pub(super) use crate::widgets::{capability_line, empty_panel, small_button, status_pill};
+pub(super) use crate::widgets::small_button;

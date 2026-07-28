@@ -1,5 +1,11 @@
-use super::*;
+use gpui::{Context, IntoElement, SharedString, div, prelude::*, px, rgb};
+
+use crate::features::NyaTermApp;
 use crate::models::{SmartSplitMode, TitleMenu, TitleMenuSubmenu};
+
+use super::super::title_menu_helpers::{
+    title_menu_item, title_menu_separator, title_menu_submenu_trigger,
+};
 
 impl NyaTermApp {
     pub(in crate::features) fn title_menu_dropdown(

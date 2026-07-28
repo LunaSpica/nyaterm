@@ -1,5 +1,6 @@
-use super::*;
+use gpui::{Context, div, prelude::*, px, rgb};
 
+use crate::features::NyaTermApp;
 use crate::models::BottomPanelMode;
 
 impl NyaTermApp {

@@ -1,6 +1,15 @@
-use super::*;
+use gpui::{
+    ClickEvent, Context, FontWeight, IntoElement, SharedString, div, prelude::*, px, rgb, rgba, svg,
+};
+use nyaterm_core::{RuntimeMode, truncate_preview};
+use nyaterm_transport::SessionInfo;
 
+use crate::features::formatting::{session_kind_label, status_label};
+use crate::features::{NyaTermApp, TextInputSetup};
 use crate::models::ActiveSessionMenuState;
+use crate::widgets::{capability_line, empty_panel, small_button, status_pill};
+
+use super::super::view_helpers::session_action_svg_button;
 
 impl NyaTermApp {
     pub(in crate::features) fn sorted_active_sessions(&self) -> Vec<SessionInfo> {

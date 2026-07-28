@@ -10,10 +10,10 @@ Last updated from the working tree on 2026-07-28.
 | Metric | Current value | Notes |
 | --- | ---: | --- |
 | `NyaTermApp` fields | 261 | Counted from `features/app_state/mod.rs`; down from 585, still transitional. |
-| `impl NyaTermApp` blocks | 239 | Spread across 234 files under `crates/nyaterm-desktop/src`. |
+| `impl NyaTermApp` blocks | 238 | Spread across 233 files under `crates/nyaterm-desktop/src`. |
 | `#[path = "..."]` declarations in desktop | 0 | Cleared. Every directory is a real module; the boundary script fails on any new occurrence. |
-| `use super::*` imports in desktop | 84 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
-| `features/prelude.rs` rough exported-token count | 163 | Still a broad shared prelude; two hundred eighty-two low-frequency GPUI/transport/core/http/model/helper/widget exports are now explicit imports. |
+| `use super::*` imports in desktop | 65 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
+| `features/prelude.rs` rough exported-token count | 152 | Still a broad shared prelude; two hundred ninety-three low-frequency GPUI/transport/core/http/model/helper/widget exports are now explicit imports. |
 | Entity Store structs | 4 | `Runtime`, `WindowRuntime`, `StartupRestore`, `Overlay`. Each owns state the app does not. |
 | Snapshot structs | 0 | Cleared. No store is a projection of `NyaTermApp` any more. |
 | `replace_snapshot` methods | 0 | Cleared. |
@@ -101,8 +101,9 @@ these as staged extraction candidates, not as formatting-only refactor targets.
 - Workspace is already on resolver `3` for the Rust 2024 workspace.
 - `migration-dashboard` exists as an explicit desktop feature. Default desktop
   features are empty, so release/default builds do not enable the dashboard.
-- Entity stores have a documented projection rule: `NyaTermApp` / FeatureState
-  remains authoritative unless a specific migration explicitly changes that.
+- The four remaining Entity stores are authoritative owners: runtime services,
+  the window pump, startup restore, and quick-switch overlay state are not
+  writable mirrors of `NyaTermApp` or a FeatureState.
 - The shell feature area is a real module tree. `features/shell` is declared as
   a normal `mod shell;` with its own `mod.rs`, `event_pump` and
   `keybinding_runtime` are directory modules, and `features/shell` no longer
@@ -141,6 +142,16 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   delete confirmation, OTP refresh, and key/password/credential editor behavior
   are unchanged. Secret storage, serialization, and encryption formats are
   untouched.
+- The rest of `features/layout` is explicit too: its remaining nineteen
+  `use super::*` occurrences across activity bar, prompts, sidebar, sync
+  history, title bar, workspace surfaces, and the workspace-menu tests are
+  gone, so the complete layout tree is guarded at zero. Its seven directory
+  entry modules are declaration-only and can no longer rebuild a shared import
+  bucket. The empty `sidebar/panels.rs` module and its empty `impl NyaTermApp`
+  were deleted. Compiler-confirmed cleanup also removed eleven shared-prelude
+  exports and sixteen `crate::features` façade re-exports; activity-bar layout,
+  prompt handling, session lists, sync-history actions, title menus, new-session
+  menus, and tab interaction behavior are unchanged.
 - `#[path = "..."]` is gone from `nyaterm-desktop` and `nyaterm-terminal-gpui`.
   The `pages` tree, `http/cloud_sync` and `models/workspace_tabs` were the last
   holdouts; `pages/remote/docker` also stopped aliasing six sibling files and
@@ -1189,12 +1200,6 @@ use the existing behavior.
 
 - `nyaterm-store` remains a transitional persistence facade; storage
   implementation still lives in `nyaterm-core`.
-- Entity stores are mostly read-model snapshots published from
-  `NyaTermApp`/FeatureState by `event_pump/publish.rs`. Quick switch state is
-  the first deliberately authoritative overlay Entity state.
-- Some Entity stores expose mutation helpers for focused tests. Until a domain
-  is explicitly migrated, these helpers are not proof that the Store is the
-  production source of truth.
 - Migration dashboard and legacy inventory remain development/migration aids.
   They must stay feature-gated when they depend on local legacy source paths.
 
@@ -1292,7 +1297,6 @@ creeps back to 104 mean very different things, and only the second is rot.
 | `nyaterm-legacy` | Legacy inventory and compatibility support | Present as dependency; dashboard code is feature-gated | Migration dashboard no longer needs legacy source inventory | Keep only tested compatibility readers needed for user data |
 | Migration Dashboard | Development migration tracking | Disabled by default feature set | GPUI migration inventory is complete and documented elsewhere | Static migration notes or external tooling |
 | Legacy source path `./temp/nyaterm-tauri` | Inventory source root | Must not be required by default builds | Legacy inventory no longer used | Remove local-path scanning code |
-| Projection-only Entity Stores | Read-model snapshots for UI domains | Enabled | Domain migrates to authoritative Entity ownership | Entity becomes source of truth or projection API is removed |
 | Temporary compatibility aliases | Migration convenience | Varies by module | All consumers use authoritative API | Remove alias and narrow exports |
 
 ## Suggested Order

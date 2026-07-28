@@ -1,4 +1,15 @@
-use super::*;
+use gpui::{
+    ClipboardItem, Context, FontWeight, IntoElement, SharedString, div, prelude::*, px, rgb,
+};
+use nyaterm_core::truncate_preview;
+
+use crate::features::NyaTermApp;
+use crate::features::formatting::{
+    cloud_sync_status_dot_color, cloud_sync_status_text_color, configured_cloud_sync_provider,
+    format_cloud_provider, format_duration_ms,
+};
+use crate::features::view_widgets::{cloud_sync_history_row, dialog_action_button};
+use crate::widgets::small_button;
 
 impl NyaTermApp {
     pub(in crate::features) fn sync_backup_history_panel(

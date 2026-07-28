@@ -1,4 +1,7 @@
-use super::*;
+use gpui::{FontWeight, IntoElement, SharedString, div, prelude::*, px, rgb, svg};
+use nyaterm_transport::SessionKind;
+
+use crate::features::NyaTermApp;
 
 /// A captioned box hosting one of the security editors' inputs.
 ///

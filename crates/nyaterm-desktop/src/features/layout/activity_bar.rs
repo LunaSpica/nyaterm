@@ -1,6 +1,13 @@
-use super::*;
+use gpui::{
+    Context, FontWeight, IntoElement, MouseButton, MouseDownEvent, SharedString, div, prelude::*,
+    px, rgb, rgba, svg,
+};
 
-use crate::models::{ActivityBarEntry, ActivityBarZone, BottomPanelMode, RightFocus};
+use crate::features::NyaTermApp;
+use crate::features::runtime_jobs::ActivitySide;
+use crate::features::shell::{ActivityBarDragPayload, ActivityBarDragPreview, ChromeTooltip};
+use crate::features::view_widgets::activity_icon;
+use crate::models::{ActivityBarEntry, ActivityBarZone};
 
 impl NyaTermApp {
     pub(in crate::features) fn activity_bar_context_menu_overlay(

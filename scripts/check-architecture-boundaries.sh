@@ -773,6 +773,12 @@ declare -A SUPER_BASELINE=(
   [crates/nyaterm-desktop/src/features/inspector/ai_widgets/history.rs]=0
   [crates/nyaterm-desktop/src/features/inspector/ai_widgets/messages.rs]=0
   [crates/nyaterm-desktop/src/features/inspector/ai_widgets/transcript.rs]=0
+  [crates/nyaterm-desktop/src/features/layout/mod.rs]=0
+  [crates/nyaterm-desktop/src/features/layout/activity_bar.rs]=0
+  [crates/nyaterm-desktop/src/features/layout/prompts.rs]=0
+  [crates/nyaterm-desktop/src/features/layout/sidebar/mod.rs]=0
+  [crates/nyaterm-desktop/src/features/layout/sidebar/sessions.rs]=0
+  [crates/nyaterm-desktop/src/features/layout/sidebar/shell.rs]=0
   [crates/nyaterm-desktop/src/features/layout/security_editors/mod.rs]=0
   [crates/nyaterm-desktop/src/features/layout/security_editors/credential.rs]=0
   [crates/nyaterm-desktop/src/features/layout/security_editors/key.rs]=0
@@ -785,6 +791,18 @@ declare -A SUPER_BASELINE=(
   [crates/nyaterm-desktop/src/features/layout/security_panel/panel/keys.rs]=0
   [crates/nyaterm-desktop/src/features/layout/security_panel/panel/otp.rs]=0
   [crates/nyaterm-desktop/src/features/layout/security_panel/panel/passwords.rs]=0
+  [crates/nyaterm-desktop/src/features/layout/sync_history_panel.rs]=0
+  [crates/nyaterm-desktop/src/features/layout/title_bar/mod.rs]=0
+  [crates/nyaterm-desktop/src/features/layout/title_bar/bar.rs]=0
+  [crates/nyaterm-desktop/src/features/layout/title_bar/menu.rs]=0
+  [crates/nyaterm-desktop/src/features/layout/title_menu_helpers.rs]=0
+  [crates/nyaterm-desktop/src/features/layout/view_helpers.rs]=0
+  [crates/nyaterm-desktop/src/features/layout/workspace/mod.rs]=0
+  [crates/nyaterm-desktop/src/features/layout/workspace/bottom.rs]=0
+  [crates/nyaterm-desktop/src/features/layout/workspace/surface/mod.rs]=0
+  [crates/nyaterm-desktop/src/features/layout/workspace/surface/empty.rs]=0
+  [crates/nyaterm-desktop/src/features/layout/workspace/surface/menus.rs]=0
+  [crates/nyaterm-desktop/src/features/layout/workspace/surface/tabs.rs]=0
   [crates/nyaterm-desktop/src/features/panels/about_overlay.rs]=0
   [crates/nyaterm-desktop/src/features/panels/active_session_menu_overlay.rs]=0
   [crates/nyaterm-desktop/src/features/panels/connection_import_overlay.rs]=0
@@ -918,8 +936,7 @@ done < <(rg -n --path-separator / '^[[:space:]]*use super::\*;' \
   crates/nyaterm-desktop/src/features/formatting \
   crates/nyaterm-desktop/src/features/icons \
   crates/nyaterm-desktop/src/features/inspector \
-  crates/nyaterm-desktop/src/features/layout/security_editors \
-  crates/nyaterm-desktop/src/features/layout/security_panel \
+  crates/nyaterm-desktop/src/features/layout \
   crates/nyaterm-desktop/src/features/panels \
   crates/nyaterm-desktop/src/features/remote \
   crates/nyaterm-desktop/src/features/session \
@@ -945,6 +962,18 @@ done < <(rg -n --path-separator / '^[[:space:]]*use super::\*;' \
   crates/nyaterm-desktop/src/features/shell/event_pump \
   crates/nyaterm-desktop/src/features/shell/keybinding_runtime \
   crates/nyaterm-desktop/src/features/tunnels 2>/dev/null || true)
+
+# Layout module entries stay declarative. Leaf modules import their own GPUI,
+# model and helper dependencies instead of rebuilding a shared parent scope.
+check_no_matches 'layout module entries must not become shared import buckets' \
+  '^[[:space:]]*use[[:space:]]' \
+  crates/nyaterm-desktop/src/features/layout/mod.rs \
+  crates/nyaterm-desktop/src/features/layout/security_editors/mod.rs \
+  crates/nyaterm-desktop/src/features/layout/security_panel/mod.rs \
+  crates/nyaterm-desktop/src/features/layout/sidebar/mod.rs \
+  crates/nyaterm-desktop/src/features/layout/title_bar/mod.rs \
+  crates/nyaterm-desktop/src/features/layout/workspace/mod.rs \
+  crates/nyaterm-desktop/src/features/layout/workspace/surface/mod.rs
 
 # Connection list selection invariants are owned by ConnectionFeatureState's
 # private list child. Keep

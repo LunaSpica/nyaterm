@@ -1,6 +1,20 @@
-use super::*;
+use gpui::{
+    Context, FontWeight, IntoElement, KeyDownEvent, SharedString, div, prelude::*, px, rgb, rgba,
+};
+use nyaterm_transport::{
+    SftpDuplicateDecision, SshCredentialPromptKind, SshCredentialPromptReason,
+};
 
+use crate::features::formatting::download_file_name_from_remote_path;
+use crate::features::session::{
+    CredentialPromptState, HostKeyPromptChoice, HostKeyPromptIssue, HostKeyPromptRequest,
+    KeyboardInteractivePromptState, SftpDuplicatePromptState, credential_prompt_target,
+    credential_text_input_id, keyboard_interactive_text_input_id, unix_seconds_now,
+};
+use crate::features::view_widgets::dialog_action_button;
+use crate::features::{NyaTermApp, TextInputSetup};
 use crate::models::{SnapshotPasswordPromptKind, SnapshotPasswordPromptState};
+use crate::widgets::small_button;
 
 impl NyaTermApp {
     pub(in crate::features) fn duplicate_prompt_banner(
