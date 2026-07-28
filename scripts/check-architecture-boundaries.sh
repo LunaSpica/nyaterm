@@ -664,25 +664,27 @@ check_no_matches \
   '^pub[[:space:]]+use[[:space:]]+(images|keywords|paint)::\*;' \
   crates/nyaterm-terminal-gpui/src/lib.rs
 
-# Keep migration-only local source paths contained. Default builds may carry an
-# inert inventory path, but new runtime dependencies on the local legacy tree
-# should not spread beyond the existing gated migration code.
-while IFS=: read -r file _line text; do
-  if [[ "$text" =~ ^[[:space:]]*// ]]; then
-    continue
-  fi
-  case "$file" in
-    crates/nyaterm-desktop/src/features/mod.rs) ;;
-    crates/nyaterm-desktop/src/features/app_state/construct.rs) ;;
-    scripts/sync-icons.sh) ;;
-    scripts/icons.manifest) ;;
-    docs/architecture/gpui-migration-status.md) ;;
-    scripts/check-architecture-boundaries.sh) ;;
-    *)
-      fail "local legacy source path appears outside the migration allowlist: $file"
-      ;;
-  esac
-done < <(rg -n --path-separator / './temp/nyaterm-tauri|nyaterm-tauri' crates docs scripts 2>/dev/null || true)
+# Migration inventory/dashboard code and the local legacy source checkout have
+# reached their exit conditions. Keep the product, docs and asset tooling free
+# of those retired boundaries.
+check_no_matches 'retired migration dashboard feature must not return' \
+  'migration-dashboard' Cargo.toml
+check_no_matches 'retired migration dashboard feature must not return' \
+  'migration-dashboard' crates
+check_no_matches 'retired legacy inventory crate must not return' \
+  'nyaterm[-_]legacy' Cargo.toml
+check_no_matches 'retired legacy inventory crate must not return' \
+  'nyaterm[-_]legacy' crates
+check_no_matches 'retired local source checkout must not return in crates' \
+  'nyaterm-tauri' crates
+check_no_matches 'retired local source checkout must not return in docs' \
+  'nyaterm-tauri' docs
+check_no_matches 'retired local source checkout must not return in repository guidance' \
+  'nyaterm-tauri' AGENTS.md
+check_no_matches 'retired local source checkout must not return in icon manifest' \
+  'nyaterm-tauri' scripts/icons.manifest
+check_no_matches 'retired local source checkout must not return in icon sync tooling' \
+  'nyaterm-tauri' scripts/sync-icons.sh
 
 # The desktop crate no longer uses `#[path]` anywhere: every directory is a
 # real module with its own `mod.rs`. Keep it that way, so module paths keep

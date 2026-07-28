@@ -41,11 +41,6 @@ impl NyaTermApp {
             return;
         }
 
-        if item == NavItem::Migration {
-            self.open_panel(NavItem::Migration, cx);
-            return;
-        }
-
         self.open_panel(item, cx);
     }
 

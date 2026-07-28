@@ -11,7 +11,6 @@ pub(crate) enum NavItem {
     Docker,
     Transfers,
     Settings,
-    Migration,
     AiAssistant,
     ActiveSessions,
     CommandHistory,
@@ -36,7 +35,7 @@ impl NavItem {
             NavItem::SecurityAuth => "securityAuth.title",
             NavItem::SyncBackupHistory => "panel.syncBackupHistory",
             NavItem::Recording => "recording.panelTitle",
-            NavItem::Workspace | NavItem::Migration => return None,
+            NavItem::Workspace => return None,
         })
     }
 
@@ -50,7 +49,6 @@ impl NavItem {
             NavItem::Docker => "Docker",
             NavItem::Transfers => "File Explorer",
             NavItem::Settings => "Settings",
-            NavItem::Migration => "Migration",
             NavItem::AiAssistant => "AI Assistant",
             NavItem::ActiveSessions => "Active Sessions",
             NavItem::CommandHistory => "Command History",
@@ -75,7 +73,6 @@ impl NavItem {
             NavItem::SyncBackupHistory => "Cloud Sync",
             NavItem::SecurityAuth => "Security",
             NavItem::Recording => "Recording",
-            NavItem::Migration => "Migration",
             NavItem::Settings => "Settings",
             NavItem::Workspace => "Workspace",
         }
@@ -98,7 +95,6 @@ impl NavItem {
             NavItem::Processes => "icons/processes.svg",
             NavItem::Docker => "icons/docker.svg",
             NavItem::Recording => "icons/record.svg",
-            NavItem::Migration => "icons/migration.svg",
             NavItem::Workspace => "icons/workspace.svg",
         }
     }
@@ -110,7 +106,6 @@ impl NavItem {
                 | NavItem::Tunnels
                 | NavItem::SecurityAuth
                 | NavItem::SyncBackupHistory
-                | NavItem::Migration
         )
     }
 
@@ -144,7 +139,6 @@ impl NavItem {
             NavItem::Docker => "dockerManager",
             NavItem::Transfers => "fileExplorer",
             NavItem::Settings => "settings",
-            NavItem::Migration => "migration",
             NavItem::AiAssistant => "aiAssistant",
             NavItem::ActiveSessions => "activeSessions",
             NavItem::CommandHistory => "commandHistory",
@@ -164,7 +158,6 @@ impl NavItem {
             "docker" | "dockerManager" => Some(NavItem::Docker),
             "fileExplorer" | "fileTransfer" | "transfers" => Some(NavItem::Transfers),
             "settings" => Some(NavItem::Settings),
-            "migration" => Some(NavItem::Migration),
             "aiAssistant" | "ai" => Some(NavItem::AiAssistant),
             "activeSessions" => Some(NavItem::ActiveSessions),
             "commandHistory" => Some(NavItem::CommandHistory),
@@ -439,7 +432,16 @@ pub(crate) fn panel_collapsed_from_persistence(
 
 #[cfg(test)]
 mod tests {
-    use super::{ActivityBarLayoutState, NavItem, PanelSide, panel_collapsed_from_persistence};
+    use super::{
+        ActivityBarEntry, ActivityBarLayoutState, NavItem, PanelSide,
+        panel_collapsed_from_persistence,
+    };
+
+    #[test]
+    fn retired_migration_panel_is_ignored_when_loading_persisted_layouts() {
+        assert_eq!(NavItem::from_persistence_id("migration"), None);
+        assert_eq!(ActivityBarEntry::from_persistence_id("migration"), None);
+    }
 
     #[test]
     fn activity_bar_entry_side_follows_current_layout() {

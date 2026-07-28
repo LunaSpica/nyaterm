@@ -7,16 +7,13 @@ use gpui::{
 use nyaterm_core::AppRuntime;
 
 use crate::{
-    entities::{
-        OverlayStore, RuntimeStore, StartupRestoreStore, UiStoreHandles, WindowRuntimeStore,
-    },
+    entities::{OverlayStore, StartupRestoreStore, UiStoreHandles, WindowRuntimeStore},
     features::NyaTermApp,
 };
 
 #[allow(dead_code)]
 pub struct AppShell {
     app: Entity<NyaTermApp>,
-    runtime: Entity<RuntimeStore>,
     window_runtime: Entity<WindowRuntimeStore>,
     startup_restore: Entity<StartupRestoreStore>,
     overlays: Entity<OverlayStore>,
@@ -25,7 +22,6 @@ pub struct AppShell {
 
 impl AppShell {
     pub fn new(runtime: AppRuntime, cx: &mut Context<Self>) -> Self {
-        let runtime_store = cx.new(|_| RuntimeStore::new(runtime.clone()));
         let startup_restore = cx.new(|_| StartupRestoreStore::default());
         let overlays = cx.new(|_| OverlayStore::default());
         let stores = UiStoreHandles {
@@ -41,7 +37,6 @@ impl AppShell {
 
         Self {
             app,
-            runtime: runtime_store,
             window_runtime: cx.new(|_| WindowRuntimeStore::default()),
             startup_restore,
             overlays,

@@ -6,10 +6,6 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 
-[features]
-default = []
-migration-dashboard = []
-
 [dependencies]
 anyhow.workspace = true
 dirs.workspace = true
@@ -20,7 +16,6 @@ hex.workspace = true
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "bmp", "webp"] }
 md5.workspace = true
 nyaterm-core.workspace = true
-nyaterm-legacy.workspace = true
 nyaterm-otp.workspace = true
 nyaterm-terminal.workspace = true
 nyaterm-terminal-gpui.workspace = true

@@ -1,5 +1,4 @@
-use nyaterm_core::{AppRuntime, AppSettingsSummary, KeywordHighlightConfig, NativeServices};
-use nyaterm_legacy::MigrationInventory;
+use nyaterm_core::{AppRuntime, AppSettingsSummary, KeywordHighlightConfig};
 
 use super::ai::AiFeatureState;
 use super::commands::CommandFeatureState;
@@ -28,8 +27,6 @@ pub(in crate::features) use types::{SettingsDraftSnapshot, TerminalRuntimeUiStat
 pub struct NyaTermApp {
     pub(in crate::features) stores: crate::entities::UiStoreHandles,
     pub(in crate::features) runtime: AppRuntime,
-    pub(in crate::features) services: NativeServices,
-    pub(in crate::features) inventory: MigrationInventory,
     pub(in crate::features) connection_catalog: ConnectionCatalogState,
     pub(in crate::features) connection_state: ConnectionFeatureState,
     /// Real text inputs for the panels that have not been given their own,

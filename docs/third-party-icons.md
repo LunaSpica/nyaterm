@@ -1,14 +1,15 @@
 # Third-party icon assets
 
 Everything under `crates/nyaterm-app/assets/` is vendored from an upstream icon
-set or carried over from the pre-GPUI NyaTerm release. The mapping from each
-bundled file to its exact upstream source is `scripts/icons.manifest`; the
-pinned versions live at the top of `scripts/sync-icons.sh`, and re-running that
-script reproduces the committed tree.
+set or carried over from the pre-GPUI NyaTerm release. The manifest at
+`scripts/icons.manifest` maps fetched assets to exact upstream sources. Project
+assets carried over from NyaTerm itself are the committed canonical copies and
+use the manifest's `keep` source; they no longer depend on a local legacy source
+checkout. Pinned upstream versions live at the top of `scripts/sync-icons.sh`.
 
 Assets are committed rather than fetched at build time, so the build stays
-offline. `bash scripts/sync-icons.sh --check` verifies the tree still matches the
-manifest.
+offline. `bash scripts/sync-icons.sh --check` verifies fetched assets against
+the manifest and verifies that canonical project assets are present.
 
 ## Sources
 

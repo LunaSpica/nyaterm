@@ -1,5 +1,5 @@
 //! Shared UI theme tokens (Tauri ThemeColors / --df-* CSS vars).
-//! Palette ids match `./temp/nyaterm-tauri/src/lib/themes.ts`.
+//! Palette ids preserve the pre-GPUI NyaTerm theme schema.
 
 /// Shell chrome palette keyed by appearance.theme (Tauri theme ids).
 /// Field names map to Tauri `ThemeColors` / CSS vars (`--df-*`).

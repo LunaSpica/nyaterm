@@ -4327,7 +4327,6 @@ dependencies = [
  "image",
  "md5",
  "nyaterm-core",
- "nyaterm-legacy",
  "nyaterm-otp",
  "nyaterm-terminal",
  "nyaterm-terminal-gpui",
@@ -4342,16 +4341,6 @@ dependencies = [
  "tracing",
  "zed-reqwest",
  "zip",
-]
-
-[[package]]
-name = "nyaterm-legacy"
-version = "1.1.12"
-dependencies = [
- "anyhow",
- "nyaterm-core",
- "serde_json",
- "thiserror 2.0.18",
 ]
 
 [[package]]

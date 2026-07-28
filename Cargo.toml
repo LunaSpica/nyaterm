@@ -3,7 +3,6 @@ members = [
     "crates/nyaterm-app",
     "crates/nyaterm-core",
     "crates/nyaterm-desktop",
-    "crates/nyaterm-legacy",
     "crates/nyaterm-otp",
     "crates/nyaterm-store",
     "crates/nyaterm-terminal",
@@ -43,7 +42,6 @@ log = "0.4.11"
 md5 = "0.8"
 nyaterm-core = { path = "crates/nyaterm-core" }
 nyaterm-desktop = { path = "crates/nyaterm-desktop" }
-nyaterm-legacy = { path = "crates/nyaterm-legacy" }
 nyaterm-otp = { path = "crates/nyaterm-otp" }
 nyaterm-terminal = { path = "crates/nyaterm-terminal" }
 nyaterm-terminal-gpui = { path = "crates/nyaterm-terminal-gpui" }

@@ -1,5 +1,4 @@
 mod connections;
-mod migration;
 mod remote;
 pub(in crate::features) mod settings;
 mod transfers;

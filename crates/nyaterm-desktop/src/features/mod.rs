@@ -111,13 +111,11 @@ pub(in crate::features) use tunnels::{TunnelCatalogState, TunnelFeatureState};
 pub(in crate::features) use update::UpdateFeatureState;
 pub(in crate::features) use view_widgets::{
     child_window_header, child_window_titlebar, color_icon, connection_type_icon,
-    dialog_action_button, logo_mark, metric, modal_close_icon_button,
-    modal_dialog_footer_localized, modal_dialog_footer_localized_danger, modal_dialog_shell,
-    mono_icon, panel_header_with_actions, service_status, stats_progress_bar, themed_icon,
-    transfer_entry_icon, window_control_button,
+    dialog_action_button, logo_mark, modal_close_icon_button, modal_dialog_footer_localized,
+    modal_dialog_footer_localized_danger, modal_dialog_shell, mono_icon, panel_header_with_actions,
+    stats_progress_bar, themed_icon, transfer_entry_icon, window_control_button,
 };
 
-const LEGACY_ROOT: &str = "./temp/nyaterm-tauri";
 pub(crate) const INITIAL_TERMINAL_BANNER: &str = "$ nyaterm --native\nGPUI shell initialized.\nStart a local terminal or open a saved connection.\n";
 const AI_AGENT_OBSERVATION_MIN_WAIT: Duration = Duration::from_millis(700);
 const AI_AGENT_OBSERVATION_QUIET: Duration = Duration::from_millis(900);

@@ -40,8 +40,6 @@ This is a Rust 2024 Cargo workspace using resolver `3`.
   implementation currently remains in `nyaterm-core`; do not expand the
   re-export-only boundary without either moving the implementation or updating
   consumers to use this crate.
-* `crates/nyaterm-legacy`: migration and legacy-source compatibility only. Do
-  not add new product features here.
 * `crates/nyaterm-otp`: bundled OTP implementation used for HOTP/TOTP
   compatibility.
 * `crates/nyaterm-app/assets`: bundled icon assets. `icons/**` is monochrome
@@ -63,15 +61,15 @@ feature-state structs, including connections, quick commands, remote ops,
 security, settings interaction, AI, terminal presentation, send-command, and
 transfers.
 
-Persisted collections and compatibility-sensitive catalogs may still live on
-`NyaTermApp` until an explicit ownership migration is tested. Examples include
-saved connections, connection groups, SSH keys, OTP entries, saved
-passwords/credentials, tunnels, proxies, quick commands, settings, cloud sync,
-session metadata, and other public compatibility surfaces.
+Persisted collections and compatibility-sensitive catalogs may stay on a
+focused feature owner or directly on `NyaTermApp` until an explicit ownership
+migration is tested. `AppSettingsSummary` and `KeywordHighlightConfig` are the
+main compatibility-sensitive values still held directly by the composition
+root; connection, security, tunnel/proxy, command, cloud-sync and session
+catalogs now live under their domain owners.
 
 The remaining Entity stores own state the app does not:
 
-* `RuntimeStore`: app runtime and native services.
 * `WindowRuntimeStore`: window runtime pump.
 * `StartupRestoreStore`: startup-restore queue.
 * `OverlayStore`: authoritative quick-switch overlay state.
@@ -235,12 +233,11 @@ Use descriptive behavior-oriented test names.
 
 ## Migration-Only Code
 
-The legacy source inventory, migration dashboard, compatibility facades, and
-temporary aliases must not become permanent homes for new functionality.
-
-`migration-dashboard` is an explicit `nyaterm-desktop` feature. Default desktop
-features are empty, so release/default builds must not depend on local legacy
-source-tree paths such as `./temp/nyaterm-tauri`.
+The legacy source inventory, migration dashboard, local legacy source-tree
+dependency, and their dedicated workspace crate have been removed. Do not
+reintroduce them. User-data compatibility readers belong in `nyaterm-core` with
+representative legacy-format tests; temporary aliases must not become permanent
+homes for new functionality.
 
 When a migration boundary is completed:
 

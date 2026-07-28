@@ -16,7 +16,6 @@ cd "$ROOT_DIR"
 
 ASSET_DIR="crates/nyaterm-app/assets"
 MANIFEST="scripts/icons.manifest"
-LEGACY_ICON_DIR="temp/nyaterm-tauri/public/icons"
 
 # Pinned so a re-run reproduces the committed tree.
 MD_VERSION="0.14.15"        # @material-design-icons/svg   Apache-2.0
@@ -24,11 +23,6 @@ SI_VERSION="16.27.1"        # simple-icons                 CC0-1.0
 FA_VERSION="7.3.1"          # @fortawesome/fontawesome-free CC BY 4.0
 VSC_VERSION="0.0.46-24"     # @vscode/codicons             CC BY 4.0
 RMX_VERSION="4.9.1"         # remixicon                    Apache-2.0
-
-# img() rasterizes at 2x an asset's *intrinsic* size and the result is cached for
-# the process lifetime, so full-color logos are re-declared at this size. The
-# viewBox is left alone, so the artwork is unchanged.
-COLOR_INTRINSIC_PX=32
 
 CHECK_ONLY=0
 [[ "${1:-}" == "--check" ]] && CHECK_ONLY=1
@@ -50,8 +44,6 @@ require() {
 }
 require curl
 require tar
-require perl
-require base64
 
 # --- upstream fetch ---------------------------------------------------------
 
@@ -85,58 +77,7 @@ copy_verbatim() {
   cp "$1" "$2"
 }
 
-# The legacy logos carry editor cruft and, more importantly, declare a 256px
-# intrinsic size against a 1024 viewBox. Strip the junk and re-declare the size.
-normalize_color_svg() {
-  local src="$1" dest="$2"
-  perl -0777 -pe '
-    s/<\?xml.*?\?>//gs;
-    s/<!DOCTYPE.*?>//gs;
-    s/<!--.*?-->//gs;
-    s{(<svg\b)([^>]*?)(/?>)}{
-      my ($open, $attrs, $close) = ($1, $2, $3);
-      # Root-only: drop editor metadata and the authored intrinsic size.
-      $attrs =~ s/\s+(?:t|p-id|class|version|id|x|y|xml:space|enable-background)="[^"]*"//g;
-      $attrs =~ s/\s+(?:width|height)="[^"]*"//g;
-      $open . qq{ width="$ENV{COLOR_INTRINSIC_PX}" height="$ENV{COLOR_INTRINSIC_PX}"} . $attrs . $close;
-    }es;
-    # Child elements carry the same exporter junk; ids and gradients must survive.
-    s/\s+(?:t|p-id)="[^"]*"//g;
-    s/^\s+//;
-    s/\s+$//;
-    s/>\s+</></g;
-  ' "$src" > "$dest"
-
-  if grep -q '<image' "$dest"; then
-    fail "$dest still contains <image>; gpui builds resvg without raster-images"
-  fi
-  if grep -q '<text' "$dest"; then
-    printf 'sync-icons: warning: %s renders <text>, so it depends on system fonts\n' "$dest" >&2
-  fi
-}
-
-# Pull the raster payload out of an SVG wrapper and write it as a real image.
-# The data URI is wrapped across lines inside the xlink:href attribute, so this
-# has to read the whole file and strip whitespace rather than match per line.
-extract_embedded_png() {
-  local src="$1" dest="$2" payload
-  payload="$(perl -0777 -ne '
-    if (/data:image\/png;base64,([A-Za-z0-9+\/=\s]+?)["\x27]/s) {
-      my $data = $1;
-      $data =~ s/\s+//g;
-      print $data;
-    }
-  ' "$src")"
-  if [[ -z "$payload" ]]; then
-    fail "$src has no base64 PNG payload to extract"
-    return 0
-  fi
-  printf '%s' "$payload" | base64 -d > "$dest"
-}
-
 # --- driver -----------------------------------------------------------------
-
-export COLOR_INTRINSIC_PX
 
 emit() {
   local dest_rel="$1" spec="$2"
@@ -148,16 +89,6 @@ emit() {
     keep)
       [[ -f "$dest" ]] || fail "$dest_rel is marked 'keep' but does not exist"
       return 0
-      ;;
-    local-svg:*)
-      local src="$LEGACY_ICON_DIR/${spec#local-svg:}"
-      [[ -f "$src" ]] || { fail "missing legacy asset $src"; return 0; }
-      normalize_color_svg "$src" "$staged"
-      ;;
-    local-png:*)
-      local src="$LEGACY_ICON_DIR/${spec#local-png:}"
-      [[ -f "$src" ]] || { fail "missing legacy asset $src"; return 0; }
-      extract_embedded_png "$src" "$staged"
       ;;
     *:*)
       local kind="${spec%%:*}" rel="${spec#*:}" root

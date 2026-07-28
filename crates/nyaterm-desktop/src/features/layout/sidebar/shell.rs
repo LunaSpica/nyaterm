@@ -46,7 +46,6 @@ impl NyaTermApp {
             NavItem::Tunnels => self.tunnels_view(cx).into_any_element(),
             NavItem::SecurityAuth => self.security_auth_panel(cx).into_any_element(),
             NavItem::SyncBackupHistory => self.sync_backup_history_panel(cx).into_any_element(),
-            NavItem::Migration => self.migration_view().into_any_element(),
             NavItem::Connections => self.connections_view(window, cx).into_any_element(),
             NavItem::AiAssistant => self.ai_assistant_panel(cx).into_any_element(),
             NavItem::ActiveSessions => self.active_sessions_panel(cx).into_any_element(),

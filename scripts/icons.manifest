@@ -8,9 +8,7 @@
 #   fa:<style>/<file>     @fortawesome/fontawesome-free svgs/  (CC BY 4.0)
 #   vsc:<file>            @vscode/codicons src/icons/ (CC BY 4.0)
 #   rmx:<dir>/<file>      remixicon icons/            (Apache-2.0)
-#   local-svg:<rel>       temp/nyaterm-tauri/public/icons/<rel>, cleaned + resized
-#   local-png:<rel>       ditto, but the base64 payload is extracted to a real PNG
-#   keep                  hand-authored here; the script must not touch it
+#   keep                  canonical project asset already committed here
 #
 # Destination prefix encodes the render mode and is enforced by tests in
 # crates/nyaterm-app/src/assets.rs:
@@ -37,7 +35,6 @@ icons/files.svg	md:outlined/folder.svg
 icons/history.svg	md:filled/history.svg
 icons/import.svg	md:filled/file_download.svg
 icons/lock.svg	md:filled/lock.svg
-icons/migration.svg	md:filled/move_up.svg
 icons/network.svg	md:filled/lan.svg
 icons/pin.svg	md:filled/push_pin.svg
 icons/processes.svg	md:filled/list_alt.svg
@@ -209,45 +206,43 @@ icons/brand/youtube.svg	si:youtube.svg
 icons/brand/zhihu.svg	si:zhihu.svg
 
 # --- Full-color OS / distro logos (Tauri SYSTEM_ICONS) ----------------------
-color/os/alibabacloudlinux.svg	local-svg:os/AlibabaCloudLinux.svg
-color/os/almalinux.svg	local-svg:os/AlmaLinux.svg
-color/os/alpine-linux.svg	local-svg:os/Alpine-Linux.svg
-color/os/android.svg	local-svg:os/android.svg
-color/os/anolisos.svg	local-svg:os/AnolisOS.svg
-color/os/apple.svg	local-svg:os/apple.svg
-color/os/archlinux.svg	local-svg:os/archlinux.svg
-color/os/aws.svg	local-svg:os/aws.svg
-color/os/centos.svg	local-svg:os/Centos.svg
-color/os/cmd.svg	local-svg:os/cmd.svg
-color/os/debian.svg	local-svg:os/Debian.svg
-color/os/deepin.svg	local-svg:os/Deepin_A.svg
-color/os/fedora.svg	local-svg:os/Fedora.svg
-color/os/gentoo.svg	local-svg:os/Gentoo.svg
-color/os/git.svg	local-svg:os/git.svg
-color/os/h3c.svg	local-svg:os/H3C.svg
-color/os/huawei.svg	local-svg:os/huawei.svg
-color/os/k8s.svg	local-svg:os/K8s.svg
-color/os/kalilinux.svg	local-svg:os/kalilinux.svg
-color/os/kylin.svg	local-svg:os/kylin.svg
-color/os/linux-mint.svg	local-svg:os/linux-mint.svg
-color/os/linux.svg	local-svg:os/linux.svg
-color/os/manjaro.svg	local-svg:os/manjaro.svg
-color/os/nixos.svg	local-svg:os/Nixos.svg
-color/os/openeuler.svg	local-svg:os/OpenEuler.svg
-color/os/opensuse.svg	local-svg:os/openSUSE.svg
-color/os/powershell.svg	local-svg:os/powershell.svg
-color/os/raspberrypi.svg	local-svg:os/Raspberrypi.svg
-color/os/rocky-linux.svg	local-svg:os/rocky-linux.svg
-color/os/tencentos.svg	local-svg:os/TencentOS.svg
-color/os/ubuntu.svg	local-svg:os/Ubuntu.svg
-color/os/uos.svg	local-svg:os/uos.svg
-color/os/windows.svg	local-svg:os/windows.svg
+color/os/alibabacloudlinux.svg	keep
+color/os/almalinux.svg	keep
+color/os/alpine-linux.svg	keep
+color/os/android.svg	keep
+color/os/anolisos.svg	keep
+color/os/apple.svg	keep
+color/os/archlinux.svg	keep
+color/os/aws.svg	keep
+color/os/centos.svg	keep
+color/os/cmd.svg	keep
+color/os/debian.svg	keep
+color/os/deepin.svg	keep
+color/os/fedora.svg	keep
+color/os/gentoo.svg	keep
+color/os/git.svg	keep
+color/os/h3c.svg	keep
+color/os/huawei.svg	keep
+color/os/k8s.svg	keep
+color/os/kalilinux.svg	keep
+color/os/kylin.svg	keep
+color/os/linux-mint.svg	keep
+color/os/linux.svg	keep
+color/os/manjaro.svg	keep
+color/os/nixos.svg	keep
+color/os/openeuler.svg	keep
+color/os/opensuse.svg	keep
+color/os/powershell.svg	keep
+color/os/raspberrypi.svg	keep
+color/os/rocky-linux.svg	keep
+color/os/tencentos.svg	keep
+color/os/ubuntu.svg	keep
+color/os/uos.svg	keep
+color/os/windows.svg	keep
 
 # --- Import-source brand logos ----------------------------------------------
-# These upstream "SVGs" are base64 PNGs in an SVG wrapper. GPUI builds resvg
-# without `raster-images`, so they render blank; the payload is extracted to a
-# real PNG and painted with img(). Only the three importers the app implements
-# are vendored.
-color/brand/mobaxterm.png	local-png:brands/MobaXterm.svg
-color/brand/windterm.png	local-png:brands/WindTerm.svg
-color/brand/xshell.png	local-png:brands/Xshell.svg
+# These project assets were originally extracted from base64 PNG payloads in
+# SVG wrappers. The committed PNGs are now canonical and painted with img().
+color/brand/mobaxterm.png	keep
+color/brand/windterm.png	keep
+color/brand/xshell.png	keep

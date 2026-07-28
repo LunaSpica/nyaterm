@@ -9,12 +9,12 @@ Last updated from the working tree on 2026-07-28.
 
 | Metric | Current value | Notes |
 | --- | ---: | --- |
-| `NyaTermApp` fields | 28 | Counted from `features/app_state/mod.rs`; down from 585, still transitional. |
-| `impl NyaTermApp` blocks | 238 | Spread across 233 files under `crates/nyaterm-desktop/src`. |
+| `NyaTermApp` fields | 26 | Counted from `features/app_state/mod.rs`; down from 585, still transitional. |
+| `impl NyaTermApp` blocks | 237 | Spread across 232 files under `crates/nyaterm-desktop/src`. |
 | `#[path = "..."]` declarations in desktop | 0 | Cleared. Every directory is a real module; the boundary script fails on any new occurrence. |
 | `use super::*` imports in desktop | 0 | Cleared in production and test modules; guarded crate-wide. |
 | `features/prelude.rs` rough exported-token count | 0 | The transitional shared prelude is removed and guarded against reintroduction. |
-| Entity Store structs | 4 | `Runtime`, `WindowRuntime`, `StartupRestore`, `Overlay`. Each owns state the app does not. |
+| Entity Store structs | 3 | `WindowRuntime`, `StartupRestore`, `Overlay`. Each owns state the app does not. |
 | Snapshot structs | 0 | Cleared. No store is a projection of `NyaTermApp` any more. |
 | `replace_snapshot` methods | 0 | Cleared. |
 | Store snapshot publish calls | 0 | `publish.rs` and the publish throttle are gone. |
@@ -99,11 +99,12 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   terminal context menu carried.
 
 - Workspace is already on resolver `3` for the Rust 2024 workspace.
-- `migration-dashboard` exists as an explicit desktop feature. Default desktop
-  features are empty, so release/default builds do not enable the dashboard.
-- The four remaining Entity stores are authoritative owners: runtime services,
-  the window pump, startup restore, and quick-switch overlay state are not
-  writable mirrors of `NyaTermApp` or a FeatureState.
+- The migration dashboard, legacy source inventory and their dedicated
+  workspace crate are removed. Default and development builds no longer carry
+  a local legacy source-tree dependency.
+- The three remaining Entity stores are authoritative owners: the window pump,
+  startup restore and quick-switch overlay state are not writable mirrors of
+  `NyaTermApp` or a FeatureState.
 - The shell feature area is a real module tree. `features/shell` is declared as
   a normal `mod shell;` with its own `mod.rs`, `event_pump` and
   `keybinding_runtime` are directory modules, and `features/shell` no longer
@@ -394,10 +395,12 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   store-observe was amplifying each publish into an extra shell paint — so the
   `cx.notify()` in every publish had no subscriber either.
 
-  What remains owns something the app does not: `RuntimeStore` (app runtime and
-  native services), `WindowRuntimeStore` (the window runtime pump),
-  `StartupRestoreStore` (the restore queue) and `OverlayStore` (quick switch
-  state, authoritative since the earlier migration).
+  A final audit removed `RuntimeStore` too: no consumer read it, while its
+  `AppRuntime` duplicated the composition root and its native-service list only
+  fed the retired migration dashboard. What remains owns something the app does
+  not: `WindowRuntimeStore` (the window runtime pump), `StartupRestoreStore`
+  (the restore queue) and `OverlayStore` (quick switch state, authoritative
+  since the earlier migration).
 - The connections UI state has started moving out of scattered `NyaTermApp`
   fields and into `ConnectionFeatureState`.
 - The current connections state split separates list UI, import UI, editor
@@ -1280,10 +1283,11 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   import JSON parsing, rule normalization, and merge accounting. `storage.rs`
   still owns settings load/save persistence, so redb table names, settings
   field paths, encryption, backup, and legacy fallback behavior are unchanged.
-- The architecture script's local legacy-source-path allowlist now includes
-  only the static icon vendoring script and manifest in addition to the existing
-  migration inventory paths. These references are provenance for committed
-  assets; default builds still must not depend on `./temp/nyaterm-tauri`.
+- The legacy source checkout boundary is gone from both runtime and asset
+  tooling. NyaTerm-owned full-color logos are committed canonical project
+  assets marked `keep` in the icon manifest, while fetched icon sets retain
+  their pinned upstream mappings. The architecture script rejects any return
+  of the retired dashboard, inventory crate or local source checkout.
 
 ## Migrating
 
@@ -1337,8 +1341,8 @@ use the existing behavior.
 
 - `nyaterm-store` remains a transitional persistence facade; storage
   implementation still lives in `nyaterm-core`.
-- Migration dashboard and legacy inventory remain development/migration aids.
-  They must stay feature-gated when they depend on local legacy source paths.
+- User-data compatibility readers remain in `nyaterm-core` beside legacy-format
+  tests; they are independent of the removed source inventory/dashboard code.
 
 ## Architecture Debt
 
@@ -1365,8 +1369,8 @@ use the existing behavior.
 - New broad crate-root exports or replacement global preludes.
 - New `NyaTermApp` fields without an ownership rationale.
 - Dual authoritative state in both FeatureState and Entity Store.
-- Default-build dependencies on `./temp/nyaterm-tauri` or other local legacy
-  source directories.
+- Migration inventory/dashboard code or dependencies on a local legacy source
+  checkout.
 - Undeclared persistence migrations, table/key renames, encryption prefix
   changes, or backup format changes.
 
@@ -1426,11 +1430,12 @@ creeps back to 104 mean very different things, and only the second is rot.
 
 ## Migration-Only Exit List
 
+The legacy inventory crate, migration dashboard and local source checkout met
+their removal conditions together. Compatibility readers required for existing
+user data remain in `nyaterm-core`; only temporary API aliases remain to audit.
+
 | Item | Current use | Default build | Removal condition | Replacement direction |
 | --- | --- | --- | --- | --- |
-| `nyaterm-legacy` | Legacy inventory and compatibility support | Present as dependency; dashboard code is feature-gated | Migration dashboard no longer needs legacy source inventory | Keep only tested compatibility readers needed for user data |
-| Migration Dashboard | Development migration tracking | Disabled by default feature set | GPUI migration inventory is complete and documented elsewhere | Static migration notes or external tooling |
-| Legacy source path `./temp/nyaterm-tauri` | Inventory source root | Must not be required by default builds | Legacy inventory no longer used | Remove local-path scanning code |
 | Temporary compatibility aliases | Migration convenience | Varies by module | All consumers use authoritative API | Remove alias and narrow exports |
 
 ## Suggested Order
@@ -1442,7 +1447,7 @@ while `features/mod.rs` still flattened every feature directory through
 still sit in the same crate-wide namespace, reachable from everywhere. Build the
 real module tree first, then the remaining steps actually enforce something.
 
-Items 1, 2, 4, 5 and 6 are done. Item 3 remains active; what follows is the
+Items 1, 2, 4, 5, 6 and 7 are done. Item 3 remains active; what follows is the
 honest remaining list.
 
 1. Done. `#[path = "..."]` no longer appears in `nyaterm-desktop` or
@@ -1452,7 +1457,7 @@ honest remaining list.
    compiler-confirmed final pass also removed `features/prelude.rs`, so modules
    cannot regain the same implicit dependency surface through a shared import
    bucket.
-3. Largely done. `NyaTermApp` is down from 585 fields to 28, across eighteen
+3. Largely done. `NyaTermApp` is down from 585 fields to 26, across eighteen
    feature-state structs. The latest cohesive cuts moved sixteen terminal
    command-assistance and credential-prompt fields into
    `TerminalFeatureState::assist`, then seventeen transient settings fields
@@ -1471,9 +1476,11 @@ honest remaining list.
    batch then moved saved connection/group/serial catalogs, security catalogs,
    tunnel/proxy catalogs and queued saved-connection starts to their domain
    owners. The command convergence batch then unified the quick-command catalog
-   and UI, command history and persistence worker under one owner. What is left
-   is a shorter tail, and much of it is genuinely app-level (stores, runtime,
-   services, feature owners and compatibility-sensitive settings collections).
+   and UI, command history and persistence worker under one owner. The
+   migration-only exit batch then removed the inventory/service fields with the
+   dashboard and its unused runtime store. What is left is a shorter tail, and
+   much of it is genuinely app-level (stores, runtime, feature owners and
+   compatibility-sensitive settings collections).
    Group by cohesion where a cluster exists; do not force the count down for
    its own sake.
    Method ownership is now moving too, which is what grouping the fields alone
@@ -1500,7 +1507,7 @@ honest remaining list.
    coupling for a worse one. And a method that reads a state plus `self.tr(...)`
    or a service is not a candidate; only move what is genuinely self-contained.
    The remaining `impl NyaTermApp` blocks are mostly this second kind.
-4. Done. No store is a projection any more; the four that remain own real
+4. Done. No store is a projection any more; the three that remain own real
    state. If a future domain wants Entity ownership, migrate it authoritatively
    rather than reintroducing a published read model.
 5. Done for the two monoliths that motivated it. `core/storage.rs` and
@@ -1516,8 +1523,8 @@ honest remaining list.
    `core/ai.rs` is done too, down from 4,032 to 1,554.
 6. Done. The final explicit-import pass removed `features/prelude.rs`; a
    crate-wide guard prevents a replacement shared feature prelude.
-7. Tighten one more low-risk crate-root export after confirming there are no
-   external workspace consumers. Prefer desktop/UI presentation crates before
-   touching core or transport public APIs.
+7. Done. The migration capability/service models had no consumer outside the
+   retired dashboard, so their `nyaterm-core` crate-root exports and module were
+   removed with that feature rather than kept as a compatibility facade.
 8. Revisit `nyaterm-store` only after storage modules have clearer internal
    boundaries and consumers can move without changing persistence compatibility.

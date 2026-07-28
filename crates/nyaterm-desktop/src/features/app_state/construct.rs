@@ -6,7 +6,7 @@ use crate::terminal::initial_terminal_screen;
 use gpui::Context;
 use nyaterm_core::{
     AiSettings, AppRuntime, AppSettingsSummary, CLOUD_SYNC_HISTORY_LIMIT, CloudSyncSettings,
-    CloudSyncState, ConnectionStore, KeywordHighlightConfig, NativeServices, TranslationSettings,
+    CloudSyncState, ConnectionStore, KeywordHighlightConfig, TranslationSettings,
     read_cloud_sync_history, uuid,
 };
 use nyaterm_terminal::TerminalOutputDecoder;
@@ -18,23 +18,17 @@ use super::super::settings::{SettingsFeatureFocus, SettingsFeatureState};
 use super::super::{
     AiFeatureFocus, AiFeatureState, CloudSyncFeatureState, CommandFeatureInit, CommandFeatureState,
     ConnectionCatalogState, ConnectionFeatureFocus, ConnectionFeatureState,
-    INITIAL_TERMINAL_BANNER, LEGACY_ROOT, NativeOtpProvider, QuickCommandFeatureFocus,
-    RecordingFeatureState, RemoteOpsFeatureFocus, RemoteOpsFeatureState, SecurityCatalogState,
-    SecurityFeatureFocus, SecurityFeatureState, SendCommandFeatureFocus, SendCommandFeatureState,
-    SessionFeatureFocus, SessionFeatureState, ShellFeatureInit, ShellFeatureState,
-    SyncInputFeatureState, TerminalFeatureFocus, TerminalFeatureState, TextInputRegistry,
-    TransferFeatureFocus, TransferFeatureState, TranslationFeatureState, TunnelCatalogState,
-    TunnelFeatureState, UpdateFeatureState, ai_active_profile_drafts, ai_usage_counts,
-    appearance_font_options, quick_command_sort_mode_from_setting,
-    quick_command_view_mode_from_setting,
+    INITIAL_TERMINAL_BANNER, NativeOtpProvider, QuickCommandFeatureFocus, RecordingFeatureState,
+    RemoteOpsFeatureFocus, RemoteOpsFeatureState, SecurityCatalogState, SecurityFeatureFocus,
+    SecurityFeatureState, SendCommandFeatureFocus, SendCommandFeatureState, SessionFeatureFocus,
+    SessionFeatureState, ShellFeatureInit, ShellFeatureState, SyncInputFeatureState,
+    TerminalFeatureFocus, TerminalFeatureState, TextInputRegistry, TransferFeatureFocus,
+    TransferFeatureState, TranslationFeatureState, TunnelCatalogState, TunnelFeatureState,
+    UpdateFeatureState, ai_active_profile_drafts, ai_usage_counts, appearance_font_options,
+    quick_command_sort_mode_from_setting, quick_command_view_mode_from_setting,
 };
 use super::NyaTermApp;
 use crate::models::panel_collapsed_from_persistence;
-#[cfg(feature = "migration-dashboard")]
-use nyaterm_legacy::LegacyProject;
-#[cfg(not(feature = "migration-dashboard"))]
-use nyaterm_legacy::MigrationInventory;
-
 impl NyaTermApp {
     pub fn new(
         runtime: AppRuntime,
@@ -42,20 +36,6 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> Self {
         nyaterm_core::warm_terminal_input_tracker();
-        #[cfg(feature = "migration-dashboard")]
-        let inventory = {
-            let legacy = LegacyProject::new(LEGACY_ROOT);
-            nyaterm_legacy::inventory(&legacy)
-        };
-        #[cfg(not(feature = "migration-dashboard"))]
-        let inventory = MigrationInventory {
-            legacy_root: std::path::PathBuf::from(LEGACY_ROOT),
-            exists: false,
-            rust_files: 0,
-            frontend_files: 0,
-            command_modules: 0,
-            copied_vendor_roots: Vec::new(),
-        };
         let (
             connections,
             connection_groups,
@@ -296,8 +276,6 @@ impl NyaTermApp {
         Self {
             stores,
             runtime,
-            services: NativeServices::new(),
-            inventory,
             connection_catalog: ConnectionCatalogState::new(connections, connection_groups),
             connection_state: ConnectionFeatureState::new(
                 &settings,

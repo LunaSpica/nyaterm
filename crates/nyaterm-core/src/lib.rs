@@ -11,7 +11,6 @@ pub mod models;
 pub mod natural_order;
 pub mod portable_snapshot;
 pub mod runtime;
-pub mod services;
 pub mod session_import;
 pub mod storage;
 pub mod terminal_file_drop;
@@ -104,7 +103,6 @@ pub use portable_snapshot::{
     encode_encrypted_raw_portable_snapshot, encode_raw_portable_snapshot,
 };
 pub use runtime::{AppRuntime, RuntimeMode};
-pub use services::{MigrationCapability, NativeServiceStatus, NativeServices};
 pub use session_import::{SessionImportError, import_sessions};
 pub use storage::{ConfigBackupInfo, ConnectionStore, KnownHostCheck, StorageError};
 pub use terminal_file_drop::{
