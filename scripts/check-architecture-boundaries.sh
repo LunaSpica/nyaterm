@@ -516,6 +516,7 @@ declare -A SUPER_BASELINE=(
   [crates/nyaterm-desktop/src/features/pages/tunnels/tunnel/sections.rs]=0
   [crates/nyaterm-desktop/src/features/shell/mod.rs]=1
   [crates/nyaterm-desktop/src/features/shell/global_shortcut_runtime.rs]=0
+  [crates/nyaterm-desktop/src/features/shell/navigation_runtime.rs]=0
   [crates/nyaterm-desktop/src/features/shell/event_pump/mod.rs]=0
   [crates/nyaterm-desktop/src/features/shell/event_pump/bridge.rs]=0
   [crates/nyaterm-desktop/src/features/shell/event_pump/helpers.rs]=0

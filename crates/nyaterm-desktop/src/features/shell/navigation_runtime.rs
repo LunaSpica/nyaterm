@@ -1,6 +1,7 @@
-use super::*;
+use gpui::Context;
 
-use crate::models::{MainMode, RightFocus};
+use crate::features::NyaTermApp;
+use crate::models::{MainMode, NavItem, PanelSide, RightFocus};
 
 impl NyaTermApp {
     pub(in crate::features) fn open_page(&mut self, item: NavItem, cx: &mut Context<Self>) {
