@@ -1,7 +1,11 @@
-use super::*;
+use gpui::{Context, KeyDownEvent, Window};
 
+use crate::features::{NyaTermApp, TextInputSetup, none_if_blank};
 use crate::models::{AiActionEditorField, AiActionListKind};
-use nyaterm_core::{ai_model_id_for_credential, ai_model_id_for_provider};
+use nyaterm_core::{
+    AiProviderCredential, AiProviderKind, AiSettings, ConnectionStore, ai_model_id_for_credential,
+    ai_model_id_for_provider,
+};
 
 impl NyaTermApp {
     pub(in crate::features) fn pending_ai_settings(&self) -> AiSettings {
@@ -355,7 +359,9 @@ fn parse_ai_action_text_input_id(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::models::{AiActionEditorField, AiActionListKind};
+
+    use super::parse_ai_action_text_input_id;
 
     #[test]
     fn parses_ai_action_text_input_id() {

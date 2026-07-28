@@ -1,4 +1,7 @@
-use super::*;
+use gpui::Context;
+use nyaterm_core::{AgentCommandExecutionMode, AiMode, RiskLevel};
+
+use crate::features::NyaTermApp;
 
 impl NyaTermApp {
     pub(in crate::features) fn toggle_ai_enabled(&mut self, cx: &mut Context<Self>) {

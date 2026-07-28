@@ -1,6 +1,9 @@
-use super::*;
+use gpui::{Context, Window};
 
+use crate::features::NyaTermApp;
 use crate::models::AiCredentialEditorField;
+
+use super::super::helpers::{is_builtin_ai_provider_id, seed_builtin_ai_models_for_provider};
 
 impl NyaTermApp {
     pub(in crate::features) fn toggle_ai_credential_enabled(

@@ -592,6 +592,21 @@ declare -A SUPER_BASELINE=(
   [crates/nyaterm-desktop/src/features/pages/settings/workspace/interaction.rs]=0
   [crates/nyaterm-desktop/src/features/pages/settings/workspace/keybindings.rs]=0
   [crates/nyaterm-desktop/src/features/pages/settings/workspace/mod.rs]=0
+  [crates/nyaterm-desktop/src/features/ai/mod.rs]=0
+  [crates/nyaterm-desktop/src/features/ai/ai_agent_runtime.rs]=0
+  [crates/nyaterm-desktop/src/features/ai/ai_jobs.rs]=0
+  [crates/nyaterm-desktop/src/features/ai/state.rs]=0
+  [crates/nyaterm-desktop/src/features/ai/ai_runtime/mod.rs]=0
+  [crates/nyaterm-desktop/src/features/ai/ai_runtime/helpers.rs]=0
+  [crates/nyaterm-desktop/src/features/ai/ai_runtime/chat/mod.rs]=0
+  [crates/nyaterm-desktop/src/features/ai/ai_runtime/chat/discovery.rs]=0
+  [crates/nyaterm-desktop/src/features/ai/ai_runtime/chat/history.rs]=0
+  [crates/nyaterm-desktop/src/features/ai/ai_runtime/chat/jobs.rs]=0
+  [crates/nyaterm-desktop/src/features/ai/ai_runtime/chat/settings_actions.rs]=0
+  [crates/nyaterm-desktop/src/features/ai/ai_runtime/settings/mod.rs]=0
+  [crates/nyaterm-desktop/src/features/ai/ai_runtime/settings/credentials.rs]=0
+  [crates/nyaterm-desktop/src/features/ai/ai_runtime/settings/models.rs]=0
+  [crates/nyaterm-desktop/src/features/ai/ai_runtime/settings/profile.rs]=0
   [crates/nyaterm-desktop/src/features/commands/mod.rs]=0
   [crates/nyaterm-desktop/src/features/commands/state.rs]=0
   [crates/nyaterm-desktop/src/features/commands/command_runtime/helpers.rs]=0
@@ -656,6 +671,7 @@ while IFS=: read -r file _line _text; do
     fail "new use super::* in governed scope: $file"
   fi
 done < <(rg -n --path-separator / '^[[:space:]]*use super::\*;' \
+  crates/nyaterm-desktop/src/features/ai \
   crates/nyaterm-desktop/src/features/connections \
   crates/nyaterm-desktop/src/features/commands \
   crates/nyaterm-desktop/src/features/pages/mod.rs \

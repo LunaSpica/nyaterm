@@ -1,10 +1,24 @@
-use super::*;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 
+use gpui::{AppContext, Context};
 use nyaterm_core::{
-    AgentCapturedOutput, AppendAiAuditRequest, build_agent_capture_command,
-    build_observation_message,
+    AgentCapturedOutput, AiAction, AiChatRequest, AiCommandCard, AiExecutionProfile, AiMode,
+    AppendAiAuditRequest, CommandObservation, ConnectionStore, build_agent_capture_command,
+    build_observation_message, truncate_preview, uuid,
 };
-use nyaterm_transport::run_local_command;
+use nyaterm_transport::{SessionKind, SshProcessService, run_local_command};
+
+use crate::features::{
+    AI_AGENT_DEFAULT_STEP_TIMEOUT, AI_AGENT_OBSERVATION_MIN_WAIT, AI_AGENT_OBSERVATION_QUIET,
+    AiAgentBackgroundTarget, AiAgentLoopState, AiAgentStepStatus, AiAgentStepView, AiChatJobResult,
+    AiChatWorkerEvent, NyaTermApp,
+};
+use crate::models::SessionLaunchConfig;
+
+use super::ai_jobs::{
+    ai_job_cancelled, observation_summary, remote_command_observation, run_ai_ask_job,
+};
 
 impl NyaTermApp {
     pub(in crate::features) fn upsert_ai_agent_step(

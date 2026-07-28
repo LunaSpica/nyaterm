@@ -1,7 +1,9 @@
-use super::*;
+use gpui::Context;
 
 use crate::http::ai::discover_openai_compatible_models;
-use nyaterm_core::{AiModelDiscovery, merge_model_discoveries};
+use nyaterm_core::{AiModelDiscovery, AiProviderKind, merge_model_discoveries, now_rfc3339};
+
+use crate::features::{AiDiscoveryJobResult, NyaTermApp};
 
 const AI_DISCOVERY_EVENT_DRAIN_LIMIT: usize = 8;
 

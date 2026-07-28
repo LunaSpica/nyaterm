@@ -1,4 +1,9 @@
-use super::*;
+use gpui::{AppContext, Context};
+use nyaterm_core::{AiMessageRole, AiMode, ConnectionStore, truncate_preview, uuid};
+
+use crate::features::{NyaTermApp, compact_id};
+
+use super::super::super::ai_jobs::{ai_active_profile_drafts, ai_usage_counts};
 
 impl NyaTermApp {
     pub(in crate::features) fn sync_ai_drafts_from_active_profile(&mut self) {

@@ -5,17 +5,16 @@ pub(super) use gpui::{
     Window, WindowControlArea, WindowHandle, div, prelude::*, px, rgb, rgba, svg,
 };
 pub(super) use nyaterm_core::{
-    AgentCommandExecutionMode, AgentOutputCaptureProcessor, AiAction, AiChatRequest, AiCommandCard,
-    AiExecutionProfile, AiMessage, AiMessageRole, AiMode, AiProviderCredential, AiProviderKind,
-    AiSettings, AppRuntime, AppSettingsSummary, CloudSyncError, CloudSyncHistoryEntry,
-    CloudSyncSettings, CloudSyncState, CommandHistoryEntry, CommandObservation, ConnectionAuth,
-    ConnectionStore, ConnectionType, CredentialPromptKind, DecryptedOtpEntry, Group,
-    InputSelectionRange, KeywordHighlightConfig, KnownHostCheck, NativeServices, NativeUpdateInfo,
-    OtpEntry, ProxyConfig, ProxyGroup, QuickCommand, QuickCommandCategory, RiskLevel, RuntimeMode,
-    SavedConnection, SavedCredential, SavedPassword, SshKey, TerminalInputState,
-    TerminalWireWriteKind, TunnelConfig, TunnelGroup, apply_terminal_input_data,
-    build_move_input_cursor_data, can_suggest_from_tracker, delete_terminal_input_range,
-    export_diagnostics_archive, now_rfc3339, terminal_input_fanout_status,
+    AgentCommandExecutionMode, AgentOutputCaptureProcessor, AiAction, AiCommandCard,
+    AiExecutionProfile, AiMessage, AiMessageRole, AiMode, AiSettings, AppRuntime,
+    AppSettingsSummary, CloudSyncError, CloudSyncHistoryEntry, CloudSyncSettings, CloudSyncState,
+    CommandHistoryEntry, CommandObservation, ConnectionAuth, ConnectionStore, ConnectionType,
+    CredentialPromptKind, DecryptedOtpEntry, Group, InputSelectionRange, KeywordHighlightConfig,
+    KnownHostCheck, NativeServices, NativeUpdateInfo, OtpEntry, ProxyConfig, ProxyGroup,
+    QuickCommand, QuickCommandCategory, RuntimeMode, SavedConnection, SavedCredential,
+    SavedPassword, SshKey, TerminalInputState, TerminalWireWriteKind, TunnelConfig, TunnelGroup,
+    apply_terminal_input_data, build_move_input_cursor_data, can_suggest_from_tracker,
+    delete_terminal_input_range, export_diagnostics_archive, terminal_input_fanout_status,
     terminal_wire_write_disposition, truncate_preview, uuid,
 };
 #[cfg(feature = "migration-dashboard")]
@@ -26,15 +25,14 @@ pub(super) use nyaterm_terminal::{
 };
 pub(super) use nyaterm_transport::{
     DockerComposeService, DockerContainerDetails, DockerService, LocalSessionConfig,
-    RecordingManager, RemoteCommandOutput, RemoteDockerOverview, RemoteProcess, RemoteStats,
-    SerialSessionConfig, SessionEvent, SessionInfo, SessionKind, SessionManager,
-    SftpDuplicateDecision, SftpDuplicatePolicy, SftpDuplicateRequest, SftpDuplicateResolver,
-    SftpFileEntry, SftpService, SftpTransferControl, SftpTransferOptions, SftpTransferProgress,
-    SshCredentialPrompt, SshCredentialPromptKind, SshCredentialPromptReason, SshCredentialProvider,
-    SshHostKey, SshHostKeyDecision, SshHostKeyVerifier, SshKeyAuthConfig,
-    SshKeyboardInteractiveRequest, SshMultiplexHandle, SshOtpProvider, SshProcessService,
-    SshProxyConfig, SshSessionConfig, SshTunnelInfo, SshTunnelManager, TelnetSessionConfig,
-    TerminalHistorySearchRequest,
+    RecordingManager, RemoteDockerOverview, RemoteProcess, RemoteStats, SerialSessionConfig,
+    SessionEvent, SessionInfo, SessionKind, SessionManager, SftpDuplicateDecision,
+    SftpDuplicatePolicy, SftpDuplicateRequest, SftpDuplicateResolver, SftpFileEntry, SftpService,
+    SftpTransferControl, SftpTransferOptions, SftpTransferProgress, SshCredentialPrompt,
+    SshCredentialPromptKind, SshCredentialPromptReason, SshCredentialProvider, SshHostKey,
+    SshHostKeyDecision, SshHostKeyVerifier, SshKeyAuthConfig, SshKeyboardInteractiveRequest,
+    SshMultiplexHandle, SshOtpProvider, SshProcessService, SshProxyConfig, SshSessionConfig,
+    SshTunnelInfo, SshTunnelManager, TelnetSessionConfig, TerminalHistorySearchRequest,
 };
 
 pub(super) use std::collections::{HashMap, HashSet, VecDeque};

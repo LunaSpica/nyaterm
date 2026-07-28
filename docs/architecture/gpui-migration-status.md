@@ -12,8 +12,8 @@ Last updated from the working tree on 2026-07-28.
 | `NyaTermApp` fields | 261 | Counted from `features/app_state/mod.rs`; down from 585, still transitional. |
 | `impl NyaTermApp` blocks | 240 | Spread across 235 files under `crates/nyaterm-desktop/src`. |
 | `#[path = "..."]` declarations in desktop | 0 | Cleared. Every directory is a real module; the boundary script fails on any new occurrence. |
-| `use super::*` imports in desktop | 244 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
-| `features/prelude.rs` rough exported-token count | 221 | Still a broad shared prelude; two hundred twenty-four low-frequency transport/core/http/model/helper exports are now explicit imports. |
+| `use super::*` imports in desktop | 230 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
+| `features/prelude.rs` rough exported-token count | 215 | Still a broad shared prelude; two hundred thirty low-frequency transport/core/http/model/helper exports are now explicit imports. |
 | Entity Store structs | 4 | `Runtime`, `WindowRuntime`, `StartupRestore`, `Overlay`. Each owns state the app does not. |
 | Snapshot structs | 0 | Cleared. No store is a projection of `NyaTermApp` any more. |
 | `replace_snapshot` methods | 0 | Cleared. |
@@ -443,6 +443,16 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   at zero `use super::*` imports. Command execution, history persistence,
   suggestion timing/search behavior and quick-command compatibility are
   unchanged.
+- The complete `features/ai` tree is now free of wildcard imports. AI agent,
+  chat, discovery, history, job and settings modules name their GPUI, core,
+  transport, model and sibling-helper dependencies directly; all four nested
+  `mod.rs` files are pure module entry points. Six AI/core/transport symbols
+  also left `features/prelude.rs`, and internal job and settings helpers are
+  imported from their owning modules instead of being flattened through the AI
+  parent. The architecture script governs all 15 Rust modules under
+  `features/ai` at zero `use super::*` imports. AI requests, streaming events,
+  audit, risk decisions, model discovery, background execution and history
+  storage behavior are unchanged.
 - `connection_runtime/helpers.rs` no longer depends on the connection runtime
   wildcard import; its GPUI, app, model, and core dependencies are explicit.
 - `connection_runtime/actions.rs` no longer depends on the connection runtime

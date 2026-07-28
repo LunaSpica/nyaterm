@@ -1,6 +1,22 @@
-use super::*;
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
 
-use nyaterm_core::AiContext;
+use gpui::{Context, KeyDownEvent};
+use nyaterm_core::{
+    AgentOutputCaptureProcessor, AiAction, AiChatRequest, AiContext, AiMessage, AiMessageRole,
+    AiMode, now_rfc3339, truncate_preview, uuid,
+};
+use nyaterm_transport::SessionInfo;
+
+use crate::features::{
+    AiAgentStepStatus, AiChatJobResult, AiChatWorkerEvent, NyaTermApp, compact_id,
+    recent_terminal_output, session_kind_label,
+};
+use crate::models::SessionLaunchConfig;
+
+use super::super::super::ai_jobs::{observation_summary, run_ai_ask_job};
 
 const AI_CHAT_EVENT_DRAIN_LIMIT: usize = 256;
 

@@ -1,11 +1,22 @@
-use super::*;
+use std::path::PathBuf;
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+    mpsc,
+};
+use std::time::Instant;
 
 use crate::http::ai::{complete_native_chat, stream_native_chat};
 use nyaterm_core::{
-    AgentApprovalDecision, AiChatStreamDelta, agent_response_action, assess_agent_command_risk,
-    decide_agent_command_execution, parse_agent_model_output, parse_agent_tool_call,
-    parse_model_output, redact_context, redact_sensitive_text,
+    AgentApprovalDecision, AiChatRequest, AiChatStreamDelta, AiCommandCard, AiMessage,
+    AiMessageRole, AiMode, AiSettings, CommandObservation, ConnectionStore, agent_response_action,
+    assess_agent_command_risk, decide_agent_command_execution, now_rfc3339,
+    parse_agent_model_output, parse_agent_tool_call, parse_model_output, redact_context,
+    redact_sensitive_text, truncate_preview, uuid,
 };
+use nyaterm_transport::RemoteCommandOutput;
+
+use crate::features::{AiChatJobOutput, AiChatWorkerEvent};
 
 pub(in crate::features) fn is_agent_command_card(card: &AiCommandCard) -> bool {
     card.id.starts_with("agent-")

@@ -1,6 +1,8 @@
-use super::*;
+use gpui::{Context, KeyDownEvent, Window};
 
 use nyaterm_core::{ai_model_id_for_credential, ai_model_id_for_provider};
+
+use crate::features::{NyaTermApp, TextInputSetup};
 
 impl NyaTermApp {
     pub(in crate::features) fn toggle_ai_model_enabled(
