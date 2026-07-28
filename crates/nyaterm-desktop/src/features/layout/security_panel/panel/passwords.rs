@@ -26,13 +26,13 @@ impl NyaTermApp {
         ));
         if let Some(editor) = self.security.editors.password.clone() {
             body = body.child(self.security_password_editor_view(editor, cx));
-        } else if self.connection_saved_passwords.is_empty() {
+        } else if self.security.catalog.passwords.is_empty() {
             body = body.child(empty_panel(
                 self.tr("passwordManager.noPasswords"),
                 self.theme_palette(),
             ));
         } else {
-            let entries = self.connection_saved_passwords.clone();
+            let entries = self.security.catalog.passwords.clone();
             let entry_count = entries.len();
             let mut rows = div()
                 .rounded_md()

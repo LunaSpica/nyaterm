@@ -1,7 +1,7 @@
 use gpui::{Context, MouseDownEvent, Window};
 use nyaterm_core::SavedConnection;
 
-use crate::features::{NyaTermApp, PendingSavedConnectionStart, SavedConnectionStartOptions};
+use crate::features::{NyaTermApp, SavedConnectionStartOptions};
 use crate::models::{ConnectionGroupOpenConfirmState, MainMode, NavItem};
 
 impl NyaTermApp {
@@ -54,6 +54,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(connection) = self
+            .connection_catalog
             .connections
             .iter()
             .find(|connection| connection.id == connection_id)
@@ -83,7 +84,7 @@ impl NyaTermApp {
     ) {
         let selected = self
             .connection_state
-            .selected_connections(&self.connections);
+            .selected_connections(&self.connection_catalog.connections);
         if selected.is_empty() {
             self.terminal.view.status = "select saved connections before connecting".to_string();
             cx.notify();
@@ -101,8 +102,8 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let connections = self.connection_state.saved_connections_in_group_tree(
-            &self.connections,
-            &self.connection_groups,
+            &self.connection_catalog.connections,
+            &self.connection_catalog.groups,
             &group_id,
         );
         if connections.is_empty() {
@@ -122,7 +123,8 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(group) = self
-            .connection_groups
+            .connection_catalog
+            .groups
             .iter()
             .find(|group| group.id == group_id)
         else {
@@ -130,7 +132,11 @@ impl NyaTermApp {
         };
         let connection_count = self
             .connection_state
-            .saved_connections_in_group_tree(&self.connections, &self.connection_groups, &group_id)
+            .saved_connections_in_group_tree(
+                &self.connection_catalog.connections,
+                &self.connection_catalog.groups,
+                &group_id,
+            )
             .len();
         if connection_count == 0 {
             return;
@@ -191,15 +197,11 @@ impl NyaTermApp {
             return false;
         }
         let name = connection.name.clone();
-        self.pending_saved_connection_queue
-            .push_back(PendingSavedConnectionStart {
-                connection,
-                options,
-            });
-        self.terminal.view.status = format!(
-            "queued {name} ({} pending)",
-            self.pending_saved_connection_queue.len()
-        );
+        let pending_count = self
+            .session
+            .start
+            .queue_saved_connection(connection, options);
+        self.terminal.view.status = format!("queued {name} ({} pending)", pending_count);
         self.shell.navigation.selected_nav = NavItem::Workspace;
         self.shell.navigation.main_mode = MainMode::Workspace;
         cx.notify();
@@ -225,12 +227,12 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        if self.pending_saved_connection_queue.is_empty() || self.has_pending_session_start() {
+        if !self.session.start.has_queued_saved_connections() || self.has_pending_session_start() {
             return false;
         }
         let mut dirty = false;
         while !self.has_pending_session_start() {
-            let Some(start) = self.pending_saved_connection_queue.pop_front() else {
+            let Some(start) = self.session.start.pop_saved_connection() else {
                 return dirty;
             };
             if self.saved_connection_start_is_pending(&start.connection) {

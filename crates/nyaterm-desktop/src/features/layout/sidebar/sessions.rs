@@ -226,7 +226,7 @@ impl NyaTermApp {
                     .child(capability_line(
                         palette,
                         "Profiles",
-                        self.connections.len().to_string(),
+                        self.connection_catalog.connections.len().to_string(),
                     ))
                     .child(capability_line(
                         palette,
@@ -236,7 +236,7 @@ impl NyaTermApp {
                     .child(capability_line(
                         palette,
                         "Tunnels",
-                        self.tunnels.len().to_string(),
+                        self.tunnel_state.catalog.tunnels.len().to_string(),
                     )),
             )
             .child(

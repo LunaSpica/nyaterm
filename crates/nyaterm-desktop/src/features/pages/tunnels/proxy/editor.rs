@@ -18,7 +18,9 @@ pub(in crate::features::pages::tunnels) fn network_proxy_editor_panel(
         .group_id
         .as_deref()
         .and_then(|id| {
-            app.proxy_groups
+            app.tunnel_state
+                .catalog
+                .proxy_groups
                 .iter()
                 .find(|group| group.id == id)
                 .map(|group| group.name.clone())

@@ -44,7 +44,6 @@ pub(in crate::features) use ai::{
     is_agent_command_card,
 };
 pub use app_state::NyaTermApp;
-pub(in crate::features) use app_state::{PendingSavedConnectionStart, SavedConnectionStartOptions};
 pub(in crate::features) use commands::{
     CommandPersistencePoll, CommandRuntimeState, QUICK_COMMAND_COLOR_OPTIONS,
     QuickCommandFeatureFocus, QuickCommandFeatureState, quick_command_category_label,
@@ -52,8 +51,9 @@ pub(in crate::features) use commands::{
 };
 pub(in crate::features) use connection_editor_window::ConnectionEditorWindow;
 pub(in crate::features) use connections::{
-    ConnectionDragKind, ConnectionDragPayload, ConnectionDragPreview, ConnectionDropPosition,
-    ConnectionDropTarget, ConnectionEditorToggle, ConnectionFeatureFocus, ConnectionFeatureState,
+    ConnectionCatalogState, ConnectionDragKind, ConnectionDragPayload, ConnectionDragPreview,
+    ConnectionDropPosition, ConnectionDropTarget, ConnectionEditorToggle, ConnectionFeatureFocus,
+    ConnectionFeatureState,
 };
 pub(in crate::features) use formatting::{
     compact_id, configured_cloud_sync_provider, docker_compose_project_key, docker_state_color,
@@ -81,10 +81,12 @@ pub(in crate::features) use runtime_jobs::{
 };
 pub(in crate::features) use session::{
     CredentialPromptBroker, FailedSessionStart, HostKeyPromptBroker, NativeOtpProvider,
-    PendingSessionStart, SessionFeatureFocus, SessionFeatureState, SessionPaneState,
-    credential_prompt_target, keyboard_interactive_prompt_target,
+    PendingSessionStart, SavedConnectionStartOptions, SessionFeatureFocus, SessionFeatureState,
+    SessionPaneState, credential_prompt_target, keyboard_interactive_prompt_target,
 };
-pub(in crate::features) use settings::{SecurityFeatureFocus, SecurityFeatureState};
+pub(in crate::features) use settings::{
+    SecurityCatalogState, SecurityFeatureFocus, SecurityFeatureState,
+};
 pub(in crate::features) use shell::{
     ChromeTooltip, SessionTabDragPayload, SessionTabDragPreview, SessionTabTooltip,
     ShellFeatureInit, ShellFeatureState, TAB_MOUSE_ACTIONS, TabMouseActionTarget,
@@ -105,7 +107,7 @@ pub(in crate::features) use transfers::{
     format_file_size, transfer_job_title, transfer_status_label,
 };
 pub(in crate::features) use translation::TranslationFeatureState;
-pub(in crate::features) use tunnels::TunnelFeatureState;
+pub(in crate::features) use tunnels::{TunnelCatalogState, TunnelFeatureState};
 pub(in crate::features) use update::UpdateFeatureState;
 pub(in crate::features) use view_widgets::{
     child_window_header, child_window_titlebar, color_icon, connection_type_icon,

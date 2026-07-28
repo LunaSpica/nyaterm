@@ -34,7 +34,13 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let tunnel = match tunnel_id.as_deref() {
-            Some(id) => self.tunnels.iter().find(|tunnel| tunnel.id == id).cloned(),
+            Some(id) => self
+                .tunnel_state
+                .catalog
+                .tunnels
+                .iter()
+                .find(|tunnel| tunnel.id == id)
+                .cloned(),
             None => Some(TunnelConfig::default()),
         };
         let Some(tunnel) = tunnel else {
@@ -121,6 +127,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn cycle_network_tunnel_connection(&mut self, cx: &mut Context<Self>) {
         let connection_ids = self
+            .connection_catalog
             .connections
             .iter()
             .filter(|connection| matches!(&connection.config, ConnectionType::Ssh { .. }))
@@ -136,10 +143,13 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn cycle_network_tunnel_group(&mut self, cx: &mut Context<Self>) {
-        if self
-            .connection_state
-            .cycle_network_tunnel_group(self.tunnel_groups.iter().map(|group| group.id.as_str()))
-        {
+        if self.connection_state.cycle_network_tunnel_group(
+            self.tunnel_state
+                .catalog
+                .tunnel_groups
+                .iter()
+                .map(|group| group.id.as_str()),
+        ) {
             self.terminal.view.status = "tunnel group changed".to_string();
         }
         cx.notify();
@@ -184,6 +194,7 @@ impl NyaTermApp {
             return;
         };
         if !self
+            .connection_catalog
             .connections
             .iter()
             .any(|connection| connection.id == connection_id)
@@ -216,13 +227,15 @@ impl NyaTermApp {
             port
         };
         let group_id = editor.group_id.filter(|id| {
-            self.tunnel_groups
+            self.tunnel_state
+                .catalog
+                .tunnel_groups
                 .iter()
                 .any(|group| group.id.as_str() == id.as_str())
         });
 
         let id = editor.id.clone().unwrap_or_else(uuid);
-        let mut next_tunnels = self.tunnels.clone();
+        let mut next_tunnels = self.tunnel_state.catalog.tunnels.clone();
         let tunnel = TunnelConfig {
             id: id.clone(),
             name: name.clone(),
@@ -249,7 +262,7 @@ impl NyaTermApp {
         .and_then(|store| store.replace_tunnels(&next_tunnels))
         {
             Ok(()) => {
-                self.tunnels = next_tunnels;
+                self.tunnel_state.catalog.tunnels = next_tunnels;
                 self.connection_state.close_network_tunnel_editor();
                 self.terminal.view.status = format!("tunnel '{name}' saved");
                 self.store_status.message = self.terminal.view.status.clone();

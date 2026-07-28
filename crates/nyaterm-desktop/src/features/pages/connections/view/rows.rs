@@ -336,8 +336,12 @@ impl NyaTermApp {
         let menu_id = connection.id.clone();
         let kind = connection.kind_label();
         let icon_def = resolve_connection_icon(connection.icon.as_deref(), kind);
-        let details_rows: Arc<[(&'static str, String)]> =
-            connection_detail_rows(&connection, &self.connections, &self.proxies).into();
+        let details_rows: Arc<[(&'static str, String)]> = connection_detail_rows(
+            &connection,
+            &self.connection_catalog.connections,
+            &self.tunnel_state.catalog.proxies,
+        )
+        .into();
         let row_group = SharedString::from(format!("connection-row-group-{}", connection.id));
         let drop_position = self.connection_state.list_drop_position_for_kind_target(
             ConnectionDragKind::Connection,
@@ -449,6 +453,7 @@ impl NyaTermApp {
                         },
                         ConnectionDragKind::Group => {
                             let parent = this
+                                .connection_catalog
                                 .connections
                                 .iter()
                                 .find(|c| c.id == target_id)

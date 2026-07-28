@@ -458,7 +458,9 @@ impl NyaTermApp {
                     );
                     let responses = vec![String::new(); request.prompts.len()];
                     let otp_type = request.otp_id.as_deref().and_then(|otp_id| {
-                        self.connection_otp_entries
+                        self.security
+                            .catalog
+                            .otp_entries
                             .iter()
                             .find(|entry| entry.id == otp_id)
                             .map(|entry| entry.otp_type.to_ascii_lowercase())

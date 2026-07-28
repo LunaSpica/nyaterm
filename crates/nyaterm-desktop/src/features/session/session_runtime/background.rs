@@ -526,6 +526,7 @@ impl NyaTermApp {
                         }) {
                             Ok(Some(updated)) => {
                                 if let Some(connection) = self
+                                    .connection_catalog
                                     .connections
                                     .iter_mut()
                                     .find(|connection| connection.id == connection_id)

@@ -14,7 +14,8 @@ impl NyaTermApp {
     ) {
         let name = match group_id.as_deref() {
             Some(id) => self
-                .connection_groups
+                .connection_catalog
+                .groups
                 .iter()
                 .find(|group| group.id == id)
                 .map(|group| group.name.clone()),
@@ -28,7 +29,8 @@ impl NyaTermApp {
         let parent_id = group_id
             .as_deref()
             .and_then(|id| {
-                self.connection_groups
+                self.connection_catalog
+                    .groups
                     .iter()
                     .find(|group| group.id == id)
                     .and_then(|group| group.parent_id.clone())
@@ -116,12 +118,13 @@ impl NyaTermApp {
                 .id
                 .as_deref()
                 .and_then(|id| {
-                    self.connection_groups
+                    self.connection_catalog
+                        .groups
                         .iter()
                         .find(|group| group.id == id)
                         .map(|group| group.sort_order)
                 })
-                .unwrap_or(self.connection_groups.len() as i32),
+                .unwrap_or(self.connection_catalog.groups.len() as i32),
             created_at_ms: None,
             updated_at_ms: None,
         };

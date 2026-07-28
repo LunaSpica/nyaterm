@@ -13,9 +13,10 @@ impl NyaTermApp {
         range: bool,
         cx: &mut Context<Self>,
     ) {
-        let visible_ids = self
-            .connection_state
-            .visible_connection_ids(&self.connections, &self.connection_groups);
+        let visible_ids = self.connection_state.visible_connection_ids(
+            &self.connection_catalog.connections,
+            &self.connection_catalog.groups,
+        );
         let count = self.connection_state.select_list_connection(
             connection_id,
             &visible_ids,
@@ -39,7 +40,7 @@ impl NyaTermApp {
     pub(in crate::features) fn copy_selected_connections(&mut self, cx: &mut Context<Self>) {
         let selected = self
             .connection_state
-            .selected_connections(&self.connections);
+            .selected_connections(&self.connection_catalog.connections);
         if selected.is_empty() {
             self.terminal.view.status = "select saved connections before copying".to_string();
             cx.notify();
@@ -87,7 +88,7 @@ impl NyaTermApp {
                 .map_err(|error| error.to_string())?;
         }
 
-        self.connections = store
+        self.connection_catalog.connections = store
             .load_sessions()
             .map_err(|error| error.to_string())?
             .connections;

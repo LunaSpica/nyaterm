@@ -18,7 +18,7 @@ impl NyaTermApp {
         let mut body = security_auth_body_base("security-otp-body");
         let actions_enabled =
             self.security.editors.otp.is_none() && !self.security.editors.otp_qr_importing;
-        let has_entries = !self.connection_otp_entries.is_empty();
+        let has_entries = !self.security.catalog.otp_entries.is_empty();
         body = body.child(
             div()
                 .flex_none()
@@ -74,13 +74,13 @@ impl NyaTermApp {
         );
         if let Some(editor) = self.security.editors.otp.clone() {
             body = body.child(self.security_otp_editor_view(editor, cx));
-        } else if self.connection_otp_entries.is_empty() {
+        } else if self.security.catalog.otp_entries.is_empty() {
             body = body.child(empty_panel(
                 self.tr("otpManager.noEntries"),
                 self.theme_palette(),
             ));
         } else {
-            let entries = self.connection_otp_entries.clone();
+            let entries = self.security.catalog.otp_entries.clone();
             let entry_count = entries.len();
             let mut rows = div()
                 .rounded_md()

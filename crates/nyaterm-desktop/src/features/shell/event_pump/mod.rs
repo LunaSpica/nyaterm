@@ -465,7 +465,7 @@ impl NyaTermApp {
     pub(in crate::features) fn runtime_quiet_tick_allowed(&self) -> bool {
         !self.runtime_output_pressure_active()
             && !self.session.start.has_pending()
-            && self.pending_saved_connection_queue.is_empty()
+            && !self.session.start.has_queued_saved_connections()
             && self.session.events.pending.is_empty()
             && !self.session.event_bridge.has_pending_ui_work()
             && !self.terminal_frame_backlog_active()
@@ -484,7 +484,7 @@ impl NyaTermApp {
             && !self.session.prompts.duplicate_prompts.has_pending()
             && self.terminal.menus.action_link_hover_pending.is_none()
             && self.recording.pending_auto_start.is_none()
-            && !self.tunnel_runtime.has_pending()
+            && !self.tunnel_state.has_pending()
             && self.transfer.queue.jobs.is_empty()
             && self.command_runtime.is_idle()
             && !self.terminal.view.runtime.open_tabs_persist_dirty

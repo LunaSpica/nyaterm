@@ -212,10 +212,10 @@ impl NyaTermApp {
             self.runtime.config_dir(),
             self.runtime.portable_key_path().map(ToOwned::to_owned),
         ) {
-            self.connection_ssh_keys = store.list_ssh_keys().unwrap_or_default();
-            self.connection_otp_entries = store.list_otp_entries().unwrap_or_default();
-            self.connection_saved_passwords = store.list_passwords().unwrap_or_default();
-            self.connection_saved_credentials = store.list_credentials().unwrap_or_default();
+            self.security.catalog.ssh_keys = store.list_ssh_keys().unwrap_or_default();
+            self.security.catalog.otp_entries = store.list_otp_entries().unwrap_or_default();
+            self.security.catalog.passwords = store.list_passwords().unwrap_or_default();
+            self.security.catalog.credentials = store.list_credentials().unwrap_or_default();
         }
     }
 }

@@ -198,6 +198,11 @@ check_no_matches \
   crates/nyaterm-desktop/src/features/app_state/mod.rs
 
 check_no_matches \
+  "connection catalogs must stay in their authoritative feature owners" \
+  '^[[:space:]]*pub\(in crate::features\)[[:space:]]+(connections|connection_groups|connection_ssh_keys|connection_otp_entries|connection_saved_passwords|connection_saved_credentials|connection_serial_ports|tunnels|tunnel_groups|proxies|proxy_groups|tunnel_runtime)[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/app_state/mod.rs
+
+check_no_matches \
   "live session runtime state must stay grouped under SessionFeatureState" \
   '^[[:space:]]*pub\(in crate::features\)[[:space:]]+(session_manager|session_event_bridge|session_start|session_command_history|active_sessions_search_draft|active_session_menu|active_session_busy_actions|active_session_id|active_ssh_config|active_ai_execution_profile|session_order|session_metadata|session_custom_names|session_dynamic_titles|session_cwds|zmodem_sessions|trzsz_sessions|session_tab_colors|ssh_multiplex_handles)[[:space:]]*:' \
   crates/nyaterm-desktop/src/features/app_state/mod.rs
@@ -219,8 +224,13 @@ check_no_matches \
 
 check_no_matches \
   "session start models must stay with SessionStartFeatureState" \
-  '(struct[[:space:]]+(PendingSessionStart|FailedSessionStart)|enum[[:space:]]+SessionPaneState)' \
+  '(struct[[:space:]]+(PendingSessionStart|FailedSessionStart|PendingSavedConnectionStart|SavedConnectionStartOptions)|enum[[:space:]]+SessionPaneState)' \
   crates/nyaterm-desktop/src/features/app_state/types.rs
+
+check_no_matches \
+  "saved connection start queue must stay under SessionStartFeatureState" \
+  '^[[:space:]]*pub\(in crate::features\)[[:space:]]+pending_saved_connection_queue[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/app_state/mod.rs
 
 # These low-frequency transport helpers have explicit imports at their call
 # sites. Keep them out of the shared feature prelude so new modules do not

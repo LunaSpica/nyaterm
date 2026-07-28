@@ -11,19 +11,20 @@ use nyaterm_core::{
 };
 use nyaterm_terminal::TerminalOutputDecoder;
 use nyaterm_transport::{SessionManager, SftpDuplicatePolicy};
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use super::super::settings::{SettingsFeatureFocus, SettingsFeatureState};
 use super::super::{
     AiFeatureFocus, AiFeatureState, CloudSyncFeatureState, CommandRuntimeState,
-    ConnectionFeatureFocus, ConnectionFeatureState, INITIAL_TERMINAL_BANNER, LEGACY_ROOT,
-    NativeOtpProvider, QuickCommandFeatureFocus, QuickCommandFeatureState, RecordingFeatureState,
-    RemoteOpsFeatureFocus, RemoteOpsFeatureState, SecurityFeatureFocus, SecurityFeatureState,
-    SendCommandFeatureFocus, SendCommandFeatureState, SessionFeatureFocus, SessionFeatureState,
-    ShellFeatureInit, ShellFeatureState, SyncInputFeatureState, TerminalFeatureFocus,
-    TerminalFeatureState, TextInputRegistry, TransferFeatureFocus, TransferFeatureState,
-    TranslationFeatureState, TunnelFeatureState, UpdateFeatureState, ai_active_profile_drafts,
+    ConnectionCatalogState, ConnectionFeatureFocus, ConnectionFeatureState,
+    INITIAL_TERMINAL_BANNER, LEGACY_ROOT, NativeOtpProvider, QuickCommandFeatureFocus,
+    QuickCommandFeatureState, RecordingFeatureState, RemoteOpsFeatureFocus, RemoteOpsFeatureState,
+    SecurityCatalogState, SecurityFeatureFocus, SecurityFeatureState, SendCommandFeatureFocus,
+    SendCommandFeatureState, SessionFeatureFocus, SessionFeatureState, ShellFeatureInit,
+    ShellFeatureState, SyncInputFeatureState, TerminalFeatureFocus, TerminalFeatureState,
+    TextInputRegistry, TransferFeatureFocus, TransferFeatureState, TranslationFeatureState,
+    TunnelCatalogState, TunnelFeatureState, UpdateFeatureState, ai_active_profile_drafts,
     ai_usage_counts, appearance_font_options, quick_command_sort_mode_from_setting,
     quick_command_view_mode_from_setting,
 };
@@ -299,8 +300,7 @@ impl NyaTermApp {
             runtime,
             services: NativeServices::new(),
             inventory,
-            connections,
-            pending_saved_connection_queue: VecDeque::new(),
+            connection_catalog: ConnectionCatalogState::new(connections, connection_groups),
             connection_state: ConnectionFeatureState::new(
                 &settings,
                 ConnectionFeatureFocus {
@@ -314,16 +314,6 @@ impl NyaTermApp {
                 },
                 cx,
             ),
-            connection_groups,
-            connection_ssh_keys,
-            connection_otp_entries,
-            connection_saved_passwords,
-            connection_saved_credentials,
-            connection_serial_ports: Vec::new(),
-            tunnels,
-            tunnel_groups,
-            proxies,
-            proxy_groups,
             quick_commands: Arc::from(quick_commands),
             quick_command_categories,
             quick_command_state: QuickCommandFeatureState::new(
@@ -396,6 +386,12 @@ impl NyaTermApp {
                 },
             ),
             security: SecurityFeatureState::new(
+                SecurityCatalogState {
+                    ssh_keys: connection_ssh_keys,
+                    otp_entries: connection_otp_entries,
+                    passwords: connection_saved_passwords,
+                    credentials: connection_saved_credentials,
+                },
                 security_secrets_unlocked,
                 "security ready".to_string(),
                 SecurityFeatureFocus {
@@ -471,7 +467,12 @@ impl NyaTermApp {
             settings_master_password_draft: String::new(),
             store_status,
             recording,
-            tunnel_runtime: TunnelFeatureState::new(),
+            tunnel_state: TunnelFeatureState::new(TunnelCatalogState {
+                tunnels,
+                tunnel_groups,
+                proxies,
+                proxy_groups,
+            }),
         }
     }
 }

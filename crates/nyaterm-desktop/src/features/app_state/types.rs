@@ -2,11 +2,10 @@ use std::collections::HashSet;
 use std::time::{Duration, Instant};
 
 use nyaterm_core::{
-    AiSettings, AppSettingsSummary, CloudSyncSettings, KeywordHighlightConfig, SavedConnection,
-    TranslationSettings,
+    AiSettings, AppSettingsSummary, CloudSyncSettings, KeywordHighlightConfig, TranslationSettings,
 };
 
-use crate::models::{CloudSyncSecretDraft, StartupCommandRequest, TranslationSecretDraft};
+use crate::models::{CloudSyncSecretDraft, TranslationSecretDraft};
 
 #[derive(Debug, Clone)]
 pub(in crate::features) struct SettingsDraftSnapshot {
@@ -97,22 +96,6 @@ pub(in crate::features) struct TerminalRuntimeUiState {
     pub cursor_blink_on: bool,
     pub cursor_blink_next_at: Option<Instant>,
     pub visual_bell_ticks: u8,
-}
-
-#[derive(Clone, Default)]
-pub(in crate::features) struct SavedConnectionStartOptions {
-    pub custom_name: Option<String>,
-    pub tab_color: Option<u32>,
-    pub after_session_id: Option<String>,
-    pub insert_index: Option<usize>,
-    pub seed_output: Option<String>,
-    pub startup_command: Option<StartupCommandRequest>,
-}
-
-#[derive(Clone)]
-pub(in crate::features) struct PendingSavedConnectionStart {
-    pub connection: SavedConnection,
-    pub options: SavedConnectionStartOptions,
 }
 
 impl Default for TerminalRuntimeUiState {

@@ -44,12 +44,24 @@ impl NyaTermApp {
         if source_id == target_id {
             return;
         }
-        let Some(source) = self.connections.iter().find(|c| c.id == source_id).cloned() else {
+        let Some(source) = self
+            .connection_catalog
+            .connections
+            .iter()
+            .find(|c| c.id == source_id)
+            .cloned()
+        else {
             self.terminal.view.status = "drag source connection missing".to_string();
             cx.notify();
             return;
         };
-        let Some(target) = self.connections.iter().find(|c| c.id == target_id).cloned() else {
+        let Some(target) = self
+            .connection_catalog
+            .connections
+            .iter()
+            .find(|c| c.id == target_id)
+            .cloned()
+        else {
             self.terminal.view.status = "drop target connection missing".to_string();
             cx.notify();
             return;
@@ -57,6 +69,7 @@ impl NyaTermApp {
 
         let parent = target.group_id.clone();
         let mut siblings = self
+            .connection_catalog
             .connections
             .iter()
             .filter(|c| c.group_id == parent && c.id != source_id)
@@ -102,12 +115,24 @@ impl NyaTermApp {
         if source_id == target_id {
             return;
         }
-        let Some(source) = self.connections.iter().find(|c| c.id == source_id).cloned() else {
+        let Some(source) = self
+            .connection_catalog
+            .connections
+            .iter()
+            .find(|c| c.id == source_id)
+            .cloned()
+        else {
             self.terminal.view.status = "drag source connection missing".to_string();
             cx.notify();
             return;
         };
-        let Some(target) = self.connections.iter().find(|c| c.id == target_id).cloned() else {
+        let Some(target) = self
+            .connection_catalog
+            .connections
+            .iter()
+            .find(|c| c.id == target_id)
+            .cloned()
+        else {
             self.terminal.view.status = "drop target connection missing".to_string();
             cx.notify();
             return;
@@ -115,6 +140,7 @@ impl NyaTermApp {
 
         let parent = target.group_id.clone();
         let mut siblings = self
+            .connection_catalog
             .connections
             .iter()
             .filter(|c| c.group_id == parent && c.id != source_id)
@@ -158,7 +184,13 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.connection_state.clear_list_drop_target();
-        let Some(source) = self.connections.iter().find(|c| c.id == source_id).cloned() else {
+        let Some(source) = self
+            .connection_catalog
+            .connections
+            .iter()
+            .find(|c| c.id == source_id)
+            .cloned()
+        else {
             self.terminal.view.status = "drag source connection missing".to_string();
             cx.notify();
             return;
@@ -167,6 +199,7 @@ impl NyaTermApp {
             // already there: append to end of group order
         }
         let mut siblings = self
+            .connection_catalog
             .connections
             .iter()
             .filter(|c| c.group_id == group_id && c.id != source_id)
@@ -208,6 +241,7 @@ impl NyaTermApp {
     ) {
         self.connection_state.clear_list_drop_target();
         let moving = self
+            .connection_catalog
             .connections
             .iter()
             .filter(|connection| source_ids.contains(&connection.id))
@@ -220,7 +254,11 @@ impl NyaTermApp {
         }
 
         let moved_count = moving.len();
-        let ordered = connections_reordered_into_group(&self.connections, &source_ids, &group_id);
+        let ordered = connections_reordered_into_group(
+            &self.connection_catalog.connections,
+            &source_ids,
+            &group_id,
+        );
 
         match self.persist_connection_order(&ordered) {
             Ok(()) => {
@@ -250,7 +288,8 @@ impl NyaTermApp {
             return;
         }
         let Some(source) = self
-            .connection_groups
+            .connection_catalog
+            .groups
             .iter()
             .find(|g| g.id == source_id)
             .cloned()
@@ -258,7 +297,8 @@ impl NyaTermApp {
             return;
         };
         let Some(target) = self
-            .connection_groups
+            .connection_catalog
+            .groups
             .iter()
             .find(|g| g.id == target_id)
             .cloned()
@@ -268,7 +308,8 @@ impl NyaTermApp {
         // Only reorder among same parent for now.
         let parent = target.parent_id.clone();
         let mut siblings = self
-            .connection_groups
+            .connection_catalog
+            .groups
             .iter()
             .filter(|g| g.parent_id == parent && g.id != source_id)
             .cloned()
@@ -314,7 +355,8 @@ impl NyaTermApp {
             }
         }
         let Some(source) = self
-            .connection_groups
+            .connection_catalog
+            .groups
             .iter()
             .find(|g| g.id == source_id)
             .cloned()
@@ -322,7 +364,8 @@ impl NyaTermApp {
             return;
         };
         let mut siblings = self
-            .connection_groups
+            .connection_catalog
+            .groups
             .iter()
             .filter(|g| g.parent_id == parent_id && g.id != source_id)
             .cloned()
@@ -359,7 +402,8 @@ impl NyaTermApp {
                 break;
             }
             current = self
-                .connection_groups
+                .connection_catalog
+                .groups
                 .iter()
                 .find(|g| g.id == id)
                 .and_then(|g| g.parent_id.clone());

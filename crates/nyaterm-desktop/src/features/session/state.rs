@@ -3,7 +3,7 @@ use std::sync::{Arc, mpsc};
 use std::time::Instant;
 
 use gpui::FocusHandle;
-use nyaterm_core::AiExecutionProfile;
+use nyaterm_core::{AiExecutionProfile, SavedConnection};
 use nyaterm_transport::{
     SessionEvent, SessionKind, SessionManager, SshMultiplexHandle, SshSessionConfig,
 };
@@ -315,6 +315,23 @@ pub(in crate::features) struct SessionStartFeatureState {
     pub reconnect_replace_id: Option<String>,
     pub reconnect_failures: HashMap<String, String>,
     pub pending_workspace_split: Option<(WorkspaceSplitDirection, String)>,
+    saved_connection_queue: VecDeque<PendingSavedConnectionStart>,
+}
+
+#[derive(Clone, Default)]
+pub(in crate::features) struct SavedConnectionStartOptions {
+    pub custom_name: Option<String>,
+    pub tab_color: Option<u32>,
+    pub after_session_id: Option<String>,
+    pub insert_index: Option<usize>,
+    pub seed_output: Option<String>,
+    pub startup_command: Option<StartupCommandRequest>,
+}
+
+#[derive(Clone)]
+pub(in crate::features) struct PendingSavedConnectionStart {
+    pub connection: SavedConnection,
+    pub options: SavedConnectionStartOptions,
 }
 
 impl SessionStartFeatureState {
@@ -332,6 +349,7 @@ impl SessionStartFeatureState {
             reconnect_replace_id: None,
             reconnect_failures: HashMap::new(),
             pending_workspace_split: None,
+            saved_connection_queue: VecDeque::new(),
         }
     }
 
@@ -349,6 +367,39 @@ impl SessionStartFeatureState {
 
     pub(in crate::features) fn has_failed(&self) -> bool {
         !self.failed.is_empty()
+    }
+
+    pub(in crate::features) fn queue_saved_connection(
+        &mut self,
+        connection: SavedConnection,
+        options: SavedConnectionStartOptions,
+    ) -> usize {
+        self.saved_connection_queue
+            .push_back(PendingSavedConnectionStart {
+                connection,
+                options,
+            });
+        self.saved_connection_queue.len()
+    }
+
+    pub(in crate::features) fn pop_saved_connection(
+        &mut self,
+    ) -> Option<PendingSavedConnectionStart> {
+        self.saved_connection_queue.pop_front()
+    }
+
+    pub(in crate::features) fn saved_connection_queue_len(&self) -> usize {
+        self.saved_connection_queue.len()
+    }
+
+    pub(in crate::features) fn has_queued_saved_connections(&self) -> bool {
+        !self.saved_connection_queue.is_empty()
+    }
+
+    pub(in crate::features) fn saved_connection_is_queued(&self, connection_id: &str) -> bool {
+        self.saved_connection_queue
+            .iter()
+            .any(|queued| queued.connection.id == connection_id)
     }
 
     pub(in crate::features) fn pending_display_name(&self) -> Option<String> {
@@ -497,15 +548,15 @@ mod tests {
     use std::time::Instant;
 
     use gpui::TestAppContext;
-    use nyaterm_core::AiExecutionProfile;
+    use nyaterm_core::{AiExecutionProfile, ConnectionType, SavedConnection};
     use nyaterm_transport::{SessionKind, SessionManager};
 
     use crate::features::runtime_jobs::SessionStartResult;
     use crate::models::{SessionEventBridge, StartupCommandAction, TerminalFramePipeline};
 
     use super::{
-        FailedSessionStart, NativeOtpProvider, PendingSessionStart, SessionFeatureFocus,
-        SessionFeatureState, SessionRestoreState, SessionStartFeatureState,
+        FailedSessionStart, NativeOtpProvider, PendingSessionStart, SavedConnectionStartOptions,
+        SessionFeatureFocus, SessionFeatureState, SessionRestoreState, SessionStartFeatureState,
     };
 
     #[test]
@@ -534,6 +585,30 @@ mod tests {
             multiplex_key: None,
             source_connection_id: None,
             reconnect_session_id: None,
+        }
+    }
+
+    fn saved_connection(id: &str) -> SavedConnection {
+        SavedConnection {
+            id: id.to_string(),
+            name: id.to_string(),
+            config: ConnectionType::LocalTerminal {
+                shell_path: String::new(),
+                shell_args: String::new(),
+                working_dir: None,
+                ai_execution_profile: AiExecutionProfile::Auto,
+            },
+            group_id: None,
+            description: None,
+            sort_order: 0,
+            icon: None,
+            icon_auto_detect: None,
+            auth: None,
+            network: None,
+            post_login: None,
+            created_at_ms: None,
+            updated_at_ms: None,
+            last_used_at_ms: None,
         }
     }
 
@@ -654,6 +729,28 @@ mod tests {
         assert!(starts.cancelled.contains("request-1"));
         assert!(!starts.has_pending());
         assert!(starts.active_pending.is_none());
+    }
+
+    #[test]
+    fn session_start_state_owns_saved_connection_queue_lifecycle() {
+        let mut starts = SessionStartFeatureState::new();
+
+        assert!(!starts.has_queued_saved_connections());
+        assert_eq!(
+            starts.queue_saved_connection(
+                saved_connection("connection-1"),
+                SavedConnectionStartOptions::default(),
+            ),
+            1
+        );
+        assert!(starts.saved_connection_is_queued("connection-1"));
+        assert!(!starts.saved_connection_is_queued("connection-2"));
+
+        let queued = starts
+            .pop_saved_connection()
+            .expect("queued saved connection should remain owned by session starts");
+        assert_eq!(queued.connection.id, "connection-1");
+        assert!(!starts.has_queued_saved_connections());
     }
 
     #[test]

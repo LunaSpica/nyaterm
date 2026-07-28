@@ -9,7 +9,7 @@ Last updated from the working tree on 2026-07-28.
 
 | Metric | Current value | Notes |
 | --- | ---: | --- |
-| `NyaTermApp` fields | 43 | Counted from `features/app_state/mod.rs`; down from 585, still transitional. |
+| `NyaTermApp` fields | 32 | Counted from `features/app_state/mod.rs`; down from 585, still transitional. |
 | `impl NyaTermApp` blocks | 238 | Spread across 233 files under `crates/nyaterm-desktop/src`. |
 | `#[path = "..."]` declarations in desktop | 0 | Cleared. Every directory is a real module; the boundary script fails on any new occurrence. |
 | `use super::*` imports in desktop | 0 | Cleared in production and test modules; guarded crate-wide. |
@@ -354,6 +354,18 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   one new runtime owner plus focused children on existing states, taking
   `NyaTermApp` from 55 fields to 43 without changing persistence formats or
   background-worker behavior.
+- Connection-owned catalogs are no longer eleven unrelated `NyaTermApp`
+  fields. `ConnectionCatalogState` authoritatively owns saved connections,
+  groups and runtime-discovered serial ports; `SecurityFeatureState::catalog`
+  owns SSH-key, OTP, password and credential catalogs without deriving
+  `Debug`; and `TunnelFeatureState::catalog` owns tunnel/proxy configs and
+  groups alongside their existing runtime owner. The queued-saved-connection
+  lifecycle and its request models moved from `app_state` to
+  `SessionStartFeatureState`. Twelve old top-level fields became one focused
+  top-level catalog plus children of existing owners, taking `NyaTermApp` from
+  43 fields to 32. `ConnectionStore` remains the persistence implementation;
+  table names, keys, serialized fields, encryption and fallback behavior did
+  not change.
 - The Entity Store projection layer is gone entirely, in two steps.
 
   First, the six domain stores (`Ai`, `CloudSync`, `Connections`, `RemoteOps`,
@@ -1274,19 +1286,20 @@ Current ownership map:
 
 | Area | Current owner | Kind | Notes |
 | --- | --- | --- | --- |
-| Saved connections | `NyaTermApp.connections` | Persisted domain state | Loaded/refreshed from `ConnectionStore`; not duplicated inside `ConnectionFeatureState`. |
-| Connection groups | `NyaTermApp.connection_groups` | Persisted domain state | Same compatibility boundary as saved connections. |
-| SSH keys | `NyaTermApp.connection_ssh_keys` | Secret-adjacent persisted catalog | Keep out of broad UI state until a credential/security migration is tested. |
-| OTP entries | `NyaTermApp.connection_otp_entries` | Secret-adjacent persisted catalog | Do not log secrets or widen Debug exposure. |
-| Saved passwords/credentials | `NyaTermApp.connection_saved_passwords`, `connection_saved_credentials` | Secret-bearing persisted catalogs | Remain top-level for now due credential autofill and security settings consumers. |
-| Serial ports | `NyaTermApp.connection_serial_ports` | Runtime/discovered state | Not persisted by this state grouping. |
-| Tunnel/proxy configs | `NyaTermApp.tunnels`, `tunnel_groups`, `proxies`, `proxy_groups` | Persisted network config | UI overlay state moved under `connection_state.network`; config collections remain persisted domain state. |
+| Saved connections | `NyaTermApp.connection_catalog.connections` | Persisted domain state | Loaded/refreshed from `ConnectionStore`; this is the only writable desktop owner. |
+| Connection groups | `NyaTermApp.connection_catalog.groups` | Persisted domain state | Same compatibility boundary and owner as saved connections. |
+| SSH keys | `NyaTermApp.security.catalog.ssh_keys` | Secret-adjacent persisted catalog | The security feature is authoritative; the catalog has no `Debug` implementation. |
+| OTP entries | `NyaTermApp.security.catalog.otp_entries` | Secret-adjacent persisted catalog | Do not log secrets or widen Debug exposure. |
+| Saved passwords/credentials | `NyaTermApp.security.catalog.passwords`, `credentials` | Secret-bearing persisted catalogs | Credential autofill and security settings read the same authoritative values through the security owner. |
+| Serial ports | `NyaTermApp.connection_catalog.serial_ports` | Runtime/discovered state | Refreshed by the session manager and never persisted. |
+| Tunnel/proxy configs | `NyaTermApp.tunnel_state.catalog` | Persisted network config | Tunnel/proxy persistence and runtime operations now meet at one feature owner; the Network page UI remains separate transient state. |
+| Queued saved-connection starts | `NyaTermApp.session.start` private queue | Transient session-start state | Admission, duplicate detection, draining and runtime cadence reads go through `SessionStartFeatureState` methods. |
 | List search/sort/hover/selection/DnD | `NyaTermApp.connection_state` private list child | Temporary UI state | Runtime and rendering enter through `ConnectionFeatureState` methods; state is not persisted except sort setting remains synced to settings as before. |
 | Connection import dialog | `NyaTermApp.connection_state` private import child | Temporary UI/runtime prompt state | File import still runs through existing runtime paths; runtime and rendering enter through `ConnectionFeatureState` methods. |
 | Connection editor | `NyaTermApp.connection_state` private editor child | Editing draft/window UI state | Runtime key handling, window lifecycle, rendering popovers, and sideband projection use `ConnectionFeatureState` methods; draft remains separate from saved connection data. |
 | Group editor | `NyaTermApp.connection_state` private group-editor child | Editing draft UI state | Draft remains separate from saved groups; runtime and rendering enter through `ConnectionFeatureState` methods. |
 | Delete/open confirmations | `NyaTermApp.connection_state` private confirmations child | Temporary UI state | Rendering and runtime actions enter through `ConnectionFeatureState` methods; persisted data changes only after existing confirm actions run. |
-| Network page UI | `NyaTermApp.connection_state` private network child | Temporary UI/editor state | Page rendering, editor focus, confirm/editor draft reads, and panel-count projection use `ConnectionFeatureState` methods. Tunnel/proxy configs remain in top-level persisted collections. |
+| Network page UI | `NyaTermApp.connection_state` private network child | Temporary UI/editor state | Page rendering, editor focus, confirm/editor draft reads, and panel-count projection use `ConnectionFeatureState` methods. Persisted configs live under `TunnelFeatureState::catalog`. |
 
 This round changed desktop-side state ownership, UI state plumbing, and module
 boundaries. Final reports should avoid broad statements that sound like no
@@ -1432,7 +1445,7 @@ honest remaining list.
    compiler-confirmed final pass also removed `features/prelude.rs`, so modules
    cannot regain the same implicit dependency surface through a shared import
    bucket.
-3. Largely done. `NyaTermApp` is down from 585 fields to 43, across eighteen
+3. Largely done. `NyaTermApp` is down from 585 fields to 32, across nineteen
    feature-state structs. The latest cohesive cuts moved sixteen terminal
    command-assistance and credential-prompt fields into
    `TerminalFeatureState::assist`, then seventeen transient settings fields
@@ -1447,9 +1460,12 @@ honest remaining list.
    shell's viewport, navigation, panel, chrome and workspace children. The
    latest batch then moved session event/restore coordination, command
    persistence runtime, diagnostic throttles, settings prompts, About state and
-   remote-editor window ownership to focused states. What is left is a long
-   tail, and much of it is genuinely app-level (stores, runtime, services,
-   persisted collections).
+   remote-editor window ownership to focused states. The connection convergence
+   batch then moved saved connection/group/serial catalogs, security catalogs,
+   tunnel/proxy catalogs and queued saved-connection starts to their domain
+   owners. What is left is a shorter tail, and much of it is genuinely
+   app-level (stores, runtime, services, feature owners and the remaining
+   compatibility-sensitive settings/command collections).
    Group by cohesion where a cluster exists; do not force the count down for
    its own sake.
    Method ownership is now moving too, which is what grouping the fields alone

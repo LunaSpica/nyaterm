@@ -229,9 +229,9 @@ impl NyaTermApp {
     ) -> bool {
         self.saved_connection_start_is_pending(connection)
             || self
-                .pending_saved_connection_queue
-                .iter()
-                .any(|queued| queued.connection.id == connection.id)
+                .session
+                .start
+                .saved_connection_is_queued(&connection.id)
     }
 
     pub(in crate::features) fn begin_background_saved_ssh_start(

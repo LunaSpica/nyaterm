@@ -30,6 +30,7 @@ impl NyaTermApp {
         self.refresh_connection_auth_catalog();
         let editor = if let Some(connection_id) = connection_id {
             let Some(connection) = self
+                .connection_catalog
                 .connections
                 .iter()
                 .find(|connection| connection.id == connection_id)
@@ -73,7 +74,8 @@ impl NyaTermApp {
                 shell_args: String::new(),
                 working_dir: String::new(),
                 serial_port: self
-                    .connection_serial_ports
+                    .connection_catalog
+                    .serial_ports
                     .first()
                     .cloned()
                     .unwrap_or_default(),
@@ -502,7 +504,7 @@ impl NyaTermApp {
             id: uuid(),
             name: name.clone(),
             parent_id: editor.pending_group_parent_id.clone(),
-            sort_order: self.connection_groups.len() as i32,
+            sort_order: self.connection_catalog.groups.len() as i32,
             created_at_ms: None,
             updated_at_ms: None,
         });

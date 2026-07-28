@@ -7,5 +7,7 @@ mod security_state;
 mod settings_runtime;
 mod state;
 
-pub(in crate::features) use security_state::{SecurityFeatureFocus, SecurityFeatureState};
+pub(in crate::features) use security_state::{
+    SecurityCatalogState, SecurityFeatureFocus, SecurityFeatureState,
+};
 pub(in crate::features) use state::{SettingsFeatureFocus, SettingsFeatureState};

@@ -81,7 +81,7 @@ impl NyaTermApp {
             editor
                 .group_id
                 .as_deref()
-                .and_then(|id| connection_group_path_label(&self.connection_groups, id))
+                .and_then(|id| connection_group_path_label(&self.connection_catalog.groups, id))
                 .unwrap_or_else(|| none_label.to_string())
         });
         let mut group_options = vec![ConnectionGroupChoice {
@@ -91,7 +91,7 @@ impl NyaTermApp {
             selected: editor.group_id.is_none() && editor.pending_group_name.is_none(),
         }];
         group_options.extend(
-            ordered_connection_groups(&self.connection_groups)
+            ordered_connection_groups(&self.connection_catalog.groups)
                 .into_iter()
                 .map(|(group, depth)| {
                     let selected = editor.group_id.as_deref() == Some(group.id.as_str());
@@ -109,7 +109,7 @@ impl NyaTermApp {
             editor.group_id.as_deref()
         };
         let group_parent_hint = group_parent_id
-            .and_then(|id| connection_group_path_label(&self.connection_groups, id))
+            .and_then(|id| connection_group_path_label(&self.connection_catalog.groups, id))
             .map(|path| {
                 self.tr("dialog.newGroupParentHint")
                     .replace("{{group}}", &path)
@@ -119,7 +119,9 @@ impl NyaTermApp {
             .key_id
             .as_deref()
             .and_then(|id| {
-                self.connection_ssh_keys
+                self.security
+                    .catalog
+                    .ssh_keys
                     .iter()
                     .find(|key| key.id == id)
                     .map(|key| key.name.clone())
@@ -129,7 +131,9 @@ impl NyaTermApp {
             .password_id
             .as_deref()
             .and_then(|id| {
-                self.connection_saved_passwords
+                self.security
+                    .catalog
+                    .passwords
                     .iter()
                     .find(|password| password.id == id)
                     .map(|password| password.name.clone())
@@ -139,7 +143,9 @@ impl NyaTermApp {
             .otp_id
             .as_deref()
             .and_then(|id| {
-                self.connection_otp_entries
+                self.security
+                    .catalog
+                    .otp_entries
                     .iter()
                     .find(|entry| entry.id == id)
                     .map(|entry| {
@@ -157,7 +163,9 @@ impl NyaTermApp {
             .proxy_id
             .as_deref()
             .and_then(|id| {
-                self.proxies
+                self.tunnel_state
+                    .catalog
+                    .proxies
                     .iter()
                     .find(|proxy| proxy.id == id)
                     .map(|proxy| {
@@ -189,7 +197,8 @@ impl NyaTermApp {
             .proxy_jump_id
             .as_deref()
             .and_then(|id| {
-                self.connections
+                self.connection_catalog
+                    .connections
                     .iter()
                     .find(|connection| connection.id == id)
                     .map(|connection| connection.name.clone())
@@ -212,21 +221,19 @@ impl NyaTermApp {
             label: none_label.to_string(),
             selected: editor.key_id.is_none(),
         }];
-        key_options.extend(
-            self.connection_ssh_keys
-                .iter()
-                .map(|key| ConnectionEditorChoice {
-                    value: Some(key.id.clone()),
-                    label: key.name.clone(),
-                    selected: editor.key_id.as_deref() == Some(key.id.as_str()),
-                }),
-        );
+        key_options.extend(self.security.catalog.ssh_keys.iter().map(|key| {
+            ConnectionEditorChoice {
+                value: Some(key.id.clone()),
+                label: key.name.clone(),
+                selected: editor.key_id.as_deref() == Some(key.id.as_str()),
+            }
+        }));
         let mut password_options = vec![ConnectionEditorChoice {
             value: None,
             label: none_label.to_string(),
             selected: editor.password_id.is_none(),
         }];
-        password_options.extend(self.connection_saved_passwords.iter().map(|password| {
+        password_options.extend(self.security.catalog.passwords.iter().map(|password| {
             ConnectionEditorChoice {
                 value: Some(password.id.clone()),
                 label: password.name.clone(),
@@ -238,7 +245,7 @@ impl NyaTermApp {
             label: self.tr("dialog.noOtp").to_string(),
             selected: editor.otp_id.is_none(),
         }];
-        otp_options.extend(self.connection_otp_entries.iter().map(|entry| {
+        otp_options.extend(self.security.catalog.otp_entries.iter().map(|entry| {
             let label = if entry.issuer.is_empty() {
                 entry.username.clone()
             } else if entry.username.is_empty() {
@@ -257,10 +264,12 @@ impl NyaTermApp {
             label: self.tr("dialog.noProxy").to_string(),
             selected: editor.proxy_id.is_none(),
         }];
-        proxy_options.extend(self.proxies.iter().map(|proxy| ConnectionEditorChoice {
-            value: Some(proxy.id.clone()),
-            label: proxy.name.clone(),
-            selected: editor.proxy_id.as_deref() == Some(proxy.id.as_str()),
+        proxy_options.extend(self.tunnel_state.catalog.proxies.iter().map(|proxy| {
+            ConnectionEditorChoice {
+                value: Some(proxy.id.clone()),
+                label: proxy.name.clone(),
+                selected: editor.proxy_id.as_deref() == Some(proxy.id.as_str()),
+            }
         }));
         let mut jump_options = vec![ConnectionEditorChoice {
             value: None,
@@ -268,13 +277,14 @@ impl NyaTermApp {
             selected: editor.proxy_jump_id.is_none(),
         }];
         jump_options.extend(
-            self.connections
+            self.connection_catalog
+                .connections
                 .iter()
                 .filter(|connection| matches!(connection.config, ConnectionType::Ssh { .. }))
                 .filter(|connection| editor.id.as_deref() != Some(connection.id.as_str()))
                 .filter(|connection| {
                     !connection_proxy_jump_would_cycle(
-                        &self.connections,
+                        &self.connection_catalog.connections,
                         editor.id.as_deref(),
                         connection,
                     )
@@ -301,7 +311,10 @@ impl NyaTermApp {
         .collect::<Vec<_>>();
         let mut serial_port_options = Vec::new();
         if !editor.serial_port.is_empty()
-            && !self.connection_serial_ports.contains(&editor.serial_port)
+            && !self
+                .connection_catalog
+                .serial_ports
+                .contains(&editor.serial_port)
         {
             serial_port_options.push(ConnectionEditorChoice {
                 value: Some(editor.serial_port.clone()),
@@ -309,7 +322,7 @@ impl NyaTermApp {
                 selected: true,
             });
         }
-        serial_port_options.extend(self.connection_serial_ports.iter().map(|port| {
+        serial_port_options.extend(self.connection_catalog.serial_ports.iter().map(|port| {
             ConnectionEditorChoice {
                 value: Some(port.clone()),
                 label: port.clone(),

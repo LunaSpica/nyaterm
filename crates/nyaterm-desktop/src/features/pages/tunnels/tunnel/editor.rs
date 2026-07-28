@@ -16,7 +16,8 @@ pub(in crate::features::pages::tunnels) fn network_tunnel_editor_panel(
         .connection_id
         .as_deref()
         .and_then(|id| {
-            app.connections
+            app.connection_catalog
+                .connections
                 .iter()
                 .find(|connection| connection.id == id)
                 .map(|connection| connection.name.clone())
@@ -26,7 +27,9 @@ pub(in crate::features::pages::tunnels) fn network_tunnel_editor_panel(
         .group_id
         .as_deref()
         .and_then(|id| {
-            app.tunnel_groups
+            app.tunnel_state
+                .catalog
+                .tunnel_groups
                 .iter()
                 .find(|group| group.id == id)
                 .map(|group| group.name.clone())

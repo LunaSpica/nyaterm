@@ -519,19 +519,24 @@ impl NyaTermApp {
                 let path = store.db_path().display().to_string();
                 match store.load_sessions() {
                     Ok(config) => {
-                        self.connections = config.connections;
-                        self.connection_groups = config.groups;
+                        self.connection_catalog.connections = config.connections;
+                        self.connection_catalog.groups = config.groups;
                         self.retain_connection_list_references_from_loaded_store();
-                        self.connection_ssh_keys = store.list_ssh_keys().unwrap_or_default();
-                        self.connection_otp_entries = store.list_otp_entries().unwrap_or_default();
-                        self.connection_saved_passwords =
+                        self.security.catalog.ssh_keys = store.list_ssh_keys().unwrap_or_default();
+                        self.security.catalog.otp_entries =
+                            store.list_otp_entries().unwrap_or_default();
+                        self.security.catalog.passwords =
                             store.list_passwords().unwrap_or_default();
-                        self.connection_saved_credentials =
+                        self.security.catalog.credentials =
                             store.list_credentials().unwrap_or_default();
-                        self.tunnels = store.list_tunnels().unwrap_or_default();
-                        self.tunnel_groups = store.list_tunnel_groups().unwrap_or_default();
-                        self.proxies = store.list_proxies().unwrap_or_default();
-                        self.proxy_groups = store.list_proxy_groups().unwrap_or_default();
+                        self.tunnel_state.catalog.tunnels =
+                            store.list_tunnels().unwrap_or_default();
+                        self.tunnel_state.catalog.tunnel_groups =
+                            store.list_tunnel_groups().unwrap_or_default();
+                        self.tunnel_state.catalog.proxies =
+                            store.list_proxies().unwrap_or_default();
+                        self.tunnel_state.catalog.proxy_groups =
+                            store.list_proxy_groups().unwrap_or_default();
                         let quick_commands = store.load_quick_commands().unwrap_or_default();
                         self.quick_commands = Arc::from(quick_commands.commands);
                         self.quick_command_categories = quick_commands.categories;
@@ -580,16 +585,16 @@ impl NyaTermApp {
                         };
                     }
                     Err(error) => {
-                        self.connections.clear();
-                        self.connection_groups.clear();
-                        self.connection_ssh_keys.clear();
-                        self.connection_otp_entries.clear();
-                        self.connection_saved_passwords.clear();
-                        self.connection_saved_credentials.clear();
-                        self.tunnels.clear();
-                        self.tunnel_groups.clear();
-                        self.proxies.clear();
-                        self.proxy_groups.clear();
+                        self.connection_catalog.connections.clear();
+                        self.connection_catalog.groups.clear();
+                        self.security.catalog.ssh_keys.clear();
+                        self.security.catalog.otp_entries.clear();
+                        self.security.catalog.passwords.clear();
+                        self.security.catalog.credentials.clear();
+                        self.tunnel_state.catalog.tunnels.clear();
+                        self.tunnel_state.catalog.tunnel_groups.clear();
+                        self.tunnel_state.catalog.proxies.clear();
+                        self.tunnel_state.catalog.proxy_groups.clear();
                         self.quick_commands = Arc::default();
                         self.quick_command_categories.clear();
                         self.command_history = Arc::default();
@@ -608,11 +613,11 @@ impl NyaTermApp {
                 }
             }
             Err(error) => {
-                self.connections.clear();
-                self.tunnels.clear();
-                self.tunnel_groups.clear();
-                self.proxies.clear();
-                self.proxy_groups.clear();
+                self.connection_catalog.connections.clear();
+                self.tunnel_state.catalog.tunnels.clear();
+                self.tunnel_state.catalog.tunnel_groups.clear();
+                self.tunnel_state.catalog.proxies.clear();
+                self.tunnel_state.catalog.proxy_groups.clear();
                 self.quick_commands = Arc::default();
                 self.quick_command_categories.clear();
                 self.command_history = Arc::default();
@@ -637,12 +642,14 @@ impl NyaTermApp {
 
     fn retain_connection_list_references_from_loaded_store(&mut self) {
         let connection_ids = self
+            .connection_catalog
             .connections
             .iter()
             .map(|connection| connection.id.clone())
             .collect::<std::collections::HashSet<_>>();
         let group_ids = self
-            .connection_groups
+            .connection_catalog
+            .groups
             .iter()
             .map(|group| group.id.clone())
             .collect::<std::collections::HashSet<_>>();

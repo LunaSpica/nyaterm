@@ -24,7 +24,7 @@ impl NyaTermApp {
     pub(in crate::features) fn tunnels_view(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = self.theme_palette();
         let open_tunnels = self
-            .tunnel_runtime
+            .tunnel_state
             .manager
             .list()
             .unwrap_or_default()
@@ -32,18 +32,20 @@ impl NyaTermApp {
             .map(|info| (info.id.clone(), info))
             .collect::<HashMap<_, _>>();
         let sections = tunnel_sections(
-            &self.tunnels,
-            &self.tunnel_groups,
+            &self.tunnel_state.catalog.tunnels,
+            &self.tunnel_state.catalog.tunnel_groups,
             self.tr("network.ungrouped"),
         );
         let proxy_sections = proxy_sections(
-            &self.proxies,
-            &self.proxy_groups,
+            &self.tunnel_state.catalog.proxies,
+            &self.tunnel_state.catalog.proxy_groups,
             self.tr("network.ungrouped"),
         );
         let mut tunnel_list = div().flex().flex_col().gap_2();
-        if self.tunnels.is_empty() && self.tunnel_groups.is_empty() {
-            let (title, description) = if self.connections.is_empty() {
+        if self.tunnel_state.catalog.tunnels.is_empty()
+            && self.tunnel_state.catalog.tunnel_groups.is_empty()
+        {
+            let (title, description) = if self.connection_catalog.connections.is_empty() {
                 (
                     self.tr("network.noConnections").to_string(),
                     self.tr("network.noConnectionsHint").to_string(),
@@ -68,7 +70,9 @@ impl NyaTermApp {
         }
 
         let mut proxy_list = div().flex().flex_col().gap_2();
-        if self.proxies.is_empty() && self.proxy_groups.is_empty() {
+        if self.tunnel_state.catalog.proxies.is_empty()
+            && self.tunnel_state.catalog.proxy_groups.is_empty()
+        {
             proxy_list = proxy_list.child(network_empty_state(
                 palette,
                 "icons/network.svg",
@@ -88,7 +92,7 @@ impl NyaTermApp {
             NetworkTab::Tunnels => self.tr("network.tunnelConfig").to_string(),
             NetworkTab::Proxies => self.tr("network.proxyConfig").to_string(),
         };
-        let has_connections = !self.connections.is_empty();
+        let has_connections = !self.connection_catalog.connections.is_empty();
 
         div()
             .flex()

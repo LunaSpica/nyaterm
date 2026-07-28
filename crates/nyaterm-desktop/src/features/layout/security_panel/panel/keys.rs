@@ -26,13 +26,13 @@ impl NyaTermApp {
         ));
         if let Some(editor) = self.security.editors.key.clone() {
             body = body.child(self.security_key_editor_view(editor, cx));
-        } else if self.connection_ssh_keys.is_empty() {
+        } else if self.security.catalog.ssh_keys.is_empty() {
             body = body.child(empty_panel(
                 self.tr("securityAuth.noKeys"),
                 self.theme_palette(),
             ));
         } else {
-            let entries = self.connection_ssh_keys.clone();
+            let entries = self.security.catalog.ssh_keys.clone();
             let entry_count = entries.len();
             let mut rows = div()
                 .rounded_md()

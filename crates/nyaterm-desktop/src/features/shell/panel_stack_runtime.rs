@@ -569,8 +569,8 @@ impl NyaTermApp {
             // Tauri NetworkPanel header shows active tab profile count.
             NavItem::Tunnels => {
                 let count = match self.connection_state.network_active_tab() {
-                    NetworkTab::Tunnels => self.tunnels.len(),
-                    NetworkTab::Proxies => self.proxies.len(),
+                    NetworkTab::Tunnels => self.tunnel_state.catalog.tunnels.len(),
+                    NetworkTab::Proxies => self.tunnel_state.catalog.proxies.len(),
                 };
                 SharedString::from(count.to_string())
             }
@@ -614,10 +614,10 @@ impl NyaTermApp {
             // Tauri SecurityAuthPanel header actions show active-tab count.
             NavItem::SecurityAuth => {
                 let count = match self.security.auth_tab {
-                    SecurityAuthTab::Keys => self.connection_ssh_keys.len(),
-                    SecurityAuthTab::Passwords => self.connection_saved_passwords.len(),
-                    SecurityAuthTab::Credentials => self.connection_saved_credentials.len(),
-                    SecurityAuthTab::Otp => self.connection_otp_entries.len(),
+                    SecurityAuthTab::Keys => self.security.catalog.ssh_keys.len(),
+                    SecurityAuthTab::Passwords => self.security.catalog.passwords.len(),
+                    SecurityAuthTab::Credentials => self.security.catalog.credentials.len(),
+                    SecurityAuthTab::Otp => self.security.catalog.otp_entries.len(),
                 };
                 SharedString::from(count.to_string())
             }
@@ -633,11 +633,11 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
         match panel {
-            NavItem::Connections if !self.connections.is_empty() => Some(
+            NavItem::Connections if !self.connection_catalog.connections.is_empty() => Some(
                 div()
                     .text_size(px(11.))
                     .text_color(rgb(self.theme_palette().text_dimmed))
-                    .child(self.connections.len().to_string())
+                    .child(self.connection_catalog.connections.len().to_string())
                     .into_any_element(),
             ),
             NavItem::AiAssistant => {

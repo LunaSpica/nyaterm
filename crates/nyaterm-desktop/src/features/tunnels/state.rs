@@ -1,20 +1,30 @@
 use std::sync::{Arc, mpsc};
 
+use nyaterm_core::{ProxyConfig, ProxyGroup, TunnelConfig, TunnelGroup};
 use nyaterm_transport::SshTunnelManager;
 
 use crate::features::TunnelJobResult;
 
 pub(in crate::features) struct TunnelFeatureState {
+    pub catalog: TunnelCatalogState,
     pub manager: Arc<SshTunnelManager>,
     tx: mpsc::Sender<TunnelJobResult>,
     rx: mpsc::Receiver<TunnelJobResult>,
     pending: Vec<String>,
 }
 
+pub(in crate::features) struct TunnelCatalogState {
+    pub tunnels: Vec<TunnelConfig>,
+    pub tunnel_groups: Vec<TunnelGroup>,
+    pub proxies: Vec<ProxyConfig>,
+    pub proxy_groups: Vec<ProxyGroup>,
+}
+
 impl TunnelFeatureState {
-    pub(in crate::features) fn new() -> Self {
+    pub(in crate::features) fn new(catalog: TunnelCatalogState) -> Self {
         let (tx, rx) = mpsc::channel();
         Self {
+            catalog,
             manager: Arc::new(SshTunnelManager::new()),
             tx,
             rx,
@@ -55,11 +65,16 @@ impl TunnelFeatureState {
 mod tests {
     use crate::features::TunnelJobResult;
 
-    use super::TunnelFeatureState;
+    use super::{TunnelCatalogState, TunnelFeatureState};
 
     #[test]
     fn tunnel_state_owns_job_channel_and_pending_lifecycle() {
-        let mut tunnels = TunnelFeatureState::new();
+        let mut tunnels = TunnelFeatureState::new(TunnelCatalogState {
+            tunnels: Vec::new(),
+            tunnel_groups: Vec::new(),
+            proxies: Vec::new(),
+            proxy_groups: Vec::new(),
+        });
         tunnels.mark_pending("tunnel-1".to_string());
 
         assert!(tunnels.has_pending());

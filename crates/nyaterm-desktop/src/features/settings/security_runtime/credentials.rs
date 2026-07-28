@@ -26,7 +26,9 @@ impl NyaTermApp {
         }
         let editor = if let Some(credential_id) = credential_id {
             let Some(entry) = self
-                .connection_saved_credentials
+                .security
+                .catalog
+                .credentials
                 .iter()
                 .find(|entry| entry.id == credential_id)
                 .cloned()
@@ -103,7 +105,9 @@ impl NyaTermApp {
             return;
         }
         let Some(entry) = self
-            .connection_saved_credentials
+            .security
+            .catalog
+            .credentials
             .iter()
             .find(|entry| entry.id == credential_id)
             .cloned()
@@ -242,7 +246,9 @@ impl NyaTermApp {
             return;
         }
         let label = self
-            .connection_saved_credentials
+            .security
+            .catalog
+            .credentials
             .iter()
             .find(|entry| entry.id == credential_id)
             .map(|entry| entry.name.clone())

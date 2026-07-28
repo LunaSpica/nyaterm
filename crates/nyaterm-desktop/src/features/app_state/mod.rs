@@ -1,16 +1,14 @@
-use std::collections::VecDeque;
 use std::sync::Arc;
 
 use nyaterm_core::{
-    AppRuntime, AppSettingsSummary, CommandHistoryEntry, Group, KeywordHighlightConfig,
-    NativeServices, OtpEntry, ProxyConfig, ProxyGroup, QuickCommand, QuickCommandCategory,
-    SavedConnection, SavedCredential, SavedPassword, SshKey, TunnelConfig, TunnelGroup,
+    AppRuntime, AppSettingsSummary, CommandHistoryEntry, KeywordHighlightConfig, NativeServices,
+    QuickCommand, QuickCommandCategory,
 };
 use nyaterm_legacy::MigrationInventory;
 
 use super::ai::AiFeatureState;
 use super::commands::{CommandRuntimeState, QuickCommandFeatureState};
-use super::connections::ConnectionFeatureState;
+use super::connections::{ConnectionCatalogState, ConnectionFeatureState};
 use super::panels::SendCommandFeatureState;
 use super::recording::RecordingFeatureState;
 use super::remote::RemoteOpsFeatureState;
@@ -30,32 +28,18 @@ use crate::models::StoreStatus;
 mod construct;
 mod types;
 
-pub(in crate::features) use types::{
-    PendingSavedConnectionStart, SavedConnectionStartOptions, SettingsDraftSnapshot,
-    TerminalRuntimeUiState,
-};
+pub(in crate::features) use types::{SettingsDraftSnapshot, TerminalRuntimeUiState};
 
 pub struct NyaTermApp {
     pub(in crate::features) stores: crate::entities::UiStoreHandles,
     pub(in crate::features) runtime: AppRuntime,
     pub(in crate::features) services: NativeServices,
     pub(in crate::features) inventory: MigrationInventory,
-    pub(in crate::features) connections: Vec<SavedConnection>,
-    pub(in crate::features) pending_saved_connection_queue: VecDeque<PendingSavedConnectionStart>,
-    pub(in crate::features) connection_groups: Vec<Group>,
+    pub(in crate::features) connection_catalog: ConnectionCatalogState,
     pub(in crate::features) connection_state: ConnectionFeatureState,
     /// Real text inputs for the panels that have not been given their own,
     /// keyed by an id the panel picks. See `features::text_inputs`.
     pub(in crate::features) text_inputs: TextInputRegistry,
-    pub(in crate::features) connection_ssh_keys: Vec<SshKey>,
-    pub(in crate::features) connection_otp_entries: Vec<OtpEntry>,
-    pub(in crate::features) connection_saved_passwords: Vec<SavedPassword>,
-    pub(in crate::features) connection_saved_credentials: Vec<SavedCredential>,
-    pub(in crate::features) connection_serial_ports: Vec<String>,
-    pub(in crate::features) tunnels: Vec<TunnelConfig>,
-    pub(in crate::features) tunnel_groups: Vec<TunnelGroup>,
-    pub(in crate::features) proxies: Vec<ProxyConfig>,
-    pub(in crate::features) proxy_groups: Vec<ProxyGroup>,
     pub(in crate::features) quick_commands: Arc<[QuickCommand]>,
     pub(in crate::features) quick_command_categories: Vec<QuickCommandCategory>,
     pub(in crate::features) quick_command_state: QuickCommandFeatureState,
@@ -80,5 +64,5 @@ pub struct NyaTermApp {
     pub(in crate::features) settings_master_password_draft: String,
     pub(in crate::features) store_status: StoreStatus,
     pub(in crate::features) recording: RecordingFeatureState,
-    pub(in crate::features) tunnel_runtime: TunnelFeatureState,
+    pub(in crate::features) tunnel_state: TunnelFeatureState,
 }

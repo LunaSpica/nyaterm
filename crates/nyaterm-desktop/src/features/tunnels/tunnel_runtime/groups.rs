@@ -13,11 +13,15 @@ impl NyaTermApp {
     ) {
         let name = match (tab, group_id.as_deref()) {
             (NetworkTab::Tunnels, Some(id)) => self
+                .tunnel_state
+                .catalog
                 .tunnel_groups
                 .iter()
                 .find(|group| group.id == id)
                 .map(|group| group.name.clone()),
             (NetworkTab::Proxies, Some(id)) => self
+                .tunnel_state
+                .catalog
                 .proxy_groups
                 .iter()
                 .find(|group| group.id == id)
@@ -88,7 +92,7 @@ impl NyaTermApp {
         name: String,
         cx: &mut Context<Self>,
     ) {
-        let mut groups = self.tunnel_groups.clone();
+        let mut groups = self.tunnel_state.catalog.tunnel_groups.clone();
         if let Some(id) = group_id {
             let Some(group) = groups.iter_mut().find(|group| group.id == id) else {
                 self.terminal.view.status = "tunnel group is no longer available".to_string();
@@ -111,7 +115,7 @@ impl NyaTermApp {
         .and_then(|store| store.replace_tunnel_groups(&groups))
         {
             Ok(()) => {
-                self.tunnel_groups = groups;
+                self.tunnel_state.catalog.tunnel_groups = groups;
                 self.connection_state.close_network_group_editor();
                 self.terminal.view.status = format!("tunnel group '{name}' saved");
                 self.store_status.message = self.terminal.view.status.clone();
@@ -132,7 +136,7 @@ impl NyaTermApp {
         name: String,
         cx: &mut Context<Self>,
     ) {
-        let mut groups = self.proxy_groups.clone();
+        let mut groups = self.tunnel_state.catalog.proxy_groups.clone();
         if let Some(id) = group_id {
             let Some(group) = groups.iter_mut().find(|group| group.id == id) else {
                 self.terminal.view.status = "proxy group is no longer available".to_string();
@@ -155,7 +159,7 @@ impl NyaTermApp {
         .and_then(|store| store.replace_proxy_groups(&groups))
         {
             Ok(()) => {
-                self.proxy_groups = groups;
+                self.tunnel_state.catalog.proxy_groups = groups;
                 self.connection_state.close_network_group_editor();
                 self.terminal.view.status = format!("proxy group '{name}' saved");
                 self.store_status.message = self.terminal.view.status.clone();
@@ -215,18 +219,24 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let deleted_tunnel_ids = self
+            .tunnel_state
+            .catalog
             .tunnels
             .iter()
             .filter(|tunnel| tunnel.group_id.as_deref() == Some(group_id.as_str()))
             .map(|tunnel| tunnel.id.clone())
             .collect::<Vec<_>>();
         let groups = self
+            .tunnel_state
+            .catalog
             .tunnel_groups
             .iter()
             .filter(|group| group.id != group_id)
             .cloned()
             .collect::<Vec<_>>();
         let tunnels = self
+            .tunnel_state
+            .catalog
             .tunnels
             .iter()
             .filter(|tunnel| tunnel.group_id.as_deref() != Some(group_id.as_str()))
@@ -242,8 +252,8 @@ impl NyaTermApp {
             store.replace_tunnels(&tunnels)
         }) {
             Ok(()) => {
-                self.tunnel_groups = groups;
-                self.tunnels = tunnels;
+                self.tunnel_state.catalog.tunnel_groups = groups;
+                self.tunnel_state.catalog.tunnels = tunnels;
                 self.connection_state.remove_network_group_references(
                     NetworkTab::Tunnels,
                     &group_id,
@@ -269,18 +279,24 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let deleted_proxy_ids = self
+            .tunnel_state
+            .catalog
             .proxies
             .iter()
             .filter(|proxy| proxy.group_id.as_deref() == Some(group_id.as_str()))
             .map(|proxy| proxy.id.clone())
             .collect::<Vec<_>>();
         let groups = self
+            .tunnel_state
+            .catalog
             .proxy_groups
             .iter()
             .filter(|group| group.id != group_id)
             .cloned()
             .collect::<Vec<_>>();
         let proxies = self
+            .tunnel_state
+            .catalog
             .proxies
             .iter()
             .filter(|proxy| proxy.group_id.as_deref() != Some(group_id.as_str()))
@@ -296,8 +312,8 @@ impl NyaTermApp {
             store.replace_proxies(&proxies)
         }) {
             Ok(()) => {
-                self.proxy_groups = groups;
-                self.proxies = proxies;
+                self.tunnel_state.catalog.proxy_groups = groups;
+                self.tunnel_state.catalog.proxies = proxies;
                 self.connection_state.remove_network_group_references(
                     NetworkTab::Proxies,
                     &group_id,

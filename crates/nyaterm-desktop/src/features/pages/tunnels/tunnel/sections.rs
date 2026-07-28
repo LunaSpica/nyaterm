@@ -94,12 +94,13 @@ pub(in crate::features::pages::tunnels) fn tunnel_section(
     } else {
         for (index, tunnel) in section.tunnels.into_iter().enumerate() {
             let open_info = open_tunnels.get(&tunnel.id).cloned();
-            let pending = app.tunnel_runtime.is_pending(&tunnel.id);
+            let pending = app.tunnel_state.is_pending(&tunnel.id);
             let connection_label = tunnel
                 .connection_id
                 .as_deref()
                 .and_then(|id| {
-                    app.connections
+                    app.connection_catalog
+                        .connections
                         .iter()
                         .find(|connection| connection.id == id)
                         .map(|connection| connection.name.clone())
@@ -137,7 +138,7 @@ pub(in crate::features::pages::tunnels) fn tunnel_section(
                         connection_label,
                         open_info,
                         pending,
-                        app.tunnel_groups.len(),
+                        app.tunnel_state.catalog.tunnel_groups.len(),
                         menu_open,
                         app.tr("common.more"),
                         app.tr("common.edit"),
@@ -186,7 +187,7 @@ pub(in crate::features::pages::tunnels) fn tunnel_section(
                             palette,
                             tunnel.id.clone(),
                             current_group_id,
-                            &app.tunnel_groups,
+                            &app.tunnel_state.catalog.tunnel_groups,
                             app,
                             cx,
                         ))

@@ -16,7 +16,9 @@ impl NyaTermApp {
         self.forget_text_inputs("security.editor.key-");
         let editor = if let Some(key_id) = key_id {
             let Some(key) = self
-                .connection_ssh_keys
+                .security
+                .catalog
+                .ssh_keys
                 .iter()
                 .find(|key| key.id == key_id)
                 .cloned()
@@ -189,7 +191,9 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let label = self
-            .connection_ssh_keys
+            .security
+            .catalog
+            .ssh_keys
             .iter()
             .find(|key| key.id == key_id)
             .map(|key| key.name.clone())

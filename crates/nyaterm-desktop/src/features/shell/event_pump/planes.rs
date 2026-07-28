@@ -185,7 +185,7 @@ impl NyaTermApp {
         if calm_tick
             && !remote_panels_need_poll
             && self.transfer.queue.jobs.is_empty()
-            && !self.tunnel_runtime.has_pending()
+            && !self.tunnel_state.has_pending()
             && self.recording.pending_auto_start.is_none()
             && !self.terminal.view.runtime.open_tabs_persist_dirty
             && !self.terminal.view.runtime.window_layout_persist_dirty
@@ -301,7 +301,7 @@ impl NyaTermApp {
                 frame_event_wake_count = self.terminal.view.frame_pipeline.event_wake_count(),
                 pending_frame_events = self.terminal.view.pending_frame_events.len(),
                 pending_session_starts = self.session.start.pending.len(),
-                queued_saved_connection_starts = self.pending_saved_connection_queue.len(),
+                queued_saved_connection_starts = self.session.start.saved_connection_queue_len(),
                 output_pressure,
                 next_tick_delay_ms = self.window_runtime_tick_delay().as_millis(),
                 visual_dirty,
@@ -456,7 +456,7 @@ impl NyaTermApp {
         // Common idle path: no connecting sessions and no auth/SFTP prompts.
         if !self.session.start.has_pending()
             && self.session.start.cancelled.is_empty()
-            && self.pending_saved_connection_queue.is_empty()
+            && !self.session.start.has_queued_saved_connections()
             && self.session.prompts.active_host_key_prompt.is_none()
             && self.session.prompts.active_credential_prompt.is_none()
             && self
@@ -733,7 +733,7 @@ impl NyaTermApp {
         let render_work_pressure = terminal_render_work_pressure_active(
             output_pressure,
             self.has_pending_session_start(),
-            !self.pending_saved_connection_queue.is_empty(),
+            self.session.start.has_queued_saved_connections(),
         );
         // Large-output protection recovery accounting.
         // Under pressure only touch views that already need recovery accounting.

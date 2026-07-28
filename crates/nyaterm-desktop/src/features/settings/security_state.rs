@@ -9,6 +9,7 @@ use std::collections::HashMap;
 use std::time::Instant;
 
 use gpui::FocusHandle;
+use nyaterm_core::{OtpEntry, SavedCredential, SavedPassword, SshKey};
 
 use crate::models::{
     SecurityAuthTab, SecurityCredentialEditorState, SecurityDeleteConfirmState,
@@ -17,6 +18,7 @@ use crate::models::{
 };
 
 pub(in crate::features) struct SecurityFeatureState {
+    pub catalog: SecurityCatalogState,
     pub auth_tab: SecurityAuthTab,
     pub editors: SecurityEditorState,
     pub delete_confirm: Option<SecurityDeleteConfirmState>,
@@ -24,6 +26,17 @@ pub(in crate::features) struct SecurityFeatureState {
     pub status: String,
     pub unlock: SecurityUnlockState,
     pub screen_lock: SecurityScreenLockState,
+}
+
+/// Persisted secret-adjacent catalogs loaded through `ConnectionStore`.
+///
+/// This type deliberately has no `Debug` implementation so callers cannot
+/// accidentally log secret-bearing entries through the feature state.
+pub(in crate::features) struct SecurityCatalogState {
+    pub ssh_keys: Vec<SshKey>,
+    pub otp_entries: Vec<OtpEntry>,
+    pub passwords: Vec<SavedPassword>,
+    pub credentials: Vec<SavedCredential>,
 }
 
 /// Focus handles the security panel needs at construction time.
@@ -81,11 +94,13 @@ pub(in crate::features) struct SecurityScreenLockState {
 
 impl SecurityFeatureState {
     pub(in crate::features) fn new(
+        catalog: SecurityCatalogState,
         secrets_unlocked: bool,
         status: String,
         focus: SecurityFeatureFocus,
     ) -> Self {
         Self {
+            catalog,
             auth_tab: SecurityAuthTab::Keys,
             editors: SecurityEditorState {
                 key: None,
@@ -166,12 +181,18 @@ mod tests {
 
     use gpui::TestAppContext;
 
-    use super::{SecurityFeatureFocus, SecurityFeatureState};
+    use super::{SecurityCatalogState, SecurityFeatureFocus, SecurityFeatureState};
 
     fn security_state() -> SecurityFeatureState {
         let cx = TestAppContext::single();
         let focus = || cx.update(|cx| cx.focus_handle());
         SecurityFeatureState::new(
+            SecurityCatalogState {
+                ssh_keys: Vec::new(),
+                otp_entries: Vec::new(),
+                passwords: Vec::new(),
+                credentials: Vec::new(),
+            },
             true,
             "ready".to_string(),
             SecurityFeatureFocus {

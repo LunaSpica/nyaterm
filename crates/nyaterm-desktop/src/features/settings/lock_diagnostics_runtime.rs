@@ -204,7 +204,7 @@ impl NyaTermApp {
         }
 
         let open_tunnels = self
-            .tunnel_runtime
+            .tunnel_state
             .manager
             .list()
             .map(|items| items.len())
@@ -233,9 +233,9 @@ impl NyaTermApp {
             raw_tcp_sessions,
             serial_sessions,
             open_tunnels,
-            pending_tunnels: self.tunnel_runtime.pending_count(),
-            saved_connections: self.connections.len(),
-            saved_tunnels: self.tunnels.len(),
+            pending_tunnels: self.tunnel_state.pending_count(),
+            saved_connections: self.connection_catalog.connections.len(),
+            saved_tunnels: self.tunnel_state.catalog.tunnels.len(),
             running_transfers,
             paused_transfers,
             completed_transfers,
