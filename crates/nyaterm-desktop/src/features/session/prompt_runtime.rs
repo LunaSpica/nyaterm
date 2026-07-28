@@ -1,6 +1,17 @@
 use std::hash::{Hash, Hasher};
 
-use super::*;
+use gpui::{ClipboardItem, Context, KeyDownEvent, Window};
+use nyaterm_transport::{
+    SftpDuplicateDecision, SftpDuplicateRequest, SshCredentialPrompt, SshHostKey,
+    SshKeyboardInteractiveRequest,
+};
+
+use super::{
+    CredentialPromptRequest, CredentialPromptState, HostKeyPromptChoice,
+    KeyboardInteractivePromptState, NativeOtpCodePreview, SftpDuplicatePromptState,
+    unix_seconds_now,
+};
+use crate::features::{NyaTermApp, TextInputSetup, duplicate_decision_label};
 
 impl NyaTermApp {
     pub(in crate::features) fn resolve_host_key_prompt(

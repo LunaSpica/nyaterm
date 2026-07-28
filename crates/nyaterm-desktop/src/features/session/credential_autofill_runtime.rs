@@ -1,6 +1,19 @@
-use super::*;
+use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::models::{CredentialSuggestionState, PendingCredentialAutofill};
+use gpui::{
+    Context, FontWeight, IntoElement, KeyDownEvent, SharedString, div, prelude::*, px, rgb, rgba,
+    svg,
+};
+use nyaterm_core::{
+    ConnectionStore, CredentialPromptKind, SavedCredential, TerminalInputState, truncate_preview,
+};
+use nyaterm_terminal::TerminalSnapshot;
+
+use crate::features::NyaTermApp;
+use crate::models::{
+    CredentialAutofillMatchEvent, CredentialAutofillMatchOutcome, CredentialAutofillMatchRequest,
+    CredentialAutofillMatchRequestKey, CredentialSuggestionState, PendingCredentialAutofill,
+};
 
 const CREDENTIAL_AUTOFILL_INPUT_TAIL_LIMIT: usize = 4096;
 const RECENT_PROMPT_TTL_MS: u64 = 30_000;
@@ -829,7 +842,16 @@ fn credential_autofill_detect_prompt_kind(prompt: &str) -> Option<CredentialProm
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use nyaterm_core::CredentialPromptKind;
+
+    use super::{
+        CREDENTIAL_AUTOFILL_INPUT_TAIL_LIMIT, credential_autofill_detect_prompt_kind,
+        credential_autofill_detection_should_run_this_tick,
+        credential_autofill_pending_detection_can_run,
+        credential_autofill_prompt_line_from_viewport,
+        credential_autofill_prompt_text_from_visible,
+        credential_autofill_snapshot_detection_can_run, credential_autofill_visible_tail,
+    };
 
     #[test]
     fn credential_autofill_snapshot_detection_requires_active_session_and_credentials() {

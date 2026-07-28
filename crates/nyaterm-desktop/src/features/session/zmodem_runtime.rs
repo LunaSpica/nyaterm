@@ -1,9 +1,17 @@
-use super::*;
+use gpui::{Context, PathPromptOptions, SharedString};
 use nyaterm_transport::{
-    SftpTransferDirection, ZmodemAction, ZmodemDetectResult, ZmodemDetector, ZmodemDirection,
-    ZmodemEvent, ZmodemTransfer,
+    SftpDuplicateDecision, SftpDuplicatePolicy, SftpDuplicateRequest, SftpDuplicateResolver,
+    SftpService, SftpTransferDirection, SftpTransferProgress, SshSessionConfig, ZmodemAction,
+    ZmodemDetectResult, ZmodemDetector, ZmodemDirection, ZmodemEvent, ZmodemTransfer,
 };
-use std::{path::PathBuf, sync::mpsc, thread};
+use std::{collections::HashSet, path::PathBuf, sync::mpsc, thread};
+
+use crate::features::NyaTermApp;
+use crate::features::formatting::short_id;
+use crate::models::{
+    TransferJobEvent, TransferJobKind, TransferJobOutput, TransferJobResult, TransferJobState,
+    TransferJobStatus,
+};
 
 pub(in crate::features) struct ZmodemSessionState {
     pub(in crate::features) detector: ZmodemDetector,
@@ -866,7 +874,9 @@ const ZMODEM_WORKER_EVENT_DRAIN_BATCH: usize = 32;
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use nyaterm_transport::{ZmodemAction, ZmodemDirection, ZmodemEvent, ZmodemTransfer};
+
+    use super::{ZmodemWorkerCommand, process_zmodem_worker_command};
 
     #[test]
     fn zmodem_worker_cancel_emits_failed_event_off_ui_state() {

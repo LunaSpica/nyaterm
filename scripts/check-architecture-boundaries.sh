@@ -122,6 +122,26 @@ check_no_matches \
   crates/nyaterm-desktop/src/features/prelude.rs
 
 check_no_matches \
+  "session-specific core types must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(ConnectionAuth|CredentialPromptKind|DecryptedOtpEntry|KnownHostCheck)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
+  "session-specific transport types must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(LocalSessionConfig|SerialSessionConfig|SftpDuplicateRequest|SshCredentialPrompt|SshCredentialProvider|SshHostKey|SshHostKeyDecision|SshHostKeyVerifier|SshKeyAuthConfig|SshKeyboardInteractiveRequest|SshOtpProvider|SshProxyConfig|TelnetSessionConfig)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
+  "session-specific standard-library types must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(Mutex|SystemTime|UNIX_EPOCH)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
+  "session-specific UI models must stay out of features/prelude.rs" \
+  '(^|[,{[:space:]])(CredentialAutofillMatchEvent|CredentialAutofillMatchOutcome|CredentialAutofillMatchRequest)([},[:space:]]|$)' \
+  crates/nyaterm-desktop/src/features/prelude.rs
+
+check_no_matches \
   "low-frequency widgets must stay out of features/prelude.rs" \
   '(^|[,{[:space:]])(mode_button|session_info_row|svg_icon_button)([},[:space:]]|$)' \
   crates/nyaterm-desktop/src/features/prelude.rs
@@ -703,6 +723,22 @@ declare -A SUPER_BASELINE=(
   [crates/nyaterm-desktop/src/features/panels/temporary_ssh_link_overlay.rs]=0
   [crates/nyaterm-desktop/src/features/panels/terminal_actions_overlay.rs]=0
   [crates/nyaterm-desktop/src/features/panels/update_overlay.rs]=0
+  [crates/nyaterm-desktop/src/features/session/auth_runtime.rs]=0
+  [crates/nyaterm-desktop/src/features/session/credential_autofill_runtime.rs]=0
+  [crates/nyaterm-desktop/src/features/session/mod.rs]=0
+  [crates/nyaterm-desktop/src/features/session/prompt_runtime.rs]=0
+  [crates/nyaterm-desktop/src/features/session/recording_runtime.rs]=0
+  [crates/nyaterm-desktop/src/features/session/session_dialog_runtime.rs]=0
+  [crates/nyaterm-desktop/src/features/session/session_lifecycle.rs]=0
+  [crates/nyaterm-desktop/src/features/session/session_order.rs]=0
+  [crates/nyaterm-desktop/src/features/session/session_runtime/background.rs]=0
+  [crates/nyaterm-desktop/src/features/session/session_runtime/mod.rs]=0
+  [crates/nyaterm-desktop/src/features/session/session_runtime/start.rs]=0
+  [crates/nyaterm-desktop/src/features/session/session_state.rs]=0
+  [crates/nyaterm-desktop/src/features/session/startup_restore_runtime.rs]=0
+  [crates/nyaterm-desktop/src/features/session/temporary_ssh_link.rs]=0
+  [crates/nyaterm-desktop/src/features/session/trzsz_runtime.rs]=0
+  [crates/nyaterm-desktop/src/features/session/zmodem_runtime.rs]=0
   [crates/nyaterm-desktop/src/features/commands/mod.rs]=0
   [crates/nyaterm-desktop/src/features/commands/state.rs]=0
   [crates/nyaterm-desktop/src/features/commands/command_runtime/helpers.rs]=0
@@ -772,6 +808,7 @@ done < <(rg -n --path-separator / '^[[:space:]]*use super::\*;' \
   crates/nyaterm-desktop/src/features/commands \
   crates/nyaterm-desktop/src/features/inspector \
   crates/nyaterm-desktop/src/features/panels \
+  crates/nyaterm-desktop/src/features/session \
   crates/nyaterm-desktop/src/features/settings \
   crates/nyaterm-desktop/src/features/pages/mod.rs \
   crates/nyaterm-desktop/src/features/pages/connections \

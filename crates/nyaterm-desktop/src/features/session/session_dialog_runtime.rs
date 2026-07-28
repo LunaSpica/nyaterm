@@ -1,6 +1,9 @@
-use super::*;
+use std::collections::HashSet;
 
-use crate::models::{StartupCommandAction, StartupCommandRequest};
+use gpui::{Context, KeyDownEvent, Window};
+
+use crate::features::{DEFAULT_DUPLICATE_STARTUP_DELAY_MS, NyaTermApp, TextInputSetup};
+use crate::models::{SessionLaunchConfig, StartupCommandAction, StartupCommandRequest};
 
 impl NyaTermApp {
     pub(in crate::features) fn open_rename_session(

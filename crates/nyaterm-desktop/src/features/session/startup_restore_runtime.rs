@@ -1,6 +1,14 @@
-use super::*;
-use crate::models::{MainMode, WorkspacePaneNode, WorkspaceSplitDirection};
-use nyaterm_core::{RestorableOpenTab, RestorablePaneNode, RestorableWorkspacePaneNode};
+use gpui::{Context, Window};
+use nyaterm_core::{
+    AiExecutionProfile, ConnectionStore, RestorableOpenTab, RestorablePaneNode,
+    RestorableWorkspacePaneNode,
+};
+use nyaterm_transport::{LocalSessionConfig, SessionInfo};
+
+use crate::features::{NyaTermApp, SavedConnectionStartOptions};
+use crate::models::{
+    MainMode, NavItem, SessionLaunchConfig, WorkspacePaneNode, WorkspaceSplitDirection,
+};
 
 impl NyaTermApp {
     fn mark_startup_restore_complete(&mut self, cx: &mut Context<Self>) {

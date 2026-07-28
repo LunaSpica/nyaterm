@@ -7,9 +7,8 @@ pub(super) use gpui::{
 pub(super) use nyaterm_core::{
     AgentOutputCaptureProcessor, AiAction, AiCommandCard, AiExecutionProfile, AiMode, AiSettings,
     AppRuntime, AppSettingsSummary, CloudSyncError, CloudSyncHistoryEntry, CloudSyncSettings,
-    CloudSyncState, CommandHistoryEntry, CommandObservation, ConnectionAuth, ConnectionStore,
-    ConnectionType, CredentialPromptKind, DecryptedOtpEntry, Group, InputSelectionRange,
-    KeywordHighlightConfig, KnownHostCheck, NativeServices, NativeUpdateInfo, OtpEntry,
+    CloudSyncState, CommandHistoryEntry, CommandObservation, ConnectionStore, ConnectionType,
+    Group, InputSelectionRange, KeywordHighlightConfig, NativeServices, NativeUpdateInfo, OtpEntry,
     ProxyConfig, ProxyGroup, QuickCommand, QuickCommandCategory, RuntimeMode, SavedConnection,
     SavedCredential, SavedPassword, SshKey, TerminalInputState, TerminalWireWriteKind,
     TunnelConfig, TunnelGroup, apply_terminal_input_data, build_move_input_cursor_data,
@@ -23,33 +22,29 @@ pub(super) use nyaterm_terminal::{
     TerminalEffects, TerminalOutputDecoder, TerminalScreen, TerminalSnapshot,
 };
 pub(super) use nyaterm_transport::{
-    DockerComposeService, DockerContainerDetails, DockerService, LocalSessionConfig,
-    RecordingManager, RemoteDockerOverview, RemoteProcess, RemoteStats, SerialSessionConfig,
-    SessionEvent, SessionInfo, SessionKind, SessionManager, SftpDuplicateDecision,
-    SftpDuplicatePolicy, SftpDuplicateRequest, SftpDuplicateResolver, SftpFileEntry, SftpService,
-    SftpTransferControl, SftpTransferOptions, SftpTransferProgress, SshCredentialPrompt,
-    SshCredentialPromptKind, SshCredentialPromptReason, SshCredentialProvider, SshHostKey,
-    SshHostKeyDecision, SshHostKeyVerifier, SshKeyAuthConfig, SshKeyboardInteractiveRequest,
-    SshMultiplexHandle, SshOtpProvider, SshProcessService, SshProxyConfig, SshSessionConfig,
-    SshTunnelInfo, SshTunnelManager, TelnetSessionConfig,
+    DockerComposeService, DockerContainerDetails, DockerService, RecordingManager,
+    RemoteDockerOverview, RemoteProcess, RemoteStats, SessionEvent, SessionInfo, SessionKind,
+    SessionManager, SftpDuplicateDecision, SftpDuplicatePolicy, SftpDuplicateResolver,
+    SftpFileEntry, SftpService, SftpTransferControl, SftpTransferOptions, SftpTransferProgress,
+    SshCredentialPromptKind, SshCredentialPromptReason, SshMultiplexHandle, SshProcessService,
+    SshSessionConfig, SshTunnelInfo, SshTunnelManager,
 };
 
 pub(super) use std::collections::{HashMap, HashSet, VecDeque};
 pub(super) use std::path::PathBuf;
 pub(super) use std::sync::{
-    Arc, Mutex,
+    Arc,
     atomic::{AtomicBool, AtomicUsize, Ordering},
     mpsc,
 };
-pub(super) use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+pub(super) use std::time::{Duration, Instant};
 
 pub(super) use crate::models::{
-    CloudSyncInputField, CredentialAutofillMatchEvent, CredentialAutofillMatchOutcome,
-    CredentialAutofillMatchPipeline, CredentialAutofillMatchRequest,
-    CredentialAutofillMatchRequestKey, NavItem, PanelSide, SessionLaunchConfig,
-    TerminalFrameActionLinks, TerminalViewState, TransferJobEvent, TransferJobKind,
-    TransferJobOutput, TransferJobResult, TransferJobState, TransferJobStatus, is_multi_line_paste,
-    normalize_paste_newlines, panel_collapsed_from_persistence,
+    CloudSyncInputField, CredentialAutofillMatchPipeline, CredentialAutofillMatchRequestKey,
+    NavItem, PanelSide, SessionLaunchConfig, TerminalFrameActionLinks, TerminalViewState,
+    TransferJobEvent, TransferJobKind, TransferJobOutput, TransferJobResult, TransferJobState,
+    TransferJobStatus, is_multi_line_paste, normalize_paste_newlines,
+    panel_collapsed_from_persistence,
 };
 pub(super) use crate::terminal::{
     NyaTerminalElement, NyaTerminalLayoutCache, TerminalBufferMatch, TerminalKeyMode,

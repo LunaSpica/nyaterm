@@ -1,6 +1,10 @@
-use super::*;
+use gpui::{ClipboardItem, Context, Window};
+use nyaterm_core::{AiExecutionProfile, TerminalInputState};
+use nyaterm_transport::SessionInfo;
 
-use crate::models::MainMode;
+use crate::features::NyaTermApp;
+use crate::features::formatting::{session_kind_label, short_id};
+use crate::models::{MainMode, NavItem, SessionLaunchConfig};
 
 impl NyaTermApp {
     pub(in crate::features) fn session_display_name_by_info(
@@ -681,7 +685,7 @@ fn terminal_activation_surface_notify_ids(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::terminal_activation_surface_notify_ids;
 
     #[test]
     fn activation_surface_notify_skips_unchanged_session() {

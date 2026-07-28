@@ -1,6 +1,12 @@
-use super::*;
+use gpui::{Context, Window};
+use nyaterm_core::TerminalInputState;
+use nyaterm_transport::SshMultiplexHandle;
 
-use crate::models::{MainMode, StartupCommandRequest};
+use crate::features::NyaTermApp;
+use crate::features::formatting::{short_id, ssh_multiplex_key};
+use crate::models::{
+    MainMode, NavItem, SessionLaunchConfig, StartupCommandRequest, TerminalViewState,
+};
 
 impl NyaTermApp {
     pub(in crate::features) fn duplicate_active_session(

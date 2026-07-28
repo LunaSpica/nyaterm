@@ -1,6 +1,24 @@
-use super::*;
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::time::Instant;
 
-use crate::models::{MainMode, StartupCommandRequest};
+use gpui::{Context, Window};
+use nyaterm_core::{
+    AiExecutionProfile, ConnectionAuth, ConnectionStore, ConnectionType, SavedConnection,
+};
+use nyaterm_transport::{
+    LocalSessionConfig, SerialSessionConfig, SessionKind, SshKeyAuthConfig, SshProxyConfig,
+    SshSessionConfig, TelnetSessionConfig,
+};
+
+use super::super::NativeHostKeyVerifier;
+use super::PendingSessionStartRegistration;
+use crate::features::formatting::{non_empty_string, parse_telnet_enter_mode, split_shell_args};
+use crate::features::{
+    CredentialPromptBroker, HostKeyPromptBroker, NativeOtpProvider, NyaTermApp,
+    SavedConnectionStartOptions, SessionStartResult, SessionStartSuccess,
+};
+use crate::models::{MainMode, NavItem, SessionLaunchConfig, StartupCommandRequest};
 
 #[derive(Clone)]
 pub(in crate::features) struct SshSessionConfigBuildContext {
@@ -538,7 +556,18 @@ fn load_proxy_jump_config_with_context(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use std::path::PathBuf;
+    use std::sync::Arc;
+
+    use nyaterm_core::{
+        AiExecutionProfile, ConnectionAuth, ConnectionStore, ConnectionType, SavedConnection, uuid,
+    };
+
+    use super::{
+        SshSessionConfigBuildContext, build_ssh_session_config_with_context,
+        load_ssh_connection_password_with_context,
+    };
+    use crate::features::{CredentialPromptBroker, HostKeyPromptBroker, NativeOtpProvider};
 
     fn unique_temp_dir(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!(

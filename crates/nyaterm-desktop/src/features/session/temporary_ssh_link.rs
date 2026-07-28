@@ -1,4 +1,11 @@
-use super::*;
+use std::sync::Arc;
+
+use gpui::{Context, KeyDownEvent, Window};
+use nyaterm_core::AiExecutionProfile;
+use nyaterm_transport::SshSessionConfig;
+
+use super::NativeHostKeyVerifier;
+use crate::features::{NyaTermApp, TextInputSetup};
 use crate::temporary_ssh_link::{TemporarySshLinkConfig, parse_temporary_ssh_link};
 
 impl NyaTermApp {

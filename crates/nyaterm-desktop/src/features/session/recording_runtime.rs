@@ -1,5 +1,9 @@
-use super::*;
+use std::sync::Arc;
 
+use gpui::{AppContext, Context};
+
+use crate::features::NyaTermApp;
+use crate::features::formatting::recording_file_path;
 use crate::models::{RecordingPathPromptKind, RecordingPathPromptResult};
 
 impl NyaTermApp {

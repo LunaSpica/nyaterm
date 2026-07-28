@@ -12,8 +12,8 @@ Last updated from the working tree on 2026-07-28.
 | `NyaTermApp` fields | 261 | Counted from `features/app_state/mod.rs`; down from 585, still transitional. |
 | `impl NyaTermApp` blocks | 239 | Spread across 234 files under `crates/nyaterm-desktop/src`. |
 | `#[path = "..."]` declarations in desktop | 0 | Cleared. Every directory is a real module; the boundary script fails on any new occurrence. |
-| `use super::*` imports in desktop | 165 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
-| `features/prelude.rs` rough exported-token count | 202 | Still a broad shared prelude; two hundred forty-three low-frequency GPUI/transport/core/http/model/helper/widget exports are now explicit imports. |
+| `use super::*` imports in desktop | 144 | Includes indented test-module imports; historical migration debt, do not add new occurrences. |
+| `features/prelude.rs` rough exported-token count | 179 | Still a broad shared prelude; two hundred sixty-six low-frequency GPUI/transport/core/http/model/helper/widget exports are now explicit imports. |
 | Entity Store structs | 4 | `Runtime`, `WindowRuntime`, `StartupRestore`, `Overlay`. Each owns state the app does not. |
 | Snapshot structs | 0 | Cleared. No store is a projection of `NyaTermApp` any more. |
 | `replace_snapshot` methods | 0 | Cleared. |
@@ -485,6 +485,18 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   wildcard imports while keeping module-entry helper imports named.
   Panel rendering, focus/keyboard routing, session actions, quick-command
   execution and send-command formatting/dispatch behavior are unchanged.
+- The complete 16-module `features/session` tree is now free of
+  `use super::*` imports, including the five nested test modules that previously
+  relied on those wildcards. Session
+  lifecycle and ordering, startup restore, prompt brokers, credential
+  autofill, recording, temporary SSH links, and TRZSZ/ZMODEM runtime modules
+  name their GPUI, core, transport, model, formatting and sibling dependencies
+  directly. Twenty-three session-specific core, transport, standard-library
+  and credential-autofill model symbols also left `features/prelude.rs`. The
+  architecture script governs the whole subtree at zero parent-module wildcard
+  imports and prevents those prelude exports from returning. SSH host-key and
+  credential prompting, OTP lookup, credential autofill, session startup and
+  restore, recording, and TRZSZ/ZMODEM behavior are unchanged.
 - `connection_runtime/helpers.rs` no longer depends on the connection runtime
   wildcard import; its GPUI, app, model, and core dependencies are explicit.
 - `connection_runtime/actions.rs` no longer depends on the connection runtime
@@ -1136,8 +1148,8 @@ use the existing behavior.
 - `features/prelude.rs` still exports many business models, services, transport
   types, terminal helpers, and widgets. New or substantially edited modules
   should prefer explicit imports instead of relying on this prelude.
-- `#[path = "..."]` and `use super::*` remain widespread. They are allowed as
-  historical debt but should be removed from each area as that area is edited.
+- `#[path = "..."]` is cleared. `use super::*` remains as historical debt and
+  should be removed from each coherent area as that area is edited.
 - `NyaTermApp` remains the dominant state owner. New state should move into a
   focused FeatureState or a deliberately authoritative Entity, not into new
   unrelated top-level fields.
@@ -1166,9 +1178,9 @@ use the existing behavior.
 
 Run `scripts/check-architecture-boundaries.sh` before review. The script is
 baseline-friendly: current historical debt is allowed, but additional
-occurrences in the governed connections/network/event-pump scope fail. The
-GitHub Actions `Architecture Boundaries` workflow runs this script for pull
-requests and pushes to `main`.
+occurrences in governed feature subtrees, including the complete session tree,
+fail. The GitHub Actions `Architecture Boundaries` workflow runs this script
+for pull requests and pushes to `main`.
 
 ## Entity Ownership Migration
 

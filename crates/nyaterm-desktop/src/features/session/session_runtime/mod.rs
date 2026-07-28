@@ -1,6 +1,7 @@
-use super::*;
+use nyaterm_core::AiExecutionProfile;
+use nyaterm_transport::SessionKind;
 
-use crate::models::StartupCommandRequest;
+use crate::models::{SessionLaunchConfig, StartupCommandRequest};
 
 pub(in crate::features) struct PendingSessionStartRegistration {
     pub(in crate::features) connection_name: String,

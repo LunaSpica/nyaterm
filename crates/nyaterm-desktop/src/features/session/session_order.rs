@@ -1,6 +1,9 @@
-use super::*;
+use std::collections::HashSet;
 
-use crate::models::SessionRuntimeMetadata;
+use nyaterm_transport::{SessionInfo, SessionKind};
+
+use crate::features::NyaTermApp;
+use crate::models::{SessionLaunchConfig, SessionRuntimeMetadata, TerminalViewState};
 
 impl NyaTermApp {
     pub(in crate::features) fn register_session(

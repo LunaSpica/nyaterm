@@ -1,8 +1,11 @@
-use super::*;
+use crate::features::NyaTermApp;
+use crate::features::formatting::short_id;
+use crate::models::{TransferJobKind, TransferJobState, TransferJobStatus};
 use crate::models::{TransferPathPromptKind, TransferPathPromptResult};
+use gpui::{Context, PathPromptOptions, SharedString};
 use nyaterm_transport::{
-    TrzszAction, TrzszDetector, TrzszDownloadEngine, TrzszDownloadEvent, TrzszMode,
-    TrzszOutputEvent, TrzszProtocolFrame, TrzszProtocolStream, TrzszTransferEvent,
+    SftpTransferProgress, TrzszAction, TrzszDetector, TrzszDownloadEngine, TrzszDownloadEvent,
+    TrzszMode, TrzszOutputEvent, TrzszProtocolFrame, TrzszProtocolStream, TrzszTransferEvent,
     TrzszTransferState, TrzszUploadEngine, TrzszUploadEntry, TrzszUploadEvent, TrzszUploadPayload,
     TrzszUploadSource, build_trzsz_action_frame, build_trzsz_string_frame, trzsz_fail_response,
 };
@@ -11,6 +14,7 @@ use std::{
     fs::{File, OpenOptions},
     io::Write,
     path::{Path, PathBuf},
+    sync::mpsc,
     thread,
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -2261,8 +2265,19 @@ const TRZSZ_UPLOAD_WORKER_EVENT_DRAIN_BATCH: usize = 32;
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use nyaterm_transport::TrzszProtocolPayload;
+    use std::collections::HashMap;
+    use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    use nyaterm_transport::{
+        TrzszDownloadEngine, TrzszProtocolFrame, TrzszProtocolPayload, TrzszTransferState,
+        TrzszUploadEngine, TrzszUploadEntry, TrzszUploadPayload,
+    };
+
+    use super::{
+        TrzszDownloadRuntime, TrzszDownloadWorkerEvent, TrzszUploadPrepareWorker,
+        TrzszUploadRuntime, process_trzsz_download_worker_frame, process_trzsz_upload_worker_begin,
+    };
 
     #[test]
     fn trzsz_download_worker_frame_path_writes_file_off_ui_state() {

@@ -1,7 +1,22 @@
-use super::*;
+use std::time::{Duration, Instant};
 
-use crate::models::{MainMode, SessionRuntimeMetadata, StartupCommandRequest};
-use nyaterm_transport::open_ssh_multiplex_handle;
+use gpui::Context;
+use nyaterm_core::{AiExecutionProfile, ConnectionStore, uuid};
+use nyaterm_transport::{
+    LocalSessionConfig, SerialSessionConfig, SessionInfo, SessionKind, SessionManager,
+    SshMultiplexHandle, SshSessionConfig, TelnetSessionConfig, open_ssh_multiplex_handle,
+};
+
+use super::PendingSessionStartRegistration;
+use crate::features::formatting::{session_kind_label, short_id, ssh_multiplex_key};
+use crate::features::{
+    FailedSessionStart, NyaTermApp, PendingSessionStart, SessionPaneState, SessionStartResult,
+    SessionStartSuccess,
+};
+use crate::models::{
+    MainMode, NavItem, SessionLaunchConfig, SessionRuntimeMetadata, StartupCommandRequest,
+    TerminalViewState,
+};
 
 const SESSION_START_EVENT_DRAIN_LIMIT: usize = 8;
 
