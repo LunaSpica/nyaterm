@@ -1,4 +1,14 @@
-use super::*;
+use gpui::{
+    Context, FontWeight, InteractiveElement as _, IntoElement, KeyDownEvent, ParentElement as _,
+    SharedString, StatefulInteractiveElement as _, Styled as _, div, px, rgb, rgba,
+};
+use nyaterm_transport::{SftpFileEntry, SftpFileType};
+
+use crate::features::{NyaTermApp, dialog_action_button};
+use crate::models::TransferUnknownFileState;
+use crate::widgets::small_button;
+
+use super::{remote_file_name, transfer_dialog_width};
 
 impl NyaTermApp {
     pub(in crate::features) fn transfer_unknown_file_overlay(
@@ -40,7 +50,7 @@ impl NyaTermApp {
             .bottom_0()
             .left_0()
             .right_0()
-            .bg(gpui::rgba(0x00000080))
+            .bg(rgba(0x00000080))
             .flex()
             .items_center()
             .justify_center()

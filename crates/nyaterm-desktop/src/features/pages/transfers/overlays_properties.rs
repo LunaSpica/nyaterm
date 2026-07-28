@@ -1,4 +1,19 @@
-use super::*;
+use gpui::{
+    Context, FontWeight, InteractiveElement as _, IntoElement, KeyDownEvent, ParentElement as _,
+    SharedString, StatefulInteractiveElement as _, Styled as _, div, prelude::FluentBuilder as _,
+    px, rgb, rgba,
+};
+use nyaterm_core::truncate_preview;
+use nyaterm_transport::{SftpFileEntry, SftpFileType};
+
+use crate::features::{NyaTermApp, TextInputSetup, dialog_action_button, format_file_size};
+use crate::models::{TransferPermissionTarget, TransferPropertiesField, TransferPropertiesState};
+use crate::widgets::small_button;
+
+use super::{
+    format_owner_group, format_sftp_modified, parse_transfer_mode, property_input_row,
+    property_row, property_section_heading, remote_parent_path,
+};
 
 impl NyaTermApp {
     pub(in crate::features) fn transfer_properties_overlay(
@@ -99,7 +114,7 @@ impl NyaTermApp {
             .bottom_0()
             .left_0()
             .right_0()
-            .bg(gpui::rgba(0x00000080))
+            .bg(rgba(0x00000080))
             .flex()
             .items_center()
             .justify_center()

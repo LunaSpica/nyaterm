@@ -524,7 +524,10 @@ declare -A SUPER_BASELINE=(
   [crates/nyaterm-desktop/src/features/pages/transfers/browser/view.rs]=0
   [crates/nyaterm-desktop/src/features/pages/transfers/entry_row.rs]=0
   [crates/nyaterm-desktop/src/features/pages/transfers/overlays_context.rs]=0
+  [crates/nyaterm-desktop/src/features/pages/transfers/overlays_delete_move.rs]=0
   [crates/nyaterm-desktop/src/features/pages/transfers/overlays_favorites.rs]=0
+  [crates/nyaterm-desktop/src/features/pages/transfers/overlays_properties.rs]=0
+  [crates/nyaterm-desktop/src/features/pages/transfers/overlays_unknown.rs]=0
   [crates/nyaterm-desktop/src/features/pages/transfers/overlays_upload.rs]=0
   [crates/nyaterm-desktop/src/features/pages/transfers/queue.rs]=0
   [crates/nyaterm-desktop/src/features/pages/transfers/helpers/browser.rs]=0
@@ -583,7 +586,10 @@ done < <(rg -n --path-separator / '^[[:space:]]*use super::\*;' \
   crates/nyaterm-desktop/src/features/pages/transfers/browser \
   crates/nyaterm-desktop/src/features/pages/transfers/entry_row.rs \
   crates/nyaterm-desktop/src/features/pages/transfers/overlays_context.rs \
+  crates/nyaterm-desktop/src/features/pages/transfers/overlays_delete_move.rs \
   crates/nyaterm-desktop/src/features/pages/transfers/overlays_favorites.rs \
+  crates/nyaterm-desktop/src/features/pages/transfers/overlays_properties.rs \
+  crates/nyaterm-desktop/src/features/pages/transfers/overlays_unknown.rs \
   crates/nyaterm-desktop/src/features/pages/transfers/overlays_upload.rs \
   crates/nyaterm-desktop/src/features/pages/transfers/queue.rs \
   crates/nyaterm-desktop/src/features/pages/transfers/helpers \
