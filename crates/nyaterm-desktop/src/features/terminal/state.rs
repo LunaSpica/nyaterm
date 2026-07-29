@@ -14,14 +14,14 @@ use nyaterm_core::{ResolvedKeywordHighlightRule, TerminalInputState as CommandIn
 use nyaterm_terminal::{TerminalOutputDecoder, TerminalScreen};
 
 use super::terminal_surface_entity::TerminalSurface;
+use super::window_state::TerminalWindowState;
 use crate::features::app_state::TerminalRuntimeUiState;
 use crate::models::{
     ActionLinkMenuState, ActionLinkTooltipState, CommandSuggestionState,
     CredentialAutofillMatchPipeline, CredentialAutofillMatchRequestKey, CredentialSuggestionState,
     MultiLinePasteDraft, PendingCredentialAutofill, RecordingHistorySearchEvent,
-    RecordingHistorySearchKey, TabDockZone, TerminalContextMenuState, TerminalFrameEvent,
-    TerminalFramePipeline, TerminalSearchMode, TerminalSelection, TerminalViewState,
-    TerminalWindowNode, normalize_paste_newlines,
+    RecordingHistorySearchKey, TerminalContextMenuState, TerminalFrameEvent, TerminalFramePipeline,
+    TerminalSearchMode, TerminalSelection, TerminalViewState, normalize_paste_newlines,
 };
 use crate::theme::ThemePalette;
 
@@ -35,7 +35,7 @@ pub(in crate::features) struct TerminalFeatureState {
     pub(super) layout: TerminalLayoutState,
     pub(super) menus: TerminalMenuState,
     pub(super) paint: TerminalPaintCacheState,
-    pub windows: TerminalWindowState,
+    pub(super) windows: TerminalWindowState,
 }
 
 /// Focus handles the terminal feature needs at construction time.
@@ -159,15 +159,6 @@ pub(super) struct TerminalMenuState {
 pub(super) struct TerminalPaintCacheState {
     pub(super) cached_terminal_theme_palette: Option<(String, String, String, ThemePalette)>,
     pub(super) cached_keyword_highlight_rules: Option<Arc<Vec<ResolvedKeywordHighlightRule>>>,
-}
-
-/// Split/tab window tree and drag-and-drop targets over it.
-pub(in crate::features) struct TerminalWindowState {
-    pub tree: Option<TerminalWindowNode>,
-    pub drop: Option<(String, TabDockZone)>,
-    /// Whether we already attempted startup restore of multi-leaf layout.
-    pub restored: bool,
-    pub file_drop_hover: Option<String>,
 }
 
 pub(in crate::features) struct TerminalPasteReviewView<'a> {
@@ -636,10 +627,13 @@ mod tests {
     use nyaterm_core::TerminalInputState as CommandInputState;
     use nyaterm_terminal::{TerminalOutputDecoder, TerminalScreen};
 
+    use super::super::window_state::{TerminalWindowDockResult, TerminalWindowReconcileResult};
     use super::{
         TerminalAssistState, TerminalFeatureFocus, TerminalFeatureState, TerminalPasteReviewState,
     };
-    use crate::models::{TerminalFramePipeline, TerminalSearchMode};
+    use crate::models::{
+        SmartSplitMode, TabDockEdge, TabDockZone, TerminalFramePipeline, TerminalSearchMode,
+    };
 
     fn paste_state() -> TerminalPasteReviewState {
         let cx = TestAppContext::single();
@@ -730,6 +724,99 @@ mod tests {
         assert_eq!(
             state.layout.session_surface_bounds.get("new-session"),
             Some(&bounds)
+        );
+    }
+
+    #[test]
+    fn terminal_window_owner_reconciles_tabs_and_reconnect_ids_atomically() {
+        let mut state = terminal_state();
+        let initial = vec!["alpha".to_string(), "beta".to_string()];
+        let focused = state
+            .apply_smart_split(&initial, SmartSplitMode::Vertical, Some("beta"))
+            .expect("layout");
+
+        let live = vec!["beta".to_string(), "gamma".to_string()];
+        let result = state.reconcile_terminal_windows(&live, focused.as_deref(), Some("gamma"));
+        assert!(matches!(
+            result,
+            TerminalWindowReconcileResult::Reconciled { .. }
+        ));
+        assert!(state.replace_terminal_window_tab_id("beta", "beta-reconnected"));
+
+        let root = state.windows.tree.as_ref().expect("window tree");
+        assert_eq!(
+            root.collect_tab_ids()
+                .into_iter()
+                .collect::<std::collections::HashSet<_>>(),
+            ["beta-reconnected".to_string(), "gamma".to_string()]
+                .into_iter()
+                .collect()
+        );
+    }
+
+    #[test]
+    fn terminal_window_owner_docks_and_clears_transient_targets() {
+        let mut state = terminal_state();
+        let leaf_id = state
+            .ensure_terminal_windows_root(
+                vec!["alpha".to_string(), "beta".to_string()],
+                Some("alpha".to_string()),
+            )
+            .expect("leaf");
+        assert!(
+            state.set_terminal_window_drop(leaf_id.clone(), TabDockZone::Edge(TabDockEdge::Right),)
+        );
+        assert_eq!(
+            state.terminal_window_drop_for_leaf(&leaf_id),
+            Some(TabDockZone::Edge(TabDockEdge::Right))
+        );
+
+        let result = state.dock_tab_on_terminal_window_leaf(
+            "alpha",
+            &leaf_id,
+            TabDockZone::Edge(TabDockEdge::Right),
+        );
+        assert!(matches!(result, TerminalWindowDockResult::Docked { .. }));
+        assert!(state.terminal_windows_is_multi_leaf());
+        assert!(state.terminal_window_drop_for_leaf(&leaf_id).is_none());
+
+        assert!(state.set_terminal_file_drop_hover(Some("alpha".to_string())));
+        assert!(state.terminal_file_drop_hover_matches("alpha"));
+        assert!(state.clear_terminal_file_drop_hover());
+        assert!(!state.terminal_file_drop_hover_is_pending());
+    }
+
+    #[test]
+    fn terminal_window_owner_round_trips_restorable_multi_leaf_layout() {
+        let mut state = terminal_state();
+        let ordered = vec!["alpha".to_string(), "beta".to_string()];
+        state
+            .apply_smart_split(&ordered, SmartSplitMode::Horizontal, Some("beta"))
+            .expect("layout");
+        let layout = state
+            .serialize_terminal_window_layout(&ordered)
+            .expect("serialized layout");
+
+        let mut restored = terminal_state();
+        restored.complete_terminal_windows_restore();
+        assert!(restored.terminal_windows_restore_is_complete());
+        restored.mark_terminal_windows_restore_pending();
+        assert!(!restored.terminal_windows_restore_is_complete());
+        restored
+            .restore_terminal_window_layout(&layout, &ordered, Some("beta"))
+            .expect("restored layout");
+
+        assert!(restored.terminal_windows_is_multi_leaf());
+        assert_eq!(
+            restored
+                .windows
+                .tree
+                .as_ref()
+                .expect("window tree")
+                .collect_tab_ids()
+                .into_iter()
+                .collect::<std::collections::HashSet<_>>(),
+            ordered.into_iter().collect()
         );
     }
 

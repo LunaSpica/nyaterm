@@ -183,7 +183,7 @@ impl NyaTermApp {
             && !self.recording.has_pending_auto_start()
             && !self.terminal.view.runtime.open_tabs_persist_dirty
             && !self.terminal.view.runtime.window_layout_persist_dirty
-            && self.terminal.windows.restored
+            && self.terminal.terminal_windows_restore_is_complete()
             && !self.ai.has_background_work()
             && self.commands.persistence_is_idle()
         {
@@ -614,13 +614,13 @@ impl NyaTermApp {
         }
         // Layout restore opens the config DB — never do it while sessions are
         // still connecting or the data plane is under pressure.
-        if !self.terminal.windows.restored
+        if !self.terminal.terminal_windows_restore_is_complete()
             && !self.session.start.has_pending()
             && !self.runtime_output_pressure_active()
             && !connect_settle
         {
             self.try_restore_terminal_window_layout();
-            if self.terminal.windows.tree.is_some() {
+            if self.terminal.terminal_window_tree_is_some() {
                 self.reconcile_terminal_windows();
             }
         }
@@ -745,8 +745,7 @@ impl NyaTermApp {
             self.notify_terminal_surface_only(Some(session_id.as_str()), cx);
         }
         // Drop overlay only while a platform drag is active.
-        if self.terminal.windows.file_drop_hover.is_some() && !cx.has_active_drag() {
-            self.terminal.windows.file_drop_hover = None;
+        if !cx.has_active_drag() && self.terminal.clear_terminal_file_drop_hover() {
             dirty = true;
         }
         RuntimeVisualPlaneResult {

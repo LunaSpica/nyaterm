@@ -563,10 +563,7 @@ impl NyaTermApp {
         let show_visual_bell = is_active && self.terminal.view.runtime.visual_bell_ticks > 0;
         let file_drop_hover = self
             .terminal
-            .windows
-            .file_drop_hover
-            .as_deref()
-            .is_some_and(|id| id == session_id.as_str());
+            .terminal_file_drop_hover_matches(session_id.as_str());
         let drop_session_kind = self
             .session
             .metadata(&session_id)

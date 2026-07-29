@@ -466,9 +466,15 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   focus/cache/geometry queries and semantic owner transitions. Session
   activation clears selection drag and action-link menu/tooltip state as one
   transition, while reconnect migrates painted surface bounds through the
-  owner. No mutable-reference child accessor was introduced. The high-coupling
-  `view`, `assist` and split/tab `windows` children remain the next terminal
-  ownership boundaries.
+  owner. A following split/tab batch made `windows` terminal-module-private and
+  moved tree reconciliation, tab activation/reorder/docking, smart-split,
+  restore/serialization, split ratios, reconnect id replacement and file-drop
+  hover transitions onto `TerminalFeatureState`. Shell/session/page adapters
+  retain GPUI notification, navigation, persistence scheduling and redb opens;
+  they receive only immutable tree/drop projections and typed mutation
+  results. No mutable-reference child accessor was introduced. The
+  high-coupling `view` and `assist` children remain the next terminal ownership
+  boundaries.
   Parsing, snapshots and the wire protocol are untouched and stay in
   `nyaterm-terminal` and `nyaterm-transport`. `OverlaySnapshot` keeps its own
   `terminal_actions_open` / `terminal_context_menu_open` projection fields.
@@ -1510,7 +1516,7 @@ Current ownership map:
 | Global storage status | Settings-module-private child in `NyaTermApp.settings` | Runtime persistence health/presentation state | Cross-domain persistence adapters update message/readiness through `SettingsFeatureState`; rendering receives a borrowed immutable view, while store reopen replaces path/message/readiness together. Database work and compatibility handling remain in existing adapters and `nyaterm-core`. |
 | AI settings/chat/history/discovery/agent/panel | AI-module-private children in `NyaTermApp.ai` | Persisted settings plus transient UI and background lifecycle | Desktop consumers use read-only slices/queries and semantic transitions; settings draft groups, menu exclusion, confirmations, request/focus preparation, detected-error throttling, picker clamping and Agent capture/reset enter through `AiFeatureState`. Persistence, terminal-context collection, GPUI focus/rendering and notification remain in adapters. |
 | Shell viewport/navigation/panels/chrome/workspace | Shell-module-private children in `NyaTermApp.shell` | Transient GPUI composition and interaction state | Other desktop modules use read-only geometry/navigation/pane queries and semantic transitions; menu exclusion, settings-window lifecycle, mobile panels, failure chrome, submenu paths and pane ownership update through `ShellFeatureState`. Persistence, rendering, GPUI windows/notification and terminal coordination remain in adapters. |
-| Terminal interaction/presentation children | Terminal-module-private children in `NyaTermApp.terminal` | Search, focus/IME, paste review, selection/mouse, paint geometry, menus and caches | Cross-domain adapters use immutable projections/queries and semantic transitions. Activation interaction cleanup and reconnect surface-bound migration are atomic owner operations; terminal parsing, snapshots, paint algorithms and protocol handling are unchanged. `view`, `assist` and `windows` remain follow-up encapsulation targets. |
+| Terminal interaction/presentation children | Terminal-module-private children in `NyaTermApp.terminal` | Search, focus/IME, paste review, selection/mouse, paint geometry, menus, caches and split/tab window ownership | Cross-domain adapters use immutable projections/queries and semantic transitions. Activation cleanup, reconnect bounds/id migration, tree reconciliation, docking, smart-split, restore/serialization and file-drop hover transitions are owner operations; GPUI notification, navigation, persistence execution, terminal parsing, snapshots, paint algorithms and protocol handling are unchanged. `view` and `assist` remain follow-up encapsulation targets. |
 | Remote Docker/process/stats panes | Private children in `NyaTermApp.remote_ops` | Transient UI state plus typed background-event lifecycle | Views use immutable presentation values; menu exclusion, list-offset clamping, Docker details/Compose/confirmation cleanup, process PID-scoped cleanup, Stats expansion/data and job identity/failure timing enter through `RemoteOpsFeatureState`. SSH service launch, active-session policy, terminal status mirroring and GPUI notification remain in adapters. |
 | Live session manager/event bridge | Private services in `NyaTermApp.session` | Runtime services | Callers receive a shared manager reference/handle and use bridge routing, drain and metrics methods; neither service field is writable outside `SessionFeatureState`. |
 | Session restore/event queue | Private state in `NyaTermApp.session` | Transient runtime coordination | Restore completion is idempotent and pending transport events are counted, extended and popped only through owner methods; event interpretation stays in the event-pump adapter. |
@@ -1783,8 +1789,11 @@ honest remaining list.
    menus and paint caches. External views and coordinators now use immutable
    projections or semantic transitions; activation interaction cleanup and
    reconnect surface-bound migration execute atomically on
-   `TerminalFeatureState`. `view`, `assist` and `windows` remain explicit
-   follow-up ownership debt.
+   `TerminalFeatureState`. The following terminal window batch made the
+   split/tab child terminal-module-private and moved reconciliation, docking,
+   smart-split, restore/serialization, ratio changes, reconnect id replacement
+   and file-drop hover transitions onto the owner. `view` and `assist` remain
+   explicit follow-up ownership debt.
    What remains at the
    composition root is stores, runtime and focused feature owners.
    Group by cohesion where a cluster exists; do not force the count down for

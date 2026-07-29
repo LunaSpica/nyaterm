@@ -28,13 +28,7 @@ impl NyaTermApp {
                     .clone()
                     .or_else(|| tab_ids.first().cloned())
                     .unwrap_or_default();
-                let drop_zone = self
-                    .terminal
-                    .windows
-                    .drop
-                    .as_ref()
-                    .filter(|(leaf, _)| leaf == &id)
-                    .map(|(_, zone)| *zone);
+                let drop_zone = self.terminal.terminal_window_drop_for_leaf(&id);
                 let mut strip = div()
                     .h(px(36.))
                     .flex()
@@ -362,11 +356,7 @@ impl NyaTermApp {
                         cx.listener(move |this, payload: &SessionTabDragPayload, _, cx| {
                             let zone = this
                                 .terminal
-                                .windows
-                                .drop
-                                .as_ref()
-                                .filter(|(leaf, _)| leaf == &drop_leaf_id_drop)
-                                .map(|(_, zone)| *zone)
+                                .terminal_window_drop_for_leaf(&drop_leaf_id_drop)
                                 .unwrap_or(TabDockZone::Center);
                             this.dock_tab_on_terminal_window_leaf(
                                 payload.session_id.clone(),

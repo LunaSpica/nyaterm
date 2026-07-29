@@ -279,37 +279,21 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         // Prefer multi-leaf tab-window splits when active; otherwise pane splits.
-        let (direction, start_ratio) = if let Some(root) = self.terminal.windows.tree.as_ref() {
-            match (
-                root.direction_for_split(&split_id),
-                root.ratio_for_split(&split_id),
-            ) {
-                (Some(direction), Some(start_ratio)) => (direction, start_ratio),
-                _ => {
-                    let Some(root) = self.shell.workspace.split.as_ref() else {
-                        return;
-                    };
-                    let Some(direction) = root.direction_for_split(&split_id) else {
-                        return;
-                    };
-                    let Some(start_ratio) = root.ratio_for_split(&split_id) else {
-                        return;
-                    };
-                    (direction, start_ratio)
-                }
-            }
-        } else {
-            let Some(root) = self.shell.workspace.split.as_ref() else {
-                return;
+        let (direction, start_ratio) =
+            if let Some(geometry) = self.terminal.terminal_window_split_geometry(&split_id) {
+                geometry
+            } else {
+                let Some(root) = self.shell.workspace.split.as_ref() else {
+                    return;
+                };
+                let Some(direction) = root.direction_for_split(&split_id) else {
+                    return;
+                };
+                let Some(start_ratio) = root.ratio_for_split(&split_id) else {
+                    return;
+                };
+                (direction, start_ratio)
             };
-            let Some(direction) = root.direction_for_split(&split_id) else {
-                return;
-            };
-            let Some(start_ratio) = root.ratio_for_split(&split_id) else {
-                return;
-            };
-            (direction, start_ratio)
-        };
         let start_pos = match direction {
             WorkspaceSplitDirection::Horizontal => event.position.y,
             WorkspaceSplitDirection::Vertical => event.position.x,
@@ -349,12 +333,9 @@ impl NyaTermApp {
             WorkspacePaneNode::MIN_RATIO_PERCENT as i16,
             WorkspacePaneNode::MAX_RATIO_PERCENT as i16,
         ) as u8;
-        let mut applied = false;
-        if let Some(root) = self.terminal.windows.tree.as_mut() {
-            if root.set_ratio_for_split(&state.split_id, next) {
-                applied = true;
-            }
-        }
+        let mut applied = self
+            .terminal
+            .set_terminal_window_split_ratio(&state.split_id, next);
         if !applied {
             if let Some(root) = self.shell.workspace.split.as_mut() {
                 if root.set_ratio_for_split(&state.split_id, next) {
@@ -377,10 +358,8 @@ impl NyaTermApp {
         if let Some(state) = self.shell.workspace.split_resize.take() {
             let ratio = self
                 .terminal
-                .windows
-                .tree
-                .as_ref()
-                .and_then(|root| root.ratio_for_split(&state.split_id))
+                .terminal_window_split_geometry(&state.split_id)
+                .map(|(_, ratio)| ratio)
                 .or_else(|| {
                     self.shell
                         .workspace

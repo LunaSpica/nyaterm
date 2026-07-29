@@ -1,7 +1,7 @@
 use gpui::{Context, IntoElement, div, prelude::*};
 
 use super::super::NyaTermApp;
-use crate::models::{TerminalWindowNode, WorkspacePaneNode};
+use crate::models::WorkspacePaneNode;
 
 mod panes;
 mod terminal_windows;
@@ -61,16 +61,14 @@ impl NyaTermApp {
         }
         // Multi-leaf tab windows (Tauri TabWindowsWorkspace) take precedence over
         // single-tree pane splits when active.
-        if let Some(window_root) = self.terminal.windows.tree.clone() {
-            if matches!(window_root, TerminalWindowNode::Split { .. }) {
-                return div()
-                    .flex_1()
-                    .min_h_0()
-                    .min_w_0()
-                    .bg(self.shell_transparent_color(palette.bg))
-                    .child(self.render_terminal_window_node(window_root, cx))
-                    .into_any_element();
-            }
+        if let Some(window_root) = self.terminal.multi_leaf_terminal_window_tree() {
+            return div()
+                .flex_1()
+                .min_h_0()
+                .min_w_0()
+                .bg(self.shell_transparent_color(palette.bg))
+                .child(self.render_terminal_window_node(window_root, cx))
+                .into_any_element();
         }
         let root =
             self.shell.workspace_split().cloned().unwrap_or_else(|| {

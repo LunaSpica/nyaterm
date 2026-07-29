@@ -152,12 +152,30 @@ check_no_matches \
   crates/nyaterm-desktop/src/features/terminal/state.rs
 check_no_multiline_matches_excluding \
   "terminal interaction child access must use TerminalFeatureState methods outside terminal" \
-  '(self|this|app)\.terminal[[:space:]]*\.[[:space:]]*(search|input|paste|selection|layout|menus|paint)[[:space:]]*(\.|=|\[)' \
+  '\.[[:space:]]*terminal[[:space:]]*\.[[:space:]]*(search|input|paste|selection|layout|menus|paint)[[:space:]]*(\.|=|\[)' \
   crates/nyaterm-desktop/src/features \
   'crates/nyaterm-desktop/src/features/terminal/**'
 check_no_matches \
   "terminal interaction state must not expose mutable-reference accessors" \
   'fn[[:space:]]+(search|input|paste|selection|layout|menus|paint)(_mut|_mutable)|->[[:space:]]*&mut[[:space:]]+Terminal(Search|Input|PasteReview|Selection|Layout|Menu|PaintCache)State' \
+  crates/nyaterm-desktop/src/features/terminal
+
+check_no_multiline_matches \
+  "terminal window state must stay inside the terminal module" \
+  'struct[[:space:]]+TerminalFeatureState[[:space:]]*\{[^}]*pub([[:space:]]|\(crate\)|\(in crate\)|\(in crate::features\))[[:space:]]+windows[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/terminal/state.rs
+check_no_matches \
+  "terminal window implementation type must stay inside the terminal module" \
+  'pub([[:space:]]|\(crate\)|\(in crate\)|\(in crate::features\))[[:space:]]+struct[[:space:]]+TerminalWindowState' \
+  crates/nyaterm-desktop/src/features/terminal/window_state.rs
+check_no_multiline_matches_excluding \
+  "terminal window child access must use TerminalFeatureState methods outside terminal" \
+  '\.[[:space:]]*terminal[[:space:]]*\.[[:space:]]*windows[[:space:]]*(\.|=|\[)' \
+  crates/nyaterm-desktop/src/features \
+  'crates/nyaterm-desktop/src/features/terminal/**'
+check_no_matches \
+  "terminal window state must not expose mutable-reference accessors" \
+  'fn[[:space:]]+windows(_mut|_mutable)|->[[:space:]]*&mut[[:space:]]+TerminalWindowState' \
   crates/nyaterm-desktop/src/features/terminal
 
 check_no_matches \

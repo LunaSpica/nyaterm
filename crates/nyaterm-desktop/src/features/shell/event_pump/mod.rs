@@ -365,7 +365,7 @@ impl NyaTermApp {
         {
             return true;
         }
-        if self.terminal.windows.file_drop_hover.is_some() {
+        if self.terminal.terminal_file_drop_hover_is_pending() {
             return true;
         }
         if self.terminal.view.runtime.visual_bell_ticks > 0 {
@@ -478,7 +478,7 @@ impl NyaTermApp {
             && self.commands.persistence_is_idle()
             && !self.terminal.view.runtime.open_tabs_persist_dirty
             && !self.terminal.view.runtime.window_layout_persist_dirty
-            && self.terminal.windows.restored
+            && self.terminal.terminal_windows_restore_is_complete()
             && !self.ai.has_background_work()
             && !self.remote_ops.has_pending_job()
             && !self.translation.is_pending()

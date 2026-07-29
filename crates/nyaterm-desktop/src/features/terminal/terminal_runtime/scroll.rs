@@ -1046,7 +1046,7 @@ impl NyaTermApp {
         paths: Vec<std::path::PathBuf>,
         cx: &mut Context<Self>,
     ) {
-        self.terminal.windows.file_drop_hover = None;
+        self.terminal.clear_terminal_file_drop_hover();
         if session_id.is_empty() || paths.is_empty() {
             cx.notify();
             return;
@@ -1120,8 +1120,7 @@ impl NyaTermApp {
         session_id: Option<String>,
         cx: &mut Context<Self>,
     ) {
-        if self.terminal.windows.file_drop_hover != session_id {
-            self.terminal.windows.file_drop_hover = session_id;
+        if self.terminal.set_terminal_file_drop_hover(session_id) {
             cx.notify();
         }
     }

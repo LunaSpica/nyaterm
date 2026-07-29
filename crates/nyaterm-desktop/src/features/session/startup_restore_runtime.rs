@@ -63,14 +63,7 @@ impl NyaTermApp {
                 .into_iter()
                 .map(|session| session.id)
                 .collect::<Vec<_>>();
-            Some(
-                self.terminal
-                    .windows
-                    .tree
-                    .as_ref()
-                    .filter(|_| self.terminal_windows_is_multi_leaf())
-                    .and_then(|root| root.serialize_layout(&ordered)),
-            )
+            Some(self.terminal.serialize_terminal_window_layout(&ordered))
         } else {
             None
         };
@@ -141,14 +134,7 @@ impl NyaTermApp {
                 .into_iter()
                 .map(|session| session.id)
                 .collect::<Vec<_>>();
-            Some(
-                self.terminal
-                    .windows
-                    .tree
-                    .as_ref()
-                    .filter(|_| self.terminal_windows_is_multi_leaf())
-                    .and_then(|root| root.serialize_layout(&ordered)),
-            )
+            Some(self.terminal.serialize_terminal_window_layout(&ordered))
         } else {
             None
         };
@@ -450,7 +436,7 @@ impl NyaTermApp {
         }
         self.mark_startup_restore_complete();
         // After all tabs reconnect, attempt multi-leaf then global pane layout restore.
-        self.terminal.windows.restored = false;
+        self.terminal.mark_terminal_windows_restore_pending();
         self.shell.set_workspace_pane_layout_restored(false);
         self.try_restore_terminal_window_layout();
         // Prefer stored ui.workspace_pane_layout only when no open_tabs per-tab roots exist.
