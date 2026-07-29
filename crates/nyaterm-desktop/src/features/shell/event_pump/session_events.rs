@@ -348,7 +348,7 @@ impl NyaTermApp {
         self.note_zmodem_output_discontinuity(&session_id, bytes, cx);
         self.note_ai_agent_output_discontinuity(&session_id, bytes, cx);
         self.session.route_session_events_to_ui(&session_id);
-        let encoding = self.settings.summary.interaction_default_encoding.clone();
+        let encoding = self.settings.summary().interaction_default_encoding.clone();
         let view = self
             .terminal
             .view

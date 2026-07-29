@@ -15,7 +15,7 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         let docs_url = if self
             .settings
-            .summary
+            .summary()
             .language
             .to_ascii_lowercase()
             .starts_with("zh")

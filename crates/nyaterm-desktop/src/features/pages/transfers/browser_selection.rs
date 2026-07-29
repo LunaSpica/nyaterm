@@ -499,7 +499,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        if self.settings.summary.transfer_ask_save_location {
+        if self.settings.summary().transfer_ask_save_location {
             let remote_paths = entries
                 .into_iter()
                 .map(|entry| entry.path)

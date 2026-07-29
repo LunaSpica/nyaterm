@@ -256,18 +256,18 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> bool {
         if self.security.screen_locked()
-            || !self.settings.summary.enable_screen_lock
-            || self.settings.summary.idle_lock_minutes == 0
+            || !self.settings.summary().enable_screen_lock
+            || self.settings.summary().idle_lock_minutes == 0
         {
             return false;
         }
         let idle_for = self.security.screen_lock_idle_for();
         let lock_after =
-            Duration::from_secs(u64::from(self.settings.summary.idle_lock_minutes) * 60);
+            Duration::from_secs(u64::from(self.settings.summary().idle_lock_minutes) * 60);
         if idle_for < lock_after {
             return false;
         }
-        let lock_status = if self.settings.summary.has_master_password {
+        let lock_status = if self.settings.summary().has_master_password {
             "Enter the master password to unlock.".to_string()
         } else {
             "No master password is configured.".to_string()
@@ -276,9 +276,9 @@ impl NyaTermApp {
         self.forget_text_inputs("lock-screen.password");
         self.terminal.view.status = format!(
             "screen locked after {} minute(s) idle",
-            self.settings.summary.idle_lock_minutes
+            self.settings.summary().idle_lock_minutes
         );
-        if self.settings.summary.has_master_password {
+        if self.settings.summary().has_master_password {
             let field = self.text_input("lock-screen.password", "", TextInputSetup::masked(), cx);
             window.focus(&field.read(cx).focus_handle());
         } else {
@@ -371,7 +371,7 @@ impl NyaTermApp {
         if self.terminal.view.runtime.visual_bell_ticks > 0 {
             return true;
         }
-        if self.settings.summary.cursor_blink
+        if self.settings.summary().cursor_blink
             && !self.visible_terminal_session_ids().is_empty()
             && self
                 .terminal
@@ -538,30 +538,30 @@ impl NyaTermApp {
         let right_panel = self.current_right_panel();
 
         if (right_panel == Some(NavItem::Stats) || self.header_status_needs_remote_stats())
-            && self.settings.summary.ui_show_remote_stats
+            && self.settings.summary().ui_show_remote_stats
             && !self.remote_ops.stats_is_pending()
             && remote_refresh_due(
                 self.remote_ops.stats_last_refresh_at(),
-                self.settings.summary.ui_remote_stats_interval.max(1),
+                self.settings.summary().ui_remote_stats_interval.max(1),
             )
         {
             self.refresh_stats(window, cx);
             dirty = true;
         } else if right_panel == Some(NavItem::Processes)
-            && self.settings.summary.ui_show_process_manager
+            && self.settings.summary().ui_show_process_manager
             && !self.remote_ops.process_is_pending()
             && remote_refresh_due(
                 self.remote_ops.process_last_refresh_at(),
-                self.settings.summary.ui_process_manager_interval.max(3),
+                self.settings.summary().ui_process_manager_interval.max(3),
             )
         {
             self.refresh_processes(window, cx);
             dirty = true;
         } else if right_panel == Some(NavItem::Docker)
-            && self.settings.summary.ui_show_docker_manager
+            && self.settings.summary().ui_show_docker_manager
             && !self.remote_ops.docker_is_pending()
         {
-            let interval = self.settings.summary.ui_docker_manager_interval.max(3);
+            let interval = self.settings.summary().ui_docker_manager_interval.max(3);
             if remote_refresh_due(self.remote_ops.docker_last_refresh_at(), interval) {
                 self.refresh_docker(window, cx);
                 dirty = true;

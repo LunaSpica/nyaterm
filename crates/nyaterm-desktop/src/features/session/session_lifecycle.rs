@@ -239,7 +239,7 @@ impl NyaTermApp {
             view.append_text(banner);
         } else {
             let mut view = TerminalViewState::new();
-            view.set_encoding(&self.settings.summary.interaction_default_encoding);
+            view.set_encoding(&self.settings.summary().interaction_default_encoding);
             view.append_text(banner);
             self.terminal
                 .view

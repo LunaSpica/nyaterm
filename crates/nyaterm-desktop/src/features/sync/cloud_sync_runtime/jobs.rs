@@ -408,7 +408,7 @@ impl NyaTermApp {
     pub(in crate::features) fn refresh_cloud_sync_history(&mut self) {
         let history = read_cloud_sync_history(
             self.runtime.log_dir(),
-            self.settings.summary.diagnostics_retention_days,
+            self.settings.summary().diagnostics_retention_days,
             CLOUD_SYNC_HISTORY_LIMIT,
         )
         .unwrap_or_default();

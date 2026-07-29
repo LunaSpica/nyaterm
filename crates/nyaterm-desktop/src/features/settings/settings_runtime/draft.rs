@@ -17,6 +17,7 @@ impl NyaTermApp {
             self.cloud_sync.settings_draft_snapshot();
         let (ai_settings, ai_model_draft, ai_base_url_draft, ai_secret_draft) =
             self.ai.settings_draft_snapshot();
+        let master_password = self.settings.master_password();
         self.shell
             .set_settings_draft_snapshot(SettingsDraftSnapshot {
                 settings: self.settings.summary.clone(),
@@ -29,8 +30,8 @@ impl NyaTermApp {
                 translation_settings,
                 translation_secret_draft,
                 keyword_highlights: self.settings.keyword_config.clone(),
-                master_password_enabled: self.settings.master_password.enabled,
-                master_password_draft: self.settings.master_password.draft.clone(),
+                master_password_enabled: master_password.enabled,
+                master_password_draft: master_password.draft.to_string(),
             });
     }
 
@@ -38,7 +39,8 @@ impl NyaTermApp {
         let Some(snapshot) = self.shell.settings_draft_snapshot() else {
             return false;
         };
-        snapshot.settings != self.settings.summary
+        let master_password = self.settings.master_password();
+        snapshot.settings != *self.settings.summary()
             || !self.ai.settings_draft_matches(
                 &snapshot.ai_settings,
                 &snapshot.ai_model_draft,
@@ -53,9 +55,9 @@ impl NyaTermApp {
                 &snapshot.translation_settings,
                 &snapshot.translation_secret_draft,
             )
-            || snapshot.keyword_highlights != self.settings.keyword_config
-            || snapshot.master_password_enabled != self.settings.master_password.enabled
-            || snapshot.master_password_draft != self.settings.master_password.draft
+            || snapshot.keyword_highlights != *self.settings.keyword_config()
+            || snapshot.master_password_enabled != master_password.enabled
+            || snapshot.master_password_draft != master_password.draft
     }
 
     /// Returns true when a settings save should stay in the in-memory draft.
@@ -78,12 +80,11 @@ impl NyaTermApp {
         if !settings.enabled {
             return None;
         }
-        if !self.settings.master_password.enabled {
+        let master_password = self.settings.master_password();
+        if !master_password.enabled {
             return Some("Enable a master password before enabling cloud sync".to_string());
         }
-        if !self.settings.summary.has_master_password
-            && self.settings.master_password.draft.is_empty()
-        {
+        if !self.settings.summary().has_master_password && master_password.draft.is_empty() {
             return Some("Enter a master password before enabling cloud sync".to_string());
         }
         let missing = match settings.provider.as_str() {
@@ -216,16 +217,17 @@ impl NyaTermApp {
             return;
         }
 
-        let settings = self.settings.summary.clone();
+        let settings = self.settings.summary().clone();
         let ai_settings = self.pending_ai_settings();
         let cloud_sync_settings = self.cloud_sync.pending_settings();
         let translation_settings = self.translation.pending_settings();
-        let keyword_highlights = self.settings.keyword_config.clone();
-        let master_password_update = if self.settings.master_password.draft.is_empty() {
-            (self.settings.summary.has_master_password && !self.settings.master_password.enabled)
+        let keyword_highlights = self.settings.keyword_config().clone();
+        let master_password = self.settings.master_password();
+        let master_password_update = if master_password.draft.is_empty() {
+            (self.settings.summary().has_master_password && !master_password.enabled)
                 .then_some(None)
         } else {
-            Some(Some(self.settings.master_password.draft.clone()))
+            Some(Some(master_password.draft.to_string()))
         };
         let result = ConnectionStore::open_with_portable_key_path(
             self.runtime.config_dir(),
@@ -343,14 +345,17 @@ impl NyaTermApp {
                 snapshot.translation_settings,
                 snapshot.translation_secret_draft,
             );
-            self.settings.keyword_config = snapshot.keyword_highlights;
-            self.settings.master_password.enabled = snapshot.master_password_enabled;
-            self.settings.master_password.draft = snapshot.master_password_draft;
+            self.settings
+                .replace_keyword_config(snapshot.keyword_highlights);
+            self.settings.restore_master_password_draft(
+                snapshot.master_password_enabled,
+                snapshot.master_password_draft,
+            );
             self.recording
-                .set_memory_limit(self.settings.summary.recording_memory_limit_bytes as usize);
+                .set_memory_limit(self.settings.summary().recording_memory_limit_bytes as usize);
             self.transfer
                 .set_duplicate_policy(SftpDuplicatePolicy::from_legacy_value(
-                    &self.settings.summary.transfer_duplicate_strategy,
+                    &self.settings.summary().transfer_duplicate_strategy,
                 ));
             self.sync_terminal_encodings_from_settings();
             self.invalidate_terminal_cell_metrics(cx);
@@ -373,8 +378,7 @@ impl NyaTermApp {
     pub(in crate::features) fn toggle_settings_master_password(&mut self, cx: &mut Context<Self>) {
         self.terminal.view.status = match self
             .settings
-            .master_password
-            .toggle(self.cloud_sync.settings().enabled)
+            .toggle_master_password(self.cloud_sync.settings().enabled)
         {
             Ok(true) => "master password enabled; enter a password".to_string(),
             Ok(false) => "master password removal staged".to_string(),
@@ -389,7 +393,7 @@ impl NyaTermApp {
         text: String,
         cx: &mut Context<Self>,
     ) {
-        if !self.settings.master_password.edit_draft(text) {
+        if !self.settings.edit_master_password_draft(text) {
             return;
         }
         self.terminal.view.status = "master password edited; apply to persist".to_string();

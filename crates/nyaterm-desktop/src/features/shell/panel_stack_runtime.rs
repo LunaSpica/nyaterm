@@ -366,29 +366,13 @@ impl NyaTermApp {
         }
     }
 
-    pub(in crate::features) fn sync_panel_stack_to_settings(&mut self) {
-        self.settings.summary.ui_panel_multi_open = self.shell.panels.multi_open;
-        self.settings.summary.ui_left_open_panels = self.shell.panels.left_open.clone();
-        self.settings.summary.ui_right_open_panels = self.shell.panels.right_open.clone();
-        self.settings.summary.ui_panel_stack_sizes = self
-            .shell
-            .panels
-            .stack_sizes
-            .iter()
-            .filter_map(|(key, value)| {
-                let scaled = (*value * 1000.).round();
-                (scaled.is_finite() && scaled > 0.).then(|| (key.clone(), scaled as u32))
-            })
-            .collect();
-    }
-
     pub(in crate::features) fn apply_panel_stack_from_settings(&mut self) {
-        self.shell.panels.multi_open = self.settings.summary.ui_panel_multi_open;
-        self.shell.panels.left_open = self.settings.summary.ui_left_open_panels.clone();
-        self.shell.panels.right_open = self.settings.summary.ui_right_open_panels.clone();
+        self.shell.panels.multi_open = self.settings.summary().ui_panel_multi_open;
+        self.shell.panels.left_open = self.settings.summary().ui_left_open_panels.clone();
+        self.shell.panels.right_open = self.settings.summary().ui_right_open_panels.clone();
         self.shell.panels.stack_sizes = self
             .settings
-            .summary
+            .summary()
             .ui_panel_stack_sizes
             .iter()
             .filter_map(|(key, value)| (*value > 0).then(|| (key.clone(), (*value as f32) / 1000.)))

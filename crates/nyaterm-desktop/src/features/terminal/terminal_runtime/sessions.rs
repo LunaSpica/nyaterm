@@ -93,7 +93,7 @@ impl NyaTermApp {
                 self.terminal
                     .view
                     .screen
-                    .set_encoding(&self.settings.summary.interaction_default_encoding);
+                    .set_encoding(&self.settings.summary().interaction_default_encoding);
                 self.terminal.view.status = "session closed".to_string();
             }
         } else {
@@ -160,7 +160,7 @@ impl NyaTermApp {
                 self.terminal
                     .view
                     .screen
-                    .set_encoding(&self.settings.summary.interaction_default_encoding);
+                    .set_encoding(&self.settings.summary().interaction_default_encoding);
             }
         }
 
@@ -179,7 +179,7 @@ impl NyaTermApp {
         // Tauri minimize_to_tray: hide window instead of taskbar minimize when enabled.
         // GPUI lacks a portable tray today; minimize still uses the platform minimize path,
         // and the flag is honored as a documented no-op tray intent with status feedback.
-        if self.settings.summary.minimize_to_tray {
+        if self.settings.summary().minimize_to_tray {
             window.minimize_window();
             self.terminal.view.status =
                 "minimized (tray mode preferred; OS tray polish pending)".to_string();
@@ -195,7 +195,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let open_sessions = self.ordered_sessions().len();
-        if self.settings.summary.confirm_on_close && open_sessions > 0 {
+        if self.settings.summary().confirm_on_close && open_sessions > 0 {
             // Reuse close-all confirmation as quit-with-sessions gate (Tauri confirm_on_close).
             self.session.dialogs.request_quit_after_close_all();
             self.open_close_all_sessions_confirm(window, cx);
@@ -205,7 +205,7 @@ impl NyaTermApp {
             return;
         }
         // Persist workspace before exit when startup restore is enabled.
-        if self.settings.summary.startup_restore {
+        if self.settings.summary().startup_restore {
             self.flush_open_tabs_now();
         }
         window.remove_window();
@@ -244,7 +244,7 @@ impl NyaTermApp {
         let quit_after = self.session.dialogs.take_close_all_sessions_confirm();
         self.close_all_sessions(cx);
         if quit_after {
-            if self.settings.summary.startup_restore {
+            if self.settings.summary().startup_restore {
                 self.flush_open_tabs_now();
             }
             self.terminal.view.status = "sessions closed; closing window".to_string();

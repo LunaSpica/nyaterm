@@ -19,8 +19,8 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         let is_dark = self.terminal_theme_is_dark();
-        let rules = self.settings.keyword_config.rules.clone();
-        let keyword_highlighting_enabled = self.settings.keyword_config.enabled;
+        let rules = self.settings.keyword_config().rules.clone();
+        let keyword_highlighting_enabled = self.settings.keyword_config().enabled;
         let expanded = self.settings.keyword_highlight_presentation().expanded_id;
         let builtin_ids = nyaterm_core::builtin_keyword_rule_ids();
         let pattern_count_template = self.tr("settings.keywordHighlightPatternCount");
@@ -63,7 +63,7 @@ impl NyaTermApp {
                                 settings_switch_with_enabled(
                                     palette,
                                     "settings-keyword-highlights-wrap",
-                                    self.settings.keyword_config.across_wrapped_lines,
+                                    self.settings.keyword_config().across_wrapped_lines,
                                     keyword_highlighting_enabled,
                                     cx.listener(|this, _, _, cx| {
                                         this.toggle_keyword_highlights_wrapped(cx);
@@ -106,7 +106,7 @@ impl NyaTermApp {
                                                         &id, is_dark,
                                                     );
                                                 let enabled = self
-                                                    .settings.keyword_config
+                                                    .settings.keyword_config()
                                                     .builtin_rules
                                                     .get(&id)
                                                     .copied()

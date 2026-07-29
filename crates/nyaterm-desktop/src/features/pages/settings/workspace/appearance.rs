@@ -15,8 +15,8 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let font_size_label = self.settings.summary.terminal_font_size.to_string();
-        let ui_font_size_label = self.settings.summary.ui_font_size.to_string();
+        let font_size_label = self.settings.summary().terminal_font_size.to_string();
+        let ui_font_size_label = self.settings.summary().ui_font_size.to_string();
 
         div()
             .flex()
@@ -71,7 +71,7 @@ impl NyaTermApp {
                 {
                     let path_label = self
                         .settings
-                        .summary
+                        .summary()
                         .background_image_path
                         .as_deref()
                         .map(|p| {
@@ -91,7 +91,7 @@ impl NyaTermApp {
                             }
                         })
                         .unwrap_or_else(|| self.tr("settings.backgroundImageEmpty").to_string());
-                    let has_image = self.settings.summary.background_image_path.is_some();
+                    let has_image = self.settings.summary().background_image_path.is_some();
                     div()
                         .flex()
                         .flex_col()
@@ -228,7 +228,7 @@ impl NyaTermApp {
                         settings_switch(
                             palette,
                             "appearance-cursor-blink",
-                            self.settings.summary.cursor_blink,
+                            self.settings.summary().cursor_blink,
                             cx.listener(|this, _, _, cx| {
                                 this.toggle_cursor_blink(cx);
                             }),
@@ -247,7 +247,7 @@ impl NyaTermApp {
             (
                 self.tr("settings.terminalFontFamily"),
                 self.tr("settings.terminalFontFamilyDesc"),
-                self.settings.summary.terminal_font_family.clone(),
+                self.settings.summary().terminal_font_family.clone(),
                 "JetBrains Mono",
                 self.settings.terminal_font_options().to_vec(),
             )
@@ -255,7 +255,7 @@ impl NyaTermApp {
             (
                 self.tr("settings.uiFontFamily"),
                 self.tr("settings.uiFontFamilyDesc"),
-                self.settings.summary.ui_font_family.clone(),
+                self.settings.summary().ui_font_family.clone(),
                 "Inter",
                 self.settings.ui_font_options().to_vec(),
             )
@@ -408,9 +408,9 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         let value = if content {
-            self.settings.summary.background_content_opacity
+            self.settings.summary().background_content_opacity
         } else {
-            self.settings.summary.background_image_opacity
+            self.settings.summary().background_image_opacity
         };
         let label = if content {
             self.tr("settings.backgroundContentOpacity")
@@ -523,12 +523,12 @@ impl NyaTermApp {
         };
         let current = if terminal {
             self.settings
-                .summary
+                .summary()
                 .terminal_theme
                 .as_deref()
                 .filter(|theme| !theme.trim().is_empty())
         } else {
-            Some(self.settings.summary.theme.as_str())
+            Some(self.settings.summary().theme.as_str())
         };
         let value = current
             .map(appearance_theme_label)
@@ -582,7 +582,7 @@ impl NyaTermApp {
     fn appearance_contrast_select(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = self.theme_palette();
         let id = "appearance-minimum-contrast";
-        let current = self.settings.summary.minimum_contrast_ratio.clone();
+        let current = self.settings.summary().minimum_contrast_ratio.clone();
         let label_for = |ratio: &str| match ratio {
             "3" => self.tr("settings.minimumContrastRatio_3"),
             "4.5" => self.tr("settings.minimumContrastRatio_4_5"),
@@ -623,7 +623,7 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         let id = "appearance-background-fit";
-        let current = match self.settings.summary.background_image_fit.as_str() {
+        let current = match self.settings.summary().background_image_fit.as_str() {
             "contain" => "contain",
             "stretch" | "fill" => "stretch",
             "tile" => "tile",
@@ -673,9 +673,9 @@ impl NyaTermApp {
             "appearance-font-weight"
         };
         let current = if bold {
-            self.settings.summary.terminal_font_weight_bold
+            self.settings.summary().terminal_font_weight_bold
         } else {
-            self.settings.summary.terminal_font_weight
+            self.settings.summary().terminal_font_weight
         };
         let label_for = |weight| match weight {
             300 => self.tr("settings.fontWeight_300"),
@@ -720,7 +720,7 @@ impl NyaTermApp {
     fn appearance_cursor_style_select(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = self.theme_palette();
         let id = "appearance-cursor-style";
-        let current = self.settings.summary.cursor_style.clone();
+        let current = self.settings.summary().cursor_style.clone();
         let label_for = |style: &str| match style {
             "underline" => self.tr("settings.cursorUnderline"),
             "bar" => self.tr("settings.cursorBar"),

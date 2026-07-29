@@ -22,13 +22,13 @@ impl NyaTermApp {
             cx,
         );
         let password_focus = password_input.read(cx).focus_handle();
-        let overlay_focus = if self.settings.summary.has_master_password {
+        let overlay_focus = if self.settings.summary().has_master_password {
             password_focus.clone()
         } else {
             self.security.screen_lock_focus().clone()
         };
         let lock_status = if self.security.screen_lock_status().trim().is_empty() {
-            if self.settings.summary.has_master_password {
+            if self.settings.summary().has_master_password {
                 self.tr("lockScreen.passwordPlaceholder").to_string()
             } else {
                 self.tr("settings.masterPasswordRequired").to_string()
@@ -168,7 +168,7 @@ impl NyaTermApp {
                                     .text_color(rgb(palette.text_muted))
                                     .child(self.tr("lockScreen.message")),
                             )
-                            .when(self.settings.summary.has_master_password, |this| {
+                            .when(self.settings.summary().has_master_password, |this| {
                                 this.child(
                                     div()
                                         .w(px(280.))
@@ -224,7 +224,7 @@ impl NyaTermApp {
                                         ),
                                 )
                             })
-                            .when(!self.settings.summary.has_master_password, |this| {
+                            .when(!self.settings.summary().has_master_password, |this| {
                                 this.child(
                                     div()
                                         .text_center()

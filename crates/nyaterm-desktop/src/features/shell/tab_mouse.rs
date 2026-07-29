@@ -225,22 +225,24 @@ impl NyaTermApp {
         let action = normalize_tab_mouse_action(action);
         match target {
             TabMouseActionTarget::Double => {
-                if self.settings.summary.interaction_tab_double_click_action == action {
+                if self.settings.summary().interaction_tab_double_click_action == action {
                     return;
                 }
-                self.settings.summary.interaction_tab_double_click_action = action.to_string();
+                self.settings
+                    .set_tab_double_click_action(action.to_string());
             }
             TabMouseActionTarget::Middle => {
-                if self.settings.summary.interaction_tab_middle_click_action == action {
+                if self.settings.summary().interaction_tab_middle_click_action == action {
                     return;
                 }
-                self.settings.summary.interaction_tab_middle_click_action = action.to_string();
+                self.settings
+                    .set_tab_middle_click_action(action.to_string());
             }
             TabMouseActionTarget::Right => {
-                if self.settings.summary.interaction_tab_right_click_action == action {
+                if self.settings.summary().interaction_tab_right_click_action == action {
                     return;
                 }
-                self.settings.summary.interaction_tab_right_click_action = action.to_string();
+                self.settings.set_tab_right_click_action(action.to_string());
             }
         }
         self.save_interaction_settings(cx);
@@ -260,7 +262,7 @@ impl NyaTermApp {
                 cx.stop_propagation();
                 let action = self
                     .settings
-                    .summary
+                    .summary()
                     .interaction_tab_middle_click_action
                     .clone();
                 if action == "none" {
@@ -276,7 +278,7 @@ impl NyaTermApp {
                 cx.stop_propagation();
                 let action = self
                     .settings
-                    .summary
+                    .summary()
                     .interaction_tab_right_click_action
                     .clone();
                 if action == "none" {
@@ -301,7 +303,7 @@ impl NyaTermApp {
             if is_left_double_click {
                 let action = self
                     .settings
-                    .summary
+                    .summary()
                     .interaction_tab_double_click_action
                     .clone();
                 if action != "none" {

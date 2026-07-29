@@ -29,7 +29,11 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        if self.settings.summary.terminal_show_multi_line_paste_dialog && is_multi_line_paste(&text)
+        if self
+            .settings
+            .summary()
+            .terminal_show_multi_line_paste_dialog
+            && is_multi_line_paste(&text)
         {
             self.terminal.paste.open(text);
             self.terminal.view.status = "multi-line paste confirmation opened".to_string();

@@ -168,8 +168,8 @@ impl NyaTermApp {
 
     pub(in crate::features) fn cycle_connection_sort_mode(&mut self, cx: &mut Context<Self>) {
         let sort_mode = self.connection_state.cycle_list_sort_mode();
-        self.settings.summary.ui_saved_connections_sort_mode =
-            sort_mode.persistence_id().to_string();
+        self.settings
+            .set_saved_connections_sort_mode(sort_mode.persistence_id().to_string());
         self.persist_ui_layout();
         self.terminal.view.status = format!("connections sorted by {}", sort_mode.label());
         cx.notify();

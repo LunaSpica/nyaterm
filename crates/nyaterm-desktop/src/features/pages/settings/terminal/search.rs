@@ -26,7 +26,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let engines = self.settings.summary.search_custom_engines.clone();
+        let engines = self.settings.summary().search_custom_engines.clone();
         let interaction = self.settings.search_engine_presentation();
         let expanded_index = interaction.expanded_index;
         let icon_picker_index = interaction.icon_picker_index;

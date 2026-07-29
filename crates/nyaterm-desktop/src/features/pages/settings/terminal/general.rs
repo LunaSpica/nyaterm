@@ -20,12 +20,12 @@ impl NyaTermApp {
         let x11_display_input = self
             .text_input_box(
                 "settings.terminal.x11-display",
-                &self.settings.summary.x11_display.clone(),
+                &self.settings.summary().x11_display.clone(),
                 TextInputSetup::placeholder(self.tr("settings.x11DisplayPlaceholder")),
                 cx,
             )
             .into_any_element();
-        let action_links_enabled = self.settings.summary.terminal_action_links_enabled;
+        let action_links_enabled = self.settings.summary().terminal_action_links_enabled;
 
         div()
             .flex()
@@ -47,7 +47,10 @@ impl NyaTermApp {
                             palette,
                             "terminal-scrollback-minus",
                             "terminal-scrollback-plus",
-                            self.settings.summary.terminal_scrollback_lines.to_string(),
+                            self.settings
+                                .summary()
+                                .terminal_scrollback_lines
+                                .to_string(),
                             cx.listener(|this, _, _, cx| {
                                 this.adjust_terminal_scrollback_lines(-100, cx);
                             }),
@@ -67,7 +70,7 @@ impl NyaTermApp {
                             "terminal-keepalive-minus",
                             "terminal-keepalive-plus",
                             self.settings
-                                .summary
+                                .summary()
                                 .terminal_keep_alive_interval
                                 .to_string(),
                             cx.listener(|this, _, _, cx| {
@@ -99,7 +102,7 @@ impl NyaTermApp {
                         settings_switch(
                             palette,
                             "terminal-hardware-acceleration",
-                            self.settings.summary.terminal_hardware_acceleration,
+                            self.settings.summary().terminal_hardware_acceleration,
                             cx.listener(|this, _, _, cx| {
                                 this.toggle_terminal_hardware_acceleration(cx);
                             }),
@@ -112,7 +115,7 @@ impl NyaTermApp {
                         settings_switch(
                             palette,
                             "terminal-low-latency-mode",
-                            self.settings.summary.terminal_low_latency_mode,
+                            self.settings.summary().terminal_low_latency_mode,
                             cx.listener(|this, _, _, cx| {
                                 this.toggle_terminal_low_latency_mode(cx);
                             }),
@@ -127,7 +130,7 @@ impl NyaTermApp {
                         settings_switch(
                             palette,
                             "terminal-workspace-padding",
-                            self.settings.summary.terminal_show_workspace_padding,
+                            self.settings.summary().terminal_show_workspace_padding,
                             cx.listener(|this, _, _, cx| {
                                 this.toggle_terminal_workspace_padding(cx);
                             }),
@@ -140,7 +143,7 @@ impl NyaTermApp {
                         settings_switch(
                             palette,
                             "terminal-line-numbers",
-                            self.settings.summary.terminal_show_line_numbers,
+                            self.settings.summary().terminal_show_line_numbers,
                             cx.listener(|this, _, _, cx| {
                                 this.toggle_terminal_line_numbers(cx);
                             }),
@@ -153,13 +156,13 @@ impl NyaTermApp {
                         settings_switch(
                             palette,
                             "terminal-timestamps",
-                            self.settings.summary.terminal_show_timestamps,
+                            self.settings.summary().terminal_show_timestamps,
                             cx.listener(|this, _, _, cx| {
                                 this.toggle_terminal_timestamps(cx);
                             }),
                         ),
                     ))
-                    .when(self.settings.summary.terminal_show_timestamps, |this| {
+                    .when(self.settings.summary().terminal_show_timestamps, |this| {
                         this.child(settings_form_row(
                             palette,
                             self.tr("settings.showTimestampMilliseconds"),
@@ -169,7 +172,7 @@ impl NyaTermApp {
                             settings_switch(
                                 palette,
                                 "terminal-timestamp-ms",
-                                self.settings.summary.terminal_show_timestamp_milliseconds,
+                                self.settings.summary().terminal_show_timestamp_milliseconds,
                                 cx.listener(|this, _, _, cx| {
                                     this.toggle_terminal_timestamp_milliseconds(cx);
                                 }),
@@ -185,7 +188,9 @@ impl NyaTermApp {
                         settings_switch(
                             palette,
                             "terminal-multi-line-paste",
-                            self.settings.summary.terminal_show_multi_line_paste_dialog,
+                            self.settings
+                                .summary()
+                                .terminal_show_multi_line_paste_dialog,
                             cx.listener(|this, _, _, cx| {
                                 this.toggle_multi_line_paste_dialog(cx);
                             }),
@@ -198,7 +203,7 @@ impl NyaTermApp {
                         settings_switch(
                             palette,
                             "terminal-paste-image-path",
-                            self.settings.summary.terminal_paste_image_as_path,
+                            self.settings.summary().terminal_paste_image_as_path,
                             cx.listener(|this, _, _, cx| {
                                 this.toggle_paste_image_as_path(cx);
                             }),
@@ -211,13 +216,13 @@ impl NyaTermApp {
                         settings_switch(
                             palette,
                             "terminal-remote-stats",
-                            self.settings.summary.ui_show_remote_stats,
+                            self.settings.summary().ui_show_remote_stats,
                             cx.listener(|this, _, _, cx| {
                                 this.toggle_remote_stats_panel(cx);
                             }),
                         ),
                     ))
-                    .when(self.settings.summary.ui_show_remote_stats, |this| {
+                    .when(self.settings.summary().ui_show_remote_stats, |this| {
                         this.child(settings_form_row(
                             palette,
                             self.tr("settings.remoteStatsInterval"),
@@ -228,7 +233,7 @@ impl NyaTermApp {
                                 palette,
                                 "terminal-remote-stats-interval-minus",
                                 "terminal-remote-stats-interval-plus",
-                                self.settings.summary.ui_remote_stats_interval.to_string(),
+                                self.settings.summary().ui_remote_stats_interval.to_string(),
                                 cx.listener(|this, _, _, cx| {
                                     this.adjust_remote_stats_interval(-1, cx);
                                 }),
@@ -247,13 +252,13 @@ impl NyaTermApp {
                         settings_switch(
                             palette,
                             "terminal-process-manager",
-                            self.settings.summary.ui_show_process_manager,
+                            self.settings.summary().ui_show_process_manager,
                             cx.listener(|this, _, _, cx| {
                                 this.toggle_process_manager_panel(cx);
                             }),
                         ),
                     ))
-                    .when(self.settings.summary.ui_show_process_manager, |this| {
+                    .when(self.settings.summary().ui_show_process_manager, |this| {
                         this.child(settings_form_row(
                             palette,
                             self.tr("settings.processManagerInterval"),
@@ -265,7 +270,7 @@ impl NyaTermApp {
                                 "terminal-process-interval-minus",
                                 "terminal-process-interval-plus",
                                 self.settings
-                                    .summary
+                                    .summary()
                                     .ui_process_manager_interval
                                     .to_string(),
                                 cx.listener(|this, _, _, cx| {
@@ -286,13 +291,13 @@ impl NyaTermApp {
                         settings_switch(
                             palette,
                             "terminal-docker-manager",
-                            self.settings.summary.ui_show_docker_manager,
+                            self.settings.summary().ui_show_docker_manager,
                             cx.listener(|this, _, _, cx| {
                                 this.toggle_docker_manager_panel(cx);
                             }),
                         ),
                     ))
-                    .when(self.settings.summary.ui_show_docker_manager, |this| {
+                    .when(self.settings.summary().ui_show_docker_manager, |this| {
                         this.child(settings_form_row(
                             palette,
                             self.tr("settings.dockerManagerInterval"),
@@ -303,7 +308,10 @@ impl NyaTermApp {
                                 palette,
                                 "terminal-docker-interval-minus",
                                 "terminal-docker-interval-plus",
-                                self.settings.summary.ui_docker_manager_interval.to_string(),
+                                self.settings
+                                    .summary()
+                                    .ui_docker_manager_interval
+                                    .to_string(),
                                 cx.listener(|this, _, _, cx| {
                                     this.adjust_docker_manager_interval(-1, cx);
                                 }),
@@ -353,7 +361,7 @@ impl NyaTermApp {
                                 self.tr("settings.actionLinksMatcherIpv4"),
                                 "192.168.1.1",
                                 self.tr("settings.actionLinksMatcherIpv4Desc"),
-                                self.settings.summary.terminal_action_links_matchers.ipv4,
+                                self.settings.summary().terminal_action_links_matchers.ipv4,
                                 action_links_enabled,
                                 cx.listener(|this, _, _, cx| {
                                     this.toggle_terminal_action_links_matcher("ipv4", cx);
@@ -366,7 +374,7 @@ impl NyaTermApp {
                                 "localhost:8080",
                                 self.tr("settings.actionLinksMatcherHostPortDesc"),
                                 self.settings
-                                    .summary
+                                    .summary()
                                     .terminal_action_links_matchers
                                     .host_port,
                                 action_links_enabled,
@@ -380,7 +388,10 @@ impl NyaTermApp {
                                 self.tr("settings.actionLinksMatcherArchive"),
                                 "backup.tar.gz",
                                 self.tr("settings.actionLinksMatcherArchiveDesc"),
-                                self.settings.summary.terminal_action_links_matchers.archive,
+                                self.settings
+                                    .summary()
+                                    .terminal_action_links_matchers
+                                    .archive,
                                 action_links_enabled,
                                 cx.listener(|this, _, _, cx| {
                                     this.toggle_terminal_action_links_matcher("archive", cx);

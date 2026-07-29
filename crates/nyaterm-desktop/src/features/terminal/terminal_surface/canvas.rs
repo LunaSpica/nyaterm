@@ -50,9 +50,9 @@ impl NyaTermApp {
             && self
                 .terminal_protocol_state_for_session(&session_id)
                 .mouse_reporting;
-        let low_latency_mode = self.settings.summary.terminal_low_latency_mode;
+        let low_latency_mode = self.settings.summary().terminal_low_latency_mode;
         let action_links_enabled =
-            self.settings.summary.terminal_action_links_enabled && !low_latency_mode;
+            self.settings.summary().terminal_action_links_enabled && !low_latency_mode;
         let render_output_pressure = self.runtime_output_pressure_active();
         let render_pressure = self
             .terminal
@@ -98,7 +98,7 @@ impl NyaTermApp {
         );
         let action_link_matcher_key = terminal_action_link_matcher_key(
             action_links_enabled,
-            &self.settings.summary.terminal_action_links_matchers,
+            &self.settings.summary().terminal_action_links_matchers,
         );
         let keyword_rules = if session_id.is_empty() {
             if render_degraded || !is_active {
@@ -132,7 +132,7 @@ impl NyaTermApp {
         // cursor placement, or when there is no session (empty bootstrap canvas).
         let needs_shell_viewport_snapshot = session_id.is_empty()
             || (is_active
-                && self.settings.summary.interaction_mac_ime_compatibility
+                && self.settings.summary().interaction_mac_ime_compatibility
                 && !self.terminal.input.ime_marked_text.is_empty());
         let snapshot = if needs_shell_viewport_snapshot {
             self.terminal_snapshot_for_session(
@@ -150,16 +150,16 @@ impl NyaTermApp {
         let snapshot_rows = snapshot.row_count();
         let snapshot_cols = snapshot.cols;
         let viewport_snapshot_duration = snapshot_stage_started_at.elapsed();
-        let show_line_numbers = self.settings.summary.terminal_show_line_numbers;
-        let show_timestamps = self.settings.summary.terminal_show_timestamps;
-        let show_timestamp_ms = self.settings.summary.terminal_show_timestamp_milliseconds;
+        let show_line_numbers = self.settings.summary().terminal_show_line_numbers;
+        let show_timestamps = self.settings.summary().terminal_show_timestamps;
+        let show_timestamp_ms = self.settings.summary().terminal_show_timestamp_milliseconds;
         let gutter_enabled = show_line_numbers || show_timestamps;
         // Prefer remote cursor visibility/shape from the terminal model; settings
         // supply the default paint style when the model reports a block cursor.
         let remote_cursor_visible = snapshot.cursor.visible
             && snapshot.cursor.shape != nyaterm_terminal::CursorShape::Hidden
             && cursor_row != usize::MAX;
-        let blink_enabled = self.settings.summary.cursor_blink || snapshot.cursor.blinking;
+        let blink_enabled = self.settings.summary().cursor_blink || snapshot.cursor.blinking;
         let show_cursor = is_active
             && !session_id.is_empty()
             && !is_disconnected
@@ -169,8 +169,8 @@ impl NyaTermApp {
         let cursor_style = match snapshot.cursor.shape {
             nyaterm_terminal::CursorShape::Underline => "underline".to_string(),
             nyaterm_terminal::CursorShape::Beam => "bar".to_string(),
-            nyaterm_terminal::CursorShape::Hidden => self.settings.summary.cursor_style.clone(),
-            nyaterm_terminal::CursorShape::Block => self.settings.summary.cursor_style.clone(),
+            nyaterm_terminal::CursorShape::Hidden => self.settings.summary().cursor_style.clone(),
+            nyaterm_terminal::CursorShape::Block => self.settings.summary().cursor_style.clone(),
         };
         let (abs_start, abs_end) = terminal_snapshot_absolute_range(&snapshot);
         let _ = abs_end;
@@ -333,7 +333,7 @@ impl NyaTermApp {
         let terminal_font_family = self.gpui_terminal_font_family();
         let ime_preedit_text = (is_active
             && !session_id.is_empty()
-            && self.settings.summary.interaction_mac_ime_compatibility
+            && self.settings.summary().interaction_mac_ime_compatibility
             && !self.terminal.input.ime_marked_text.is_empty())
         .then(|| self.terminal.input.ime_marked_text.clone());
         let ime_preedit_position = ime_preedit_text.as_ref().map(|_| {
@@ -409,7 +409,7 @@ impl NyaTermApp {
                         .pr(px(8.))
                         .text_color(rgb(palette.text_dimmed))
                         .font_family(terminal_font_family.clone())
-                        .text_size(px(self.settings.summary.terminal_font_size as f32))
+                        .text_size(px(self.settings.summary().terminal_font_size as f32))
                         .when(show_timestamps, |this| {
                             this.child(div().w(px(ts_w)).flex_none().child(ts_label))
                         })
@@ -464,9 +464,9 @@ impl NyaTermApp {
                 cell_h,
                 palette,
                 terminal_font_family.clone(),
-                self.settings.summary.terminal_font_size as f32,
-                self.settings.summary.terminal_font_weight as f32,
-                self.settings.summary.terminal_font_weight_bold as f32,
+                self.settings.summary().terminal_font_size as f32,
+                self.settings.summary().terminal_font_weight as f32,
+                self.settings.summary().terminal_font_weight_bold as f32,
             );
             if let Some(cache) = layout_cache {
                 grid = grid.with_layout_cache(cache);
@@ -487,9 +487,9 @@ impl NyaTermApp {
                 cell_h,
                 palette,
                 terminal_font_family.clone(),
-                self.settings.summary.terminal_font_size as f32,
-                self.settings.summary.terminal_font_weight as f32,
-                self.settings.summary.terminal_font_weight_bold as f32,
+                self.settings.summary().terminal_font_size as f32,
+                self.settings.summary().terminal_font_weight as f32,
+                self.settings.summary().terminal_font_weight_bold as f32,
             );
             if let Some(cache) = layout_cache {
                 grid = grid.with_layout_cache(cache);
@@ -507,7 +507,7 @@ impl NyaTermApp {
             .unwrap_or(palette.link);
         let sync_status_label = if sync_is_paused { "Paused" } else { "Syncing" };
         let output_session_id = session_id.clone();
-        let terminal_font_size = self.settings.summary.terminal_font_size as f32;
+        let terminal_font_size = self.settings.summary().terminal_font_size as f32;
         let performance_overlay = self
             .terminal
             .view
@@ -581,7 +581,7 @@ impl NyaTermApp {
             .font_family(terminal_font_family.clone())
             .text_size(px(terminal_font_size))
             .font_weight(FontWeight(
-                self.settings.summary.terminal_font_weight as f32,
+                self.settings.summary().terminal_font_weight as f32,
             ))
             .text_color(rgb(palette.terminal_fg))
             .child(
@@ -855,7 +855,7 @@ impl NyaTermApp {
                                         this.close_action_link_menu(cx);
                                         let mods = event.modifiers;
                                         let skip_selection =
-                                            this.settings.summary.terminal_action_links_enabled
+                                            this.settings.summary().terminal_action_links_enabled
                                                 && (mods.alt || mods.control || mods.platform);
                                         if !skip_selection {
                                             this.start_terminal_selection_for_session(
@@ -893,7 +893,7 @@ impl NyaTermApp {
                                                 return;
                                             }
                                         }
-                                        if this.settings.summary.interaction_right_click_paste {
+                                        if this.settings.summary().interaction_right_click_paste {
                                             this.paste_from_clipboard(window, cx);
                                             this.clear_terminal_selection(cx);
                                         } else {
@@ -947,7 +947,7 @@ impl NyaTermApp {
                                     }
                                     window.focus(&this.terminal.input.focus);
                                     let modifiers = event.modifiers();
-                                    if this.settings.summary.terminal_action_links_enabled {
+                                    if this.settings.summary().terminal_action_links_enabled {
                                         if modifiers.alt {
                                             if this.try_open_action_link_menu_at_click(event, cx) {
                                                 cx.stop_propagation();
@@ -1032,7 +1032,7 @@ impl NyaTermApp {
                                             .text_color(rgb(palette.terminal_fg))
                                             .font_family(terminal_font_family.clone())
                                             .text_size(px(
-                                                self.settings.summary.terminal_font_size as f32
+                                                self.settings.summary().terminal_font_size as f32,
                                             ))
                                             .child(marked_text),
                                     )
@@ -1260,7 +1260,7 @@ impl NyaTermApp {
                 expensive_interactions_enabled,
                 output_burst_bytes,
                 ?performance_mode,
-                action_links_enabled = self.settings.summary.terminal_action_links_enabled,
+                action_links_enabled = self.settings.summary().terminal_action_links_enabled,
                 search_open = self.terminal.search.open,
                 search_matches = search_matches_len,
                 render_cache_hits,

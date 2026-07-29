@@ -199,13 +199,13 @@ impl NyaTermApp {
         {
             return;
         }
-        if self.settings.summary.terminal_low_latency_mode {
+        if self.settings.summary().terminal_low_latency_mode {
             self.clear_command_suggestion_draft(cx);
             finish!("low_latency_mode", 0);
         }
         if !self
             .settings
-            .summary
+            .summary()
             .interaction_command_suggestions_enabled
         {
             self.clear_command_suggestion_draft(cx);
@@ -294,7 +294,7 @@ impl NyaTermApp {
         let min_chars_started_at = Instant::now();
         let min_chars = self
             .settings
-            .summary
+            .summary()
             .interaction_command_suggestion_min_chars
             .max(1) as usize;
         let below_min_chars = terminal_input_tracker_below_min_chars(
@@ -421,7 +421,7 @@ impl NyaTermApp {
                     if this.terminal.assist.command_suggestion_search_gen != request_id {
                         return None;
                     }
-                    if this.settings.summary.terminal_low_latency_mode {
+                    if this.settings.summary().terminal_low_latency_mode {
                         this.hide_command_suggestions_if_present(cx);
                         return None;
                     }
@@ -528,7 +528,7 @@ impl NyaTermApp {
         }
         if !self
             .settings
-            .summary
+            .summary()
             .interaction_command_suggestions_enabled
         {
             let hide_started_at = Instant::now();
@@ -538,12 +538,12 @@ impl NyaTermApp {
         }
         let min_chars = self
             .settings
-            .summary
+            .summary()
             .interaction_command_suggestion_min_chars
             .max(1) as usize;
         let max_chars = self
             .settings
-            .summary
+            .summary()
             .interaction_command_suggestion_max_chars
             .max(min_chars as u32) as usize;
         let pattern_started_at = Instant::now();
@@ -599,7 +599,7 @@ impl NyaTermApp {
             || self.terminal.assist.command_suggestions_suppressed
             || !self
                 .settings
-                .summary
+                .summary()
                 .interaction_command_suggestions_enabled
             || get_tracked_command(&self.terminal.assist.command_input_tracker) != request.pattern
         {

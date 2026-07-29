@@ -18,7 +18,7 @@ impl NyaTermApp {
     /// Connect/register must not open the config database or rewrite settings on
     /// the UI thread — that path was a major connect-time freeze source.
     pub(in crate::features) fn persist_open_tabs(&mut self) {
-        if !self.settings.summary.startup_restore {
+        if !self.settings.summary().startup_restore {
             return;
         }
         self.terminal.view.runtime.open_tabs_persist_dirty = true;
@@ -28,7 +28,7 @@ impl NyaTermApp {
 
     /// Force a durable open-tabs write (window close / explicit quit paths).
     pub(in crate::features) fn flush_open_tabs_now(&mut self) {
-        if !self.settings.summary.startup_restore {
+        if !self.settings.summary().startup_restore {
             self.terminal.view.runtime.open_tabs_persist_dirty = false;
             self.terminal.view.runtime.window_layout_persist_dirty = false;
             return;
@@ -44,14 +44,14 @@ impl NyaTermApp {
     /// rewriting settings is never done on the UI tick — that freezes connect
     /// and the first idle frame after connect.
     pub(in crate::features) fn flush_pending_session_persistence(&mut self) {
-        if !self.settings.summary.startup_restore {
+        if !self.settings.summary().startup_restore {
             self.terminal.view.runtime.open_tabs_persist_dirty = false;
             self.terminal.view.runtime.window_layout_persist_dirty = false;
             return;
         }
         let need_tabs = self.terminal.view.runtime.open_tabs_persist_dirty;
         let need_layout = self.terminal.view.runtime.window_layout_persist_dirty
-            && self.settings.summary.startup_restore_window_layout;
+            && self.settings.summary().startup_restore_window_layout;
         if !need_tabs && !need_layout {
             return;
         }
@@ -122,14 +122,14 @@ impl NyaTermApp {
 
     /// Synchronous durable write used by window-close / quit (must not race exit).
     fn flush_pending_session_persistence_sync(&mut self) {
-        if !self.settings.summary.startup_restore {
+        if !self.settings.summary().startup_restore {
             self.terminal.view.runtime.open_tabs_persist_dirty = false;
             self.terminal.view.runtime.window_layout_persist_dirty = false;
             return;
         }
         let need_tabs = self.terminal.view.runtime.open_tabs_persist_dirty;
         let need_layout = self.terminal.view.runtime.window_layout_persist_dirty
-            && self.settings.summary.startup_restore_window_layout;
+            && self.settings.summary().startup_restore_window_layout;
         if !need_tabs && !need_layout {
             return;
         }
@@ -339,7 +339,7 @@ impl NyaTermApp {
         if !should_restore {
             return;
         }
-        if !self.settings.summary.startup_restore {
+        if !self.settings.summary().startup_restore {
             self.mark_startup_restore_complete();
             return;
         }

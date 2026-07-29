@@ -19,47 +19,47 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let encoding = self.settings.summary.interaction_default_encoding.clone();
+        let encoding = self.settings.summary().interaction_default_encoding.clone();
         // Built before the form, which reads `self` throughout: creating the
         // box needs it mutably.
         let word_separators_input = self
             .text_input_box(
                 "settings.interaction.word-separators",
-                &self.settings.summary.interaction_word_separators.clone(),
+                &self.settings.summary().interaction_word_separators.clone(),
                 TextInputSetup::default(),
                 cx,
             )
             .into_any_element();
         let double_action = self
             .settings
-            .summary
+            .summary()
             .interaction_tab_double_click_action
             .clone();
         let middle_action = self
             .settings
-            .summary
+            .summary()
             .interaction_tab_middle_click_action
             .clone();
         let right_action = self
             .settings
-            .summary
+            .summary()
             .interaction_tab_right_click_action
             .clone();
         let delay_ms = self
             .settings
-            .summary
+            .summary()
             .interaction_duplicate_session_command_delay_ms;
         let min_chars = self
             .settings
-            .summary
+            .summary()
             .interaction_command_suggestion_min_chars;
         let max_chars = self
             .settings
-            .summary
+            .summary()
             .interaction_command_suggestion_max_chars;
         let suggestions_enabled = self
             .settings
-            .summary
+            .summary()
             .interaction_command_suggestions_enabled;
 
         div()
@@ -81,7 +81,7 @@ impl NyaTermApp {
                         settings_switch(
                             palette,
                             "interaction-copy-select",
-                            self.settings.summary.interaction_copy_on_select,
+                            self.settings.summary().interaction_copy_on_select,
                             cx.listener(|this, _, _, cx| {
                                 this.toggle_interaction_copy_on_select(cx);
                             }),
@@ -94,7 +94,7 @@ impl NyaTermApp {
                         settings_switch(
                             palette,
                             "interaction-right-paste",
-                            self.settings.summary.interaction_right_click_paste,
+                            self.settings.summary().interaction_right_click_paste,
                             cx.listener(|this, _, _, cx| {
                                 this.toggle_interaction_right_click_paste(cx);
                             }),
@@ -219,7 +219,7 @@ impl NyaTermApp {
                         settings_switch(
                             palette,
                             "interaction-alt-meta",
-                            self.settings.summary.interaction_alt_as_meta,
+                            self.settings.summary().interaction_alt_as_meta,
                             cx.listener(|this, _, _, cx| {
                                 this.toggle_alt_as_meta(cx);
                             }),
@@ -234,7 +234,7 @@ impl NyaTermApp {
                         settings_switch(
                             palette,
                             "interaction-mac-ime",
-                            self.settings.summary.interaction_mac_ime_compatibility,
+                            self.settings.summary().interaction_mac_ime_compatibility,
                             cx.listener(|this, _, _, cx| {
                                 this.toggle_mac_ime_compatibility(cx);
                             }),

@@ -1,8 +1,8 @@
 //! Compatibility-sensitive settings state shared by the settings feature owner.
 
-pub(in crate::features) struct SettingsMasterPasswordState {
-    pub enabled: bool,
-    pub draft: String,
+pub(super) struct SettingsMasterPasswordState {
+    pub(super) enabled: bool,
+    pub(super) draft: String,
 }
 
 impl SettingsMasterPasswordState {

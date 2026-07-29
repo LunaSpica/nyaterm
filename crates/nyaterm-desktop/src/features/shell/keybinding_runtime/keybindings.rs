@@ -10,7 +10,7 @@ impl NyaTermApp {
     /// First display chord for empty-workspace / UI labels (Tauri-style chips).
     pub(in crate::features) fn display_shortcut_for(&self, id: &str, fallback: &str) -> String {
         use crate::shortcuts::{format_hotkey_for_display, shortcut_keys_for};
-        let raw = shortcut_keys_for(id, &self.settings.summary.keybindings)
+        let raw = shortcut_keys_for(id, &self.settings.summary().keybindings)
             .unwrap_or_else(|| fallback.to_string());
         let display = format_hotkey_for_display(&raw);
         display
@@ -59,7 +59,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        let mut keybindings = self.settings.summary.keybindings.clone();
+        let mut keybindings = self.settings.summary().keybindings.clone();
         let is_default = crate::shortcuts::SHORTCUT_REGISTRY
             .iter()
             .find(|s| s.id == shortcut_id)
@@ -77,7 +77,7 @@ impl NyaTermApp {
         shortcut_id: String,
         cx: &mut Context<Self>,
     ) {
-        let mut keybindings = self.settings.summary.keybindings.clone();
+        let mut keybindings = self.settings.summary().keybindings.clone();
         keybindings.remove(&shortcut_id);
         self.save_keybindings(keybindings, format!("shortcut {shortcut_id} reset"), cx);
     }
@@ -92,7 +92,7 @@ impl NyaTermApp {
         success_message: String,
         cx: &mut Context<Self>,
     ) {
-        self.settings.summary.keybindings = keybindings.clone();
+        self.settings.set_keybindings(keybindings.clone());
         if self.defer_settings_persistence(cx) {
             self.settings.finish_keybinding_recording();
             self.terminal.view.status = success_message.replace("saved", "staged");
@@ -177,7 +177,7 @@ impl NyaTermApp {
             }
             let existing = crate::shortcuts::shortcut_keys_for(
                 shortcut.id,
-                &self.settings.summary.keybindings,
+                &self.settings.summary().keybindings,
             )
             .unwrap_or_else(|| shortcut.default_keys.to_string());
             let normalized_existing = existing

@@ -119,7 +119,7 @@ impl NyaTermApp {
         }
         let delay_ms = u64::from(
             self.settings
-                .summary
+                .summary()
                 .interaction_duplicate_session_command_delay_ms,
         );
         self.session.dialogs.open_startup_command(action, delay_ms);

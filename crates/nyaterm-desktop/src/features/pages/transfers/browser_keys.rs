@@ -76,7 +76,7 @@ impl NyaTermApp {
         if shortcut_matches(
             event,
             "fileExplorer.rename",
-            &self.settings.summary.keybindings,
+            &self.settings.summary().keybindings,
         ) && self.selected_transfer_entries().len() == 1
             && self.session.active_ssh_config().is_some()
             && !self.transfer.rename_dialog_is_open()

@@ -36,8 +36,8 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.commands.set_quick_view_mode(mode);
-        self.settings.summary.ui_quick_cmd_view_mode =
-            quick_command_view_mode_setting(mode).to_string();
+        self.settings
+            .set_quick_command_view_mode(quick_command_view_mode_setting(mode).to_string());
         self.save_quick_command_ui_settings(cx);
     }
 
@@ -47,8 +47,8 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.commands.set_quick_sort_mode(mode);
-        self.settings.summary.ui_quick_cmd_sort_mode =
-            quick_command_sort_mode_setting(mode).to_string();
+        self.settings
+            .set_quick_command_sort_mode(quick_command_sort_mode_setting(mode).to_string());
         self.save_quick_command_ui_settings(cx);
     }
 
@@ -57,7 +57,7 @@ impl NyaTermApp {
             self.runtime.config_dir(),
             self.runtime.portable_key_path().map(ToOwned::to_owned),
         )
-        .and_then(|store| store.save_quick_command_ui_settings(&self.settings.summary))
+        .and_then(|store| store.save_quick_command_ui_settings(self.settings.summary()))
         {
             Ok(settings) => {
                 self.apply_gpui_settings(settings);

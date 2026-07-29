@@ -59,7 +59,7 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         let wallpaper_path = self
             .settings
-            .summary
+            .summary()
             .background_image_path
             .as_ref()
             .map(|p| p.trim())
@@ -67,8 +67,8 @@ impl NyaTermApp {
             .filter(|p| std::path::Path::new(p).is_file())
             .map(|p| p.to_string());
         let wallpaper_opacity =
-            (self.settings.summary.background_image_opacity.min(100) as f32) / 100.0;
-        let wallpaper_fit = self.settings.summary.background_image_fit.clone();
+            (self.settings.summary().background_image_opacity.min(100) as f32) / 100.0;
+        let wallpaper_fit = self.settings.summary().background_image_fit.clone();
         let wallpaper_tile_size = wallpaper_path
             .as_deref()
             .filter(|_| wallpaper_fit == "tile")
@@ -80,7 +80,7 @@ impl NyaTermApp {
             .bg(self.shell_transparent_color(palette.bg))
             .text_color(rgb(palette.text))
             .font_family(self.gpui_ui_font_family())
-            .text_size(px(self.settings.summary.ui_font_size.clamp(12, 24) as f32))
+            .text_size(px(self.settings.summary().ui_font_size.clamp(12, 24) as f32))
             .on_click(cx.listener(|this, _, _, _| {
                 this.mark_user_activity();
             }))

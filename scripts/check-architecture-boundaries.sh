@@ -268,6 +268,27 @@ check_no_multiline_matches_excluding \
   '(self|this|app)\.settings[[:space:]]*\.[[:space:]]*store_status[[:space:]]*(\.|=)' \
   crates/nyaterm-desktop/src/features \
   'crates/nyaterm-desktop/src/features/settings/**'
+check_no_multiline_matches \
+  "SettingsFeatureState compatibility children must stay inside the settings module" \
+  'struct[[:space:]]+SettingsFeatureState[[:space:]]*\{[^}]*pub([[:space:]]|\(crate\)|\(in crate\)|\(in crate::features\))[[:space:]]+(summary|keyword_config|master_password)[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/settings/state.rs
+check_no_matches \
+  "SettingsMasterPasswordState implementation must stay inside the settings module" \
+  'pub([[:space:]]|\(crate\)|\(in crate\)|\(in crate::features\))[[:space:]]+struct[[:space:]]+SettingsMasterPasswordState' \
+  crates/nyaterm-desktop/src/features/settings/catalog.rs
+check_no_matches \
+  "settings compatibility implementation types must not be re-exported" \
+  'pub([^;]*)use([^;]*)(SettingsMasterPasswordState|StoreStatus)' \
+  crates/nyaterm-desktop/src/features/settings/mod.rs
+check_no_multiline_matches_excluding \
+  "settings compatibility children must use SettingsFeatureState methods outside settings" \
+  '(self|this|app)\.settings[[:space:]]*\.[[:space:]]*(summary|keyword_config|master_password)[[:space:]]*(\.|=|\[)' \
+  crates/nyaterm-desktop/src/features \
+  'crates/nyaterm-desktop/src/features/settings/**'
+check_no_matches \
+  "settings compatibility state must not expose mutable-reference accessors" \
+  'fn[[:space:]]+(summary|keyword_config|master_password)(_mut|_mutable)|->[[:space:]]*&mut[[:space:]]+(AppSettingsSummary|KeywordHighlightConfig|SettingsMasterPasswordState)' \
+  crates/nyaterm-desktop/src/features/settings
 
 check_no_matches \
   "translation state must stay grouped under TranslationFeatureState" \

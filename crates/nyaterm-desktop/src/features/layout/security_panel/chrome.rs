@@ -13,7 +13,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let unlocked =
-            self.settings.summary.has_master_password && self.security.secrets_unlocked();
+            self.settings.summary().has_master_password && self.security.secrets_unlocked();
         let palette = self.theme_palette();
         div()
             .id(SharedString::from("security-secrets-toggle"))
@@ -81,7 +81,7 @@ impl NyaTermApp {
             .on_click(cx.listener(|this, _, window, cx| {
                 if this.security_secrets_locked() {
                     this.open_security_unlock_prompt(window, cx);
-                } else if this.settings.summary.has_master_password {
+                } else if this.settings.summary().has_master_password {
                     this.lock_security_secrets(cx);
                 } else {
                     this.open_security_unlock_prompt(window, cx);

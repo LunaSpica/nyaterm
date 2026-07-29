@@ -11,11 +11,11 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let editor_type = self.settings.summary.transfer_editor_type.clone();
+        let editor_type = self.settings.summary().transfer_editor_type.clone();
         let default_editor_input = self
             .text_input_box(
                 "settings.transfer.default-editor",
-                &self.settings.summary.transfer_default_editor.clone(),
+                &self.settings.summary().transfer_default_editor.clone(),
                 TextInputSetup::placeholder(self.tr("settings.defaultEditor")),
                 cx,
             )

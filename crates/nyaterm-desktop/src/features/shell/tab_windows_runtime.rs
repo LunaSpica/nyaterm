@@ -247,8 +247,8 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn persist_terminal_window_layout(&mut self) {
-        if !self.settings.summary.startup_restore
-            || !self.settings.summary.startup_restore_window_layout
+        if !self.settings.summary().startup_restore
+            || !self.settings.summary().startup_restore_window_layout
         {
             return;
         }
@@ -260,8 +260,8 @@ impl NyaTermApp {
         if self.terminal.windows.restored {
             return;
         }
-        if !self.settings.summary.startup_restore
-            || !self.settings.summary.startup_restore_window_layout
+        if !self.settings.summary().startup_restore
+            || !self.settings.summary().startup_restore_window_layout
         {
             self.terminal.windows.restored = true;
             return;

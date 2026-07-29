@@ -25,7 +25,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn fallback_terminal_cell_size(&self) -> (f32, f32) {
-        let font_size = self.settings.summary.terminal_font_size.max(8) as f32;
+        let font_size = self.settings.summary().terminal_font_size.max(8) as f32;
         // Prefer painted fixed 18px when font is near default; scale with font otherwise.
         let cell_h = if (font_size - 14.).abs() < 0.5 {
             18.
@@ -40,7 +40,7 @@ impl NyaTermApp {
     /// Refresh monospaced cell metrics from GPUI TextSystem for the configured terminal font.
 
     pub(in crate::features) fn refresh_terminal_cell_metrics(&mut self, cx: &App) {
-        let font_size = self.settings.summary.terminal_font_size.max(8) as f32;
+        let font_size = self.settings.summary().terminal_font_size.max(8) as f32;
         let family = self.gpui_terminal_font_family();
         let text_system = cx.text_system();
         let font_id = text_system.resolve_font(&gpui::font(SharedString::from(family)));
@@ -68,9 +68,9 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn terminal_content_insets(&self) -> TerminalViewportInsets {
-        if self.settings.summary.terminal_show_workspace_padding
-            && !self.settings.summary.terminal_show_line_numbers
-            && !self.settings.summary.terminal_show_timestamps
+        if self.settings.summary().terminal_show_workspace_padding
+            && !self.settings.summary().terminal_show_line_numbers
+            && !self.settings.summary().terminal_show_timestamps
         {
             // Tauri applies workspace padding as `pl-2`; it does not add a
             // default margin or vertical padding around the terminal grid.
@@ -98,9 +98,9 @@ impl NyaTermApp {
         let snapshot = self.terminal_snapshot_for_session(session_id, display_offset);
         terminal_gutter_metrics(
             cell_w,
-            self.settings.summary.terminal_show_timestamps,
-            self.settings.summary.terminal_show_timestamp_milliseconds,
-            self.settings.summary.terminal_show_line_numbers,
+            self.settings.summary().terminal_show_timestamps,
+            self.settings.summary().terminal_show_timestamp_milliseconds,
+            self.settings.summary().terminal_show_line_numbers,
             terminal_line_number_digits(snapshot.as_ref()),
         )
         .total_width()

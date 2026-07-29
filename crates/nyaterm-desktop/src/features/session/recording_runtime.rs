@@ -29,7 +29,7 @@ impl NyaTermApp {
             return;
         }
         let target = recording_file_path(
-            &self.settings.summary,
+            self.settings.summary(),
             self.runtime.config_dir(),
             &session_name,
         );
@@ -107,9 +107,9 @@ impl NyaTermApp {
         let manager = self.recording.manager_for_job();
         let writer = self.recording.writer();
         let job_session_id = session_id.to_string();
-        let memory_limit = self.settings.summary.recording_memory_limit_bytes as usize;
-        let include_io_labels = self.settings.summary.recording_include_io_labels;
-        let include_timestamps = self.settings.summary.recording_include_timestamps;
+        let memory_limit = self.settings.summary().recording_memory_limit_bytes as usize;
+        let include_io_labels = self.settings.summary().recording_include_io_labels;
+        let include_timestamps = self.settings.summary().recording_include_timestamps;
         let task = cx.background_spawn(async move {
             writer.flush();
             manager.set_memory_limit(memory_limit);
@@ -207,9 +207,9 @@ impl NyaTermApp {
         let manager = self.recording.manager_for_job();
         let writer = self.recording.writer();
         let job_session_id = session_id.to_string();
-        let memory_limit = self.settings.summary.recording_memory_limit_bytes as usize;
-        let include_io_labels = self.settings.summary.recording_include_io_labels;
-        let include_timestamps = self.settings.summary.recording_include_timestamps;
+        let memory_limit = self.settings.summary().recording_memory_limit_bytes as usize;
+        let include_io_labels = self.settings.summary().recording_include_io_labels;
+        let include_timestamps = self.settings.summary().recording_include_timestamps;
         let task = cx.background_spawn(async move {
             writer.flush();
             manager.set_memory_limit(memory_limit);
@@ -249,11 +249,11 @@ impl NyaTermApp {
         session_name: &str,
         cx: &mut Context<Self>,
     ) {
-        if !self.settings.summary.recording_auto_start {
+        if !self.settings.summary().recording_auto_start {
             return;
         }
         let path = recording_file_path(
-            &self.settings.summary,
+            self.settings.summary(),
             self.runtime.config_dir(),
             session_name,
         );

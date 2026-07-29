@@ -8,8 +8,8 @@ const MAX_KEYWORD_HIGHLIGHT_IMPORT_BYTES: u64 = 4 * 1024 * 1024;
 
 impl NyaTermApp {
     pub(in crate::features) fn toggle_keyword_highlights(&mut self, cx: &mut Context<Self>) {
-        self.settings.keyword_config.enabled = !self.settings.keyword_config.enabled;
-        if !self.settings.keyword_config.enabled {
+        let enabled = self.settings.toggle_keyword_highlights();
+        if !enabled {
             self.settings.clear_keyword_highlight_edit();
             self.forget_text_inputs("keyword.highlight.");
         }
@@ -20,8 +20,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        self.settings.keyword_config.across_wrapped_lines =
-            !self.settings.keyword_config.across_wrapped_lines;
+        self.settings.toggle_keyword_highlights_wrapped();
         self.save_keyword_highlights(cx);
     }
 
@@ -34,10 +33,10 @@ impl NyaTermApp {
             self.runtime.config_dir(),
             self.runtime.portable_key_path().map(ToOwned::to_owned),
         )
-        .and_then(|store| store.save_keyword_highlights(&self.settings.keyword_config))
+        .and_then(|store| store.save_keyword_highlights(self.settings.keyword_config()))
         {
             Ok(config) => {
-                self.settings.keyword_config = config;
+                self.settings.replace_keyword_config(config);
                 self.settings
                     .set_store_message("keyword highlight settings saved".to_string());
                 self.settings.set_store_ready(true);
@@ -158,7 +157,7 @@ impl NyaTermApp {
             self.runtime.portable_key_path().map(ToOwned::to_owned),
         ) {
             if let Ok(config) = store.load_keyword_highlights() {
-                self.settings.keyword_config = config;
+                self.settings.replace_keyword_config(config);
                 self.forget_text_inputs("keyword.highlight.");
             }
         }
@@ -169,17 +168,7 @@ impl NyaTermApp {
         rule_id: String,
         cx: &mut Context<Self>,
     ) {
-        let enabled = self
-            .settings
-            .keyword_config
-            .builtin_rules
-            .get(&rule_id)
-            .copied()
-            .unwrap_or(true);
-        self.settings
-            .keyword_config
-            .builtin_rules
-            .insert(rule_id, !enabled);
+        self.settings.toggle_keyword_highlight_builtin(rule_id);
         self.save_keyword_highlights(cx);
     }
 
@@ -188,14 +177,7 @@ impl NyaTermApp {
         rule_id: String,
         cx: &mut Context<Self>,
     ) {
-        if let Some(rule) = self
-            .settings
-            .keyword_config
-            .rules
-            .iter_mut()
-            .find(|rule| rule.id == rule_id)
-        {
-            rule.enabled = !rule.enabled;
+        if self.settings.toggle_keyword_highlight_rule(&rule_id) {
             self.save_keyword_highlights(cx);
         }
     }
@@ -266,18 +248,10 @@ impl NyaTermApp {
         } else {
             normalize_keyword_highlight_color(color)
         };
-        if let Some(rule) = self
+        if self
             .settings
-            .keyword_config
-            .rules
-            .iter_mut()
-            .find(|rule| rule.id == rule_id)
+            .set_keyword_highlight_rule_color(&rule_id, dark, color.clone())
         {
-            if dark {
-                rule.color_dark = color.clone();
-            } else {
-                rule.color_light = color.clone();
-            }
             let field = if dark {
                 KeywordHighlightEditorField::ColorDark
             } else {
@@ -301,7 +275,7 @@ impl NyaTermApp {
     ) {
         let value = self
             .settings
-            .keyword_config
+            .keyword_config()
             .rules
             .iter()
             .find(|rule| rule.id == rule_id)
@@ -389,29 +363,13 @@ impl NyaTermApp {
             KeywordHighlightEditorField::ColorDark | KeywordHighlightEditorField::ColorLight
         )
         .then(|| normalize_keyword_highlight_color(&text));
-        let Some(rule) = self
+        let value = normalized_color.clone().unwrap_or(text);
+        if !self
             .settings
-            .keyword_config
-            .rules
-            .iter_mut()
-            .find(|rule| rule.id == rule_id)
-        else {
+            .apply_keyword_highlight_rule_input(rule_id, field, value)
+        {
             return;
-        };
-        match field {
-            KeywordHighlightEditorField::Name => rule.name = text,
-            KeywordHighlightEditorField::Patterns => {
-                rule.patterns = text.split('\n').map(ToOwned::to_owned).collect();
-            }
-            KeywordHighlightEditorField::ColorDark => {
-                rule.color_dark = normalized_color.clone().unwrap_or_default();
-            }
-            KeywordHighlightEditorField::ColorLight => {
-                rule.color_light = normalized_color.clone().unwrap_or_default();
-            }
         }
-        self.settings
-            .begin_keyword_highlight_edit(rule_id.to_string(), field);
         if let Some(color) = normalized_color {
             self.reset_text_input(&keyword_highlight_text_input_id(rule_id, field), &color, cx);
         }

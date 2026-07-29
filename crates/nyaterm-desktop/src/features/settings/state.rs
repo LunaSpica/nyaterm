@@ -1,5 +1,7 @@
 //! Authoritative application settings and grouped state for the settings experience.
 
+use std::collections::HashMap;
+
 use gpui::FocusHandle;
 use nyaterm_core::{
     AppSettingsSummary, KeywordHighlightConfig, KeywordHighlightRule, SearchEngineConfig,
@@ -14,9 +16,9 @@ use super::catalog::{SettingsMasterPasswordState, StoreStatus};
 
 pub(in crate::features) struct SettingsFeatureState {
     /// Compatibility-sensitive values loaded and persisted through `nyaterm-core`.
-    pub summary: AppSettingsSummary,
-    pub keyword_config: KeywordHighlightConfig,
-    pub master_password: SettingsMasterPasswordState,
+    pub(super) summary: AppSettingsSummary,
+    pub(super) keyword_config: KeywordHighlightConfig,
+    pub(super) master_password: SettingsMasterPasswordState,
     pub(super) store_status: StoreStatus,
     search_engines: SearchEngineSettingsState,
     keyword_highlights: KeywordHighlightSettingsState,
@@ -43,6 +45,37 @@ pub(in crate::features) struct StoreStatusView<'a> {
     pub path: &'a str,
     pub message: &'a str,
     pub ready: bool,
+}
+
+/// Borrowed staged master-password state. Deliberately does not implement
+/// `Debug` so the secret draft cannot be exposed through aggregate logging.
+pub(in crate::features) struct MasterPasswordView<'a> {
+    pub enabled: bool,
+    pub draft: &'a str,
+}
+
+pub(in crate::features) struct UiLayoutSettingsUpdate {
+    pub left_panel_width: u32,
+    pub right_panel_width: u32,
+    pub transfer_height: u32,
+    pub quick_command_height: u32,
+    pub quick_command_visible: bool,
+    pub serial_send_height: u32,
+    pub serial_send_visible: bool,
+    pub active_left_panel: Option<String>,
+    pub active_right_panel: Option<String>,
+    pub left_panel_collapsed: bool,
+    pub right_panel_collapsed: bool,
+    pub saved_connections_sort_mode: String,
+    pub activity_bar_left_top: Vec<String>,
+    pub activity_bar_left_bottom: Vec<String>,
+    pub activity_bar_right_top: Vec<String>,
+    pub activity_bar_right_bottom: Vec<String>,
+    pub activity_bar_show_labels: bool,
+    pub panel_multi_open: bool,
+    pub left_open_panels: Vec<String>,
+    pub right_open_panels: Vec<String>,
+    pub panel_stack_sizes: HashMap<String, u32>,
 }
 
 struct SearchEngineSettingsState {
@@ -147,8 +180,336 @@ impl SettingsFeatureState {
         }
     }
 
-    pub fn rebase_master_password(&mut self) {
+    pub(in crate::features) fn rebase_master_password(&mut self) {
         self.master_password.reset(self.summary.has_master_password);
+    }
+
+    pub(in crate::features) fn summary(&self) -> &AppSettingsSummary {
+        &self.summary
+    }
+
+    pub(in crate::features) fn replace_summary(&mut self, summary: AppSettingsSummary) {
+        self.summary = summary;
+    }
+
+    pub(in crate::features) fn keyword_config(&self) -> &KeywordHighlightConfig {
+        &self.keyword_config
+    }
+
+    pub(in crate::features) fn replace_keyword_config(&mut self, config: KeywordHighlightConfig) {
+        self.keyword_config = config;
+    }
+
+    pub(in crate::features) fn toggle_keyword_highlights(&mut self) -> bool {
+        self.keyword_config.enabled = !self.keyword_config.enabled;
+        self.keyword_config.enabled
+    }
+
+    pub(in crate::features) fn toggle_keyword_highlights_wrapped(&mut self) -> bool {
+        self.keyword_config.across_wrapped_lines = !self.keyword_config.across_wrapped_lines;
+        self.keyword_config.across_wrapped_lines
+    }
+
+    pub(in crate::features) fn toggle_keyword_highlight_builtin(&mut self, rule_id: String) {
+        let enabled = self
+            .keyword_config
+            .builtin_rules
+            .get(&rule_id)
+            .copied()
+            .unwrap_or(true);
+        self.keyword_config.builtin_rules.insert(rule_id, !enabled);
+    }
+
+    pub(in crate::features) fn toggle_keyword_highlight_rule(&mut self, rule_id: &str) -> bool {
+        let Some(rule) = self
+            .keyword_config
+            .rules
+            .iter_mut()
+            .find(|rule| rule.id == rule_id)
+        else {
+            return false;
+        };
+        rule.enabled = !rule.enabled;
+        true
+    }
+
+    pub(in crate::features) fn set_keyword_highlight_rule_color(
+        &mut self,
+        rule_id: &str,
+        dark: bool,
+        color: String,
+    ) -> bool {
+        let Some(rule) = self
+            .keyword_config
+            .rules
+            .iter_mut()
+            .find(|rule| rule.id == rule_id)
+        else {
+            return false;
+        };
+        if dark {
+            rule.color_dark = color;
+        } else {
+            rule.color_light = color;
+        }
+        true
+    }
+
+    pub(in crate::features) fn apply_keyword_highlight_rule_input(
+        &mut self,
+        rule_id: &str,
+        field: KeywordHighlightEditorField,
+        text: String,
+    ) -> bool {
+        let Some(rule) = self
+            .keyword_config
+            .rules
+            .iter_mut()
+            .find(|rule| rule.id == rule_id)
+        else {
+            return false;
+        };
+        match field {
+            KeywordHighlightEditorField::Name => rule.name = text,
+            KeywordHighlightEditorField::Patterns => {
+                rule.patterns = text.split('\n').map(ToOwned::to_owned).collect();
+            }
+            KeywordHighlightEditorField::ColorDark => rule.color_dark = text,
+            KeywordHighlightEditorField::ColorLight => rule.color_light = text,
+        }
+        self.begin_keyword_highlight_edit(rule_id.to_string(), field);
+        true
+    }
+
+    pub(in crate::features) fn master_password(&self) -> MasterPasswordView<'_> {
+        MasterPasswordView {
+            enabled: self.master_password.enabled,
+            draft: &self.master_password.draft,
+        }
+    }
+
+    pub(in crate::features) fn restore_master_password_draft(
+        &mut self,
+        enabled: bool,
+        draft: String,
+    ) {
+        self.master_password.enabled = enabled;
+        self.master_password.draft = draft;
+    }
+
+    pub(in crate::features) fn toggle_master_password(
+        &mut self,
+        cloud_sync_enabled: bool,
+    ) -> Result<bool, &'static str> {
+        self.master_password.toggle(cloud_sync_enabled)
+    }
+
+    pub(in crate::features) fn edit_master_password_draft(&mut self, text: String) -> bool {
+        self.master_password.edit_draft(text)
+    }
+
+    pub(in crate::features) fn set_quick_command_view_mode(&mut self, mode: String) {
+        self.summary.ui_quick_cmd_view_mode = mode;
+    }
+
+    pub(in crate::features) fn set_quick_command_sort_mode(&mut self, mode: String) {
+        self.summary.ui_quick_cmd_sort_mode = mode;
+    }
+
+    pub(in crate::features) fn set_saved_connections_sort_mode(&mut self, mode: String) {
+        self.summary.ui_saved_connections_sort_mode = mode;
+    }
+
+    pub(in crate::features) fn set_header_status_mode(&mut self, mode: String) {
+        self.summary.ui_header_status_mode = mode;
+        self.summary.ui_header_status_visible = true;
+    }
+
+    pub(in crate::features) fn set_header_status_visible(&mut self, visible: bool) {
+        self.summary.ui_header_status_visible = visible;
+    }
+
+    pub(in crate::features) fn set_keybindings(&mut self, keybindings: HashMap<String, String>) {
+        self.summary.keybindings = keybindings;
+    }
+
+    pub(in crate::features) fn set_transfer_download_path(&mut self, path: String) {
+        self.summary.transfer_download_path = path;
+    }
+
+    pub(in crate::features) fn set_recording_path(&mut self, path: String) {
+        self.summary.recording_path = path;
+    }
+
+    pub(in crate::features) fn set_transfer_default_editor(&mut self, path: String) {
+        self.summary.transfer_default_editor = path;
+    }
+
+    pub(in crate::features) fn set_tab_double_click_action(&mut self, action: String) {
+        self.summary.interaction_tab_double_click_action = action;
+    }
+
+    pub(in crate::features) fn set_tab_middle_click_action(&mut self, action: String) {
+        self.summary.interaction_tab_middle_click_action = action;
+    }
+
+    pub(in crate::features) fn set_tab_right_click_action(&mut self, action: String) {
+        self.summary.interaction_tab_right_click_action = action;
+    }
+
+    pub(in crate::features) fn apply_ui_layout(&mut self, update: UiLayoutSettingsUpdate) {
+        self.summary.ui_left_panel_width = update.left_panel_width;
+        self.summary.ui_right_panel_width = update.right_panel_width;
+        self.summary.ui_transfer_height = update.transfer_height;
+        self.summary.ui_quick_cmd_height = update.quick_command_height;
+        self.summary.ui_quick_cmd_visible = update.quick_command_visible;
+        self.summary.ui_serial_send_height = update.serial_send_height;
+        self.summary.ui_serial_send_visible = update.serial_send_visible;
+        self.summary.ui_active_left_panel = update.active_left_panel;
+        self.summary.ui_active_right_panel = update.active_right_panel;
+        self.summary.ui_left_panel_collapsed = update.left_panel_collapsed;
+        self.summary.ui_right_panel_collapsed = update.right_panel_collapsed;
+        self.summary.ui_saved_connections_sort_mode = update.saved_connections_sort_mode;
+        self.summary.ui_activity_bar_left_top = update.activity_bar_left_top;
+        self.summary.ui_activity_bar_left_bottom = update.activity_bar_left_bottom;
+        self.summary.ui_activity_bar_right_top = update.activity_bar_right_top;
+        self.summary.ui_activity_bar_right_bottom = update.activity_bar_right_bottom;
+        self.summary.ui_activity_bar_show_labels = update.activity_bar_show_labels;
+        self.summary.ui_panel_multi_open = update.panel_multi_open;
+        self.summary.ui_left_open_panels = update.left_open_panels;
+        self.summary.ui_right_open_panels = update.right_open_panels;
+        self.summary.ui_panel_stack_sizes = update.panel_stack_sizes;
+    }
+
+    pub(in crate::features) fn set_appearance_theme(&mut self, theme: String) {
+        self.summary.theme = theme;
+    }
+
+    pub(in crate::features) fn set_terminal_font_family(&mut self, family: String) -> bool {
+        if self.summary.terminal_font_family == family {
+            return false;
+        }
+        self.summary.terminal_font_family = family;
+        true
+    }
+
+    pub(in crate::features) fn set_terminal_font_size(&mut self, size: u16) -> bool {
+        if self.summary.terminal_font_size == size {
+            return false;
+        }
+        self.summary.terminal_font_size = size;
+        true
+    }
+
+    pub(in crate::features) fn set_cursor_style(&mut self, style: String) {
+        self.summary.cursor_style = style;
+    }
+
+    pub(in crate::features) fn toggle_cursor_blink(&mut self) -> bool {
+        self.summary.cursor_blink = !self.summary.cursor_blink;
+        self.summary.cursor_blink
+    }
+
+    pub(in crate::features) fn set_terminal_theme(&mut self, theme: Option<String>) {
+        self.summary.terminal_theme = theme;
+    }
+
+    pub(in crate::features) fn set_minimum_contrast_ratio(&mut self, ratio: String) -> bool {
+        if self.summary.minimum_contrast_ratio == ratio {
+            return false;
+        }
+        self.summary.minimum_contrast_ratio = ratio;
+        true
+    }
+
+    pub(in crate::features) fn set_ui_font_family(&mut self, family: String) {
+        self.summary.ui_font_family = family;
+    }
+
+    pub(in crate::features) fn set_ui_font_size(&mut self, size: u16) {
+        self.summary.ui_font_size = size;
+    }
+
+    pub(in crate::features) fn set_terminal_font_weight(&mut self, weight: u16) -> bool {
+        if self.summary.terminal_font_weight == weight {
+            return false;
+        }
+        self.summary.terminal_font_weight = weight;
+        true
+    }
+
+    pub(in crate::features) fn set_terminal_font_weight_bold(&mut self, weight: u16) -> bool {
+        if self.summary.terminal_font_weight_bold == weight {
+            return false;
+        }
+        self.summary.terminal_font_weight_bold = weight;
+        true
+    }
+
+    pub(in crate::features) fn select_background_image(&mut self, path: String) {
+        self.summary.background_image_path = Some(path);
+        if self.summary.background_image_fit.trim().is_empty() {
+            self.summary.background_image_fit = "cover".to_string();
+        }
+    }
+
+    pub(in crate::features) fn clear_background_image(&mut self) {
+        self.summary.background_image_path = None;
+    }
+
+    pub(in crate::features) fn set_background_image_fit(&mut self, fit: String) {
+        self.summary.background_image_fit = fit;
+    }
+
+    pub(in crate::features) fn set_background_image_opacity(&mut self, opacity: u8) -> bool {
+        if self.summary.background_image_opacity == opacity {
+            return false;
+        }
+        self.summary.background_image_opacity = opacity;
+        true
+    }
+
+    pub(in crate::features) fn set_background_content_opacity(&mut self, opacity: u8) -> bool {
+        if self.summary.background_content_opacity == opacity {
+            return false;
+        }
+        self.summary.background_content_opacity = opacity;
+        true
+    }
+
+    pub(in crate::features) fn toggle_file_explorer_auto_sync_cwd(
+        &mut self,
+        connection_id: String,
+    ) -> bool {
+        let ids = &mut self.summary.ui_file_explorer_auto_sync_cwd_connection_ids;
+        let was_enabled = ids.iter().any(|id| id == &connection_id);
+        ids.retain(|id| id != &connection_id);
+        if !was_enabled {
+            ids.push(connection_id);
+        }
+        !was_enabled
+    }
+
+    pub(in crate::features) fn toggle_file_explorer_hidden_files(&mut self) -> bool {
+        self.summary.ui_file_explorer_show_hidden_files =
+            !self.summary.ui_file_explorer_show_hidden_files;
+        self.summary.ui_file_explorer_show_hidden_files
+    }
+
+    pub(in crate::features) fn set_file_explorer_favorites(
+        &mut self,
+        connection_id: String,
+        favorites: Vec<String>,
+    ) {
+        if favorites.is_empty() {
+            self.summary
+                .ui_file_explorer_favorite_dirs_by_connection_id
+                .remove(&connection_id);
+        } else {
+            self.summary
+                .ui_file_explorer_favorite_dirs_by_connection_id
+                .insert(connection_id, favorites);
+        }
     }
 
     pub(in crate::features) fn store_status(&self) -> StoreStatusView<'_> {
@@ -570,12 +931,16 @@ fn adjusted_index_after_remove(value: Option<usize>, removed: usize) -> Option<u
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use gpui::TestAppContext;
     use nyaterm_core::{
         AppSettingsSummary, KeywordHighlightConfig, KeywordHighlightRule, SearchEngineConfig,
     };
 
-    use super::{SearchEngineMenu, SettingsFeatureFocus, SettingsFeatureState};
+    use super::{
+        SearchEngineMenu, SettingsFeatureFocus, SettingsFeatureState, UiLayoutSettingsUpdate,
+    };
     use crate::models::{
         ConfigPathPromptKind, KeywordHighlightEditorField, SnapshotPasswordPromptKind,
     };
@@ -716,5 +1081,97 @@ mod tests {
         assert_eq!(status.path, "/tmp/nyaterm.redb");
         assert_eq!(status.message, "store reopened");
         assert!(status.ready);
+    }
+
+    #[test]
+    fn settings_owner_applies_ui_layout_as_one_transition() {
+        let mut state = settings_state();
+
+        state.apply_ui_layout(UiLayoutSettingsUpdate {
+            left_panel_width: 320,
+            right_panel_width: 360,
+            transfer_height: 240,
+            quick_command_height: 180,
+            quick_command_visible: false,
+            serial_send_height: 160,
+            serial_send_visible: true,
+            active_left_panel: Some("connections".to_string()),
+            active_right_panel: Some("sftp".to_string()),
+            left_panel_collapsed: false,
+            right_panel_collapsed: true,
+            saved_connections_sort_mode: "recent".to_string(),
+            activity_bar_left_top: vec!["connections".to_string()],
+            activity_bar_left_bottom: vec!["settings".to_string()],
+            activity_bar_right_top: vec!["sftp".to_string()],
+            activity_bar_right_bottom: vec!["ai".to_string()],
+            activity_bar_show_labels: true,
+            panel_multi_open: true,
+            left_open_panels: vec!["connections".to_string()],
+            right_open_panels: vec!["sftp".to_string()],
+            panel_stack_sizes: HashMap::from([("left:connections".to_string(), 600)]),
+        });
+
+        let summary = state.summary();
+        assert_eq!(summary.ui_left_panel_width, 320);
+        assert_eq!(summary.ui_right_panel_width, 360);
+        assert!(!summary.ui_quick_cmd_visible);
+        assert!(summary.ui_serial_send_visible);
+        assert_eq!(summary.ui_active_left_panel.as_deref(), Some("connections"));
+        assert!(summary.ui_right_panel_collapsed);
+        assert_eq!(summary.ui_activity_bar_right_bottom, ["ai"]);
+        assert_eq!(summary.ui_panel_stack_sizes["left:connections"], 600);
+    }
+
+    #[test]
+    fn settings_owner_controls_keyword_catalog_transitions() {
+        let mut state = settings_state();
+        state.add_keyword_highlight_rule(KeywordHighlightRule {
+            id: "warning".to_string(),
+            name: "warning".to_string(),
+            patterns: vec!["WARN".to_string()],
+            color_dark: "#ffffff".to_string(),
+            color_light: "#000000".to_string(),
+            enabled: true,
+        });
+
+        assert!(state.toggle_keyword_highlights());
+        assert!(state.toggle_keyword_highlights_wrapped());
+        state.toggle_keyword_highlight_builtin("builtin-error".to_string());
+        assert!(state.toggle_keyword_highlight_rule("warning"));
+        assert!(state.set_keyword_highlight_rule_color("warning", true, "#123456".to_string()));
+        assert!(state.apply_keyword_highlight_rule_input(
+            "warning",
+            KeywordHighlightEditorField::Patterns,
+            "WARN\nERROR".to_string(),
+        ));
+
+        let config = state.keyword_config();
+        assert!(config.enabled);
+        assert!(config.across_wrapped_lines);
+        assert!(!config.builtin_rules["builtin-error"]);
+        assert!(!config.rules[0].enabled);
+        assert_eq!(config.rules[0].color_dark, "#123456");
+        assert_eq!(config.rules[0].patterns, ["WARN", "ERROR"]);
+    }
+
+    #[test]
+    fn settings_owner_exposes_master_password_as_a_borrowed_view() {
+        let mut state = settings_state();
+        assert_eq!(state.master_password.toggle(false), Ok(true));
+        assert!(
+            state
+                .master_password
+                .edit_draft("replacement secret".to_string())
+        );
+
+        let view = state.master_password();
+        assert!(view.enabled);
+        assert_eq!(view.draft, "replacement secret");
+
+        state.summary.has_master_password = false;
+        state.rebase_master_password();
+        let view = state.master_password();
+        assert!(!view.enabled);
+        assert!(view.draft.is_empty());
     }
 }

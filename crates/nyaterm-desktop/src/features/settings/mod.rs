@@ -11,4 +11,6 @@ mod state;
 pub(in crate::features) use security_state::{
     SecurityCatalogState, SecurityFeatureFocus, SecurityFeatureState,
 };
-pub(in crate::features) use state::{SearchEngineMenu, SettingsFeatureFocus, SettingsFeatureState};
+pub(in crate::features) use state::{
+    SearchEngineMenu, SettingsFeatureFocus, SettingsFeatureState, UiLayoutSettingsUpdate,
+};

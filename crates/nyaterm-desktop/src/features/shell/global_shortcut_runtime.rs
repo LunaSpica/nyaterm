@@ -39,7 +39,7 @@ impl NyaTermApp {
             return true;
         }
 
-        let keybindings = self.settings.summary.keybindings.clone();
+        let keybindings = self.settings.summary().keybindings.clone();
         if shortcut_matches(event, "terminal.copy", &keybindings) {
             self.copy_terminal_selection_or_visible(cx);
             return true;

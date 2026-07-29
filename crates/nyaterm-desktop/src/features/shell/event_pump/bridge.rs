@@ -3,7 +3,7 @@ use crate::features::NyaTermApp;
 impl NyaTermApp {
     pub(in crate::features) fn sync_session_event_bridge_config(&self) {
         self.session.configure_event_bridge(
-            self.settings.summary.interaction_default_encoding.clone(),
+            self.settings.summary().interaction_default_encoding.clone(),
             self.terminal_scrollback_line_limit(),
         );
     }

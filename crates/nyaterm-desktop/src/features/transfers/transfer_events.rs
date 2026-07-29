@@ -260,7 +260,7 @@ impl NyaTermApp {
                         entry.file_type == SftpFileType::Directory
                             && entry.name != "."
                             && entry.name != ".."
-                            && (self.settings.summary.ui_file_explorer_show_hidden_files
+                            && (self.settings.summary().ui_file_explorer_show_hidden_files
                                 || !entry.name.starts_with('.'))
                     });
                     entries.sort_by(|left, right| {

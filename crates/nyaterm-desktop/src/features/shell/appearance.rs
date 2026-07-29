@@ -14,34 +14,34 @@ const TERMINAL_FONT_SIZE_MAX: i16 = 72;
 
 impl NyaTermApp {
     pub(in crate::features) fn apply_gpui_settings(&mut self, settings: AppSettingsSummary) {
-        self.settings.summary = settings;
+        self.settings.replace_summary(settings);
         self.invalidate_paint_theme_caches();
     }
 
     pub(in crate::features) fn gpui_terminal_font_family(&self) -> String {
         gpui_platform_font_family(
-            &self.settings.summary.terminal_font_family,
+            &self.settings.summary().terminal_font_family,
             gpui_terminal_font_fallback(),
             true,
         )
     }
 
     pub(in crate::features) fn gpui_ui_font_family(&self) -> String {
-        let raw = if self.settings.summary.ui_font_family.trim().is_empty() {
-            self.settings.summary.terminal_font_family.as_str()
+        let raw = if self.settings.summary().ui_font_family.trim().is_empty() {
+            self.settings.summary().terminal_font_family.as_str()
         } else {
-            self.settings.summary.ui_font_family.as_str()
+            self.settings.summary().ui_font_family.as_str()
         };
         gpui_platform_font_family(raw, gpui_ui_font_fallback(), false)
     }
 
     pub(in crate::features) fn theme_palette(&self) -> ThemePalette {
-        theme_palette(&self.settings.summary.theme)
+        theme_palette(&self.settings.summary().theme)
     }
 
     pub(in crate::features) fn wallpaper_enabled(&self) -> bool {
         self.settings
-            .summary
+            .summary()
             .background_image_path
             .as_deref()
             .map(str::trim)
@@ -53,7 +53,7 @@ impl NyaTermApp {
         if !self.wallpaper_enabled() {
             return rgb(color);
         }
-        let alpha = ((self.settings.summary.background_content_opacity.min(100) as f32 / 100.0)
+        let alpha = ((self.settings.summary().background_content_opacity.min(100) as f32 / 100.0)
             * 255.0)
             .round() as u32;
         rgba((color << 8) | alpha.min(0xff))
@@ -80,19 +80,19 @@ impl NyaTermApp {
     pub(in crate::features) fn resolved_keyword_highlight_rules(
         &self,
     ) -> Arc<Vec<ResolvedKeywordHighlightRule>> {
-        if self.settings.summary.terminal_low_latency_mode {
+        if self.settings.summary().terminal_low_latency_mode {
             return Arc::new(Vec::new());
         }
         if let Some(cached) = self.terminal.paint.cached_keyword_highlight_rules.as_ref() {
             return cached.clone();
         }
         // Cache miss (settings path / first call without ensure): build once without storing.
-        if !self.settings.keyword_config.enabled {
+        if !self.settings.keyword_config().enabled {
             return Arc::new(Vec::new());
         }
         Arc::new(merge_keyword_highlight_rules_for_paint(
-            &self.settings.keyword_config.rules,
-            &self.settings.keyword_config.builtin_rules,
+            &self.settings.keyword_config().rules,
+            &self.settings.keyword_config().builtin_rules,
             self.terminal_theme_is_dark(),
         ))
     }
@@ -104,21 +104,21 @@ impl NyaTermApp {
     }
 
     fn ensure_keyword_highlight_rules_cache(&mut self) {
-        if self.settings.summary.terminal_low_latency_mode {
+        if self.settings.summary().terminal_low_latency_mode {
             self.terminal.paint.cached_keyword_highlight_rules = Some(Arc::new(Vec::new()));
             return;
         }
         if self.terminal.paint.cached_keyword_highlight_rules.is_some() {
             return;
         }
-        let rules = if !self.settings.keyword_config.enabled {
+        let rules = if !self.settings.keyword_config().enabled {
             Arc::new(Vec::new())
         } else {
             // terminal_theme_is_dark uses palette; ensure palette first.
             self.ensure_terminal_theme_palette_cache();
             Arc::new(merge_keyword_highlight_rules_for_paint(
-                &self.settings.keyword_config.rules,
-                &self.settings.keyword_config.builtin_rules,
+                &self.settings.keyword_config().rules,
+                &self.settings.keyword_config().builtin_rules,
                 self.terminal_theme_is_dark(),
             ))
         };
@@ -127,16 +127,16 @@ impl NyaTermApp {
 
     /// Terminal surface palette: follows optional `terminal_theme`, else UI theme.
     pub(in crate::features) fn terminal_theme_palette(&self) -> ThemePalette {
-        let ui_theme = self.settings.summary.theme.as_str();
+        let ui_theme = self.settings.summary().theme.as_str();
         let terminal_theme = self
             .settings
-            .summary
+            .summary()
             .terminal_theme
             .as_deref()
             .map(str::trim)
             .filter(|s| !s.is_empty())
             .unwrap_or("");
-        let contrast = self.settings.summary.minimum_contrast_ratio.as_str();
+        let contrast = self.settings.summary().minimum_contrast_ratio.as_str();
         if let Some((cached_ui, cached_term, cached_contrast, palette)) =
             self.terminal.paint.cached_terminal_theme_palette.as_ref()
         {
@@ -157,17 +157,17 @@ impl NyaTermApp {
     }
 
     fn ensure_terminal_theme_palette_cache(&mut self) {
-        let ui_theme = self.settings.summary.theme.clone();
+        let ui_theme = self.settings.summary().theme.clone();
         let terminal_theme = self
             .settings
-            .summary
+            .summary()
             .terminal_theme
             .as_deref()
             .map(str::trim)
             .filter(|s| !s.is_empty())
             .unwrap_or("")
             .to_string();
-        let contrast = self.settings.summary.minimum_contrast_ratio.clone();
+        let contrast = self.settings.summary().minimum_contrast_ratio.clone();
         if let Some((cached_ui, cached_term, cached_contrast, _)) =
             self.terminal.paint.cached_terminal_theme_palette.as_ref()
         {
@@ -237,7 +237,7 @@ impl NyaTermApp {
         } else {
             theme
         };
-        self.settings.summary.theme = theme.to_string();
+        self.settings.set_appearance_theme(theme.to_string());
         self.save_appearance_settings(cx);
     }
 
@@ -246,10 +246,9 @@ impl NyaTermApp {
         family: &str,
         cx: &mut Context<Self>,
     ) {
-        if self.settings.summary.terminal_font_family == family {
+        if !self.settings.set_terminal_font_family(family.to_string()) {
             return;
         }
-        self.settings.summary.terminal_font_family = family.to_string();
         self.invalidate_terminal_cell_metrics(cx);
         self.save_appearance_settings(cx);
     }
@@ -273,22 +272,20 @@ impl NyaTermApp {
         delta: i16,
         cx: &mut Context<Self>,
     ) {
-        let next = (self.settings.summary.terminal_font_size as i16 + delta)
+        let next = (self.settings.summary().terminal_font_size as i16 + delta)
             .clamp(TERMINAL_FONT_SIZE_MIN, TERMINAL_FONT_SIZE_MAX);
-        if self.settings.summary.terminal_font_size == next as u16 {
+        if !self.settings.set_terminal_font_size(next as u16) {
             return;
         }
-        self.settings.summary.terminal_font_size = next as u16;
         self.invalidate_terminal_cell_metrics(cx);
         self.save_appearance_settings(cx);
     }
 
     pub(in crate::features) fn reset_terminal_font_size(&mut self, cx: &mut Context<Self>) {
         let default_size = AppSettingsSummary::default().terminal_font_size;
-        if self.settings.summary.terminal_font_size == default_size {
+        if !self.settings.set_terminal_font_size(default_size) {
             return;
         }
-        self.settings.summary.terminal_font_size = default_size;
         self.invalidate_terminal_cell_metrics(cx);
         self.save_appearance_settings(cx);
     }
@@ -302,15 +299,15 @@ impl NyaTermApp {
             "underline" | "bar" => style,
             _ => "block",
         };
-        self.settings.summary.cursor_style = normalized.to_string();
+        self.settings.set_cursor_style(normalized.to_string());
         self.save_appearance_settings(cx);
         self.terminal.view.status = format!("cursor style → {normalized}");
     }
 
     pub(in crate::features) fn toggle_cursor_blink(&mut self, cx: &mut Context<Self>) {
-        self.settings.summary.cursor_blink = !self.settings.summary.cursor_blink;
+        let cursor_blink = self.settings.toggle_cursor_blink();
         self.save_appearance_settings(cx);
-        self.terminal.view.status = if self.settings.summary.cursor_blink {
+        self.terminal.view.status = if cursor_blink {
             "cursor blink on".to_string()
         } else {
             "cursor blink off".to_string()
@@ -322,16 +319,16 @@ impl NyaTermApp {
         theme: Option<&str>,
         cx: &mut Context<Self>,
     ) {
-        self.settings.summary.terminal_theme =
-            theme.map(str::trim).filter(|s| !s.is_empty()).map(|s| {
-                if s == "catppuccin" {
-                    "catppuccin-mocha".to_string()
-                } else {
-                    s.to_string()
-                }
-            });
+        let theme = theme.map(str::trim).filter(|s| !s.is_empty()).map(|s| {
+            if s == "catppuccin" {
+                "catppuccin-mocha".to_string()
+            } else {
+                s.to_string()
+            }
+        });
+        self.settings.set_terminal_theme(theme);
         self.save_appearance_settings(cx);
-        self.terminal.view.status = match self.settings.summary.terminal_theme.as_deref() {
+        self.terminal.view.status = match self.settings.summary().terminal_theme.as_deref() {
             Some(id) => format!("terminal theme → {id}"),
             None => "terminal theme → follow UI".to_string(),
         };
@@ -346,10 +343,9 @@ impl NyaTermApp {
             "3" | "4.5" | "7" | "21" => ratio,
             _ => "1",
         };
-        if self.settings.summary.minimum_contrast_ratio == ratio {
+        if !self.settings.set_minimum_contrast_ratio(ratio.to_string()) {
             return;
         }
-        self.settings.summary.minimum_contrast_ratio = ratio.to_string();
         self.save_appearance_settings(cx);
         self.terminal.view.status = format!("minimum contrast → {ratio}");
     }
@@ -359,7 +355,7 @@ impl NyaTermApp {
         family: &str,
         cx: &mut Context<Self>,
     ) {
-        self.settings.summary.ui_font_family = family.to_string();
+        self.settings.set_ui_font_family(family.to_string());
         self.save_appearance_settings(cx);
     }
 
@@ -371,9 +367,9 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let raw = if terminal {
-            &self.settings.summary.terminal_font_family
+            &self.settings.summary().terminal_font_family
         } else {
-            &self.settings.summary.ui_font_family
+            &self.settings.summary().ui_font_family
         };
         let fallback = if terminal { "JetBrains Mono" } else { "Inter" };
         let mut fonts = appearance_font_stack(raw, fallback);
@@ -391,9 +387,9 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let raw = if terminal {
-            &self.settings.summary.terminal_font_family
+            &self.settings.summary().terminal_font_family
         } else {
-            &self.settings.summary.ui_font_family
+            &self.settings.summary().ui_font_family
         };
         let fallback = if terminal { "JetBrains Mono" } else { "Inter" };
         let mut fonts = appearance_font_stack(raw, fallback);
@@ -415,9 +411,9 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let raw = if terminal {
-            &self.settings.summary.terminal_font_family
+            &self.settings.summary().terminal_font_family
         } else {
-            &self.settings.summary.ui_font_family
+            &self.settings.summary().ui_font_family
         };
         let fallback = if terminal { "JetBrains Mono" } else { "Inter" };
         let mut fonts = appearance_font_stack(raw, fallback);
@@ -447,8 +443,8 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn adjust_ui_font_size(&mut self, delta: i16, cx: &mut Context<Self>) {
-        let next = (self.settings.summary.ui_font_size as i16 + delta).clamp(12, 24) as u16;
-        self.settings.summary.ui_font_size = next;
+        let next = (self.settings.summary().ui_font_size as i16 + delta).clamp(12, 24) as u16;
+        self.settings.set_ui_font_size(next);
         self.save_appearance_settings(cx);
     }
 
@@ -461,10 +457,9 @@ impl NyaTermApp {
             300 | 400 | 500 | 600 | 700 | 800 => weight,
             _ => 400,
         };
-        if self.settings.summary.terminal_font_weight == weight {
+        if !self.settings.set_terminal_font_weight(weight) {
             return;
         }
-        self.settings.summary.terminal_font_weight = weight;
         self.invalidate_terminal_cell_metrics(cx);
         self.save_appearance_settings(cx);
     }
@@ -478,10 +473,9 @@ impl NyaTermApp {
             300 | 400 | 500 | 600 | 700 | 800 => weight,
             _ => 700,
         };
-        if self.settings.summary.terminal_font_weight_bold == weight {
+        if !self.settings.set_terminal_font_weight_bold(weight) {
             return;
         }
-        self.settings.summary.terminal_font_weight_bold = weight;
         self.invalidate_terminal_cell_metrics(cx);
         self.save_appearance_settings(cx);
     }
@@ -495,7 +489,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn prompt_background_image(&mut self, cx: &mut Context<Self>) {
-        if self.settings.summary.background_image_path.is_some() {
+        if self.settings.summary().background_image_path.is_some() {
             // allow replace
         }
         let options = PathPromptOptions {
@@ -515,10 +509,8 @@ impl NyaTermApp {
             };
             let _ = this.update(cx, |this, cx| {
                 if let Some(path) = path {
-                    this.settings.summary.background_image_path = Some(path.display().to_string());
-                    if this.settings.summary.background_image_fit.trim().is_empty() {
-                        this.settings.summary.background_image_fit = "cover".to_string();
-                    }
+                    this.settings
+                        .select_background_image(path.display().to_string());
                     this.save_appearance_settings(cx);
                     this.terminal.view.status = "wallpaper image selected".to_string();
                 } else {
@@ -532,7 +524,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn clear_background_image(&mut self, cx: &mut Context<Self>) {
-        self.settings.summary.background_image_path = None;
+        self.settings.clear_background_image();
         self.settings.close_appearance_menu();
         self.save_appearance_settings(cx);
         self.terminal.view.status = "wallpaper cleared".to_string();
@@ -549,7 +541,8 @@ impl NyaTermApp {
             "tile" => "tile",
             _ => "cover",
         };
-        self.settings.summary.background_image_fit = normalized.to_string();
+        self.settings
+            .set_background_image_fit(normalized.to_string());
         self.save_appearance_settings(cx);
         self.terminal.view.status = format!("wallpaper fit → {normalized}");
     }
@@ -560,10 +553,9 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let next = value.min(100);
-        if self.settings.summary.background_image_opacity == next {
+        if !self.settings.set_background_image_opacity(next) {
             return;
         }
-        self.settings.summary.background_image_opacity = next;
         self.save_appearance_settings(cx);
     }
 
@@ -573,10 +565,9 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let next = value.min(100);
-        if self.settings.summary.background_content_opacity == next {
+        if !self.settings.set_background_content_opacity(next) {
             return;
         }
-        self.settings.summary.background_content_opacity = next;
         self.save_appearance_settings(cx);
     }
 
@@ -589,7 +580,7 @@ impl NyaTermApp {
             self.runtime.config_dir(),
             self.runtime.portable_key_path().map(ToOwned::to_owned),
         )
-        .and_then(|store| store.save_appearance_settings(&self.settings.summary))
+        .and_then(|store| store.save_appearance_settings(self.settings.summary()))
         {
             Ok(settings) => {
                 self.apply_gpui_settings(settings);

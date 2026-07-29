@@ -64,7 +64,7 @@ impl NyaTermApp {
         let selected_for_paste = selected.clone();
         let search_engines: Vec<(String, String, Option<String>)> = self
             .settings
-            .summary
+            .summary()
             .search_custom_engines
             .iter()
             .filter(|engine| {
@@ -118,9 +118,9 @@ impl NyaTermApp {
                 .collect();
         let selection_link_kind: Option<&'static str> = None;
         let selection_actions: Vec<(String, ActionLinkAction)> =
-            if self.settings.summary.terminal_action_links_enabled && has_selection {
+            if self.settings.summary().terminal_action_links_enabled && has_selection {
                 let trimmed = selected.trim();
-                let matchers = &self.settings.summary.terminal_action_links_matchers;
+                let matchers = &self.settings.summary().terminal_action_links_matchers;
                 let entity = find_action_links(trimmed, matchers, true)
                     .into_iter()
                     .find(|item| item.text == trimmed || item.value == trimmed)

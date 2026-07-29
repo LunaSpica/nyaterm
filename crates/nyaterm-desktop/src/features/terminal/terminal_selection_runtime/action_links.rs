@@ -75,8 +75,8 @@ impl NyaTermApp {
         event: &MouseMoveEvent,
         cx: &mut Context<Self>,
     ) {
-        if !self.settings.summary.terminal_action_links_enabled
-            || self.settings.summary.terminal_low_latency_mode
+        if !self.settings.summary().terminal_action_links_enabled
+            || self.settings.summary().terminal_low_latency_mode
             || self.runtime_output_pressure_active()
         {
             self.clear_action_link_tooltip(cx);
@@ -179,7 +179,7 @@ impl NyaTermApp {
         position: Point<Pixels>,
         cx: &App,
     ) -> Option<(ActionLinkMatch, Vec<ActionLinkAction>)> {
-        if !self.settings.summary.terminal_action_links_enabled {
+        if !self.settings.summary().terminal_action_links_enabled {
             return None;
         }
         let session_id = self.terminal_session_at_point(position)?;
@@ -203,8 +203,8 @@ impl NyaTermApp {
         }
         let cell = self.point_to_terminal_cell_for_session(session_id, position, cx)?;
         let action_link_matcher_key = terminal_action_link_matcher_key(
-            self.settings.summary.terminal_action_links_enabled,
-            &self.settings.summary.terminal_action_links_matchers,
+            self.settings.summary().terminal_action_links_enabled,
+            &self.settings.summary().terminal_action_links_matchers,
         );
         let offset = self.terminal_display_offset_for_session(session_id);
         let snapshot = self.terminal_snapshot_for_session(session_id, offset);
@@ -245,7 +245,7 @@ impl NyaTermApp {
                     .cloned()
             })
             .or_else(|| {
-                let matchers = &self.settings.summary.terminal_action_links_matchers;
+                let matchers = &self.settings.summary().terminal_action_links_matchers;
                 match_at_offset(line, byte_offset, matchers)
             })?;
         let actions = actions_for_match(&item);
@@ -453,8 +453,8 @@ impl NyaTermApp {
             || view.output_burst_bytes > 0
             || view.performance_mode == TerminalPerformanceMode::Overloaded;
         terminal_expensive_interactions_enabled(
-            self.settings.summary.terminal_action_links_enabled
-                && !self.settings.summary.terminal_low_latency_mode,
+            self.settings.summary().terminal_action_links_enabled
+                && !self.settings.summary().terminal_low_latency_mode,
             is_active,
             render_degraded,
             runtime_output_pressure,

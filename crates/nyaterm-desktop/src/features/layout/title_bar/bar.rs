@@ -30,7 +30,7 @@ impl NyaTermApp {
         let compact_layout = !cfg!(target_os = "macos");
         let narrow_left = compact_layout && self.shell.viewport_size().0 < 1024.;
         let narrow_right = compact_layout && self.shell.viewport_size().0 < 768.;
-        let header_status_visible = self.settings.summary.ui_header_status_visible;
+        let header_status_visible = self.settings.summary().ui_header_status_visible;
         let header_status = self.header_status_content();
         // Match Tauri Header: h-10.
         div()
@@ -279,7 +279,8 @@ impl NyaTermApp {
 
     fn header_status_dropdown(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = self.theme_palette();
-        let selected = HeaderStatusMode::from_setting(&self.settings.summary.ui_header_status_mode);
+        let selected =
+            HeaderStatusMode::from_setting(&self.settings.summary().ui_header_status_mode);
         let mut menu = div()
             .id("header-status-menu")
             .absolute()
@@ -328,7 +329,7 @@ impl NyaTermApp {
     }
 
     fn header_status_content(&self) -> HeaderStatusContent {
-        let mode = HeaderStatusMode::from_setting(&self.settings.summary.ui_header_status_mode);
+        let mode = HeaderStatusMode::from_setting(&self.settings.summary().ui_header_status_mode);
         match mode {
             HeaderStatusMode::Session => HeaderStatusContent {
                 icon_path: self.title_context_icon().unwrap_or(mode.icon_path()),
@@ -336,7 +337,7 @@ impl NyaTermApp {
             },
             HeaderStatusMode::DateTime => HeaderStatusContent {
                 icon_path: mode.icon_path(),
-                label: format_header_datetime(local_now(), &self.settings.summary.language),
+                label: format_header_datetime(local_now(), &self.settings.summary().language),
             },
             HeaderStatusMode::Resources | HeaderStatusMode::Host => {
                 let label = self
@@ -351,7 +352,8 @@ impl NyaTermApp {
     }
 
     fn remote_stats_header_label(&self, mode: HeaderStatusMode) -> Option<String> {
-        if self.session.active_ssh_config().is_none() || !self.settings.summary.ui_show_remote_stats
+        if self.session.active_ssh_config().is_none()
+            || !self.settings.summary().ui_show_remote_stats
         {
             return None;
         }
@@ -396,7 +398,7 @@ impl NyaTermApp {
     fn remote_stats_header_fallback(&self) -> String {
         if self.session.active_ssh_config().is_none() {
             self.tr("panel.resourceMonitorNoSession").to_string()
-        } else if !self.settings.summary.ui_show_remote_stats {
+        } else if !self.settings.summary().ui_show_remote_stats {
             self.tr("panel.resourceMonitorDisabled").to_string()
         } else {
             let stats = self.remote_ops.stats_presentation();
@@ -418,8 +420,8 @@ impl NyaTermApp {
         mode: HeaderStatusMode,
         cx: &mut Context<Self>,
     ) {
-        self.settings.summary.ui_header_status_mode = mode.persistence_id().to_string();
-        self.settings.summary.ui_header_status_visible = true;
+        self.settings
+            .set_header_status_mode(mode.persistence_id().to_string());
         self.shell.close_header_status_menu();
         self.shell
             .set_header_status_rendered_minute(current_unix_minute());
@@ -432,7 +434,7 @@ impl NyaTermApp {
         visible: bool,
         cx: &mut Context<Self>,
     ) {
-        self.settings.summary.ui_header_status_visible = visible;
+        self.settings.set_header_status_visible(visible);
         self.shell.close_header_status_menu();
         self.persist_header_status_settings();
         cx.notify();
@@ -448,14 +450,14 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn header_status_needs_remote_stats(&self) -> bool {
-        self.settings.summary.ui_header_status_visible
-            && HeaderStatusMode::from_setting(&self.settings.summary.ui_header_status_mode)
+        self.settings.summary().ui_header_status_visible
+            && HeaderStatusMode::from_setting(&self.settings.summary().ui_header_status_mode)
                 .needs_remote_stats()
     }
 
     pub(in crate::features) fn header_status_clock_refresh_due(&self) -> bool {
-        self.settings.summary.ui_header_status_visible
-            && HeaderStatusMode::from_setting(&self.settings.summary.ui_header_status_mode)
+        self.settings.summary().ui_header_status_visible
+            && HeaderStatusMode::from_setting(&self.settings.summary().ui_header_status_mode)
                 == HeaderStatusMode::DateTime
             && self.shell.header_status_rendered_minute() != current_unix_minute()
     }

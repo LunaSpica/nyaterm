@@ -14,19 +14,21 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
+        let master_password = self.settings.master_password();
+        let master_password_draft = master_password.draft.to_string();
+        let master_password_enabled = master_password.enabled;
         let master_password_input = self
             .text_input_box(
                 "settings.security.master-password",
-                &self.settings.master_password.draft.clone(),
+                &master_password_draft,
                 TextInputSetup::masked(),
                 cx,
             )
             .into_any_element();
-        let master_password_enabled = self.settings.master_password.enabled;
         let master_password_switch_enabled = !self.cloud_sync.settings().enabled;
-        let has_stored_master_password = self.settings.summary.has_master_password;
-        let idle_minutes = self.settings.summary.idle_lock_minutes;
-        let host_key_policy = match self.settings.summary.host_key_policy.as_str() {
+        let has_stored_master_password = self.settings.summary().has_master_password;
+        let idle_minutes = self.settings.summary().idle_lock_minutes;
+        let host_key_policy = match self.settings.summary().host_key_policy.as_str() {
             "strict" | "reject" => "strict",
             "accept" | "accept_new" => "accept",
             _ => "prompt",
@@ -91,8 +93,7 @@ impl NyaTermApp {
                             )),
                     ))
                     .when(
-                        has_stored_master_password
-                            && self.settings.master_password.draft.is_empty(),
+                        has_stored_master_password && master_password_draft.is_empty(),
                         |this| {
                             this.child(
                                 div()
@@ -130,13 +131,13 @@ impl NyaTermApp {
                         settings_switch(
                             palette,
                             "settings-screen-lock-enabled",
-                            self.settings.summary.enable_screen_lock,
+                            self.settings.summary().enable_screen_lock,
                             cx.listener(|this, _, _, cx| {
                                 this.toggle_screen_lock_enabled(cx);
                             }),
                         ),
                     ))
-                    .when(self.settings.summary.enable_screen_lock, |this| {
+                    .when(self.settings.summary().enable_screen_lock, |this| {
                         this.child(settings_form_row(
                             palette,
                             idle_lock_label,

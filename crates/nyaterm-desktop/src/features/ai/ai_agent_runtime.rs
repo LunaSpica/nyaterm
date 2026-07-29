@@ -624,7 +624,7 @@ impl NyaTermApp {
         let observation_message = build_observation_message(
             &observation,
             &state.command,
-            &self.settings.summary.language,
+            &self.settings.summary().language,
         );
         let settings = self.ai.settings.config.clone();
         let terminal_session_id = state.terminal_session_id.clone();

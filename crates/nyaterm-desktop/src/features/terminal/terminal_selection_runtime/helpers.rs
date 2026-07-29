@@ -68,7 +68,7 @@ pub(in crate::features) fn terminal_bounds_tracker(
             if input_entity
                 .read(cx)
                 .settings
-                .summary
+                .summary()
                 .interaction_mac_ime_compatibility
             {
                 window.handle_input(&focus, ElementInputHandler::new(bounds, input_entity), cx);
