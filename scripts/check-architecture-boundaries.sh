@@ -331,6 +331,14 @@ check_no_multiline_matches \
   "security secret interaction must use SecurityFeatureState methods" \
   '(self|this|app)[[:space:]]*\.[[:space:]]*security[[:space:]]*\.[[:space:]]*(auth_tab|revealed|status|unlock)([[:space:]]*\.|[[:space:]]*=)' \
   crates/nyaterm-desktop/src/features
+check_no_multiline_matches \
+  "SecurityFeatureState must not expose screen lock state" \
+  'struct[[:space:]]+SecurityFeatureState[[:space:]]*\{[^}]*pub([[:space:]]|\([^)]*\))[[:space:]]+screen_lock[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/settings/security_state.rs
+check_no_multiline_matches \
+  "security screen lock access must use SecurityFeatureState methods" \
+  '(self|this|app)[[:space:]]*\.[[:space:]]*security[[:space:]]*\.[[:space:]]*screen_lock([[:space:]]*\.|[[:space:]]*=)' \
+  crates/nyaterm-desktop/src/features
 
 check_no_matches \
   "command catalog, UI, history and runtime fields must stay grouped under CommandFeatureState" \

@@ -405,7 +405,7 @@ impl NyaTermApp {
             ActivityBarEntry::Recording => {
                 self.panel_entry_selected(NavItem::Recording) || self.recording.active_count() > 0
             }
-            ActivityBarEntry::Lock => self.security.screen_lock.locked,
+            ActivityBarEntry::Lock => self.security.screen_locked(),
         }
     }
 

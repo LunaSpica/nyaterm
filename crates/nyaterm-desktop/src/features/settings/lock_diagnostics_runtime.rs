@@ -16,20 +16,20 @@ impl NyaTermApp {
         } else {
             String::new()
         };
-        self.security.screen_lock.activate(lock_status);
+        self.security.activate_screen_lock(lock_status);
         self.forget_text_inputs("lock-screen.password");
         self.terminal.view.status = "screen locked".to_string();
         if self.settings.summary.has_master_password {
             let field = self.text_input("lock-screen.password", "", TextInputSetup::masked(), cx);
             window.focus(&field.read(cx).focus_handle());
         } else {
-            window.focus(&self.security.screen_lock.focus);
+            window.focus(self.security.screen_lock_focus());
         }
         cx.notify();
     }
 
     pub(in crate::features) fn unlock_app(&mut self, cx: &mut Context<Self>) {
-        self.security.screen_lock.deactivate();
+        self.security.deactivate_screen_lock();
         self.forget_text_inputs("lock-screen.password");
         self.terminal.view.status = "screen unlocked".to_string();
         cx.notify();
@@ -45,19 +45,19 @@ impl NyaTermApp {
             self.runtime.config_dir(),
             self.runtime.portable_key_path().map(ToOwned::to_owned),
         )
-        .and_then(|store| store.verify_master_password(&self.security.screen_lock.password_draft))
+        .and_then(|store| store.verify_master_password(self.security.screen_lock_password_draft()))
         {
             Ok(true) => self.unlock_app(cx),
             Ok(false) => {
                 let status = self.tr("lockScreen.wrongPassword").to_string();
-                self.security.screen_lock.clear_password_with_status(status);
+                self.security.clear_screen_lock_password_with_status(status);
                 self.reset_text_input("lock-screen.password", "", cx);
                 self.terminal.view.status = "screen unlock rejected".to_string();
                 cx.notify();
             }
             Err(error) => {
                 let status = format!("{}: {error}", self.tr("lockScreen.unlockFailed"));
-                self.security.screen_lock.clear_password_with_status(status);
+                self.security.clear_screen_lock_password_with_status(status);
                 self.reset_text_input("lock-screen.password", "", cx);
                 self.terminal.view.status = "screen unlock failed".to_string();
                 cx.notify();
@@ -80,7 +80,7 @@ impl NyaTermApp {
             "escape" if !self.settings.summary.has_master_password => self.unlock_app(cx),
             "escape" => {
                 let status = self.tr("lockScreen.passwordPlaceholder").to_string();
-                self.security.screen_lock.clear_password_with_status(status);
+                self.security.clear_screen_lock_password_with_status(status);
                 self.reset_text_input("lock-screen.password", "", cx);
                 cx.notify();
             }
@@ -94,7 +94,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let status = self.tr("lockScreen.passwordPlaceholder").to_string();
-        self.security.screen_lock.set_password_draft(text, status);
+        self.security.set_screen_lock_password_draft(text, status);
         cx.notify();
     }
 

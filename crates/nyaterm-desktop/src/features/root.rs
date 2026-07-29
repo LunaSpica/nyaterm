@@ -480,7 +480,7 @@ impl NyaTermApp {
                 .session
                 .dialogs
                 .close_all_sessions_confirm_is_open(),
-            locked: self.security.screen_lock.locked,
+            locked: self.security.screen_locked(),
         };
         let quick_switch_open = self.quick_switch_open(cx);
         let transfer_properties_open = self

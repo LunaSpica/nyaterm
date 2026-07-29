@@ -89,7 +89,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn mark_user_activity(&mut self) {
-        self.security.screen_lock.record_user_activity();
+        self.security.record_screen_lock_user_activity();
     }
 
     pub(in crate::features) fn arm_terminal_input_wake(&mut self, cx: &mut Context<Self>) {
@@ -256,13 +256,13 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        if self.security.screen_lock.locked
+        if self.security.screen_locked()
             || !self.settings.summary.enable_screen_lock
             || self.settings.summary.idle_lock_minutes == 0
         {
             return false;
         }
-        let idle_for = self.security.screen_lock.last_user_activity_at.elapsed();
+        let idle_for = self.security.screen_lock_idle_for();
         let lock_after =
             Duration::from_secs(u64::from(self.settings.summary.idle_lock_minutes) * 60);
         if idle_for < lock_after {
@@ -273,7 +273,7 @@ impl NyaTermApp {
         } else {
             "No master password is configured.".to_string()
         };
-        self.security.screen_lock.activate(lock_status);
+        self.security.activate_screen_lock(lock_status);
         self.forget_text_inputs("lock-screen.password");
         self.terminal.view.status = format!(
             "screen locked after {} minute(s) idle",
@@ -283,7 +283,7 @@ impl NyaTermApp {
             let field = self.text_input("lock-screen.password", "", TextInputSetup::masked(), cx);
             window.focus(&field.read(cx).focus_handle());
         } else {
-            window.focus(&self.security.screen_lock.focus);
+            window.focus(self.security.screen_lock_focus());
         }
         true
     }

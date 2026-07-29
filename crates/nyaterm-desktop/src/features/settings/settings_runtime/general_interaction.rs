@@ -289,7 +289,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn toggle_screen_lock_enabled(&mut self, cx: &mut Context<Self>) {
         self.settings.summary.enable_screen_lock = !self.settings.summary.enable_screen_lock;
-        self.security.screen_lock.reset_idle_timer();
+        self.security.reset_screen_lock_idle_timer();
         self.save_screen_lock_settings(cx);
     }
 
@@ -301,7 +301,7 @@ impl NyaTermApp {
         let current = self.settings.summary.idle_lock_minutes as i32;
         let next = (current + delta).clamp(0, 1440);
         self.settings.summary.idle_lock_minutes = next as u32;
-        self.security.screen_lock.reset_idle_timer();
+        self.security.reset_screen_lock_idle_timer();
         self.save_screen_lock_settings(cx);
     }
 

@@ -6,7 +6,7 @@
 //! same paths as before.
 
 use std::collections::HashMap;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use gpui::FocusHandle;
 use nyaterm_core::{OtpEntry, SavedCredential, SavedPassword, SshKey};
@@ -25,7 +25,7 @@ pub(in crate::features) struct SecurityFeatureState {
     revealed: SecurityRevealedState,
     status: String,
     unlock: SecurityUnlockState,
-    pub screen_lock: SecurityScreenLockState,
+    screen_lock: SecurityScreenLockState,
 }
 
 /// Persisted secret-adjacent catalogs loaded through `ConnectionStore`.
@@ -100,12 +100,12 @@ struct SecurityUnlockState {
 ///
 /// This is distinct from `SecurityUnlockState`, which gates access to stored
 /// secrets while the rest of the application remains usable.
-pub(in crate::features) struct SecurityScreenLockState {
-    pub locked: bool,
-    pub password_draft: String,
-    pub status: String,
-    pub focus: FocusHandle,
-    pub last_user_activity_at: Instant,
+struct SecurityScreenLockState {
+    locked: bool,
+    password_draft: String,
+    status: String,
+    focus: FocusHandle,
+    last_user_activity_at: Instant,
 }
 
 impl SecurityFeatureState {
@@ -277,6 +277,63 @@ impl SecurityFeatureState {
 
     pub(in crate::features) fn unlock_without_master_password(&mut self) {
         self.unlock.secrets_unlocked = true;
+    }
+
+    pub(in crate::features) fn screen_locked(&self) -> bool {
+        self.screen_lock.locked
+    }
+
+    pub(in crate::features) fn screen_lock_password_draft(&self) -> &str {
+        &self.screen_lock.password_draft
+    }
+
+    pub(in crate::features) fn screen_lock_status(&self) -> &str {
+        &self.screen_lock.status
+    }
+
+    pub(in crate::features) fn screen_lock_focus(&self) -> &FocusHandle {
+        &self.screen_lock.focus
+    }
+
+    pub(in crate::features) fn screen_lock_idle_for(&self) -> Duration {
+        self.screen_lock.last_user_activity_at.elapsed()
+    }
+
+    pub(in crate::features) fn activate_screen_lock(&mut self, status: String) {
+        self.screen_lock.locked = true;
+        self.screen_lock.password_draft.clear();
+        self.screen_lock.status = status;
+    }
+
+    pub(in crate::features) fn deactivate_screen_lock(&mut self) {
+        self.screen_lock.locked = false;
+        self.screen_lock.password_draft.clear();
+        self.screen_lock.status.clear();
+        self.screen_lock.last_user_activity_at = Instant::now();
+    }
+
+    pub(in crate::features) fn record_screen_lock_user_activity(&mut self) {
+        if !self.screen_lock.locked {
+            self.reset_screen_lock_idle_timer();
+        }
+    }
+
+    pub(in crate::features) fn reset_screen_lock_idle_timer(&mut self) {
+        self.screen_lock.last_user_activity_at = Instant::now();
+    }
+
+    pub(in crate::features) fn set_screen_lock_password_draft(
+        &mut self,
+        text: String,
+        status: String,
+    ) {
+        self.screen_lock.password_draft = text;
+        self.screen_lock.status = status;
+    }
+
+    pub(in crate::features) fn clear_screen_lock_password_with_status(&mut self, status: String) {
+        self.screen_lock.password_draft.clear();
+        self.screen_lock.status = status;
     }
 
     pub(in crate::features) fn revealed_password(&self, id: &str) -> Option<&str> {
@@ -538,41 +595,6 @@ fn digits_only(text: &str) -> String {
     text.chars().filter(char::is_ascii_digit).collect()
 }
 
-impl SecurityScreenLockState {
-    pub(in crate::features) fn activate(&mut self, status: String) {
-        self.locked = true;
-        self.password_draft.clear();
-        self.status = status;
-    }
-
-    pub(in crate::features) fn deactivate(&mut self) {
-        self.locked = false;
-        self.password_draft.clear();
-        self.status.clear();
-        self.last_user_activity_at = Instant::now();
-    }
-
-    pub(in crate::features) fn record_user_activity(&mut self) {
-        if !self.locked {
-            self.reset_idle_timer();
-        }
-    }
-
-    pub(in crate::features) fn reset_idle_timer(&mut self) {
-        self.last_user_activity_at = Instant::now();
-    }
-
-    pub(in crate::features) fn set_password_draft(&mut self, text: String, status: String) {
-        self.password_draft = text;
-        self.status = status;
-    }
-
-    pub(in crate::features) fn clear_password_with_status(&mut self, status: String) {
-        self.password_draft.clear();
-        self.status = status;
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::time::Duration;
@@ -781,31 +803,31 @@ mod tests {
     #[test]
     fn screen_lock_lifecycle_clears_password_and_resets_activity() {
         let mut security = security_state();
-        security.screen_lock.password_draft = "secret".to_string();
+        security.set_screen_lock_password_draft("secret".to_string(), "ready".to_string());
         security.screen_lock.last_user_activity_at =
             std::time::Instant::now() - Duration::from_secs(60);
         let stale_activity = security.screen_lock.last_user_activity_at;
 
-        security.screen_lock.activate("locked".to_string());
-        assert!(security.screen_lock.locked);
-        assert!(security.screen_lock.password_draft.is_empty());
-        assert_eq!(security.screen_lock.status, "locked");
+        security.activate_screen_lock("locked".to_string());
+        assert!(security.screen_locked());
+        assert!(security.screen_lock_password_draft().is_empty());
+        assert_eq!(security.screen_lock_status(), "locked");
 
-        security.screen_lock.password_draft = "retry".to_string();
-        security.screen_lock.deactivate();
-        assert!(!security.screen_lock.locked);
-        assert!(security.screen_lock.password_draft.is_empty());
-        assert!(security.screen_lock.status.is_empty());
+        security.set_screen_lock_password_draft("retry".to_string(), "retry".to_string());
+        security.deactivate_screen_lock();
+        assert!(!security.screen_locked());
+        assert!(security.screen_lock_password_draft().is_empty());
+        assert!(security.screen_lock_status().is_empty());
         assert!(security.screen_lock.last_user_activity_at > stale_activity);
     }
 
     #[test]
     fn locked_screen_does_not_record_background_activity() {
         let mut security = security_state();
-        security.screen_lock.activate("locked".to_string());
+        security.activate_screen_lock("locked".to_string());
         let locked_at = security.screen_lock.last_user_activity_at;
 
-        security.screen_lock.record_user_activity();
+        security.record_screen_lock_user_activity();
 
         assert_eq!(security.screen_lock.last_user_activity_at, locked_at);
     }

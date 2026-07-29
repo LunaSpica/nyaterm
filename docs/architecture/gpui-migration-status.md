@@ -203,10 +203,11 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   and their focus handles in `editors`, revealed passwords/credentials and
   generated OTP codes in `revealed`, and the master password prompt in
   `unlock`. The separate `screen_lock` child now owns the whole-application
-  locked flag, password draft, focus, status and idle timer; its lifecycle
-  transitions cannot mutate other app state. Secrets themselves still live in
-  `nyaterm-core`; this is view/runtime state only, cleared through the same
-  paths as before.
+  locked flag, password draft, focus, status and idle timer. That child is
+  private too: root rendering, global shortcuts, the event pump, settings and
+  unlock adapters enter through read-only queries and atomic lifecycle methods
+  on `SecurityFeatureState`. Secrets themselves still live in `nyaterm-core`;
+  this is view/runtime state only, cleared through the same paths as before.
 - Settings interaction state is grouped into `SettingsFeatureState`: custom
   search-engine row/editor menus, keyword-highlight editor expansion/focus,
   appearance menu and discovered font options, and keybinding search/recording
@@ -1356,6 +1357,7 @@ Current ownership map:
 | OTP entries | Private catalog in `NyaTermApp.security` | Secret-adjacent persisted catalog | Consumers use a read-only slice; do not log secrets or widen Debug exposure. |
 | Saved passwords/credentials | Private catalog in `NyaTermApp.security` | Secret-bearing persisted catalogs | Credential autofill and security settings use read-only owner APIs; grouped store loads and clears replace all four catalogs together. |
 | Secret unlock/reveal interaction | Private state in `NyaTermApp.security` | Secret-bearing transient UI state | Prompt admission, pending actions, success/failure, revealed values and lock cleanup enter through `SecurityFeatureState`; secret-bearing children have no `Debug` implementation. |
+| Whole-application screen lock | Private state in `NyaTermApp.security` | Transient lock/input/idle state | Locked status, password draft, focus and idle timing are queried or changed only through `SecurityFeatureState`; storage verification, input widgets and GPUI focus remain in runtime/view adapters. |
 | Serial ports | Private catalog in `NyaTermApp.connection_catalog` | Runtime/discovered state | Replaced through the catalog after session-manager discovery and never persisted. |
 | Tunnel/proxy configs | Private catalog in `NyaTermApp.tunnel_state` | Persisted network config | Views use read-only slices; pure move/upsert/delete candidates and successful commits stay on `TunnelFeatureState`. The Network page UI remains separate transient state. |
 | Queued saved-connection starts | `NyaTermApp.session.start` private queue | Transient session-start state | Admission, duplicate detection, draining and runtime cadence reads go through `SessionStartFeatureState` methods. |
@@ -1561,7 +1563,12 @@ honest remaining list.
    status, unlock prompt/pending-action state and revealed password,
    credential and OTP maps private. Unlock success/failure and secret cleanup
    are now owner transitions, while password verification, clipboard access
-   and OTP generation remain in their existing adapters. What remains at the
+   and OTP generation remain in their existing adapters. The following screen
+   lock encapsulation batch made the whole-application lock child private as
+   well, replacing direct reads and writes across root rendering, shortcuts,
+   the event pump, settings and the lock overlay with owner queries and atomic
+   lifecycle transitions. Password verification, text-input ownership and GPUI
+   focus remain in their existing adapters. What remains at the
    composition root is stores, runtime and focused feature owners.
    Group by cohesion where a cluster exists; do not force the count down for
    its own sake.

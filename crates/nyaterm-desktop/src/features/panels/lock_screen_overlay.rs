@@ -14,9 +14,10 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
+        let password_draft = self.security.screen_lock_password_draft().to_string();
         let password_input = self.text_input(
             "lock-screen.password",
-            &self.security.screen_lock.password_draft.clone(),
+            &password_draft,
             TextInputSetup::masked(),
             cx,
         );
@@ -24,16 +25,16 @@ impl NyaTermApp {
         let overlay_focus = if self.settings.summary.has_master_password {
             password_focus.clone()
         } else {
-            self.security.screen_lock.focus.clone()
+            self.security.screen_lock_focus().clone()
         };
-        let lock_status = if self.security.screen_lock.status.trim().is_empty() {
+        let lock_status = if self.security.screen_lock_status().trim().is_empty() {
             if self.settings.summary.has_master_password {
                 self.tr("lockScreen.passwordPlaceholder").to_string()
             } else {
                 self.tr("settings.masterPasswordRequired").to_string()
             }
         } else {
-            self.security.screen_lock.status.clone()
+            self.security.screen_lock_status().to_string()
         };
         let status_is_error = lock_status == self.tr("lockScreen.wrongPassword")
             || lock_status.starts_with(self.tr("lockScreen.unlockFailed"));
@@ -49,7 +50,7 @@ impl NyaTermApp {
             .flex_col()
             .bg(rgba(0x000000d9))
             .text_color(rgb(0xffffff))
-            .track_focus(&self.security.screen_lock.focus)
+            .track_focus(self.security.screen_lock_focus())
             .on_click(move |_, window, _| window.focus(&overlay_focus))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
                 cx.stop_propagation();
