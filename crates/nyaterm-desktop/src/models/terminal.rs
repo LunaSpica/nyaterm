@@ -1057,12 +1057,6 @@ impl TerminalViewState {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum SearchEngineEditorField {
-    Name,
-    Url,
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum KeywordHighlightEditorField {
     Name,
@@ -4859,15 +4853,6 @@ mod tests {
 
         assert!(!view.render_degraded);
         assert_eq!(view.render_degraded_calm_ticks, 0);
-    }
-}
-
-impl SearchEngineEditorField {
-    pub(crate) fn next(self) -> Self {
-        match self {
-            Self::Name => Self::Url,
-            Self::Url => Self::Name,
-        }
     }
 }
 

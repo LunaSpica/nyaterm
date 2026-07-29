@@ -41,7 +41,7 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         let risk_menu_id = "ai-smart-risk";
-        let risk_menu_open = self.settings.appearance.menu_open.as_deref() == Some(risk_menu_id);
+        let risk_menu_open = self.settings.appearance_menu_open(risk_menu_id);
         let risk_label = self.tr(ai_risk_i18n_key(
             &self.ai.settings.config.agent_smart_auto_execute_max_risk,
         ));
@@ -180,14 +180,7 @@ impl NyaTermApp {
                             risk_menu_open,
                             risk_label,
                             cx.listener(move |this, _, _, cx| {
-                                if this.settings.appearance.menu_open.as_deref()
-                                    == Some(risk_menu_id)
-                                {
-                                    this.settings.appearance.menu_open = None;
-                                } else {
-                                    this.settings.appearance.menu_open =
-                                        Some(risk_menu_id.to_string());
-                                }
+                                this.settings.toggle_appearance_menu(risk_menu_id);
                                 cx.notify();
                             }),
                             [
@@ -245,7 +238,7 @@ impl NyaTermApp {
                                         ))
                                     })
                                     .on_click(cx.listener(move |this, _, _, cx| {
-                                        this.settings.appearance.menu_open = None;
+                                        this.settings.close_appearance_menu();
                                         this.update_ai_smart_auto_execute_max_risk(
                                             risk.clone(),
                                             cx,

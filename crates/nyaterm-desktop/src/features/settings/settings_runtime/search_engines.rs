@@ -1,7 +1,6 @@
 use gpui::Context;
 
 use crate::features::NyaTermApp;
-use crate::models::SearchEngineEditorField;
 use nyaterm_core::SearchEngineConfig;
 
 use super::helpers::{open_external_url_simple, urlencoding_query};
@@ -17,19 +16,8 @@ impl NyaTermApp {
         text: String,
         cx: &mut Context<Self>,
     ) {
-        let Some((index, field)) = rest.split_once('.') else {
+        if !self.settings.apply_search_engine_input(rest, text) {
             return;
-        };
-        let Ok(index) = index.parse::<usize>() else {
-            return;
-        };
-        let Some(engine) = self.settings.summary.search_custom_engines.get_mut(index) else {
-            return;
-        };
-        match field {
-            "name" => engine.name = text,
-            "url" => engine.url_template = text,
-            _ => return,
         }
         // Persist as it is typed, the way every other settings control does.
         // Trimming waits for the row to close, so a space mid-word survives.
@@ -39,20 +27,12 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn add_search_engine(&mut self, cx: &mut Context<Self>) {
-        self.settings.summary.search_custom_engines.insert(
-            0,
-            SearchEngineConfig {
-                name: "New Engine".to_string(),
-                url_template: "https://example.com/search?q=%s".to_string(),
-                icon: None,
-                show_in_menu: true,
-            },
-        );
-        self.settings.search_engines.expanded_index = Some(0);
-        self.settings.search_engines.edit_index = Some(0);
-        self.settings.search_engines.icon_picker_index = None;
-        self.settings.search_engines.actions_index = None;
-        self.settings.search_engines.edit_field = SearchEngineEditorField::Name;
+        self.settings.add_search_engine(SearchEngineConfig {
+            name: "New Engine".to_string(),
+            url_template: "https://example.com/search?q=%s".to_string(),
+            icon: None,
+            show_in_menu: true,
+        });
         // The inputs are keyed by row index and every row just shifted down, so
         // they have to be rebuilt from the engines they now stand for.
         self.forget_text_inputs("settings.search-engine.");
@@ -65,25 +45,8 @@ impl NyaTermApp {
         index: usize,
         cx: &mut Context<Self>,
     ) {
-        if index >= self.settings.summary.search_custom_engines.len() {
+        if !self.settings.remove_search_engine(index) {
             return;
-        }
-        self.settings.summary.search_custom_engines.remove(index);
-        self.settings.search_engines.icon_picker_index = None;
-        self.settings.search_engines.actions_index = None;
-        if self.settings.search_engines.expanded_index == Some(index) {
-            self.settings.search_engines.expanded_index = None;
-        } else if let Some(edit) = self.settings.search_engines.expanded_index {
-            if edit > index {
-                self.settings.search_engines.expanded_index = Some(edit - 1);
-            }
-        }
-        if let Some(edit) = self.settings.search_engines.edit_index {
-            if edit == index {
-                self.settings.search_engines.edit_index = None;
-            } else if edit > index {
-                self.settings.search_engines.edit_index = Some(edit - 1);
-            }
         }
         self.forget_text_inputs("settings.search-engine.");
         self.save_terminal_settings(cx);
@@ -96,11 +59,9 @@ impl NyaTermApp {
         icon: Option<&str>,
         cx: &mut Context<Self>,
     ) {
-        let Some(engine) = self.settings.summary.search_custom_engines.get_mut(index) else {
+        if !self.settings.set_search_engine_icon(index, icon) {
             return;
-        };
-        engine.icon = icon.map(str::to_string);
-        self.settings.search_engines.icon_picker_index = None;
+        }
         self.save_terminal_settings(cx);
         self.terminal.view.status = "search engine icon updated".to_string();
     }
@@ -110,10 +71,9 @@ impl NyaTermApp {
         index: usize,
         cx: &mut Context<Self>,
     ) {
-        let Some(engine) = self.settings.summary.search_custom_engines.get_mut(index) else {
+        if !self.settings.toggle_search_engine_in_menu(index) {
             return;
-        };
-        engine.show_in_menu = !engine.show_in_menu;
+        }
         self.save_terminal_settings(cx);
     }
 
@@ -122,16 +82,12 @@ impl NyaTermApp {
         index: usize,
         cx: &mut Context<Self>,
     ) {
-        if self.settings.search_engines.expanded_index == Some(index) {
-            self.settings.search_engines.expanded_index = None;
-            self.settings.search_engines.edit_index = None;
-            self.normalize_search_engines();
+        let Some(collapsed) = self.settings.toggle_search_engine_expanded(index) else {
+            return;
+        };
+        if collapsed {
             self.save_terminal_settings(cx);
-        } else {
-            self.settings.search_engines.expanded_index = Some(index);
         }
-        self.settings.search_engines.icon_picker_index = None;
-        self.settings.search_engines.actions_index = None;
         cx.notify();
     }
 
@@ -207,13 +163,6 @@ impl NyaTermApp {
         if self.send_terminal_input(bytes, cx) {
             self.terminal.view.status = "action link command sent".to_string();
             cx.notify();
-        }
-    }
-
-    pub(in crate::features) fn normalize_search_engines(&mut self) {
-        for engine in &mut self.settings.summary.search_custom_engines {
-            engine.name = engine.name.trim().to_string();
-            engine.url_template = engine.url_template.trim().to_string();
         }
     }
 }

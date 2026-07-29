@@ -381,7 +381,7 @@ impl NyaTermApp {
             return;
         };
         *font = family;
-        self.settings.appearance.menu_open = None;
+        self.settings.close_appearance_menu();
         self.save_appearance_font_stack(terminal, fonts, cx);
     }
 
@@ -398,9 +398,9 @@ impl NyaTermApp {
         let fallback = if terminal { "JetBrains Mono" } else { "Inter" };
         let mut fonts = appearance_font_stack(raw, fallback);
         let next = if terminal {
-            self.settings.appearance.terminal_font_options.first()
+            self.settings.terminal_font_options().first()
         } else {
-            self.settings.appearance.ui_font_options.first()
+            self.settings.ui_font_options().first()
         }
         .cloned()
         .unwrap_or_else(|| fallback.to_string());
@@ -428,7 +428,7 @@ impl NyaTermApp {
         if fonts.is_empty() {
             fonts.push(fallback.to_string());
         }
-        self.settings.appearance.menu_open = None;
+        self.settings.close_appearance_menu();
         self.save_appearance_font_stack(terminal, fonts, cx);
     }
 
@@ -533,7 +533,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn clear_background_image(&mut self, cx: &mut Context<Self>) {
         self.settings.summary.background_image_path = None;
-        self.settings.appearance.menu_open = None;
+        self.settings.close_appearance_menu();
         self.save_appearance_settings(cx);
         self.terminal.view.status = "wallpaper cleared".to_string();
     }

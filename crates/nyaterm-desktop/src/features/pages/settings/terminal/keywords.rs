@@ -21,7 +21,7 @@ impl NyaTermApp {
         let is_dark = self.terminal_theme_is_dark();
         let rules = self.settings.keyword_config.rules.clone();
         let keyword_highlighting_enabled = self.settings.keyword_config.enabled;
-        let expanded = self.settings.keyword_highlights.expanded_id.clone();
+        let expanded = self.settings.keyword_highlight_presentation().expanded_id;
         let builtin_ids = nyaterm_core::builtin_keyword_rule_ids();
         let pattern_count_template = self.tr("settings.keywordHighlightPatternCount");
         let untitled_rule_label = self.tr("settings.keywordHighlightNewRule");
@@ -546,7 +546,7 @@ impl NyaTermApp {
                                                 .gap_3()
                                                 .when(keyword_highlighting_enabled, |this| {
                                                     this.track_focus(
-                                                        &self.settings.keyword_highlights.focus,
+                                                        self.settings.keyword_highlight_focus(),
                                                     )
                                                     .on_key_down(cx.listener(
                                                         |this,

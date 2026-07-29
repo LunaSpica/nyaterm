@@ -186,6 +186,18 @@ check_no_matches \
   "compatibility-sensitive settings must stay grouped under SettingsFeatureState" \
   '(AppSettingsSummary|KeywordHighlightConfig|SettingsMasterPasswordState|StoreStatus|settings_master_password_(enabled|draft))' \
   crates/nyaterm-desktop/src/features/app_state/mod.rs
+check_no_multiline_matches \
+  "SettingsFeatureState interaction children must remain private" \
+  'struct[[:space:]]+SettingsFeatureState[[:space:]]*\{[^}]*pub([[:space:]]|\([^)]*\))[[:space:]]+(search_engines|keyword_highlights|appearance|keybindings|prompts)[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/settings/state.rs
+check_no_matches \
+  "settings interaction child state types must remain private" \
+  'pub([[:space:]]|\([^)]*\))[[:space:]]+struct[[:space:]]+(SearchEngineSettings|KeywordHighlightSettings|AppearanceSettings|KeybindingSettings|SettingsPrompt)State' \
+  crates/nyaterm-desktop/src/features/settings/state.rs
+check_no_multiline_matches \
+  "settings interaction child access must use SettingsFeatureState methods" \
+  '(self|this|app)\.settings[[:space:]]*\.(search_engines|keyword_highlights|appearance|keybindings|prompts)(\.|[[:space:]]*=)' \
+  crates/nyaterm-desktop/src/features
 
 check_no_matches \
   "translation state must stay grouped under TranslationFeatureState" \
@@ -704,7 +716,7 @@ check_no_matches \
 
 check_no_matches \
   "low-frequency settings UI models must stay out of features/prelude.rs" \
-  '(^|[,{[:space:]])(SearchEngineEditorField|SettingsTab)([},[:space:]]|$)' \
+  '(^|[,{[:space:]])SettingsTab([},[:space:]]|$)' \
   crates/nyaterm-desktop/src/features/prelude.rs
 
 check_no_matches \

@@ -251,24 +251,19 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let cloud_snapshot_prompt =
-            self.settings
-                .prompts
-                .snapshot_password
-                .clone()
-                .filter(|prompt| {
-                    matches!(
-                        prompt.kind,
-                        SnapshotPasswordPromptKind::CloudPush
-                            | SnapshotPasswordPromptKind::CloudPull
-                            | SnapshotPasswordPromptKind::CloudForcePush
-                            | SnapshotPasswordPromptKind::CloudForcePull
-                            | SnapshotPasswordPromptKind::CloudProviderPush
-                            | SnapshotPasswordPromptKind::CloudProviderPull
-                            | SnapshotPasswordPromptKind::CloudProviderForcePush
-                            | SnapshotPasswordPromptKind::CloudProviderForcePull
-                    )
-                });
+        let cloud_snapshot_prompt = self.settings.snapshot_password_prompt().filter(|prompt| {
+            matches!(
+                prompt.kind,
+                SnapshotPasswordPromptKind::CloudPush
+                    | SnapshotPasswordPromptKind::CloudPull
+                    | SnapshotPasswordPromptKind::CloudForcePush
+                    | SnapshotPasswordPromptKind::CloudForcePull
+                    | SnapshotPasswordPromptKind::CloudProviderPush
+                    | SnapshotPasswordPromptKind::CloudProviderPull
+                    | SnapshotPasswordPromptKind::CloudProviderForcePush
+                    | SnapshotPasswordPromptKind::CloudProviderForcePull
+            )
+        });
         let cloud_conflict = self.cloud_sync.conflict().cloned();
         let active_cloud_provider = configured_cloud_sync_provider(self.cloud_sync.settings());
         let form_enabled = self.cloud_sync_form_enabled();

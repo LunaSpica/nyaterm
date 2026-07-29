@@ -23,8 +23,8 @@ Large files currently over 4,000 lines:
 
 | File | Lines | Status |
 | --- | ---: | --- |
-| `crates/nyaterm-desktop/src/models/terminal.rs` | 4964 | Split candidate; coordinate with terminal render/runtime ownership. |
-| `crates/nyaterm-desktop/src/features/terminal/terminal_surface_entity.rs` | 4516 | Split candidate; avoid hot-path regressions. |
+| `crates/nyaterm-desktop/src/models/terminal.rs` | 4978 | Split candidate; coordinate with terminal render/runtime ownership. |
+| `crates/nyaterm-desktop/src/features/terminal/terminal_surface_entity.rs` | 4548 | Split candidate; avoid hot-path regressions. |
 | `crates/nyaterm-transport/src/lib.rs` | 4539 | Split by domain: SFTP, X11 forwarding, SSH tunnels and SSH authentication are out. What remains is the session manager, the four `TerminalTransport` impls and the SSH/serial/telnet session lifecycle. |
 | `crates/nyaterm-core/src/storage.rs` | 4089 | Split by domain: config backup, keyword highlights, command history, known hosts, AI history, the secret vault, portable snapshots, app settings and cloud sync are out. About 1,450 lines of that are code; the rest is the test module. Schema compatibility is public contract. |
 
@@ -221,7 +221,14 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   one composition-root field. A later convergence pass moved the persisted
   `AppSettingsSummary`, `KeywordHighlightConfig`, staged master-password state,
   and global storage status into the same authoritative feature owner. Their
-  save/load formats, encryption behavior, and storage paths are unchanged.
+  save/load formats, encryption behavior, and storage paths are unchanged. The
+  interaction children and the shared config/diagnostics/keyword-import/
+  snapshot-password prompt child are now private. Search-row index/menu
+  reconciliation, keyword expansion/edit lifecycle, appearance-menu exclusion,
+  keybinding recording/search transitions and kind-matched prompt completion
+  execute on `SettingsFeatureState`; views receive immutable presentation data
+  and focus handles. Filesystem prompts, persistence and GPUI notification stay
+  in their existing adapters.
 - Translation and native-update background state now have authoritative
   `TranslationFeatureState` and `UpdateFeatureState` owners. Eighteen app fields
   became two feature fields; each owner constructs and retains its own job
@@ -1071,10 +1078,11 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   runtime-job, and translation modules. This is import plumbing only;
   translation settings persistence fields, secret-draft handling, and
   translation job execution are unchanged.
-- The low-frequency search-engine editor field UI model was moved out of
-  `features/prelude.rs` and imported explicitly by app-state and settings
-  runtime modules. This is import plumbing only; terminal search-engine
-  settings persistence and editor behavior are unchanged.
+- The former search-engine editor field model and its paired write-only row
+  index were removed when the settings interaction owner was encapsulated.
+  Expanded-row identity and the actual registry-backed text fields are the
+  live editing state; no compatibility reader or persistence field used the
+  deleted values.
 - The low-frequency settings-tab UI model was moved out of
   `features/prelude.rs` and imported explicitly by app-state, settings page,
   security unlock, cloud sync, AI inspector, and panel-stack modules. This is
@@ -1452,6 +1460,7 @@ Current ownership map:
 | Quick-command UI | Private child in `NyaTermApp.commands` | Transient UI/window state | List filters and menus, editor/dialog drafts, import admission and AI prompt state are queried or changed only through `CommandFeatureState`; GPUI focus, windows, rendering and persistence stay in adapters. |
 | Command history and persistence worker | Private state in `NyaTermApp.commands` | Persisted catalog plus background runtime | History snapshots, queue admission, event polling and idle checks enter through `CommandFeatureState`; failed optimistic use-count updates roll back on the owner. |
 | Send-command composer/options/progress | Private children in `NyaTermApp.send_command` | Transient editor and send lifecycle | Views receive immutable presentation data; control edits, mutually-exclusive menus, data/mode defaults, progress counters and cancellation enter through `SendCommandFeatureState`. Session selection, terminal writes, GPUI/text-input routing and status remain in adapters. |
+| Settings interaction and prompts | Private children in `NyaTermApp.settings` | Transient settings UI and prompt lifecycle | Search-engine rows, keyword-highlight editing, appearance menus, keybinding recording/search and config/diagnostics/import/password prompt admission enter through `SettingsFeatureState`; views use immutable presentation values and read-only focus/font access. Persistence, native filesystem prompts, text inputs and GPUI notification remain in adapters. |
 | Live session manager/event bridge | Private services in `NyaTermApp.session` | Runtime services | Callers receive a shared manager reference/handle and use bridge routing, drain and metrics methods; neither service field is writable outside `SessionFeatureState`. |
 | Session restore/event queue | Private state in `NyaTermApp.session` | Transient runtime coordination | Restore completion is idempotent and pending transport events are counted, extended and popped only through owner methods; event interpretation stays in the event-pump adapter. |
 | Session command history/search/menu/busy state | Private state in `NyaTermApp.session` | Transient per-session interaction state | History append/migration/deletion and active-menu/busy transitions are owner operations; beginning reconnect/disconnect closes the menu in the same transition. |
@@ -1738,7 +1747,12 @@ honest remaining list.
    send-command encapsulation pass similarly made its composer, options and
    in-flight progress children private, replacing writable view/runtime access
    with owner transitions and a single per-render presentation value while
-   leaving session routing and terminal writes in the app adapter. Cloud sync
+   leaving session routing and terminal writes in the app adapter. The settings
+   interaction pass then made its five UI/prompt children private, coupling
+   search-row deletion with index correction, mutually exclusive menus,
+   keyword edit cleanup, keybinding recording state and kind-matched prompt
+   completion on `SettingsFeatureState` while leaving persistence and native
+   path prompts in adapters. Cloud sync
    made secret-field routing inaccessible outside
    its owner, and
    recording cleanup can no longer leave its manager, busy map and pipeline out
@@ -1785,8 +1799,8 @@ honest remaining list.
    constants, record types, helpers, tests and crate dependencies with it.
    Table definitions, serialized records, encryption paths, backup formats,
    legacy fallback behavior, and the SSH/SFTP/X11 protocol paths are
-   compatibility surface and stay unchanged. `models/terminal.rs` (4,995) and
-   `terminal_surface_entity.rs` (4,524) are the next files of this size, but
+   compatibility surface and stay unchanged. `models/terminal.rs` (4,978) and
+   `terminal_surface_entity.rs` (4,548) are the next files of this size, but
    they are render hot paths and need a different approach than a domain cut.
    `core/ai.rs` is done too, down from 4,032 to 1,554.
 6. Done. The final explicit-import pass removed `features/prelude.rs`; a

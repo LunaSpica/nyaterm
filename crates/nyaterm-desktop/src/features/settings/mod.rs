@@ -12,4 +12,4 @@ pub(in crate::features) use catalog::StoreStatus;
 pub(in crate::features) use security_state::{
     SecurityCatalogState, SecurityFeatureFocus, SecurityFeatureState,
 };
-pub(in crate::features) use state::{SettingsFeatureFocus, SettingsFeatureState};
+pub(in crate::features) use state::{SearchEngineMenu, SettingsFeatureFocus, SettingsFeatureState};

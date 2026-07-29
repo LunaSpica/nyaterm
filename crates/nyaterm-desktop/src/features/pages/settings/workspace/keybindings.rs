@@ -16,7 +16,7 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         let overrides = self.settings.summary.keybindings.len();
-        let search = self.settings.keybindings.search_draft.clone();
+        let search = self.settings.keybinding_presentation().search_draft;
         let search_field = self.text_input(
             "settings.keybindings.search",
             &search,
@@ -34,9 +34,9 @@ impl NyaTermApp {
             .flex()
             .flex_col()
             .gap_3()
-            .track_focus(&self.settings.keybindings.focus)
+            .track_focus(self.settings.keybinding_focus())
             .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(&this.settings.keybindings.focus);
+                window.focus(this.settings.keybinding_focus());
                 cx.notify();
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
@@ -70,7 +70,7 @@ impl NyaTermApp {
                             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
                                 if event.keystroke.key == "escape" {
                                     cx.stop_propagation();
-                                    this.settings.keybindings.search_draft.clear();
+                                    this.settings.clear_keybinding_search();
                                     this.reset_text_input("settings.keybindings.search", "", cx);
                                     cx.notify();
                                 }
@@ -141,12 +141,12 @@ impl NyaTermApp {
             },
         );
         let is_custom = self.settings.summary.keybindings.contains_key(shortcut.id);
-        let is_recording = self.settings.keybindings.recording_id.as_deref() == Some(shortcut.id);
+        let interaction = self.settings.keybinding_presentation();
+        let is_recording = interaction.recording_id.as_deref() == Some(shortcut.id);
         let effective_keys = shortcut_keys_for(shortcut.id, &self.settings.summary.keybindings)
             .unwrap_or_else(|| shortcut.default_keys.to_string());
         let conflict = if is_recording {
-            self.settings
-                .keybindings
+            interaction
                 .pending_keys
                 .as_deref()
                 .and_then(|keys| self.keybinding_conflict_label(keys, shortcut.id))
@@ -158,8 +158,7 @@ impl NyaTermApp {
         let reset_label = self.tr("settings.keybindingsReset");
         let indexed_hint = self.tr("settings.keybindingsIndexedHint");
         let key_display = if is_recording {
-            self.settings
-                .keybindings
+            interaction
                 .pending_keys
                 .as_deref()
                 .map(format_hotkey_for_display)
