@@ -10,7 +10,9 @@ use std::sync::mpsc;
 use std::time::Instant;
 
 use gpui::{FocusHandle, Pixels, WindowHandle};
-use nyaterm_transport::{SftpDuplicatePolicy, SftpFileEntry, SftpFileProperties};
+use nyaterm_transport::{
+    SftpDuplicatePolicy, SftpFileEntry, SftpFileProperties, SftpRemoteTextFile, SftpWriteTextResult,
+};
 
 use crate::features::TransferExternalSyncWindow;
 use crate::models::{
@@ -19,11 +21,11 @@ use crate::models::{
     TransferBrowserNavigationSnapshot, TransferBrowserPathMenuState,
     TransferBrowserPendingRenameState, TransferBrowserSessionCacheState, TransferBrowserSortColumn,
     TransferBrowserSortDirection, TransferBrowserUploadMenuState, TransferDeleteState,
-    TransferEditorWorkspaceState, TransferExternalSyncPromptState, TransferHeightResizeState,
-    TransferJobDeleteState, TransferJobMenuState, TransferJobResult, TransferJobState,
-    TransferJobStatus, TransferMoveState, TransferNewFileState, TransferNewFolderState,
-    TransferNewSymlinkState, TransferPathPromptKind, TransferPropertiesState, TransferRenameState,
-    TransferUnknownFileState,
+    TransferEditorState, TransferEditorWorkspaceState, TransferExternalSyncPromptState,
+    TransferHeightResizeState, TransferJobDeleteState, TransferJobMenuState, TransferJobResult,
+    TransferJobState, TransferJobStatus, TransferMoveState, TransferNewFileState,
+    TransferNewFolderState, TransferNewSymlinkState, TransferPathPromptKind,
+    TransferPropertiesState, TransferRenameState, TransferUnknownFileState,
 };
 
 use super::super::remote_editor_window::RemoteFileEditorWindow;
@@ -33,7 +35,7 @@ pub(in crate::features) struct TransferFeatureState {
     paths: TransferPathState,
     pub browser: TransferBrowserState,
     file_ops: TransferFileOpsState,
-    pub editor: TransferEditorState,
+    editor: TransferEditorFeatureState,
     external_sync: TransferExternalSyncState,
     panel: TransferPanelState,
 }
@@ -141,12 +143,42 @@ struct TransferFileOpsState {
 }
 
 /// Built-in remote file editor workspace.
-pub(in crate::features) struct TransferEditorState {
-    pub workspace: Option<TransferEditorWorkspaceState>,
-    pub tabs_menu_open: bool,
-    pub focus: FocusHandle,
-    pub window: Option<WindowHandle<RemoteFileEditorWindow>>,
-    pub window_open_pending: bool,
+struct TransferEditorFeatureState {
+    workspace: Option<TransferEditorWorkspaceState>,
+    tabs_menu_open: bool,
+    focus: FocusHandle,
+    window: Option<WindowHandle<RemoteFileEditorWindow>>,
+    window_open_pending: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::features) enum TransferEditorCloseOutcome {
+    Missing,
+    ConfirmationRequired,
+    Closed,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::features) enum TransferEditorDiscardOutcome {
+    Missing,
+    TabDiscarded,
+    WorkspaceDiscarded,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::features) enum TransferEditorSaveOutcome {
+    Saved,
+    Conflict,
+    SavedAndClosed,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(in crate::features) enum TransferEditorCloseAfterSave {
+    Missing,
+    Loading,
+    Saving,
+    Ready(String),
+    All,
 }
 
 /// Handing a remote file to an external editor and syncing it back.
@@ -215,13 +247,7 @@ impl TransferFeatureState {
                 upload_menu: None,
                 focus: focus.browser,
             },
-            editor: TransferEditorState {
-                workspace: None,
-                tabs_menu_open: false,
-                focus: focus.editor,
-                window: None,
-                window_open_pending: false,
-            },
+            editor: TransferEditorFeatureState::new(focus.editor),
             external_sync: TransferExternalSyncState::new(focus.external_sync),
             panel: TransferPanelState {
                 focus: focus.panel,
@@ -808,6 +834,544 @@ impl TransferFeatureState {
         &self.external_sync.focus
     }
 
+    pub(in crate::features) fn editor_focus(&self) -> &FocusHandle {
+        &self.editor.focus
+    }
+
+    pub(in crate::features) fn editor_workspace(&self) -> Option<&TransferEditorWorkspaceState> {
+        self.editor.workspace.as_ref()
+    }
+
+    pub(in crate::features) fn editor_workspace_snapshot(
+        &self,
+    ) -> Option<TransferEditorWorkspaceState> {
+        self.editor.workspace.clone()
+    }
+
+    pub(in crate::features) fn editor_has_workspace(&self) -> bool {
+        self.editor.workspace.is_some()
+    }
+
+    pub(in crate::features) fn editor_inline_overlay_is_open(&self) -> bool {
+        self.editor.workspace.is_some()
+            && self.editor.window.is_none()
+            && !self.editor.window_open_pending
+    }
+
+    pub(in crate::features) fn active_editor_tab(&self) -> Option<&TransferEditorState> {
+        self.editor
+            .workspace
+            .as_ref()
+            .and_then(TransferEditorWorkspaceState::active_tab)
+    }
+
+    pub(in crate::features) fn active_editor_tab_mut(
+        &mut self,
+    ) -> Option<&mut TransferEditorState> {
+        self.editor
+            .workspace
+            .as_mut()
+            .and_then(TransferEditorWorkspaceState::active_tab_mut)
+    }
+
+    pub(in crate::features) fn editor_tab_snapshot(
+        &self,
+        tab_id: &str,
+    ) -> Option<TransferEditorState> {
+        self.editor
+            .workspace
+            .as_ref()?
+            .tabs
+            .iter()
+            .find(|tab| tab.id == tab_id)
+            .cloned()
+    }
+
+    pub(in crate::features) fn open_editor_tab(&mut self, tab: TransferEditorState) -> bool {
+        let tab_id = tab.id.clone();
+        if let Some(workspace) = self.editor.workspace.as_mut() {
+            let already_open = workspace.tabs.iter().any(|current| current.id == tab_id);
+            if !already_open {
+                workspace.tabs.push(tab);
+            }
+            workspace.active_tab_id = tab_id;
+            Self::clear_editor_close_state(workspace);
+            self.editor.tabs_menu_open = false;
+            already_open
+        } else {
+            self.editor.workspace = Some(TransferEditorWorkspaceState::new(tab));
+            self.editor.tabs_menu_open = false;
+            false
+        }
+    }
+
+    pub(in crate::features) fn activate_editor_tab(&mut self, tab_id: &str) -> bool {
+        self.editor.tabs_menu_open = false;
+        let Some(workspace) = self.editor.workspace.as_mut() else {
+            return false;
+        };
+        if !workspace.tabs.iter().any(|tab| tab.id == tab_id) {
+            return false;
+        }
+        workspace.active_tab_id = tab_id.to_string();
+        Self::clear_editor_close_state(workspace);
+        true
+    }
+
+    pub(in crate::features) fn request_editor_tab_close(
+        &mut self,
+        tab_id: &str,
+    ) -> TransferEditorCloseOutcome {
+        self.editor.tabs_menu_open = false;
+        let Some(workspace) = self.editor.workspace.as_mut() else {
+            return TransferEditorCloseOutcome::Missing;
+        };
+        let Some(tab) = workspace.tabs.iter().find(|tab| tab.id == tab_id) else {
+            return TransferEditorCloseOutcome::Missing;
+        };
+        if tab.dirty || tab.saving {
+            workspace.active_tab_id = tab_id.to_string();
+            workspace.close_confirm = true;
+            workspace.pending_close_tab_id = Some(tab_id.to_string());
+            workspace.close_after_save_all = false;
+            return TransferEditorCloseOutcome::ConfirmationRequired;
+        }
+        workspace.remove_tab(tab_id);
+        if workspace.tabs.is_empty() {
+            self.editor.workspace = None;
+            self.editor.window_open_pending = false;
+        }
+        TransferEditorCloseOutcome::Closed
+    }
+
+    pub(in crate::features) fn request_editor_close(&mut self) -> TransferEditorCloseOutcome {
+        let Some(workspace) = self.editor.workspace.as_mut() else {
+            return TransferEditorCloseOutcome::Missing;
+        };
+        if let Some(dirty_tab_id) = workspace
+            .tabs
+            .iter()
+            .find(|tab| tab.dirty || tab.saving)
+            .map(|tab| tab.id.clone())
+        {
+            workspace.active_tab_id = dirty_tab_id;
+            workspace.close_confirm = true;
+            workspace.pending_close_tab_id = None;
+            workspace.close_after_save_all = false;
+            return TransferEditorCloseOutcome::ConfirmationRequired;
+        }
+        self.editor.workspace = None;
+        self.editor.tabs_menu_open = false;
+        self.editor.window_open_pending = false;
+        TransferEditorCloseOutcome::Closed
+    }
+
+    pub(in crate::features) fn discard_editor(&mut self) -> TransferEditorDiscardOutcome {
+        let Some(workspace) = self.editor.workspace.as_mut() else {
+            return TransferEditorDiscardOutcome::Missing;
+        };
+        if let Some(tab_id) = workspace.pending_close_tab_id.clone() {
+            workspace.remove_tab(&tab_id);
+            Self::clear_editor_close_state(workspace);
+            if workspace.tabs.is_empty() {
+                self.editor.workspace = None;
+                self.editor.window_open_pending = false;
+            }
+            TransferEditorDiscardOutcome::TabDiscarded
+        } else {
+            self.editor.workspace = None;
+            self.editor.tabs_menu_open = false;
+            self.editor.window_open_pending = false;
+            TransferEditorDiscardOutcome::WorkspaceDiscarded
+        }
+    }
+
+    pub(in crate::features) fn cancel_editor_close(&mut self) -> bool {
+        let Some(workspace) = self.editor.workspace.as_mut() else {
+            return false;
+        };
+        Self::clear_editor_close_state(workspace);
+        for tab in &mut workspace.tabs {
+            tab.close_after_save = false;
+        }
+        true
+    }
+
+    pub(in crate::features) fn cancel_editor_reload(&mut self) -> bool {
+        let Some(tab) = self.active_editor_tab_mut() else {
+            return false;
+        };
+        tab.reload_confirm = false;
+        if tab
+            .error
+            .as_deref()
+            .is_some_and(|error| error.contains("Reload will discard"))
+        {
+            tab.error = None;
+        }
+        true
+    }
+
+    pub(in crate::features) fn cancel_editor_conflict(&mut self) -> bool {
+        let Some(tab) = self.active_editor_tab_mut() else {
+            return false;
+        };
+        tab.conflict = false;
+        true
+    }
+
+    pub(in crate::features) fn clear_editor_close_request(&mut self) -> bool {
+        let Some(workspace) = self.editor.workspace.as_mut() else {
+            return false;
+        };
+        let changed = workspace.close_confirm
+            || workspace.pending_close_tab_id.is_some()
+            || workspace.close_after_save_all;
+        Self::clear_editor_close_state(workspace);
+        changed
+    }
+
+    pub(in crate::features) fn editor_close_confirmation_is_open(&self) -> bool {
+        self.editor
+            .workspace
+            .as_ref()
+            .is_some_and(|workspace| workspace.close_confirm)
+    }
+
+    pub(in crate::features) fn dirty_editor_tab_ids(&self) -> Vec<String> {
+        self.editor
+            .workspace
+            .as_ref()
+            .map(|workspace| {
+                workspace
+                    .tabs
+                    .iter()
+                    .filter(|tab| tab.dirty && !tab.loading && !tab.saving)
+                    .map(|tab| tab.id.clone())
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    pub(in crate::features) fn set_editor_tab_error(
+        &mut self,
+        session_id: Option<&str>,
+        remote_path: &str,
+        error: String,
+    ) -> bool {
+        let Some(tab) = self
+            .editor
+            .workspace
+            .as_mut()
+            .and_then(|workspace| workspace.tab_mut(session_id, remote_path))
+        else {
+            return false;
+        };
+        tab.error = Some(error);
+        true
+    }
+
+    pub(in crate::features) fn fail_editor_load(
+        &mut self,
+        session_id: Option<&str>,
+        remote_path: &str,
+        error: String,
+    ) -> bool {
+        let Some(tab) = self
+            .editor
+            .workspace
+            .as_mut()
+            .and_then(|workspace| workspace.tab_mut(session_id, remote_path))
+        else {
+            return false;
+        };
+        tab.loading = false;
+        tab.error = Some(error);
+        true
+    }
+
+    pub(in crate::features) fn begin_editor_tab_save(&mut self, tab_id: &str) -> bool {
+        let Some(tab) = self
+            .editor
+            .workspace
+            .as_mut()
+            .and_then(|workspace| workspace.tabs.iter_mut().find(|tab| tab.id == tab_id))
+        else {
+            return false;
+        };
+        if tab.loading || tab.saving {
+            return false;
+        }
+        tab.saving = true;
+        tab.error = None;
+        tab.conflict = false;
+        tab.reload_confirm = false;
+        true
+    }
+
+    pub(in crate::features) fn prepare_editor_close_after_save(
+        &mut self,
+    ) -> TransferEditorCloseAfterSave {
+        let Some(workspace) = self.editor.workspace.as_mut() else {
+            return TransferEditorCloseAfterSave::Missing;
+        };
+        if let Some(tab_id) = workspace.pending_close_tab_id.clone() {
+            let Some(tab) = workspace.tabs.iter_mut().find(|tab| tab.id == tab_id) else {
+                return TransferEditorCloseAfterSave::Missing;
+            };
+            if tab.loading {
+                return TransferEditorCloseAfterSave::Loading;
+            }
+            tab.close_after_save = true;
+            if tab.saving {
+                TransferEditorCloseAfterSave::Saving
+            } else {
+                TransferEditorCloseAfterSave::Ready(tab_id)
+            }
+        } else {
+            workspace.close_after_save_all = true;
+            workspace.close_confirm = false;
+            TransferEditorCloseAfterSave::All
+        }
+    }
+
+    pub(in crate::features) fn complete_editor_load(
+        &mut self,
+        session_id: Option<&str>,
+        remote_path: &str,
+        file: SftpRemoteTextFile,
+    ) -> bool {
+        let Some(tab) = self
+            .editor
+            .workspace
+            .as_mut()
+            .and_then(|workspace| workspace.tab_mut(session_id, remote_path))
+        else {
+            return false;
+        };
+        tab.content = file.content;
+        tab.base_size = Some(file.size);
+        tab.base_modified_at = Some(file.modified_at);
+        tab.loading = false;
+        tab.saving = false;
+        tab.dirty = false;
+        tab.conflict = false;
+        tab.close_after_save = false;
+        tab.reload_confirm = false;
+        tab.error = None;
+        true
+    }
+
+    pub(in crate::features) fn complete_editor_save(
+        &mut self,
+        session_id: Option<&str>,
+        remote_path: &str,
+        result: SftpWriteTextResult,
+    ) -> Option<TransferEditorSaveOutcome> {
+        let workspace = self.editor.workspace.as_mut()?;
+        let tab = workspace.tab_mut(session_id, remote_path)?;
+        let mut remove_tab_id = None;
+        let outcome = match result {
+            SftpWriteTextResult::Saved { modified_at, size } => {
+                if tab.close_after_save {
+                    remove_tab_id = Some(tab.id.clone());
+                }
+                tab.base_size = Some(size);
+                tab.base_modified_at = Some(modified_at);
+                tab.saving = false;
+                tab.dirty = false;
+                tab.conflict = false;
+                tab.close_after_save = false;
+                tab.reload_confirm = false;
+                tab.error = None;
+                TransferEditorSaveOutcome::Saved
+            }
+            SftpWriteTextResult::Conflict { modified_at, size } => {
+                tab.base_size = Some(size);
+                tab.base_modified_at = Some(modified_at);
+                tab.saving = false;
+                tab.conflict = true;
+                tab.close_after_save = false;
+                tab.error = Some("Remote file changed before save.".to_string());
+                workspace.close_after_save_all = false;
+                workspace.close_confirm = true;
+                TransferEditorSaveOutcome::Conflict
+            }
+        };
+        if let Some(tab_id) = remove_tab_id.as_deref() {
+            workspace.remove_tab(tab_id);
+            workspace.pending_close_tab_id = None;
+            workspace.close_confirm = false;
+        }
+        let close_workspace = workspace.tabs.is_empty()
+            || (workspace.close_after_save_all
+                && workspace.tabs.iter().all(|tab| !tab.dirty && !tab.saving));
+        if close_workspace {
+            self.editor.workspace = None;
+            self.editor.tabs_menu_open = false;
+            self.editor.window_open_pending = false;
+            Some(TransferEditorSaveOutcome::SavedAndClosed)
+        } else {
+            Some(outcome)
+        }
+    }
+
+    pub(in crate::features) fn fail_editor_operation(
+        &mut self,
+        session_id: Option<&str>,
+        remote_path: &str,
+        error: String,
+    ) -> bool {
+        let Some(workspace) = self.editor.workspace.as_mut() else {
+            return false;
+        };
+        let Some(tab) = workspace.tab_mut(session_id, remote_path) else {
+            return false;
+        };
+        tab.loading = false;
+        tab.saving = false;
+        tab.close_after_save = false;
+        tab.error = Some(error);
+        workspace.close_after_save_all = false;
+        true
+    }
+
+    pub(in crate::features) fn remove_editor_tabs_for_session(
+        &mut self,
+        session_id: &str,
+    ) -> usize {
+        let Some(workspace) = self.editor.workspace.as_mut() else {
+            return 0;
+        };
+        let before = workspace.tabs.len();
+        let active_removed = workspace
+            .active_tab()
+            .is_some_and(|tab| tab.session_id.as_deref() == Some(session_id));
+        workspace
+            .tabs
+            .retain(|tab| tab.session_id.as_deref() != Some(session_id));
+        let removed = before.saturating_sub(workspace.tabs.len());
+        if active_removed {
+            workspace.active_tab_id = workspace
+                .tabs
+                .first()
+                .map(|tab| tab.id.clone())
+                .unwrap_or_default();
+        }
+        if workspace.tabs.is_empty() {
+            self.editor.workspace = None;
+            self.editor.tabs_menu_open = false;
+            self.editor.window_open_pending = false;
+        } else if removed > 0 {
+            Self::clear_editor_close_state(workspace);
+        }
+        removed
+    }
+
+    pub(in crate::features) fn sync_editor_content(
+        &mut self,
+        tab_id: &str,
+        content: String,
+    ) -> bool {
+        let Some(workspace) = self.editor.workspace.as_mut() else {
+            return false;
+        };
+        Self::clear_editor_close_state(workspace);
+        let Some(tab) = workspace.tabs.iter_mut().find(|tab| tab.id == tab_id) else {
+            return false;
+        };
+        tab.focused_field = crate::models::TransferEditorField::Content;
+        if tab.content == content {
+            return false;
+        }
+        tab.content = content;
+        tab.dirty = true;
+        tab.conflict = false;
+        tab.close_after_save = false;
+        tab.reload_confirm = false;
+        tab.error = None;
+        true
+    }
+
+    pub(in crate::features) fn editor_tabs_menu_is_open(&self) -> bool {
+        self.editor.tabs_menu_open
+    }
+
+    pub(in crate::features) fn toggle_editor_tabs_menu(&mut self) -> bool {
+        self.editor.tabs_menu_open = !self.editor.tabs_menu_open;
+        self.editor.tabs_menu_open
+    }
+
+    pub(in crate::features) fn close_editor_tabs_menu(&mut self) -> bool {
+        std::mem::take(&mut self.editor.tabs_menu_open)
+    }
+
+    pub(in crate::features) fn editor_window(
+        &self,
+    ) -> Option<WindowHandle<RemoteFileEditorWindow>> {
+        self.editor.window
+    }
+
+    pub(in crate::features) fn editor_window_open_is_pending(&self) -> bool {
+        self.editor.window_open_pending
+    }
+
+    pub(in crate::features) fn begin_editor_window_open(&mut self) -> bool {
+        if self.editor.workspace.is_none()
+            || self.editor.window.is_some()
+            || self.editor.window_open_pending
+        {
+            return false;
+        }
+        self.editor.window_open_pending = true;
+        true
+    }
+
+    pub(in crate::features) fn finish_editor_window_open(
+        &mut self,
+        handle: WindowHandle<RemoteFileEditorWindow>,
+    ) {
+        self.editor.window = Some(handle);
+        self.editor.window_open_pending = false;
+    }
+
+    pub(in crate::features) fn finish_editor_window_activation(
+        &mut self,
+        handle: WindowHandle<RemoteFileEditorWindow>,
+        activated: bool,
+    ) -> bool {
+        self.editor.window_open_pending = false;
+        if !activated && self.editor.window.is_some_and(|current| current == handle) {
+            self.editor.window = None;
+            return true;
+        }
+        false
+    }
+
+    pub(in crate::features) fn clear_editor_window_if(
+        &mut self,
+        handle: WindowHandle<RemoteFileEditorWindow>,
+    ) -> bool {
+        if self.editor.window.is_some_and(|current| current == handle) {
+            self.editor.window = None;
+            true
+        } else {
+            false
+        }
+    }
+
+    pub(in crate::features) fn clear_editor_window_tracking(&mut self) -> bool {
+        let changed = self.editor.window.take().is_some() || self.editor.window_open_pending;
+        self.editor.window_open_pending = false;
+        changed
+    }
+
+    fn clear_editor_close_state(workspace: &mut TransferEditorWorkspaceState) {
+        workspace.close_confirm = false;
+        workspace.pending_close_tab_id = None;
+        workspace.close_after_save_all = false;
+    }
+
     pub(in crate::features) fn external_sync_prompt(
         &self,
         prompt_id: &str,
@@ -1092,6 +1656,18 @@ impl TransferExternalSyncState {
             window_open_pending: HashSet::new(),
             always_uploads: HashSet::new(),
             focus,
+        }
+    }
+}
+
+impl TransferEditorFeatureState {
+    fn new(focus: FocusHandle) -> Self {
+        Self {
+            workspace: None,
+            tabs_menu_open: false,
+            focus,
+            window: None,
+            window_open_pending: false,
         }
     }
 }
@@ -1535,15 +2111,18 @@ mod tests {
     use gpui::{TestAppContext, px};
     use nyaterm_transport::{
         SftpDuplicatePolicy, SftpFileEntry, SftpFileProperties, SftpFileType, SftpTransferControl,
+        SftpWriteTextResult,
     };
 
     use crate::models::{
-        TransferExternalSyncPromptState, TransferJobEvent, TransferJobKind, TransferJobResult,
-        TransferJobState, TransferJobStatus, TransferNewFolderState, TransferPathPromptKind,
-        TransferPropertiesField, TransferPropertiesState, TransferRenameState,
+        TransferEditorField, TransferEditorState, TransferExternalSyncPromptState,
+        TransferJobEvent, TransferJobKind, TransferJobResult, TransferJobState, TransferJobStatus,
+        TransferNewFolderState, TransferPathPromptKind, TransferPropertiesField,
+        TransferPropertiesState, TransferRenameState,
     };
 
     use super::{
+        TransferEditorCloseAfterSave, TransferEditorCloseOutcome, TransferEditorSaveOutcome,
         TransferFeatureFocus, TransferFeatureState, TransferPanelState, TransferPathState,
         TransferQueueState,
     };
@@ -1646,6 +2225,28 @@ mod tests {
             job_id: job_id.to_string(),
             remote_path: format!("/remote/{job_id}.txt"),
             local_path: PathBuf::from(format!("/local/{job_id}.txt")),
+        }
+    }
+
+    fn editor_tab(session_id: &str, remote_path: &str) -> TransferEditorState {
+        TransferEditorState {
+            id: TransferEditorState::tab_id(Some(session_id), remote_path),
+            session_id: Some(session_id.to_string()),
+            remote_path: remote_path.to_string(),
+            name: remote_path.rsplit('/').next().unwrap().to_string(),
+            content: String::new(),
+            search_query: String::new(),
+            active_match: 0,
+            base_size: Some(0),
+            base_modified_at: Some(1),
+            loading: false,
+            saving: false,
+            dirty: false,
+            conflict: false,
+            close_after_save: false,
+            reload_confirm: false,
+            error: None,
+            focused_field: TransferEditorField::Content,
         }
     }
 
@@ -1843,6 +2444,167 @@ mod tests {
         assert!(transfer.external_sync_prompt("prompt-b").is_some());
         assert!(transfer.external_sync_window_open_is_pending("prompt-b"));
         assert!(transfer.external_sync_always_uploads("persistent-watch-key"));
+    }
+
+    #[test]
+    fn transfer_editor_owns_tab_activation_and_close_confirmation() {
+        let cx = TestAppContext::single();
+        let mut transfer = transfer_state(&cx);
+        let tab_a = editor_tab("session-a", "/srv/a.txt");
+        let tab_a_id = tab_a.id.clone();
+        let tab_b = editor_tab("session-b", "/srv/b.txt");
+        let tab_b_id = tab_b.id.clone();
+
+        assert!(!transfer.open_editor_tab(tab_a));
+        assert!(!transfer.open_editor_tab(tab_b));
+        assert_eq!(
+            transfer.active_editor_tab().map(|tab| tab.id.as_str()),
+            Some(tab_b_id.as_str())
+        );
+        assert!(transfer.activate_editor_tab(&tab_a_id));
+        transfer.active_editor_tab_mut().unwrap().dirty = true;
+
+        assert_eq!(
+            transfer.request_editor_tab_close(&tab_a_id),
+            TransferEditorCloseOutcome::ConfirmationRequired
+        );
+        let workspace = transfer.editor_workspace().unwrap();
+        assert!(workspace.close_confirm);
+        assert_eq!(
+            workspace.pending_close_tab_id.as_deref(),
+            Some(tab_a_id.as_str())
+        );
+        assert!(transfer.cancel_editor_close());
+        assert!(!transfer.editor_close_confirmation_is_open());
+
+        transfer.active_editor_tab_mut().unwrap().dirty = false;
+        assert_eq!(
+            transfer.request_editor_tab_close(&tab_a_id),
+            TransferEditorCloseOutcome::Closed
+        );
+        assert_eq!(
+            transfer.active_editor_tab().map(|tab| tab.id.as_str()),
+            Some(tab_b_id.as_str())
+        );
+    }
+
+    #[test]
+    fn transfer_editor_save_completion_closes_requested_tab_atomically() {
+        let cx = TestAppContext::single();
+        let mut transfer = transfer_state(&cx);
+        let tab = editor_tab("session-a", "/srv/a.txt");
+        let tab_id = tab.id.clone();
+        transfer.open_editor_tab(tab);
+        assert!(transfer.sync_editor_content(&tab_id, "updated".to_string()));
+        assert_eq!(
+            transfer.request_editor_tab_close(&tab_id),
+            TransferEditorCloseOutcome::ConfirmationRequired
+        );
+        assert_eq!(
+            transfer.prepare_editor_close_after_save(),
+            TransferEditorCloseAfterSave::Ready(tab_id.clone())
+        );
+        assert!(transfer.begin_editor_tab_save(&tab_id));
+
+        assert_eq!(
+            transfer.complete_editor_save(
+                Some("session-a"),
+                "/srv/a.txt",
+                SftpWriteTextResult::Saved {
+                    modified_at: 2,
+                    size: 7,
+                },
+            ),
+            Some(TransferEditorSaveOutcome::SavedAndClosed)
+        );
+        assert!(!transfer.editor_has_workspace());
+    }
+
+    #[test]
+    fn transfer_editor_save_all_waits_for_every_dirty_tab() {
+        let cx = TestAppContext::single();
+        let mut transfer = transfer_state(&cx);
+        let tab_a = editor_tab("session-a", "/srv/a.txt");
+        let tab_a_id = tab_a.id.clone();
+        let tab_b = editor_tab("session-b", "/srv/b.txt");
+        let tab_b_id = tab_b.id.clone();
+        transfer.open_editor_tab(tab_a);
+        transfer.open_editor_tab(tab_b);
+        assert!(transfer.sync_editor_content(&tab_a_id, "updated a".to_string()));
+        assert!(transfer.sync_editor_content(&tab_b_id, "updated b".to_string()));
+        assert_eq!(
+            transfer.request_editor_close(),
+            TransferEditorCloseOutcome::ConfirmationRequired
+        );
+        assert_eq!(
+            transfer.prepare_editor_close_after_save(),
+            TransferEditorCloseAfterSave::All
+        );
+        assert!(transfer.begin_editor_tab_save(&tab_a_id));
+        assert!(transfer.begin_editor_tab_save(&tab_b_id));
+
+        assert_eq!(
+            transfer.complete_editor_save(
+                Some("session-a"),
+                "/srv/a.txt",
+                SftpWriteTextResult::Saved {
+                    modified_at: 2,
+                    size: 9,
+                },
+            ),
+            Some(TransferEditorSaveOutcome::Saved)
+        );
+        assert!(transfer.editor_has_workspace());
+        assert_eq!(
+            transfer.complete_editor_save(
+                Some("session-b"),
+                "/srv/b.txt",
+                SftpWriteTextResult::Saved {
+                    modified_at: 3,
+                    size: 9,
+                },
+            ),
+            Some(TransferEditorSaveOutcome::SavedAndClosed)
+        );
+        assert!(!transfer.editor_has_workspace());
+    }
+
+    #[test]
+    fn transfer_editor_conflict_and_session_cleanup_preserve_other_tabs() {
+        let cx = TestAppContext::single();
+        let mut transfer = transfer_state(&cx);
+        let tab_a = editor_tab("session-a", "/srv/a.txt");
+        let tab_a_id = tab_a.id.clone();
+        let tab_b = editor_tab("session-b", "/srv/b.txt");
+        let tab_b_id = tab_b.id.clone();
+        transfer.open_editor_tab(tab_a);
+        transfer.open_editor_tab(tab_b);
+        assert!(transfer.activate_editor_tab(&tab_a_id));
+        assert!(transfer.begin_editor_tab_save(&tab_a_id));
+        assert_eq!(
+            transfer.complete_editor_save(
+                Some("session-a"),
+                "/srv/a.txt",
+                SftpWriteTextResult::Conflict {
+                    modified_at: 3,
+                    size: 9,
+                },
+            ),
+            Some(TransferEditorSaveOutcome::Conflict)
+        );
+        assert!(transfer.editor_close_confirmation_is_open());
+
+        assert_eq!(transfer.remove_editor_tabs_for_session("session-a"), 1);
+        assert_eq!(
+            transfer.active_editor_tab().map(|tab| tab.id.as_str()),
+            Some(tab_b_id.as_str())
+        );
+        assert!(!transfer.editor_close_confirmation_is_open());
+        assert!(transfer.begin_editor_window_open());
+        assert!(!transfer.begin_editor_window_open());
+        assert!(transfer.clear_editor_window_tracking());
+        assert_eq!(transfer.remove_editor_tabs_for_session("session-b"), 1);
+        assert!(!transfer.editor_has_workspace());
     }
 
     #[test]

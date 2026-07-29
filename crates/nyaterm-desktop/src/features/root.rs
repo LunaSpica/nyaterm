@@ -486,9 +486,7 @@ impl NyaTermApp {
         let transfer_properties_open = self
             .transfer
             .properties_dialog_is_open_for_session(self.session.active_id());
-        let transfer_editor_open = self.transfer.editor.workspace.is_some()
-            && self.transfer.editor.window.is_none()
-            && !self.transfer.editor.window_open_pending;
+        let transfer_editor_open = self.transfer.editor_inline_overlay_is_open();
         let transfer_external_sync_open = self.active_external_editor_sync_prompt().is_some();
         let ssh_auth_prompt_open = self.session.prompts.has_active_ssh_auth();
 

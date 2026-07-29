@@ -9,9 +9,9 @@ use nyaterm_transport::{
 
 use crate::features::NyaTermApp;
 use crate::models::{
-    NavItem, TransferEditorField, TransferEditorState, TransferEditorWorkspaceState,
-    TransferJobEvent, TransferJobKind, TransferJobOutput, TransferJobResult, TransferJobState,
-    TransferJobStatus, TransferUnknownFileState,
+    NavItem, TransferEditorField, TransferEditorState, TransferJobEvent, TransferJobKind,
+    TransferJobOutput, TransferJobResult, TransferJobState, TransferJobStatus,
+    TransferUnknownFileState,
 };
 
 use super::super::helpers::remote_file_name;
@@ -229,17 +229,18 @@ impl NyaTermApp {
         }
         let session_id = self.session.active_id_owned();
         let tab_id = TransferEditorState::tab_id(session_id.as_deref(), &entry.path);
-        if let Some(editor) = self.transfer.editor.workspace.as_mut()
-            && editor.tabs.iter().any(|tab| tab.id == tab_id)
+        if self
+            .transfer
+            .editor_workspace()
+            .is_some_and(|workspace| workspace.tabs.iter().any(|tab| tab.id == tab_id))
         {
-            editor.active_tab_id = tab_id;
-            editor.close_confirm = false;
-            editor.pending_close_tab_id = None;
-            editor.close_after_save_all = false;
+            self.transfer.activate_editor_tab(&tab_id);
             let status = format!("remote text file already open: {}", entry.path);
             self.open_remote_file_editor_window(cx);
-            if self.transfer.editor.window.is_none() && !self.transfer.editor.window_open_pending {
-                window.focus(&self.transfer.editor.focus);
+            if self.transfer.editor_window().is_none()
+                && !self.transfer.editor_window_open_is_pending()
+            {
+                window.focus(self.transfer.editor_focus());
             }
             self.transfer.browser.status = status.clone();
             self.terminal.view.status = status;
@@ -267,19 +268,12 @@ impl NyaTermApp {
             error: None,
             focused_field: TransferEditorField::Content,
         };
-        if let Some(editor) = self.transfer.editor.workspace.as_mut() {
-            editor.tabs.push(tab);
-            editor.active_tab_id = tab_id;
-            editor.close_confirm = false;
-            editor.pending_close_tab_id = None;
-            editor.close_after_save_all = false;
-        } else {
-            self.transfer.editor.workspace = Some(TransferEditorWorkspaceState::new(tab));
-        }
+        self.transfer.open_editor_tab(tab);
         self.terminal.view.status = format!("opening remote text file {}", entry.path);
         self.open_remote_file_editor_window(cx);
-        if self.transfer.editor.window.is_none() && !self.transfer.editor.window_open_pending {
-            window.focus(&self.transfer.editor.focus);
+        if self.transfer.editor_window().is_none() && !self.transfer.editor_window_open_is_pending()
+        {
+            window.focus(self.transfer.editor_focus());
         }
         self.start_sftp_editor_load_job(session_id, entry.path, window, cx);
         cx.notify();

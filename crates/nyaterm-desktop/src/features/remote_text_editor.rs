@@ -264,24 +264,7 @@ impl RemoteTextEditor {
         let tab_id = self.tab_id.clone();
         let content = self.content.clone();
         self.app.update(cx, move |app, cx| {
-            let Some(workspace) = app.transfer.editor.workspace.as_mut() else {
-                return;
-            };
-            workspace.close_confirm = false;
-            workspace.pending_close_tab_id = None;
-            workspace.close_after_save_all = false;
-            let Some(tab) = workspace.tabs.iter_mut().find(|tab| tab.id == tab_id) else {
-                return;
-            };
-            if tab.content != content {
-                tab.content = content;
-                tab.dirty = true;
-                tab.conflict = false;
-                tab.close_after_save = false;
-                tab.reload_confirm = false;
-                tab.error = None;
-            }
-            tab.focused_field = TransferEditorField::Content;
+            app.transfer.sync_editor_content(&tab_id, content);
             app.mark_user_activity();
             cx.notify();
         });
@@ -522,7 +505,7 @@ impl RemoteTextEditor {
                         if let Some(tab) = app.active_transfer_editor_tab_mut() {
                             tab.focused_field = TransferEditorField::Search;
                         }
-                        window.focus(&app.transfer.editor.focus);
+                        window.focus(app.transfer.editor_focus());
                         cx.notify();
                     });
                     true

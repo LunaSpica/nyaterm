@@ -103,6 +103,7 @@ pub(in crate::features) use terminal::{
 pub(in crate::features) use text_inputs::{TextInputRegistry, TextInputSetup, secret_input_setup};
 pub(in crate::features) use transfer_external_sync_window::TransferExternalSyncWindow;
 pub(in crate::features) use transfers::{
+    TransferEditorCloseAfterSave, TransferEditorCloseOutcome, TransferEditorDiscardOutcome,
     TransferFeatureFocus, TransferFeatureState, duplicate_decision_label, duplicate_policy_label,
     format_file_size, transfer_job_title, transfer_status_label,
 };

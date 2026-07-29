@@ -348,6 +348,22 @@ check_no_multiline_matches \
   "transfer external-sync state access must use TransferFeatureState methods" \
   '(self|this|app)\.transfer[[:space:]]*\.external_sync(\.|[[:space:]]*=)' \
   crates/nyaterm-desktop/src/features
+check_no_multiline_matches \
+  "TransferFeatureState editor child must remain private" \
+  'struct[[:space:]]+TransferFeatureState[[:space:]]*\{[^}]*pub([[:space:]]|\([^)]*\))[[:space:]]+editor[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/transfers/state.rs
+check_no_matches \
+  "TransferEditorFeatureState must remain private" \
+  'pub([[:space:]]|\([^)]*\))[[:space:]]+struct[[:space:]]+TransferEditorFeatureState' \
+  crates/nyaterm-desktop/src/features/transfers/state.rs
+check_no_multiline_matches \
+  "TransferEditorFeatureState fields must remain private" \
+  'struct[[:space:]]+TransferEditorFeatureState[[:space:]]*\{[^}]*pub([[:space:]]|\([^)]*\))[[:space:]]+(workspace|tabs_menu_open|focus|window|window_open_pending)[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/transfers/state.rs
+check_no_multiline_matches \
+  "transfer editor child state access must use TransferFeatureState methods" \
+  '(self|this|app)\.transfer[[:space:]]*\.editor(\.|[[:space:]]*=)' \
+  crates/nyaterm-desktop/src/features
 
 check_no_matches \
   "SyncInputFeatureState must expose methods, not writable fields" \

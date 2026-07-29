@@ -225,24 +225,7 @@ impl NyaTermApp {
         self.transfer.clear_external_sync_for_session(session_id);
         self.transfer
             .close_properties_dialog_for_session(session_id);
-        if let Some(workspace) = self.transfer.editor.workspace.as_mut() {
-            let active_removed = workspace
-                .active_tab()
-                .is_some_and(|tab| tab.session_id.as_deref() == Some(session_id));
-            workspace
-                .tabs
-                .retain(|tab| tab.session_id.as_deref() != Some(session_id));
-            if active_removed {
-                workspace.active_tab_id = workspace
-                    .tabs
-                    .first()
-                    .map(|tab| tab.id.clone())
-                    .unwrap_or_default();
-            }
-            if workspace.tabs.is_empty() {
-                self.transfer.editor.workspace = None;
-            }
-        }
+        self.transfer.remove_editor_tabs_for_session(session_id);
         self.purge_session_from_sync_groups(session_id);
         self.reconcile_terminal_windows();
         if self.session.restore_is_complete() {

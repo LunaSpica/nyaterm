@@ -50,7 +50,7 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   Full editing surfaces are separate by design: the terminal and paste review
   use terminal input routing, and `RemoteTextEditor` owns editor-specific
   selection, undo and command handling. The built-in transfer editor remains a
-  dedicated editor-surface migration, not a registry form field. None of these
+  dedicated editor surface, not a registry form field. None of these
   should be replaced mechanically with a single-line registry field.
 
   Four GPUI behaviours make this migration go wrong in ways that are invisible
@@ -380,6 +380,13 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   transitions, so consuming a prompt or closing its session also reconciles
   associated window tracking. GPUI window creation and activation, terminal
   status updates and SFTP upload work remain in the application adapters.
+  The built-in editor pass made its workspace, tab menu, focus and detached
+  window lifecycle private behind `TransferFeatureState`. Tab open/activation,
+  dirty-close confirmation, discard, save completion/conflict reconciliation,
+  session-scoped cleanup and window admission are owner transitions. The
+  dedicated `RemoteTextEditor` continues to own selection, undo, IME and text
+  commands through narrow active-tab access; GPUI window operations, SFTP jobs,
+  rendering and status text remain in their adapters.
 - The SFTP browser parity pass covers the six Tauri file-manager areas: toolbar
   commands and state, editable path/history/breadcrumb navigation, resizable
   sortable columns, range/additive selection and context actions, transfer
@@ -1449,6 +1456,7 @@ Current ownership map:
 | Transfer job queue | Private child in `NyaTermApp.transfer` | Typed background-event queue plus transient interaction state | Monotonic job-id allocation, admission/removal, result-channel access, selection/menu/delete lifecycles, session-switch reset and session-scoped batch actions enter through `TransferFeatureState`; cleanup also prunes stale interaction references. Renderers receive a read-only slice, protocol adapters can update individual jobs without receiving the backing collection, and the event reducer temporarily extracts only its matched job while it coordinates browser/editor side effects. |
 | Transfer file-operation dialogs | Private child in `NyaTermApp.transfer` | Transient dialog drafts, focus and property-operation lifecycle | Rename/move/delete/create/properties/unknown-file state enters through `TransferFeatureState`; deferred rename focus is consumed atomically, creation options update semantically, and property results require matching session/path ownership. Renderers receive read-only dialog state while GPUI focus, text inputs, status and SFTP launch remain in adapters. |
 | Transfer external-editor sync | Private child in `NyaTermApp.transfer` | Transient prompts, child-window tracking and always-upload policy | Prompt admission/filtering/resolution, window admission/tracking and session cleanup enter through `TransferFeatureState`; consuming or dismissing a prompt reconciles its tracked window state. GPUI window operations, status updates and SFTP upload launch remain in adapters. |
+| Built-in transfer editor | Private child in `NyaTermApp.transfer` | Editor workspace, tab/confirmation state and detached-window lifecycle | Tab admission/activation/close/discard, save result reconciliation, session cleanup, menu state and window admission enter through `TransferFeatureState`. `RemoteTextEditor` keeps its dedicated selection/undo/IME path through narrow active-tab access; GPUI windows, SFTP work and rendering remain in adapters. |
 | Serial ports | Private catalog in `NyaTermApp.connection_catalog` | Runtime/discovered state | Replaced through the catalog after session-manager discovery and never persisted. |
 | Tunnel/proxy configs | Private catalog in `NyaTermApp.tunnel_state` | Persisted network config | Views use read-only slices; pure move/upsert/delete candidates and successful commits stay on `TunnelFeatureState`. The Network page UI remains separate transient state. |
 | Queued saved-connection starts | `NyaTermApp.session.start` private queue | Transient session-start state | Admission, duplicate detection, draining and runtime cadence reads go through `SessionStartFeatureState` methods. |
@@ -1716,7 +1724,10 @@ honest remaining list.
    session-scoped property cleanup onto the same owner; the external-sync pass
    then made prompt, child-window, pending-open and always-upload state private,
    coupling prompt resolution and session cleanup with window-tracking cleanup
-   while leaving GPUI windows and SFTP uploads in their adapters. Cloud sync made
+   while leaving GPUI windows and SFTP uploads in their adapters; the built-in
+   editor pass then made workspace/tab/menu/window state private and moved
+   dirty-close, save-result, session-cleanup and window-admission transitions to
+   the transfer owner while preserving the dedicated editor surface. Cloud sync made
    secret-field routing inaccessible outside
    its owner, and
    recording cleanup can no longer leave its manager, busy map and pipeline out

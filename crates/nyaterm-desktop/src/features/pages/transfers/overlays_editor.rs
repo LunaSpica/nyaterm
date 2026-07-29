@@ -278,7 +278,7 @@ impl NyaTermApp {
         let encoding_label = self.tr("fileEditor.encodingUtf8");
         let line_ending_label = self.tr("fileEditor.lineEndingLf");
         let plain_text_label = self.tr("fileEditor.plainText");
-        let workspace = self.transfer.editor.workspace.clone();
+        let workspace = self.transfer.editor_workspace_snapshot();
         let state = workspace
             .as_ref()
             .and_then(TransferEditorWorkspaceState::active_tab)
@@ -357,7 +357,7 @@ impl NyaTermApp {
         };
         let active_tab_id = state.id.clone();
         let has_native_editor = native_editor.is_some();
-        let tabs_menu_open = self.transfer.editor.tabs_menu_open && tabs.len() > 1;
+        let tabs_menu_open = self.transfer.editor_tabs_menu_is_open() && tabs.len() > 1;
         let mut tab_list = div()
             .id("transfer-editor-tab-list")
             .h_full()
@@ -584,8 +584,7 @@ impl NyaTermApp {
                         .hover(|this| this.bg(rgb(palette.hover)))
                         .on_click(cx.listener(|this, _, _, cx| {
                             cx.stop_propagation();
-                            this.transfer.editor.tabs_menu_open =
-                                !this.transfer.editor.tabs_menu_open;
+                            this.transfer.toggle_editor_tabs_menu();
                             cx.notify();
                         }))
                         .child(
@@ -612,14 +611,14 @@ impl NyaTermApp {
             .flex()
             .items_center()
             .justify_center()
-            .track_focus(&self.transfer.editor.focus)
+            .track_focus(self.transfer.editor_focus())
             .on_click(cx.listener(|this, _, window, cx| {
-                this.transfer.editor.tabs_menu_open = false;
-                window.focus(&this.transfer.editor.focus);
+                this.transfer.close_editor_tabs_menu();
+                window.focus(this.transfer.editor_focus());
                 cx.notify();
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
-                if this.transfer.editor.focus.is_focused(window) {
+                if this.transfer.editor_focus().is_focused(window) {
                     cx.stop_propagation();
                     this.handle_transfer_editor_key_down(event, window, cx);
                 }
@@ -798,7 +797,7 @@ impl NyaTermApp {
                                             {
                                                 state.focused_field = TransferEditorField::Search;
                                             }
-                                            window.focus(&this.transfer.editor.focus);
+                                            window.focus(this.transfer.editor_focus());
                                             cx.notify();
                                         }))
                                         .child(truncate_preview(&search_label, 96)),

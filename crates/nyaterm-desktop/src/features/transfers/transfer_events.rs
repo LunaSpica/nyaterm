@@ -15,7 +15,7 @@ use crate::models::{
     TransferJobKind, TransferJobOutput, TransferJobStatus,
 };
 
-use super::state::TransferFeatureState;
+use super::state::{TransferEditorSaveOutcome, TransferFeatureState};
 use super::transfer_widgets::{format_file_size, format_transfer_progress};
 
 const TRANSFER_EVENT_DRAIN_LIMIT: usize = 256;
@@ -600,26 +600,11 @@ impl NyaTermApp {
                     job.summary = None;
                     job.progress = None;
                     job.control = None;
-                    if let Some(state) =
-                        self.transfer
-                            .editor
-                            .workspace
-                            .as_mut()
-                            .and_then(|workspace| {
-                                workspace.tab_mut(job_session_id.as_deref(), &remote_path)
-                            })
-                    {
-                        state.content = file.content;
-                        state.base_size = Some(file.size);
-                        state.base_modified_at = Some(file.modified_at);
-                        state.loading = false;
-                        state.saving = false;
-                        state.dirty = false;
-                        state.conflict = false;
-                        state.close_after_save = false;
-                        state.reload_confirm = false;
-                        state.error = None;
-                    }
+                    self.transfer.complete_editor_load(
+                        job_session_id.as_deref(),
+                        &remote_path,
+                        file,
+                    );
                     self.transfer.browser.status = format!("opened text file {remote_path}");
                     self.terminal.view.status = format!("SFTP text file opened: {remote_path}");
                 }
@@ -668,73 +653,22 @@ impl NyaTermApp {
                     job.summary = None;
                     job.progress = None;
                     job.control = None;
-                    let mut remove_saved_tab_id = None;
-                    let mut close_editor_workspace = false;
-                    if let Some(workspace) = self.transfer.editor.workspace.as_mut() {
-                        let mut save_conflicted = false;
-                        if let Some(state) =
-                            workspace.tab_mut(job_session_id.as_deref(), &remote_path)
-                        {
-                            match result {
-                                nyaterm_transport::SftpWriteTextResult::Saved {
-                                    modified_at,
-                                    size,
-                                } => {
-                                    if state.close_after_save {
-                                        remove_saved_tab_id = Some(state.id.clone());
-                                    }
-                                    state.base_size = Some(size);
-                                    state.base_modified_at = Some(modified_at);
-                                    state.saving = false;
-                                    state.dirty = false;
-                                    state.conflict = false;
-                                    state.close_after_save = false;
-                                    state.reload_confirm = false;
-                                    state.error = None;
-                                    self.terminal.view.status =
-                                        format!("SFTP text file saved: {remote_path}");
-                                }
-                                nyaterm_transport::SftpWriteTextResult::Conflict {
-                                    modified_at,
-                                    size,
-                                } => {
-                                    save_conflicted = true;
-                                    state.base_size = Some(size);
-                                    state.base_modified_at = Some(modified_at);
-                                    state.saving = false;
-                                    state.conflict = true;
-                                    state.close_after_save = false;
-                                    state.error =
-                                        Some("Remote file changed before save.".to_string());
-                                    self.terminal.view.status =
-                                        format!("SFTP text save conflict: {remote_path}");
-                                }
+                    if let Some(outcome) = self.transfer.complete_editor_save(
+                        job_session_id.as_deref(),
+                        &remote_path,
+                        result,
+                    ) {
+                        self.terminal.view.status = match outcome {
+                            TransferEditorSaveOutcome::Saved => {
+                                format!("SFTP text file saved: {remote_path}")
                             }
-                        }
-                        if save_conflicted {
-                            workspace.close_after_save_all = false;
-                            workspace.close_confirm = true;
-                        }
-                        if let Some(tab_id) = remove_saved_tab_id.as_deref() {
-                            workspace.remove_tab(tab_id);
-                            workspace.pending_close_tab_id = None;
-                            workspace.close_confirm = false;
-                        }
-                        if workspace.close_after_save_all
-                            && workspace.tabs.iter().all(|tab| !tab.dirty && !tab.saving)
-                        {
-                            close_editor_workspace = true;
-                        }
-                        if workspace.tabs.is_empty() {
-                            close_editor_workspace = true;
-                        }
-                        if close_editor_workspace {
-                            self.terminal.view.status =
-                                format!("SFTP text file saved and closed: {remote_path}");
-                        }
-                    }
-                    if close_editor_workspace {
-                        self.transfer.editor.workspace = None;
+                            TransferEditorSaveOutcome::Conflict => {
+                                format!("SFTP text save conflict: {remote_path}")
+                            }
+                            TransferEditorSaveOutcome::SavedAndClosed => {
+                                format!("SFTP text file saved and closed: {remote_path}")
+                            }
+                        };
                     }
                     self.transfer.browser.status =
                         format!("text editor save finished for {remote_path}");
@@ -917,16 +851,12 @@ impl NyaTermApp {
                             error.clone(),
                         );
                     }
-                    if let Some(remote_path) = property_remote_path.as_ref()
-                        && let Some(workspace) = self.transfer.editor.workspace.as_mut()
-                        && let Some(state) =
-                            workspace.tab_mut(job_session_id.as_deref(), remote_path)
-                    {
-                        state.loading = false;
-                        state.saving = false;
-                        state.close_after_save = false;
-                        state.error = Some(error);
-                        workspace.close_after_save_all = false;
+                    if let Some(remote_path) = property_remote_path.as_ref() {
+                        self.transfer.fail_editor_operation(
+                            job_session_id.as_deref(),
+                            remote_path,
+                            error,
+                        );
                     }
                     job.summary = None;
                     job.control = None;

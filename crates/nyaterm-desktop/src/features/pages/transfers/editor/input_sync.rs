@@ -19,11 +19,7 @@ impl NyaTermApp {
         let keystroke = &event.keystroke;
         let primary = keystroke.modifiers.platform || keystroke.modifiers.control;
         if primary && !keystroke.modifiers.alt && keystroke.key.as_str() == "f" {
-            if let Some(workspace) = self.transfer.editor.workspace.as_mut() {
-                workspace.close_confirm = false;
-                workspace.pending_close_tab_id = None;
-                workspace.close_after_save_all = false;
-            }
+            self.transfer.clear_editor_close_request();
             if let Some(state) = self.active_transfer_editor_tab_mut() {
                 state.focused_field = TransferEditorField::Search;
                 state.error = None;
@@ -50,22 +46,11 @@ impl NyaTermApp {
             self.cancel_transfer_editor_reload_confirm(cx);
             return;
         }
-        if keystroke.key.as_str() == "escape"
-            && self
-                .transfer
-                .editor
-                .workspace
-                .as_ref()
-                .is_some_and(|workspace| workspace.close_confirm)
-        {
+        if keystroke.key.as_str() == "escape" && self.transfer.editor_close_confirmation_is_open() {
             self.cancel_transfer_editor_close_confirm(cx);
             return;
         }
-        if let Some(workspace) = self.transfer.editor.workspace.as_mut() {
-            workspace.close_confirm = false;
-            workspace.pending_close_tab_id = None;
-            workspace.close_after_save_all = false;
-        }
+        self.transfer.clear_editor_close_request();
         if focused_field == TransferEditorField::Content
             && self
                 .active_transfer_editor_tab()
