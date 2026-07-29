@@ -126,14 +126,16 @@ impl NyaTermApp {
                     "Saved AI command card '{}' to Quick Commands",
                     label
                 ));
-                self.settings.store_status.message = self.ai.panel_status().to_string();
-                self.settings.store_status.ready = true;
+                self.settings
+                    .set_store_message(self.ai.panel_status().to_string());
+                self.settings.set_store_ready(true);
             }
             Err(error) => {
                 self.ai
                     .set_panel_status(format!("Quick command save failed: {error}"));
-                self.settings.store_status.message = self.ai.panel_status().to_string();
-                self.settings.store_status.ready = false;
+                self.settings
+                    .set_store_message(self.ai.panel_status().to_string());
+                self.settings.set_store_ready(false);
             }
         }
         cx.notify();

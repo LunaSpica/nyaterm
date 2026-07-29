@@ -109,13 +109,15 @@ impl NyaTermApp {
                 self.tunnel_state.commit_tunnel_groups(groups);
                 self.connection_state.close_network_group_editor();
                 self.terminal.view.status = format!("tunnel group '{name}' saved");
-                self.settings.store_status.message = self.terminal.view.status.clone();
-                self.settings.store_status.ready = true;
+                self.settings
+                    .set_store_message(self.terminal.view.status.clone());
+                self.settings.set_store_ready(true);
             }
             Err(error) => {
                 self.terminal.view.status = format!("failed to save tunnel group: {error}");
-                self.settings.store_status.message = self.terminal.view.status.clone();
-                self.settings.store_status.ready = false;
+                self.settings
+                    .set_store_message(self.terminal.view.status.clone());
+                self.settings.set_store_ready(false);
             }
         }
         cx.notify();
@@ -146,13 +148,15 @@ impl NyaTermApp {
                 self.tunnel_state.commit_proxy_groups(groups);
                 self.connection_state.close_network_group_editor();
                 self.terminal.view.status = format!("proxy group '{name}' saved");
-                self.settings.store_status.message = self.terminal.view.status.clone();
-                self.settings.store_status.ready = true;
+                self.settings
+                    .set_store_message(self.terminal.view.status.clone());
+                self.settings.set_store_ready(true);
             }
             Err(error) => {
                 self.terminal.view.status = format!("failed to save proxy group: {error}");
-                self.settings.store_status.message = self.terminal.view.status.clone();
-                self.settings.store_status.ready = false;
+                self.settings
+                    .set_store_message(self.terminal.view.status.clone());
+                self.settings.set_store_ready(false);
             }
         }
         cx.notify();
@@ -220,13 +224,15 @@ impl NyaTermApp {
                     &deleted_tunnel_ids,
                 );
                 self.terminal.view.status = format!("tunnel group '{label}' deleted");
-                self.settings.store_status.message = self.terminal.view.status.clone();
-                self.settings.store_status.ready = true;
+                self.settings
+                    .set_store_message(self.terminal.view.status.clone());
+                self.settings.set_store_ready(true);
             }
             Err(error) => {
                 self.terminal.view.status = format!("failed to delete tunnel group: {error}");
-                self.settings.store_status.message = self.terminal.view.status.clone();
-                self.settings.store_status.ready = false;
+                self.settings
+                    .set_store_message(self.terminal.view.status.clone());
+                self.settings.set_store_ready(false);
             }
         }
         cx.notify();
@@ -256,13 +262,15 @@ impl NyaTermApp {
                     &deleted_proxy_ids,
                 );
                 self.terminal.view.status = format!("proxy group '{label}' deleted");
-                self.settings.store_status.message = self.terminal.view.status.clone();
-                self.settings.store_status.ready = true;
+                self.settings
+                    .set_store_message(self.terminal.view.status.clone());
+                self.settings.set_store_ready(true);
             }
             Err(error) => {
                 self.terminal.view.status = format!("failed to delete proxy group: {error}");
-                self.settings.store_status.message = self.terminal.view.status.clone();
-                self.settings.store_status.ready = false;
+                self.settings
+                    .set_store_message(self.terminal.view.status.clone());
+                self.settings.set_store_ready(false);
             }
         }
         cx.notify();

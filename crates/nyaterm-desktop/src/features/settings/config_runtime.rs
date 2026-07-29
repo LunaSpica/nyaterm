@@ -10,8 +10,6 @@ use crate::models::{
     TranslationSecretDraft,
 };
 
-use super::StoreStatus;
-
 impl NyaTermApp {
     pub(in crate::features) fn prompt_config_export(&mut self, cx: &mut Context<Self>) {
         if !self
@@ -592,11 +590,11 @@ impl NyaTermApp {
                             .set_duplicate_policy(SftpDuplicatePolicy::from_legacy_value(
                                 &self.settings.summary.transfer_duplicate_strategy,
                             ));
-                        self.settings.store_status = StoreStatus {
+                        self.settings.replace_store_status(
                             path,
-                            message: "redb connection store online".to_string(),
-                            ready: true,
-                        };
+                            "redb connection store online".to_string(),
+                            true,
+                        );
                     }
                     Err(error) => {
                         self.connection_catalog.clear_loaded();
@@ -609,11 +607,11 @@ impl NyaTermApp {
                             TranslationSettings::default(),
                             TranslationSecretDraft::default(),
                         );
-                        self.settings.store_status = StoreStatus {
+                        self.settings.replace_store_status(
                             path,
-                            message: format!("failed to load sessions: {error}"),
-                            ready: false,
-                        };
+                            format!("failed to load sessions: {error}"),
+                            false,
+                        );
                     }
                 }
             }
@@ -626,16 +624,15 @@ impl NyaTermApp {
                     TranslationSettings::default(),
                     TranslationSecretDraft::default(),
                 );
-                self.settings.store_status = StoreStatus {
-                    path: self
-                        .runtime
+                self.settings.replace_store_status(
+                    self.runtime
                         .config_dir()
                         .join("nyaterm.redb")
                         .display()
                         .to_string(),
-                    message: format!("failed to open store: {error}"),
-                    ready: false,
-                };
+                    format!("failed to open store: {error}"),
+                    false,
+                );
             }
         }
     }

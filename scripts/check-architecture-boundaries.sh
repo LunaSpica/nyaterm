@@ -251,6 +251,23 @@ check_no_multiline_matches \
   "settings interaction child access must use SettingsFeatureState methods" \
   '(self|this|app)\.settings[[:space:]]*\.(search_engines|keyword_highlights|appearance|keybindings|prompts)(\.|[[:space:]]*=)' \
   crates/nyaterm-desktop/src/features
+check_no_multiline_matches \
+  "SettingsFeatureState store status must stay inside the settings module" \
+  'struct[[:space:]]+SettingsFeatureState[[:space:]]*\{[^}]*pub([[:space:]]|\(crate\)|\(in crate\)|\(in crate::features\))[[:space:]]+store_status[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/settings/state.rs
+check_no_matches \
+  "StoreStatus implementation must stay inside the settings module" \
+  'pub([[:space:]]|\(crate\)|\(in crate\)|\(in crate::features\))[[:space:]]+struct[[:space:]]+StoreStatus' \
+  crates/nyaterm-desktop/src/features/settings/catalog.rs
+check_no_matches \
+  "StoreStatus implementation must not be re-exported from settings" \
+  'pub([^;]*)use([^;]*)StoreStatus' \
+  crates/nyaterm-desktop/src/features/settings/mod.rs
+check_no_multiline_matches_excluding \
+  "settings store status access must use SettingsFeatureState methods outside settings" \
+  '(self|this|app)\.settings[[:space:]]*\.[[:space:]]*store_status[[:space:]]*(\.|=)' \
+  crates/nyaterm-desktop/src/features \
+  'crates/nyaterm-desktop/src/features/settings/**'
 
 check_no_matches \
   "translation state must stay grouped under TranslationFeatureState" \

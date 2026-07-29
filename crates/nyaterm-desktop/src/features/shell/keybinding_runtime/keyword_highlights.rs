@@ -38,15 +38,16 @@ impl NyaTermApp {
         {
             Ok(config) => {
                 self.settings.keyword_config = config;
-                self.settings.store_status.message = "keyword highlight settings saved".to_string();
-                self.settings.store_status.ready = true;
+                self.settings
+                    .set_store_message("keyword highlight settings saved".to_string());
+                self.settings.set_store_ready(true);
                 self.terminal.view.status = "keyword highlight settings saved".to_string();
             }
             Err(error) => {
-                self.settings.store_status.message =
-                    format!("keyword highlight settings save failed: {error}");
-                self.settings.store_status.ready = false;
-                self.terminal.view.status = self.settings.store_status.message.clone();
+                self.settings
+                    .set_store_message(format!("keyword highlight settings save failed: {error}"));
+                self.settings.set_store_ready(false);
+                self.terminal.view.status = self.settings.store_status().message.to_string();
             }
         }
         cx.notify();
@@ -130,16 +131,18 @@ impl NyaTermApp {
                 self.terminal.view.status = format!(
                     "imported {imported_rules} keyword highlight rule(s), updated {updated_rules}, total {total_rules}"
                 );
-                self.settings.store_status.message = self.terminal.view.status.clone();
-                self.settings.store_status.ready = true;
+                self.settings
+                    .set_store_message(self.terminal.view.status.clone());
+                self.settings.set_store_ready(true);
             }
             KeywordHighlightPathPromptResult::Cancelled => {
                 self.terminal.view.status = "keyword highlight import cancelled".to_string();
             }
             KeywordHighlightPathPromptResult::Failed(error) => {
                 self.terminal.view.status = format!("keyword highlight import failed: {error}");
-                self.settings.store_status.message = self.terminal.view.status.clone();
-                self.settings.store_status.ready = false;
+                self.settings
+                    .set_store_message(self.terminal.view.status.clone());
+                self.settings.set_store_ready(false);
             }
             KeywordHighlightPathPromptResult::Closed => {
                 self.terminal.view.status =

@@ -54,8 +54,9 @@ impl NyaTermApp {
             }
             Err(error) => {
                 self.terminal.view.status = format!("copy selected connections failed: {error}");
-                self.settings.store_status.message = self.terminal.view.status.clone();
-                self.settings.store_status.ready = false;
+                self.settings
+                    .set_store_message(self.terminal.view.status.clone());
+                self.settings.set_store_ready(false);
             }
         }
         cx.notify();
@@ -94,8 +95,9 @@ impl NyaTermApp {
                 .map_err(|error| error.to_string())?
                 .connections,
         );
-        self.settings.store_status.message = "saved connections copied".to_string();
-        self.settings.store_status.ready = true;
+        self.settings
+            .set_store_message("saved connections copied".to_string());
+        self.settings.set_store_ready(true);
         Ok(connections.len())
     }
 }

@@ -331,15 +331,16 @@ impl NyaTermApp {
         {
             Ok(settings) => {
                 self.apply_gpui_settings(settings);
-                self.settings.store_status.message = "file explorer favorites saved".to_string();
-                self.settings.store_status.ready = true;
+                self.settings
+                    .set_store_message("file explorer favorites saved".to_string());
+                self.settings.set_store_ready(true);
             }
             Err(error) => {
-                self.settings.store_status.message =
-                    format!("file explorer favorites save failed: {error}");
-                self.settings.store_status.ready = false;
+                self.settings
+                    .set_store_message(format!("file explorer favorites save failed: {error}"));
+                self.settings.set_store_ready(false);
                 self.transfer
-                    .set_browser_status(self.settings.store_status.message.clone());
+                    .set_browser_status(self.settings.store_status().message.to_string());
             }
         }
     }

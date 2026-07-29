@@ -17,7 +17,7 @@ pub(in crate::features) struct SettingsFeatureState {
     pub summary: AppSettingsSummary,
     pub keyword_config: KeywordHighlightConfig,
     pub master_password: SettingsMasterPasswordState,
-    pub store_status: StoreStatus,
+    pub(super) store_status: StoreStatus,
     search_engines: SearchEngineSettingsState,
     keyword_highlights: KeywordHighlightSettingsState,
     appearance: AppearanceSettingsState,
@@ -37,6 +37,12 @@ pub(in crate::features) struct SettingsFeatureFocus {
     pub search_engine: FocusHandle,
     pub keyword_highlight: FocusHandle,
     pub keybindings: FocusHandle,
+}
+
+pub(in crate::features) struct StoreStatusView<'a> {
+    pub path: &'a str,
+    pub message: &'a str,
+    pub ready: bool,
 }
 
 struct SearchEngineSettingsState {
@@ -97,7 +103,9 @@ impl SettingsFeatureState {
     pub(in crate::features) fn new(
         summary: AppSettingsSummary,
         keyword_config: KeywordHighlightConfig,
-        store_status: StoreStatus,
+        store_path: String,
+        store_message: String,
+        store_ready: bool,
         ui_font_options: Vec<String>,
         terminal_font_options: Vec<String>,
         focus: SettingsFeatureFocus,
@@ -107,7 +115,11 @@ impl SettingsFeatureState {
             summary,
             keyword_config,
             master_password,
-            store_status,
+            store_status: StoreStatus {
+                path: store_path,
+                message: store_message,
+                ready: store_ready,
+            },
             search_engines: SearchEngineSettingsState {
                 expanded_index: None,
                 icon_picker_index: None,
@@ -137,6 +149,35 @@ impl SettingsFeatureState {
 
     pub fn rebase_master_password(&mut self) {
         self.master_password.reset(self.summary.has_master_password);
+    }
+
+    pub(in crate::features) fn store_status(&self) -> StoreStatusView<'_> {
+        StoreStatusView {
+            path: &self.store_status.path,
+            message: &self.store_status.message,
+            ready: self.store_status.ready,
+        }
+    }
+
+    pub(in crate::features) fn set_store_message(&mut self, message: impl Into<String>) {
+        self.store_status.message = message.into();
+    }
+
+    pub(in crate::features) fn set_store_ready(&mut self, ready: bool) {
+        self.store_status.ready = ready;
+    }
+
+    pub(in crate::features) fn replace_store_status(
+        &mut self,
+        path: String,
+        message: String,
+        ready: bool,
+    ) {
+        self.store_status = StoreStatus {
+            path,
+            message,
+            ready,
+        };
     }
 
     pub(in crate::features) fn search_engine_presentation(&self) -> SearchEnginePresentationState {
@@ -535,7 +576,6 @@ mod tests {
     };
 
     use super::{SearchEngineMenu, SettingsFeatureFocus, SettingsFeatureState};
-    use crate::features::settings::StoreStatus;
     use crate::models::{
         ConfigPathPromptKind, KeywordHighlightEditorField, SnapshotPasswordPromptKind,
     };
@@ -546,11 +586,9 @@ mod tests {
         SettingsFeatureState::new(
             AppSettingsSummary::default(),
             KeywordHighlightConfig::default(),
-            StoreStatus {
-                path: String::new(),
-                message: String::new(),
-                ready: true,
-            },
+            String::new(),
+            String::new(),
+            true,
             vec!["Inter".to_string()],
             vec!["JetBrains Mono".to_string()],
             SettingsFeatureFocus {
@@ -656,5 +694,27 @@ mod tests {
         assert_eq!(interaction.recording_id, None);
         assert_eq!(interaction.pending_keys, None);
         assert!(interaction.search_draft.is_empty());
+    }
+
+    #[test]
+    fn settings_owner_controls_store_status_updates_and_replacement() {
+        let mut state = settings_state();
+
+        state.set_store_message("saving settings");
+        state.set_store_ready(false);
+        let status = state.store_status();
+        assert_eq!(status.path, "");
+        assert_eq!(status.message, "saving settings");
+        assert!(!status.ready);
+
+        state.replace_store_status(
+            "/tmp/nyaterm.redb".to_string(),
+            "store reopened".to_string(),
+            true,
+        );
+        let status = state.store_status();
+        assert_eq!(status.path, "/tmp/nyaterm.redb");
+        assert_eq!(status.message, "store reopened");
+        assert!(status.ready);
     }
 }

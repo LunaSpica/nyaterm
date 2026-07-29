@@ -232,7 +232,11 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   reconciliation, keyword expansion/edit lifecycle, appearance-menu exclusion,
   keybinding recording/search transitions and kind-matched prompt completion
   execute on `SettingsFeatureState`; views receive immutable presentation data
-  and focus handles. Filesystem prompts, persistence and GPUI notification stay
+  and focus handles. A storage-status follow-up made the implementation type
+  and backing child settings-module-private. Cross-domain persistence adapters
+  now update its message/readiness through owner methods, rendering receives a
+  borrowed immutable view, and store reopen replaces path/message/readiness as
+  one transition. Filesystem prompts, persistence and GPUI notification stay
   in their existing adapters.
 - Translation and native-update background state now have authoritative
   `TranslationFeatureState` and `UpdateFeatureState` owners. Eighteen app fields
@@ -1487,6 +1491,7 @@ Current ownership map:
 | Command history and persistence worker | Private state in `NyaTermApp.commands` | Persisted catalog plus background runtime | History snapshots, queue admission, event polling and idle checks enter through `CommandFeatureState`; failed optimistic use-count updates roll back on the owner. |
 | Send-command composer/options/progress | Private children in `NyaTermApp.send_command` | Transient editor and send lifecycle | Views receive immutable presentation data; control edits, mutually-exclusive menus, data/mode defaults, progress counters and cancellation enter through `SendCommandFeatureState`. Session selection, terminal writes, GPUI/text-input routing and status remain in adapters. |
 | Settings interaction and prompts | Private children in `NyaTermApp.settings` | Transient settings UI and prompt lifecycle | Search-engine rows, keyword-highlight editing, appearance menus, keybinding recording/search and config/diagnostics/import/password prompt admission enter through `SettingsFeatureState`; views use immutable presentation values and read-only focus/font access. Persistence, native filesystem prompts, text inputs and GPUI notification remain in adapters. |
+| Global storage status | Settings-module-private child in `NyaTermApp.settings` | Runtime persistence health/presentation state | Cross-domain persistence adapters update message/readiness through `SettingsFeatureState`; rendering receives a borrowed immutable view, while store reopen replaces path/message/readiness together. Database work and compatibility handling remain in existing adapters and `nyaterm-core`. |
 | AI settings/chat/history/discovery/agent/panel | AI-module-private children in `NyaTermApp.ai` | Persisted settings plus transient UI and background lifecycle | Desktop consumers use read-only slices/queries and semantic transitions; settings draft groups, menu exclusion, confirmations, request/focus preparation, detected-error throttling, picker clamping and Agent capture/reset enter through `AiFeatureState`. Persistence, terminal-context collection, GPUI focus/rendering and notification remain in adapters. |
 | Shell viewport/navigation/panels/chrome/workspace | Shell-module-private children in `NyaTermApp.shell` | Transient GPUI composition and interaction state | Other desktop modules use read-only geometry/navigation/pane queries and semantic transitions; menu exclusion, settings-window lifecycle, mobile panels, failure chrome, submenu paths and pane ownership update through `ShellFeatureState`. Persistence, rendering, GPUI windows/notification and terminal coordination remain in adapters. |
 | Remote Docker/process/stats panes | Private children in `NyaTermApp.remote_ops` | Transient UI state plus typed background-event lifecycle | Views use immutable presentation values; menu exclusion, list-offset clamping, Docker details/Compose/confirmation cleanup, process PID-scoped cleanup, Stats expansion/data and job identity/failure timing enter through `RemoteOpsFeatureState`. SSH service launch, active-session policy, terminal status mirroring and GPUI notification remain in adapters. |
@@ -1746,6 +1751,10 @@ honest remaining list.
    cross-domain consumers receive a borrowed immutable view, and navigation,
    session cache, history/favorites, search/sort, path editing, selection/rename,
    menu and resize transitions moved onto `TransferFeatureState`.
+   The settings storage-status batch then made the backing child and
+   implementation type settings-module-private, moved cross-domain status
+   writes behind owner transitions, and gave rendering a borrowed immutable
+   view without changing storage execution or compatibility formats.
    What remains at the
    composition root is stores, runtime and focused feature owners.
    Group by cohesion where a cluster exists; do not force the count down for

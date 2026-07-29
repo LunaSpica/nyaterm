@@ -75,7 +75,8 @@ impl NyaTermApp {
                 "AI Agent request was cancelled",
             );
         }
-        self.settings.store_status.message = self.ai.panel.status.clone();
+        self.settings
+            .set_store_message(self.ai.panel.status.clone());
         cx.notify();
     }
 
@@ -790,9 +791,9 @@ impl NyaTermApp {
                     } else {
                         "AI stream receiving".to_string()
                     };
-                    self.settings.store_status.message =
-                        format!("AI session {session_id} streaming");
-                    self.settings.store_status.ready = true;
+                    self.settings
+                        .set_store_message(format!("AI session {session_id} streaming"));
+                    self.settings.set_store_ready(true);
                 }
                 AiChatWorkerEvent::AgentToolCallDelta {
                     job_id,
@@ -832,9 +833,10 @@ impl NyaTermApp {
                             format!("Streaming arguments (+{arguments_delta_len} chars)")
                         },
                     );
-                    self.settings.store_status.message =
-                        format!("AI session {session_id} streaming Agent tool call");
-                    self.settings.store_status.ready = true;
+                    self.settings.set_store_message(format!(
+                        "AI session {session_id} streaming Agent tool call"
+                    ));
+                    self.settings.set_store_ready(true);
                 }
                 AiChatWorkerEvent::AgentBackgroundFinished {
                     job_id,
@@ -879,8 +881,9 @@ impl NyaTermApp {
                                 "Failed",
                                 truncate_preview(&error, 140),
                             );
-                            self.settings.store_status.message = self.ai.panel.status.clone();
-                            self.settings.store_status.ready = false;
+                            self.settings
+                                .set_store_message(self.ai.panel.status.clone());
+                            self.settings.set_store_ready(false);
                         }
                     }
                 }
@@ -958,9 +961,11 @@ impl NyaTermApp {
                                     message.command_cards = output.command_cards.clone();
                                 }
                             }
-                            self.settings.store_status.message =
-                                format!("AI session {} updated", event.session_id);
-                            self.settings.store_status.ready = true;
+                            self.settings.set_store_message(format!(
+                                "AI session {} updated",
+                                event.session_id
+                            ));
+                            self.settings.set_store_ready(true);
                             self.reset_text_input("ai.chat.prompt", "", cx);
                             self.ai.chat.prompt_draft.clear();
                             self.refresh_ai_usage_counts(cx);
@@ -1007,8 +1012,9 @@ impl NyaTermApp {
                                     truncate_preview(&error, 140),
                                 );
                             }
-                            self.settings.store_status.message = self.ai.panel.status.clone();
-                            self.settings.store_status.ready = false;
+                            self.settings
+                                .set_store_message(self.ai.panel.status.clone());
+                            self.settings.set_store_ready(false);
                         }
                     }
                 }

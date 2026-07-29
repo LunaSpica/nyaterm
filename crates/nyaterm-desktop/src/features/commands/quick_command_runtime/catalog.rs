@@ -23,9 +23,9 @@ impl NyaTermApp {
                     .replace_quick_command_catalog(config.commands, config.categories);
             }
             Err(error) => {
-                self.settings.store_status.message =
-                    format!("quick command refresh failed: {error}");
-                self.settings.store_status.ready = false;
+                self.settings
+                    .set_store_message(format!("quick command refresh failed: {error}"));
+                self.settings.set_store_ready(false);
             }
         }
     }
@@ -61,15 +61,16 @@ impl NyaTermApp {
         {
             Ok(settings) => {
                 self.apply_gpui_settings(settings);
-                self.settings.store_status.message = "quick command UI settings saved".to_string();
-                self.settings.store_status.ready = true;
+                self.settings
+                    .set_store_message("quick command UI settings saved".to_string());
+                self.settings.set_store_ready(true);
                 self.terminal.view.status = "quick command UI settings saved".to_string();
             }
             Err(error) => {
-                self.settings.store_status.message =
-                    format!("quick command UI settings save failed: {error}");
-                self.settings.store_status.ready = false;
-                self.terminal.view.status = self.settings.store_status.message.clone();
+                self.settings
+                    .set_store_message(format!("quick command UI settings save failed: {error}"));
+                self.settings.set_store_ready(false);
+                self.terminal.view.status = self.settings.store_status().message.to_string();
             }
         }
         cx.notify();

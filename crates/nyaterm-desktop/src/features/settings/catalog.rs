@@ -37,10 +37,10 @@ impl SettingsMasterPasswordState {
 }
 
 #[derive(Debug, Clone)]
-pub(in crate::features) struct StoreStatus {
-    pub path: String,
-    pub message: String,
-    pub ready: bool,
+pub(super) struct StoreStatus {
+    pub(super) path: String,
+    pub(super) message: String,
+    pub(super) ready: bool,
 }
 
 #[cfg(test)]

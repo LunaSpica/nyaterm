@@ -14,7 +14,7 @@ use nyaterm_transport::{SessionManager, SftpDuplicatePolicy};
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use super::super::settings::{SettingsFeatureFocus, SettingsFeatureState, StoreStatus};
+use super::super::settings::{SettingsFeatureFocus, SettingsFeatureState};
 use super::super::{
     AiFeatureFocus, AiFeatureState, CloudSyncFeatureState, CommandFeatureInit, CommandFeatureState,
     ConnectionCatalogState, ConnectionFeatureFocus, ConnectionFeatureState,
@@ -111,11 +111,7 @@ impl NyaTermApp {
                             command_history,
                             keyword_highlights,
                             settings,
-                            StoreStatus {
-                                path,
-                                message: "redb connection store online".to_string(),
-                                ready: true,
-                            },
+                            (path, "redb connection store online".to_string(), true),
                             cloud_sync_settings,
                             cloud_sync_state,
                             translation_settings,
@@ -141,11 +137,7 @@ impl NyaTermApp {
                         Vec::new(),
                         KeywordHighlightConfig::default(),
                         AppSettingsSummary::default(),
-                        StoreStatus {
-                            path,
-                            message: format!("failed to load sessions: {error}"),
-                            ready: false,
-                        },
+                        (path, format!("failed to load sessions: {error}"), false),
                         CloudSyncSettings::default(),
                         CloudSyncState::default(),
                         TranslationSettings::default(),
@@ -172,15 +164,15 @@ impl NyaTermApp {
                 Vec::new(),
                 KeywordHighlightConfig::default(),
                 AppSettingsSummary::default(),
-                StoreStatus {
-                    path: runtime
+                (
+                    runtime
                         .config_dir()
                         .join("nyaterm.redb")
                         .display()
                         .to_string(),
-                    message: format!("failed to open store: {error}"),
-                    ready: false,
-                },
+                    format!("failed to open store: {error}"),
+                    false,
+                ),
                 CloudSyncSettings::default(),
                 CloudSyncState::default(),
                 TranslationSettings::default(),
@@ -431,7 +423,9 @@ impl NyaTermApp {
             settings: SettingsFeatureState::new(
                 settings,
                 keyword_highlights,
-                store_status,
+                store_status.0,
+                store_status.1,
+                store_status.2,
                 appearance_ui_font_options,
                 appearance_terminal_font_options,
                 SettingsFeatureFocus {
