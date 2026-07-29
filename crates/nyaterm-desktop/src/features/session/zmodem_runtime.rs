@@ -214,7 +214,7 @@ impl NyaTermApp {
         let policy = self.transfer.duplicate_policy();
         let resolver = self.session.prompts.duplicate_broker();
         let id = self.next_transfer_id("zmodem-probe");
-        self.transfer.queue.jobs.push(TransferJobState {
+        self.transfer.enqueue_transfer_job(TransferJobState {
             id: id.clone(),
             session_id: Some(session_id.clone()),
             kind: TransferJobKind::ZmodemConflictProbe {
@@ -235,7 +235,7 @@ impl NyaTermApp {
             "ZMODEM preparing upload ({} file(s)) — probing remote conflicts",
             files.len()
         );
-        let transfer_tx = self.transfer.queue.tx.clone();
+        let transfer_tx = self.transfer.transfer_event_sender();
         let probe_session_id = session_id.clone();
         std::thread::spawn(move || {
             let result =
@@ -621,22 +621,31 @@ impl NyaTermApp {
             item_count_completed: None,
             item_count_total: None,
         };
-        if let Some(job) = self.transfer.queue.jobs.iter_mut().find(|job| {
-            matches!(
-                &job.kind,
-                TransferJobKind::ZmodemUpload {
-                    session_id: sid,
-                    file_name: name
-                }
-                | TransferJobKind::ZmodemDownload {
-                    session_id: sid,
-                    file_name: name
-                } if sid == session_id && name == file_name
-            ) && matches!(
-                job.status,
-                TransferJobStatus::Running | TransferJobStatus::Cancelling
-            )
-        }) {
+        let existing_job_id = self
+            .transfer
+            .transfer_jobs()
+            .iter()
+            .find(|job| {
+                matches!(
+                    &job.kind,
+                    TransferJobKind::ZmodemUpload {
+                        session_id: sid,
+                        file_name: name
+                    }
+                    | TransferJobKind::ZmodemDownload {
+                        session_id: sid,
+                        file_name: name
+                    } if sid == session_id && name == file_name
+                ) && matches!(
+                    job.status,
+                    TransferJobStatus::Running | TransferJobStatus::Cancelling
+                )
+            })
+            .map(|job| job.id.clone());
+        if let Some(job) = existing_job_id
+            .as_deref()
+            .and_then(|job_id| self.transfer.transfer_job_mut(job_id))
+        {
             job.progress = Some(progress);
             job.detail = if completed {
                 "Complete".to_string()
@@ -675,7 +684,7 @@ impl NyaTermApp {
                     format!("Transferring {file_name}")
                 }
             });
-        self.transfer.queue.jobs.push(TransferJobState {
+        self.transfer.enqueue_transfer_job(TransferJobState {
             id,
             session_id: Some(session_id.to_string()),
             kind,
@@ -696,7 +705,7 @@ impl NyaTermApp {
         fail_reason: Option<&str>,
         _cx: &mut Context<Self>,
     ) {
-        for job in &mut self.transfer.queue.jobs {
+        self.transfer.visit_transfer_jobs_mut(|job| {
             let is_zmodem = matches!(
                 &job.kind,
                 TransferJobKind::ZmodemUpload {
@@ -709,13 +718,13 @@ impl NyaTermApp {
                 } if sid == session_id
             );
             if !is_zmodem {
-                continue;
+                return;
             }
             if !matches!(
                 job.status,
                 TransferJobStatus::Running | TransferJobStatus::Cancelling
             ) {
-                continue;
+                return;
             }
             if success {
                 job.status = TransferJobStatus::Completed;
@@ -726,7 +735,7 @@ impl NyaTermApp {
                     .map(|r| format!("Failed: {r}"))
                     .unwrap_or_else(|| "Failed".to_string());
             }
-        }
+        });
     }
 
     fn prompt_zmodem_download_directory(&mut self, session_id: String, cx: &mut Context<Self>) {

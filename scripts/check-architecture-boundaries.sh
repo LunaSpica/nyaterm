@@ -300,6 +300,22 @@ check_no_matches \
   "transfer path state access must use TransferFeatureState methods" \
   '(self|this|app)\.transfer\.paths(\.|[[:space:]]*=)' \
   crates/nyaterm-desktop/src/features
+check_no_multiline_matches \
+  "TransferFeatureState queue child must remain private" \
+  'struct[[:space:]]+TransferFeatureState[[:space:]]*\{[^}]*pub([[:space:]]|\([^)]*\))[[:space:]]+queue[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/transfers/state.rs
+check_no_matches \
+  "TransferQueueState must remain private" \
+  'pub([[:space:]]|\([^)]*\))[[:space:]]+struct[[:space:]]+TransferQueueState' \
+  crates/nyaterm-desktop/src/features/transfers/state.rs
+check_no_multiline_matches \
+  "TransferQueueState fields must remain private" \
+  'struct[[:space:]]+TransferQueueState[[:space:]]*\{[^}]*pub([[:space:]]|\([^)]*\))[[:space:]]+(tx|rx|jobs|next_job_sequence|selected_job_id|job_delete|job_menu|focus|job_delete_focus)[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/transfers/state.rs
+check_no_matches \
+  "transfer queue state access must use TransferFeatureState methods" \
+  '(self|this|app)\.transfer\.queue(\.|[[:space:]]*=)' \
+  crates/nyaterm-desktop/src/features
 
 check_no_matches \
   "SyncInputFeatureState must expose methods, not writable fields" \

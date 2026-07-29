@@ -251,9 +251,7 @@ impl NyaTermApp {
 
         self.session.select_active_session(session_id);
         if switching_sessions {
-            self.transfer.queue.selected_job_id = None;
-            self.transfer.queue.job_menu = None;
-            self.transfer.queue.job_delete = None;
+            self.transfer.reset_transfer_queue_interaction();
             self.reset_remote_runtime_for_session_switch();
         }
         // Keep workspace_split mirrored to the active tab's per-tab pane root.

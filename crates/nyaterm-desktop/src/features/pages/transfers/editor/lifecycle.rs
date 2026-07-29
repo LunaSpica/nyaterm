@@ -226,7 +226,7 @@ impl NyaTermApp {
             return;
         };
         let id = self.next_transfer_id("sftp-open-text");
-        self.transfer.queue.jobs.push(TransferJobState {
+        self.transfer.enqueue_transfer_job(TransferJobState {
             id: id.clone(),
             session_id,
             kind: TransferJobKind::LoadEditor {
@@ -239,7 +239,7 @@ impl NyaTermApp {
             progress: None,
             control: None,
         });
-        let transfer_tx = self.transfer.queue.tx.clone();
+        let transfer_tx = self.transfer.transfer_event_sender();
         std::thread::spawn(move || {
             let result = SftpService::new(config)
                 .read_text_file(&remote_path, NATIVE_EDITOR_MAX_BYTES)
@@ -416,7 +416,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let id = self.next_transfer_id("sftp-save-text");
-        self.transfer.queue.jobs.push(TransferJobState {
+        self.transfer.enqueue_transfer_job(TransferJobState {
             id: id.clone(),
             session_id,
             kind: TransferJobKind::SaveEditor {
@@ -429,7 +429,7 @@ impl NyaTermApp {
             progress: None,
             control: None,
         });
-        let transfer_tx = self.transfer.queue.tx.clone();
+        let transfer_tx = self.transfer.transfer_event_sender();
         std::thread::spawn(move || {
             let result = SftpService::new(config)
                 .write_text_file(

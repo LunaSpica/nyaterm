@@ -1226,18 +1226,27 @@ impl NyaTermApp {
             item_count_completed: None,
             item_count_total: None,
         };
-        if let Some(job) = self.transfer.queue.jobs.iter_mut().find(|job| {
-            matches!(
-                &job.kind,
-                TransferJobKind::TrzszDownload {
-                    session_id: sid,
-                    file_name,
-                } if sid == session_id && file_name == &update.file_name
-            ) && matches!(
-                job.status,
-                TransferJobStatus::Running | TransferJobStatus::Cancelling
-            )
-        }) {
+        let existing_job_id = self
+            .transfer
+            .transfer_jobs()
+            .iter()
+            .find(|job| {
+                matches!(
+                    &job.kind,
+                    TransferJobKind::TrzszDownload {
+                        session_id: sid,
+                        file_name,
+                    } if sid == session_id && file_name == &update.file_name
+                ) && matches!(
+                    job.status,
+                    TransferJobStatus::Running | TransferJobStatus::Cancelling
+                )
+            })
+            .map(|job| job.id.clone());
+        if let Some(job) = existing_job_id
+            .as_deref()
+            .and_then(|job_id| self.transfer.transfer_job_mut(job_id))
+        {
             job.progress = Some(progress);
             job.detail = if update.completed {
                 "Complete".to_string()
@@ -1279,7 +1288,7 @@ impl NyaTermApp {
                     format!("Downloading {}", update.file_name)
                 }
             });
-        self.transfer.queue.jobs.push(TransferJobState {
+        self.transfer.enqueue_transfer_job(TransferJobState {
             id,
             session_id: Some(session_id.to_string()),
             kind: TransferJobKind::TrzszDownload {
@@ -1311,18 +1320,27 @@ impl NyaTermApp {
             item_count_completed: None,
             item_count_total: None,
         };
-        if let Some(job) = self.transfer.queue.jobs.iter_mut().find(|job| {
-            matches!(
-                &job.kind,
-                TransferJobKind::TrzszUpload {
-                    session_id: sid,
-                    file_name,
-                } if sid == session_id && file_name == &update.file_name
-            ) && matches!(
-                job.status,
-                TransferJobStatus::Running | TransferJobStatus::Cancelling
-            )
-        }) {
+        let existing_job_id = self
+            .transfer
+            .transfer_jobs()
+            .iter()
+            .find(|job| {
+                matches!(
+                    &job.kind,
+                    TransferJobKind::TrzszUpload {
+                        session_id: sid,
+                        file_name,
+                    } if sid == session_id && file_name == &update.file_name
+                ) && matches!(
+                    job.status,
+                    TransferJobStatus::Running | TransferJobStatus::Cancelling
+                )
+            })
+            .map(|job| job.id.clone());
+        if let Some(job) = existing_job_id
+            .as_deref()
+            .and_then(|job_id| self.transfer.transfer_job_mut(job_id))
+        {
             job.progress = Some(progress);
             job.detail = if update.completed {
                 "Complete".to_string()
@@ -1364,7 +1382,7 @@ impl NyaTermApp {
                     format!("Uploading {}", update.file_name)
                 }
             });
-        self.transfer.queue.jobs.push(TransferJobState {
+        self.transfer.enqueue_transfer_job(TransferJobState {
             id,
             session_id: Some(session_id.to_string()),
             kind: TransferJobKind::TrzszUpload {
@@ -1388,7 +1406,7 @@ impl NyaTermApp {
         fail_reason: Option<&str>,
         cx: &mut Context<Self>,
     ) {
-        for job in &mut self.transfer.queue.jobs {
+        self.transfer.visit_transfer_jobs_mut(|job| {
             let is_trzsz = matches!(
                 &job.kind,
                 TransferJobKind::TrzszDownload {
@@ -1402,7 +1420,7 @@ impl NyaTermApp {
                     TransferJobStatus::Running | TransferJobStatus::Cancelling
                 )
             {
-                continue;
+                return;
             }
             if success {
                 job.status = TransferJobStatus::Completed;
@@ -1413,7 +1431,7 @@ impl NyaTermApp {
                     .map(|reason| format!("Failed: {reason}"))
                     .unwrap_or_else(|| "Failed".to_string());
             }
-        }
+        });
         cx.notify();
     }
 
@@ -1424,7 +1442,7 @@ impl NyaTermApp {
         fail_reason: Option<&str>,
         cx: &mut Context<Self>,
     ) {
-        for job in &mut self.transfer.queue.jobs {
+        self.transfer.visit_transfer_jobs_mut(|job| {
             let is_trzsz = matches!(
                 &job.kind,
                 TransferJobKind::TrzszUpload {
@@ -1438,7 +1456,7 @@ impl NyaTermApp {
                     TransferJobStatus::Running | TransferJobStatus::Cancelling
                 )
             {
-                continue;
+                return;
             }
             if success {
                 job.status = TransferJobStatus::Completed;
@@ -1449,7 +1467,7 @@ impl NyaTermApp {
                     .map(|reason| format!("Failed: {reason}"))
                     .unwrap_or_else(|| "Failed".to_string());
             }
-        }
+        });
         cx.notify();
     }
 }

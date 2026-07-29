@@ -1,10 +1,8 @@
 use gpui::{Context, KeyDownEvent, MouseDownEvent, Window};
 
-use crate::features::NyaTermApp;
-use crate::models::{TransferJobDeleteState, TransferJobMenuState, TransferJobStatus};
-
 use super::super::transfer_widgets::transfer_job_title;
 use super::helpers::{transfer_job_local_target_path, transfer_job_reveal_dir};
+use crate::features::NyaTermApp;
 
 impl NyaTermApp {
     pub(in crate::features) fn select_transfer_job(
@@ -12,8 +10,7 @@ impl NyaTermApp {
         job_id: String,
         cx: &mut Context<Self>,
     ) {
-        if self.transfer.queue.jobs.iter().any(|job| job.id == job_id) {
-            self.transfer.queue.selected_job_id = Some(job_id.clone());
+        if self.transfer.select_transfer_job_id(&job_id) {
             self.terminal.view.status = format!("selected transfer {job_id}");
         } else {
             self.terminal.view.status = "transfer job not found".to_string();
@@ -28,24 +25,20 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        window.focus(&self.transfer.queue.focus);
-        if self.transfer.queue.jobs.iter().any(|job| job.id == job_id) {
-            self.transfer.queue.selected_job_id = Some(job_id.clone());
-            self.transfer.queue.job_menu = Some(TransferJobMenuState {
-                job_id,
-                x: event.position.x,
-                y: event.position.y,
-            });
+        window.focus(self.transfer.queue_focus());
+        if self
+            .transfer
+            .open_transfer_job_menu_at(&job_id, event.position.x, event.position.y)
+        {
             self.terminal.view.status = "transfer menu opened".to_string();
         } else {
-            self.transfer.queue.job_menu = None;
             self.terminal.view.status = "transfer job not found".to_string();
         }
         cx.notify();
     }
 
     pub(in crate::features) fn close_transfer_job_menu(&mut self, cx: &mut Context<Self>) {
-        self.transfer.queue.close_job_menu();
+        self.transfer.close_transfer_job_menu();
         cx.notify();
     }
 
@@ -54,7 +47,7 @@ impl NyaTermApp {
         job_id: String,
         cx: &mut Context<Self>,
     ) {
-        let Some(job) = self.transfer.queue.jobs.iter().find(|job| job.id == job_id) else {
+        let Some(job) = self.transfer.transfer_job(&job_id) else {
             self.terminal.view.status = "transfer job not found".to_string();
             cx.notify();
             return;
@@ -64,11 +57,8 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        self.transfer.queue.selected_job_id = Some(job.id.clone());
-        self.transfer.queue.job_delete = Some(TransferJobDeleteState {
-            job_id: job.id.clone(),
-            title: transfer_job_title(&job.kind),
-        });
+        let title = transfer_job_title(&job.kind);
+        self.transfer.request_transfer_job_delete(&job_id, title);
         cx.notify();
     }
 
@@ -77,25 +67,9 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let active_session_id = self.session.active_id();
-        let job_id =
-            self.transfer
-                .queue
-                .selected_job_id
-                .clone()
-                .filter(|job_id| {
-                    self.transfer.queue.jobs.iter().any(|job| {
-                        job.id == *job_id && job.is_visible_for_session(active_session_id)
-                    })
-                })
-                .or_else(|| {
-                    self.transfer
-                        .queue
-                        .jobs
-                        .iter()
-                        .rev()
-                        .find(|job| job.is_visible_for_session(active_session_id))
-                        .map(|job| job.id.clone())
-                });
+        let job_id = self
+            .transfer
+            .selected_or_latest_visible_transfer_job_id(active_session_id);
         let Some(job_id) = job_id else {
             self.terminal.view.status = "transfer queue is empty".to_string();
             cx.notify();
@@ -105,20 +79,12 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn confirm_delete_transfer_job(&mut self, cx: &mut Context<Self>) {
-        let Some(state) = self.transfer.queue.job_delete.take() else {
+        let Some((job_id, removed)) = self.transfer.confirm_transfer_job_delete() else {
             cx.notify();
             return;
         };
-        let before = self.transfer.queue.jobs.len();
-        self.transfer
-            .queue
-            .jobs
-            .retain(|job| job.id != state.job_id);
-        if self.transfer.queue.selected_job_id.as_deref() == Some(state.job_id.as_str()) {
-            self.transfer.queue.selected_job_id = None;
-        }
-        self.terminal.view.status = if self.transfer.queue.jobs.len() < before {
-            format!("deleted transfer {}", state.job_id)
+        self.terminal.view.status = if removed {
+            format!("deleted transfer {job_id}")
         } else {
             "transfer job not found".to_string()
         };
@@ -126,7 +92,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn cancel_delete_transfer_job(&mut self, cx: &mut Context<Self>) {
-        self.transfer.queue.job_delete = None;
+        self.transfer.cancel_transfer_job_delete();
         self.terminal.view.status = "transfer delete cancelled".to_string();
         cx.notify();
     }
@@ -136,7 +102,7 @@ impl NyaTermApp {
         job_id: String,
         cx: &mut Context<Self>,
     ) {
-        let Some(job) = self.transfer.queue.jobs.iter().find(|job| job.id == job_id) else {
+        let Some(job) = self.transfer.transfer_job(&job_id) else {
             self.terminal.view.status = "transfer job not found".to_string();
             cx.notify();
             return;
@@ -162,7 +128,8 @@ impl NyaTermApp {
             && !keystroke.modifiers.control
             && !keystroke.modifiers.platform
             && !keystroke.modifiers.shift;
-        if unmodified && keystroke.key == "delete" && self.transfer.queue.job_delete.is_none() {
+        if unmodified && keystroke.key == "delete" && self.transfer.transfer_job_delete().is_none()
+        {
             cx.stop_propagation();
             self.request_delete_selected_transfer_job(cx);
         }
@@ -171,22 +138,10 @@ impl NyaTermApp {
     pub(in crate::features) fn can_delete_transfer_job(&self, job_id: &str) -> bool {
         let active_session_id = self.session.active_id();
         self.transfer
-            .queue
-            .jobs
-            .iter()
-            .find(|job| job.id == job_id)
-            .is_some_and(|job| {
-                job.is_visible_for_session(active_session_id)
-                    && !matches!(
-                        job.status,
-                        TransferJobStatus::Running
-                            | TransferJobStatus::Paused
-                            | TransferJobStatus::Cancelling
-                    )
-            })
+            .transfer_job_can_be_deleted(job_id, active_session_id)
     }
 
-    pub(in crate::features) fn next_transfer_id(&self, prefix: &str) -> String {
-        format!("{prefix}-{}", self.transfer.queue.jobs.len() + 1)
+    pub(in crate::features) fn next_transfer_id(&mut self, prefix: &str) -> String {
+        self.transfer.next_transfer_job_id(prefix)
     }
 }

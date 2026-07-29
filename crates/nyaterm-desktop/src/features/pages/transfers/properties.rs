@@ -199,7 +199,7 @@ impl NyaTermApp {
             return;
         };
         let id = self.next_transfer_id("sftp-properties");
-        self.transfer.queue.jobs.push(TransferJobState {
+        self.transfer.enqueue_transfer_job(TransferJobState {
             id: id.clone(),
             session_id: self.session.active_id_owned(),
             kind: TransferJobKind::LoadProperties {
@@ -213,7 +213,7 @@ impl NyaTermApp {
             control: None,
         });
         self.transfer.browser.status = format!("Loading properties for {remote_path}");
-        let transfer_tx = self.transfer.queue.tx.clone();
+        let transfer_tx = self.transfer.transfer_event_sender();
         std::thread::spawn(move || {
             let result = SftpService::new(config)
                 .file_properties(&remote_path)
@@ -309,7 +309,7 @@ impl NyaTermApp {
             return;
         };
         let id = self.next_transfer_id("sftp-update-properties");
-        self.transfer.queue.jobs.push(TransferJobState {
+        self.transfer.enqueue_transfer_job(TransferJobState {
             id: id.clone(),
             session_id: self.session.active_id_owned(),
             kind: TransferJobKind::UpdateProperties {
@@ -324,7 +324,7 @@ impl NyaTermApp {
             control: None,
         });
         self.transfer.browser.status = format!("Updating properties for {remote_path}");
-        let transfer_tx = self.transfer.queue.tx.clone();
+        let transfer_tx = self.transfer.transfer_event_sender();
         std::thread::spawn(move || {
             let result = (|| {
                 let service = SftpService::new(config);

@@ -87,7 +87,7 @@ impl NyaTermApp {
         let prompt = action.prompt.clone();
         let max_bytes = self.ai.settings.config.max_ai_file_size_bytes;
         let id = self.next_transfer_id("sftp-ai-file");
-        self.transfer.queue.jobs.push(TransferJobState {
+        self.transfer.enqueue_transfer_job(TransferJobState {
             id: id.clone(),
             session_id: self.session.active_id_owned(),
             kind: TransferJobKind::AiFileAction {
@@ -104,7 +104,7 @@ impl NyaTermApp {
         });
         self.transfer.browser.status = format!("loading {remote_path} for AI");
         self.terminal.view.status = format!("SFTP AI file action started: {remote_path}");
-        let transfer_tx = self.transfer.queue.tx.clone();
+        let transfer_tx = self.transfer.transfer_event_sender();
         std::thread::spawn(move || {
             let result = SftpService::new(config)
                 .read_text_file(&remote_path, max_bytes)
@@ -380,7 +380,7 @@ impl NyaTermApp {
         let transfer_options = self.sftp_transfer_options();
         let id = self.next_transfer_id("sftp-open-external");
         let control = SftpTransferControl::new();
-        self.transfer.queue.jobs.push(TransferJobState {
+        self.transfer.enqueue_transfer_job(TransferJobState {
             id: id.clone(),
             session_id,
             kind: TransferJobKind::OpenExternal {
@@ -396,8 +396,8 @@ impl NyaTermApp {
         });
         self.terminal.view.status = format!("downloading {remote_path} for external open");
 
-        let progress_tx = self.transfer.queue.tx.clone();
-        let finished_tx = self.transfer.queue.tx.clone();
+        let progress_tx = self.transfer.transfer_event_sender();
+        let finished_tx = self.transfer.transfer_event_sender();
         std::thread::spawn(move || {
             let progress_id = id.clone();
             let result = SftpService::new(config)

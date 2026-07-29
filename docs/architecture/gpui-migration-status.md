@@ -1431,6 +1431,7 @@ Current ownership map:
 | Session protocol resources | Private child in `NyaTermApp.session` | Per-session runtime resources | ZMODEM/trzsz maps and SSH multiplex handles are private; session removal stops protocol workers atomically, state drops stop remaining workers, and multiplex disconnect runs off the GPUI update path after owner reference checks. |
 | Transfer panel interaction | Private child in `NyaTermApp.transfer` | Transient focus and resize state | Focus routing, height and resize state enter through `TransferFeatureState`; the write-only focused-endpoint marker was removed, and height-drag calculation and clamping are pure owner transitions while rendering and persistence stay in adapters. |
 | Transfer endpoints and path prompts | Private child in `NyaTermApp.transfer` | Transient endpoints, compatibility-derived policy and prompt admission | Remote/local paths, duplicate policy and the shared native prompt slot enter through `TransferFeatureState`; normalization, single-prompt admission and kind-matched completion are owner transitions while GPUI prompts, jobs and settings persistence stay in adapters. |
+| Transfer job queue | Private child in `NyaTermApp.transfer` | Typed background-event queue plus transient interaction state | Monotonic job-id allocation, admission/removal, result-channel access, selection/menu/delete lifecycles, session-switch reset and session-scoped batch actions enter through `TransferFeatureState`; cleanup also prunes stale interaction references. Renderers receive a read-only slice, protocol adapters can update individual jobs without receiving the backing collection, and the event reducer temporarily extracts only its matched job while it coordinates browser/editor side effects. |
 | Serial ports | Private catalog in `NyaTermApp.connection_catalog` | Runtime/discovered state | Replaced through the catalog after session-manager discovery and never persisted. |
 | Tunnel/proxy configs | Private catalog in `NyaTermApp.tunnel_state` | Persisted network config | Views use read-only slices; pure move/upsert/delete candidates and successful commits stay on `TunnelFeatureState`. The Network page UI remains separate transient state. |
 | Queued saved-connection starts | `NyaTermApp.session.start` private queue | Transient session-start state | Admission, duplicate detection, draining and runtime cadence reads go through `SessionStartFeatureState` methods. |
@@ -1688,8 +1689,13 @@ honest remaining list.
    and moved the complete drag lifecycle onto `TransferFeatureState`; the next
    transfer-path pass made endpoints, duplicate policy and native prompt
    admission private, and removed the app-level remote-path normalization
-   helper, while cloud sync made secret-field routing inaccessible outside its
-   owner, and
+   helper; the transfer-queue pass then made the typed result channel, backing
+   job collection, selection, menus, delete confirmation and focus private,
+   moving monotonic id allocation, admission, removal, session-scoped batch
+   actions and interaction cleanup onto the owner while keeping protocol
+   interpretation in its existing desktop adapters. Cloud sync made
+   secret-field routing inaccessible outside
+   its owner, and
    recording cleanup can no longer leave its manager, busy map and pipeline out
    of sync; recording action and path-prompt admission are atomic owner
    transitions, and sync-input views cannot mutate group/broadcast state while

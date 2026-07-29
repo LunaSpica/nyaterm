@@ -211,7 +211,7 @@ impl NyaTermApp {
                 "start an SSH session before syncing external edits".to_string();
             return;
         };
-        let transfer_tx = self.transfer.queue.tx.clone();
+        let transfer_tx = self.transfer.transfer_event_sender();
         let transfer_options = self.sftp_transfer_options();
         std::thread::spawn(move || {
             upload_external_editor_file(

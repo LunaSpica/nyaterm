@@ -49,7 +49,7 @@ impl NyaTermApp {
         } else {
             return;
         }
-        self.transfer.queue.jobs.push(TransferJobState {
+        self.transfer.enqueue_transfer_job(TransferJobState {
             id: id.clone(),
             session_id: self.session.active_id_owned(),
             kind: TransferJobKind::ListChildren {
@@ -62,7 +62,7 @@ impl NyaTermApp {
             progress: None,
             control: None,
         });
-        let transfer_tx = self.transfer.queue.tx.clone();
+        let transfer_tx = self.transfer.transfer_event_sender();
         std::thread::spawn(move || {
             let result = SftpService::new(config)
                 .list_dir(&remote_path)
@@ -110,7 +110,7 @@ impl NyaTermApp {
             .browser
             .pending_navigations
             .insert(id.clone(), rollback);
-        self.transfer.queue.jobs.push(TransferJobState {
+        self.transfer.enqueue_transfer_job(TransferJobState {
             id: id.clone(),
             session_id: job_session_id,
             kind: TransferJobKind::ListDir {
@@ -125,7 +125,7 @@ impl NyaTermApp {
             control: None,
         });
         self.terminal.view.status = format!("SFTP list started for {remote_path}");
-        let transfer_tx = self.transfer.queue.tx.clone();
+        let transfer_tx = self.transfer.transfer_event_sender();
         std::thread::spawn(move || {
             let result = SftpService::new(config)
                 .list_dir(&remote_path)
@@ -162,7 +162,7 @@ impl NyaTermApp {
             .browser
             .navigation_jobs
             .insert(job_session_id.clone().unwrap_or_default(), id.clone());
-        self.transfer.queue.jobs.push(TransferJobState {
+        self.transfer.enqueue_transfer_job(TransferJobState {
             id: id.clone(),
             session_id: job_session_id,
             kind: TransferJobKind::SyncCwd,
@@ -177,7 +177,7 @@ impl NyaTermApp {
         self.transfer.browser.loading = true;
         self.transfer.browser.error = None;
         self.terminal.view.status = "SFTP cwd sync started".to_string();
-        let transfer_tx = self.transfer.queue.tx.clone();
+        let transfer_tx = self.transfer.transfer_event_sender();
         std::thread::spawn(move || {
             let result = (|| {
                 let output = SshProcessService::new(config.clone())
@@ -217,7 +217,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn transfer_sync_cwd_job_running(&self) -> bool {
-        self.transfer.queue.jobs.iter().any(|job| {
+        self.transfer.transfer_jobs().iter().any(|job| {
             job.kind == TransferJobKind::SyncCwd
                 && matches!(
                     job.status,
@@ -242,7 +242,7 @@ impl NyaTermApp {
         };
         self.transfer.browser.home_dir_pending = true;
         let id = self.next_transfer_id("sftp-home");
-        self.transfer.queue.jobs.push(TransferJobState {
+        self.transfer.enqueue_transfer_job(TransferJobState {
             id: id.clone(),
             session_id: self.session.active_id_owned(),
             kind: TransferJobKind::ResolveHome,
@@ -254,7 +254,7 @@ impl NyaTermApp {
             control: None,
         });
         self.transfer.browser.status = "Resolving remote home...".to_string();
-        let transfer_tx = self.transfer.queue.tx.clone();
+        let transfer_tx = self.transfer.transfer_event_sender();
         std::thread::spawn(move || {
             let result = (|| {
                 let output = SshProcessService::new(config)

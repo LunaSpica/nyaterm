@@ -520,10 +520,10 @@ impl NyaTermApp {
             .when(self.transfer.file_ops.delete.is_some(), |this| {
                 this.child(self.transfer_delete_overlay(cx))
             })
-            .when(self.transfer.queue.job_delete.is_some(), |this| {
+            .when(self.transfer.transfer_job_delete().is_some(), |this| {
                 this.child(self.transfer_job_delete_overlay(cx))
             })
-            .when(self.transfer.queue.job_menu.is_some(), |this| {
+            .when(self.transfer.transfer_job_menu().is_some(), |this| {
                 this.child(self.transfer_job_menu_overlay(cx))
             })
             .when(self.transfer.file_ops.new_folder.is_some(), |this| {

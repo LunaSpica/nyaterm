@@ -58,7 +58,7 @@ impl NyaTermApp {
     ) {
         let id = self.next_transfer_id("sftp-download");
         let control = SftpTransferControl::new();
-        self.transfer.queue.jobs.push(TransferJobState {
+        self.transfer.enqueue_transfer_job(TransferJobState {
             id: id.clone(),
             session_id,
             kind: TransferJobKind::Download {
@@ -73,8 +73,8 @@ impl NyaTermApp {
             control: Some(control.clone()),
         });
         self.terminal.view.status = format!("SFTP download started for {remote_path}");
-        let progress_tx = self.transfer.queue.tx.clone();
-        let finished_tx = self.transfer.queue.tx.clone();
+        let progress_tx = self.transfer.transfer_event_sender();
+        let finished_tx = self.transfer.transfer_event_sender();
         std::thread::spawn(move || {
             let mut progress_sender = TransferProgressEventSender::new(id.clone(), progress_tx);
             let result = SftpService::new(config)
@@ -112,7 +112,7 @@ impl NyaTermApp {
     ) {
         let id = self.next_transfer_id("sftp-upload");
         let control = SftpTransferControl::new();
-        self.transfer.queue.jobs.push(TransferJobState {
+        self.transfer.enqueue_transfer_job(TransferJobState {
             id: id.clone(),
             session_id,
             kind: TransferJobKind::Upload {
@@ -127,8 +127,8 @@ impl NyaTermApp {
             control: Some(control.clone()),
         });
         self.terminal.view.status = format!("SFTP upload started for {}", local_path.display());
-        let progress_tx = self.transfer.queue.tx.clone();
-        let finished_tx = self.transfer.queue.tx.clone();
+        let progress_tx = self.transfer.transfer_event_sender();
+        let finished_tx = self.transfer.transfer_event_sender();
         std::thread::spawn(move || {
             let mut progress_sender = TransferProgressEventSender::new(id.clone(), progress_tx);
             let service = SftpService::new(config);
@@ -172,13 +172,7 @@ impl NyaTermApp {
         job_id: &str,
         cx: &mut Context<Self>,
     ) {
-        let Some(job) = self
-            .transfer
-            .queue
-            .jobs
-            .iter_mut()
-            .find(|candidate| candidate.id == job_id)
-        else {
+        let Some(job) = self.transfer.transfer_job_mut(job_id) else {
             self.terminal.view.status = "transfer job not found".to_string();
             cx.notify();
             return;
@@ -221,13 +215,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn pause_transfer_job(&mut self, job_id: &str, cx: &mut Context<Self>) {
-        let Some(job) = self
-            .transfer
-            .queue
-            .jobs
-            .iter_mut()
-            .find(|candidate| candidate.id == job_id)
-        else {
+        let Some(job) = self.transfer.transfer_job_mut(job_id) else {
             self.terminal.view.status = "transfer job not found".to_string();
             cx.notify();
             return;
@@ -257,13 +245,7 @@ impl NyaTermApp {
         job_id: &str,
         cx: &mut Context<Self>,
     ) {
-        let Some(job) = self
-            .transfer
-            .queue
-            .jobs
-            .iter_mut()
-            .find(|candidate| candidate.id == job_id)
-        else {
+        let Some(job) = self.transfer.transfer_job_mut(job_id) else {
             self.terminal.view.status = "transfer job not found".to_string();
             cx.notify();
             return;
@@ -300,20 +282,14 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        let Some(index) = self
-            .transfer
-            .queue
-            .jobs
-            .iter()
-            .position(|candidate| candidate.id == job_id)
-        else {
+        let Some(job) = self.transfer.transfer_job(&job_id) else {
             self.terminal.view.status = "transfer job not found".to_string();
             cx.notify();
             return;
         };
-        let kind = self.transfer.queue.jobs[index].kind.clone();
+        let kind = job.kind.clone();
         if !matches!(
-            self.transfer.queue.jobs[index].status,
+            job.status,
             TransferJobStatus::Failed | TransferJobStatus::Cancelled
         ) {
             self.terminal.view.status = format!("transfer {job_id} is not retryable");
@@ -333,7 +309,10 @@ impl NyaTermApp {
                     });
                 let transfer_options = self.sftp_transfer_options();
                 let control = SftpTransferControl::new();
-                let job = &mut self.transfer.queue.jobs[index];
+                let job = self
+                    .transfer
+                    .transfer_job_mut(&job_id)
+                    .expect("transfer job was read from the same queue");
                 job.status = TransferJobStatus::Running;
                 job.detail = format!("Retrying download {remote_path}");
                 job.entries.clear();
@@ -341,8 +320,8 @@ impl NyaTermApp {
                 job.progress = None;
                 job.control = Some(control.clone());
                 self.terminal.view.status = format!("retrying SFTP download for {remote_path}");
-                let progress_tx = self.transfer.queue.tx.clone();
-                let finished_tx = self.transfer.queue.tx.clone();
+                let progress_tx = self.transfer.transfer_event_sender();
+                let finished_tx = self.transfer.transfer_event_sender();
                 std::thread::spawn(move || {
                     let mut progress_sender =
                         TransferProgressEventSender::new(job_id.clone(), progress_tx);
@@ -377,7 +356,10 @@ impl NyaTermApp {
                     });
                 let transfer_options = self.sftp_transfer_options();
                 let control = SftpTransferControl::new();
-                let job = &mut self.transfer.queue.jobs[index];
+                let job = self
+                    .transfer
+                    .transfer_job_mut(&job_id)
+                    .expect("transfer job was read from the same queue");
                 job.status = TransferJobStatus::Running;
                 job.detail = format!("Retrying upload {}", local_path.display());
                 job.entries.clear();
@@ -386,8 +368,8 @@ impl NyaTermApp {
                 job.control = Some(control.clone());
                 self.terminal.view.status =
                     format!("retrying SFTP upload for {}", local_path.display());
-                let progress_tx = self.transfer.queue.tx.clone();
-                let finished_tx = self.transfer.queue.tx.clone();
+                let progress_tx = self.transfer.transfer_event_sender();
+                let finished_tx = self.transfer.transfer_event_sender();
                 std::thread::spawn(move || {
                     let mut progress_sender =
                         TransferProgressEventSender::new(job_id.clone(), progress_tx);
@@ -437,18 +419,9 @@ impl NyaTermApp {
 
     pub(in crate::features) fn pause_all_transfer_jobs(&mut self, cx: &mut Context<Self>) {
         let active_session_id = self.session.active_id_owned();
-        let mut changed = 0;
-        for job in &mut self.transfer.queue.jobs {
-            if job.is_visible_for_session(active_session_id.as_deref())
-                && job.status == TransferJobStatus::Running
-                && let Some(control) = job.control.as_ref()
-            {
-                control.pause();
-                job.status = TransferJobStatus::Paused;
-                job.detail = "Paused".to_string();
-                changed += 1;
-            }
-        }
+        let changed = self
+            .transfer
+            .pause_visible_transfer_jobs(active_session_id.as_deref());
         self.terminal.view.status = if changed == 0 {
             "no running transfer jobs to pause".to_string()
         } else {
@@ -459,18 +432,9 @@ impl NyaTermApp {
 
     pub(in crate::features) fn resume_all_transfer_jobs(&mut self, cx: &mut Context<Self>) {
         let active_session_id = self.session.active_id_owned();
-        let mut changed = 0;
-        for job in &mut self.transfer.queue.jobs {
-            if job.is_visible_for_session(active_session_id.as_deref())
-                && job.status == TransferJobStatus::Paused
-                && let Some(control) = job.control.as_ref()
-            {
-                control.resume();
-                job.status = TransferJobStatus::Running;
-                job.detail = "Resuming".to_string();
-                changed += 1;
-            }
-        }
+        let changed = self
+            .transfer
+            .resume_visible_transfer_jobs(active_session_id.as_deref());
         self.terminal.view.status = if changed == 0 {
             "no paused transfer jobs to resume".to_string()
         } else {
@@ -481,21 +445,9 @@ impl NyaTermApp {
 
     pub(in crate::features) fn cancel_all_transfer_jobs(&mut self, cx: &mut Context<Self>) {
         let active_session_id = self.session.active_id_owned();
-        let mut changed = 0;
-        for job in &mut self.transfer.queue.jobs {
-            if job.is_visible_for_session(active_session_id.as_deref())
-                && matches!(
-                    job.status,
-                    TransferJobStatus::Running | TransferJobStatus::Paused
-                )
-                && let Some(control) = job.control.as_ref()
-            {
-                control.cancel();
-                job.status = TransferJobStatus::Cancelling;
-                job.detail = "Cancelling".to_string();
-                changed += 1;
-            }
-        }
+        let changed = self
+            .transfer
+            .cancel_visible_transfer_jobs(active_session_id.as_deref());
         self.terminal.view.status = if changed == 0 {
             "no active transfer jobs to cancel".to_string()
         } else {
@@ -506,12 +458,9 @@ impl NyaTermApp {
 
     pub(in crate::features) fn clear_completed_transfer_jobs(&mut self, cx: &mut Context<Self>) {
         let active_session_id = self.session.active_id_owned();
-        let before = self.transfer.queue.jobs.len();
-        self.transfer.queue.jobs.retain(|job| {
-            !job.is_visible_for_session(active_session_id.as_deref())
-                || job.status != TransferJobStatus::Completed
-        });
-        let removed = before.saturating_sub(self.transfer.queue.jobs.len());
+        let removed = self
+            .transfer
+            .clear_completed_transfer_jobs_for_session(active_session_id.as_deref());
         self.terminal.view.status = if removed == 0 {
             "no completed transfer jobs to clear".to_string()
         } else {
@@ -522,17 +471,9 @@ impl NyaTermApp {
 
     pub(in crate::features) fn clear_stopped_transfer_jobs(&mut self, cx: &mut Context<Self>) {
         let active_session_id = self.session.active_id_owned();
-        let before = self.transfer.queue.jobs.len();
-        self.transfer.queue.jobs.retain(|job| {
-            !job.is_visible_for_session(active_session_id.as_deref())
-                || matches!(
-                    job.status,
-                    TransferJobStatus::Running
-                        | TransferJobStatus::Paused
-                        | TransferJobStatus::Cancelling
-                )
-        });
-        let removed = before.saturating_sub(self.transfer.queue.jobs.len());
+        let removed = self
+            .transfer
+            .clear_stopped_transfer_jobs_for_session(active_session_id.as_deref());
         self.terminal.view.status = if removed == 0 {
             "no stopped transfer jobs to clear".to_string()
         } else {

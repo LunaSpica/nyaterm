@@ -119,27 +119,22 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        if self.transfer.queue.jobs.is_empty() {
+        if self.transfer.transfer_jobs_are_empty() {
             return false;
         }
         let mut dirty = false;
         for _ in 0..TRANSFER_EVENT_DRAIN_LIMIT {
-            let Ok(event) = self.transfer.queue.rx.try_recv() else {
+            let Ok(event) = self.transfer.try_recv_transfer_event() else {
                 break;
             };
-            let Some(job_index) = self
-                .transfer
-                .queue
-                .jobs
-                .iter()
-                .position(|candidate| candidate.id == event.id)
+            let Some((job_index, mut job)) = self.transfer.take_transfer_job_for_event(&event.id)
             else {
                 continue;
             };
             let event_id = event.id.clone();
-            let job_session_id = self.transfer.queue.jobs[job_index].session_id.clone();
+            let job_session_id = job.session_id.clone();
             let navigation_job_key = matches!(
-                &self.transfer.queue.jobs[job_index].kind,
+                &job.kind,
                 TransferJobKind::ListDir { .. } | TransferJobKind::SyncCwd
             )
             .then(|| job_session_id.clone().unwrap_or_default());
@@ -149,7 +144,6 @@ impl NyaTermApp {
                 &event_id,
             ) {
                 self.transfer.browser.pending_navigations.remove(&event_id);
-                self.transfer.queue.jobs.remove(job_index);
                 continue;
             }
             dirty |= transfer_event_needs_ui_refresh(
@@ -160,18 +154,12 @@ impl NyaTermApp {
             let inactive_browser_snapshot = job_session_id
                 .as_deref()
                 .filter(|session_id| self.session.active_id() != Some(*session_id))
-                .filter(|_| {
-                    transfer_event_needs_browser_context(
-                        &self.transfer.queue.jobs[job_index].kind,
-                        &event.event,
-                    )
-                })
+                .filter(|_| transfer_event_needs_browser_context(&job.kind, &event.event))
                 .map(|session_id| {
                     let snapshot = self.transfer.browser_event_snapshot();
                     self.load_transfer_browser_event_session(session_id);
                     snapshot
                 });
-            let job = &mut self.transfer.queue.jobs[job_index];
             let mut external_sync_to_start: Option<(Option<String>, String, String, PathBuf)> =
                 None;
             let mut external_sync_prompt_to_open: Option<String> = None;
@@ -183,10 +171,9 @@ impl NyaTermApp {
             let mut forget_properties_inputs = false;
             let event_finished = matches!(&event.event, TransferJobEvent::Finished(_));
             let event_failed = matches!(&event.event, TransferJobEvent::Finished(Err(_)));
-            let cleanup_internal_job_id = (event_finished
+            let cleanup_internal_job = event_finished
                 && !job.is_user_transfer()
-                && (!matches!(&job.kind, TransferJobKind::OpenExternal { .. }) || event_failed))
-                .then(|| job.id.clone());
+                && (!matches!(&job.kind, TransferJobKind::OpenExternal { .. }) || event_failed);
             match event.event {
                 TransferJobEvent::Started { detail } => {
                     job.status = TransferJobStatus::Running;
@@ -985,6 +972,10 @@ impl NyaTermApp {
                     job.control = None;
                 }
             }
+            if !cleanup_internal_job {
+                self.transfer
+                    .restore_transfer_job_after_event((job_index, job));
+            }
             if let Some(remote_path) = remote_path_to_set {
                 self.transfer.set_remote_path(remote_path);
             }
@@ -1032,9 +1023,6 @@ impl NyaTermApp {
             }
             if event_finished {
                 self.transfer.browser.pending_navigations.remove(&event_id);
-            }
-            if let Some(job_id) = cleanup_internal_job_id {
-                self.transfer.queue.jobs.retain(|job| job.id != job_id);
             }
             if let Some(prompt_id) = external_sync_prompt_to_open {
                 self.open_transfer_external_sync_window(prompt_id, cx);

@@ -180,7 +180,7 @@ impl NyaTermApp {
             || self.current_left_panel() == Some(NavItem::Transfers);
         if calm_tick
             && !remote_panels_need_poll
-            && self.transfer.queue.jobs.is_empty()
+            && self.transfer.transfer_jobs_are_empty()
             && !self.tunnel_state.has_pending()
             && !self.recording.has_pending_auto_start()
             && !self.terminal.view.runtime.open_tabs_persist_dirty

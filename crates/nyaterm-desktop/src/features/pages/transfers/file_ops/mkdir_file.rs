@@ -120,7 +120,7 @@ impl NyaTermApp {
             return;
         };
         let id = self.next_transfer_id("sftp-mkdir");
-        self.transfer.queue.jobs.push(TransferJobState {
+        self.transfer.enqueue_transfer_job(TransferJobState {
             id: id.clone(),
             session_id: self.session.active_id_owned(),
             kind: TransferJobKind::Mkdir {
@@ -135,7 +135,7 @@ impl NyaTermApp {
             control: None,
         });
         self.terminal.view.status = format!("SFTP create folder started: {remote_path}");
-        let transfer_tx = self.transfer.queue.tx.clone();
+        let transfer_tx = self.transfer.transfer_event_sender();
         std::thread::spawn(move || {
             let service = SftpService::new(config);
             let list_path = if open_after_create {
@@ -266,7 +266,7 @@ impl NyaTermApp {
             return;
         };
         let id = self.next_transfer_id("sftp-create-file");
-        self.transfer.queue.jobs.push(TransferJobState {
+        self.transfer.enqueue_transfer_job(TransferJobState {
             id: id.clone(),
             session_id: self.session.active_id_owned(),
             kind: TransferJobKind::CreateFile {
@@ -281,7 +281,7 @@ impl NyaTermApp {
             control: None,
         });
         self.terminal.view.status = format!("SFTP create file started: {remote_path}");
-        let transfer_tx = self.transfer.queue.tx.clone();
+        let transfer_tx = self.transfer.transfer_event_sender();
         std::thread::spawn(move || {
             let service = SftpService::new(config);
             let result = service

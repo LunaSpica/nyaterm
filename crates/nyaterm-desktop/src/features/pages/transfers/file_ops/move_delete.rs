@@ -114,7 +114,7 @@ impl NyaTermApp {
         };
         let parent_path = remote_parent_path(&old_path);
         let id = self.next_transfer_id("sftp-move");
-        self.transfer.queue.jobs.push(TransferJobState {
+        self.transfer.enqueue_transfer_job(TransferJobState {
             id: id.clone(),
             session_id: self.session.active_id_owned(),
             kind: TransferJobKind::Move {
@@ -130,7 +130,7 @@ impl NyaTermApp {
             control: None,
         });
         self.terminal.view.status = format!("SFTP move started: {old_path} -> {new_path}");
-        let transfer_tx = self.transfer.queue.tx.clone();
+        let transfer_tx = self.transfer.transfer_event_sender();
         std::thread::spawn(move || {
             let service = SftpService::new(config);
             let result = service
@@ -243,7 +243,7 @@ impl NyaTermApp {
         };
         let parent_path = remote_parent_path(&remote_path);
         let id = self.next_transfer_id("sftp-delete");
-        self.transfer.queue.jobs.push(TransferJobState {
+        self.transfer.enqueue_transfer_job(TransferJobState {
             id: id.clone(),
             session_id: self.session.active_id_owned(),
             kind: TransferJobKind::Delete {
@@ -258,7 +258,7 @@ impl NyaTermApp {
             control: None,
         });
         self.terminal.view.status = format!("SFTP delete started: {remote_path}");
-        let transfer_tx = self.transfer.queue.tx.clone();
+        let transfer_tx = self.transfer.transfer_event_sender();
         std::thread::spawn(move || {
             let service = SftpService::new(config);
             let result = service

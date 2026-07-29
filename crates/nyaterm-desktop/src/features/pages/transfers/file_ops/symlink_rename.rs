@@ -128,7 +128,7 @@ impl NyaTermApp {
             return;
         };
         let id = self.next_transfer_id("sftp-symlink");
-        self.transfer.queue.jobs.push(TransferJobState {
+        self.transfer.enqueue_transfer_job(TransferJobState {
             id: id.clone(),
             session_id: self.session.active_id_owned(),
             kind: TransferJobKind::Symlink {
@@ -144,7 +144,7 @@ impl NyaTermApp {
             control: None,
         });
         self.terminal.view.status = format!("SFTP symlink started: {link_path}");
-        let transfer_tx = self.transfer.queue.tx.clone();
+        let transfer_tx = self.transfer.transfer_event_sender();
         std::thread::spawn(move || {
             let service = SftpService::new(config);
             let result = service
@@ -311,7 +311,7 @@ impl NyaTermApp {
         };
         let parent_path = remote_parent_path(&old_path);
         let id = self.next_transfer_id("sftp-rename");
-        self.transfer.queue.jobs.push(TransferJobState {
+        self.transfer.enqueue_transfer_job(TransferJobState {
             id: id.clone(),
             session_id: self.session.active_id_owned(),
             kind: TransferJobKind::Rename {
@@ -327,7 +327,7 @@ impl NyaTermApp {
             control: None,
         });
         self.terminal.view.status = format!("SFTP rename started: {old_path} -> {new_path}");
-        let transfer_tx = self.transfer.queue.tx.clone();
+        let transfer_tx = self.transfer.transfer_event_sender();
         std::thread::spawn(move || {
             let service = SftpService::new(config);
             let result = service

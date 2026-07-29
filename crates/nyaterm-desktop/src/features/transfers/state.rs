@@ -21,14 +21,15 @@ use crate::models::{
     TransferBrowserSortDirection, TransferBrowserUploadMenuState, TransferDeleteState,
     TransferEditorWorkspaceState, TransferExternalSyncPromptState, TransferHeightResizeState,
     TransferJobDeleteState, TransferJobMenuState, TransferJobResult, TransferJobState,
-    TransferMoveState, TransferNewFileState, TransferNewFolderState, TransferNewSymlinkState,
-    TransferPathPromptKind, TransferPropertiesState, TransferRenameState, TransferUnknownFileState,
+    TransferJobStatus, TransferMoveState, TransferNewFileState, TransferNewFolderState,
+    TransferNewSymlinkState, TransferPathPromptKind, TransferPropertiesState, TransferRenameState,
+    TransferUnknownFileState,
 };
 
 use super::super::remote_editor_window::RemoteFileEditorWindow;
 
 pub(in crate::features) struct TransferFeatureState {
-    pub queue: TransferQueueState,
+    queue: TransferQueueState,
     paths: TransferPathState,
     pub browser: TransferBrowserState,
     pub file_ops: TransferFileOpsState,
@@ -58,15 +59,16 @@ pub(in crate::features) struct TransferFeatureFocus {
 }
 
 /// Upload/download job queue.
-pub(in crate::features) struct TransferQueueState {
-    pub tx: mpsc::Sender<TransferJobResult>,
-    pub rx: mpsc::Receiver<TransferJobResult>,
-    pub jobs: Vec<TransferJobState>,
-    pub selected_job_id: Option<String>,
-    pub job_delete: Option<TransferJobDeleteState>,
-    pub job_menu: Option<TransferJobMenuState>,
-    pub focus: FocusHandle,
-    pub job_delete_focus: FocusHandle,
+struct TransferQueueState {
+    tx: mpsc::Sender<TransferJobResult>,
+    rx: mpsc::Receiver<TransferJobResult>,
+    jobs: Vec<TransferJobState>,
+    next_job_sequence: u64,
+    selected_job_id: Option<String>,
+    job_delete: Option<TransferJobDeleteState>,
+    job_menu: Option<TransferJobMenuState>,
+    focus: FocusHandle,
+    job_delete_focus: FocusHandle,
 }
 
 /// Manual transfer endpoints and the duplicate policy that applies to them.
@@ -173,16 +175,7 @@ impl TransferFeatureState {
     ) -> Self {
         let (tx, rx) = mpsc::channel();
         Self {
-            queue: TransferQueueState {
-                tx,
-                rx,
-                jobs: Vec::new(),
-                selected_job_id: None,
-                job_delete: None,
-                job_menu: None,
-                focus: focus.queue,
-                job_delete_focus: focus.job_delete,
-            },
+            queue: TransferQueueState::new(tx, rx, focus.queue, focus.job_delete),
             paths: TransferPathState::new(remote_path, local_path, duplicate_policy),
             browser: TransferBrowserState {
                 path: ".".to_string(),
@@ -264,6 +257,171 @@ impl TransferFeatureState {
 
     pub(in crate::features) fn panel_focus(&self) -> &FocusHandle {
         &self.panel.focus
+    }
+
+    pub(in crate::features) fn queue_focus(&self) -> &FocusHandle {
+        self.queue.focus()
+    }
+
+    pub(in crate::features) fn queue_delete_focus(&self) -> &FocusHandle {
+        self.queue.delete_focus()
+    }
+
+    pub(in crate::features) fn transfer_jobs(&self) -> &[TransferJobState] {
+        self.queue.jobs()
+    }
+
+    pub(in crate::features) fn transfer_jobs_are_empty(&self) -> bool {
+        self.queue.is_empty()
+    }
+
+    pub(in crate::features) fn transfer_job(&self, job_id: &str) -> Option<&TransferJobState> {
+        self.queue.job(job_id)
+    }
+
+    pub(in crate::features) fn transfer_job_mut(
+        &mut self,
+        job_id: &str,
+    ) -> Option<&mut TransferJobState> {
+        self.queue.job_mut(job_id)
+    }
+
+    pub(in crate::features) fn visit_transfer_jobs_mut(
+        &mut self,
+        visit: impl FnMut(&mut TransferJobState),
+    ) {
+        self.queue.visit_jobs_mut(visit);
+    }
+
+    pub(in crate::features) fn enqueue_transfer_job(&mut self, job: TransferJobState) {
+        self.queue.enqueue(job);
+    }
+
+    pub(in crate::features) fn transfer_event_sender(&self) -> mpsc::Sender<TransferJobResult> {
+        self.queue.event_sender()
+    }
+
+    pub(in crate::features) fn try_recv_transfer_event(
+        &self,
+    ) -> Result<TransferJobResult, mpsc::TryRecvError> {
+        self.queue.try_recv_event()
+    }
+
+    pub(in crate::features) fn take_transfer_job_for_event(
+        &mut self,
+        job_id: &str,
+    ) -> Option<(usize, TransferJobState)> {
+        self.queue.take_job(job_id)
+    }
+
+    pub(in crate::features) fn restore_transfer_job_after_event(
+        &mut self,
+        queued: (usize, TransferJobState),
+    ) {
+        self.queue.restore_job(queued);
+    }
+
+    pub(in crate::features) fn next_transfer_job_id(&mut self, prefix: &str) -> String {
+        self.queue.next_job_id(prefix)
+    }
+
+    pub(in crate::features) fn selected_transfer_job_id(&self) -> Option<&str> {
+        self.queue.selected_job_id()
+    }
+
+    pub(in crate::features) fn select_transfer_job_id(&mut self, job_id: &str) -> bool {
+        self.queue.select_job(job_id)
+    }
+
+    pub(in crate::features) fn selected_or_latest_visible_transfer_job_id(
+        &self,
+        session_id: Option<&str>,
+    ) -> Option<String> {
+        self.queue.selected_or_latest_visible_job_id(session_id)
+    }
+
+    pub(in crate::features) fn transfer_job_delete(&self) -> Option<&TransferJobDeleteState> {
+        self.queue.job_delete()
+    }
+
+    pub(in crate::features) fn request_transfer_job_delete(
+        &mut self,
+        job_id: &str,
+        title: String,
+    ) -> bool {
+        self.queue.request_job_delete(job_id, title)
+    }
+
+    pub(in crate::features) fn confirm_transfer_job_delete(&mut self) -> Option<(String, bool)> {
+        self.queue.confirm_job_delete()
+    }
+
+    pub(in crate::features) fn cancel_transfer_job_delete(&mut self) {
+        self.queue.cancel_job_delete();
+    }
+
+    pub(in crate::features) fn transfer_job_menu(&self) -> Option<&TransferJobMenuState> {
+        self.queue.job_menu()
+    }
+
+    pub(in crate::features) fn open_transfer_job_menu_at(
+        &mut self,
+        job_id: &str,
+        x: Pixels,
+        y: Pixels,
+    ) -> bool {
+        self.queue.open_job_menu(job_id, x, y)
+    }
+
+    pub(in crate::features) fn close_transfer_job_menu(&mut self) {
+        self.queue.close_job_menu();
+    }
+
+    pub(in crate::features) fn reset_transfer_queue_interaction(&mut self) {
+        self.queue.reset_interaction();
+    }
+
+    pub(in crate::features) fn transfer_job_can_be_deleted(
+        &self,
+        job_id: &str,
+        session_id: Option<&str>,
+    ) -> bool {
+        self.queue.can_delete_job(job_id, session_id)
+    }
+
+    pub(in crate::features) fn pause_visible_transfer_jobs(
+        &mut self,
+        session_id: Option<&str>,
+    ) -> usize {
+        self.queue.pause_visible_jobs(session_id)
+    }
+
+    pub(in crate::features) fn resume_visible_transfer_jobs(
+        &mut self,
+        session_id: Option<&str>,
+    ) -> usize {
+        self.queue.resume_visible_jobs(session_id)
+    }
+
+    pub(in crate::features) fn cancel_visible_transfer_jobs(
+        &mut self,
+        session_id: Option<&str>,
+    ) -> usize {
+        self.queue.cancel_visible_jobs(session_id)
+    }
+
+    pub(in crate::features) fn clear_completed_transfer_jobs_for_session(
+        &mut self,
+        session_id: Option<&str>,
+    ) -> usize {
+        self.queue.clear_completed_jobs(session_id)
+    }
+
+    pub(in crate::features) fn clear_stopped_transfer_jobs_for_session(
+        &mut self,
+        session_id: Option<&str>,
+    ) -> usize {
+        self.queue.clear_stopped_jobs(session_id)
     }
 
     pub(in crate::features) fn remote_path(&self) -> &str {
@@ -461,19 +619,348 @@ impl TransferBrowserState {
 }
 
 impl TransferQueueState {
-    pub(in crate::features) fn close_job_menu(&mut self) {
+    fn new(
+        tx: mpsc::Sender<TransferJobResult>,
+        rx: mpsc::Receiver<TransferJobResult>,
+        focus: FocusHandle,
+        job_delete_focus: FocusHandle,
+    ) -> Self {
+        Self {
+            tx,
+            rx,
+            jobs: Vec::new(),
+            next_job_sequence: 0,
+            selected_job_id: None,
+            job_delete: None,
+            job_menu: None,
+            focus,
+            job_delete_focus,
+        }
+    }
+
+    fn focus(&self) -> &FocusHandle {
+        &self.focus
+    }
+
+    fn delete_focus(&self) -> &FocusHandle {
+        &self.job_delete_focus
+    }
+
+    fn jobs(&self) -> &[TransferJobState] {
+        &self.jobs
+    }
+
+    fn is_empty(&self) -> bool {
+        self.jobs.is_empty()
+    }
+
+    fn job(&self, job_id: &str) -> Option<&TransferJobState> {
+        self.jobs.iter().find(|job| job.id == job_id)
+    }
+
+    fn job_mut(&mut self, job_id: &str) -> Option<&mut TransferJobState> {
+        self.jobs.iter_mut().find(|job| job.id == job_id)
+    }
+
+    fn visit_jobs_mut(&mut self, visit: impl FnMut(&mut TransferJobState)) {
+        self.jobs.iter_mut().for_each(visit);
+    }
+
+    fn enqueue(&mut self, job: TransferJobState) {
+        self.jobs.push(job);
+    }
+
+    fn event_sender(&self) -> mpsc::Sender<TransferJobResult> {
+        self.tx.clone()
+    }
+
+    fn try_recv_event(&self) -> Result<TransferJobResult, mpsc::TryRecvError> {
+        self.rx.try_recv()
+    }
+
+    fn remove_job(&mut self, job_id: &str) -> bool {
+        let before = self.jobs.len();
+        self.jobs.retain(|job| job.id != job_id);
+        let removed = self.jobs.len() != before;
+        if removed {
+            self.clear_job_interaction(job_id);
+        }
+        removed
+    }
+
+    fn take_job(&mut self, job_id: &str) -> Option<(usize, TransferJobState)> {
+        let index = self.jobs.iter().position(|job| job.id == job_id)?;
+        Some((index, self.jobs.remove(index)))
+    }
+
+    fn restore_job(&mut self, queued: (usize, TransferJobState)) {
+        let (index, job) = queued;
+        self.jobs.insert(index.min(self.jobs.len()), job);
+    }
+
+    fn next_job_id(&mut self, prefix: &str) -> String {
+        self.next_job_sequence = self.next_job_sequence.max(self.jobs.len() as u64) + 1;
+        format!("{prefix}-{}", self.next_job_sequence)
+    }
+
+    fn selected_job_id(&self) -> Option<&str> {
+        self.selected_job_id.as_deref()
+    }
+
+    fn select_job(&mut self, job_id: &str) -> bool {
+        if self.job(job_id).is_none() {
+            return false;
+        }
+        self.selected_job_id = Some(job_id.to_string());
+        true
+    }
+
+    fn selected_or_latest_visible_job_id(&self, session_id: Option<&str>) -> Option<String> {
+        self.selected_job_id
+            .as_ref()
+            .filter(|job_id| {
+                self.job(job_id)
+                    .is_some_and(|job| job.is_visible_for_session(session_id))
+            })
+            .cloned()
+            .or_else(|| {
+                self.jobs
+                    .iter()
+                    .rev()
+                    .find(|job| job.is_visible_for_session(session_id))
+                    .map(|job| job.id.clone())
+            })
+    }
+
+    fn job_delete(&self) -> Option<&TransferJobDeleteState> {
+        self.job_delete.as_ref()
+    }
+
+    fn request_job_delete(&mut self, job_id: &str, title: String) -> bool {
+        if self.job(job_id).is_none() {
+            return false;
+        }
+        self.selected_job_id = Some(job_id.to_string());
+        self.job_delete = Some(TransferJobDeleteState {
+            job_id: job_id.to_string(),
+            title,
+        });
+        true
+    }
+
+    fn confirm_job_delete(&mut self) -> Option<(String, bool)> {
+        let state = self.job_delete.take()?;
+        let removed = self.remove_job(&state.job_id);
+        Some((state.job_id, removed))
+    }
+
+    fn cancel_job_delete(&mut self) {
+        self.job_delete = None;
+    }
+
+    fn job_menu(&self) -> Option<&TransferJobMenuState> {
+        self.job_menu.as_ref()
+    }
+
+    fn open_job_menu(&mut self, job_id: &str, x: Pixels, y: Pixels) -> bool {
+        if !self.select_job(job_id) {
+            self.job_menu = None;
+            return false;
+        }
+        self.job_menu = Some(TransferJobMenuState {
+            job_id: job_id.to_string(),
+            x,
+            y,
+        });
+        true
+    }
+
+    fn close_job_menu(&mut self) {
         self.job_menu = None;
+    }
+
+    fn reset_interaction(&mut self) {
+        self.selected_job_id = None;
+        self.job_delete = None;
+        self.job_menu = None;
+    }
+
+    fn clear_job_interaction(&mut self, job_id: &str) {
+        if self.selected_job_id.as_deref() == Some(job_id) {
+            self.selected_job_id = None;
+        }
+        if self
+            .job_menu
+            .as_ref()
+            .is_some_and(|menu| menu.job_id == job_id)
+        {
+            self.job_menu = None;
+        }
+        if self
+            .job_delete
+            .as_ref()
+            .is_some_and(|delete| delete.job_id == job_id)
+        {
+            self.job_delete = None;
+        }
+    }
+
+    fn prune_missing_interaction(&mut self) {
+        let selected_missing = self
+            .selected_job_id
+            .as_deref()
+            .is_some_and(|job_id| self.job(job_id).is_none());
+        let menu_missing = self
+            .job_menu
+            .as_ref()
+            .is_some_and(|menu| self.job(&menu.job_id).is_none());
+        let delete_missing = self
+            .job_delete
+            .as_ref()
+            .is_some_and(|delete| self.job(&delete.job_id).is_none());
+        if selected_missing {
+            self.selected_job_id = None;
+        }
+        if menu_missing {
+            self.job_menu = None;
+        }
+        if delete_missing {
+            self.job_delete = None;
+        }
+    }
+
+    fn can_delete_job(&self, job_id: &str, session_id: Option<&str>) -> bool {
+        self.job(job_id).is_some_and(|job| {
+            job.is_visible_for_session(session_id)
+                && !matches!(
+                    job.status,
+                    TransferJobStatus::Running
+                        | TransferJobStatus::Paused
+                        | TransferJobStatus::Cancelling
+                )
+        })
+    }
+
+    fn pause_visible_jobs(&mut self, session_id: Option<&str>) -> usize {
+        let mut changed = 0;
+        for job in &mut self.jobs {
+            if job.is_visible_for_session(session_id)
+                && job.status == TransferJobStatus::Running
+                && let Some(control) = job.control.as_ref()
+            {
+                control.pause();
+                job.status = TransferJobStatus::Paused;
+                job.detail = "Paused".to_string();
+                changed += 1;
+            }
+        }
+        changed
+    }
+
+    fn resume_visible_jobs(&mut self, session_id: Option<&str>) -> usize {
+        let mut changed = 0;
+        for job in &mut self.jobs {
+            if job.is_visible_for_session(session_id)
+                && job.status == TransferJobStatus::Paused
+                && let Some(control) = job.control.as_ref()
+            {
+                control.resume();
+                job.status = TransferJobStatus::Running;
+                job.detail = "Resuming".to_string();
+                changed += 1;
+            }
+        }
+        changed
+    }
+
+    fn cancel_visible_jobs(&mut self, session_id: Option<&str>) -> usize {
+        let mut changed = 0;
+        for job in &mut self.jobs {
+            if job.is_visible_for_session(session_id)
+                && matches!(
+                    job.status,
+                    TransferJobStatus::Running | TransferJobStatus::Paused
+                )
+                && let Some(control) = job.control.as_ref()
+            {
+                control.cancel();
+                job.status = TransferJobStatus::Cancelling;
+                job.detail = "Cancelling".to_string();
+                changed += 1;
+            }
+        }
+        changed
+    }
+
+    fn clear_completed_jobs(&mut self, session_id: Option<&str>) -> usize {
+        let before = self.jobs.len();
+        self.jobs.retain(|job| {
+            !job.is_visible_for_session(session_id) || job.status != TransferJobStatus::Completed
+        });
+        let removed = before.saturating_sub(self.jobs.len());
+        self.prune_missing_interaction();
+        removed
+    }
+
+    fn clear_stopped_jobs(&mut self, session_id: Option<&str>) -> usize {
+        let before = self.jobs.len();
+        self.jobs.retain(|job| {
+            !job.is_visible_for_session(session_id)
+                || matches!(
+                    job.status,
+                    TransferJobStatus::Running
+                        | TransferJobStatus::Paused
+                        | TransferJobStatus::Cancelling
+                )
+        });
+        let removed = before.saturating_sub(self.jobs.len());
+        self.prune_missing_interaction();
+        removed
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+    use std::sync::mpsc;
+
     use gpui::{TestAppContext, px};
-    use nyaterm_transport::SftpDuplicatePolicy;
+    use nyaterm_transport::{SftpDuplicatePolicy, SftpTransferControl};
 
-    use crate::models::TransferPathPromptKind;
+    use crate::models::{
+        TransferJobEvent, TransferJobKind, TransferJobResult, TransferJobState, TransferJobStatus,
+        TransferPathPromptKind,
+    };
 
-    use super::{TransferPanelState, TransferPathState};
+    use super::{TransferPanelState, TransferPathState, TransferQueueState};
+
+    fn transfer_queue(cx: &TestAppContext) -> TransferQueueState {
+        let (tx, rx) = mpsc::channel();
+        let (focus, delete_focus) = cx.update(|cx| (cx.focus_handle(), cx.focus_handle()));
+        TransferQueueState::new(tx, rx, focus, delete_focus)
+    }
+
+    fn transfer_job(
+        id: &str,
+        session_id: &str,
+        status: TransferJobStatus,
+        controlled: bool,
+    ) -> TransferJobState {
+        TransferJobState {
+            id: id.to_string(),
+            session_id: Some(session_id.to_string()),
+            kind: TransferJobKind::Download {
+                remote_path: format!("/remote/{id}"),
+                local_path: PathBuf::from(format!("/local/{id}")),
+            },
+            status,
+            detail: String::new(),
+            entries: Vec::new(),
+            summary: None,
+            progress: None,
+            control: controlled.then(SftpTransferControl::new),
+        }
+    }
 
     #[test]
     fn transfer_paths_own_endpoints_policy_and_prompt_admission() {
@@ -522,5 +1009,100 @@ mod tests {
         panel.start_height_resize(px(400.));
         assert_eq!(panel.update_height_resize(px(-200.)), Some(600.));
         assert!(panel.finish_height_resize());
+    }
+
+    #[test]
+    fn transfer_queue_owns_admission_events_and_delete_interaction() {
+        let cx = TestAppContext::single();
+        let mut queue = transfer_queue(&cx);
+        queue.enqueue(transfer_job(
+            "job-1",
+            "session-a",
+            TransferJobStatus::Completed,
+            false,
+        ));
+
+        assert_eq!(queue.next_job_id("download"), "download-2");
+        assert!(queue.select_job("job-1"));
+        assert!(queue.open_job_menu("job-1", px(12.), px(24.)));
+        assert_eq!(queue.selected_job_id(), Some("job-1"));
+        assert_eq!(
+            queue.job_menu().map(|menu| menu.job_id.as_str()),
+            Some("job-1")
+        );
+        assert!(queue.can_delete_job("job-1", Some("session-a")));
+
+        assert!(queue.request_job_delete("job-1", "Download".to_string()));
+        assert_eq!(
+            queue.confirm_job_delete(),
+            Some(("job-1".to_string(), true))
+        );
+        assert!(queue.is_empty());
+        assert_eq!(queue.selected_job_id(), None);
+        assert_eq!(queue.next_job_id("download"), "download-3");
+
+        let sender = queue.event_sender();
+        sender
+            .send(TransferJobResult {
+                id: "missing-job".to_string(),
+                event: TransferJobEvent::Started {
+                    detail: "started".to_string(),
+                },
+            })
+            .expect("queue receiver should remain connected");
+        let event = queue
+            .try_recv_event()
+            .expect("queue should receive its typed event");
+        assert_eq!(event.id, "missing-job");
+        assert!(matches!(event.event, TransferJobEvent::Started { .. }));
+    }
+
+    #[test]
+    fn transfer_queue_batches_are_scoped_to_the_visible_session() {
+        let cx = TestAppContext::single();
+        let mut queue = transfer_queue(&cx);
+        queue.enqueue(transfer_job(
+            "running-a",
+            "session-a",
+            TransferJobStatus::Running,
+            true,
+        ));
+        queue.enqueue(transfer_job(
+            "running-b",
+            "session-b",
+            TransferJobStatus::Running,
+            true,
+        ));
+        queue.enqueue(transfer_job(
+            "completed-a",
+            "session-a",
+            TransferJobStatus::Completed,
+            false,
+        ));
+        assert!(queue.open_job_menu("completed-a", px(8.), px(8.)));
+        assert!(queue.request_job_delete("completed-a", "Completed".to_string()));
+
+        assert_eq!(queue.pause_visible_jobs(Some("session-a")), 1);
+        assert_eq!(
+            queue.job("running-a").map(|job| job.status),
+            Some(TransferJobStatus::Paused)
+        );
+        assert_eq!(
+            queue.job("running-b").map(|job| job.status),
+            Some(TransferJobStatus::Running)
+        );
+        assert_eq!(queue.resume_visible_jobs(Some("session-a")), 1);
+        assert_eq!(queue.cancel_visible_jobs(Some("session-a")), 1);
+        assert_eq!(
+            queue.job("running-a").map(|job| job.status),
+            Some(TransferJobStatus::Cancelling)
+        );
+        assert_eq!(queue.clear_completed_jobs(Some("session-a")), 1);
+        assert!(queue.job("completed-a").is_none());
+        assert_eq!(queue.selected_job_id(), None);
+        assert!(queue.job_menu().is_none());
+        assert!(queue.job_delete().is_none());
+        assert!(queue.job("running-b").is_some());
+        assert_eq!(queue.clear_stopped_jobs(Some("session-b")), 0);
     }
 }

@@ -17,8 +17,7 @@ impl NyaTermApp {
         let active_session_id = self.session.active_id();
         let visible_jobs = self
             .transfer
-            .queue
-            .jobs
+            .transfer_jobs()
             .iter()
             .filter(|job| job.is_visible_for_session(active_session_id))
             .cloned()
@@ -97,7 +96,7 @@ impl NyaTermApp {
                     job,
                     directory_progress,
                     self.transfer.browser.selected_remote_path.clone(),
-                    self.transfer.queue.selected_job_id.clone(),
+                    self.transfer.selected_transfer_job_id().map(str::to_string),
                     cx,
                 ));
             }
@@ -109,9 +108,9 @@ impl NyaTermApp {
             .flex_col()
             .overflow_hidden()
             .bg(self.shell_transparent_color(palette.surface))
-            .track_focus(&self.transfer.queue.focus)
+            .track_focus(self.transfer.queue_focus())
             .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(&this.transfer.queue.focus);
+                window.focus(this.transfer.queue_focus());
                 cx.notify();
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
