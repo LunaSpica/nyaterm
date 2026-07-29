@@ -683,7 +683,7 @@ impl NyaTermApp {
                                             {
                                                 if state.dirty && !state.reload_confirm {
                                                     state.reload_confirm = true;
-                                                    this.terminal.view.status =
+                                                    this.shell.status =
                                                         "confirm remote editor reload".to_string();
                                                     cx.notify();
                                                     return;

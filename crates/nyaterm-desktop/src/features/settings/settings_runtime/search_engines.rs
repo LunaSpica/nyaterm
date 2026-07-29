@@ -22,7 +22,7 @@ impl NyaTermApp {
         // Persist as it is typed, the way every other settings control does.
         // Trimming waits for the row to close, so a space mid-word survives.
         self.save_terminal_settings(cx);
-        self.terminal.view.status = "search engine edited".to_string();
+        self.shell.status = "search engine edited".to_string();
         cx.notify();
     }
 
@@ -37,7 +37,7 @@ impl NyaTermApp {
         // they have to be rebuilt from the engines they now stand for.
         self.forget_text_inputs("settings.search-engine.");
         self.save_terminal_settings(cx);
-        self.terminal.view.status = "search engine added".to_string();
+        self.shell.status = "search engine added".to_string();
     }
 
     pub(in crate::features) fn remove_search_engine(
@@ -50,7 +50,7 @@ impl NyaTermApp {
         }
         self.forget_text_inputs("settings.search-engine.");
         self.save_terminal_settings(cx);
-        self.terminal.view.status = "search engine removed".to_string();
+        self.shell.status = "search engine removed".to_string();
     }
 
     pub(in crate::features) fn set_search_engine_icon(
@@ -63,7 +63,7 @@ impl NyaTermApp {
             return;
         }
         self.save_terminal_settings(cx);
-        self.terminal.view.status = "search engine icon updated".to_string();
+        self.shell.status = "search engine icon updated".to_string();
     }
 
     pub(in crate::features) fn toggle_search_engine_in_menu(
@@ -93,12 +93,12 @@ impl NyaTermApp {
 
     pub(in crate::features) fn test_search_engine(&mut self, index: usize, cx: &mut Context<Self>) {
         let Some(engine) = self.settings.summary.search_custom_engines.get(index) else {
-            self.terminal.view.status = "search engine not found".to_string();
+            self.shell.status = "search engine not found".to_string();
             cx.notify();
             return;
         };
         if !engine.url_template.contains("%s") {
-            self.terminal.view.status = "search engine URL must include %s".to_string();
+            self.shell.status = "search engine URL must include %s".to_string();
             cx.notify();
             return;
         }
@@ -107,10 +107,10 @@ impl NyaTermApp {
             .replace("%s", &urlencoding_query("nyaterm"));
         match open_external_url_simple(&url) {
             Ok(()) => {
-                self.terminal.view.status = format!("tested search engine: {}", engine.name);
+                self.shell.status = format!("tested search engine: {}", engine.name);
             }
             Err(error) => {
-                self.terminal.view.status = format!("test search engine failed: {error}");
+                self.shell.status = format!("test search engine failed: {error}");
             }
         }
         cx.notify();
@@ -161,7 +161,7 @@ impl NyaTermApp {
             bytes.push(b'\n');
         }
         if self.send_terminal_input(bytes, cx) {
-            self.terminal.view.status = "action link command sent".to_string();
+            self.shell.status = "action link command sent".to_string();
             cx.notify();
         }
     }

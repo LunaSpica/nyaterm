@@ -145,7 +145,7 @@ impl NyaTermApp {
     pub(in crate::features) fn toggle_activity_bar_labels(&mut self, cx: &mut Context<Self>) {
         self.shell.chrome.activity_bar_layout.show_labels =
             !self.shell.chrome.activity_bar_layout.show_labels;
-        self.terminal.view.status = if self.shell.chrome.activity_bar_layout.show_labels {
+        self.shell.status = if self.shell.chrome.activity_bar_layout.show_labels {
             "activity labels shown".to_string()
         } else {
             "activity labels hidden".to_string()
@@ -199,7 +199,7 @@ impl NyaTermApp {
         let Some((source_zone, source_index)) =
             self.shell.chrome.activity_bar_layout.find_entry(&entry_id)
         else {
-            self.terminal.view.status = "activity item not found".to_string();
+            self.shell.status = "activity item not found".to_string();
             cx.notify();
             return;
         };
@@ -262,7 +262,7 @@ impl NyaTermApp {
         }
 
         self.shell.chrome.activity_bar_context_menu = None;
-        self.terminal.view.status = format!(
+        self.shell.status = format!(
             "moved {} to {}",
             entry_id,
             target_zone.label().to_lowercase()

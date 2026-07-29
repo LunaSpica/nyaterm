@@ -173,14 +173,13 @@ impl NyaTermApp {
             return;
         }
         if self.is_session_disconnected(&session_id) {
-            self.terminal.view.status =
-                "session disconnected — reconnect before ZMODEM upload".to_string();
+            self.shell.status = "session disconnected — reconnect before ZMODEM upload".to_string();
             cx.notify();
             return;
         }
         let state = self.zmodem_state_mut(&session_id);
         if state.transfer.is_some() || state.worker.is_some() {
-            self.terminal.view.status = "ZMODEM transfer already active".to_string();
+            self.shell.status = "ZMODEM transfer already active".to_string();
             cx.notify();
             return;
         }
@@ -231,7 +230,7 @@ impl NyaTermApp {
             progress: None,
             control: None,
         });
-        self.terminal.view.status = format!(
+        self.shell.status = format!(
             "ZMODEM preparing upload ({} file(s)) — probing remote conflicts",
             files.len()
         );
@@ -264,21 +263,20 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if files.is_empty() {
-            self.terminal.view.status =
+            self.shell.status =
                 "ZMODEM upload cancelled — no files remaining after conflict resolution"
                     .to_string();
             cx.notify();
             return;
         }
         if self.is_session_disconnected(&session_id) {
-            self.terminal.view.status =
-                "session disconnected — reconnect before ZMODEM upload".to_string();
+            self.shell.status = "session disconnected — reconnect before ZMODEM upload".to_string();
             cx.notify();
             return;
         }
         let state = self.zmodem_state_mut(&session_id);
         if state.transfer.is_some() || state.worker.is_some() {
-            self.terminal.view.status = "ZMODEM transfer already active".to_string();
+            self.shell.status = "ZMODEM transfer already active".to_string();
             cx.notify();
             return;
         }
@@ -288,14 +286,14 @@ impl NyaTermApp {
         let cmd = b"rz\r".to_vec();
         match self.write_session_input_recorded(&session_id, &cmd) {
             Ok(()) => {
-                self.terminal.view.status = format!(
+                self.shell.status = format!(
                     "ZMODEM upload prepared ({} file(s)) — waiting for remote rz",
                     files.len()
                 );
             }
             Err(error) => {
                 self.zmodem_state_mut(&session_id).pending_upload = None;
-                self.terminal.view.status = format!("ZMODEM upload failed to start: {error}");
+                self.shell.status = format!("ZMODEM upload failed to start: {error}");
             }
         }
         cx.notify();
@@ -313,7 +311,7 @@ impl NyaTermApp {
         state.pending_download = false;
         if let Some(worker) = state.worker.as_ref() {
             worker.cancel("cancelled");
-            self.terminal.view.status = "ZMODEM transfer cancelling".to_string();
+            self.shell.status = "ZMODEM transfer cancelling".to_string();
             cx.notify();
             return;
         }
@@ -324,7 +322,7 @@ impl NyaTermApp {
             .unwrap_or_default();
         state.finish_transfer();
         self.apply_zmodem_actions(session_id, actions, cx);
-        self.terminal.view.status = "ZMODEM transfer cancelled".to_string();
+        self.shell.status = "ZMODEM transfer cancelled".to_string();
         cx.notify();
     }
 
@@ -478,7 +476,7 @@ impl NyaTermApp {
                     self.prompt_zmodem_download_directory(session_id.to_string(), cx);
                 }
                 // Surface detection event status.
-                self.terminal.view.status = match direction {
+                self.shell.status = match direction {
                     ZmodemDirection::Upload => "ZMODEM upload detected".to_string(),
                     ZmodemDirection::Download => {
                         "ZMODEM download detected — choose save folder".to_string()
@@ -514,7 +512,7 @@ impl NyaTermApp {
             match action {
                 ZmodemAction::SendToRemote(bytes) => {
                     if let Err(error) = self.write_session_protocol_response(session_id, &bytes) {
-                        self.terminal.view.status = format!("ZMODEM write failed: {error}");
+                        self.shell.status = format!("ZMODEM write failed: {error}");
                     }
                 }
                 ZmodemAction::EmitEvent(event) => self.handle_zmodem_event(session_id, event, cx),
@@ -530,7 +528,7 @@ impl NyaTermApp {
     ) {
         match event {
             ZmodemEvent::Detected { direction } => {
-                self.terminal.view.status = match direction {
+                self.shell.status = match direction {
                     ZmodemDirection::Upload => "ZMODEM upload in progress".to_string(),
                     ZmodemDirection::Download => "ZMODEM download in progress".to_string(),
                 };
@@ -547,11 +545,11 @@ impl NyaTermApp {
                 };
                 if total_size > 0 {
                     let pct = (bytes_transferred.saturating_mul(100) / total_size).min(100);
-                    self.terminal.view.status = format!(
+                    self.shell.status = format!(
                         "ZMODEM {dir} {file_name}: {pct}% ({bytes_transferred}/{total_size})"
                     );
                 } else {
-                    self.terminal.view.status =
+                    self.shell.status =
                         format!("ZMODEM {dir} {file_name}: {bytes_transferred} bytes");
                 }
                 self.upsert_zmodem_transfer_job(
@@ -573,7 +571,7 @@ impl NyaTermApp {
                     ZmodemDirection::Upload => "upload",
                     ZmodemDirection::Download => "download",
                 };
-                self.terminal.view.status =
+                self.shell.status =
                     format!("ZMODEM {dir} complete ({file_count} file(s)) [{session_id}]");
                 self.finish_zmodem_transfer_jobs(session_id, true, None, cx);
                 if let Some(state) = self.session.zmodem_state_mut(session_id) {
@@ -581,7 +579,7 @@ impl NyaTermApp {
                 }
             }
             ZmodemEvent::Failed { reason } => {
-                self.terminal.view.status = format!("ZMODEM failed: {reason}");
+                self.shell.status = format!("ZMODEM failed: {reason}");
                 self.finish_zmodem_transfer_jobs(session_id, false, Some(reason.as_str()), cx);
                 if let Some(state) = self.session.zmodem_state_mut(session_id) {
                     state.finish_transfer();
@@ -746,7 +744,7 @@ impl NyaTermApp {
             prompt: Some(SharedString::from("Select ZMODEM download folder")),
         };
         let receiver = cx.prompt_for_paths(options);
-        self.terminal.view.status = "selecting ZMODEM download folder…".to_string();
+        self.shell.status = "selecting ZMODEM download folder…".to_string();
         cx.spawn(async move |this, cx| {
             let result = match receiver.await {
                 Ok(Ok(Some(paths))) => paths.into_iter().next(),

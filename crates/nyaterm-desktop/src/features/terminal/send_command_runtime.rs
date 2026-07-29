@@ -168,7 +168,7 @@ impl NyaTermApp {
             "escape" if !accel => {
                 self.send_command.clear_draft();
                 self.reset_text_input("send-command.draft", "", cx);
-                self.terminal.view.status = "command send cleared".to_string();
+                self.shell.status = "command send cleared".to_string();
                 cx.notify();
             }
             _ => {}
@@ -206,13 +206,13 @@ impl NyaTermApp {
         let units = match self.build_send_command_units(&draft, session_kind) {
             Ok(units) => units,
             Err(message) => {
-                self.terminal.view.status = message;
+                self.shell.status = message;
                 cx.notify();
                 return;
             }
         };
         if units.is_empty() {
-            self.terminal.view.status = "command send is empty".to_string();
+            self.shell.status = "command send is empty".to_string();
             cx.notify();
             return;
         }
@@ -224,12 +224,11 @@ impl NyaTermApp {
                     .active_id()
                     .is_some_and(|session_id| self.is_session_disconnected(session_id))
             {
-                self.terminal.view.status =
-                    "session disconnected — reconnect before sending".to_string();
+                self.shell.status = "session disconnected — reconnect before sending".to_string();
                 cx.notify();
                 return;
             }
-            self.terminal.view.status = "start a session before sending".to_string();
+            self.shell.status = "start a session before sending".to_string();
             cx.notify();
             return;
         }
@@ -242,7 +241,7 @@ impl NyaTermApp {
         let rounds = run.rounds;
         let interval = run.interval_seconds;
         let raw_units = run.raw_units;
-        self.terminal.view.status = if infinite {
+        self.shell.status = if infinite {
             format!("sending {units_per_round} unit(s) × ∞")
         } else {
             format!("sending {units_per_round} unit(s) × {rounds}")
@@ -311,7 +310,7 @@ impl NyaTermApp {
                 let progress = this.send_command.finish_send();
                 let failed_writes = failed_writes.load(Ordering::SeqCst);
                 if aborted {
-                    this.terminal.view.status = if infinite {
+                    this.shell.status = if infinite {
                         format!(
                             "command send stopped at {} unit(s) · round {}",
                             progress.completed, progress.round
@@ -323,11 +322,11 @@ impl NyaTermApp {
                         )
                     };
                     if failed_writes > 0 {
-                        this.terminal.view.status =
-                            format!("{}, {failed_writes} failed write(s)", this.terminal.view.status);
+                        this.shell.status =
+                            format!("{}, {failed_writes} failed write(s)", this.shell.status);
                     }
                 } else if infinite {
-                    this.terminal.view.status = if failed_writes == 0 {
+                    this.shell.status = if failed_writes == 0 {
                         format!(
                             "command send completed: {} unit(s)",
                             progress.completed
@@ -339,7 +338,7 @@ impl NyaTermApp {
                         )
                     };
                 } else {
-                    this.terminal.view.status = if failed_writes == 0 {
+                    this.shell.status = if failed_writes == 0 {
                         format!("command send completed: {rounds} round(s)")
                     } else {
                         format!(
@@ -355,7 +354,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn stop_send_command(&mut self, cx: &mut Context<Self>) {
         if self.send_command.request_cancel() {
-            self.terminal.view.status = "stopping command send…".to_string();
+            self.shell.status = "stopping command send…".to_string();
             cx.notify();
         }
     }
@@ -503,7 +502,7 @@ impl NyaTermApp {
                 .map(|group| format!("Group: {}", group.name))
                 .unwrap_or_else(|| "Group".to_string()),
         };
-        self.terminal.view.status = format!("command send target: {label}");
+        self.shell.status = format!("command send target: {label}");
         cx.notify();
     }
 
@@ -544,7 +543,7 @@ impl NyaTermApp {
             return;
         };
         self.reset_text_input("send-command.interval", &interval, cx);
-        self.terminal.view.status = format!(
+        self.shell.status = format!(
             "command send data: {}",
             match data_type {
                 SendCommandDataType::Text => "Text",

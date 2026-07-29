@@ -55,10 +55,10 @@ impl NyaTermApp {
         match self.transfer.request_editor_tab_close(tab_id) {
             TransferEditorCloseOutcome::Missing => return,
             TransferEditorCloseOutcome::ConfirmationRequired => {
-                self.terminal.view.status = "remote editor tab has unsaved changes".to_string();
+                self.shell.status = "remote editor tab has unsaved changes".to_string();
             }
             TransferEditorCloseOutcome::Closed => {
-                self.terminal.view.status = "remote editor tab closed".to_string();
+                self.shell.status = "remote editor tab closed".to_string();
             }
         }
         cx.notify();
@@ -68,10 +68,10 @@ impl NyaTermApp {
         match self.transfer.request_editor_close() {
             TransferEditorCloseOutcome::Missing => return,
             TransferEditorCloseOutcome::ConfirmationRequired => {
-                self.terminal.view.status = "remote editor has unsaved changes".to_string();
+                self.shell.status = "remote editor has unsaved changes".to_string();
             }
             TransferEditorCloseOutcome::Closed => {
-                self.terminal.view.status = "remote editor closed".to_string();
+                self.shell.status = "remote editor closed".to_string();
             }
         }
         cx.notify();
@@ -81,10 +81,10 @@ impl NyaTermApp {
         match self.transfer.discard_editor() {
             TransferEditorDiscardOutcome::Missing => return,
             TransferEditorDiscardOutcome::TabDiscarded => {
-                self.terminal.view.status = "remote editor tab discarded".to_string();
+                self.shell.status = "remote editor tab discarded".to_string();
             }
             TransferEditorDiscardOutcome::WorkspaceDiscarded => {
-                self.terminal.view.status = "remote editor discarded".to_string();
+                self.shell.status = "remote editor discarded".to_string();
             }
         }
         cx.notify();
@@ -98,7 +98,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        self.terminal.view.status = "remote editor close cancelled".to_string();
+        self.shell.status = "remote editor close cancelled".to_string();
         cx.notify();
     }
 
@@ -110,7 +110,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        self.terminal.view.status = "remote editor reload cancelled".to_string();
+        self.shell.status = "remote editor reload cancelled".to_string();
         cx.notify();
     }
 
@@ -119,7 +119,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        self.terminal.view.status = "remote editor conflict dismissed".to_string();
+        self.shell.status = "remote editor conflict dismissed".to_string();
         cx.notify();
     }
 
@@ -134,7 +134,7 @@ impl NyaTermApp {
             let error = self.tr("fileEditor.sourceSessionUnavailable").to_string();
             self.transfer
                 .fail_editor_load(session_id.as_deref(), &remote_path, error.clone());
-            self.terminal.view.status = error;
+            self.shell.status = error;
             cx.notify();
             return;
         };
@@ -174,7 +174,7 @@ impl NyaTermApp {
     ) {
         let tab_id = self.transfer.active_editor_tab().map(|tab| tab.id.clone());
         let Some(tab_id) = tab_id else {
-            self.terminal.view.status = "no remote editor is active".to_string();
+            self.shell.status = "no remote editor is active".to_string();
             cx.notify();
             return;
         };
@@ -212,7 +212,7 @@ impl NyaTermApp {
                 &snapshot.remote_path,
                 error.clone(),
             );
-            self.terminal.view.status = error;
+            self.shell.status = error;
             cx.notify();
             return;
         };
@@ -245,7 +245,7 @@ impl NyaTermApp {
                 self.save_all_transfer_editor_tabs(window, cx);
             }
             TransferEditorCloseAfterSave::Missing => {
-                self.terminal.view.status = "no remote editor is active".to_string();
+                self.shell.status = "no remote editor is active".to_string();
                 cx.notify();
             }
             TransferEditorCloseAfterSave::Loading | TransferEditorCloseAfterSave::Saving => {}

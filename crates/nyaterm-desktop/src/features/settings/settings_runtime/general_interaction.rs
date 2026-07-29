@@ -95,13 +95,13 @@ impl NyaTermApp {
                 self.apply_gpui_settings(settings);
                 self.settings.store_status.message = "diagnostics settings saved".to_string();
                 self.settings.store_status.ready = true;
-                self.terminal.view.status = "diagnostics settings saved".to_string();
+                self.shell.status = "diagnostics settings saved".to_string();
             }
             Err(error) => {
                 self.settings.store_status.message =
                     format!("diagnostics settings save failed: {error}");
                 self.settings.store_status.ready = false;
-                self.terminal.view.status = self.settings.store_status.message.clone();
+                self.shell.status = self.settings.store_status.message.clone();
             }
         }
         cx.notify();
@@ -121,13 +121,13 @@ impl NyaTermApp {
                 self.apply_gpui_settings(settings);
                 self.settings.store_status.message = "general settings saved".to_string();
                 self.settings.store_status.ready = true;
-                self.terminal.view.status = "general settings saved".to_string();
+                self.shell.status = "general settings saved".to_string();
             }
             Err(error) => {
                 self.settings.store_status.message =
                     format!("general settings save failed: {error}");
                 self.settings.store_status.ready = false;
-                self.terminal.view.status = self.settings.store_status.message.clone();
+                self.shell.status = self.settings.store_status.message.clone();
             }
         }
         cx.notify();
@@ -274,13 +274,13 @@ impl NyaTermApp {
                 self.apply_gpui_settings(settings);
                 self.settings.store_status.message = "interaction settings saved".to_string();
                 self.settings.store_status.ready = true;
-                self.terminal.view.status = "interaction settings saved".to_string();
+                self.shell.status = "interaction settings saved".to_string();
             }
             Err(error) => {
                 self.settings.store_status.message =
                     format!("interaction settings save failed: {error}");
                 self.settings.store_status.ready = false;
-                self.terminal.view.status = self.settings.store_status.message.clone();
+                self.shell.status = self.settings.store_status.message.clone();
             }
         }
         cx.notify();
@@ -318,13 +318,13 @@ impl NyaTermApp {
                 self.apply_gpui_settings(settings);
                 self.settings.store_status.message = "screen lock settings saved".to_string();
                 self.settings.store_status.ready = true;
-                self.terminal.view.status = "screen lock settings saved".to_string();
+                self.shell.status = "screen lock settings saved".to_string();
             }
             Err(error) => {
                 self.settings.store_status.message =
                     format!("screen lock settings save failed: {error}");
                 self.settings.store_status.ready = false;
-                self.terminal.view.status = self.settings.store_status.message.clone();
+                self.shell.status = self.settings.store_status.message.clone();
             }
         }
         cx.notify();

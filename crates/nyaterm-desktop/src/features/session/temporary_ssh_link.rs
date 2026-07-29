@@ -15,8 +15,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if self.has_pending_session_start() {
-            self.terminal.view.status =
-                "wait for the pending session to finish connecting".to_string();
+            self.shell.status = "wait for the pending session to finish connecting".to_string();
             cx.notify();
             return;
         }
@@ -29,7 +28,7 @@ impl NyaTermApp {
             TextInputSetup::placeholder(self.tr("temporarySsh.placeholder")),
             cx,
         );
-        self.terminal.view.status = "temporary SSH link opened".to_string();
+        self.shell.status = "temporary SSH link opened".to_string();
         window.focus(&field.read(cx).focus_handle());
         cx.notify();
     }
@@ -37,7 +36,7 @@ impl NyaTermApp {
     pub(in crate::features) fn close_temporary_ssh_link_dialog(&mut self, cx: &mut Context<Self>) {
         self.session.dialogs.close_temporary_ssh_link();
         self.forget_text_inputs("temporary-ssh.link");
-        self.terminal.view.status = "temporary SSH link cancelled".to_string();
+        self.shell.status = "temporary SSH link cancelled".to_string();
         cx.notify();
     }
 
@@ -50,8 +49,7 @@ impl NyaTermApp {
             self.session
                 .dialogs
                 .reject_temporary_ssh_link("temporarySsh.connecting");
-            self.terminal.view.status =
-                "wait for the pending session to finish connecting".to_string();
+            self.shell.status = "wait for the pending session to finish connecting".to_string();
             cx.notify();
             return;
         }
@@ -63,7 +61,7 @@ impl NyaTermApp {
                 self.session
                     .dialogs
                     .reject_temporary_ssh_link(error.locale_key());
-                self.terminal.view.status = "temporary SSH link is invalid".to_string();
+                self.shell.status = "temporary SSH link is invalid".to_string();
                 cx.notify();
                 return;
             }

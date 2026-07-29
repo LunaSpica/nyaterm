@@ -13,7 +13,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(current_name) = self.session_display_name(&session_id) else {
-            self.terminal.view.status = "session no longer exists".to_string();
+            self.shell.status = "session no longer exists".to_string();
             cx.notify();
             return;
         };
@@ -26,7 +26,7 @@ impl NyaTermApp {
             TextInputSetup::placeholder(self.tr("tabCtx.renamePlaceholder")),
             cx,
         );
-        self.terminal.view.status = "rename tab opened".to_string();
+        self.shell.status = "rename tab opened".to_string();
         window.focus(&field.read(cx).focus_handle());
         field.update(cx, |field, cx| field.select_all(window, cx));
         cx.notify();
@@ -35,19 +35,19 @@ impl NyaTermApp {
     pub(in crate::features) fn close_rename_session(&mut self, cx: &mut Context<Self>) {
         self.session.dialogs.cancel_rename();
         self.forget_text_inputs("session.rename");
-        self.terminal.view.status = "rename tab cancelled".to_string();
+        self.shell.status = "rename tab cancelled".to_string();
         cx.notify();
     }
 
     pub(in crate::features) fn submit_rename_session(&mut self, cx: &mut Context<Self>) {
         let (session_id, trimmed) = match self.session.dialogs.take_rename_submission() {
             RenameSessionSubmission::Inactive => {
-                self.terminal.view.status = "no tab rename is active".to_string();
+                self.shell.status = "no tab rename is active".to_string();
                 cx.notify();
                 return;
             }
             RenameSessionSubmission::Empty => {
-                self.terminal.view.status = "tab name cannot be empty".to_string();
+                self.shell.status = "tab name cannot be empty".to_string();
                 cx.notify();
                 return;
             }
@@ -56,7 +56,7 @@ impl NyaTermApp {
         self.forget_text_inputs("session.rename");
         self.session
             .set_custom_name(session_id.clone(), trimmed.clone());
-        self.terminal.view.status = format!("renamed tab to {trimmed}");
+        self.shell.status = format!("renamed tab to {trimmed}");
         cx.notify();
     }
 
@@ -92,7 +92,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if self.session.active_id().is_none() {
-            self.terminal.view.status = match action {
+            self.shell.status = match action {
                 StartupCommandAction::Duplicate => {
                     "select a session before duplicating with a command"
                 }
@@ -113,7 +113,7 @@ impl NyaTermApp {
                     !matches!(metadata.launch_config, SessionLaunchConfig::Ssh(_))
                 })
         {
-            self.terminal.view.status = "active session is not SSH".to_string();
+            self.shell.status = "active session is not SSH".to_string();
             cx.notify();
             return;
         }
@@ -130,7 +130,7 @@ impl NyaTermApp {
             TextInputSetup::placeholder(self.tr("tabCtx.commandRequired")),
             cx,
         );
-        self.terminal.view.status = action.status_opened().to_string();
+        self.shell.status = action.status_opened().to_string();
         window.focus(&field.read(cx).focus_handle());
         cx.notify();
     }
@@ -138,7 +138,7 @@ impl NyaTermApp {
     pub(in crate::features) fn close_startup_command_dialog(&mut self, cx: &mut Context<Self>) {
         let action = self.session.dialogs.cancel_startup_command();
         self.forget_text_inputs("session.startup-command");
-        self.terminal.view.status = action.status_cancelled().to_string();
+        self.shell.status = action.status_cancelled().to_string();
         cx.notify();
     }
 
@@ -157,7 +157,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some((action, startup_command)) = self.session.dialogs.take_startup_command() else {
-            self.terminal.view.status = "startup command cannot be empty".to_string();
+            self.shell.status = "startup command cannot be empty".to_string();
             cx.notify();
             return;
         };
@@ -211,12 +211,8 @@ impl NyaTermApp {
         self.shell.remove_workspace_session(session_id);
         let multiplex_key = self.session.remove_session_catalog(session_id);
         self.session.clear_event_bridge_session(session_id);
-        self.terminal.view.views.remove(session_id);
+        self.terminal.remove_frame_session(session_id);
         self.remove_terminal_surface(session_id);
-        self.terminal
-            .view
-            .frame_pipeline
-            .remove_session(session_id.to_string());
         self.terminal.remove_session_surface_bounds(session_id);
         self.transfer.remove_browser_session_cache(session_id);
         self.transfer.clear_external_sync_for_session(session_id);

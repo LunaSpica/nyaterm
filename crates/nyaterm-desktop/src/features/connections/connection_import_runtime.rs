@@ -42,7 +42,7 @@ impl NyaTermApp {
         if self.connection_state.import_path_prompt_active()
             || self.settings.config_path_prompt_active()
         {
-            self.terminal.view.status = "connection import picker is already open".to_string();
+            self.shell.status = "connection import picker is already open".to_string();
             cx.notify();
             return;
         }
@@ -50,7 +50,7 @@ impl NyaTermApp {
         self.connection_state.open_import_dialog();
         self.connection_state.close_list_more_menu();
         self.shell.close_title_menus();
-        self.terminal.view.status = "select a connection import source".to_string();
+        self.shell.status = "select a connection import source".to_string();
         let import_focus = self.connection_state.import_focus_handle();
         window.focus(&import_focus);
         cx.notify();
@@ -80,7 +80,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if self.connection_state.import_path_prompt_active() {
-            self.terminal.view.status = "connection import picker is already open".to_string();
+            self.shell.status = "connection import picker is already open".to_string();
             cx.notify();
             return;
         }
@@ -94,7 +94,7 @@ impl NyaTermApp {
         let config_dir = self.runtime.config_dir().to_path_buf();
         let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
         self.connection_state.begin_import_path_prompt(source);
-        self.terminal.view.status = source.selecting_status().to_string();
+        self.shell.status = source.selecting_status().to_string();
 
         cx.spawn(async move |this, cx| {
             let result = match receiver.await {
@@ -146,23 +146,23 @@ impl NyaTermApp {
                 let message = self
                     .tr("savedConnections.importSuccess")
                     .replace("{{count}}", &count.to_string());
-                self.terminal.view.status = message.clone();
+                self.shell.status = message.clone();
                 self.settings.set_store_message(message);
                 self.settings.set_store_ready(true);
             }
             ConnectionImportResult::Cancelled => {
-                self.terminal.view.status = "connection import cancelled".to_string();
+                self.shell.status = "connection import cancelled".to_string();
             }
             ConnectionImportResult::Failed(error) => {
                 let message = self
                     .tr("savedConnections.importFailed")
                     .replace("{{error}}", &error);
-                self.terminal.view.status = message.clone();
+                self.shell.status = message.clone();
                 self.settings.set_store_message(message);
                 self.settings.set_store_ready(false);
             }
             ConnectionImportResult::Closed => {
-                self.terminal.view.status = "connection import picker closed".to_string();
+                self.shell.status = "connection import picker closed".to_string();
             }
         }
         cx.notify();

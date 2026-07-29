@@ -689,22 +689,15 @@ impl NyaTermApp {
         // immediately, but defer target snapshot/decorations to the coalesced
         // position notify below.
         self.notify_terminal_scroll_visual_only(session_id, cx);
-        self.terminal
-            .view
+        self.shell
             .runtime
             .pending_terminal_scroll_snapshot_only_sessions
             .remove(session_id);
-        self.terminal
-            .view
+        self.shell
             .runtime
             .pending_terminal_scroll_position_sessions
             .insert(session_id.to_string());
-        if self
-            .terminal
-            .view
-            .runtime
-            .terminal_scroll_position_notify_armed
-        {
+        if self.shell.runtime.terminal_scroll_position_notify_armed {
             return;
         }
         self.arm_terminal_scroll_position_notify(cx);
@@ -720,14 +713,12 @@ impl NyaTermApp {
         }
         self.mark_terminal_user_scroll_activity(session_id, cx);
         if !self
-            .terminal
-            .view
+            .shell
             .runtime
             .pending_terminal_scroll_position_sessions
             .contains(session_id)
         {
-            self.terminal
-                .view
+            self.shell
                 .runtime
                 .pending_terminal_scroll_snapshot_only_sessions
                 .insert(session_id.to_string());
@@ -736,42 +727,28 @@ impl NyaTermApp {
     }
 
     fn arm_terminal_scroll_position_notify(&mut self, cx: &mut Context<Self>) {
-        if self
-            .terminal
-            .view
-            .runtime
-            .terminal_scroll_position_notify_armed
-        {
+        if self.shell.runtime.terminal_scroll_position_notify_armed {
             return;
         }
-        self.terminal
-            .view
-            .runtime
-            .terminal_scroll_position_notify_armed = true;
+        self.shell.runtime.terminal_scroll_position_notify_armed = true;
         cx.spawn(async move |this, cx| {
             Timer::after(TERMINAL_SCROLL_POSITION_NOTIFY_DELAY).await;
             let _ = this.update(cx, |this, cx| {
-                this.terminal
-                    .view
-                    .runtime
-                    .terminal_scroll_position_notify_armed = false;
+                this.shell.runtime.terminal_scroll_position_notify_armed = false;
                 let (session_ids, snapshot_only_session_ids) =
                     terminal_scroll_position_flush_queued_sessions(
                         &mut this
-                            .terminal
-                            .view
+                            .shell
                             .runtime
                             .pending_terminal_scroll_position_repaint_sessions,
                         &mut this
-                            .terminal
-                            .view
+                            .shell
                             .runtime
                             .pending_terminal_scroll_snapshot_only_sessions,
                     );
                 let mut session_ids = session_ids;
                 session_ids.extend(
-                    this.terminal
-                        .view
+                    this.shell
                         .runtime
                         .pending_terminal_scroll_position_sessions
                         .drain(),
@@ -861,24 +838,15 @@ impl NyaTermApp {
         if session_id.is_empty() {
             return;
         }
-        self.terminal.view.runtime.last_terminal_user_scroll_at = Some(Instant::now());
-        self.terminal
-            .view
+        self.shell.runtime.last_terminal_user_scroll_at = Some(Instant::now());
+        self.shell
             .runtime
             .pending_terminal_user_scroll_idle_sessions
             .insert(session_id.to_string());
-        if self
-            .terminal
-            .view
-            .runtime
-            .terminal_user_scroll_idle_notify_armed
-        {
+        if self.shell.runtime.terminal_user_scroll_idle_notify_armed {
             return;
         }
-        self.terminal
-            .view
-            .runtime
-            .terminal_user_scroll_idle_notify_armed = true;
+        self.shell.runtime.terminal_user_scroll_idle_notify_armed = true;
         cx.spawn(async move |this, cx| {
             Timer::after(TERMINAL_USER_SCROLL_ACTIVE_WINDOW).await;
             let _ = this.update(cx, |this, cx| {
@@ -891,7 +859,7 @@ impl NyaTermApp {
     fn flush_terminal_user_scroll_idle_notify(&mut self, cx: &mut Context<Self>) {
         let now = Instant::now();
         if let Some(delay) = terminal_user_scroll_idle_remaining_delay(
-            self.terminal.view.runtime.last_terminal_user_scroll_at,
+            self.shell.runtime.last_terminal_user_scroll_at,
             now,
             TERMINAL_USER_SCROLL_ACTIVE_WINDOW,
         ) {
@@ -904,13 +872,9 @@ impl NyaTermApp {
             .detach();
             return;
         }
-        self.terminal
-            .view
-            .runtime
-            .terminal_user_scroll_idle_notify_armed = false;
+        self.shell.runtime.terminal_user_scroll_idle_notify_armed = false;
         let session_ids = self
-            .terminal
-            .view
+            .shell
             .runtime
             .pending_terminal_user_scroll_idle_sessions
             .drain()
@@ -1052,7 +1016,7 @@ impl NyaTermApp {
             return;
         }
         if self.is_session_disconnected(&session_id) {
-            self.terminal.view.status =
+            self.shell.status =
                 "session disconnected — reconnect before dropping files".to_string();
             cx.notify();
             return;
@@ -1076,7 +1040,7 @@ impl NyaTermApp {
         match kind {
             Some(SessionKind::LocalPty) | None => {
                 if path_strings.is_empty() {
-                    self.terminal.view.status =
+                    self.shell.status =
                         "folders cannot be dropped into a local terminal".to_string();
                     cx.notify();
                     return;
@@ -1087,7 +1051,7 @@ impl NyaTermApp {
                 }
                 let text = nyaterm_core::format_local_terminal_drop_input(&path_strings);
                 if self.send_terminal_input(text.into_bytes(), cx) {
-                    self.terminal.view.status =
+                    self.shell.status =
                         format!("inserted {} path(s) into terminal", path_strings.len());
                     cx.notify();
                 }
@@ -1096,7 +1060,7 @@ impl NyaTermApp {
                 SessionKind::Ssh | SessionKind::Telnet | SessionKind::Serial | SessionKind::RawTcp,
             ) => {
                 if has_dirs {
-                    self.terminal.view.status =
+                    self.shell.status =
                         "folders cannot be uploaded via ZMODEM — use the file explorer for SFTP"
                             .to_string();
                     cx.notify();
@@ -1388,23 +1352,14 @@ impl NyaTermApp {
             return;
         }
         self.mark_terminal_user_scroll_activity(session_id.as_str(), cx);
-        self.terminal
-            .view
+        self.shell
             .runtime
             .pending_terminal_scrollbar_drag_sessions
             .insert(session_id);
-        if self
-            .terminal
-            .view
-            .runtime
-            .terminal_scrollbar_drag_notify_armed
-        {
+        if self.shell.runtime.terminal_scrollbar_drag_notify_armed {
             return;
         }
-        self.terminal
-            .view
-            .runtime
-            .terminal_scrollbar_drag_notify_armed = true;
+        self.shell.runtime.terminal_scrollbar_drag_notify_armed = true;
         cx.spawn(async move |this, cx| {
             Timer::after(TERMINAL_SCROLLBAR_DRAG_NOTIFY_DELAY).await;
             let _ = this.update(cx, |this, cx| {
@@ -1415,16 +1370,9 @@ impl NyaTermApp {
     }
 
     fn flush_terminal_scrollbar_drag_visual_notify(&mut self, cx: &mut Context<Self>) {
-        self.terminal
-            .view
-            .runtime
-            .terminal_scrollbar_drag_notify_armed = false;
+        self.shell.runtime.terminal_scrollbar_drag_notify_armed = false;
         let session_ids = terminal_scrollbar_drag_flush_sessions(
-            &mut self
-                .terminal
-                .view
-                .runtime
-                .pending_terminal_scrollbar_drag_sessions,
+            &mut self.shell.runtime.pending_terminal_scrollbar_drag_sessions,
         );
         for session_id in session_ids {
             self.notify_terminal_scroll_visual_only(session_id.as_str(), cx);
@@ -1520,7 +1468,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn drive_terminal_resize(&mut self) -> bool {
-        if let Some(last) = self.terminal.view.runtime.last_terminal_resize_at
+        if let Some(last) = self.shell.runtime.last_terminal_resize_at
             && last.elapsed() < Duration::from_millis(100)
         {
             return false;
@@ -1639,7 +1587,7 @@ impl NyaTermApp {
             self.terminal.view.screen.resize(cols, rows);
             self.clear_terminal_scroll_residual_for_session(None);
         }
-        self.terminal.view.runtime.last_terminal_resize_at = Some(Instant::now());
+        self.shell.runtime.last_terminal_resize_at = Some(Instant::now());
         true
     }
 

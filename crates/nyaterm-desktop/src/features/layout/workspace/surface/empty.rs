@@ -89,7 +89,7 @@ impl NyaTermApp {
                                         cx,
                                     );
                                     window.focus(&field.read(cx).focus_handle());
-                                    this.terminal.view.status = "quick commands opened".to_string();
+                                    this.shell.status = "quick commands opened".to_string();
                                     cx.notify();
                                 }),
                             ))

@@ -11,7 +11,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.commands.clear_quick_variable_prompt();
-        self.terminal.view.status = "quick command variables cancelled".to_string();
+        self.shell.status = "quick command variables cancelled".to_string();
         cx.notify();
     }
 

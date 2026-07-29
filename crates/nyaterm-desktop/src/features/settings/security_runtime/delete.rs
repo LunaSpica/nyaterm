@@ -39,7 +39,7 @@ impl NyaTermApp {
                 self.security.cancel_delete();
                 let status = format!("{} deleted", confirm.label);
                 self.security.set_status(status.clone());
-                self.terminal.view.status = status;
+                self.shell.status = status;
             }
             Err(error) => {
                 self.security.set_status(error.to_string());

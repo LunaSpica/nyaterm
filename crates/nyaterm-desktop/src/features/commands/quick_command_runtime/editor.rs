@@ -183,7 +183,7 @@ impl NyaTermApp {
                 self.settings
                     .set_store_message(format!("quick command '{}' saved", command.label));
                 self.settings.set_store_ready(true);
-                self.terminal.view.status = self.settings.store_status().message.to_string();
+                self.shell.status = self.settings.store_status().message.to_string();
             }
             Err(error) => {
                 self.commands
@@ -191,7 +191,7 @@ impl NyaTermApp {
                 self.settings
                     .set_store_message(format!("quick command save failed: {error}"));
                 self.settings.set_store_ready(false);
-                self.terminal.view.status = self.settings.store_status().message.to_string();
+                self.shell.status = self.settings.store_status().message.to_string();
             }
         }
         cx.notify();

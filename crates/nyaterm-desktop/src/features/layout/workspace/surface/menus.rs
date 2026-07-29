@@ -169,13 +169,9 @@ impl NyaTermApp {
                     .workspace_pane_root(&session_id)
                     .map(|root| root.session_ids())
                     .unwrap_or_else(|| vec![session_id.clone()]);
-                let has_unread = leaf_ids.iter().any(|id| {
-                    self.terminal
-                        .view
-                        .views
-                        .get(id)
-                        .is_some_and(|view| view.has_unread)
-                });
+                let has_unread = leaf_ids
+                    .iter()
+                    .any(|id| self.terminal.session_has_unread(id));
                 let is_disconnected = leaf_ids.iter().any(|id| self.is_session_disconnected(id));
                 let title = self.session_display_name_by_info(&session);
                 let kind_icon = session_kind_icon_path(session.kind);

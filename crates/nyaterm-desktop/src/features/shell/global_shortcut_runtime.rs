@@ -132,20 +132,20 @@ impl NyaTermApp {
         }
         if shortcut_matches(event, "view.openSettings", &keybindings) {
             self.open_page(NavItem::Settings, cx);
-            self.terminal.view.status = "settings opened".to_string();
+            self.shell.status = "settings opened".to_string();
             cx.notify();
             return true;
         }
         if shortcut_matches(event, "view.openChat", &keybindings) {
             self.ensure_panel_open(NavItem::AiAssistant);
             window.focus(self.ai.chat_focus());
-            self.terminal.view.status = "AI panel focused".to_string();
+            self.shell.status = "AI panel focused".to_string();
             cx.notify();
             return true;
         }
         if shortcut_matches(event, "view.showAllCommands", &keybindings) {
             self.set_bottom_panel_mode(BottomPanelMode::QuickCommands);
-            self.terminal.view.status = "quick commands opened".to_string();
+            self.shell.status = "quick commands opened".to_string();
             cx.notify();
             return true;
         }

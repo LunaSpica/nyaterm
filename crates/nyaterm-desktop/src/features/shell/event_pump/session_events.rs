@@ -11,7 +11,6 @@ use crate::features::shell::event_pump::helpers::{
     terminal_log_plain_text, terminal_output_dropped_marker,
 };
 use crate::features::{NyaTermApp, short_id};
-use crate::models::TerminalViewState;
 
 #[derive(Clone, Copy)]
 enum SessionOutputDrainStep {
@@ -74,10 +73,7 @@ fn terminal_error_notice_output(output: &str) -> String {
 
 impl NyaTermApp {
     pub(in crate::features) fn drain_session_events(&mut self, cx: &mut Context<Self>) -> bool {
-        let settle = connect_settle_active(
-            self.terminal.view.runtime.connect_settle_until,
-            Instant::now(),
-        );
+        let settle = connect_settle_active(self.shell.runtime.connect_settle_until, Instant::now());
         let mut drain_budget =
             session_event_drain_budget(self.runtime_output_pressure_active() || settle);
         if settle {
@@ -110,33 +106,17 @@ impl NyaTermApp {
             && !self.session.event_bridge_has_pending_ui_work()
             && (!drain_sideband_workers || !self.session.has_protocol_runtime_sessions())
         {
-            if self.terminal.view.runtime.session_event_queued_events != 0
-                || self.terminal.view.runtime.session_event_queued_output_bytes != 0
-                || self.terminal.view.runtime.session_event_backlog_active
-                || self
-                    .terminal
-                    .view
-                    .runtime
-                    .session_event_last_output_event_count
-                    != 0
-                || self
-                    .terminal
-                    .view
-                    .runtime
-                    .session_event_last_drained_output_bytes
-                    != 0
+            if self.shell.runtime.session_event_queued_events != 0
+                || self.shell.runtime.session_event_queued_output_bytes != 0
+                || self.shell.runtime.session_event_backlog_active
+                || self.shell.runtime.session_event_last_output_event_count != 0
+                || self.shell.runtime.session_event_last_drained_output_bytes != 0
             {
-                self.terminal.view.runtime.session_event_queued_events = 0;
-                self.terminal.view.runtime.session_event_queued_output_bytes = 0;
-                self.terminal.view.runtime.session_event_backlog_active = false;
-                self.terminal
-                    .view
-                    .runtime
-                    .session_event_last_output_event_count = 0;
-                self.terminal
-                    .view
-                    .runtime
-                    .session_event_last_drained_output_bytes = 0;
+                self.shell.runtime.session_event_queued_events = 0;
+                self.shell.runtime.session_event_queued_output_bytes = 0;
+                self.shell.runtime.session_event_backlog_active = false;
+                self.shell.runtime.session_event_last_output_event_count = 0;
+                self.shell.runtime.session_event_last_drained_output_bytes = 0;
             }
             return false;
         }
@@ -182,12 +162,8 @@ impl NyaTermApp {
                 bridge_drained_ui_events = drain.stats.drained_ui_events;
                 bridge_drained_ui_output_bytes = drain.stats.drained_ui_output_bytes;
                 if drain.stats.dropped_output_bytes > 0 {
-                    self.terminal
-                        .view
-                        .runtime
-                        .session_event_dropped_output_bytes = self
-                        .terminal
-                        .view
+                    self.shell.runtime.session_event_dropped_output_bytes = self
+                        .shell
                         .runtime
                         .session_event_dropped_output_bytes
                         .saturating_add(drain.stats.dropped_output_bytes as u64);
@@ -282,18 +258,12 @@ impl NyaTermApp {
         let queued_output_bytes =
             transport_queued_output_bytes.saturating_add(self.session.pending_event_output_bytes());
         let drained_output_bytes = processed_output_bytes;
-        self.terminal.view.runtime.session_event_queued_events = queued_events;
-        self.terminal.view.runtime.session_event_queued_output_bytes = queued_output_bytes;
-        self.terminal
-            .view
-            .runtime
-            .session_event_last_output_event_count = output_event_count;
-        self.terminal
-            .view
-            .runtime
-            .session_event_last_drained_output_bytes = drained_output_bytes;
+        self.shell.runtime.session_event_queued_events = queued_events;
+        self.shell.runtime.session_event_queued_output_bytes = queued_output_bytes;
+        self.shell.runtime.session_event_last_output_event_count = output_event_count;
+        self.shell.runtime.session_event_last_drained_output_bytes = drained_output_bytes;
 
-        self.terminal.view.runtime.session_event_backlog_active = session_event_backlog_active(
+        self.shell.runtime.session_event_backlog_active = session_event_backlog_active(
             drained_events,
             drained_output_bytes,
             queued_output_bytes,
@@ -317,11 +287,7 @@ impl NyaTermApp {
                 bridge_direct_backpressure_bytes,
                 bridge_drained_ui_events,
                 bridge_drained_ui_output_bytes,
-                dropped_output_bytes = self
-                    .terminal
-                    .view
-                    .runtime
-                    .session_event_dropped_output_bytes,
+                dropped_output_bytes = self.shell.runtime.session_event_dropped_output_bytes,
                 drain_total_ms = drain_started_at.elapsed().as_millis(),
                 output_total_ms = drain_timings.output_total.as_millis(),
                 max_output_chunk_ms = max_output_chunk_duration.as_millis(),
@@ -349,20 +315,14 @@ impl NyaTermApp {
         self.note_ai_agent_output_discontinuity(&session_id, bytes, cx);
         self.session.route_session_events_to_ui(&session_id);
         let encoding = self.settings.summary().interaction_default_encoding.clone();
-        let view = self
-            .terminal
-            .view
-            .views
-            .entry(session_id.clone())
-            .or_insert_with(TerminalViewState::new);
-        view.set_encoding(&encoding);
-        view.note_output_discontinuity(bytes);
+        self.terminal
+            .note_session_output_discontinuity(session_id.clone(), &encoding, bytes);
         let marker = terminal_output_dropped_marker(bytes);
         self.recording
             .write_output(session_id.clone(), marker.clone());
         self.append_terminal_log_for_session(Some(&session_id), &marker, true);
         if self.session.active_id() == Some(session_id.as_str()) {
-            self.terminal.view.status = format!(
+            self.shell.status = format!(
                 "terminal output overloaded; dropped {} queued byte(s)",
                 bytes
             );
@@ -399,9 +359,9 @@ impl NyaTermApp {
         if known_session {
             // Keep the tab so the user can reconnect (Tauri disconnected pane).
             self.mark_session_disconnected(&session_id, cx);
-            self.terminal.view.status = format!("session disconnected {}", short_id(&session_id));
+            self.shell.status = format!("session disconnected {}", short_id(&session_id));
         } else {
-            self.terminal.view.status = format!("session exited {}", short_id(&session_id));
+            self.shell.status = format!("session exited {}", short_id(&session_id));
         }
         true
     }
@@ -420,7 +380,7 @@ impl NyaTermApp {
             self.recording.write_output(session_id.clone(), log.clone());
         }
         if session_id.is_empty() || self.session.active_id() == Some(session_id.as_str()) {
-            self.terminal.view.status = format!("session error: {message}");
+            self.shell.status = format!("session error: {message}");
             self.append_terminal_log(log);
         } else {
             self.append_terminal_log_for_session(Some(&session_id), &log, true);
@@ -607,9 +567,9 @@ impl NyaTermApp {
 
     pub(super) fn terminal_frame_backlog_active(&self) -> bool {
         terminal_frame_backlog_active_from_counts(
-            self.terminal.view.pending_frame_events.len(),
-            self.terminal.view.frame_pipeline.queued_event_count(),
-            self.terminal.view.frame_pipeline.queued_command_count(),
+            self.terminal.frame_queue_metrics().pending_event_count,
+            self.terminal.frame_queue_metrics().event_count,
+            self.terminal.frame_queue_metrics().command_count,
         )
     }
 

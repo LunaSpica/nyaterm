@@ -16,7 +16,6 @@ use nyaterm_terminal::{TerminalOutputDecoder, TerminalScreen};
 use super::assist_state::TerminalAssistState;
 use super::terminal_surface_entity::TerminalSurface;
 use super::window_state::TerminalWindowState;
-use crate::features::app_state::TerminalRuntimeUiState;
 use crate::models::{
     ActionLinkMenuState, ActionLinkTooltipState, MultiLinePasteDraft, RecordingHistorySearchEvent,
     RecordingHistorySearchKey, TerminalContextMenuState, TerminalFrameEvent, TerminalFramePipeline,
@@ -26,7 +25,7 @@ use crate::theme::ThemePalette;
 
 pub(in crate::features) struct TerminalFeatureState {
     pub(super) search: TerminalSearchState,
-    pub view: TerminalViewRuntimeState,
+    pub(super) view: TerminalViewRuntimeState,
     pub(super) input: TerminalInputState,
     pub(super) paste: TerminalPasteReviewState,
     pub(super) assist: TerminalAssistState,
@@ -59,7 +58,7 @@ pub(super) struct TerminalSearchState {
 }
 
 /// Live terminal views, their surfaces, and the frame/scroll pipeline.
-pub(in crate::features) struct TerminalViewRuntimeState {
+pub(super) struct TerminalViewRuntimeState {
     pub views: HashMap<String, TerminalViewState>,
     /// Per-session terminal grid entities (frame notify isolation).
     pub surfaces: HashMap<String, Entity<TerminalSurface>>,
@@ -73,8 +72,6 @@ pub(in crate::features) struct TerminalViewRuntimeState {
     pub scroll_delta_residuals: HashMap<String, f32>,
     pub scrollbar_dragging: bool,
     pub scrollbar_drag_session_id: Option<String>,
-    pub status: String,
-    pub runtime: TerminalRuntimeUiState,
     pub pending_frame_events: VecDeque<TerminalFrameEvent>,
 }
 
@@ -160,7 +157,6 @@ impl TerminalFeatureState {
         output_decoder: TerminalOutputDecoder,
         frame_pipeline: TerminalFramePipeline,
         output: String,
-        status: String,
         scale_factor: f32,
         focus: TerminalFeatureFocus,
     ) -> Self {
@@ -189,8 +185,6 @@ impl TerminalFeatureState {
                 scroll_delta_residuals: HashMap::new(),
                 scrollbar_dragging: false,
                 scrollbar_drag_session_id: None,
-                status,
-                runtime: TerminalRuntimeUiState::default(),
                 pending_frame_events: VecDeque::new(),
             },
             input: TerminalInputState {
@@ -564,7 +558,6 @@ mod tests {
                 TerminalOutputDecoder::default(),
                 TerminalFramePipeline::default(),
                 String::new(),
-                "idle".to_string(),
                 1.0,
                 TerminalFeatureFocus {
                     actions: cx.focus_handle(),
@@ -617,6 +610,21 @@ mod tests {
         assert!(!state.selection.dragging);
         assert!(!state.action_link_hover_is_pending());
         assert!(!state.clear_activation_interaction());
+    }
+
+    #[test]
+    fn terminal_view_owner_groups_session_and_frame_lifecycle() {
+        let mut state = terminal_state();
+        state.ensure_frame_session("session-a".to_string(), "UTF-8".to_string(), 1_000);
+        state.append_session_text_or_create("session-a", "UTF-8", "hello");
+
+        assert_eq!(state.session_output("session-a"), Some("hello"));
+        assert!(!state.session_has_unread("session-a"));
+        assert_eq!(state.session_scroll_offset("session-a"), 0);
+        assert_eq!(state.frame_queue_metrics().pending_event_count, 0);
+
+        state.remove_frame_session("session-a");
+        assert_eq!(state.session_output("session-a"), None);
     }
 
     #[test]

@@ -179,6 +179,28 @@ check_no_matches \
   crates/nyaterm-desktop/src/features/terminal
 
 check_no_multiline_matches \
+  "terminal view state must stay inside the terminal module" \
+  'struct[[:space:]]+TerminalFeatureState[[:space:]]*\{[^}]*pub([[:space:]]|\(crate\)|\(in crate\)|\(in crate::features\))[[:space:]]+view[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/terminal/state.rs
+check_no_matches \
+  "terminal view implementation type must stay inside the terminal module" \
+  'pub([[:space:]]|\(crate\)|\(in crate\)|\(in crate::features\))[[:space:]]+struct[[:space:]]+TerminalViewRuntimeState' \
+  crates/nyaterm-desktop/src/features/terminal/state.rs
+check_no_multiline_matches_excluding \
+  "terminal view child access must use TerminalFeatureState methods outside terminal" \
+  '\.[[:space:]]*terminal[[:space:]]*\.[[:space:]]*view[[:space:]]*(\.|=|\[)' \
+  crates/nyaterm-desktop/src/features \
+  'crates/nyaterm-desktop/src/features/terminal/**'
+check_no_matches \
+  "terminal view state must not expose mutable-reference accessors" \
+  'fn[[:space:]]+view(_mut|_mutable)|->[[:space:]]*&mut[[:space:]]+TerminalViewRuntimeState' \
+  crates/nyaterm-desktop/src/features/terminal
+check_no_matches \
+  "shell status and runtime state must not return to terminal view ownership" \
+  'pub[[:space:]]+(status|runtime)[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/terminal/state.rs
+
+check_no_multiline_matches \
   "terminal window state must stay inside the terminal module" \
   'struct[[:space:]]+TerminalFeatureState[[:space:]]*\{[^}]*pub([[:space:]]|\(crate\)|\(in crate\)|\(in crate::features\))[[:space:]]+windows[[:space:]]*:' \
   crates/nyaterm-desktop/src/features/terminal/state.rs

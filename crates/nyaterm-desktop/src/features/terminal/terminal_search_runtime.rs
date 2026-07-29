@@ -16,7 +16,7 @@ impl NyaTermApp {
         self.terminal.menus.actions_open = false;
         self.terminal.search.open = true;
         self.terminal.search.active_index = 0;
-        self.terminal.view.status = "terminal search opened".to_string();
+        self.shell.status = "terminal search opened".to_string();
         self.forget_text_inputs("terminal.search.");
         let query = self.terminal.search.query.clone();
         let field = self.text_input(
@@ -37,7 +37,7 @@ impl NyaTermApp {
         self.terminal.search.open = false;
         self.terminal.search.active_index = 0;
         self.forget_text_inputs("terminal.search.");
-        self.terminal.view.status = "terminal search closed".to_string();
+        self.shell.status = "terminal search closed".to_string();
         window.focus(&self.terminal.input.focus);
         self.notify_active_terminal_surface(cx);
         cx.notify();
@@ -252,7 +252,7 @@ impl NyaTermApp {
         };
         if count == 0 {
             self.terminal.search.active_index = 0;
-            self.terminal.view.status = "terminal search has no matches".to_string();
+            self.shell.status = "terminal search has no matches".to_string();
             self.notify_active_terminal_surface(cx);
             cx.notify();
             return;
@@ -266,7 +266,7 @@ impl NyaTermApp {
                 }
             }
         }
-        self.terminal.view.status = format!(
+        self.shell.status = format!(
             "terminal search match {}/{}",
             self.terminal.search.active_index + 1,
             count

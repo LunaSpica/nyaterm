@@ -314,7 +314,7 @@ impl NyaTermApp {
     pub(in crate::features) fn drain_translate_events(&mut self) -> bool {
         let dirty = self.translation.drain_events();
         if dirty {
-            self.terminal.view.status = self.translation.status().to_string();
+            self.shell.status = self.translation.status().to_string();
         }
         dirty
     }

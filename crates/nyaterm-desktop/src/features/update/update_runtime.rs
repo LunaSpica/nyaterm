@@ -31,7 +31,7 @@ impl NyaTermApp {
     pub(in crate::features) fn drain_update_events(&mut self) -> bool {
         let dirty = self.update.drain_events();
         if dirty {
-            self.terminal.view.status = self.update.status().to_string();
+            self.shell.status = self.update.status().to_string();
         }
         dirty
     }

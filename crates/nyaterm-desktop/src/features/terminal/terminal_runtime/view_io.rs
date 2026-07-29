@@ -489,7 +489,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.terminal.menus.actions_open = true;
-        self.terminal.view.status = "terminal actions opened".to_string();
+        self.shell.status = "terminal actions opened".to_string();
         window.focus(&self.terminal.menus.actions_focus);
         cx.notify();
     }
@@ -500,7 +500,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.terminal.menus.actions_open = false;
-        self.terminal.view.status = "terminal actions closed".to_string();
+        self.shell.status = "terminal actions closed".to_string();
         window.focus(&self.terminal.input.focus);
         cx.notify();
     }
@@ -596,10 +596,10 @@ impl NyaTermApp {
     pub(in crate::features) fn copy_terminal_visible_text(&mut self, cx: &mut Context<Self>) {
         let text = self.active_terminal_visible_text();
         if text.trim().is_empty() {
-            self.terminal.view.status = "visible terminal text is empty".to_string();
+            self.shell.status = "visible terminal text is empty".to_string();
         } else {
             cx.write_to_clipboard(ClipboardItem::new_string(text));
-            self.terminal.view.status = "copied visible terminal text".to_string();
+            self.shell.status = "copied visible terminal text".to_string();
         }
         self.terminal.menus.actions_open = false;
         cx.notify();
@@ -609,7 +609,7 @@ impl NyaTermApp {
         self.terminal.menus.actions_open = false;
         self.clear_terminal_selection(cx);
         if self.send_terminal_input(vec![0x0c], cx) {
-            self.terminal.view.status = "clear screen command sent".to_string();
+            self.shell.status = "clear screen command sent".to_string();
             cx.notify();
         }
     }
@@ -990,7 +990,7 @@ impl NyaTermApp {
             }
         }
         if failed > 0 {
-            self.terminal.view.status =
+            self.shell.status =
                 format!("alternate scroll synced {synced} peer(s), {failed} failed");
             cx.notify();
         }
@@ -1549,10 +1549,10 @@ impl NyaTermApp {
         status: impl Into<String>,
     ) -> bool {
         let status = status.into();
-        if !terminal_status_changed(self.terminal.view.status.as_str(), status.as_str()) {
+        if !terminal_status_changed(self.shell.status.as_str(), status.as_str()) {
             return false;
         }
-        self.terminal.view.status = status;
+        self.shell.status = status;
         true
     }
 
@@ -1756,16 +1756,15 @@ impl NyaTermApp {
         let now = Instant::now();
         let user_scroll_active = terminal_user_scroll_active(
             display_offset,
-            self.terminal
-                .view
+            self.shell
                 .runtime
                 .pending_terminal_user_scroll_idle_sessions
                 .contains(session_id),
-            self.terminal.view.runtime.last_terminal_user_scroll_at,
+            self.shell.runtime.last_terminal_user_scroll_at,
             now,
         );
         let input_latency_active =
-            terminal_input_latency_active(self.terminal.view.runtime.last_terminal_input_at, now);
+            terminal_input_latency_active(self.shell.runtime.last_terminal_input_at, now);
         let Some(snapshot) = terminal_paint_window_snapshot_for_view(
             Some(view),
             display_offset,
@@ -1800,7 +1799,7 @@ impl NyaTermApp {
             .cell_metrics
             .unwrap_or(((font_size * 0.6).max(6.0), (font_size * 1.35).max(12.0)));
         let is_active = self.session.active_id() == Some(session_id);
-        let visual_bell = is_active && self.terminal.view.runtime.visual_bell_ticks > 0;
+        let visual_bell = is_active && self.shell.runtime.visual_bell_ticks > 0;
         let layout_cache = view.render_cache.layout_cache.clone();
         let render_degraded =
             view.render_degraded || self.settings.summary().terminal_low_latency_mode;
@@ -1976,16 +1975,15 @@ impl NyaTermApp {
             terminal_visual_display_offset(scroll_offset, scroll_residual_lines, scrollback_len);
         let user_scroll_active = terminal_user_scroll_active(
             display_offset,
-            self.terminal
-                .view
+            self.shell
                 .runtime
                 .pending_terminal_user_scroll_idle_sessions
                 .contains(session_id),
-            self.terminal.view.runtime.last_terminal_user_scroll_at,
+            self.shell.runtime.last_terminal_user_scroll_at,
             paint_started_at,
         );
         let input_latency_active = terminal_input_latency_active(
-            self.terminal.view.runtime.last_terminal_input_at,
+            self.shell.runtime.last_terminal_input_at,
             paint_started_at,
         );
         let render_pressure = render_output_pressure
@@ -2063,7 +2061,7 @@ impl NyaTermApp {
             .layout
             .cell_metrics
             .unwrap_or(((font_size * 0.6).max(6.0), (font_size * 1.35).max(12.0)));
-        let visual_bell = is_active && self.terminal.view.runtime.visual_bell_ticks > 0;
+        let visual_bell = is_active && self.shell.runtime.visual_bell_ticks > 0;
         let Some(snapshot) = snapshot else {
             if let Some(request_offset) = terminal_scroll_snapshot_request_offset(
                 scroll_offset,
@@ -2142,7 +2140,7 @@ impl NyaTermApp {
             display_offset,
             remote_cursor_visible,
             blink_enabled,
-            self.terminal.view.runtime.cursor_blink_on,
+            self.shell.runtime.cursor_blink_on,
         );
         let cursor_style = match snapshot.cursor.shape {
             nyaterm_terminal::CursorShape::Underline => "underline".to_string(),

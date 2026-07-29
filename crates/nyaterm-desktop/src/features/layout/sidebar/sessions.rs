@@ -301,7 +301,7 @@ impl NyaTermApp {
                                     .child("START"),
                             )
                             .child(status_pill(
-                                status_label(&self.terminal.view.status),
+                                status_label(&self.shell.status),
                                 rgb(palette.link),
                                 rgb(palette.hover),
                             )),
@@ -406,12 +406,7 @@ impl NyaTermApp {
         let custom_color = self.session.tab_color(&session.id);
         let is_active = self.session.active_id() == Some(session.id.as_str());
         let is_disconnected = self.is_session_disconnected(&session.id);
-        let has_unread = self
-            .terminal
-            .view
-            .views
-            .get(&session.id)
-            .is_some_and(|view| view.has_unread);
+        let has_unread = self.terminal.session_has_unread(&session.id);
         let busy_action = self.session.busy_action(&session.id).map(str::to_string);
         let is_busy = busy_action.is_some();
         let menu_open = self

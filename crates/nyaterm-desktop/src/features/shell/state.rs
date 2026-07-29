@@ -11,6 +11,7 @@ use gpui::{Pixels, ScrollHandle, WindowHandle};
 
 use super::super::app_state::SettingsDraftSnapshot;
 use super::super::settings_window::SettingsWindow;
+use super::runtime_state::ShellRuntimeState;
 use crate::models::{
     ActivityBarContextMenuState, ActivityBarLayoutState, BottomPanelMode, BottomPanelResizeState,
     HeaderStatusState, MainMode, NavItem, PanelResizeSide, PanelResizeState, PanelSide,
@@ -19,6 +20,10 @@ use crate::models::{
 };
 
 pub(in crate::features) struct ShellFeatureState {
+    /// Application-wide transient status shown by shell chrome and terminal overlays.
+    pub(in crate::features) status: String,
+    /// GPUI event-pump, repaint, and shell-persistence scheduling bookkeeping.
+    pub(in crate::features) runtime: ShellRuntimeState,
     pub(super) bottom_panel: ShellBottomPanelState,
     pub(super) viewport: ShellViewportState,
     pub(super) navigation: ShellNavigationState,
@@ -34,6 +39,7 @@ pub(super) struct ShellDiagnosticState {
 }
 
 pub(in crate::features) struct ShellFeatureInit {
+    pub status: String,
     pub bottom_panel_mode: BottomPanelMode,
     pub quick_commands_height: f32,
     pub command_send_height: f32,
@@ -132,6 +138,8 @@ pub(super) struct ShellWorkspaceState {
 impl ShellFeatureState {
     pub(in crate::features) fn new(init: ShellFeatureInit) -> Self {
         Self {
+            status: init.status,
+            runtime: ShellRuntimeState::default(),
             bottom_panel: ShellBottomPanelState {
                 mode: init.bottom_panel_mode,
                 quick_commands_height: init.quick_commands_height,
@@ -960,6 +968,7 @@ mod tests {
 
     fn shell(mode: BottomPanelMode) -> ShellFeatureState {
         ShellFeatureState::new(ShellFeatureInit {
+            status: "idle".to_string(),
             bottom_panel_mode: mode,
             quick_commands_height: 120.,
             command_send_height: 180.,

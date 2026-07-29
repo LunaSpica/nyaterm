@@ -36,7 +36,7 @@ impl NyaTermApp {
                 .find(|connection| connection.id == connection_id)
                 .cloned()
             else {
-                self.terminal.view.status = "connection is no longer available".to_string();
+                self.shell.status = "connection is no longer available".to_string();
                 cx.notify();
                 return;
             };
@@ -106,7 +106,7 @@ impl NyaTermApp {
         self.connection_state.begin_editor(editor);
         // Fields mirror the draft, so they are rebuilt with it.
         self.connection_state.build_editor_fields(cx);
-        self.terminal.view.status = "connection editor opened".to_string();
+        self.shell.status = "connection editor opened".to_string();
         if !self.open_connection_editor_window(cx) {
             // Land on the name and select it, so an edit can start by typing.
             match self
@@ -131,7 +131,7 @@ impl NyaTermApp {
     pub(in crate::features) fn close_connection_editor(&mut self, cx: &mut Context<Self>) {
         self.connection_state.close_editor();
         self.connection_state.clear_editor_fields();
-        self.terminal.view.status = "connection editor closed".to_string();
+        self.shell.status = "connection editor closed".to_string();
         cx.notify();
     }
 
@@ -256,7 +256,7 @@ impl NyaTermApp {
             // Switching kind rewrites the default port on the draft; the box has
             // to be told, or it keeps showing the other protocol's.
             self.connection_state.sync_editor_fields_from_draft(cx);
-            self.terminal.view.status = format!("connection type set to {}", kind.label());
+            self.shell.status = format!("connection type set to {}", kind.label());
         }
         cx.notify();
     }
@@ -272,7 +272,7 @@ impl NyaTermApp {
             prompt: Some(SharedString::from("Select shell executable")),
         };
         let receiver = cx.prompt_for_paths(options);
-        self.terminal.view.status = "selecting shell executable".to_string();
+        self.shell.status = "selecting shell executable".to_string();
         cx.spawn(async move |this, cx| {
             let selected = match receiver.await {
                 Ok(Ok(Some(paths))) => paths.into_iter().next(),
@@ -282,9 +282,9 @@ impl NyaTermApp {
                 if let Some(path) = selected {
                     let path = path.display().to_string();
                     this.connection_state.apply_editor_shell_path(path.clone());
-                    this.terminal.view.status = format!("shell path: {path}");
+                    this.shell.status = format!("shell path: {path}");
                 } else {
-                    this.terminal.view.status = "shell path selection cancelled".to_string();
+                    this.shell.status = "shell path selection cancelled".to_string();
                 }
                 cx.notify();
             });
@@ -304,7 +304,7 @@ impl NyaTermApp {
             prompt: Some(SharedString::from("Select working directory")),
         };
         let receiver = cx.prompt_for_paths(options);
-        self.terminal.view.status = "selecting working directory".to_string();
+        self.shell.status = "selecting working directory".to_string();
         cx.spawn(async move |this, cx| {
             let selected = match receiver.await {
                 Ok(Ok(Some(paths))) => paths.into_iter().next(),
@@ -314,9 +314,9 @@ impl NyaTermApp {
                 if let Some(path) = selected {
                     let path = path.display().to_string();
                     this.connection_state.apply_editor_working_dir(path.clone());
-                    this.terminal.view.status = format!("working dir: {path}");
+                    this.shell.status = format!("working dir: {path}");
                 } else {
-                    this.terminal.view.status = "working directory selection cancelled".to_string();
+                    this.shell.status = "working directory selection cancelled".to_string();
                 }
                 cx.notify();
             });
@@ -525,7 +525,7 @@ impl NyaTermApp {
                 let connect_after_save = editor.connect_after_save;
                 self.connection_state
                     .finish_editor_save(saved.id.clone(), saved.group_id.clone());
-                self.terminal.view.status = format!("saved connection {}", saved.name);
+                self.shell.status = format!("saved connection {}", saved.name);
                 if connect_after_save {
                     self.start_saved_connection(saved, window, cx);
                 } else {

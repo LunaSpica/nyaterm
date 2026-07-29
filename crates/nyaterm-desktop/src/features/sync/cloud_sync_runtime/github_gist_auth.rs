@@ -95,7 +95,7 @@ impl NyaTermApp {
                         login,
                         message,
                     );
-                    self.terminal.view.status = self.cloud_sync.status().to_string();
+                    self.shell.status = self.cloud_sync.status().to_string();
                 }
                 GithubGistAuthEvent::Failed(error) => {
                     let message = if error.contains("OAuth Client ID is not configured") {
@@ -104,7 +104,7 @@ impl NyaTermApp {
                         error
                     };
                     self.cloud_sync.apply_github_auth_failed(message);
-                    self.terminal.view.status = self.cloud_sync.status().to_string();
+                    self.shell.status = self.cloud_sync.status().to_string();
                 }
                 GithubGistAuthEvent::Cancelled => {
                     self.cloud_sync.apply_github_auth_cancelled();

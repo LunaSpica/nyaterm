@@ -608,8 +608,8 @@ impl NyaTermApp {
             }
 
             let allow_deferred_events = terminal_frame_deferred_events_can_apply(
-                self.terminal.view.runtime.session_event_backlog_active,
-                self.terminal.view.runtime.session_event_queued_output_bytes,
+                self.shell.runtime.session_event_backlog_active,
+                self.shell.runtime.session_event_queued_output_bytes,
                 self.session.event_bridge_queued_output_bytes(),
                 pending_terminal_frame_output_events(&self.terminal.view.pending_frame_events),
                 self.terminal.view.frame_pipeline.queued_output_bytes(),
@@ -651,30 +651,22 @@ impl NyaTermApp {
         }
 
         if drained_events > 0 {
-            self.terminal.view.runtime.last_terminal_frame_apply_at = Some(started_at);
+            self.shell.runtime.last_terminal_frame_apply_at = Some(started_at);
         }
         let surface_notify_count =
             dirty_surface_sessions.len() + scroll_position_surface_sessions.len();
         for session_id in dirty_surface_sessions {
             self.sync_terminal_surface_paint(&session_id, cx);
-            self.terminal
-                .view
-                .runtime
-                .terminal_surface_frame_notify_count = self
-                .terminal
-                .view
+            self.shell.runtime.terminal_surface_frame_notify_count = self
+                .shell
                 .runtime
                 .terminal_surface_frame_notify_count
                 .saturating_add(1);
         }
         for session_id in scroll_position_surface_sessions {
             self.notify_terminal_scroll_position_only(&session_id, cx);
-            self.terminal
-                .view
-                .runtime
-                .terminal_surface_frame_notify_count = self
-                .terminal
-                .view
+            self.shell.runtime.terminal_surface_frame_notify_count = self
+                .shell
                 .runtime
                 .terminal_surface_frame_notify_count
                 .saturating_add(1);
@@ -701,8 +693,7 @@ impl NyaTermApp {
                 layout_cache_hits,
                 layout_cache_misses,
                 connect_settle_active = self
-                    .terminal
-                    .view
+                    .shell
                     .runtime
                     .connect_settle_until
                     .is_some_and(|until| Instant::now() < until),
@@ -767,8 +758,7 @@ impl NyaTermApp {
         if is_visible
             && accepted_bytes > 0
             && self
-                .terminal
-                .view
+                .shell
                 .runtime
                 .connect_settle_until
                 .is_none_or(|until| Instant::now() >= until)
@@ -893,12 +883,8 @@ impl NyaTermApp {
         let chrome_notify =
             terminal_output_frame_needs_chrome_notify(unread_changed, effects_need_ui_apply);
         if chrome_notify {
-            self.terminal
-                .view
-                .runtime
-                .terminal_chrome_frame_notify_count = self
-                .terminal
-                .view
+            self.shell.runtime.terminal_chrome_frame_notify_count = self
+                .shell
                 .runtime
                 .terminal_chrome_frame_notify_count
                 .saturating_add(1);
@@ -1138,11 +1124,11 @@ impl NyaTermApp {
     ) -> bool {
         let text_bytes = frame.text.len();
         if frame.text.trim().is_empty() {
-            self.terminal.view.status = "terminal buffer is empty".to_string();
+            self.shell.status = "terminal buffer is empty".to_string();
         } else {
             let char_count = frame.text.chars().count();
             cx.write_to_clipboard(ClipboardItem::new_string(frame.text));
-            self.terminal.view.status = if frame.truncated {
+            self.shell.status = if frame.truncated {
                 format!("copied terminal buffer tail ({char_count} chars)")
             } else {
                 format!("copied terminal buffer ({char_count} chars)")
@@ -1246,7 +1232,7 @@ impl NyaTermApp {
             clipboard_store = effects.clipboard_store;
             clipboard_loads = effects.clipboard_loads;
             if effects.bell {
-                self.terminal.view.runtime.visual_bell_ticks = 4;
+                self.shell.runtime.visual_bell_ticks = 4;
             }
             if let Some(title) = effects.title {
                 self.session.set_dynamic_title(session_id, Some(title));
@@ -1274,7 +1260,7 @@ impl NyaTermApp {
             clipboard_store = effects.clipboard_store;
             clipboard_loads = effects.clipboard_loads;
             if effects.bell {
-                self.terminal.view.runtime.visual_bell_ticks = 4;
+                self.shell.runtime.visual_bell_ticks = 4;
             }
         }
 
@@ -1309,7 +1295,7 @@ impl NyaTermApp {
                 continue;
             }
             if let Err(error) = self.write_session_protocol_response(session_id, &response) {
-                self.terminal.view.status = format!("terminal response failed: {error}");
+                self.shell.status = format!("terminal response failed: {error}");
                 break;
             }
         }
@@ -1326,7 +1312,7 @@ impl NyaTermApp {
         let mut clipboard_store = effects.clipboard_store;
         let mut clipboard_loads = effects.clipboard_loads;
         if effects.bell {
-            self.terminal.view.runtime.visual_bell_ticks = 4;
+            self.shell.runtime.visual_bell_ticks = 4;
         }
         if let Some(title) = effects.title {
             self.session.set_dynamic_title(session_id, Some(title));
@@ -1364,7 +1350,7 @@ impl NyaTermApp {
         if let Some(cx) = cx {
             if let Some(text) = clipboard_store.take() {
                 cx.write_to_clipboard(ClipboardItem::new_string(text));
-                self.terminal.view.status = "OSC 52 clipboard updated".to_string();
+                self.shell.status = "OSC 52 clipboard updated".to_string();
             }
             if !clipboard_loads.is_empty() {
                 let clipboard_text = cx
@@ -1379,8 +1365,7 @@ impl NyaTermApp {
             }
         } else {
             if clipboard_store.take().is_some() {
-                self.terminal.view.status =
-                    "OSC 52 clipboard update skipped: UI unavailable".to_string();
+                self.shell.status = "OSC 52 clipboard update skipped: UI unavailable".to_string();
             }
             if !clipboard_loads.is_empty() {
                 queue_osc52_clipboard_load_replies(clipboard_loads, "", pending_pty_writes);

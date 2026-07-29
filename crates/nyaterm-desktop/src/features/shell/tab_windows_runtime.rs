@@ -95,7 +95,7 @@ impl NyaTermApp {
         {
             self.shell.workspace.focused_terminal_leaf_id = focused_leaf_id;
             self.activate_session_id_with_surface_sync(&tab_id, cx);
-            self.terminal.view.status = format!(
+            self.shell.status = format!(
                 "moved tab {} before {}",
                 short_id(&tab_id),
                 short_id(&before_tab_id)
@@ -140,12 +140,12 @@ impl NyaTermApp {
                     return;
                 }
                 TerminalWindowDockResult::UnknownTab => {
-                    self.terminal.view.status = format!("unknown tab {}", short_id(&tab_id));
+                    self.shell.status = format!("unknown tab {}", short_id(&tab_id));
                     cx.notify();
                     return;
                 }
                 TerminalWindowDockResult::NoEffect => {
-                    self.terminal.view.status = "tab dock had no effect".to_string();
+                    self.shell.status = "tab dock had no effect".to_string();
                     cx.notify();
                     return;
                 }
@@ -159,7 +159,7 @@ impl NyaTermApp {
             TabDockZone::Center => "merged into leaf".to_string(),
             TabDockZone::Edge(edge) => format!("split to {}", edge.label()),
         };
-        self.terminal.view.status = format!("docked tab {} ({})", short_id(&tab_id), zone_label);
+        self.shell.status = format!("docked tab {} ({})", short_id(&tab_id), zone_label);
         self.persist_terminal_window_layout();
         cx.notify();
     }
@@ -176,7 +176,7 @@ impl NyaTermApp {
             .map(|session| session.id)
             .collect::<Vec<_>>();
         if tab_ids.is_empty() {
-            self.terminal.view.status = "no tabs to tile".to_string();
+            self.shell.status = "no tabs to tile".to_string();
             cx.notify();
             return;
         }
@@ -185,7 +185,7 @@ impl NyaTermApp {
             self.terminal
                 .apply_smart_split(&tab_ids, mode, active.as_deref())
         else {
-            self.terminal.view.status = "unable to build tile layout".to_string();
+            self.shell.status = "unable to build tile layout".to_string();
             cx.notify();
             return;
         };
@@ -195,7 +195,7 @@ impl NyaTermApp {
         self.shell.workspace.focused_terminal_leaf_id = focused_leaf_id;
         self.shell.navigation.selected_nav = NavItem::Workspace;
         self.shell.navigation.main_mode = MainMode::Workspace;
-        self.terminal.view.status = format!("applied {}", mode.label().to_ascii_lowercase());
+        self.shell.status = format!("applied {}", mode.label().to_ascii_lowercase());
         self.persist_terminal_window_layout();
         // Global pane layout is obsolete while multi-leaf is active.
         self.persist_workspace_pane_layout();
@@ -209,7 +209,7 @@ impl NyaTermApp {
             return;
         }
         // Defer disk write — layout changes must not open redb on the UI hot path.
-        self.terminal.view.runtime.window_layout_persist_dirty = true;
+        self.shell.runtime.window_layout_persist_dirty = true;
     }
 
     pub(in crate::features) fn try_restore_terminal_window_layout(&mut self) {
@@ -259,6 +259,6 @@ impl NyaTermApp {
             return;
         };
         self.shell.workspace.focused_terminal_leaf_id = focused_leaf_id;
-        self.terminal.view.status = "restored multi-leaf window layout".to_string();
+        self.shell.status = "restored multi-leaf window layout".to_string();
     }
 }

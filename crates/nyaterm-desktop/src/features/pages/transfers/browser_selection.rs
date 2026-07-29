@@ -23,7 +23,7 @@ impl NyaTermApp {
     ) {
         self.transfer.select_browser_entry(path.clone());
         self.transfer.set_remote_path(path.clone());
-        self.terminal.view.status = format!("selected remote {path}");
+        self.shell.status = format!("selected remote {path}");
         cx.notify();
     }
 
@@ -222,7 +222,7 @@ impl NyaTermApp {
         window.focus(self.transfer.browser_view().focus);
         if let Some(selected_count) = self.transfer.activate_marked_browser_path(&path) {
             self.transfer.set_remote_path(path);
-            self.terminal.view.status = format!("{} remote item(s) marked", selected_count);
+            self.shell.status = format!("{} remote item(s) marked", selected_count);
             cx.notify();
             return;
         }
@@ -366,7 +366,7 @@ impl NyaTermApp {
             .transfer
             .replace_browser_selection(next_selection, Some(target_path.clone()));
         self.transfer.set_remote_path(target_path);
-        self.terminal.view.status = format!("{} remote item(s) marked", selected_count);
+        self.shell.status = format!("{} remote item(s) marked", selected_count);
         cx.notify();
     }
 
@@ -377,7 +377,7 @@ impl NyaTermApp {
     ) {
         let selected_count = self.transfer.toggle_browser_path_mark(path.clone());
         self.transfer.set_remote_path(path.clone());
-        self.terminal.view.status = format!("{} remote item(s) marked", selected_count);
+        self.shell.status = format!("{} remote item(s) marked", selected_count);
         cx.notify();
     }
 
@@ -394,7 +394,7 @@ impl NyaTermApp {
         if let Some(path) = active_path {
             self.transfer.set_remote_path(path);
         }
-        self.terminal.view.status = format!("{} remote item(s) marked", selected_count);
+        self.shell.status = format!("{} remote item(s) marked", selected_count);
         cx.notify();
     }
 
@@ -416,12 +416,12 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(value) = self.selected_transfer_path_part(part) else {
-            self.terminal.view.status = "select a remote item first".to_string();
+            self.shell.status = "select a remote item first".to_string();
             cx.notify();
             return;
         };
         cx.write_to_clipboard(ClipboardItem::new_string(value.clone()));
-        self.terminal.view.status = format!("copied remote {}", part.label());
+        self.shell.status = format!("copied remote {}", part.label());
         self.transfer
             .set_browser_status(truncate_preview(&value, 92));
         cx.notify();
@@ -433,17 +433,17 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(value) = self.selected_transfer_path_part(part) else {
-            self.terminal.view.status = "select a remote item first".to_string();
+            self.shell.status = "select a remote item first".to_string();
             cx.notify();
             return;
         };
         if self.session.active_id().is_none() {
-            self.terminal.view.status = "start a session before sending remote path".to_string();
+            self.shell.status = "start a session before sending remote path".to_string();
             cx.notify();
             return;
         }
         if self.send_terminal_input(value.clone().into_bytes(), cx) {
-            self.terminal.view.status = format!("sent remote {} to terminal", part.label());
+            self.shell.status = format!("sent remote {} to terminal", part.label());
             self.transfer
                 .set_browser_status(truncate_preview(&value, 92));
             cx.notify();
@@ -495,7 +495,7 @@ impl NyaTermApp {
     ) {
         let entries = self.selected_transfer_entries();
         if entries.is_empty() {
-            self.terminal.view.status = "mark remote items before downloading".to_string();
+            self.shell.status = "mark remote items before downloading".to_string();
             cx.notify();
             return;
         }
@@ -517,7 +517,7 @@ impl NyaTermApp {
             };
             self.start_sftp_download_job_for_target(entry.path, local_path, window, cx);
         }
-        self.terminal.view.status = format!("{total} SFTP download job(s) started");
+        self.shell.status = format!("{total} SFTP download job(s) started");
         cx.notify();
     }
 }

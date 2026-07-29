@@ -165,7 +165,7 @@ impl NyaTermApp {
             && !is_disconnected
             && display_offset == 0
             && remote_cursor_visible
-            && (!blink_enabled || self.terminal.view.runtime.cursor_blink_on);
+            && (!blink_enabled || self.shell.runtime.cursor_blink_on);
         let cursor_style = match snapshot.cursor.shape {
             nyaterm_terminal::CursorShape::Underline => "underline".to_string(),
             nyaterm_terminal::CursorShape::Beam => "bar".to_string(),
@@ -560,7 +560,7 @@ impl NyaTermApp {
                     })
                 })
                 .unwrap_or((0, 0, 0, 0));
-        let show_visual_bell = is_active && self.terminal.view.runtime.visual_bell_ticks > 0;
+        let show_visual_bell = is_active && self.shell.runtime.visual_bell_ticks > 0;
         let file_drop_hover = self
             .terminal
             .terminal_file_drop_hover_matches(session_id.as_str());
@@ -738,7 +738,7 @@ impl NyaTermApp {
                     })
                     .when(
                         !session_id.is_empty()
-                            && !self.terminal.view.status.trim().is_empty()
+                            && !self.shell.status.trim().is_empty()
                             && !is_active,
                         |this| {
                             this.child(
@@ -754,7 +754,7 @@ impl NyaTermApp {
                                         div()
                                             .text_xs()
                                             .text_color(rgb(palette.text_muted))
-                                            .child(self.terminal.view.status.clone()),
+                                            .child(self.shell.status.clone()),
                                     ),
                             )
                         },
@@ -792,7 +792,7 @@ impl NyaTermApp {
                                     div()
                                         .text_xs()
                                         .text_color(rgb(palette.text_muted))
-                                        .child(self.terminal.view.status.clone()),
+                                        .child(self.shell.status.clone()),
                                 ),
                         )
                     })
@@ -958,9 +958,9 @@ impl NyaTermApp {
                                         }
                                     }
                                     if this.terminal.selection.selection.is_none()
-                                        && this.terminal.view.status != "terminal focused"
+                                        && this.shell.status != "terminal focused"
                                     {
-                                        this.terminal.view.status = "terminal focused".to_string();
+                                        this.shell.status = "terminal focused".to_string();
                                         cx.notify();
                                     }
                                 })

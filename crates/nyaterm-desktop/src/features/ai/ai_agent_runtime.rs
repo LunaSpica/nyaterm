@@ -436,11 +436,7 @@ impl NyaTermApp {
         let now = Instant::now();
         let current_len = self
             .terminal
-            .view
-            .views
-            .get(&state.terminal_session_id)
-            .map(|view| view.output.len())
-            .unwrap_or_else(|| self.terminal.view.output.len());
+            .session_output_len_or_default(&state.terminal_session_id);
         if current_len != state.last_seen_len {
             state.last_seen_len = current_len;
             state.stable_since = now;

@@ -14,7 +14,7 @@ impl NyaTermApp {
     ) {
         self.settings.summary.host_key_policy = policy.to_string();
         if self.defer_settings_persistence(cx) {
-            self.terminal.view.status = format!("host key policy staged as {policy}");
+            self.shell.status = format!("host key policy staged as {policy}");
             return;
         }
         match ConnectionStore::open_with_portable_key_path(
@@ -25,12 +25,12 @@ impl NyaTermApp {
         {
             Ok(settings) => {
                 self.apply_gpui_settings(settings);
-                self.terminal.view.status = format!("host key policy set to {policy}");
+                self.shell.status = format!("host key policy set to {policy}");
                 self.settings.store_status.message = "settings saved".to_string();
                 self.settings.store_status.ready = true;
             }
             Err(error) => {
-                self.terminal.view.status = format!("failed to save host key policy: {error}");
+                self.shell.status = format!("failed to save host key policy: {error}");
                 self.settings.store_status.message = format!("settings save failed: {error}");
                 self.settings.store_status.ready = false;
             }
@@ -89,13 +89,13 @@ impl NyaTermApp {
                     .set_memory_limit(self.settings.summary.recording_memory_limit_bytes as usize);
                 self.settings.store_status.message = "recording settings saved".to_string();
                 self.settings.store_status.ready = true;
-                self.terminal.view.status = "recording settings saved".to_string();
+                self.shell.status = "recording settings saved".to_string();
             }
             Err(error) => {
                 self.settings.store_status.message =
                     format!("recording settings save failed: {error}");
                 self.settings.store_status.ready = false;
-                self.terminal.view.status = self.settings.store_status.message.clone();
+                self.shell.status = self.settings.store_status.message.clone();
             }
         }
         cx.notify();
@@ -225,13 +225,13 @@ impl NyaTermApp {
                     ));
                 self.settings.store_status.message = "transfer settings saved".to_string();
                 self.settings.store_status.ready = true;
-                self.terminal.view.status = success_status.to_string();
+                self.shell.status = success_status.to_string();
             }
             Err(error) => {
                 self.settings.store_status.message =
                     format!("transfer settings save failed: {error}");
                 self.settings.store_status.ready = false;
-                self.terminal.view.status = self.settings.store_status.message.clone();
+                self.shell.status = self.settings.store_status.message.clone();
             }
         }
         cx.notify();
@@ -244,7 +244,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.settings.summary.transfer_default_editor = text;
-        self.terminal.view.status = "transfer editor command edited".to_string();
+        self.shell.status = "transfer editor command edited".to_string();
         cx.notify();
     }
 

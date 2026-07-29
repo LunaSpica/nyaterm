@@ -258,9 +258,7 @@ impl NyaTermApp {
         // that is especially visible while scrolled or dragging a selection.
         self.refresh_terminal_cell_metrics(cx);
         self.sync_terminal_cell_metrics_to_screens();
-        for view in self.terminal.view.views.values_mut() {
-            view.render_cache.clear();
-        }
+        self.terminal.invalidate_all_render_caches();
         self.resize_all_known_terminal_surfaces();
         self.refresh_visible_terminal_surfaces(cx);
     }
@@ -299,13 +297,13 @@ impl NyaTermApp {
         };
         self.settings.set_cursor_style(normalized.to_string());
         self.save_appearance_settings(cx);
-        self.terminal.view.status = format!("cursor style → {normalized}");
+        self.shell.status = format!("cursor style → {normalized}");
     }
 
     pub(in crate::features) fn toggle_cursor_blink(&mut self, cx: &mut Context<Self>) {
         let cursor_blink = self.settings.toggle_cursor_blink();
         self.save_appearance_settings(cx);
-        self.terminal.view.status = if cursor_blink {
+        self.shell.status = if cursor_blink {
             "cursor blink on".to_string()
         } else {
             "cursor blink off".to_string()
@@ -326,7 +324,7 @@ impl NyaTermApp {
         });
         self.settings.set_terminal_theme(theme);
         self.save_appearance_settings(cx);
-        self.terminal.view.status = match self.settings.summary().terminal_theme.as_deref() {
+        self.shell.status = match self.settings.summary().terminal_theme.as_deref() {
             Some(id) => format!("terminal theme → {id}"),
             None => "terminal theme → follow UI".to_string(),
         };
@@ -345,7 +343,7 @@ impl NyaTermApp {
             return;
         }
         self.save_appearance_settings(cx);
-        self.terminal.view.status = format!("minimum contrast → {ratio}");
+        self.shell.status = format!("minimum contrast → {ratio}");
     }
 
     pub(in crate::features) fn update_ui_font_family(
@@ -499,7 +497,7 @@ impl NyaTermApp {
             )),
         };
         let receiver = cx.prompt_for_paths(options);
-        self.terminal.view.status = "selecting wallpaper image".to_string();
+        self.shell.status = "selecting wallpaper image".to_string();
         cx.spawn(async move |this, cx| {
             let path = match receiver.await {
                 Ok(Ok(Some(paths))) => paths.into_iter().next(),
@@ -510,9 +508,9 @@ impl NyaTermApp {
                     this.settings
                         .select_background_image(path.display().to_string());
                     this.save_appearance_settings(cx);
-                    this.terminal.view.status = "wallpaper image selected".to_string();
+                    this.shell.status = "wallpaper image selected".to_string();
                 } else {
-                    this.terminal.view.status = "wallpaper selection cancelled".to_string();
+                    this.shell.status = "wallpaper selection cancelled".to_string();
                     cx.notify();
                 }
             });
@@ -525,7 +523,7 @@ impl NyaTermApp {
         self.settings.clear_background_image();
         self.settings.close_appearance_menu();
         self.save_appearance_settings(cx);
-        self.terminal.view.status = "wallpaper cleared".to_string();
+        self.shell.status = "wallpaper cleared".to_string();
     }
 
     pub(in crate::features) fn set_background_image_fit(
@@ -542,7 +540,7 @@ impl NyaTermApp {
         self.settings
             .set_background_image_fit(normalized.to_string());
         self.save_appearance_settings(cx);
-        self.terminal.view.status = format!("wallpaper fit → {normalized}");
+        self.shell.status = format!("wallpaper fit → {normalized}");
     }
 
     pub(in crate::features) fn set_background_image_opacity(
@@ -586,13 +584,13 @@ impl NyaTermApp {
                 self.settings
                     .set_store_message("appearance settings saved".to_string());
                 self.settings.set_store_ready(true);
-                self.terminal.view.status = "appearance settings saved".to_string();
+                self.shell.status = "appearance settings saved".to_string();
             }
             Err(error) => {
                 self.settings
                     .set_store_message(format!("appearance settings save failed: {error}"));
                 self.settings.set_store_ready(false);
-                self.terminal.view.status = self.settings.store_status().message.to_string();
+                self.shell.status = self.settings.store_status().message.to_string();
             }
         }
         cx.notify();

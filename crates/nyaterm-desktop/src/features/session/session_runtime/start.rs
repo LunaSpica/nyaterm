@@ -78,8 +78,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if self.saved_connection_start_is_pending_or_queued(&connection) {
-            self.terminal.view.status =
-                format!("{} is already connecting or queued", connection.name);
+            self.shell.status = format!("{} is already connecting or queued", connection.name);
             self.shell.show_workspace();
             cx.notify();
             return;

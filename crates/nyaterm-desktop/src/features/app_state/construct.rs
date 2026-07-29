@@ -305,7 +305,6 @@ impl NyaTermApp {
                 terminal_output_decoder,
                 terminal_frame_pipeline,
                 String::from(INITIAL_TERMINAL_BANNER),
-                "idle".to_string(),
                 1.0,
                 TerminalFeatureFocus {
                     actions: cx.focus_handle(),
@@ -398,6 +397,7 @@ impl NyaTermApp {
             ),
             text_inputs: TextInputRegistry::default(),
             shell: ShellFeatureState::new(ShellFeatureInit {
+                status: "idle".to_string(),
                 bottom_panel_mode: if settings.ui_serial_send_visible {
                     BottomPanelMode::CommandSend
                 } else if settings.ui_quick_cmd_visible {

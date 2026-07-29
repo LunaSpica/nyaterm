@@ -21,7 +21,7 @@ use super::update::UpdateFeatureState;
 mod construct;
 mod types;
 
-pub(in crate::features) use types::{SettingsDraftSnapshot, TerminalRuntimeUiState};
+pub(in crate::features) use types::SettingsDraftSnapshot;
 
 pub struct NyaTermApp {
     pub(in crate::features) stores: crate::entities::UiStoreHandles,

@@ -1,7 +1,7 @@
 use nyaterm_transport::SessionInfo;
 
 use crate::features::NyaTermApp;
-use crate::models::{SessionRuntimeMetadata, TerminalViewState};
+use crate::models::SessionRuntimeMetadata;
 
 impl NyaTermApp {
     pub(in crate::features) fn register_session(
@@ -11,14 +11,7 @@ impl NyaTermApp {
     ) {
         self.session.register_session_metadata(session_id, metadata);
         let encoding = self.settings.summary().interaction_default_encoding.clone();
-        let view = self
-            .terminal
-            .view
-            .views
-            .entry(session_id.to_string())
-            .or_insert_with(TerminalViewState::new);
-        view.set_encoding(&encoding);
-        self.terminal.view.frame_pipeline.ensure_session(
+        self.terminal.ensure_frame_session(
             session_id.to_string(),
             encoding,
             self.terminal_scrollback_line_limit(),

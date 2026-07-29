@@ -207,7 +207,7 @@ impl NyaTermApp {
     pub(super) fn copy_current_transfer_browser_path(&mut self, cx: &mut Context<Self>) {
         let path = normalized_transfer_browser_path(&self.transfer.browser_view().path);
         cx.write_to_clipboard(ClipboardItem::new_string(path.clone()));
-        self.terminal.view.status = "copied current remote directory".to_string();
+        self.shell.status = "copied current remote directory".to_string();
         self.transfer
             .set_browser_status(truncate_preview(&path, 92));
         cx.notify();
@@ -434,13 +434,13 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if self.session.active_id().is_none() {
-            self.terminal.view.status = "start a session before sending remote path".to_string();
+            self.shell.status = "start a session before sending remote path".to_string();
             cx.notify();
             return;
         }
         let path = normalized_transfer_browser_path(&self.transfer.browser_view().path);
         if self.send_terminal_input(path.clone().into_bytes(), cx) {
-            self.terminal.view.status = "sent current remote directory to terminal".to_string();
+            self.shell.status = "sent current remote directory to terminal".to_string();
             self.transfer
                 .set_browser_status(truncate_preview(&path, 92));
             cx.notify();

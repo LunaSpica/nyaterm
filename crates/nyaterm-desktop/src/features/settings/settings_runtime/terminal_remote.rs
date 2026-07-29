@@ -171,13 +171,13 @@ impl NyaTermApp {
                 self.enforce_terminal_scrollback_limit();
                 self.settings.store_status.message = "terminal settings saved".to_string();
                 self.settings.store_status.ready = true;
-                self.terminal.view.status = "terminal settings saved".to_string();
+                self.shell.status = "terminal settings saved".to_string();
             }
             Err(error) => {
                 self.settings.store_status.message =
                     format!("terminal settings save failed: {error}");
                 self.settings.store_status.ready = false;
-                self.terminal.view.status = self.settings.store_status.message.clone();
+                self.shell.status = self.settings.store_status.message.clone();
             }
         }
         cx.notify();

@@ -16,7 +16,7 @@ use crate::features::shell::event_pump::helpers::{
 use crate::features::{
     NyaTermApp, TextInputSetup, credential_prompt_target, keyboard_interactive_prompt_target,
 };
-use crate::models::{NavItem, terminal_frame_search_result_is_current};
+use crate::models::NavItem;
 
 mod bridge;
 mod helpers;
@@ -36,7 +36,7 @@ const TERMINAL_INPUT_WAKE_INTERVALS: [Duration; 3] = [
 
 impl NyaTermApp {
     pub(in crate::features) fn start_terminal_frame_event_wake(&mut self, cx: &mut Context<Self>) {
-        let Some(mut wake_rx) = self.terminal.view.frame_pipeline.take_event_wake_receiver() else {
+        let Some(mut wake_rx) = self.terminal.take_frame_event_wake_receiver() else {
             return;
         };
         cx.spawn(async move |this, cx| {
@@ -94,16 +94,15 @@ impl NyaTermApp {
 
     pub(in crate::features) fn arm_terminal_input_wake(&mut self, cx: &mut Context<Self>) {
         self.mark_terminal_input_latency_activity(cx);
-        self.terminal.view.runtime.terminal_input_wake_generation = self
-            .terminal
-            .view
+        self.shell.runtime.terminal_input_wake_generation = self
+            .shell
             .runtime
             .terminal_input_wake_generation
             .saturating_add(1);
-        if self.terminal.view.runtime.terminal_input_wake_armed {
+        if self.shell.runtime.terminal_input_wake_armed {
             return;
         }
-        self.terminal.view.runtime.terminal_input_wake_armed = true;
+        self.shell.runtime.terminal_input_wake_armed = true;
         // Keep key dispatch limited to encoding and the PTY notifier. Pull
         // through already queued echo after the current input event. The armed
         // state coalesces a burst of keys into one deferred drain.
@@ -113,7 +112,7 @@ impl NyaTermApp {
                 this.drain_terminal_input_wake(cx);
             });
         });
-        let mut observed_generation = self.terminal.view.runtime.terminal_input_wake_generation;
+        let mut observed_generation = self.shell.runtime.terminal_input_wake_generation;
         cx.spawn(async move |this, cx| {
             loop {
                 for delay in TERMINAL_INPUT_WAKE_INTERVALS {
@@ -124,10 +123,9 @@ impl NyaTermApp {
                 }
                 let (next_generation, finished) = this
                     .update(cx, |this, _| {
-                        let next_generation =
-                            this.terminal.view.runtime.terminal_input_wake_generation;
+                        let next_generation = this.shell.runtime.terminal_input_wake_generation;
                         if next_generation == observed_generation {
-                            this.terminal.view.runtime.terminal_input_wake_armed = false;
+                            this.shell.runtime.terminal_input_wake_armed = false;
                             (next_generation, true)
                         } else {
                             (next_generation, false)
@@ -148,8 +146,8 @@ impl NyaTermApp {
             | self.drain_terminal_frame_events_for_input_wake(cx);
         if chrome_dirty {
             cx.notify();
-            self.terminal.view.runtime.last_ui_notify_at = Some(Instant::now());
-            self.terminal.view.runtime.pending_ui_notify = false;
+            self.shell.runtime.last_ui_notify_at = Some(Instant::now());
+            self.shell.runtime.pending_ui_notify = false;
         }
     }
 
@@ -157,28 +155,27 @@ impl NyaTermApp {
         let chrome_dirty = self.drain_terminal_frame_events(cx);
         if chrome_dirty {
             cx.notify();
-            self.terminal.view.runtime.last_ui_notify_at = Some(Instant::now());
-            self.terminal.view.runtime.pending_ui_notify = false;
+            self.shell.runtime.last_ui_notify_at = Some(Instant::now());
+            self.shell.runtime.pending_ui_notify = false;
         }
     }
 
     fn mark_terminal_input_latency_activity(&mut self, cx: &mut Context<Self>) {
-        self.terminal.view.runtime.last_terminal_input_at = Some(Instant::now());
+        self.shell.runtime.last_terminal_input_at = Some(Instant::now());
         if let Some(session_id) = self
             .session
             .active_id()
             .filter(|session_id| !session_id.is_empty())
         {
-            self.terminal
-                .view
+            self.shell
                 .runtime
                 .pending_terminal_input_idle_sessions
                 .insert(session_id.to_string());
         }
-        if self.terminal.view.runtime.terminal_input_idle_notify_armed {
+        if self.shell.runtime.terminal_input_idle_notify_armed {
             return;
         }
-        self.terminal.view.runtime.terminal_input_idle_notify_armed = true;
+        self.shell.runtime.terminal_input_idle_notify_armed = true;
         cx.spawn(async move |this, cx| {
             Timer::after(TERMINAL_INPUT_LATENCY_WINDOW).await;
             let _ = this.update(cx, |this, cx| {
@@ -191,7 +188,7 @@ impl NyaTermApp {
     fn flush_terminal_input_idle_notify(&mut self, cx: &mut Context<Self>) {
         let now = Instant::now();
         if let Some(delay) = terminal_input_idle_remaining_delay(
-            self.terminal.view.runtime.last_terminal_input_at,
+            self.shell.runtime.last_terminal_input_at,
             now,
             TERMINAL_INPUT_LATENCY_WINDOW,
         ) {
@@ -204,10 +201,9 @@ impl NyaTermApp {
             .detach();
             return;
         }
-        self.terminal.view.runtime.terminal_input_idle_notify_armed = false;
+        self.shell.runtime.terminal_input_idle_notify_armed = false;
         let session_ids = self
-            .terminal
-            .view
+            .shell
             .runtime
             .pending_terminal_input_idle_sessions
             .drain()
@@ -238,16 +234,8 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn visible_terminal_layout_cache_stats(&self) -> (u64, u64) {
-        self.visible_terminal_session_ids()
-            .into_iter()
-            .filter_map(|session_id| self.terminal.view.views.get(session_id))
-            .filter_map(|view| view.render_cache.layout_cache.lock().ok())
-            .fold((0u64, 0u64), |(hits, misses), cache| {
-                (
-                    hits.saturating_add(cache.hits),
-                    misses.saturating_add(cache.misses),
-                )
-            })
+        self.terminal
+            .visible_layout_cache_stats(self.visible_terminal_session_ids())
     }
 
     pub(in crate::features) fn drive_idle_lock(
@@ -274,7 +262,7 @@ impl NyaTermApp {
         };
         self.security.activate_screen_lock(lock_status);
         self.forget_text_inputs("lock-screen.password");
-        self.terminal.view.status = format!(
+        self.shell.status = format!(
             "screen locked after {} minute(s) idle",
             self.settings.summary().idle_lock_minutes
         );
@@ -288,11 +276,11 @@ impl NyaTermApp {
     }
 
     pub(crate) fn mark_window_runtime_started(&mut self) {
-        self.terminal.view.runtime.event_pump_started = true;
+        self.shell.runtime.event_pump_started = true;
     }
 
     pub(crate) fn window_runtime_running(&self) -> bool {
-        self.terminal.view.runtime.event_pump_started
+        self.shell.runtime.event_pump_started
     }
 
     pub(crate) fn window_runtime_tick_delay(&self) -> Duration {
@@ -315,7 +303,7 @@ impl NyaTermApp {
         viewport_size: (f32, f32),
         now: Instant,
     ) -> bool {
-        if !self.terminal.view.runtime.event_pump_started {
+        if !self.shell.runtime.event_pump_started {
             return false;
         }
         if self.shell.viewport.size != viewport_size
@@ -324,8 +312,7 @@ impl NyaTermApp {
             return true;
         }
         if self
-            .terminal
-            .view
+            .shell
             .runtime
             .connect_settle_until
             .is_some_and(|until| now >= until)
@@ -337,14 +324,13 @@ impl NyaTermApp {
         }
 
         let output_pressure = self.runtime_output_pressure_active();
-        let connect_settle =
-            connect_settle_active(self.terminal.view.runtime.connect_settle_until, now);
+        let connect_settle = connect_settle_active(self.shell.runtime.connect_settle_until, now);
         if runtime_ui_notify_allowed(
             false,
-            self.terminal.view.runtime.pending_ui_notify,
+            self.shell.runtime.pending_ui_notify,
             false,
             output_pressure || connect_settle,
-            self.terminal.view.runtime.last_ui_notify_at,
+            self.shell.runtime.last_ui_notify_at,
             now,
         ) {
             return true;
@@ -368,14 +354,13 @@ impl NyaTermApp {
         if self.terminal.terminal_file_drop_hover_is_pending() {
             return true;
         }
-        if self.terminal.view.runtime.visual_bell_ticks > 0 {
+        if self.shell.runtime.visual_bell_ticks > 0 {
             return true;
         }
         if self.settings.summary().cursor_blink
             && !self.visible_terminal_session_ids().is_empty()
             && self
-                .terminal
-                .view
+                .shell
                 .runtime
                 .cursor_blink_next_at
                 .is_some_and(|next| now >= next)
@@ -389,30 +374,16 @@ impl NyaTermApp {
     }
 
     fn visible_terminal_performance_recovery_due(&self) -> bool {
-        self.visible_terminal_session_ids()
-            .into_iter()
-            .any(|session_id| {
-                self.terminal
-                    .view
-                    .views
-                    .get(session_id)
-                    .is_some_and(|view| {
-                        view.render_degraded
-                            || view.performance_overlay.is_some()
-                            || view.output_burst_bytes > 0
-                    })
-            })
+        self.terminal
+            .visible_performance_recovery_due(self.visible_terminal_session_ids())
     }
 
     fn terminal_render_requests_pending(&self) -> bool {
         let visible_session_ids = self.visible_terminal_session_ids();
-        if visible_session_ids.iter().any(|session_id| {
-            self.terminal
-                .view
-                .views
-                .get(*session_id)
-                .is_some_and(|view| view.frame_snapshot.is_none() && view.scroll_offset == 0)
-        }) {
+        if self
+            .terminal
+            .visible_live_snapshot_missing(visible_session_ids.iter().copied())
+        {
             return true;
         }
         if visible_session_ids
@@ -430,35 +401,26 @@ impl NyaTermApp {
         let Some(key) = self.terminal_search_key() else {
             return false;
         };
-        self.terminal
-            .view
-            .views
-            .get(session_id)
-            .is_some_and(|view| {
-                view.pending_search_key.as_ref() != Some(&key)
-                    && !view.search_result.as_ref().is_some_and(|result| {
-                        terminal_frame_search_result_is_current(result, &key, view.screen_revision)
-                    })
-            })
+        self.terminal.search_refresh_is_due(session_id, &key)
     }
 
     pub(in crate::features) fn enter_connect_settle(&mut self) {
-        self.terminal.view.runtime.connect_settle_until =
-            Some(connect_settle_deadline(Instant::now()));
+        self.shell.runtime.connect_settle_until = Some(connect_settle_deadline(Instant::now()));
     }
 
     pub(in crate::features) fn runtime_output_pressure_active(&self) -> bool {
+        let frame = self.terminal.frame_queue_metrics();
         runtime_output_pressure_active_from_counts(
-            self.terminal.view.runtime.session_event_backlog_active,
-            self.terminal.view.runtime.session_event_queued_output_bytes,
+            self.shell.runtime.session_event_backlog_active,
+            self.shell.runtime.session_event_queued_output_bytes,
             self.session.pending_event_count(),
             self.session.event_bridge_queued_event_count()
                 + self.session.event_bridge_source_queued_event_count(),
             self.session.event_bridge_queued_output_bytes()
                 + self.session.event_bridge_source_queued_output_bytes(),
-            self.terminal.view.pending_frame_events.len(),
-            self.terminal.view.frame_pipeline.queued_event_count(),
-            self.terminal.view.frame_pipeline.queued_output_bytes(),
+            frame.pending_event_count,
+            frame.event_count,
+            frame.output_bytes,
         )
     }
 
@@ -476,8 +438,8 @@ impl NyaTermApp {
             && !self.tunnel_state.has_pending()
             && self.transfer.transfer_jobs_are_empty()
             && self.commands.persistence_is_idle()
-            && !self.terminal.view.runtime.open_tabs_persist_dirty
-            && !self.terminal.view.runtime.window_layout_persist_dirty
+            && !self.shell.runtime.open_tabs_persist_dirty
+            && !self.shell.runtime.window_layout_persist_dirty
             && self.terminal.terminal_windows_restore_is_complete()
             && !self.ai.has_background_work()
             && !self.remote_ops.has_pending_job()
@@ -496,7 +458,7 @@ impl NyaTermApp {
 
     pub(super) fn drive_pending_session_status(&mut self) -> bool {
         let Some((name, requested_at)) = self.pending_session_status_source() else {
-            self.terminal.view.runtime.last_pending_session_status_at = None;
+            self.shell.runtime.last_pending_session_status_at = None;
             return false;
         };
         let auth_wait = self.pending_session_auth_wait();
@@ -505,8 +467,7 @@ impl NyaTermApp {
         }
         let now = Instant::now();
         if self
-            .terminal
-            .view
+            .shell
             .runtime
             .last_pending_session_status_at
             .is_some_and(|last_at| {
@@ -515,12 +476,12 @@ impl NyaTermApp {
         {
             return false;
         }
-        self.terminal.view.runtime.last_pending_session_status_at = Some(now);
+        self.shell.runtime.last_pending_session_status_at = Some(now);
         let message = pending_session_status_message(&name, auth_wait.as_ref());
-        if self.terminal.view.status == message {
+        if self.shell.status == message {
             return false;
         }
-        self.terminal.view.status = message;
+        self.shell.status = message;
         true
     }
 

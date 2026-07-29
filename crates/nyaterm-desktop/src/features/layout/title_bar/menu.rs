@@ -194,7 +194,7 @@ impl NyaTermApp {
                         cx.listener(|this, _, _, cx| {
                             this.close_title_menu(cx);
                             let changed = this.resize_all_known_terminal_surfaces();
-                            this.terminal.view.status = if changed {
+                            this.shell.status = if changed {
                                 "terminal sizes reset".to_string()
                             } else {
                                 "terminal sizes already current".to_string()

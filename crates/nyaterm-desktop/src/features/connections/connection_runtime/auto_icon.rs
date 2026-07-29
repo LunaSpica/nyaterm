@@ -56,8 +56,7 @@ impl NyaTermApp {
 
         match self.persist_saved_connection_with_group(updated, None) {
             Ok(connection) => {
-                self.terminal.view.status =
-                    format!("detected {icon_key} icon for {}", connection.name);
+                self.shell.status = format!("detected {icon_key} icon for {}", connection.name);
             }
             Err(error) => {
                 // A failed icon refresh must not disturb the session, so this is

@@ -70,13 +70,7 @@ impl NyaTermApp {
             .and_then(|root| self.shell.workspace_pane_root(&root))
             .is_some_and(|root| root.is_split())
             || self.shell.workspace_split().is_some();
-        let scroll_offset = self
-            .terminal
-            .view
-            .views
-            .get(&session_id)
-            .map(|view| view.scroll_offset)
-            .unwrap_or(0);
+        let scroll_offset = self.terminal.session_scroll_offset(&session_id);
         let visible_for_ai = terminal_action_prompt_text(
             &self
                 .terminal_snapshot_for_session(Some(session_id.as_str()), scroll_offset)

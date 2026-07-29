@@ -393,7 +393,7 @@ impl NyaTermApp {
         self.sync_input.open();
         self.forget_text_inputs("sync.groups.search");
         self.forget_text_inputs("sync.group-name.");
-        self.terminal.view.status = "sync groups opened".to_string();
+        self.shell.status = "sync groups opened".to_string();
         window.focus(self.sync_input.focus());
         cx.notify();
     }
@@ -402,13 +402,13 @@ impl NyaTermApp {
         self.sync_input.close();
         self.forget_text_inputs("sync.groups.search");
         self.forget_text_inputs("sync.group-name.");
-        self.terminal.view.status = "sync groups closed".to_string();
+        self.shell.status = "sync groups closed".to_string();
         cx.notify();
     }
 
     pub(in crate::features) fn create_sync_group(&mut self, cx: &mut Context<Self>) {
         self.sync_input.create_group();
-        self.terminal.view.status = "sync group created".to_string();
+        self.shell.status = "sync group created".to_string();
         cx.notify();
     }
 
@@ -417,7 +417,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if !self.sync_input.request_delete_selected() {
-            self.terminal.view.status = "no sync group selected".to_string();
+            self.shell.status = "no sync group selected".to_string();
             cx.notify();
             return;
         }
@@ -433,7 +433,7 @@ impl NyaTermApp {
         if !self.sync_input.confirm_delete() {
             return;
         }
-        self.terminal.view.status = "sync group deleted".to_string();
+        self.shell.status = "sync group deleted".to_string();
         cx.notify();
     }
 
@@ -560,7 +560,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if self.sync_input.select(group_id) {
-            self.terminal.view.status = "sync group selected".to_string();
+            self.shell.status = "sync group selected".to_string();
             cx.notify();
         }
     }
@@ -570,11 +570,11 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(enabled) = self.sync_input.toggle_selected_enabled() else {
-            self.terminal.view.status = "no sync group selected".to_string();
+            self.shell.status = "no sync group selected".to_string();
             cx.notify();
             return;
         };
-        self.terminal.view.status = if enabled {
+        self.shell.status = if enabled {
             "sync group enabled".to_string()
         } else {
             "sync group disabled".to_string()
@@ -588,14 +588,14 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(added) = self.sync_input.toggle_selected_session(session_id) else {
-            self.terminal.view.status = "create or select a sync group first".to_string();
+            self.shell.status = "create or select a sync group first".to_string();
             cx.notify();
             return;
         };
         if added {
-            self.terminal.view.status = "session added to sync group".to_string();
+            self.shell.status = "session added to sync group".to_string();
         } else {
-            self.terminal.view.status = "session removed from sync group".to_string();
+            self.shell.status = "session removed from sync group".to_string();
         }
         cx.notify();
     }
@@ -605,14 +605,13 @@ impl NyaTermApp {
         session_id: String,
         cx: &mut Context<Self>,
     ) {
-        self.terminal.view.status =
-            match self.sync_input.toggle_selected_session_paused(session_id) {
-                SyncSessionPauseResult::Paused => "session sync paused",
-                SyncSessionPauseResult::Resumed => "session sync resumed",
-                SyncSessionPauseResult::NotMember => "session is not in the selected sync group",
-                SyncSessionPauseResult::NoGroup => "create or select a sync group first",
-            }
-            .to_string();
+        self.shell.status = match self.sync_input.toggle_selected_session_paused(session_id) {
+            SyncSessionPauseResult::Paused => "session sync paused",
+            SyncSessionPauseResult::Resumed => "session sync resumed",
+            SyncSessionPauseResult::NotMember => "session is not in the selected sync group",
+            SyncSessionPauseResult::NoGroup => "create or select a sync group first",
+        }
+        .to_string();
         cx.notify();
     }
 
@@ -627,7 +626,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn toggle_broadcast_to_all(&mut self, cx: &mut Context<Self>) {
-        self.terminal.view.status = if self.sync_input.toggle_broadcast_to_all() {
+        self.shell.status = if self.sync_input.toggle_broadcast_to_all() {
             "broadcast to all sessions enabled".to_string()
         } else {
             "broadcast to all sessions disabled".to_string()
@@ -658,15 +657,14 @@ impl NyaTermApp {
         session_id: String,
         cx: &mut Context<Self>,
     ) {
-        self.terminal.view.status =
-            match self.sync_input.toggle_active_session_paused(session_id) {
-                SyncSessionPauseResult::Paused => "session sync paused",
-                SyncSessionPauseResult::Resumed => "session sync resumed",
-                SyncSessionPauseResult::NoGroup | SyncSessionPauseResult::NotMember => {
-                    "session is not in an active sync group"
-                }
+        self.shell.status = match self.sync_input.toggle_active_session_paused(session_id) {
+            SyncSessionPauseResult::Paused => "session sync paused",
+            SyncSessionPauseResult::Resumed => "session sync resumed",
+            SyncSessionPauseResult::NoGroup | SyncSessionPauseResult::NotMember => {
+                "session is not in an active sync group"
             }
-            .to_string();
+        }
+        .to_string();
         cx.notify();
     }
 
@@ -677,11 +675,11 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if !self.sync_input.leave_active_group(&session_id) {
-            self.terminal.view.status = "session is not in an active sync group".to_string();
+            self.shell.status = "session is not in an active sync group".to_string();
             cx.notify();
             return;
         }
-        self.terminal.view.status = "left sync group".to_string();
+        self.shell.status = "left sync group".to_string();
         cx.notify();
     }
 
@@ -692,11 +690,11 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if !self.sync_input.close_active_group(&session_id) {
-            self.terminal.view.status = "session is not in an active sync group".to_string();
+            self.shell.status = "session is not in an active sync group".to_string();
             cx.notify();
             return;
         }
-        self.terminal.view.status = "sync group closed".to_string();
+        self.shell.status = "sync group closed".to_string();
         cx.notify();
     }
 

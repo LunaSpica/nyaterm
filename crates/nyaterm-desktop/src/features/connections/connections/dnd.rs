@@ -21,7 +21,7 @@ impl NyaTermApp {
             .find(|c| c.id == source_id)
             .cloned()
         else {
-            self.terminal.view.status = "drag source connection missing".to_string();
+            self.shell.status = "drag source connection missing".to_string();
             cx.notify();
             return;
         };
@@ -32,7 +32,7 @@ impl NyaTermApp {
             .find(|c| c.id == target_id)
             .cloned()
         else {
-            self.terminal.view.status = "drop target connection missing".to_string();
+            self.shell.status = "drop target connection missing".to_string();
             cx.notify();
             return;
         };
@@ -63,12 +63,11 @@ impl NyaTermApp {
         match self.persist_connection_order(&siblings) {
             Ok(()) => {
                 self.refresh_store_from_runtime();
-                self.terminal.view.status = "connection reordered".to_string();
+                self.shell.status = "connection reordered".to_string();
             }
             Err(error) => {
-                self.terminal.view.status = format!("reorder connection failed: {error}");
-                self.settings
-                    .set_store_message(self.terminal.view.status.clone());
+                self.shell.status = format!("reorder connection failed: {error}");
+                self.settings.set_store_message(self.shell.status.clone());
                 self.settings.set_store_ready(false);
             }
         }
@@ -93,7 +92,7 @@ impl NyaTermApp {
             .find(|c| c.id == source_id)
             .cloned()
         else {
-            self.terminal.view.status = "drag source connection missing".to_string();
+            self.shell.status = "drag source connection missing".to_string();
             cx.notify();
             return;
         };
@@ -104,7 +103,7 @@ impl NyaTermApp {
             .find(|c| c.id == target_id)
             .cloned()
         else {
-            self.terminal.view.status = "drop target connection missing".to_string();
+            self.shell.status = "drop target connection missing".to_string();
             cx.notify();
             return;
         };
@@ -136,12 +135,11 @@ impl NyaTermApp {
         match self.persist_connection_order(&siblings) {
             Ok(()) => {
                 self.refresh_store_from_runtime();
-                self.terminal.view.status = "connection reordered".to_string();
+                self.shell.status = "connection reordered".to_string();
             }
             Err(error) => {
-                self.terminal.view.status = format!("reorder connection failed: {error}");
-                self.settings
-                    .set_store_message(self.terminal.view.status.clone());
+                self.shell.status = format!("reorder connection failed: {error}");
+                self.settings.set_store_message(self.shell.status.clone());
                 self.settings.set_store_ready(false);
             }
         }
@@ -163,7 +161,7 @@ impl NyaTermApp {
             .find(|c| c.id == source_id)
             .cloned()
         else {
-            self.terminal.view.status = "drag source connection missing".to_string();
+            self.shell.status = "drag source connection missing".to_string();
             cx.notify();
             return;
         };
@@ -188,12 +186,11 @@ impl NyaTermApp {
                     self.connection_state.expand_list_group(gid);
                 }
                 self.refresh_store_from_runtime();
-                self.terminal.view.status = "connection moved".to_string();
+                self.shell.status = "connection moved".to_string();
             }
             Err(error) => {
-                self.terminal.view.status = format!("move connection failed: {error}");
-                self.settings
-                    .set_store_message(self.terminal.view.status.clone());
+                self.shell.status = format!("move connection failed: {error}");
+                self.settings.set_store_message(self.shell.status.clone());
                 self.settings.set_store_ready(false);
             }
         }
@@ -221,7 +218,7 @@ impl NyaTermApp {
             .cloned()
             .collect::<Vec<_>>();
         if moving.is_empty() {
-            self.terminal.view.status = "no connections to move".to_string();
+            self.shell.status = "no connections to move".to_string();
             cx.notify();
             return;
         }
@@ -237,12 +234,11 @@ impl NyaTermApp {
                     self.connection_state.expand_list_group(group_id);
                 }
                 self.refresh_store_from_runtime();
-                self.terminal.view.status = format!("moved {moved_count} connection(s)");
+                self.shell.status = format!("moved {moved_count} connection(s)");
             }
             Err(error) => {
-                self.terminal.view.status = format!("move connections failed: {error}");
-                self.settings
-                    .set_store_message(self.terminal.view.status.clone());
+                self.shell.status = format!("move connections failed: {error}");
+                self.settings.set_store_message(self.shell.status.clone());
                 self.settings.set_store_ready(false);
             }
         }
@@ -297,10 +293,10 @@ impl NyaTermApp {
         match self.persist_group_order(&siblings) {
             Ok(()) => {
                 self.refresh_store_from_runtime();
-                self.terminal.view.status = "group reordered".to_string();
+                self.shell.status = "group reordered".to_string();
             }
             Err(error) => {
-                self.terminal.view.status = format!("reorder group failed: {error}");
+                self.shell.status = format!("reorder group failed: {error}");
             }
         }
         cx.notify();
@@ -314,14 +310,14 @@ impl NyaTermApp {
     ) {
         self.connection_state.clear_list_drop_target();
         if parent_id.as_deref() == Some(source_id.as_str()) {
-            self.terminal.view.status = "cannot nest group into itself".to_string();
+            self.shell.status = "cannot nest group into itself".to_string();
             cx.notify();
             return;
         }
         // Prevent cycles: parent cannot be descendant of source.
         if let Some(pid) = parent_id.as_ref() {
             if self.connection_catalog.group_is_descendant(pid, &source_id) {
-                self.terminal.view.status = "cannot create group cycle".to_string();
+                self.shell.status = "cannot create group cycle".to_string();
                 cx.notify();
                 return;
             }
@@ -349,10 +345,10 @@ impl NyaTermApp {
         match self.persist_group_order(&siblings) {
             Ok(()) => {
                 self.refresh_store_from_runtime();
-                self.terminal.view.status = "group moved".to_string();
+                self.shell.status = "group moved".to_string();
             }
             Err(error) => {
-                self.terminal.view.status = format!("move group failed: {error}");
+                self.shell.status = format!("move group failed: {error}");
             }
         }
         cx.notify();

@@ -76,13 +76,9 @@ impl NyaTermApp {
                         .unwrap_or_else(|| vec![tab_id.clone()]);
                     let is_disconnected =
                         leaf_ids.iter().any(|id| self.is_session_disconnected(id));
-                    let has_unread = leaf_ids.iter().any(|id| {
-                        self.terminal
-                            .view
-                            .views
-                            .get(id)
-                            .is_some_and(|view| view.has_unread)
-                    });
+                    let has_unread = leaf_ids
+                        .iter()
+                        .any(|id| self.terminal.session_has_unread(id));
                     let sync_group = self.active_sync_group_for_session(tab_id);
                     let sync_paused = self.is_session_paused_in_active_sync_group(tab_id);
                     let show_sync_indicator =

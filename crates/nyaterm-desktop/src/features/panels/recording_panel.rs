@@ -301,8 +301,7 @@ impl NyaTermApp {
                                         cx.stop_propagation();
                                         this.recording.clear_search_draft();
                                         this.reset_text_input("recording.search", "", cx);
-                                        this.terminal.view.status =
-                                            "recording search cleared".to_string();
+                                        this.shell.status = "recording search cleared".to_string();
                                         cx.notify();
                                     }
                                 }))

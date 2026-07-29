@@ -64,13 +64,13 @@ impl NyaTermApp {
                 self.settings
                     .set_store_message("quick command UI settings saved".to_string());
                 self.settings.set_store_ready(true);
-                self.terminal.view.status = "quick command UI settings saved".to_string();
+                self.shell.status = "quick command UI settings saved".to_string();
             }
             Err(error) => {
                 self.settings
                     .set_store_message(format!("quick command UI settings save failed: {error}"));
                 self.settings.set_store_ready(false);
-                self.terminal.view.status = self.settings.store_status().message.to_string();
+                self.shell.status = self.settings.store_status().message.to_string();
             }
         }
         cx.notify();
@@ -121,7 +121,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(prompt) = self.commands.take_quick_ai_prompt() else {
-            self.terminal.view.status = "describe a command to generate".to_string();
+            self.shell.status = "describe a command to generate".to_string();
             cx.notify();
             return;
         };

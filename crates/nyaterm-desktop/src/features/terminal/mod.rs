@@ -12,6 +12,7 @@ mod terminal_search_runtime;
 mod terminal_selection_runtime;
 mod terminal_surface;
 mod terminal_surface_entity;
+mod view_state;
 mod window_state;
 
 pub(in crate::features) use state::{TerminalFeatureFocus, TerminalFeatureState};

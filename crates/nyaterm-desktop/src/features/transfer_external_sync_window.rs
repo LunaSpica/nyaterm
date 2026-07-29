@@ -213,7 +213,7 @@ fn open_transfer_external_sync_window_now_from_app(
         }
         Err(error) => {
             app.transfer.clear_external_sync_window_tracking(&prompt_id);
-            app.terminal.view.status = format!("failed to open auto-upload window: {error}");
+            app.shell.status = format!("failed to open auto-upload window: {error}");
             cx.notify();
         }
     });

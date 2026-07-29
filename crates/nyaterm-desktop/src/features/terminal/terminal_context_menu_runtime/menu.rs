@@ -32,13 +32,13 @@ impl NyaTermApp {
             selected_text,
             submenu: None,
         });
-        self.terminal.view.status = "terminal context menu opened".to_string();
+        self.shell.status = "terminal context menu opened".to_string();
         cx.notify();
     }
 
     pub(in crate::features) fn close_terminal_context_menu(&mut self, cx: &mut Context<Self>) {
         if self.terminal.menus.context_menu.take().is_some() {
-            self.terminal.view.status = "terminal context menu closed".to_string();
+            self.shell.status = "terminal context menu closed".to_string();
             cx.notify();
         }
     }
@@ -203,11 +203,10 @@ impl NyaTermApp {
                             this.close_terminal_context_menu(cx);
                             match open_external_url(&open_url) {
                                 Ok(()) => {
-                                    this.terminal.view.status = format!("opened link: {open_url}");
+                                    this.shell.status = format!("opened link: {open_url}");
                                 }
                                 Err(error) => {
-                                    this.terminal.view.status =
-                                        format!("open link failed: {error}");
+                                    this.shell.status = format!("open link failed: {error}");
                                 }
                             }
                             cx.notify();
@@ -232,11 +231,10 @@ impl NyaTermApp {
                             if let Some(url) = open_url.clone() {
                                 match open_external_url(&url) {
                                     Ok(()) => {
-                                        this.terminal.view.status = format!("opened link: {url}");
+                                        this.shell.status = format!("opened link: {url}");
                                     }
                                     Err(error) => {
-                                        this.terminal.view.status =
-                                            format!("open link failed: {error}");
+                                        this.shell.status = format!("open link failed: {error}");
                                     }
                                 }
                                 cx.notify();
@@ -492,11 +490,11 @@ impl NyaTermApp {
                                     let url = search_engine_url(&template, &query);
                                     match open_external_url(&url) {
                                         Ok(()) => {
-                                            this.terminal.view.status =
+                                            this.shell.status =
                                                 format!("opened online search: {name}");
                                         }
                                         Err(error) => {
-                                            this.terminal.view.status =
+                                            this.shell.status =
                                                 format!("online search failed: {error}");
                                         }
                                     }

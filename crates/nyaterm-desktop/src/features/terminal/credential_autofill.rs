@@ -127,7 +127,7 @@ impl NyaTermApp {
             self.session.active_id(),
             !self.security.credentials().is_empty()
                 || self.terminal.assist.credential_autofill_pending.is_some(),
-            self.terminal.view.runtime.session_event_queued_output_bytes,
+            self.shell.runtime.session_event_queued_output_bytes,
             self.session.pending_event_count(),
             self.terminal.view.pending_frame_events.len(),
             self.terminal.view.frame_pipeline.queued_event_count(),
@@ -144,7 +144,7 @@ impl NyaTermApp {
             credential_autofill_pending_detection_can_run(
                 self.session.active_id(),
                 self.terminal.assist.credential_autofill_detection_pending,
-                self.terminal.view.runtime.session_event_queued_output_bytes,
+                self.shell.runtime.session_event_queued_output_bytes,
                 self.session.pending_event_count(),
                 self.terminal.view.pending_frame_events.len(),
                 self.terminal.view.frame_pipeline.queued_event_count(),
@@ -390,7 +390,7 @@ impl NyaTermApp {
             return;
         }
         if self.is_session_disconnected(session_id) {
-            self.terminal.view.status =
+            self.shell.status =
                 "session disconnected - reconnect before filling credentials".to_string();
             cx.notify();
             return;
@@ -403,20 +403,19 @@ impl NyaTermApp {
                 let mut payload = credential.username.clone();
                 payload.push('\r');
                 self.send_terminal_input_without_suggestion_track(payload.into_bytes(), cx);
-                self.terminal.view.status = format!("filled username from '{}'", credential.name);
+                self.shell.status = format!("filled username from '{}'", credential.name);
             }
             CredentialPromptKind::Password => {
                 let password = self.decrypt_saved_credential_password(&credential.id);
                 let Some(password) = password.filter(|value| !value.is_empty()) else {
-                    self.terminal.view.status =
-                        format!("credential '{}' has no password", credential.name);
+                    self.shell.status = format!("credential '{}' has no password", credential.name);
                     cx.notify();
                     return;
                 };
                 let mut payload = password;
                 payload.push('\r');
                 self.send_terminal_input_without_suggestion_track(payload.into_bytes(), cx);
-                self.terminal.view.status = format!("filled password from '{}'", credential.name);
+                self.shell.status = format!("filled password from '{}'", credential.name);
             }
         }
         cx.notify();

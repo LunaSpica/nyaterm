@@ -26,7 +26,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.shell.panels.start_resize(side, event.position.x);
-        self.terminal.view.status = match side {
+        self.shell.status = match side {
             PanelResizeSide::Left => "resizing left panel".to_string(),
             PanelResizeSide::Right => "resizing right panel".to_string(),
         };
@@ -43,11 +43,11 @@ impl NyaTermApp {
         };
         match side {
             PanelResizeSide::Left => {
-                self.terminal.view.status = format!("left panel: {:.0}px", width.round());
+                self.shell.status = format!("left panel: {:.0}px", width.round());
             }
             PanelResizeSide::Right => {
                 // Right handle sits on the left edge of the right panel: drag left grows width.
-                self.terminal.view.status = format!("right panel: {:.0}px", width.round());
+                self.shell.status = format!("right panel: {:.0}px", width.round());
             }
         }
         cx.notify();
@@ -60,7 +60,7 @@ impl NyaTermApp {
     ) {
         if self.shell.panels.finish_resize() {
             self.persist_panel_widths();
-            self.terminal.view.status = format!(
+            self.shell.status = format!(
                 "panel sizes L{:.0}/R{:.0}",
                 self.shell.panels.left_width.round(),
                 self.shell.panels.right_width.round()
@@ -229,7 +229,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.transfer.start_panel_height_resize(event.position.y);
-        self.terminal.view.status = "resizing transfer queue".to_string();
+        self.shell.status = "resizing transfer queue".to_string();
         cx.notify();
     }
 
@@ -241,7 +241,7 @@ impl NyaTermApp {
         let Some(height) = self.transfer.update_panel_height_resize(event.position.y) else {
             return;
         };
-        self.terminal.view.status = format!("transfer queue: {:.0}px", height.round());
+        self.shell.status = format!("transfer queue: {:.0}px", height.round());
         cx.notify();
     }
 
@@ -252,7 +252,7 @@ impl NyaTermApp {
     ) {
         if self.transfer.finish_panel_height_resize() {
             self.persist_ui_layout();
-            self.terminal.view.status = format!(
+            self.shell.status = format!(
                 "transfer queue {:.0}px",
                 self.transfer.panel_height().round()
             );
@@ -291,7 +291,7 @@ impl NyaTermApp {
         if !self.shell.bottom_panel.start_resize(event.position.y) {
             return;
         }
-        self.terminal.view.status = "resizing bottom panel".to_string();
+        self.shell.status = "resizing bottom panel".to_string();
         cx.notify();
     }
 
@@ -303,7 +303,7 @@ impl NyaTermApp {
         let Some(next) = self.shell.bottom_panel.update_resize(event.position.y) else {
             return;
         };
-        self.terminal.view.status = format!("bottom panel: {:.0}px", next.round());
+        self.shell.status = format!("bottom panel: {:.0}px", next.round());
         cx.notify();
     }
 
@@ -314,7 +314,7 @@ impl NyaTermApp {
     ) {
         if self.shell.bottom_panel.finish_resize() {
             self.persist_ui_layout();
-            self.terminal.view.status = "bottom panel size saved".to_string();
+            self.shell.status = "bottom panel size saved".to_string();
             cx.notify();
         }
     }
