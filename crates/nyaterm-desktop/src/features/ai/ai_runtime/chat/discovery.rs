@@ -10,7 +10,8 @@ const AI_DISCOVERY_EVENT_DRAIN_LIMIT: usize = 8;
 impl NyaTermApp {
     pub(in crate::features) fn discover_ai_models(&mut self, cx: &mut Context<Self>) {
         if self.ai.discovery.pending {
-            self.ai.panel.status = "AI model discovery already running".to_string();
+            self.ai
+                .set_panel_status("AI model discovery already running".to_string());
             cx.notify();
             return;
         }
@@ -32,8 +33,9 @@ impl NyaTermApp {
             .cloned()
             .collect();
         if credentials.is_empty() {
-            self.ai.panel.status =
-                "AI model discovery requires an enabled custom provider".to_string();
+            self.ai.set_panel_status(
+                "AI model discovery requires an enabled custom provider".to_string(),
+            );
             cx.notify();
             return;
         }
@@ -41,7 +43,8 @@ impl NyaTermApp {
         let settings = self.ai.settings.config.clone();
         let tx = self.ai.discovery.tx.clone();
         self.ai.discovery.pending = true;
-        self.ai.panel.status = "Discovering AI models...".to_string();
+        self.ai
+            .set_panel_status("Discovering AI models...".to_string());
         std::thread::spawn(move || {
             let mut discoveries = Vec::new();
             let mut errors = Vec::new();
@@ -80,19 +83,22 @@ impl NyaTermApp {
             self.ai.discovery.pending = false;
             match event.result {
                 Ok(discoveries) if discoveries.is_empty() => {
-                    self.ai.panel.status = "AI discovery returned no models".to_string();
+                    self.ai
+                        .set_panel_status("AI discovery returned no models".to_string());
                 }
                 Ok(discoveries) => {
                     let count = self.apply_ai_model_discoveries(&event.profile_id, discoveries);
-                    self.ai.panel.status = format!("Discovered {count} AI model(s)");
+                    self.ai
+                        .set_panel_status(format!("Discovered {count} AI model(s)"));
                     self.settings
-                        .update_store_status(self.ai.panel.status.clone(), true);
+                        .update_store_status(self.ai.panel_status().to_string(), true);
                     self.persist_ai_settings_now(cx);
                 }
                 Err(error) => {
-                    self.ai.panel.status = format!("AI model discovery failed: {error}");
+                    self.ai
+                        .set_panel_status(format!("AI model discovery failed: {error}"));
                     self.settings
-                        .update_store_status(self.ai.panel.status.clone(), false);
+                        .update_store_status(self.ai.panel_status().to_string(), false);
                 }
             }
         }

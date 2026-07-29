@@ -34,11 +34,12 @@ impl NyaTermApp {
                 match result {
                     Ok(sessions) => {
                         this.ai.history.sessions = sessions;
-                        this.ai.panel.status = "AI history loaded".to_string();
+                        this.ai.set_panel_status("AI history loaded".to_string());
                     }
                     Err(error) => {
                         this.ai.history.sessions.clear();
-                        this.ai.panel.status = format!("failed to load AI history: {error}");
+                        this.ai
+                            .set_panel_status(format!("failed to load AI history: {error}"));
                     }
                 }
                 cx.notify();
@@ -73,47 +74,50 @@ impl NyaTermApp {
         });
         cx.spawn(async move |this, cx| {
             let result = task.await;
-            let _ = this.update(cx, |this, cx| {
-                if this.ai.history.job_id != job_id {
-                    return;
-                }
-                this.ai.history.pending = false;
-                if this.ai.chat.session_id != source_session_id {
-                    this.ai.panel.status = "AI session load cancelled".to_string();
-                    cx.notify();
-                    return;
-                }
-                match result {
-                    Ok(messages) => {
-                        this.ai.chat.session_id = session_id;
-                        this.ai.chat.messages = messages;
-                        this.ai.chat.streaming_assistant_id = None;
-                        this.ai.history.open = false;
-                        this.ai.chat.message_menu = None;
-                        this.ai.chat.quoted_text = None;
-                        this.ai.chat.command_cards.clear();
-                        if let Some(last) = this
-                            .ai
-                            .chat
-                            .messages
-                            .iter()
-                            .rev()
-                            .find(|message| matches!(message.role, AiMessageRole::Assistant))
-                        {
-                            this.ai.chat.response_preview = truncate_preview(&last.content, 320);
-                            this.ai.chat.command_cards = last.command_cards.clone();
-                        } else {
-                            this.ai.chat.response_preview.clear();
+            let _ =
+                this.update(cx, |this, cx| {
+                    if this.ai.history.job_id != job_id {
+                        return;
+                    }
+                    this.ai.history.pending = false;
+                    if this.ai.chat.session_id != source_session_id {
+                        this.ai
+                            .set_panel_status("AI session load cancelled".to_string());
+                        cx.notify();
+                        return;
+                    }
+                    match result {
+                        Ok(messages) => {
+                            this.ai.chat.session_id = session_id;
+                            this.ai.chat.messages = messages;
+                            this.ai.chat.streaming_assistant_id = None;
+                            this.ai.history.open = false;
+                            this.ai.chat.message_menu = None;
+                            this.ai.chat.quoted_text = None;
+                            this.ai.chat.command_cards.clear();
+                            if let Some(last) =
+                                this.ai.chat.messages.iter().rev().find(|message| {
+                                    matches!(message.role, AiMessageRole::Assistant)
+                                })
+                            {
+                                this.ai.chat.response_preview =
+                                    truncate_preview(&last.content, 320);
+                                this.ai.chat.command_cards = last.command_cards.clone();
+                            } else {
+                                this.ai.chat.response_preview.clear();
+                            }
+                            this.ai.set_panel_status(format!(
+                                "loaded AI session {}",
+                                compact_id(&this.ai.chat.session_id)
+                            ));
                         }
-                        this.ai.panel.status =
-                            format!("loaded AI session {}", compact_id(&this.ai.chat.session_id));
+                        Err(error) => {
+                            this.ai
+                                .set_panel_status(format!("failed to load AI session: {error}"));
+                        }
                     }
-                    Err(error) => {
-                        this.ai.panel.status = format!("failed to load AI session: {error}");
-                    }
-                }
-                cx.notify();
-            });
+                    cx.notify();
+                });
         })
         .detach();
     }
@@ -156,11 +160,12 @@ impl NyaTermApp {
                             .history
                             .sessions
                             .retain(|session| session.id != session_id);
-                        this.ai.panel.status = "AI session deleted".to_string();
+                        this.ai.set_panel_status("AI session deleted".to_string());
                         this.refresh_ai_usage_counts(cx);
                     }
                     Err(error) => {
-                        this.ai.panel.status = format!("failed to delete AI session: {error}");
+                        this.ai
+                            .set_panel_status(format!("failed to delete AI session: {error}"));
                     }
                 }
                 cx.notify();
@@ -198,7 +203,7 @@ impl NyaTermApp {
                             this.ai.chat.streaming_assistant_id = None;
                             this.ai.chat.message_menu = None;
                             this.ai.chat.quoted_text = None;
-                            this.ai.panel.detected_error = None;
+                            this.ai.clear_detected_error();
                             this.ai.chat.session_id = format!("ai-session-{}", uuid());
                             this.ai.chat.response_preview =
                                 if this.ai.settings.config.default_mode == AiMode::Agent {
@@ -207,11 +212,12 @@ impl NyaTermApp {
                                     "Ask mode ready".to_string()
                                 };
                         }
-                        this.ai.panel.status = "AI history cleared".to_string();
+                        this.ai.set_panel_status("AI history cleared".to_string());
                         this.refresh_ai_usage_counts(cx);
                     }
                     Err(error) => {
-                        this.ai.panel.status = format!("failed to clear AI history: {error}");
+                        this.ai
+                            .set_panel_status(format!("failed to clear AI history: {error}"));
                     }
                 }
                 cx.notify();
@@ -263,13 +269,14 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> Option<u64> {
         if self.ai.history.pending {
-            self.ai.panel.status = "AI history operation already in progress".to_string();
+            self.ai
+                .set_panel_status("AI history operation already in progress".to_string());
             cx.notify();
             return None;
         }
         self.ai.history.job_id = self.ai.history.job_id.wrapping_add(1).max(1);
         self.ai.history.pending = true;
-        self.ai.panel.status = status.to_string();
+        self.ai.set_panel_status(status.to_string());
         cx.notify();
         Some(self.ai.history.job_id)
     }

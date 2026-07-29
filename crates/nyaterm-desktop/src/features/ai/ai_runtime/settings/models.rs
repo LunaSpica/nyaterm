@@ -19,7 +19,8 @@ impl NyaTermApp {
             .find(|model| model.id == model_id)
         {
             model.enabled = !model.enabled;
-            self.ai.panel.status = "AI model list updated".to_string();
+            self.ai
+                .set_panel_status("AI model list updated".to_string());
         }
         if self
             .ai
@@ -73,7 +74,8 @@ impl NyaTermApp {
         {
             model.enabled = true;
             self.ai.settings.config.default_model_id = Some(model.id.clone());
-            self.ai.panel.status = "AI default model updated".to_string();
+            self.ai
+                .set_panel_status("AI default model updated".to_string());
         }
         self.persist_ai_settings_now(cx);
     }
@@ -95,7 +97,8 @@ impl NyaTermApp {
             return;
         };
         if model.source != nyaterm_core::AiModelSource::Manual {
-            self.ai.panel.status = "Only manual models can be deleted".to_string();
+            self.ai
+                .set_panel_status("Only manual models can be deleted".to_string());
             cx.notify();
             return;
         }
@@ -114,7 +117,8 @@ impl NyaTermApp {
                 .find(|item| item.enabled)
                 .map(|item| item.id.clone());
         }
-        self.ai.panel.status = format!("Deleted manual model {}", model.name);
+        self.ai
+            .set_panel_status(format!("Deleted manual model {}", model.name));
         self.persist_ai_settings_now(cx);
     }
 
@@ -126,7 +130,8 @@ impl NyaTermApp {
     ) {
         let name = name.trim().to_string();
         if name.is_empty() {
-            self.ai.panel.status = "Manual model name is required".to_string();
+            self.ai
+                .set_panel_status("Manual model name is required".to_string());
             cx.notify();
             return;
         }
@@ -139,7 +144,7 @@ impl NyaTermApp {
             .find(|credential| credential.id == credential_id)
             .cloned()
         else {
-            self.ai.panel.status = "Credential not found".to_string();
+            self.ai.set_panel_status("Credential not found".to_string());
             cx.notify();
             return;
         };
@@ -174,7 +179,7 @@ impl NyaTermApp {
             existing.provider_kind = Some(credential.provider_kind.clone());
             existing.credential_id = (!builtin).then(|| credential.id.clone());
             self.ai.settings.config.default_model_id = Some(model_id);
-            self.ai.panel.status = format!("Enabled model {name}");
+            self.ai.set_panel_status(format!("Enabled model {name}"));
             self.persist_ai_settings_now(cx);
             return;
         }
@@ -208,7 +213,8 @@ impl NyaTermApp {
         {
             self.ai.settings.config.default_model_id = Some(model_id);
         }
-        self.ai.panel.status = format!("Added manual model {name}");
+        self.ai
+            .set_panel_status(format!("Added manual model {name}"));
         self.persist_ai_settings_now(cx);
     }
 

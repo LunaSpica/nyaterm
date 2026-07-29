@@ -337,6 +337,18 @@ check_no_multiline_matches_excluding \
   '(self|this|app)\.ai[[:space:]]*\.(settings|chat|history|discovery|agent|panel)(\.|[[:space:]]*=)' \
   crates/nyaterm-desktop/src/features \
   'crates/nyaterm-desktop/src/features/ai/**'
+check_no_multiline_matches \
+  "AI panel child must remain private to AiFeatureState" \
+  'struct[[:space:]]+AiFeatureState[[:space:]]*\{[^}]*pub([[:space:]]|\([^)]*\))[[:space:]]+panel[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/ai/state.rs
+check_no_matches \
+  "AI panel implementation type must remain private" \
+  'pub([[:space:]]|\([^)]*\))[[:space:]]+struct[[:space:]]+AiPanelState' \
+  crates/nyaterm-desktop/src/features/ai/state.rs
+check_no_multiline_matches \
+  "AI panel state must be accessed through AiFeatureState" \
+  '(self|this|app)\.ai[[:space:]]*\.panel(\.|[[:space:]]*=)' \
+  crates/nyaterm-desktop/src/features
 
 check_no_matches \
   "settings transient UI fields must stay grouped under SettingsFeatureState" \

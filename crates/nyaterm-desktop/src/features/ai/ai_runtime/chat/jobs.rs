@@ -66,7 +66,7 @@ impl NyaTermApp {
                 }
             }
         }
-        self.ai.panel.status = "AI request cancelled".to_string();
+        self.ai.set_panel_status("AI request cancelled".to_string());
         if let Some(step_index) = cancelled_step {
             self.upsert_ai_agent_step(
                 step_index,
@@ -76,7 +76,7 @@ impl NyaTermApp {
             );
         }
         self.settings
-            .set_store_message(self.ai.panel.status.clone());
+            .set_store_message(self.ai.panel_status().to_string());
         cx.notify();
     }
 
@@ -88,7 +88,8 @@ impl NyaTermApp {
         }
         if self.ai.agent.loop_state.is_some() {
             self.ai.chat.response_preview = "AI Agent step already running".to_string();
-            self.ai.panel.status = self.ai.chat.response_preview.clone();
+            self.ai
+                .set_panel_status(self.ai.chat.response_preview.clone());
             cx.notify();
             return;
         }
@@ -114,7 +115,8 @@ impl NyaTermApp {
         }
         let Some(model_id) = self.ai_selected_model_id() else {
             self.ai.chat.response_preview = "Enable an AI model before sending".to_string();
-            self.ai.panel.status = self.ai.chat.response_preview.clone();
+            self.ai
+                .set_panel_status(self.ai.chat.response_preview.clone());
             cx.notify();
             return;
         };
@@ -126,7 +128,8 @@ impl NyaTermApp {
         if mode == AiMode::Agent && target_session_id.is_none() {
             self.ai.chat.response_preview =
                 "Start a terminal session before running Agent mode".to_string();
-            self.ai.panel.status = self.ai.chat.response_preview.clone();
+            self.ai
+                .set_panel_status(self.ai.chat.response_preview.clone());
             cx.notify();
             return;
         }
@@ -216,13 +219,13 @@ impl NyaTermApp {
         self.ai.chat.mention_query.clear();
         self.ai.chat.mention_index = 0;
         self.ai.chat.streaming_assistant_id = Some(assistant_id);
-        self.ai.panel.status = if mode == AiMode::Agent {
+        self.ai.set_panel_status(if mode == AiMode::Agent {
             "AI Agent step started".to_string()
         } else if let Some(source_label) = source_label.as_ref() {
             format!("AI file action started: {source_label}")
         } else {
             "AI Ask request started".to_string()
-        };
+        });
         self.ai.chat.prepared_request = None;
         std::thread::spawn(move || {
             let result = run_ai_ask_job(
@@ -336,7 +339,8 @@ impl NyaTermApp {
         self.ai.discovery.query.clear();
         self.ai.discovery.index = 0;
         self.set_ai_default_model(model.id.clone(), cx);
-        self.ai.panel.status = format!("AI model selected: {}", model.name);
+        self.ai
+            .set_panel_status(format!("AI model selected: {}", model.name));
     }
 
     pub(in crate::features) fn handle_ai_model_search_key_down(
@@ -531,9 +535,11 @@ impl NyaTermApp {
             .target_session_ids
             .retain(|target_id| target_id != &session_id);
         if self.ai.chat.target_session_ids.is_empty() {
-            self.ai.panel.status = "AI target sessions cleared".to_string();
+            self.ai
+                .set_panel_status("AI target sessions cleared".to_string());
         } else {
-            self.ai.panel.status = "AI target session removed".to_string();
+            self.ai
+                .set_panel_status("AI target session removed".to_string());
         }
         cx.notify();
     }
@@ -576,10 +582,10 @@ impl NyaTermApp {
         self.ai.chat.mention_open = false;
         self.ai.chat.mention_query.clear();
         self.ai.chat.mention_index = 0;
-        self.ai.panel.status = format!(
+        self.ai.set_panel_status(format!(
             "AI target session selected: {}",
             self.session_display_name_by_info(&session)
-        );
+        ));
         cx.notify();
     }
 
@@ -783,14 +789,16 @@ impl NyaTermApp {
                             }
                         }
                     }
-                    self.ai.panel.status = if reasoning_delta
-                        .as_deref()
-                        .is_some_and(|delta| !delta.trim().is_empty())
-                    {
-                        "AI stream receiving; reasoning captured".to_string()
-                    } else {
-                        "AI stream receiving".to_string()
-                    };
+                    self.ai.set_panel_status(
+                        if reasoning_delta
+                            .as_deref()
+                            .is_some_and(|delta| !delta.trim().is_empty())
+                        {
+                            "AI stream receiving; reasoning captured".to_string()
+                        } else {
+                            "AI stream receiving".to_string()
+                        },
+                    );
                     self.settings
                         .update_store_status(format!("AI session {session_id} streaming"), true);
                 }
@@ -808,13 +816,13 @@ impl NyaTermApp {
                         .as_deref()
                         .filter(|name| !name.trim().is_empty())
                         .unwrap_or("tool");
-                    self.ai.panel.status = if arguments_delta_len == 0 {
+                    self.ai.set_panel_status(if arguments_delta_len == 0 {
                         format!("AI Agent selected {tool_label}")
                     } else {
                         format!(
                             "AI Agent streaming {tool_label} arguments (+{arguments_delta_len} chars)"
                         )
-                    };
+                    });
                     let step_index = self
                         .ai
                         .agent
@@ -856,12 +864,12 @@ impl NyaTermApp {
                     }
                     match result {
                         Ok(observation) => {
-                            self.ai.panel.status = match observation.exit_code {
+                            self.ai.set_panel_status(match observation.exit_code {
                                 Some(code) => {
                                     format!("AI Agent background command exited with {code}")
                                 }
                                 None => "AI Agent background command completed".to_string(),
-                            };
+                            });
                             self.upsert_ai_agent_step(
                                 state.step_index,
                                 AiAgentStepStatus::Completed,
@@ -871,9 +879,10 @@ impl NyaTermApp {
                             self.start_ai_agent_continuation(state, observation, cx);
                         }
                         Err(error) => {
-                            self.ai.panel.status =
-                                format!("AI Agent background command failed: {error}");
-                            self.ai.chat.response_preview = self.ai.panel.status.clone();
+                            self.ai.set_panel_status(format!(
+                                "AI Agent background command failed: {error}"
+                            ));
+                            self.ai.chat.response_preview = self.ai.panel_status().to_string();
                             self.upsert_ai_agent_step(
                                 state.step_index,
                                 AiAgentStepStatus::Failed,
@@ -881,7 +890,7 @@ impl NyaTermApp {
                                 truncate_preview(&error, 140),
                             );
                             self.settings
-                                .update_store_status(self.ai.panel.status.clone(), false);
+                                .update_store_status(self.ai.panel_status().to_string(), false);
                         }
                     }
                 }
@@ -905,18 +914,25 @@ impl NyaTermApp {
                             } else {
                                 "AI Ask"
                             };
-                            self.ai.panel.status = format!(
+                            let mut panel_status = format!(
                                 "{mode_label} completed; {} command card(s) parsed",
                                 command_count
                             );
                             if output.reasoning.is_some() {
-                                self.ai.panel.status.push_str("; reasoning captured");
+                                panel_status.push_str("; reasoning captured");
                             }
                             if let Some(note) = output.approval_note.as_deref() {
-                                self.ai.panel.status.push_str("; ");
-                                self.ai.panel.status.push_str(note);
+                                panel_status.push_str("; ");
+                                panel_status.push_str(note);
                             }
                             let auto_execute_first = output.auto_execute_first;
+                            if output.mode == AiMode::Agent
+                                && command_count > 0
+                                && !auto_execute_first
+                            {
+                                panel_status.push_str("; awaiting command approval");
+                            }
+                            self.ai.set_panel_status(panel_status);
                             let agent_step_index = self
                                 .ai
                                 .agent
@@ -970,8 +986,6 @@ impl NyaTermApp {
                                 if command_count == 0 {
                                     self.ai.agent.loop_state = None;
                                     self.ai.agent.task_prompt = None;
-                                } else if !auto_execute_first {
-                                    self.ai.panel.status.push_str("; awaiting command approval");
                                 }
                             }
                             if auto_execute_first && !self.ai.chat.command_cards.is_empty() {
@@ -981,7 +995,8 @@ impl NyaTermApp {
                         Err(error) => {
                             self.ai.chat.response_preview = format!("AI request failed: {error}");
                             self.ai.chat.command_cards.clear();
-                            self.ai.panel.status = self.ai.chat.response_preview.clone();
+                            self.ai
+                                .set_panel_status(self.ai.chat.response_preview.clone());
                             if let Some(assistant_id) = self.ai.chat.streaming_assistant_id.take() {
                                 if let Some(message) = self
                                     .ai
@@ -1010,7 +1025,7 @@ impl NyaTermApp {
                                 );
                             }
                             self.settings
-                                .update_store_status(self.ai.panel.status.clone(), false);
+                                .update_store_status(self.ai.panel_status().to_string(), false);
                         }
                     }
                 }

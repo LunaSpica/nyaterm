@@ -79,10 +79,10 @@ impl NyaTermApp {
             }
         }
 
-        self.ai.panel.status = format!(
+        self.ai.set_panel_status(format!(
             "AI credential {name} {}",
             if enabled { "enabled" } else { "disabled" }
-        );
+        ));
         self.persist_ai_settings_now(cx);
     }
 
@@ -129,7 +129,7 @@ impl NyaTermApp {
             _ => return,
         }
         self.ai.settings.credential_edit = None;
-        self.ai.panel.status = "AI credential edited".to_string();
+        self.ai.set_panel_status("AI credential edited".to_string());
         cx.notify();
     }
 
@@ -183,7 +183,7 @@ impl NyaTermApp {
             .settings
             .credential_secret_drafts
             .remove(credential_id);
-        self.ai.panel.status = "AI credential saved".to_string();
+        self.ai.set_panel_status("AI credential saved".to_string());
         self.persist_ai_settings_now(cx);
     }
 
@@ -214,7 +214,7 @@ impl NyaTermApp {
             .insert(0, credential);
         self.ai.settings.credential_edit = Some((id, AiCredentialEditorField::Name));
         window.focus(&self.ai.settings.credential_focus);
-        self.ai.panel.status = "AI credential added".to_string();
+        self.ai.set_panel_status("AI credential added".to_string());
         self.persist_ai_settings_now(cx);
     }
 
@@ -224,7 +224,8 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if is_builtin_ai_provider_id(&credential_id) {
-            self.ai.panel.status = "Built-in AI credentials cannot be deleted".to_string();
+            self.ai
+                .set_panel_status("Built-in AI credentials cannot be deleted".to_string());
             cx.notify();
             return;
         }
@@ -268,7 +269,8 @@ impl NyaTermApp {
             .settings
             .credential_secret_drafts
             .remove(&credential_id);
-        self.ai.panel.status = "AI credential removed".to_string();
+        self.ai
+            .set_panel_status("AI credential removed".to_string());
         self.persist_ai_settings_now(cx);
     }
 }

@@ -109,7 +109,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn persist_ai_settings_now(&mut self, cx: &mut Context<Self>) {
         if self.defer_settings_persistence(cx) {
-            self.ai.panel.status = "AI settings staged".to_string();
+            self.ai.set_panel_status("AI settings staged".to_string());
             return;
         }
         let next = self.ai.settings.config.clone();
@@ -122,16 +122,17 @@ impl NyaTermApp {
             Ok(saved) => {
                 self.ai.settings.config = saved;
                 self.refresh_ai_usage_counts(cx);
-                if self.ai.panel.status.trim().is_empty() {
-                    self.ai.panel.status = "AI settings saved".to_string();
+                if self.ai.panel_status().trim().is_empty() {
+                    self.ai.set_panel_status("AI settings saved".to_string());
                 }
                 self.settings
-                    .update_store_status(self.ai.panel.status.clone(), true);
+                    .update_store_status(self.ai.panel_status().to_string(), true);
             }
             Err(error) => {
-                self.ai.panel.status = format!("AI settings save failed: {error}");
+                self.ai
+                    .set_panel_status(format!("AI settings save failed: {error}"));
                 self.settings
-                    .update_store_status(self.ai.panel.status.clone(), false);
+                    .update_store_status(self.ai.panel_status().to_string(), false);
             }
         }
         cx.notify();
@@ -171,7 +172,7 @@ impl NyaTermApp {
     ) {
         if let Some(action) = self.ai_action_mut(kind, &action_id) {
             action.enabled = !action.enabled;
-            self.ai.panel.status = "AI action toggled".to_string();
+            self.ai.set_panel_status("AI action toggled".to_string());
             self.persist_ai_settings_now(cx);
         }
     }
@@ -208,7 +209,7 @@ impl NyaTermApp {
             cx,
         );
         window.focus(&input.read(cx).focus_handle());
-        self.ai.panel.status = "AI action added".to_string();
+        self.ai.set_panel_status("AI action added".to_string());
         self.persist_ai_settings_now(cx);
     }
 
@@ -247,7 +248,7 @@ impl NyaTermApp {
             "ai.settings.action.{}.{action_id}.",
             kind.input_key()
         ));
-        self.ai.panel.status = "AI action removed".to_string();
+        self.ai.set_panel_status("AI action removed".to_string());
         self.persist_ai_settings_now(cx);
     }
 

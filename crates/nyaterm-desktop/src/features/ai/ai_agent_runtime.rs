@@ -210,8 +210,9 @@ impl NyaTermApp {
         let step_index = self.ai.agent.step_index;
         if step_index.saturating_add(1) >= max_steps {
             self.ai.agent.loop_state = None;
-            self.ai.panel.status =
-                format!("AI Agent reached max step limit ({max_steps}); review terminal output");
+            self.ai.set_panel_status(format!(
+                "AI Agent reached max step limit ({max_steps}); review terminal output"
+            ));
             return Ok(None);
         }
         self.ai.agent.step_index = self.ai.agent.step_index.saturating_add(1);
@@ -256,11 +257,11 @@ impl NyaTermApp {
             stable_since: now,
         });
         self.sync_session_event_bridge_policy();
-        self.ai.panel.status = format!(
+        self.ai.set_panel_status(format!(
             "AI Agent observing command output for step {}/{}",
             step_index + 1,
             max_steps
-        );
+        ));
         self.upsert_ai_agent_step(
             step_index,
             AiAgentStepStatus::Running,
@@ -358,11 +359,11 @@ impl NyaTermApp {
             stable_since: now,
         };
         self.ai.agent.loop_state = Some(state.clone());
-        self.ai.panel.status = format!(
+        self.ai.set_panel_status(format!(
             "AI Agent running {target_label} background command for step {}/{}",
             step_index + 1,
             max_steps
-        );
+        ));
         self.upsert_ai_agent_step(
             step_index,
             AiAgentStepStatus::Running,
@@ -416,8 +417,9 @@ impl NyaTermApp {
         {
             let step_index = state.step_index;
             self.ai.agent.loop_state = None;
-            self.ai.panel.status =
-                "AI Agent loop stopped because the target session closed".to_string();
+            self.ai.set_panel_status(
+                "AI Agent loop stopped because the target session closed".to_string(),
+            );
             self.upsert_ai_agent_step(
                 step_index,
                 AiAgentStepStatus::Failed,
@@ -465,7 +467,8 @@ impl NyaTermApp {
                 exit_code: None,
                 duration_ms: timeout_ms,
             };
-            self.ai.panel.status = format!("AI Agent command capture timed out: {command}");
+            self.ai
+                .set_panel_status(format!("AI Agent command capture timed out: {command}"));
             self.upsert_ai_agent_step(
                 state.step_index,
                 AiAgentStepStatus::Failed,
@@ -527,10 +530,10 @@ impl NyaTermApp {
             exit_code: captured.exit_code,
             duration_ms: captured.duration_ms,
         };
-        self.ai.panel.status = match observation.exit_code {
+        self.ai.set_panel_status(match observation.exit_code {
             Some(code) => format!("AI Agent captured command output with exit code {code}"),
             None => "AI Agent captured command output".to_string(),
-        };
+        });
         self.upsert_ai_agent_step(
             state.step_index,
             AiAgentStepStatus::Completed,
@@ -575,8 +578,9 @@ impl NyaTermApp {
             exit_code: None,
             duration_ms,
         };
-        self.ai.panel.status =
-            "AI Agent command observation stopped because terminal output was dropped".to_string();
+        self.ai.set_panel_status(
+            "AI Agent command observation stopped because terminal output was dropped".to_string(),
+        );
         self.upsert_ai_agent_step(
             state.step_index,
             AiAgentStepStatus::Failed,
@@ -652,7 +656,8 @@ impl NyaTermApp {
             state.max_steps
         );
         self.ai.chat.command_cards.clear();
-        self.ai.panel.status = self.ai.chat.response_preview.clone();
+        self.ai
+            .set_panel_status(self.ai.chat.response_preview.clone());
         self.upsert_ai_agent_step(
             state.step_index.saturating_add(1),
             AiAgentStepStatus::Planning,

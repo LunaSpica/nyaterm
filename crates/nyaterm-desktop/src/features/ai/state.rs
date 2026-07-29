@@ -28,7 +28,7 @@ pub(in crate::features) struct AiFeatureState {
     pub(super) history: AiHistoryState,
     pub(super) discovery: AiDiscoveryState,
     pub(super) agent: AiAgentState,
-    pub(super) panel: AiPanelState,
+    panel: AiPanelState,
 }
 
 /// Focus handles the AI feature needs at construction time.
@@ -124,12 +124,12 @@ pub(super) struct AiAgentState {
 }
 
 /// Panel chrome: status line, focus routing and the detected-error banner.
-pub(super) struct AiPanelState {
-    pub(super) execution_menu_open: bool,
-    pub(super) status: String,
-    pub(super) focused_field: AiInputField,
-    pub(super) detected_error: Option<AiDetectedErrorState>,
-    pub(super) error_notice_at: HashMap<String, Instant>,
+struct AiPanelState {
+    execution_menu_open: bool,
+    status: String,
+    focused_field: AiInputField,
+    detected_error: Option<AiDetectedErrorState>,
+    error_notice_at: HashMap<String, Instant>,
 }
 
 impl AiFeatureState {
@@ -732,6 +732,10 @@ impl AiFeatureState {
         self.panel.dismiss_detected_error();
     }
 
+    pub(in crate::features) fn clear_detected_error(&mut self) {
+        self.panel.detected_error = None;
+    }
+
     pub(in crate::features) fn note_detected_error(
         &mut self,
         session_id: String,
@@ -1002,5 +1006,23 @@ mod tests {
         assert_eq!(state.clamp_chat_mention_index(2), 1);
         assert_eq!(state.clamp_discovery_index(0), 0);
         assert_eq!(state.clamp_chat_mention_index(0), 0);
+    }
+
+    #[test]
+    fn panel_status_and_error_banner_change_only_through_owner_operations() {
+        let cx = TestAppContext::single();
+        let mut state = state(&cx);
+        let now = Instant::now();
+
+        state.set_panel_status("completed");
+        assert_eq!(state.panel_status(), "completed");
+        state.set_panel_status("replacement");
+        assert_eq!(state.panel_status(), "replacement");
+
+        assert!(state.note_detected_error("session".to_string(), "failure".to_string(), now,));
+        assert!(state.panel_detected_error().is_some());
+        state.clear_detected_error();
+        assert!(state.panel_detected_error().is_none());
+        assert_eq!(state.panel_status(), "terminal error detected");
     }
 }
