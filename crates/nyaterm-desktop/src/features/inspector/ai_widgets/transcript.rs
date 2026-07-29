@@ -13,10 +13,10 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let mut body = div().flex().flex_col().gap_2();
-        if self.ai.chat.messages.is_empty() {
+        if self.ai.chat_messages().is_empty() {
             body = body.child(self.ai_empty_transcript(mode_label, enabled, cx));
         } else {
-            for message in &self.ai.chat.messages {
+            for message in self.ai.chat_messages() {
                 body = body.child(self.ai_message_bubble(message, cx));
             }
         }
@@ -30,11 +30,10 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
         let palette = self.theme_palette();
-        let has_model = !self.ai.settings.model_draft.trim().is_empty()
+        let has_model = !self.ai.settings_model_draft().trim().is_empty()
             || self
                 .ai
-                .settings
-                .config
+                .settings_config()
                 .default_model_id
                 .as_ref()
                 .is_some_and(|id| !id.trim().is_empty());

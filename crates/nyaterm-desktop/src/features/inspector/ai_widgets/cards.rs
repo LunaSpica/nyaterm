@@ -17,14 +17,13 @@ impl NyaTermApp {
         // Tauri AICommandCardView list under transcript.
         // Return AnyElement so listeners do not pin cx/self lifetimes across the panel tree.
         let mut rows = div().mt_2().flex().flex_col().gap_2();
-        if self.ai.chat.command_cards.is_empty() {
+        if self.ai.chat_command_cards().is_empty() {
             return rows.into_any_element();
         }
         let palette = self.theme_palette();
         for (index, card) in self
             .ai
-            .chat
-            .command_cards
+            .chat_command_cards()
             .iter()
             .cloned()
             .take(8)
@@ -234,7 +233,7 @@ impl NyaTermApp {
                             cx.write_to_clipboard(ClipboardItem::new_string(
                                 command_for_copy.clone(),
                             ));
-                            this.ai.panel.status = "command copied".to_string();
+                            this.ai.set_panel_status("command copied");
                             cx.notify();
                         }),
                     ))

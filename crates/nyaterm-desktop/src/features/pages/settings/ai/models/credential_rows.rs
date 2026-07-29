@@ -13,8 +13,8 @@ impl NyaTermApp {
         palette: crate::theme::ThemePalette,
         cx: &mut Context<Self>,
     ) -> gpui::Div {
-        let credential_edit = self.ai.settings.credential_edit.clone();
-        let credential_secret_drafts = self.ai.settings.credential_secret_drafts.clone();
+        let credential_edit = self.ai.settings_credential_edit().cloned();
+        let credential_secret_drafts = self.ai.settings_credential_secret_drafts().clone();
         let profile_name_label = self.tr("ai.profileName");
         let base_url_label = self.tr("ai.baseUrl");
         let api_key_label = self.tr("settings.apiKey");
@@ -23,7 +23,7 @@ impl NyaTermApp {
 
         // Cloned up front so the fold can borrow `self` mutably: each row builds
         // three real inputs, and creating one needs the app.
-        let credentials = self.ai.settings.config.provider_credentials.clone();
+        let credentials = self.ai.settings_config().provider_credentials.clone();
         credentials
             .into_iter()
             .fold(div().flex().flex_col().gap_4(), |rows, credential| {

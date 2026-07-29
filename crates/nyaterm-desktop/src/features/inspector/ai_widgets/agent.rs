@@ -25,8 +25,8 @@ impl NyaTermApp {
             AiAgentStepStatus::Planning => rgb(palette.text_muted),
         };
         let step_index = step.step_index;
-        let thought_open = self.ai.agent.thought_expanded.contains(&step_index);
-        let output_open = self.ai.agent.output_expanded.contains(&step_index);
+        let thought_open = self.ai.agent_thought_is_expanded(step_index);
+        let output_open = self.ai.agent_output_is_expanded(step_index);
         let thought = step
             .thought
             .clone()

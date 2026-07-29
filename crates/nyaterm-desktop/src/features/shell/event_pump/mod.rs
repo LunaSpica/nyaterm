@@ -359,7 +359,7 @@ impl NyaTermApp {
         if self.header_status_clock_refresh_due() {
             return true;
         }
-        if self.ai.chat.focus_pending
+        if self.ai.chat_focus_is_pending()
             || self.transfer.rename_focus_is_pending()
             || self.session.prompts.credential_focus_is_pending()
         {
@@ -479,13 +479,11 @@ impl NyaTermApp {
             && !self.terminal.view.runtime.open_tabs_persist_dirty
             && !self.terminal.view.runtime.window_layout_persist_dirty
             && self.terminal.windows.restored
-            && !self.ai.chat.pending
-            && self.ai.agent.loop_state.is_none()
-            && !self.ai.discovery.pending
+            && !self.ai.has_background_work()
             && !self.remote_ops.has_pending_job()
             && !self.translation.is_pending()
             && !self.update.is_pending()
-            && !self.ai.chat.focus_pending
+            && !self.ai.chat_focus_is_pending()
             && !self.transfer.rename_focus_is_pending()
             && !self.session.prompts.credential_focus_is_pending()
             && !((self.session.active_ssh_config().is_some()

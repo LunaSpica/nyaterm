@@ -213,22 +213,22 @@ impl NyaTermApp {
                                 if this.session.session_is_busy(&explain_session_id)
                                     || this.is_session_disconnected(&explain_session_id)
                                 {
-                                    this.ai.panel.status =
-                                        "terminal session unavailable for AI".to_string();
+                                    this.ai
+                                        .set_panel_status("terminal session unavailable for AI");
                                     cx.notify();
                                     return;
                                 }
                                 if visible_for_ai.trim().is_empty() {
-                                    this.ai.panel.status =
-                                        "terminal visible screen is empty".to_string();
+                                    this.ai
+                                        .set_panel_status("terminal visible screen is empty");
                                 } else {
                                     this.set_ai_prompt_draft(format!(
                                         "Explain this terminal output:\n\n{}",
                                         visible_for_ai
                                     ), cx);
-                                    this.ai.panel.status =
-                                        "terminal output loaded into AI prompt".to_string();
-                                    window.focus(&this.ai.chat.focus);
+                                    this.ai
+                                        .set_panel_status("terminal output loaded into AI prompt");
+                                    window.focus(this.ai.chat_focus());
                                 }
                                 cx.notify();
                             }),
@@ -244,21 +244,21 @@ impl NyaTermApp {
                                 if this.session.session_is_busy(&analyze_session_id)
                                     || this.is_session_disconnected(&analyze_session_id)
                                 {
-                                    this.ai.panel.status =
-                                        "terminal session unavailable for AI".to_string();
+                                    this.ai
+                                        .set_panel_status("terminal session unavailable for AI");
                                     cx.notify();
                                     return;
                                 }
                                 if buffer_for_ai.trim().is_empty() {
-                                    this.ai.panel.status = "terminal buffer is empty".to_string();
+                                    this.ai.set_panel_status("terminal buffer is empty");
                                 } else {
                                     this.set_ai_prompt_draft(format!(
                                         "Analyze this terminal buffer for errors, risks, and next actions:\n\n{}",
                                         buffer_for_ai
                                     ), cx);
-                                    this.ai.panel.status =
-                                        "terminal buffer loaded into AI prompt".to_string();
-                                    window.focus(&this.ai.chat.focus);
+                                    this.ai
+                                        .set_panel_status("terminal buffer loaded into AI prompt");
+                                    window.focus(this.ai.chat_focus());
                                 }
                                 cx.notify();
                             }),

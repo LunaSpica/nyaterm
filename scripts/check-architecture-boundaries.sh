@@ -62,6 +62,19 @@ check_no_multiline_matches() {
   rm -f /tmp/nyaterm-architecture-boundary.$$
 }
 
+check_no_multiline_matches_excluding() {
+  local label="$1"
+  local pattern="$2"
+  local path="$3"
+  local exclude="$4"
+  if rg -n -U "$pattern" "$path" --glob "!$exclude" \
+    >/tmp/nyaterm-architecture-boundary.$$ 2>/dev/null; then
+    fail "$label"
+    sed 's/^/  /' /tmp/nyaterm-architecture-boundary.$$ >&2
+  fi
+  rm -f /tmp/nyaterm-architecture-boundary.$$
+}
+
 check_no_matches_in_rust_fn() {
   local label="$1"
   local file="$2"
@@ -188,6 +201,20 @@ check_no_multiline_matches \
   "remote pane state must be accessed through RemoteOpsFeatureState" \
   '(self|this|app)\.remote_ops[[:space:]]*\.(docker|process|stats)(\.|[[:space:]]*=)' \
   crates/nyaterm-desktop/src/features
+
+check_no_multiline_matches \
+  "AI feature children must not be visible outside the AI module" \
+  'struct[[:space:]]+AiFeatureState[[:space:]]*\{[^}]*pub([[:space:]]|\(in crate::features\)|\(crate\))[[:space:]]+(settings|chat|history|discovery|agent|panel)[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/ai/state.rs
+check_no_matches \
+  "AI child implementation types must not be visible outside the AI module" \
+  'pub([[:space:]]|\(in crate::features\)|\(crate\))[[:space:]]+struct[[:space:]]+Ai(Settings|Chat|History|Discovery|Agent|Panel)State' \
+  crates/nyaterm-desktop/src/features/ai/state.rs
+check_no_multiline_matches_excluding \
+  "AI child state must be accessed through AiFeatureState outside the AI module" \
+  '(self|this|app)\.ai[[:space:]]*\.(settings|chat|history|discovery|agent|panel)(\.|[[:space:]]*=)' \
+  crates/nyaterm-desktop/src/features \
+  'crates/nyaterm-desktop/src/features/ai/**'
 
 check_no_matches \
   "settings transient UI fields must stay grouped under SettingsFeatureState" \

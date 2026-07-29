@@ -17,14 +17,13 @@ impl NyaTermApp {
     ) -> AnyElement {
         let credentials: Vec<_> = self
             .ai
-            .settings
-            .config
+            .settings_config()
             .provider_credentials
             .iter()
             .filter(|credential| credential.enabled)
             .cloned()
             .collect();
-        let query = self.ai.settings.model_query.trim().to_ascii_lowercase();
+        let query = self.ai.settings_model_query().trim().to_ascii_lowercase();
         let mut groups: Vec<(
             String,
             String,
@@ -43,7 +42,7 @@ impl NyaTermApp {
             .collect();
 
         for model in
-            self.ai.settings.config.models.iter().filter(|model| {
+            self.ai.settings_config().models.iter().filter(|model| {
                 query.is_empty() || model.name.to_ascii_lowercase().contains(&query)
             })
         {
@@ -72,8 +71,8 @@ impl NyaTermApp {
                 .sort_by_key(|model| (!model.enabled, model.name.to_ascii_lowercase()));
         }
 
-        let collapsed = self.ai.settings.model_collapsed_groups.clone();
-        let manual_drafts = self.ai.settings.manual_model_drafts.clone();
+        let collapsed = self.ai.settings_model_collapsed_groups().clone();
+        let manual_drafts = self.ai.settings_manual_model_drafts().clone();
         let manual_placeholder = self.tr("ai.manualModelPlaceholder");
         let manual_badge = self.tr("ai.manualModelBadge");
         let custom_provider = self.tr("ai.customProvider");
@@ -213,8 +212,7 @@ impl NyaTermApp {
                                                     move |this, _, _, cx| {
                                                         let name = this
                                                             .ai
-                                                            .settings
-                                                            .manual_model_drafts
+                                                            .settings_manual_model_drafts()
                                                             .get(&group)
                                                             .cloned()
                                                             .unwrap_or_default();

@@ -15,7 +15,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let query = self.ai.settings.model_query.clone();
+        let query = self.ai.settings_model_query().to_string();
         let query_placeholder = self.tr("ai.searchModels");
         let search_field = self.text_input(
             "ai.settings.model-search",
@@ -26,8 +26,7 @@ impl NyaTermApp {
         let search_focus = search_field.read(cx).focus_handle();
         let has_enabled_custom_credential = self
             .ai
-            .settings
-            .config
+            .settings_config()
             .provider_credentials
             .iter()
             .any(|credential| {
@@ -36,20 +35,18 @@ impl NyaTermApp {
             });
         let enabled_credentials = self
             .ai
-            .settings
-            .config
+            .settings_config()
             .provider_credentials
             .iter()
             .filter(|credential| credential.enabled)
             .count();
         let has_enabled_model = self
             .ai
-            .settings
-            .config
+            .settings_config()
             .models
             .iter()
             .any(|model| model.enabled);
-        let refresh_label = if self.ai.discovery.pending {
+        let refresh_label = if self.ai.discovery_is_pending() {
             self.tr("common.loading")
         } else {
             self.tr("ai.refreshModels")
@@ -99,7 +96,7 @@ impl NyaTermApp {
                                         |this, event: &KeyDownEvent, _, cx| {
                                             if event.keystroke.key == "escape" {
                                                 cx.stop_propagation();
-                                                this.ai.settings.model_query.clear();
+                                                this.ai.clear_settings_model_query();
                                                 this.reset_text_input(
                                                     "ai.settings.model-search",
                                                     "",
@@ -115,7 +112,7 @@ impl NyaTermApp {
                                 div()
                                     .opacity(
                                         if has_enabled_custom_credential
-                                            && !self.ai.discovery.pending
+                                            && !self.ai.discovery_is_pending()
                                         {
                                             1.0
                                         } else {
@@ -128,7 +125,7 @@ impl NyaTermApp {
                                         refresh_label,
                                         cx.listener(move |this, _, _, cx| {
                                             if has_enabled_custom_credential
-                                                && !this.ai.discovery.pending
+                                                && !this.ai.discovery_is_pending()
                                             {
                                                 this.discover_ai_models(cx);
                                             }

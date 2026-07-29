@@ -39,16 +39,15 @@ impl NyaTermApp {
     }
 
     fn drive_pending_focus(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
-        if !self.ai.chat.focus_pending
+        if !self.ai.chat_focus_is_pending()
             && !self.transfer.rename_focus_is_pending()
             && !self.session.prompts.credential_focus_is_pending()
         {
             return false;
         }
         let mut dirty = false;
-        if self.ai.chat.focus_pending {
-            window.focus(&self.ai.chat.focus);
-            self.ai.chat.focus_pending = false;
+        if self.ai.take_chat_focus_request() {
+            window.focus(self.ai.chat_focus());
             dirty = true;
         }
         if let Some(focus) = self.transfer.take_pending_rename_focus() {
@@ -185,9 +184,7 @@ impl NyaTermApp {
             && !self.terminal.view.runtime.open_tabs_persist_dirty
             && !self.terminal.view.runtime.window_layout_persist_dirty
             && self.terminal.windows.restored
-            && !self.ai.chat.pending
-            && self.ai.agent.loop_state.is_none()
-            && !self.ai.discovery.pending
+            && !self.ai.has_background_work()
             && self.commands.persistence_is_idle()
         {
             dirty |= self.drive_pending_focus(window, cx);

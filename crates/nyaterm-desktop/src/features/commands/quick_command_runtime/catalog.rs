@@ -127,10 +127,11 @@ impl NyaTermApp {
         self.reset_text_input("quick-command.ai-prompt", "", cx);
         self.close_quick_command_toolbar_popovers();
         self.set_ai_prompt_draft(format!("Generate a shell command for: {prompt}"), cx);
-        self.ai.chat.response_preview = "Quick command generation ready".to_string();
-        self.ai.panel.status = "quick command AI assist".to_string();
+        self.ai
+            .set_chat_response_preview("Quick command generation ready");
+        self.ai.set_panel_status("quick command AI assist");
         self.ensure_panel_open(NavItem::AiAssistant);
-        window.focus(&self.ai.chat.focus);
+        window.focus(self.ai.chat_focus());
         cx.notify();
     }
 

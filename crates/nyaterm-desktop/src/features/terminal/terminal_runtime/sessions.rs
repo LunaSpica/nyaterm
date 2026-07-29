@@ -2,7 +2,6 @@ use std::collections::HashSet;
 use std::time::Duration;
 
 use gpui::{Context, Timer, Window};
-use nyaterm_core::AgentOutputCaptureProcessor;
 
 use crate::features::formatting::{normalize_startup_command, short_id};
 use crate::features::{INITIAL_TERMINAL_BANNER, NyaTermApp};
@@ -80,8 +79,7 @@ impl NyaTermApp {
         }
         self.prune_workspace_split();
         if was_active {
-            self.ai.agent.loop_state = None;
-            self.ai.agent.capture = AgentOutputCaptureProcessor::new();
+            self.ai.reset_agent_runtime();
             self.sync_session_event_bridge_policy();
             if let Some(next_session_id) = self.next_session_after(&session_id) {
                 self.activate_session_id(&next_session_id);
@@ -143,8 +141,7 @@ impl NyaTermApp {
             .is_some_and(|session_id| live_ids.contains(session_id));
 
         if !active_is_live {
-            self.ai.agent.loop_state = None;
-            self.ai.agent.capture = AgentOutputCaptureProcessor::new();
+            self.ai.reset_agent_runtime();
             self.sync_session_event_bridge_policy();
             if let Some(next_session_id) = self
                 .session

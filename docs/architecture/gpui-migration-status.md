@@ -415,10 +415,16 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   the remote E2E test.
 - AI state is grouped into `AiFeatureState`: provider `settings`, the `chat`
   composer and transcript, session `history`, model `discovery`, the agent
-  `loop`, and `panel` chrome. Note that `SettingsDraftSnapshot` deliberately
+  `loop`, and `panel` chrome. All six implementation children are now visible
+  only inside `features::ai`; the rest of desktop uses read-only slices/queries
+  and semantic owner transitions. Settings draft snapshot/restore, mutually
+  exclusive menus and confirmations, external request preparation, model and
+  mention index clamping, detected-error throttling, focus requests and Agent
+  capture/reset execute on the owner. `SettingsDraftSnapshot` deliberately
   keeps its own `ai_settings` / `ai_model_draft` / `ai_base_url_draft` /
-  `ai_secret_draft` fields with the old names; it is a separate snapshot type,
-  and the rewrite was anchored on `self`/`this` so those were left alone.
+  `ai_secret_draft` fields with the old names because it is a separate snapshot
+  type. GPUI focus/rendering, persistence calls and terminal-context collection
+  remain in application adapters.
 - Terminal presentation state is grouped into `TerminalFeatureState`: `search`,
   `view` runtime, `input` focus and IME, inline command/credential `assist`,
   dedicated multi-line `paste` review editor, `selection` and mouse reporting,
@@ -1466,6 +1472,7 @@ Current ownership map:
 | Command history and persistence worker | Private state in `NyaTermApp.commands` | Persisted catalog plus background runtime | History snapshots, queue admission, event polling and idle checks enter through `CommandFeatureState`; failed optimistic use-count updates roll back on the owner. |
 | Send-command composer/options/progress | Private children in `NyaTermApp.send_command` | Transient editor and send lifecycle | Views receive immutable presentation data; control edits, mutually-exclusive menus, data/mode defaults, progress counters and cancellation enter through `SendCommandFeatureState`. Session selection, terminal writes, GPUI/text-input routing and status remain in adapters. |
 | Settings interaction and prompts | Private children in `NyaTermApp.settings` | Transient settings UI and prompt lifecycle | Search-engine rows, keyword-highlight editing, appearance menus, keybinding recording/search and config/diagnostics/import/password prompt admission enter through `SettingsFeatureState`; views use immutable presentation values and read-only focus/font access. Persistence, native filesystem prompts, text inputs and GPUI notification remain in adapters. |
+| AI settings/chat/history/discovery/agent/panel | AI-module-private children in `NyaTermApp.ai` | Persisted settings plus transient UI and background lifecycle | Desktop consumers use read-only slices/queries and semantic transitions; settings draft groups, menu exclusion, confirmations, request/focus preparation, detected-error throttling, picker clamping and Agent capture/reset enter through `AiFeatureState`. Persistence, terminal-context collection, GPUI focus/rendering and notification remain in adapters. |
 | Remote Docker/process/stats panes | Private children in `NyaTermApp.remote_ops` | Transient UI state plus typed background-event lifecycle | Views use immutable presentation values; menu exclusion, list-offset clamping, Docker details/Compose/confirmation cleanup, process PID-scoped cleanup, Stats expansion/data and job identity/failure timing enter through `RemoteOpsFeatureState`. SSH service launch, active-session policy, terminal status mirroring and GPUI notification remain in adapters. |
 | Live session manager/event bridge | Private services in `NyaTermApp.session` | Runtime services | Callers receive a shared manager reference/handle and use bridge routing, drain and metrics methods; neither service field is writable outside `SessionFeatureState`. |
 | Session restore/event queue | Private state in `NyaTermApp.session` | Transient runtime coordination | Restore completion is idempotent and pending transport events are counted, extended and popped only through owner methods; event interpretation stays in the event-pump adapter. |
@@ -1762,7 +1769,13 @@ honest remaining list.
    three Docker/process/Stats pane children private, routed views through
    immutable presentation values, and moved menu, scrolling, details/Compose,
    PID-scoped interaction and typed job transitions behind the domain owner.
-   SSH launch and terminal-status mirroring remain app-level adapters. Cloud sync
+   SSH launch and terminal-status mirroring remain app-level adapters. The AI
+   encapsulation pass then restricted its six child states to the AI module,
+   migrated roughly three hundred cross-feature reads and writes to owner APIs,
+   and coupled settings snapshot/restore, overlay exclusion, confirmations,
+   external request/focus preparation, detected-error throttling and Agent
+   capture/reset transitions. GPUI, persistence and terminal-context work stay
+   in adapters. Cloud sync
    made secret-field routing inaccessible outside
    its owner, and
    recording cleanup can no longer leave its manager, busy map and pipeline out

@@ -625,20 +625,22 @@ impl NyaTermApp {
                         let mut context = self.ai_terminal_context();
                         context.selected_text = file.content;
                         context.cwd = Some(transfer_event_remote_parent_path(&remote_path));
-                        self.ai.chat.prepared_request = Some(AiPreparedRequest {
+                        let request = AiPreparedRequest {
                             action: AiAction::CustomFileAction,
                             context,
                             source_label: format!("{action_name} · {remote_path}"),
-                        });
+                        };
                         self.set_ai_prompt_draft(prompt, cx);
-                        self.ai.chat.response_preview = format!(
-                            "Loaded {} byte(s) from {remote_path} for AI action {action_name}",
-                            file.size
+                        self.ai.prepare_external_request(
+                            request,
+                            format!(
+                                "Loaded {} byte(s) from {remote_path} for AI action {action_name}",
+                                file.size
+                            ),
+                            format!("AI file action ready: {action_name} ({action_id})"),
+                            true,
                         );
-                        self.ai.panel.status =
-                            format!("AI file action ready: {action_name} ({action_id})");
                         self.ensure_panel_open(NavItem::AiAssistant);
-                        self.ai.chat.focus_pending = true;
                         self.transfer.browser.status = format!("AI action ready for {remote_path}");
                         self.terminal.view.status =
                             format!("AI assistant opened for remote file: {remote_path}");

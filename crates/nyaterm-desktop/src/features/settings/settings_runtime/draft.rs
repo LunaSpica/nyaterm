@@ -15,12 +15,14 @@ impl NyaTermApp {
             self.translation.settings_draft_snapshot();
         let (cloud_sync_settings, cloud_sync_secret_draft) =
             self.cloud_sync.settings_draft_snapshot();
+        let (ai_settings, ai_model_draft, ai_base_url_draft, ai_secret_draft) =
+            self.ai.settings_draft_snapshot();
         self.shell.navigation.settings.draft_snapshot = Some(SettingsDraftSnapshot {
             settings: self.settings.summary.clone(),
-            ai_settings: self.ai.settings.config.clone(),
-            ai_model_draft: self.ai.settings.model_draft.clone(),
-            ai_base_url_draft: self.ai.settings.base_url_draft.clone(),
-            ai_secret_draft: self.ai.settings.secret_draft.clone(),
+            ai_settings,
+            ai_model_draft,
+            ai_base_url_draft,
+            ai_secret_draft,
             cloud_sync_settings,
             cloud_sync_secret_draft,
             translation_settings,
@@ -36,10 +38,12 @@ impl NyaTermApp {
             return false;
         };
         snapshot.settings != self.settings.summary
-            || snapshot.ai_settings != self.ai.settings.config
-            || snapshot.ai_model_draft != self.ai.settings.model_draft
-            || snapshot.ai_base_url_draft != self.ai.settings.base_url_draft
-            || snapshot.ai_secret_draft != self.ai.settings.secret_draft
+            || !self.ai.settings_draft_matches(
+                &snapshot.ai_settings,
+                &snapshot.ai_model_draft,
+                &snapshot.ai_base_url_draft,
+                &snapshot.ai_secret_draft,
+            )
             || !self.cloud_sync.settings_draft_matches(
                 &snapshot.cloud_sync_settings,
                 &snapshot.cloud_sync_secret_draft,
@@ -265,7 +269,7 @@ impl NyaTermApp {
             )) => {
                 self.apply_gpui_settings(saved_settings);
                 self.settings.rebase_master_password();
-                self.ai.settings.config = saved_ai_settings;
+                self.ai.replace_settings_config(saved_ai_settings, true);
                 self.cloud_sync
                     .replace_settings(saved_cloud_sync_settings, Default::default());
                 self.translation.replace_settings(
@@ -273,7 +277,6 @@ impl NyaTermApp {
                     TranslationSecretDraft::default(),
                 );
                 self.settings.keyword_config = saved_keyword_highlights;
-                self.ai.settings.secret_draft.clear();
                 self.sync_ai_drafts_from_active_profile();
                 self.recording
                     .set_memory_limit(self.settings.summary.recording_memory_limit_bytes as usize);
@@ -325,10 +328,12 @@ impl NyaTermApp {
     pub(in crate::features) fn cancel_settings(&mut self, cx: &mut Context<Self>) {
         if let Some(snapshot) = self.shell.navigation.settings.draft_snapshot.take() {
             self.apply_gpui_settings(snapshot.settings);
-            self.ai.settings.config = snapshot.ai_settings;
-            self.ai.settings.model_draft = snapshot.ai_model_draft;
-            self.ai.settings.base_url_draft = snapshot.ai_base_url_draft;
-            self.ai.settings.secret_draft = snapshot.ai_secret_draft;
+            self.ai.restore_settings_draft(
+                snapshot.ai_settings,
+                snapshot.ai_model_draft,
+                snapshot.ai_base_url_draft,
+                snapshot.ai_secret_draft,
+            );
             self.cloud_sync.replace_settings(
                 snapshot.cloud_sync_settings,
                 snapshot.cloud_sync_secret_draft,
@@ -392,8 +397,7 @@ impl NyaTermApp {
 
     fn finish_settings_page(&mut self, cx: &mut Context<Self>) {
         self.cancel_github_gist_auth(cx);
-        self.ai.settings.action_edit = None;
-        self.ai.settings.manual_model_edit_group = None;
+        self.ai.close_settings_editors();
         self.settings.clear_keyword_highlight_edit();
         self.forget_text_inputs("ai.settings.action.");
         self.forget_text_inputs("ai.settings.manual-model.");

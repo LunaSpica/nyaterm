@@ -11,7 +11,6 @@ use crate::features::shell::event_pump::helpers::{
     terminal_log_plain_text, terminal_output_dropped_marker,
 };
 use crate::features::{NyaTermApp, short_id};
-use crate::models::AiDetectedErrorState;
 use crate::models::TerminalViewState;
 
 #[derive(Clone, Copy)]
@@ -489,7 +488,7 @@ impl NyaTermApp {
             drain_timings.decode += stage_duration;
             chunk_timings.decode += stage_duration;
             let stage_started_at = Instant::now();
-            let result = self.ai.agent.capture.process(&text);
+            let result = self.ai.process_agent_output(&text);
             let stage_duration = stage_started_at.elapsed();
             drain_timings.ai_capture += stage_duration;
             chunk_timings.ai_capture += stage_duration;
@@ -539,12 +538,7 @@ impl NyaTermApp {
             return;
         }
         let watched = self.session.active_id() == Some(session_id)
-            || self
-                .ai
-                .chat
-                .target_session_ids
-                .iter()
-                .any(|target_id| target_id == session_id);
+            || self.ai.chat_targets_session(session_id);
         if !watched {
             return;
         }
@@ -554,27 +548,13 @@ impl NyaTermApp {
             return;
         }
 
-        let now = Instant::now();
-        if self
-            .ai
-            .panel
-            .error_notice_at
-            .get(session_id)
-            .is_some_and(|last| now.duration_since(*last) < Duration::from_secs(30))
-        {
-            return;
+        if self.ai.note_detected_error(
+            session_id.to_string(),
+            terminal_error_notice_output(&output),
+            Instant::now(),
+        ) {
+            cx.notify();
         }
-
-        self.ai
-            .panel
-            .error_notice_at
-            .insert(session_id.to_string(), now);
-        self.ai.panel.detected_error = Some(AiDetectedErrorState {
-            session_id: session_id.to_string(),
-            output: terminal_error_notice_output(&output),
-        });
-        self.ai.panel.status = "terminal error detected".to_string();
-        cx.notify();
     }
 
     pub(super) fn maybe_log_slow_session_output_chunk(
@@ -607,13 +587,7 @@ impl NyaTermApp {
     }
 
     pub(super) fn session_has_active_ai_capture(&self, session_id: &str) -> bool {
-        self.ai.agent.capture.has_active()
-            && self
-                .ai
-                .agent
-                .loop_state
-                .as_ref()
-                .is_some_and(|state| state.terminal_session_id == session_id)
+        self.ai.agent_capture_is_active_for(session_id)
     }
 
     pub(super) fn flush_pending_session_frame_outputs(

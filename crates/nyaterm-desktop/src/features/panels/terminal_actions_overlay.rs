@@ -254,17 +254,18 @@ impl NyaTermApp {
                                         cx.listener(move |this, _, window, cx| {
                                             this.terminal.menus.actions_open = false;
                                             if visible_for_ai.trim().is_empty() {
-                                                this.ai.panel.status =
-                                                    "terminal visible screen is empty".to_string();
+                                                this.ai.set_panel_status(
+                                                    "terminal visible screen is empty",
+                                                );
                                             } else {
                                                 this.set_ai_prompt_draft(format!(
                                                     "Explain this terminal output:\n\n{}",
                                                     visible_for_ai
                                                 ), cx);
-                                                this.ai.panel.status =
-                                                    "terminal output loaded into AI prompt"
-                                                        .to_string();
-                                                window.focus(&this.ai.chat.focus);
+                                                this.ai.set_panel_status(
+                                                    "terminal output loaded into AI prompt",
+                                                );
+                                                window.focus(this.ai.chat_focus());
                                             }
                                             cx.notify();
                                         }),
@@ -281,17 +282,17 @@ impl NyaTermApp {
                                         cx.listener(move |this, _, window, cx| {
                                             this.terminal.menus.actions_open = false;
                                             if buffer_for_ai.trim().is_empty() {
-                                                this.ai.panel.status =
-                                                    "terminal buffer is empty".to_string();
+                                                this.ai
+                                                    .set_panel_status("terminal buffer is empty");
                                             } else {
                                                 this.set_ai_prompt_draft(format!(
                                                     "Review this terminal buffer and summarize issues or next actions:\n\n{}",
                                                     buffer_for_ai
                                                 ), cx);
-                                                this.ai.panel.status =
-                                                    "terminal buffer loaded into AI prompt"
-                                                        .to_string();
-                                                window.focus(&this.ai.chat.focus);
+                                                this.ai.set_panel_status(
+                                                    "terminal buffer loaded into AI prompt",
+                                                );
+                                                window.focus(this.ai.chat_focus());
                                             }
                                             cx.notify();
                                         }),

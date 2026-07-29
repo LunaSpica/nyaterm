@@ -11,7 +11,7 @@ use crate::widgets::{mode_button, small_button};
 
 impl NyaTermApp {
     pub(in crate::features) fn dismiss_ai_detected_error(&mut self, cx: &mut Context<Self>) {
-        self.ai.panel.dismiss_detected_error();
+        self.ai.dismiss_detected_error();
         cx.notify();
     }
 
@@ -20,35 +20,23 @@ impl NyaTermApp {
         detected: AiDetectedErrorState,
         cx: &mut Context<Self>,
     ) {
-        if self.ai.chat.pending || self.ai.agent.loop_state.is_some() {
-            self.ai.chat.response_preview = "AI request already running".to_string();
-            self.ai.panel.status = self.ai.chat.response_preview.clone();
+        if self.ai.chat_or_agent_is_running() {
+            self.ai
+                .set_chat_response_preview("AI request already running");
+            self.ai.set_panel_status("AI request already running");
             cx.notify();
             return;
         }
         let mut context = self.ai_terminal_context_for_session(Some(&detected.session_id));
         context.selected_text = detected.output.clone();
-        self.ai.chat.prepared_request = Some(AiPreparedRequest {
+        let request = AiPreparedRequest {
             action: AiAction::AnalyzeError,
             context,
             source_label: "Detected terminal error".to_string(),
-        });
-        if !self
-            .ai
-            .chat
-            .target_session_ids
-            .iter()
-            .any(|session_id| session_id == &detected.session_id)
-        {
-            self.ai
-                .chat
-                .target_session_ids
-                .push(detected.session_id.clone());
-        }
+        };
+        self.ai
+            .prepare_detected_error_request(request, detected.session_id.clone());
         self.set_ai_prompt_draft("Analyze detected error", cx);
-        self.ai.history.open = false;
-        self.ai.panel.execution_menu_open = false;
-        self.ai.discovery.menu_open = false;
         self.start_ai_ask(cx);
     }
 
@@ -117,17 +105,16 @@ impl NyaTermApp {
 
     pub(in crate::features) fn ai_ask_panel(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = self.theme_palette();
-        let agent_mode = self.ai.settings.config.default_mode == AiMode::Agent;
+        let agent_mode = self.ai.settings_config().default_mode == AiMode::Agent;
         let file_action_ready = self
             .ai
-            .chat
-            .prepared_request
-            .as_ref()
+            .chat_prepared_request()
             .is_some_and(|request| request.action == AiAction::CustomFileAction);
-        let ai_running = self.ai.chat.pending || self.ai.agent.loop_state.is_some();
+        let ai_running = self.ai.chat_or_agent_is_running();
         let command_rows = self.ai_command_card_list(cx);
+        let agent_steps = self.ai.agent_steps().to_vec();
         let mut agent_step_rows = div();
-        if agent_mode || !self.ai.agent.steps.is_empty() {
+        if agent_mode || !agent_steps.is_empty() {
             agent_step_rows = agent_step_rows
                 .mt_2()
                 .border_t_1()
@@ -143,7 +130,7 @@ impl NyaTermApp {
                         .text_color(rgb(palette.text_muted))
                         .child(self.tr("ai.agentSteps")),
                 );
-            if self.ai.agent.steps.is_empty() {
+            if agent_steps.is_empty() {
                 agent_step_rows = agent_step_rows.child(
                     div()
                         .text_xs()
@@ -151,7 +138,7 @@ impl NyaTermApp {
                         .child(self.tr("ai.agentNoSteps")),
                 );
             } else {
-                for step in self.ai.agent.steps.iter().cloned().rev().take(16).rev() {
+                for step in agent_steps.into_iter().rev().take(16).rev() {
                     agent_step_rows = agent_step_rows.child(self.ai_agent_step_card(step, cx));
                 }
             }
@@ -165,17 +152,13 @@ impl NyaTermApp {
                 .cloned()
         });
         let model_choices = self.ai_filtered_model_choices();
-        if self.ai.discovery.index >= model_choices.len() && !model_choices.is_empty() {
-            self.ai.discovery.index = model_choices.len() - 1;
-        }
+        self.ai.clamp_discovery_index(model_choices.len());
         let model_label = selected_model
             .as_ref()
             .map(|model| model.name.clone())
             .unwrap_or_else(|| self.tr("ai.notConfigured").to_string());
-        let target_sessions = self
-            .ai
-            .chat
-            .target_session_ids
+        let target_session_ids = self.ai.chat_target_session_ids().to_vec();
+        let target_sessions = target_session_ids
             .iter()
             .filter_map(|session_id| {
                 self.session_info(session_id).map(|session| {
@@ -186,16 +169,13 @@ impl NyaTermApp {
                 })
             })
             .collect::<Vec<_>>();
-        let mention_candidates = if self.ai.chat.mention_open {
+        let mention_candidates = if self.ai.chat_mention_is_open() {
             self.ai_mention_candidates()
                 .into_iter()
                 .map(|session| {
                     let label = self.session_display_name_by_info(&session);
                     let kind = session_kind_label(session.kind).to_string();
-                    let selected = self
-                        .ai
-                        .chat
-                        .target_session_ids
+                    let selected = target_session_ids
                         .iter()
                         .any(|session_id| session_id == &session.id);
                     (session, label, kind, selected)
@@ -204,17 +184,14 @@ impl NyaTermApp {
         } else {
             Vec::new()
         };
-        if self.ai.chat.mention_index >= mention_candidates.len() && !mention_candidates.is_empty()
-        {
-            self.ai.chat.mention_index = mention_candidates.len() - 1;
-        }
+        self.ai.clamp_chat_mention_index(mention_candidates.len());
         let mode_label = if agent_mode { "Agent" } else { "Ask" };
-        let enabled = self.ai.settings.config.enabled;
+        let enabled = self.ai.settings_config().enabled;
         let composer_disabled = ai_running || !enabled;
         let send_disabled = !ai_running
             && (!enabled
                 || selected_model.is_none()
-                || self.ai.chat.prompt_draft.trim().is_empty());
+                || self.ai.chat_prompt_draft().trim().is_empty());
         // Built before the panel, which reads `self` throughout: creating a box
         // needs it mutably. The prompt wraps, the way Tauri's composer does.
         let prompt_placeholder = if !enabled {
@@ -224,10 +201,23 @@ impl NyaTermApp {
         } else {
             "Ask about the terminal or generate a command…"
         };
+        let prompt_draft = self.ai.chat_prompt_draft().to_string();
+        let model_query = self.ai.discovery_query().to_string();
+        let history_open = self.ai.history_is_open();
+        let execution_menu_open = self.ai.panel_execution_menu_is_open();
+        let message_menu_open = self.ai.chat_message_menu().is_some();
+        let detected_error = self.ai.panel_detected_error().cloned();
+        let quoted_text = self.ai.chat_quote().map(str::to_string);
+        let mention_open = self.ai.chat_mention_is_open();
+        let mention_index = self.ai.chat_mention_index();
+        let discovery_menu_open = self.ai.discovery_menu_is_open();
+        let discovery_index = self.ai.discovery_index();
+        let history_clear_confirm_open = self.ai.history_clear_confirm_is_open();
+        let agent_auto_confirm_open = self.ai.agent_auto_confirm_is_open();
         let prompt_input = self
             .text_input_box(
                 "ai.chat.prompt",
-                &self.ai.chat.prompt_draft.clone(),
+                &prompt_draft,
                 TextInputSetup::multi_line(prompt_placeholder),
                 cx,
             )
@@ -235,7 +225,7 @@ impl NyaTermApp {
         let model_search_input = self
             .text_input_box(
                 "ai.model-search",
-                &self.ai.discovery.query.clone(),
+                &model_query,
                 TextInputSetup::placeholder("Search models"),
                 cx,
             )
@@ -248,16 +238,16 @@ impl NyaTermApp {
             .overflow_hidden()
             .bg(self.shell_transparent_color(palette.surface))
             .relative()
-            .when(self.ai.history.open, |this| {
+            .when(history_open, |this| {
                 this.child(self.ai_history_popover(cx))
             })
-            .when(self.ai.panel.execution_menu_open, |this| {
+            .when(execution_menu_open, |this| {
                 this.child(self.ai_execution_mode_menu(cx))
             })
-            .when(self.ai.chat.message_menu.is_some(), |this| {
+            .when(message_menu_open, |this| {
                 this.child(self.ai_message_context_menu_overlay(cx))
             })
-            .when_some(self.ai.panel.detected_error.clone(), |this, detected| {
+            .when_some(detected_error, |this, detected| {
                 this.child(self.ai_detected_error_banner(detected, cx))
             })
             .child(
@@ -290,7 +280,7 @@ impl NyaTermApp {
                     .flex()
                     .flex_col()
                     .gap_2()
-                    .when_some(self.ai.chat.quoted_text.clone(), |this, quoted_text| {
+                    .when_some(quoted_text, |this, quoted_text| {
                         let preview = truncate_preview(quoted_text.trim(), 140);
                         this.child(
                             div()
@@ -428,8 +418,8 @@ impl NyaTermApp {
                         }
                         this.child(target_row)
                     })
-                    .when(self.ai.chat.mention_open, |this| {
-                        let selected_index = self.ai.chat.mention_index;
+                    .when(mention_open, |this| {
+                        let selected_index = mention_index;
                         let mut popover = div()
                             .max_h(px(192.))
                             .overflow_hidden()
@@ -477,7 +467,7 @@ impl NyaTermApp {
                                         .cursor_pointer()
                                         .hover(|this| this.bg(rgb(palette.hover)))
                                         .on_click(cx.listener(move |this, _, _, cx| {
-                                            this.ai.chat.mention_index = index;
+                                            this.ai.set_chat_mention_index(index);
                                             this.select_ai_mention_candidate(cx);
                                         }))
                                         .child(div().size(px(7.)).rounded_full().flex_none().bg(
@@ -592,12 +582,12 @@ impl NyaTermApp {
                                                             .text_color(rgb(palette.text))
                                                     })
                                                     .on_click(cx.listener(|this, _, window, cx| {
-                                                        let opening = !this.ai.discovery.menu_open;
-                                                        this.ai.discovery.menu_open = opening;
+                                                        let selected_index =
+                                                            this.ai_selected_model_index();
+                                                        let opening = this
+                                                            .ai
+                                                            .toggle_discovery_menu(selected_index);
                                                         if opening {
-                                                            this.ai.discovery.query.clear();
-                                                            this.ai.discovery.index =
-                                                                this.ai_selected_model_index();
                                                             this.reset_text_input(
                                                                 "ai.model-search",
                                                                 "",
@@ -615,8 +605,6 @@ impl NyaTermApp {
                                                                 &field.read(cx).focus_handle(),
                                                             );
                                                         }
-                                                        this.ai.history.open = false;
-                                                        this.ai.panel.execution_menu_open = false;
                                                         cx.notify();
                                                     }))
                                                     .child(
@@ -636,9 +624,9 @@ impl NyaTermApp {
                                                             .text_color(rgb(palette.text_dimmed)),
                                                     ),
                                             )
-                                            .when(self.ai.discovery.menu_open, |this| {
+                                            .when(discovery_menu_open, |this| {
                                                 let selected_id = selected_model_id.clone();
-                                                let focused_index = self.ai.discovery.index;
+                                                let focused_index = discovery_index;
                                                 let mut menu = div()
                                                     .absolute()
                                                     .left_0()
@@ -685,8 +673,8 @@ impl NyaTermApp {
                                                                 })
                                                                 .on_click(cx.listener(
                                                                     |this, _, _, cx| {
-                                                                        this.ai.discovery.menu_open =
-                                                                            false;
+                                                                        this.ai
+                                                                            .close_discovery_menu();
                                                                         this.shell.navigation.settings.active_tab =
                                                                             SettingsTab::AiModels;
                                                                         this.open_page(
@@ -770,13 +758,10 @@ impl NyaTermApp {
                                                                     })
                                                                     .on_click(cx.listener(
                                                                         move |this, _, _, cx| {
-                                                                            this.ai.discovery.index =
-                                                                                index;
-                                                                            this.ai.discovery.menu_open =
-                                                                                false;
-                                                                            this.ai.discovery.query
-                                                                                .clear();
-                                                                            this.ai.discovery.index = 0;
+                                                                            this.ai
+                                                                                .set_discovery_index(index);
+                                                                            this.ai
+                                                                                .close_discovery_menu();
                                                                             this.set_ai_default_model(
                                                                                 model_id.clone(),
                                                                                 cx,
@@ -857,10 +842,10 @@ impl NyaTermApp {
                         )
                     }),
             )
-            .when(self.ai.history.clear_confirm_open, |this| {
+            .when(history_clear_confirm_open, |this| {
                 this.child(self.ai_clear_history_confirm_overlay(cx))
             })
-            .when(self.ai.agent.auto_execution_confirm_open, |this| {
+            .when(agent_auto_confirm_open, |this| {
                 this.child(self.ai_auto_execution_confirm_overlay(cx))
             })
     }
@@ -908,7 +893,7 @@ fn ai_send_button(
                 }),
         )
         .on_click(cx.listener(move |this, _, _, cx| {
-            if this.ai.chat.pending || this.ai.agent.loop_state.is_some() {
+            if this.ai.chat_or_agent_is_running() {
                 this.cancel_ai_chat(cx);
             } else if !disabled {
                 this.start_ai_ask(cx);

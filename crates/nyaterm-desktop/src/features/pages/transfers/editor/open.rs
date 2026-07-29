@@ -25,18 +25,17 @@ impl NyaTermApp {
         &self,
         entry: &SftpFileEntry,
     ) -> Vec<AiCustomActionConfig> {
-        if !self.ai.settings.config.enabled
+        if !self.ai.settings_config().enabled
             || entry.file_type == SftpFileType::Directory
             || entry
                 .size
-                .is_some_and(|size| size > self.ai.settings.config.max_ai_file_size_bytes)
+                .is_some_and(|size| size > self.ai.settings_config().max_ai_file_size_bytes)
         {
             return Vec::new();
         }
 
         self.ai
-            .settings
-            .config
+            .settings_config()
             .file_ai_actions
             .iter()
             .filter(|action| action.enabled && !action.name.trim().is_empty())
@@ -59,14 +58,14 @@ impl NyaTermApp {
         }
         if entry
             .size
-            .is_some_and(|size| size > self.ai.settings.config.max_ai_file_size_bytes)
+            .is_some_and(|size| size > self.ai.settings_config().max_ai_file_size_bytes)
         {
             self.transfer.browser.status = "file exceeds AI file size limit".to_string();
             self.terminal.view.status = format!("{} is too large for AI file actions", entry.path);
             cx.notify();
             return;
         }
-        if !self.ai.settings.config.enabled {
+        if !self.ai.settings_config().enabled {
             self.transfer.browser.status = "AI assistant is disabled".to_string();
             self.terminal.view.status = "AI assistant is disabled".to_string();
             cx.notify();
@@ -85,7 +84,7 @@ impl NyaTermApp {
         let action_id = action.id.clone();
         let action_name = action.name.clone();
         let prompt = action.prompt.clone();
-        let max_bytes = self.ai.settings.config.max_ai_file_size_bytes;
+        let max_bytes = self.ai.settings_config().max_ai_file_size_bytes;
         let id = self.next_transfer_id("sftp-ai-file");
         self.transfer.enqueue_transfer_job(TransferJobState {
             id: id.clone(),

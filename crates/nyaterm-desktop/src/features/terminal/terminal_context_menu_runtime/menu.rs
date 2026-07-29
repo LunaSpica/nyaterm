@@ -80,25 +80,24 @@ impl NyaTermApp {
                 )
             })
             .collect();
-        let terminal_ai_actions: Vec<(String, String, String)> = if self.ai.settings.config.enabled
-        {
-            self.ai
-                .settings
-                .config
-                .terminal_ai_actions
-                .iter()
-                .filter(|action| action.enabled && !action.name.trim().is_empty())
-                .map(|action| {
-                    (
-                        action.id.clone(),
-                        action.name.clone(),
-                        action.prompt.clone(),
-                    )
-                })
-                .collect()
-        } else {
-            Vec::new()
-        };
+        let terminal_ai_actions: Vec<(String, String, String)> =
+            if self.ai.settings_config().enabled {
+                self.ai
+                    .settings_config()
+                    .terminal_ai_actions
+                    .iter()
+                    .filter(|action| action.enabled && !action.name.trim().is_empty())
+                    .map(|action| {
+                        (
+                            action.id.clone(),
+                            action.name.clone(),
+                            action.prompt.clone(),
+                        )
+                    })
+                    .collect()
+            } else {
+                Vec::new()
+            };
         let translation_providers: Vec<(String, String)> =
             available_translation_providers(self.translation.settings())
                 .into_iter()
@@ -529,8 +528,9 @@ impl NyaTermApp {
                                         query.clone()
                                     };
                                     this.set_ai_prompt_draft(format!("{prompt}\n\n{body}"), cx);
-                                    this.ai.panel.status = format!("AI action loaded: {name}");
-                                    window.focus(&this.ai.chat.focus);
+                                    this.ai
+                                        .set_panel_status(format!("AI action loaded: {name}"));
+                                    window.focus(this.ai.chat_focus());
                                     cx.notify();
                                 }),
                             )

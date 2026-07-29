@@ -577,10 +577,10 @@ impl NyaTermApp {
                         let cloud_sync_settings = store
                             .load_cloud_sync_settings()
                             .unwrap_or_else(|_| self.cloud_sync.settings().clone());
-                        self.ai.settings.config = store
+                        let ai_settings = store
                             .load_ai_settings()
-                            .unwrap_or_else(|_| self.ai.settings.config.clone());
-                        self.ai.settings.secret_draft.clear();
+                            .unwrap_or_else(|_| self.ai.settings_config().clone());
+                        self.ai.replace_settings_config(ai_settings, true);
                         self.sync_ai_drafts_from_active_profile();
                         self.settings.rebase_master_password();
                         let cloud_sync_state = store

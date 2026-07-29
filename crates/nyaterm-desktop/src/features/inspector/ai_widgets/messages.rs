@@ -27,7 +27,7 @@ fn ai_message_menu_position(
 
 impl NyaTermApp {
     pub(in crate::features) fn close_ai_message_menu(&mut self, cx: &mut Context<Self>) {
-        self.ai.chat.close_message_menu();
+        self.ai.close_message_menu();
         cx.notify();
     }
 
@@ -36,14 +36,7 @@ impl NyaTermApp {
         text: String,
         cx: &mut Context<Self>,
     ) {
-        let value = text.trim().to_string();
-        if value.is_empty() {
-            self.ai.panel.status = "AI message is empty".to_string();
-        } else {
-            self.ai.chat.quoted_text = Some(value);
-            self.ai.panel.status = "AI message quoted".to_string();
-        }
-        self.ai.chat.message_menu = None;
+        self.ai.quote_message(text);
         cx.notify();
     }
 
@@ -53,13 +46,11 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let value = text.trim().to_string();
-        if value.is_empty() {
-            self.ai.panel.status = "AI message is empty".to_string();
-        } else {
+        let copied = !value.is_empty();
+        if copied {
             cx.write_to_clipboard(ClipboardItem::new_string(value));
-            self.ai.panel.status = "AI message copied".to_string();
         }
-        self.ai.chat.message_menu = None;
+        self.ai.finish_copy_message(copied);
         cx.notify();
     }
 
@@ -75,9 +66,8 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         let state = self
             .ai
-            .chat
-            .message_menu
-            .clone()
+            .chat_message_menu()
+            .cloned()
             .unwrap_or(AiMessageMenuState {
                 message_id: String::new(),
                 text: String::new(),
@@ -153,9 +143,7 @@ impl NyaTermApp {
         let is_user = matches!(message.role, AiMessageRole::User);
         let streaming = self
             .ai
-            .chat
-            .streaming_assistant_id
-            .as_deref()
+            .chat_streaming_assistant_id()
             .is_some_and(|id| id == message.id);
         let role_label = if is_user { "User" } else { "AI" };
         let raw = if message.content.trim().is_empty() {
@@ -208,15 +196,12 @@ impl NyaTermApp {
                 MouseButton::Right,
                 cx.listener(move |this, event: &MouseDownEvent, _, cx| {
                     cx.stop_propagation();
-                    this.ai.chat.message_menu = Some(AiMessageMenuState {
+                    this.ai.open_message_menu(AiMessageMenuState {
                         message_id: menu_message_id.clone(),
                         text: menu_text.clone(),
                         x: event.position.x,
                         y: event.position.y,
                     });
-                    this.ai.history.open = false;
-                    this.ai.panel.execution_menu_open = false;
-                    this.ai.discovery.menu_open = false;
                     cx.notify();
                 }),
             )
