@@ -317,6 +317,17 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   the active-session menu atomically. Event processing, terminal updates,
   worker spawning, rendering and GPUI notification remain on `NyaTermApp` and
   its existing adapters.
+  The following session catalog/presentation pass made order, runtime metadata,
+  custom names, OSC titles, OSC working directories and tab colors private as
+  one ownership cluster. Registration keeps order and metadata synchronized;
+  tab moves, disconnect transitions, reconnect presentation migration and
+  session removal now execute on `SessionFeatureState`. Removal atomically
+  clears all six catalogs together with command history, busy state and the
+  matching active menu before the application adapter cleans up terminal,
+  workspace and transfer resources. Views and runtime adapters use read-only
+  iterators or focused queries, while terminal effects use semantic title/CWD/
+  color updates. Session persistence formats, terminal parsing and transport
+  protocol behavior are unchanged.
 - Transfer state is grouped into `TransferFeatureState`. Seventy-eight fields
   turned out to be five separate things sharing one panel: the job `queue`, the
   SFTP `browser`, the file operation dialogs (`file_ops`), the built-in remote
@@ -1384,6 +1395,7 @@ Current ownership map:
 | Live session manager/event bridge | Private services in `NyaTermApp.session` | Runtime services | Callers receive a shared manager reference/handle and use bridge routing, drain and metrics methods; neither service field is writable outside `SessionFeatureState`. |
 | Session restore/event queue | Private state in `NyaTermApp.session` | Transient runtime coordination | Restore completion is idempotent and pending transport events are counted, extended and popped only through owner methods; event interpretation stays in the event-pump adapter. |
 | Session command history/search/menu/busy state | Private state in `NyaTermApp.session` | Transient per-session interaction state | History append/migration/deletion and active-menu/busy transitions are owner operations; beginning reconnect/disconnect closes the menu in the same transition. |
+| Session catalog and presentation | Private state in `NyaTermApp.session` | Runtime catalog plus transient presentation | Order/metadata registration, tab movement, disconnect marking, reconnect migration and removal are owner transitions; custom names, OSC titles/CWDs and tab colors are exposed through read-only queries and semantic updates. |
 | Serial ports | Private catalog in `NyaTermApp.connection_catalog` | Runtime/discovered state | Replaced through the catalog after session-manager discovery and never persisted. |
 | Tunnel/proxy configs | Private catalog in `NyaTermApp.tunnel_state` | Persisted network config | Views use read-only slices; pure move/upsert/delete candidates and successful commits stay on `TunnelFeatureState`. The Network page UI remains separate transient state. |
 | Queued saved-connection starts | `NyaTermApp.session.start` private queue | Transient session-start state | Admission, duplicate detection, draining and runtime cadence reads go through `SessionStartFeatureState` methods. |
@@ -1611,7 +1623,10 @@ honest remaining list.
    history, search, menu and busy-state access through focused owner APIs.
    Reconnect/disconnect admission now couples busy registration with menu
    closure, and reconnect history migration cannot leave the old session id
-   behind.
+   behind. The next session catalog/presentation batch then made six more
+   fields private and moved registration/order synchronization, disconnect
+   marking, reconnect presentation migration and atomic catalog removal onto
+   `SessionFeatureState`.
    What remains at the
    composition root is stores, runtime and focused feature owners.
    Group by cohesion where a cluster exists; do not force the count down for

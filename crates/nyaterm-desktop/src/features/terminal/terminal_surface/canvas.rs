@@ -569,8 +569,7 @@ impl NyaTermApp {
             .is_some_and(|id| id == session_id.as_str());
         let drop_session_kind = self
             .session
-            .metadata
-            .get(&session_id)
+            .metadata(&session_id)
             .map(|metadata| terminal_canvas_session_kind_label(&metadata.launch_config))
             .unwrap_or("Local");
         let (drop_title, drop_hint) = nyaterm_core::terminal_drop_overlay_copy(drop_session_kind);

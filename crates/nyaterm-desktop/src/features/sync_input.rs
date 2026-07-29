@@ -619,10 +619,9 @@ impl NyaTermApp {
     pub(in crate::features) fn sync_peer_session_ids(&self, session_id: &str) -> Vec<String> {
         let live_ids = self
             .session
-            .metadata
-            .iter()
+            .metadata_entries()
             .filter(|(_, metadata)| !metadata.disconnected)
-            .map(|(session_id, _)| session_id.clone())
+            .map(|(session_id, _)| session_id.to_string())
             .collect::<HashSet<_>>();
         self.sync_input.peer_session_ids(session_id, &live_ids)
     }

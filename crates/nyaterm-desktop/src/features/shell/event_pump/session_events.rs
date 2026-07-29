@@ -379,7 +379,7 @@ impl NyaTermApp {
         reason: String,
         cx: &mut Context<Self>,
     ) -> bool {
-        let known_session = self.session.metadata.contains_key(&session_id);
+        let known_session = self.session.has_session(&session_id);
         tracing::warn!(
             diagnostic = "session_exited",
             session_id = %session_id,

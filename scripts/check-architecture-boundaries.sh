@@ -369,6 +369,14 @@ check_no_multiline_matches \
   "session runtime coordination access must use SessionFeatureState methods" \
   '(self|this|app)[[:space:]]*\.[[:space:]]*session[[:space:]]*\.[[:space:]]*(manager|event_bridge|restore|events|command_history|active_search_draft|active_menu|busy_actions)([[:space:]]*\.|[[:space:]]*=)' \
   crates/nyaterm-desktop/src/features
+check_no_multiline_matches \
+  "SessionFeatureState session catalog and presentation fields must remain private" \
+  'struct[[:space:]]+SessionFeatureState[[:space:]]*\{[^}]*pub([[:space:]]|\([^)]*\))[[:space:]]+(order|metadata|custom_names|dynamic_titles|cwds|tab_colors)[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/session/state.rs
+check_no_multiline_matches \
+  "session catalog and presentation access must use SessionFeatureState methods" \
+  '(self|this|app)[[:space:]]*\.[[:space:]]*session[[:space:]]*\.[[:space:]]*(order|metadata|custom_names|dynamic_titles|cwds|tab_colors)([[:space:]]*\.|[[:space:]]*=)' \
+  crates/nyaterm-desktop/src/features
 
 check_no_matches \
   "session prompt runtime must stay grouped under SessionPromptState" \

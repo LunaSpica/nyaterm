@@ -14,10 +14,9 @@ use crate::models::{
 impl NyaTermApp {
     pub(in crate::features) fn live_session_ids(&self) -> HashSet<String> {
         self.session
-            .metadata
-            .iter()
+            .metadata_entries()
             .filter(|(_, metadata)| !metadata.disconnected)
-            .map(|(session_id, _)| session_id.clone())
+            .map(|(session_id, _)| session_id.to_string())
             .collect()
     }
 
@@ -79,9 +78,9 @@ impl NyaTermApp {
 
     fn live_session_ids_with_disconnected(&self) -> HashSet<String> {
         let mut live = self.live_session_ids();
-        for (session_id, metadata) in &self.session.metadata {
+        for (session_id, metadata) in self.session.metadata_entries() {
             if metadata.disconnected {
-                live.insert(session_id.clone());
+                live.insert(session_id.to_string());
             }
         }
         live
@@ -203,7 +202,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        if !self.session.metadata.contains_key(&source_session_id) {
+        if !self.session.has_session(&source_session_id) {
             self.terminal.view.status = "active session cannot be duplicated for split".to_string();
             cx.notify();
             return;

@@ -1128,15 +1128,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn apply_session_cwd(&mut self, session_id: &str, cwd: String) {
-        let changed = self
-            .session
-            .cwds
-            .get(session_id)
-            .map(|prev| prev != &cwd)
-            .unwrap_or(true);
-        self.session
-            .cwds
-            .insert(session_id.to_string(), cwd.clone());
+        let changed = self.session.update_cwd(session_id, cwd.clone());
         // Auto-sync the transfer browser path when enabled for the active SSH session.
         if terminal_should_apply_session_cwd(
             changed,

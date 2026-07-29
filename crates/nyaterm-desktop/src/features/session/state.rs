@@ -5,7 +5,7 @@ use std::time::Instant;
 use gpui::FocusHandle;
 use nyaterm_core::{AiExecutionProfile, SavedConnection};
 use nyaterm_transport::{
-    SessionEvent, SessionKind, SessionManager, SshMultiplexHandle, SshSessionConfig,
+    SessionEvent, SessionInfo, SessionKind, SessionManager, SshMultiplexHandle, SshSessionConfig,
 };
 
 use crate::features::runtime_jobs::SessionStartResult;
@@ -40,18 +40,18 @@ pub(in crate::features) struct SessionFeatureState {
     pub active_id: Option<String>,
     pub active_ssh_config: Option<SshSessionConfig>,
     pub active_ai_execution_profile: AiExecutionProfile,
-    pub order: Vec<String>,
-    pub metadata: HashMap<String, SessionRuntimeMetadata>,
-    pub custom_names: HashMap<String, String>,
+    order: Vec<String>,
+    metadata: HashMap<String, SessionRuntimeMetadata>,
+    custom_names: HashMap<String, String>,
     /// OSC 0/2 titles from the session PTY (fall back when no custom rename).
-    pub dynamic_titles: HashMap<String, String>,
+    dynamic_titles: HashMap<String, String>,
     /// Latest OSC 7 working directories per session.
-    pub cwds: HashMap<String, String>,
+    cwds: HashMap<String, String>,
     /// Per-session ZMODEM detector / transfer state (UI-layer interception).
     pub zmodem: HashMap<String, ZmodemSessionState>,
     /// Per-session trzsz trigger detector state (pre-parser protocol slot).
     pub trzsz: HashMap<String, TrzszSessionState>,
-    pub tab_colors: HashMap<String, u32>,
+    tab_colors: HashMap<String, u32>,
     pub multiplex_handles: HashMap<String, SshMultiplexHandle>,
 }
 
@@ -134,6 +134,11 @@ pub(in crate::features) enum RenameSessionSubmission {
     Inactive,
     Empty,
     Ready { session_id: String, name: String },
+}
+
+pub(in crate::features) struct SessionDisconnectUpdate {
+    pub already_disconnected: bool,
+    pub multiplex_key: Option<String>,
 }
 
 impl SessionFeatureState {
@@ -322,10 +327,6 @@ impl SessionFeatureState {
         history.truncate(SESSION_COMMAND_HISTORY_LIMIT);
     }
 
-    pub(in crate::features) fn remove_command_history(&mut self, session_id: &str) {
-        self.command_history.remove(session_id);
-    }
-
     pub(in crate::features) fn migrate_command_history(&mut self, old_id: &str, new_id: &str) {
         if let Some(history) = self.command_history.remove(old_id) {
             self.command_history.insert(new_id.to_string(), history);
@@ -402,6 +403,300 @@ impl SessionFeatureState {
     pub(in crate::features) fn retain_busy_actions_for_live_sessions(&mut self) {
         self.busy_actions
             .retain(|id, _| self.metadata.contains_key(id));
+    }
+
+    pub(in crate::features) fn session_order(&self) -> &[String] {
+        &self.order
+    }
+
+    pub(in crate::features) fn session_order_len(&self) -> usize {
+        self.order.len()
+    }
+
+    pub(in crate::features) fn session_index(&self, session_id: &str) -> Option<usize> {
+        self.order.iter().position(|id| id == session_id)
+    }
+
+    pub(in crate::features) fn metadata(
+        &self,
+        session_id: &str,
+    ) -> Option<&SessionRuntimeMetadata> {
+        self.metadata.get(session_id)
+    }
+
+    pub(in crate::features) fn has_session(&self, session_id: &str) -> bool {
+        self.metadata.contains_key(session_id)
+    }
+
+    pub(in crate::features) fn session_ids(&self) -> impl Iterator<Item = &str> {
+        self.metadata.keys().map(String::as_str)
+    }
+
+    pub(in crate::features) fn metadata_entries(
+        &self,
+    ) -> impl Iterator<Item = (&str, &SessionRuntimeMetadata)> {
+        self.metadata
+            .iter()
+            .map(|(session_id, metadata)| (session_id.as_str(), metadata))
+    }
+
+    pub(in crate::features) fn register_session_metadata(
+        &mut self,
+        session_id: &str,
+        metadata: SessionRuntimeMetadata,
+    ) {
+        if !self.order.iter().any(|id| id == session_id) {
+            self.order.push(session_id.to_string());
+        }
+        self.metadata.insert(session_id.to_string(), metadata);
+    }
+
+    pub(in crate::features) fn move_session_after(
+        &mut self,
+        session_id: &str,
+        after_session_id: &str,
+    ) -> bool {
+        if session_id == after_session_id {
+            return false;
+        }
+        let Some(mut session_index) = self.session_index(session_id) else {
+            return false;
+        };
+        let Some(mut after_index) = self.session_index(after_session_id) else {
+            return false;
+        };
+        let session_id = self.order.remove(session_index);
+        if session_index < after_index {
+            after_index = after_index.saturating_sub(1);
+        }
+        session_index = (after_index + 1).min(self.order.len());
+        self.order.insert(session_index, session_id);
+        true
+    }
+
+    pub(in crate::features) fn move_session_to_index(
+        &mut self,
+        session_id: &str,
+        index: usize,
+    ) -> bool {
+        let Some(current_index) = self.session_index(session_id) else {
+            return false;
+        };
+        let session_id = self.order.remove(current_index);
+        let index = index.min(self.order.len());
+        self.order.insert(index, session_id);
+        true
+    }
+
+    pub(in crate::features) fn ordered_sessions(&self) -> Vec<SessionInfo> {
+        let mut ordered = Vec::with_capacity(self.order.len());
+        let mut seen = HashSet::with_capacity(self.order.len());
+        for session_id in &self.order {
+            if !seen.insert(session_id.as_str()) {
+                continue;
+            }
+            if let Some(metadata) = self.metadata.get(session_id) {
+                ordered.push(session_info_from_metadata(session_id, metadata));
+            }
+        }
+        for (session_id, metadata) in &self.metadata {
+            if seen.insert(session_id.as_str()) {
+                ordered.push(session_info_from_metadata(session_id, metadata));
+            }
+        }
+        ordered
+    }
+
+    pub(in crate::features) fn session_info(&self, session_id: &str) -> Option<SessionInfo> {
+        self.metadata
+            .get(session_id)
+            .map(|metadata| session_info_from_metadata(session_id, metadata))
+    }
+
+    pub(in crate::features) fn live_session_count(&self) -> usize {
+        self.metadata
+            .values()
+            .filter(|metadata| !metadata.disconnected)
+            .count()
+    }
+
+    pub(in crate::features) fn next_session_after(&self, session_id: &str) -> Option<String> {
+        let known_ids = self.session_ids().collect::<HashSet<_>>();
+        self.order
+            .iter()
+            .find(|candidate| {
+                candidate.as_str() != session_id && known_ids.contains(candidate.as_str())
+            })
+            .cloned()
+            .or_else(|| {
+                known_ids
+                    .into_iter()
+                    .find(|candidate| *candidate != session_id)
+                    .map(ToOwned::to_owned)
+            })
+    }
+
+    pub(in crate::features) fn mark_session_disconnected(
+        &mut self,
+        session_id: &str,
+    ) -> Option<SessionDisconnectUpdate> {
+        let metadata = self.metadata.get_mut(session_id)?;
+        let already_disconnected = metadata.disconnected;
+        metadata.disconnected = true;
+        Some(SessionDisconnectUpdate {
+            already_disconnected,
+            multiplex_key: metadata.ssh_multiplex_key.clone(),
+        })
+    }
+
+    pub(in crate::features) fn other_live_session_uses_multiplex_key(
+        &self,
+        session_id: &str,
+        multiplex_key: &str,
+    ) -> bool {
+        self.metadata.iter().any(|(id, metadata)| {
+            id != session_id
+                && !metadata.disconnected
+                && metadata.ssh_multiplex_key.as_deref() == Some(multiplex_key)
+        })
+    }
+
+    pub(in crate::features) fn multiplex_key_is_referenced(&self, multiplex_key: &str) -> bool {
+        self.metadata
+            .values()
+            .any(|metadata| metadata.ssh_multiplex_key.as_deref() == Some(multiplex_key))
+    }
+
+    pub(in crate::features) fn custom_name(&self, session_id: &str) -> Option<&str> {
+        self.custom_names.get(session_id).map(String::as_str)
+    }
+
+    pub(in crate::features) fn set_custom_name(&mut self, session_id: String, name: String) {
+        self.custom_names.insert(session_id, name);
+    }
+
+    pub(in crate::features) fn dynamic_title(&self, session_id: &str) -> Option<&str> {
+        self.dynamic_titles.get(session_id).map(String::as_str)
+    }
+
+    pub(in crate::features) fn set_dynamic_title(
+        &mut self,
+        session_id: &str,
+        title: Option<String>,
+    ) {
+        if let Some(title) = title {
+            self.dynamic_titles.insert(session_id.to_string(), title);
+        } else {
+            self.dynamic_titles.remove(session_id);
+        }
+    }
+
+    pub(in crate::features) fn cwd(&self, session_id: &str) -> Option<&str> {
+        self.cwds.get(session_id).map(String::as_str)
+    }
+
+    pub(in crate::features) fn update_cwd(&mut self, session_id: &str, cwd: String) -> bool {
+        let changed = self.cwds.get(session_id) != Some(&cwd);
+        self.cwds.insert(session_id.to_string(), cwd);
+        changed
+    }
+
+    pub(in crate::features) fn tab_color(&self, session_id: &str) -> Option<u32> {
+        self.tab_colors.get(session_id).copied()
+    }
+
+    pub(in crate::features) fn set_tab_color(&mut self, session_id: &str, color: Option<u32>) {
+        if let Some(color) = color {
+            self.tab_colors.insert(session_id.to_string(), color);
+        } else {
+            self.tab_colors.remove(session_id);
+        }
+    }
+
+    pub(in crate::features) fn migrate_session_presentation(&mut self, old_id: &str, new_id: &str) {
+        if !self.custom_names.contains_key(new_id)
+            && let Some(custom_name) = self.custom_names.remove(old_id)
+        {
+            self.custom_names.insert(new_id.to_string(), custom_name);
+        }
+        if let Some(title) = self.dynamic_titles.remove(old_id) {
+            self.dynamic_titles.insert(new_id.to_string(), title);
+        }
+        if let Some(cwd) = self.cwds.remove(old_id) {
+            self.cwds.insert(new_id.to_string(), cwd);
+        }
+        if !self.tab_colors.contains_key(new_id)
+            && let Some(color) = self.tab_colors.remove(old_id)
+        {
+            self.tab_colors.insert(new_id.to_string(), color);
+        }
+        self.migrate_command_history(old_id, new_id);
+    }
+
+    pub(in crate::features) fn remove_session_catalog(
+        &mut self,
+        session_id: &str,
+    ) -> Option<String> {
+        self.order.retain(|id| id != session_id);
+        let multiplex_key = self
+            .metadata
+            .remove(session_id)
+            .and_then(|metadata| metadata.ssh_multiplex_key);
+        self.custom_names.remove(session_id);
+        self.dynamic_titles.remove(session_id);
+        self.cwds.remove(session_id);
+        self.tab_colors.remove(session_id);
+        self.command_history.remove(session_id);
+        self.busy_actions.remove(session_id);
+        if self
+            .active_menu
+            .as_ref()
+            .is_some_and(|menu| menu.session_id == session_id)
+        {
+            self.active_menu = None;
+        }
+        multiplex_key
+    }
+}
+
+fn session_info_from_metadata(session_id: &str, metadata: &SessionRuntimeMetadata) -> SessionInfo {
+    match &metadata.launch_config {
+        SessionLaunchConfig::Local(config) => SessionInfo {
+            id: session_id.to_string(),
+            name: config.name.clone(),
+            kind: SessionKind::LocalPty,
+            working_dir: config.working_dir.clone(),
+            cols: config.cols,
+            rows: config.rows,
+        },
+        SessionLaunchConfig::Ssh(config) => SessionInfo {
+            id: session_id.to_string(),
+            name: config.name.clone(),
+            kind: SessionKind::Ssh,
+            working_dir: None,
+            cols: config.cols,
+            rows: config.rows,
+        },
+        SessionLaunchConfig::Telnet(config) => SessionInfo {
+            id: session_id.to_string(),
+            name: config.name.clone(),
+            kind: if config.raw_tcp {
+                SessionKind::RawTcp
+            } else {
+                SessionKind::Telnet
+            },
+            working_dir: None,
+            cols: config.cols,
+            rows: config.rows,
+        },
+        SessionLaunchConfig::Serial(config) => SessionInfo {
+            id: session_id.to_string(),
+            name: config.name.clone(),
+            kind: SessionKind::Serial,
+            working_dir: None,
+            cols: 80,
+            rows: 24,
+        },
     }
 }
 
@@ -1438,16 +1733,16 @@ mod tests {
     use gpui::{TestAppContext, px};
     use nyaterm_core::{AiExecutionProfile, ConnectionType, SavedConnection};
     use nyaterm_transport::{
-        SessionEvent, SessionKind, SessionManager, SshCredentialPrompt, SshCredentialPromptKind,
-        SshCredentialPromptReason, SshHostKey, SshKeyboardInteractivePrompt,
-        SshKeyboardInteractiveRequest,
+        LocalSessionConfig, SessionEvent, SessionKind, SessionManager, SshCredentialPrompt,
+        SshCredentialPromptKind, SshCredentialPromptReason, SshHostKey,
+        SshKeyboardInteractivePrompt, SshKeyboardInteractiveRequest,
     };
 
     use crate::features::runtime_jobs::SessionStartResult;
     use crate::features::session::HostKeyPromptIssue;
     use crate::models::{
-        ActiveSessionMenuState, SessionEventBridge, StartupCommandAction, TabActionsSubmenu,
-        TerminalFramePipeline, WorkspaceSplitDirection,
+        ActiveSessionMenuState, SessionEventBridge, SessionLaunchConfig, SessionRuntimeMetadata,
+        StartupCommandAction, TabActionsSubmenu, TerminalFramePipeline, WorkspaceSplitDirection,
     };
 
     use super::{
@@ -1513,6 +1808,45 @@ mod tests {
             credential_prompt_focus_pending: false,
             credential_focus: cx.update(|cx| cx.focus_handle()),
             otp_provider: Arc::new(NativeOtpProvider::new(std::path::PathBuf::new(), None)),
+        }
+    }
+
+    fn session_state(cx: &TestAppContext) -> SessionFeatureState {
+        let manager = Arc::new(SessionManager::new());
+        let event_bridge = SessionEventBridge::spawn(
+            Arc::clone(&manager),
+            TerminalFramePipeline::default(),
+            "utf-8".to_string(),
+            10_000,
+        );
+        let focus = || cx.update(|cx| cx.focus_handle());
+        SessionFeatureState::new(
+            manager,
+            event_bridge,
+            Arc::new(NativeOtpProvider::new(std::path::PathBuf::new(), None)),
+            SessionFeatureFocus {
+                credential: focus(),
+                tab_actions: focus(),
+                close_all: focus(),
+                rename: focus(),
+                color_picker: focus(),
+                info: focus(),
+                startup_command: focus(),
+                temporary_ssh_link: focus(),
+            },
+        )
+    }
+
+    fn session_metadata(name: &str, multiplex_key: Option<&str>) -> SessionRuntimeMetadata {
+        let mut config = LocalSessionConfig::default();
+        config.name = name.to_string();
+        SessionRuntimeMetadata {
+            ssh_config: None,
+            ssh_multiplex_key: multiplex_key.map(ToOwned::to_owned),
+            source_connection_id: None,
+            ai_execution_profile: AiExecutionProfile::Posix,
+            launch_config: SessionLaunchConfig::Local(config),
+            disconnected: false,
         }
     }
 
@@ -1838,6 +2172,124 @@ mod tests {
         );
         sessions.dialogs.close_temporary_ssh_link();
         assert!(sessions.dialogs.temporary_ssh_link_draft().is_empty());
+    }
+
+    #[test]
+    fn session_catalog_registration_and_reordering_stay_synchronized() {
+        let cx = TestAppContext::single();
+        let mut sessions = session_state(&cx);
+
+        sessions.register_session_metadata("session-a", session_metadata("first", None));
+        sessions.register_session_metadata("session-b", session_metadata("second", None));
+        sessions.register_session_metadata("session-c", session_metadata("third", None));
+        sessions.register_session_metadata("session-a", session_metadata("updated", None));
+
+        assert_eq!(
+            sessions.session_order(),
+            ["session-a", "session-b", "session-c"]
+        );
+        assert_eq!(sessions.ordered_sessions().len(), 3);
+        assert_eq!(sessions.session_info("session-a").unwrap().name, "updated");
+
+        assert!(sessions.move_session_after("session-a", "session-c"));
+        assert_eq!(
+            sessions.session_order(),
+            ["session-b", "session-c", "session-a"]
+        );
+        assert!(sessions.move_session_to_index("session-c", 0));
+        assert_eq!(
+            sessions.session_order(),
+            ["session-c", "session-b", "session-a"]
+        );
+        assert!(!sessions.move_session_after("missing", "session-a"));
+    }
+
+    #[test]
+    fn session_disconnect_transition_is_idempotent_and_reports_multiplex_owner() {
+        let cx = TestAppContext::single();
+        let mut sessions = session_state(&cx);
+
+        assert!(sessions.mark_session_disconnected("missing").is_none());
+        sessions
+            .register_session_metadata("session-a", session_metadata("first", Some("multiplex-a")));
+
+        let changed = sessions
+            .mark_session_disconnected("session-a")
+            .expect("registered session should transition");
+        assert!(!changed.already_disconnected);
+        assert_eq!(changed.multiplex_key.as_deref(), Some("multiplex-a"));
+        assert!(sessions.metadata("session-a").unwrap().disconnected);
+
+        let unchanged = sessions
+            .mark_session_disconnected("session-a")
+            .expect("disconnected session should remain registered");
+        assert!(unchanged.already_disconnected);
+        assert_eq!(unchanged.multiplex_key.as_deref(), Some("multiplex-a"));
+    }
+
+    #[test]
+    fn reconnect_presentation_migration_preserves_destination_overrides() {
+        let cx = TestAppContext::single();
+        let mut sessions = session_state(&cx);
+
+        sessions.set_custom_name("old".to_string(), "old name".to_string());
+        sessions.set_custom_name("new".to_string(), "new name".to_string());
+        sessions.set_dynamic_title("old", Some("old title".to_string()));
+        sessions.set_dynamic_title("new", Some("new title".to_string()));
+        assert!(sessions.update_cwd("old", "/old".to_string()));
+        assert!(!sessions.update_cwd("old", "/old".to_string()));
+        assert!(sessions.update_cwd("new", "/new".to_string()));
+        sessions.set_tab_color("old", Some(0x112233));
+        sessions.set_tab_color("new", Some(0x445566));
+        sessions.record_command_history("old", "pwd");
+
+        sessions.migrate_session_presentation("old", "new");
+
+        assert_eq!(sessions.custom_name("new"), Some("new name"));
+        assert_eq!(sessions.dynamic_title("new"), Some("old title"));
+        assert!(sessions.dynamic_title("old").is_none());
+        assert_eq!(sessions.cwd("new"), Some("/old"));
+        assert!(sessions.cwd("old").is_none());
+        assert_eq!(sessions.tab_color("new"), Some(0x445566));
+        assert_eq!(
+            sessions.command_history_for("new"),
+            Some(["pwd".to_string()].as_slice())
+        );
+        assert!(sessions.command_history_for("old").is_none());
+    }
+
+    #[test]
+    fn removing_session_catalog_clears_all_session_scoped_entries() {
+        let cx = TestAppContext::single();
+        let mut sessions = session_state(&cx);
+
+        sessions
+            .register_session_metadata("session-a", session_metadata("first", Some("multiplex-a")));
+        sessions.set_custom_name("session-a".to_string(), "custom".to_string());
+        sessions.set_dynamic_title("session-a", Some("dynamic".to_string()));
+        sessions.update_cwd("session-a", "/workspace".to_string());
+        sessions.set_tab_color("session-a", Some(0x112233));
+        sessions.record_command_history("session-a", "pwd");
+        assert!(sessions.begin_reconnect_action("session-a".to_string()));
+        sessions.set_active_menu(ActiveSessionMenuState {
+            session_id: "session-a".to_string(),
+            x: px(10.),
+            y: px(20.),
+        });
+
+        assert_eq!(
+            sessions.remove_session_catalog("session-a").as_deref(),
+            Some("multiplex-a")
+        );
+        assert!(!sessions.has_session("session-a"));
+        assert!(sessions.session_order().is_empty());
+        assert!(sessions.custom_name("session-a").is_none());
+        assert!(sessions.dynamic_title("session-a").is_none());
+        assert!(sessions.cwd("session-a").is_none());
+        assert!(sessions.tab_color("session-a").is_none());
+        assert!(sessions.command_history_for("session-a").is_none());
+        assert!(!sessions.session_is_busy("session-a"));
+        assert!(sessions.active_menu().is_none());
     }
 
     #[test]

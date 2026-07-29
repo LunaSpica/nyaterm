@@ -597,7 +597,7 @@ impl NyaTermApp {
         session_id: Option<&str>,
         line_limit: usize,
     ) -> AiContext {
-        let metadata = session_id.and_then(|session_id| self.session.metadata.get(session_id));
+        let metadata = session_id.and_then(|session_id| self.session.metadata(session_id));
         let ssh = match metadata.map(|metadata| &metadata.launch_config) {
             Some(SessionLaunchConfig::Ssh(config)) => Some(config),
             _ if session_id == self.session.active_id.as_deref() => {

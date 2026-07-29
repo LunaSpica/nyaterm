@@ -17,8 +17,7 @@ impl NyaTermApp {
     ) {
         let Some(connection_id) = self
             .session
-            .metadata
-            .get(session_id)
+            .metadata(session_id)
             .and_then(|metadata| metadata.source_connection_id.as_deref())
             .map(str::trim)
             .filter(|id| !id.is_empty())

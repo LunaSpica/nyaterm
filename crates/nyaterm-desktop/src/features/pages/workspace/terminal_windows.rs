@@ -75,7 +75,7 @@ impl NyaTermApp {
                             )
                         })
                         .unwrap_or(("Session", "icons/conn/terminal.svg"));
-                    let custom_color = self.session.tab_colors.get(tab_id).copied();
+                    let custom_color = self.session.tab_color(tab_id);
                     let leaf_ids = self
                         .shell
                         .workspace

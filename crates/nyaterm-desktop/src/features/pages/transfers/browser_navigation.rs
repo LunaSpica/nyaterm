@@ -13,8 +13,7 @@ impl NyaTermApp {
         if session_id.trim().is_empty()
             || !self
                 .session
-                .metadata
-                .get(session_id)
+                .metadata(session_id)
                 .is_some_and(|metadata| metadata.ssh_config.is_some())
         {
             return;
@@ -464,8 +463,7 @@ impl NyaTermApp {
     ) -> Option<String> {
         let session_id = self.session.active_id.as_deref()?;
         self.session
-            .metadata
-            .get(session_id)?
+            .metadata(session_id)?
             .source_connection_id
             .clone()
             .filter(|connection_id| !connection_id.trim().is_empty())

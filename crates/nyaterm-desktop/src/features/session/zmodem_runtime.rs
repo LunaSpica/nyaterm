@@ -178,8 +178,7 @@ impl NyaTermApp {
         // Prefer SSH config bound to this session, fall back to active.
         let ssh_config = self
             .session
-            .metadata
-            .get(&session_id)
+            .metadata(&session_id)
             .and_then(|meta| meta.ssh_config.clone())
             .or_else(|| self.session.active_ssh_config.clone());
 
@@ -191,9 +190,8 @@ impl NyaTermApp {
 
         let remote_dir = self
             .session
-            .cwds
-            .get(&session_id)
-            .cloned()
+            .cwd(&session_id)
+            .map(ToOwned::to_owned)
             .filter(|cwd| !cwd.trim().is_empty())
             .unwrap_or_else(|| "/".to_string());
         let remote_dir = remote_dir.trim_end_matches('/').to_string();

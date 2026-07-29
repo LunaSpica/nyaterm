@@ -288,8 +288,7 @@ impl NyaTermApp {
             SessionKind::Ssh => {
                 let config = self
                     .session
-                    .metadata
-                    .get(&terminal_session_id)
+                    .metadata(&terminal_session_id)
                     .and_then(|metadata| match &metadata.launch_config {
                         SessionLaunchConfig::Ssh(config) => Some(config.clone()),
                         _ => None,

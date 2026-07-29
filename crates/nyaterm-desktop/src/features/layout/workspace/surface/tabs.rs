@@ -426,7 +426,7 @@ impl NyaTermApp {
                 kind_label: session_kind_label(session.kind),
             };
             let drop_target_session_id = session.id.clone();
-            let custom_color = self.session.tab_colors.get(&session.id).copied();
+            let custom_color = self.session.tab_color(&session.id);
             // Active when any leaf under this tab root is focused.
             let is_active = self
                 .session

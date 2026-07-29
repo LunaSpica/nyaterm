@@ -1233,12 +1233,10 @@ impl NyaTermApp {
                 self.terminal.view.runtime.visual_bell_ticks = 4;
             }
             if let Some(title) = effects.title {
-                self.session
-                    .dynamic_titles
-                    .insert(session_id.to_string(), title);
+                self.session.set_dynamic_title(session_id, Some(title));
             }
             if effects.reset_title {
-                self.session.dynamic_titles.remove(session_id);
+                self.session.set_dynamic_title(session_id, None);
             }
             let command_running = view.screen.command_running();
             shell_started |= effects.shell_command_started;
@@ -1315,12 +1313,10 @@ impl NyaTermApp {
             self.terminal.view.runtime.visual_bell_ticks = 4;
         }
         if let Some(title) = effects.title {
-            self.session
-                .dynamic_titles
-                .insert(session_id.to_string(), title);
+            self.session.set_dynamic_title(session_id, Some(title));
         }
         if effects.reset_title {
-            self.session.dynamic_titles.remove(session_id);
+            self.session.set_dynamic_title(session_id, None);
         }
         self.handle_terminal_clipboard_effects(
             &mut clipboard_store,

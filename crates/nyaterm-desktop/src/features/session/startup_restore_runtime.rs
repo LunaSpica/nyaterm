@@ -209,7 +209,7 @@ impl NyaTermApp {
     }
 
     fn serialize_open_tab_for_session(&self, session: &SessionInfo) -> RestorableOpenTab {
-        let metadata = self.session.metadata.get(&session.id);
+        let metadata = self.session.metadata(&session.id);
         let connection_id = metadata.and_then(|meta| meta.source_connection_id.clone());
         let session_type = match metadata.map(|meta| &meta.launch_config) {
             Some(SessionLaunchConfig::Ssh(_)) => "SSH",
@@ -218,11 +218,10 @@ impl NyaTermApp {
             Some(SessionLaunchConfig::Local(_)) | None => "Local",
         }
         .to_string();
-        let custom_name = self.session.custom_names.get(&session.id).cloned();
+        let custom_name = self.session.custom_name(&session.id).map(ToOwned::to_owned);
         let tab_color = self
             .session
-            .tab_colors
-            .get(&session.id)
+            .tab_color(&session.id)
             .map(|color| format!("#{color:06x}"));
         let title = self.session_display_name_by_info(session);
         RestorableOpenTab::with_leaf_root(

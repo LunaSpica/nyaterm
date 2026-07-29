@@ -110,8 +110,7 @@ impl NyaTermApp {
             .session
             .active_id
             .as_deref()
-            .and_then(|session_id| self.session.tab_colors.get(session_id))
-            .copied();
+            .and_then(|session_id| self.session.tab_color(session_id));
         let mut swatches = div().mt_3().grid().grid_cols(6).gap_2();
         for (name, color) in TAB_PRESET_COLORS {
             let selected = active_color == Some(color);

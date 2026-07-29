@@ -19,8 +19,7 @@ impl NyaTermApp {
         }
         let exists = self
             .session
-            .metadata
-            .get(&session_id)
+            .metadata(&session_id)
             .is_some_and(|metadata| !metadata.disconnected);
         if !exists {
             self.recording.finish_path_prompt();
@@ -133,8 +132,7 @@ impl NyaTermApp {
                     Ok(path)
                         if this
                             .session
-                            .metadata
-                            .get(&result_session_id)
+                            .metadata(&result_session_id)
                             .is_some_and(|metadata| !metadata.disconnected) =>
                     {
                         this.recording.refresh_active_count();

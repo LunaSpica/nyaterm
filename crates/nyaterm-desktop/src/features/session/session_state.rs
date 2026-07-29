@@ -13,19 +13,17 @@ impl NyaTermApp {
     ) -> String {
         if let Some(name) = self
             .session
-            .custom_names
-            .get(&session.id)
+            .custom_name(&session.id)
             .filter(|name| !name.trim().is_empty())
         {
-            return name.clone();
+            return name.to_string();
         }
         if let Some(name) = self
             .session
-            .dynamic_titles
-            .get(&session.id)
+            .dynamic_title(&session.id)
             .filter(|name| !name.trim().is_empty())
         {
-            return name.clone();
+            return name.to_string();
         }
         session.name.clone()
     }
@@ -33,26 +31,24 @@ impl NyaTermApp {
     pub(in crate::features) fn session_display_name(&self, session_id: &str) -> Option<String> {
         if let Some(name) = self
             .session
-            .custom_names
-            .get(session_id)
+            .custom_name(session_id)
             .filter(|name| !name.trim().is_empty())
         {
-            return Some(name.clone());
+            return Some(name.to_string());
         }
         if let Some(name) = self
             .session
-            .dynamic_titles
-            .get(session_id)
+            .dynamic_title(session_id)
             .filter(|name| !name.trim().is_empty())
         {
-            return Some(name.clone());
+            return Some(name.to_string());
         }
         // Prefer local metadata — never take the transport session map lock for chrome.
         self.session_info(session_id).map(|session| session.name)
     }
 
     pub(in crate::features) fn session_endpoint(&self, session_id: &str) -> Option<String> {
-        let metadata = self.session.metadata.get(session_id)?;
+        let metadata = self.session.metadata(session_id)?;
         match &metadata.launch_config {
             SessionLaunchConfig::Local(config) => {
                 let shell = config
@@ -82,7 +78,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn session_ssh_host(&self, session_id: &str) -> Option<String> {
-        let metadata = self.session.metadata.get(session_id)?;
+        let metadata = self.session.metadata(session_id)?;
         match &metadata.launch_config {
             SessionLaunchConfig::Ssh(config) if !config.host.trim().is_empty() => {
                 Some(config.host.clone())
@@ -92,7 +88,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn session_ssh_address(&self, session_id: &str) -> Option<String> {
-        let metadata = self.session.metadata.get(session_id)?;
+        let metadata = self.session.metadata(session_id)?;
         match &metadata.launch_config {
             SessionLaunchConfig::Ssh(config)
                 if !config.username.trim().is_empty() && !config.host.trim().is_empty() =>
@@ -120,7 +116,7 @@ impl NyaTermApp {
         if self.is_session_disconnected(session_id) {
             lines.push("Disconnected — press Enter to reconnect".to_string());
         }
-        if let Some(cwd) = self.session.cwds.get(session_id) {
+        if let Some(cwd) = self.session.cwd(session_id) {
             if !cwd.trim().is_empty() {
                 lines.push(format!("cwd {cwd}"));
             }
@@ -152,7 +148,7 @@ impl NyaTermApp {
         let session_id = self.session.active_id.as_deref()?;
         let name = self.session_display_name(session_id)?;
         let session = self.session_info(session_id)?;
-        let metadata = self.session.metadata.get(session_id)?;
+        let metadata = self.session.metadata(session_id)?;
         let endpoint = self
             .session_endpoint(session_id)
             .unwrap_or_else(|| "unknown endpoint".to_string());
@@ -174,8 +170,8 @@ impl NyaTermApp {
                 format!("{:?}", metadata.ai_execution_profile),
             ),
         ];
-        if let Some(cwd) = self.session.cwds.get(session_id) {
-            details.push((self.tr("sessionInfo.cwd"), cwd.clone()));
+        if let Some(cwd) = self.session.cwd(session_id) {
+            details.push((self.tr("sessionInfo.cwd"), cwd.to_string()));
         }
 
         match &metadata.launch_config {
@@ -264,7 +260,7 @@ impl NyaTermApp {
         // Keep workspace_split mirrored to the active tab's per-tab pane root.
         self.sync_workspace_split_from_active_tab();
         self.transfer.browser.auto_sync_cwd_last_at = None;
-        if let Some(metadata) = self.session.metadata.get(session_id).cloned() {
+        if let Some(metadata) = self.session.metadata(session_id).cloned() {
             self.session.active_ssh_config = metadata.ssh_config;
             self.session.active_ai_execution_profile = metadata.ai_execution_profile;
         } else {
@@ -378,7 +374,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         // Local metadata is authoritative for tab existence; transport lock not needed.
-        let known = self.session.metadata.contains_key(&session_id);
+        let known = self.session.has_session(&session_id);
         let disconnected = self.is_session_disconnected(&session_id);
         if !known && !disconnected {
             self.terminal.view.status = "session no longer exists".to_string();
@@ -587,16 +583,12 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        match color {
-            Some(color) => {
-                self.session.tab_colors.insert(session_id, color);
-                self.terminal.view.status = "tab color updated".to_string();
-            }
-            None => {
-                self.session.tab_colors.remove(&session_id);
-                self.terminal.view.status = "tab color reset".to_string();
-            }
-        }
+        self.session.set_tab_color(&session_id, color);
+        self.terminal.view.status = if color.is_some() {
+            "tab color updated".to_string()
+        } else {
+            "tab color reset".to_string()
+        };
         self.session.dialogs.close_color_picker();
         cx.notify();
     }

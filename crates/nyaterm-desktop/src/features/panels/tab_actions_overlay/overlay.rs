@@ -7,22 +7,18 @@ use crate::models::SessionLaunchConfig;
 
 impl NyaTermApp {
     pub(super) fn tab_action_can_spawn_session(&self, session_id: &str) -> bool {
-        self.session
-            .metadata
-            .get(session_id)
-            .is_some_and(|metadata| {
-                matches!(metadata.launch_config, SessionLaunchConfig::Local(_))
-                    || metadata
-                        .source_connection_id
-                        .as_deref()
-                        .is_some_and(|id| !id.trim().is_empty())
-            })
+        self.session.metadata(session_id).is_some_and(|metadata| {
+            matches!(metadata.launch_config, SessionLaunchConfig::Local(_))
+                || metadata
+                    .source_connection_id
+                    .as_deref()
+                    .is_some_and(|id| !id.trim().is_empty())
+        })
     }
 
     pub(super) fn tab_action_can_show_session_info(&self, session_id: &str) -> bool {
         self.session
-            .metadata
-            .get(session_id)
+            .metadata(session_id)
             .and_then(|metadata| metadata.source_connection_id.as_deref())
             .is_some_and(|id| !id.trim().is_empty())
     }
@@ -51,7 +47,7 @@ impl NyaTermApp {
         };
 
         let display_name = self.session_display_name_by_info(&session);
-        let active_color = self.session.tab_colors.get(&session_id).copied();
+        let active_color = self.session.tab_color(&session_id);
         let can_copy_ssh = self.session_ssh_address(&session_id).is_some();
         let busy_action = self.session.busy_action(&session_id).map(str::to_string);
         let is_busy = busy_action.is_some();

@@ -68,7 +68,7 @@ impl NyaTermApp {
             match self.session.manager().close(close_id) {
                 Ok(()) => {}
                 Err(_) if disconnected => {}
-                Err(error) if !disconnected && !self.session.metadata.contains_key(close_id) => {
+                Err(error) if !disconnected && !self.session.has_session(close_id) => {
                     self.terminal.view.status = format!("close failed: {error}");
                     cx.notify();
                     return;
@@ -137,9 +137,8 @@ impl NyaTermApp {
         // remaining tabs (includes disconnected). Avoid transport map lock.
         let live_ids = self
             .session
-            .metadata
-            .keys()
-            .cloned()
+            .session_ids()
+            .map(ToOwned::to_owned)
             .collect::<HashSet<_>>();
         let active_is_live = active_before
             .as_deref()
@@ -151,7 +150,7 @@ impl NyaTermApp {
             self.sync_session_event_bridge_policy();
             if let Some(next_session_id) = self
                 .session
-                .order
+                .session_order()
                 .iter()
                 .find(|session_id| live_ids.contains(*session_id))
                 .cloned()
@@ -263,7 +262,11 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn close_all_sessions(&mut self, cx: &mut Context<Self>) {
-        let ids = self.session.metadata.keys().cloned().collect::<Vec<_>>();
+        let ids = self
+            .session
+            .session_ids()
+            .map(ToOwned::to_owned)
+            .collect::<Vec<_>>();
         self.close_session_batch(ids, "active");
         cx.notify();
     }

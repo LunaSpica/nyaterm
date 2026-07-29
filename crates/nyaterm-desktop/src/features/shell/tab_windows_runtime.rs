@@ -15,11 +15,10 @@ impl NyaTermApp {
 
         let live_ids = self
             .session
-            .order
+            .session_order()
             .iter()
             .filter(|session_id| {
-                self.session.metadata.contains_key(*session_id)
-                    && !self.is_secondary_pane_session(session_id)
+                self.session.has_session(session_id) && !self.is_secondary_pane_session(session_id)
             })
             .cloned()
             .collect::<Vec<_>>();

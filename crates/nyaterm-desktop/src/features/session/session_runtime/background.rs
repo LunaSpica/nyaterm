@@ -463,7 +463,7 @@ impl NyaTermApp {
                         .and_then(|pending| pending.reconnect_session_id.clone());
                     if reconnect_session_id
                         .as_deref()
-                        .is_some_and(|stale_id| !self.session.metadata.contains_key(stale_id))
+                        .is_some_and(|stale_id| !self.session.has_session(stale_id))
                     {
                         self.session.start.clear_reconnect_target();
                         if let Err(error) = self.session.manager().close(&session_id) {
@@ -539,14 +539,11 @@ impl NyaTermApp {
                         .and_then(|pending| pending.custom_name.clone())
                     {
                         self.session
-                            .custom_names
-                            .insert(session_id.clone(), custom_name);
+                            .set_custom_name(session_id.clone(), custom_name);
                     }
                     if let Some(tab_color) = pending.as_ref().and_then(|pending| pending.tab_color)
                     {
-                        self.session
-                            .tab_colors
-                            .insert(session_id.clone(), tab_color);
+                        self.session.set_tab_color(&session_id, Some(tab_color));
                     }
                     if let Some(seed_output) = pending
                         .as_ref()
@@ -657,7 +654,7 @@ impl NyaTermApp {
                         .and_then(|pending| pending.reconnect_session_id.clone());
                     let reconnect_session_exists = reconnect_session_id
                         .as_deref()
-                        .is_some_and(|session_id| self.session.metadata.contains_key(session_id));
+                        .is_some_and(|session_id| self.session.has_session(session_id));
                     let reconnect_failure = self.session.start.record_failure(
                         request_id.clone(),
                         pending,

@@ -34,13 +34,16 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        let Some(metadata) = self.session.metadata.get(&source_session_id).cloned() else {
+        let Some(metadata) = self.session.metadata(&source_session_id).cloned() else {
             self.terminal.view.status = "active session cannot be duplicated".to_string();
             cx.notify();
             return;
         };
-        let custom_name = self.session.custom_names.get(&source_session_id).cloned();
-        let custom_color = self.session.tab_colors.get(&source_session_id).copied();
+        let custom_name = self
+            .session
+            .custom_name(&source_session_id)
+            .map(str::to_string);
+        let custom_color = self.session.tab_color(&source_session_id);
 
         match metadata.launch_config.clone() {
             SessionLaunchConfig::Local(mut config) => {
@@ -135,7 +138,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        let Some(metadata) = self.session.metadata.get(&source_session_id).cloned() else {
+        let Some(metadata) = self.session.metadata(&source_session_id).cloned() else {
             self.terminal.view.status = "active session cannot be multiplexed".to_string();
             cx.notify();
             return;
@@ -155,8 +158,11 @@ impl NyaTermApp {
             self.session.multiplex_handles.remove(&multiplex_key);
         }
         let existing_multiplex = self.session.multiplex_handles.get(&multiplex_key).cloned();
-        let custom_name = self.session.custom_names.get(&source_session_id).cloned();
-        let custom_color = self.session.tab_colors.get(&source_session_id).copied();
+        let custom_name = self
+            .session
+            .custom_name(&source_session_id)
+            .map(str::to_string);
+        let custom_color = self.session.tab_color(&source_session_id);
         self.begin_background_multiplex_ssh_start(
             format!("{} multiplex", config.name),
             config,
@@ -203,7 +209,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        if !self.session.metadata.contains_key(&session_id) {
+        if !self.session.has_session(&session_id) {
             self.terminal.view.status = "session no longer exists".to_string();
             cx.notify();
             return;
@@ -225,21 +231,17 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.clear_terminal_mouse_report_for_session(session_id);
-        let Some(metadata) = self.session.metadata.get_mut(session_id) else {
+        let Some(update) = self.session.mark_session_disconnected(session_id) else {
             return;
         };
-        if metadata.disconnected {
+        if update.already_disconnected {
             return;
         }
-        metadata.disconnected = true;
         // Drop multiplex handle association for this session key if unused.
-        let multiplex_key = metadata.ssh_multiplex_key.clone();
-        if let Some(multiplex_key) = multiplex_key {
-            let still_in_use = self.session.metadata.iter().any(|(id, meta)| {
-                id != session_id
-                    && !meta.disconnected
-                    && meta.ssh_multiplex_key.as_deref() == Some(multiplex_key.as_str())
-            });
+        if let Some(multiplex_key) = update.multiplex_key {
+            let still_in_use = self
+                .session
+                .other_live_session_uses_multiplex_key(session_id, &multiplex_key);
             if !still_in_use {
                 if let Some(handle) = self.session.multiplex_handles.remove(&multiplex_key) {
                     let _ = handle.disconnect();
@@ -287,7 +289,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        if !self.session.metadata.contains_key(&session_id) {
+        if !self.session.has_session(&session_id) {
             self.terminal.view.status = "session cannot be reconnected".to_string();
             cx.notify();
             return;
@@ -298,12 +300,10 @@ impl NyaTermApp {
         self.session.start.clear_reconnect_failure(&old_id);
         let source_index = self
             .session
-            .order
-            .iter()
-            .position(|id| id == &old_id)
-            .unwrap_or(self.session.order.len());
-        let custom_name = self.session.custom_names.get(&old_id).cloned();
-        let custom_color = self.session.tab_colors.get(&old_id).copied();
+            .session_index(&old_id)
+            .unwrap_or(self.session.session_order_len());
+        let custom_name = self.session.custom_name(&old_id).map(str::to_string);
+        let custom_color = self.session.tab_color(&old_id);
         let seed_output = self
             .terminal
             .view
@@ -332,15 +332,15 @@ impl NyaTermApp {
         let _ = self.session.manager().close(&old_id);
         self.cleanup_recording_for_session(&old_id);
         self.clear_terminal_mouse_report_for_session(&old_id);
-        let Some(metadata) = self.session.metadata.get_mut(&old_id) else {
+        let Some(metadata) = self.session.metadata(&old_id).cloned() else {
             self.session.finish_busy_action(&old_id);
             self.terminal.view.status = "session cannot be reconnected".to_string();
             cx.notify();
             return;
         };
-        metadata.disconnected = true;
-        let launch_config = metadata.launch_config.clone();
-        let source_connection_id = metadata.source_connection_id.clone();
+        self.session.mark_session_disconnected(&old_id);
+        let launch_config = metadata.launch_config;
+        let source_connection_id = metadata.source_connection_id;
         let ai_execution_profile = metadata.ai_execution_profile;
         let seed = Some(seed_output);
         self.session.start.set_reconnect_target(old_id.clone());
@@ -428,27 +428,7 @@ impl NyaTermApp {
                 .session_surface_bounds
                 .insert(new_id.to_string(), bounds);
         }
-        if !self.session.custom_names.contains_key(new_id) {
-            if let Some(custom_name) = self.session.custom_names.remove(old_id) {
-                self.session
-                    .custom_names
-                    .insert(new_id.to_string(), custom_name);
-            }
-        }
-        if let Some(title) = self.session.dynamic_titles.remove(old_id) {
-            self.session
-                .dynamic_titles
-                .insert(new_id.to_string(), title);
-        }
-        if let Some(cwd) = self.session.cwds.remove(old_id) {
-            self.session.cwds.insert(new_id.to_string(), cwd);
-        }
-        if !self.session.tab_colors.contains_key(new_id) {
-            if let Some(color) = self.session.tab_colors.remove(old_id) {
-                self.session.tab_colors.insert(new_id.to_string(), color);
-            }
-        }
-        self.session.migrate_command_history(old_id, new_id);
+        self.session.migrate_session_presentation(old_id, new_id);
 
         self.shell.workspace.replace_session_id(old_id, new_id);
         if let Some(root) = self.terminal.windows.tree.as_mut() {

@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use gpui::{Context, KeyDownEvent, Window};
 
 use crate::features::{NyaTermApp, TextInputSetup};
@@ -57,8 +55,7 @@ impl NyaTermApp {
         };
         self.forget_text_inputs("session.rename");
         self.session
-            .custom_names
-            .insert(session_id.clone(), trimmed.clone());
+            .set_custom_name(session_id.clone(), trimmed.clone());
         self.terminal.view.status = format!("renamed tab to {trimmed}");
         cx.notify();
     }
@@ -112,7 +109,7 @@ impl NyaTermApp {
                 .session
                 .active_id
                 .as_deref()
-                .and_then(|session_id| self.session.metadata.get(session_id))
+                .and_then(|session_id| self.session.metadata(session_id))
                 .is_none_or(|metadata| {
                     !matches!(metadata.launch_config, SessionLaunchConfig::Ssh(_))
                 })
@@ -211,21 +208,12 @@ impl NyaTermApp {
     pub(in crate::features) fn remove_session_state(&mut self, session_id: &str) {
         self.clear_terminal_mouse_report_for_session(session_id);
         self.session.start.clear_reconnect_failure(session_id);
-        self.session.order.retain(|id| id != session_id);
         // If this leaf was a tab root, drop its pane tree (prune will rekey survivors).
         self.shell.workspace.remove_session(session_id);
-        let multiplex_key = self
-            .session
-            .metadata
-            .remove(session_id)
-            .and_then(|metadata| metadata.ssh_multiplex_key);
-        self.session.custom_names.remove(session_id);
-        self.session.dynamic_titles.remove(session_id);
-        self.session.cwds.remove(session_id);
+        let multiplex_key = self.session.remove_session_catalog(session_id);
         self.clear_zmodem_session(session_id);
         self.clear_trzsz_session(session_id);
         self.session.clear_event_bridge_session(session_id);
-        self.session.tab_colors.remove(session_id);
         self.terminal.view.views.remove(session_id);
         self.remove_terminal_surface(session_id);
         self.terminal
@@ -236,7 +224,6 @@ impl NyaTermApp {
             .layout
             .session_surface_bounds
             .remove(session_id);
-        self.session.remove_command_history(session_id);
         self.transfer.browser.session_cache.remove(session_id);
         self.transfer
             .external_sync
@@ -283,11 +270,7 @@ impl NyaTermApp {
             self.persist_open_tabs();
         }
         if let Some(multiplex_key) = multiplex_key {
-            let still_in_use = self
-                .session
-                .metadata
-                .values()
-                .any(|metadata| metadata.ssh_multiplex_key.as_deref() == Some(&multiplex_key));
+            let still_in_use = self.session.multiplex_key_is_referenced(&multiplex_key);
             if !still_in_use {
                 if let Some(handle) = self.session.multiplex_handles.remove(&multiplex_key) {
                     let _ = handle.disconnect();
@@ -298,21 +281,6 @@ impl NyaTermApp {
 
     pub(in crate::features) fn next_session_after(&self, session_id: &str) -> Option<String> {
         // Local metadata includes live + disconnected tabs; no transport lock.
-        let known_ids = self
-            .session
-            .metadata
-            .keys()
-            .cloned()
-            .collect::<HashSet<_>>();
-        self.session
-            .order
-            .iter()
-            .find(|candidate| candidate.as_str() != session_id && known_ids.contains(*candidate))
-            .cloned()
-            .or_else(|| {
-                known_ids
-                    .into_iter()
-                    .find(|candidate| candidate.as_str() != session_id)
-            })
+        self.session.next_session_after(session_id)
     }
 }

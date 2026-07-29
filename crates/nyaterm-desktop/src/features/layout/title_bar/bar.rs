@@ -490,8 +490,7 @@ impl NyaTermApp {
                 .unwrap_or_else(|| short_id(&tab_root).to_string());
             let has_custom_name = self
                 .session
-                .custom_names
-                .get(&tab_root)
+                .custom_name(&tab_root)
                 .is_some_and(|value| !value.trim().is_empty());
             if !has_custom_name
                 && self

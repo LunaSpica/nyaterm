@@ -9,7 +9,11 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn sync_session_event_bridge_routing(&self) {
-        let mut session_ids = self.session.metadata.keys().cloned().collect::<Vec<_>>();
+        let mut session_ids = self
+            .session
+            .session_ids()
+            .map(ToOwned::to_owned)
+            .collect::<Vec<_>>();
         if let Some(active_session_id) = self.session.active_id.clone()
             && !session_ids.contains(&active_session_id)
         {
