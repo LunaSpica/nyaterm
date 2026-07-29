@@ -13,17 +13,13 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let delete = self
-            .commands
-            .quick
-            .dialogs
-            .category_delete
-            .clone()
-            .unwrap_or(QuickCommandCategoryDeleteState {
+        let delete = self.commands.quick_category_delete().cloned().unwrap_or(
+            QuickCommandCategoryDeleteState {
                 id: String::new(),
                 name: "category".to_string(),
                 command_count: 0,
-            });
+            },
+        );
 
         div()
             .id(SharedString::from("quick-command-category-delete-overlay"))
@@ -98,18 +94,14 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let rename = self
-            .commands
-            .quick
-            .dialogs
-            .category_rename
-            .clone()
-            .unwrap_or(QuickCommandCategoryRenameState {
+        let rename = self.commands.quick_category_rename().cloned().unwrap_or(
+            QuickCommandCategoryRenameState {
                 id: String::new(),
                 original_name: "category".to_string(),
                 draft: String::new(),
                 error: None,
-            });
+            },
+        );
         // Built before the overlay, which reads `self` throughout: creating the
         // box needs it mutably.
         let rename_input = self

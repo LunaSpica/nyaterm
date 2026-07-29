@@ -27,14 +27,11 @@ impl NyaTermApp {
         for option in categories {
             let id = option.id.clone();
             let menu_id = option.id.clone();
-            let selected = self.commands.quick.list.selected_category == option.id;
+            let selected = self.commands.quick_selected_category() == option.id;
             let manageable = option.manageable;
             let menu_open = self
                 .commands
-                .quick
-                .list
-                .category_menu
-                .as_ref()
+                .quick_category_menu()
                 .is_some_and(|menu| menu.category_id == option.id);
             category_sidebar = category_sidebar.child(
                 div()
@@ -94,9 +91,7 @@ impl NyaTermApp {
                             .child(option.count.to_string()),
                     )
                     .on_click(cx.listener(move |this, _, _, cx| {
-                        this.commands.quick.list.selected_category = id.clone();
-                        this.commands.quick.list.row_menu = None;
-                        this.commands.quick.list.category_menu = None;
+                        this.commands.select_quick_category(id.clone());
                         cx.notify();
                     }))
                     .when(manageable, |this| {
@@ -104,13 +99,13 @@ impl NyaTermApp {
                             MouseButton::Right,
                             cx.listener(move |this, event: &gpui::MouseDownEvent, _, cx| {
                                 cx.stop_propagation();
-                                this.commands.quick.list.row_menu = None;
-                                this.commands.quick.list.category_menu =
-                                    Some(QuickCommandCategoryMenuState {
+                                this.commands.open_quick_category_menu(
+                                    QuickCommandCategoryMenuState {
                                         category_id: menu_id.clone(),
                                         x: event.position.x,
                                         y: event.position.y,
-                                    });
+                                    },
+                                );
                                 cx.notify();
                             }),
                         )

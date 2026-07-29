@@ -345,12 +345,16 @@ check_no_matches \
   '^[[:space:]]*pub\(in crate::features\)[[:space:]]+(quick_commands|quick_command_categories|quick_command_state|command_history|command_runtime)[[:space:]]*:' \
   crates/nyaterm-desktop/src/features/app_state/mod.rs
 check_no_multiline_matches \
-  "CommandFeatureState must not expose catalog, history or persistence runtime" \
-  'struct[[:space:]]+CommandFeatureState[[:space:]]*\{[^}]*pub([[:space:]]|\([^)]*\))[[:space:]]+(catalog|history|runtime)[[:space:]]*:' \
+  "CommandFeatureState must not expose catalog, quick-command UI, history or persistence runtime" \
+  'struct[[:space:]]+CommandFeatureState[[:space:]]*\{[^}]*pub([[:space:]]|\([^)]*\))[[:space:]]+(catalog|quick|history|runtime)[[:space:]]*:' \
   crates/nyaterm-desktop/src/features/commands/state.rs
 check_no_multiline_matches \
-  "command catalog, history and persistence access must use CommandFeatureState methods" \
-  '(self|this|app)[[:space:]]*\.[[:space:]]*commands[[:space:]]*\.[[:space:]]*(catalog|history|runtime)([[:space:]]*\.|[[:space:]]*=)' \
+  "QuickCommandFeatureState must not expose writable child states" \
+  'struct[[:space:]]+QuickCommandFeatureState[[:space:]]*\{[^}]*pub([[:space:]]|\([^)]*\))[[:space:]]+(list|editor|dialogs|import|ai)[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/commands/state.rs
+check_no_multiline_matches \
+  "command catalog, quick-command UI, history and persistence access must use CommandFeatureState methods" \
+  '(self|this|app)[[:space:]]*\.[[:space:]]*commands[[:space:]]*\.[[:space:]]*(catalog|quick|history|runtime)([[:space:]]*\.|[[:space:]]*=)' \
   crates/nyaterm-desktop/src/features
 
 check_no_matches \

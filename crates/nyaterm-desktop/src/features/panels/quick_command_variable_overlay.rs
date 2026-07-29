@@ -14,13 +14,8 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let prompt = self
-            .commands
-            .quick
-            .dialogs
-            .variable_prompt
-            .clone()
-            .unwrap_or(QuickCommandVariablePromptState {
+        let prompt = self.commands.quick_variable_prompt().cloned().unwrap_or(
+            QuickCommandVariablePromptState {
                 command_id: String::new(),
                 label: "command".to_string(),
                 command: String::new(),
@@ -28,7 +23,8 @@ impl NyaTermApp {
                 send_to_all: false,
                 variables: Vec::new(),
                 focused_index: 0,
-            });
+            },
+        );
         let mut preview = prompt.command.clone();
         for variable in &prompt.variables {
             preview = preview.replace(&variable.raw, &variable.value);
@@ -113,7 +109,7 @@ impl NyaTermApp {
                     .cursor_pointer()
                     .on_click(cx.listener(move |this, _, window, cx| {
                         this.focus_quick_command_variable(index, cx);
-                        window.focus(&this.commands.quick.dialogs.variable_focus);
+                        window.focus(this.commands.quick_variable_focus());
                     }))
                     .child(
                         div()
@@ -136,9 +132,9 @@ impl NyaTermApp {
             .flex()
             .items_center()
             .justify_center()
-            .track_focus(&self.commands.quick.dialogs.variable_focus)
+            .track_focus(self.commands.quick_variable_focus())
             .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(&this.commands.quick.dialogs.variable_focus);
+                window.focus(this.commands.quick_variable_focus());
                 cx.notify();
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {

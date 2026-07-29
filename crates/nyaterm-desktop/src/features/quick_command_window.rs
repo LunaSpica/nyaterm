@@ -22,10 +22,9 @@ impl QuickCommandWindow {
 
 impl Render for QuickCommandWindow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        if self.app.read(cx).commands.quick.editor.draft.is_none() {
+        if self.app.read(cx).commands.quick_editor().is_none() {
             self.app.update(cx, |app, cx| {
-                app.commands.quick.editor.window = None;
-                app.commands.quick.editor.window_open_pending = false;
+                app.commands.close_quick_editor();
                 cx.notify();
             });
             window.defer(cx, |window, _| window.remove_window());
@@ -76,10 +75,7 @@ impl NyaTermApp {
     pub(in crate::features) fn quick_command_editor_title(&self) -> &'static str {
         if self
             .commands
-            .quick
-            .editor
-            .draft
-            .as_ref()
+            .quick_editor()
             .is_some_and(|editor| editor.original.is_some())
         {
             self.tr("quickCommands.editCommand")
@@ -92,7 +88,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> bool {
-        let Some(handle) = self.commands.quick.editor.window else {
+        let Some(handle) = self.commands.quick_editor_window() else {
             return false;
         };
         let app = cx.entity();
@@ -102,14 +98,7 @@ impl NyaTermApp {
                 .is_err()
             {
                 let _ = app.update(cx, |app, cx| {
-                    if app
-                        .commands
-                        .quick
-                        .editor
-                        .window
-                        .is_some_and(|current| current == handle)
-                    {
-                        app.commands.quick.editor.window = None;
+                    if app.commands.clear_quick_editor_window_if(handle) {
                         cx.notify();
                     }
                 });
@@ -125,15 +114,17 @@ impl NyaTermApp {
         if self.activate_quick_command_window(cx) {
             return true;
         }
-        if self.commands.quick.editor.window_open_pending {
+        if self.commands.quick_editor_window_is_pending() {
             return true;
         }
 
-        self.commands.quick.editor.window_open_pending = true;
+        if !self.commands.request_quick_editor_window() {
+            return false;
+        }
         cx.notify();
         let app = cx.entity();
         cx.defer(move |cx| {
-            let should_open = app.read(cx).commands.quick.editor.window_open_pending;
+            let should_open = app.read(cx).commands.quick_editor_window_is_pending();
             if should_open {
                 open_quick_command_window_now_from_app(app, cx);
             }
@@ -143,17 +134,17 @@ impl NyaTermApp {
 }
 
 fn open_quick_command_window_now_from_app(app: Entity<NyaTermApp>, cx: &mut App) {
-    if app.read(cx).commands.quick.editor.window.is_some() {
+    if app.read(cx).commands.quick_editor_window().is_some() {
         let _ = app.update(cx, |app, cx| {
-            app.commands.quick.editor.window_open_pending = false;
+            app.commands.cancel_quick_editor_window_request();
             app.activate_quick_command_window(cx);
             cx.notify();
         });
         return;
     }
-    if app.read(cx).commands.quick.editor.draft.is_none() {
+    if app.read(cx).commands.quick_editor().is_none() {
         let _ = app.update(cx, |app, cx| {
-            app.commands.quick.editor.window_open_pending = false;
+            app.commands.cancel_quick_editor_window_request();
             cx.notify();
         });
         return;
@@ -175,15 +166,13 @@ fn open_quick_command_window_now_from_app(app: Entity<NyaTermApp>, cx: &mut App)
         move |window, cx| {
             window.on_window_should_close(cx, move |_, cx| {
                 close_app.update(cx, |app, cx| {
-                    app.commands.quick.editor.draft = None;
-                    app.commands.quick.editor.window = None;
-                    app.commands.quick.editor.window_open_pending = false;
+                    app.commands.close_quick_editor();
                     app.terminal.view.status = "quick command editor closed".to_string();
                     cx.notify();
                 });
                 true
             });
-            let editor_focus = view_app.read(cx).commands.quick.editor.focus.clone();
+            let editor_focus = view_app.read(cx).commands.quick_editor_focus().clone();
             window.focus(&editor_focus);
             cx.new(|cx| QuickCommandWindow::new(view_app, cx))
         },
@@ -191,13 +180,11 @@ fn open_quick_command_window_now_from_app(app: Entity<NyaTermApp>, cx: &mut App)
 
     let _ = app.update(cx, |app, cx| match result {
         Ok(handle) => {
-            app.commands.quick.editor.window = Some(handle);
-            app.commands.quick.editor.window_open_pending = false;
+            app.commands.finish_quick_editor_window_open(Some(handle));
             cx.notify();
         }
         Err(error) => {
-            app.commands.quick.editor.window = None;
-            app.commands.quick.editor.window_open_pending = false;
+            app.commands.finish_quick_editor_window_open(None);
             app.terminal.view.status = format!("failed to open quick command window: {error}");
             cx.notify();
         }

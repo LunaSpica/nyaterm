@@ -8,7 +8,7 @@ use super::helpers::{quick_command_sort_mode_setting, quick_command_view_mode_se
 
 impl NyaTermApp {
     pub(in crate::features) fn close_quick_command_toolbar_popovers(&mut self) {
-        self.commands.quick.close_toolbar_popovers();
+        self.commands.close_quick_toolbar_popovers();
     }
 
     pub(in crate::features) fn refresh_quick_commands(&mut self) {
@@ -35,9 +35,7 @@ impl NyaTermApp {
         mode: QuickCommandViewMode,
         cx: &mut Context<Self>,
     ) {
-        self.commands.quick.list.row_menu = None;
-        self.close_quick_command_toolbar_popovers();
-        self.commands.quick.list.view_mode = mode;
+        self.commands.set_quick_view_mode(mode);
         self.settings.summary.ui_quick_cmd_view_mode =
             quick_command_view_mode_setting(mode).to_string();
         self.save_quick_command_ui_settings(cx);
@@ -48,9 +46,7 @@ impl NyaTermApp {
         mode: QuickCommandSortMode,
         cx: &mut Context<Self>,
     ) {
-        self.commands.quick.list.row_menu = None;
-        self.close_quick_command_toolbar_popovers();
-        self.commands.quick.list.sort_mode = mode;
+        self.commands.set_quick_sort_mode(mode);
         self.settings.summary.ui_quick_cmd_sort_mode =
             quick_command_sort_mode_setting(mode).to_string();
         self.save_quick_command_ui_settings(cx);
@@ -85,7 +81,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.mark_user_activity();
-        self.commands.quick.list.search_draft = text;
+        self.commands.set_quick_search_draft(text);
         cx.notify();
     }
 
@@ -94,14 +90,12 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let next = !self.commands.quick.ai.popover_open;
-        self.close_quick_command_toolbar_popovers();
-        self.commands.quick.list.row_menu = None;
-        self.commands.quick.ai.popover_open = next;
+        let next = self.commands.toggle_quick_ai_popover();
         if next {
+            let prompt = self.commands.quick_ai_prompt_draft().to_string();
             let input = self.text_input(
                 "quick-command.ai-prompt",
-                &self.commands.quick.ai.prompt_draft.clone(),
+                &prompt,
                 TextInputSetup::placeholder(self.tr("ai.placeholder")),
                 cx,
             );
@@ -116,7 +110,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.mark_user_activity();
-        self.commands.quick.ai.prompt_draft = text;
+        self.commands.set_quick_ai_prompt_draft(text);
         cx.notify();
     }
 
@@ -125,14 +119,11 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let prompt = self.commands.quick.ai.prompt_draft.trim().to_string();
-        if prompt.is_empty() {
+        let Some(prompt) = self.commands.take_quick_ai_prompt() else {
             self.terminal.view.status = "describe a command to generate".to_string();
             cx.notify();
             return;
-        }
-
-        self.commands.quick.ai.prompt_draft.clear();
+        };
         self.reset_text_input("quick-command.ai-prompt", "", cx);
         self.close_quick_command_toolbar_popovers();
         self.set_ai_prompt_draft(format!("Generate a shell command for: {prompt}"), cx);
@@ -154,7 +145,7 @@ impl NyaTermApp {
                 self.submit_quick_command_ai_prompt(window, cx);
             }
             "escape" => {
-                self.commands.quick.ai.popover_open = false;
+                self.commands.close_quick_ai_popover();
                 cx.notify();
             }
             _ => {}

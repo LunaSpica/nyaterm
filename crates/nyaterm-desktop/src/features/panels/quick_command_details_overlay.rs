@@ -14,10 +14,8 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         let details = self
             .commands
-            .quick
-            .dialogs
-            .details
-            .clone()
+            .quick_details()
+            .cloned()
             .expect("quick command details overlay requires open state");
         let anchor_x = details.x;
         let anchor_y = details.y;
@@ -70,9 +68,9 @@ impl NyaTermApp {
                     .border_color(rgba((palette.border << 8) | 0x99))
                     .bg(self.shell_surface_color(palette.surface))
                     .shadow_lg()
-                    .track_focus(&self.commands.quick.dialogs.details_focus)
+                    .track_focus(self.commands.quick_details_focus())
                     .on_click(cx.listener(|this, _, window, cx| {
-                        window.focus(&this.commands.quick.dialogs.details_focus);
+                        window.focus(this.commands.quick_details_focus());
                         cx.stop_propagation();
                         cx.notify();
                     }))

@@ -35,9 +35,9 @@ impl NyaTermApp {
             .flex()
             .items_center()
             .justify_center()
-            .track_focus(&self.commands.quick.import.focus)
+            .track_focus(self.commands.quick_import_focus())
             .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(&this.commands.quick.import.focus);
+                window.focus(this.commands.quick_import_focus());
                 cx.notify();
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {

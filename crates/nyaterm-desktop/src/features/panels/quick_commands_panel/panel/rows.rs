@@ -30,12 +30,9 @@ impl NyaTermApp {
             };
             let menu_open = self
                 .commands
-                .quick
-                .list
-                .row_menu
-                .as_ref()
+                .quick_row_menu()
                 .is_some_and(|menu| menu.command_id == command.id);
-            let command_item = match self.commands.quick.list.view_mode {
+            let command_item = match self.commands.quick_view_mode() {
                 QuickCommandViewMode::Tile => div()
                     .id(SharedString::from(format!(
                         "quick-command-tile-{command_id}"
@@ -59,18 +56,17 @@ impl NyaTermApp {
                             let menu_command_id = command_id.clone();
                             move |this, event: &gpui::MouseDownEvent, _, cx| {
                                 cx.stop_propagation();
-                                this.commands.quick.list.row_menu =
-                                    Some(QuickCommandRowMenuState {
-                                        command_id: menu_command_id.clone(),
-                                        x: event.position.x,
-                                        y: event.position.y,
-                                    });
+                                this.commands.open_quick_row_menu(QuickCommandRowMenuState {
+                                    command_id: menu_command_id.clone(),
+                                    x: event.position.x,
+                                    y: event.position.y,
+                                });
                                 cx.notify();
                             }
                         }),
                     )
                     .on_click(cx.listener(move |this, _, _, cx| {
-                        this.commands.quick.list.row_menu = None;
+                        this.commands.close_quick_row_menu();
                         this.run_quick_command_by_id(run_command_id.clone(), cx);
                     }))
                     .child(quick_command_icon_mark(
@@ -114,11 +110,11 @@ impl NyaTermApp {
                         execution_mode,
                         menu_open,
                         cx.listener(move |this, _, _, cx| {
-                            this.commands.quick.list.row_menu = None;
+                            this.commands.close_quick_row_menu();
                             this.run_quick_command_by_id(run_command_id.clone(), cx);
                         }),
                         cx.listener(move |this, event: &ClickEvent, window, cx| {
-                            this.commands.quick.list.row_menu = None;
+                            this.commands.close_quick_row_menu();
                             let position = event.position();
                             this.open_quick_command_details(
                                 detail_command_id.clone(),
@@ -132,24 +128,13 @@ impl NyaTermApp {
                             let menu_command_id = command_id.clone();
                             move |this, event: &ClickEvent, _, cx| {
                                 cx.stop_propagation();
-                                if this
-                                    .commands
-                                    .quick
-                                    .list
-                                    .row_menu
-                                    .as_ref()
-                                    .is_some_and(|menu| menu.command_id == menu_command_id)
-                                {
-                                    this.commands.quick.list.row_menu = None;
-                                } else {
-                                    let position = event.position();
-                                    this.commands.quick.list.row_menu =
-                                        Some(QuickCommandRowMenuState {
-                                            command_id: menu_command_id.clone(),
-                                            x: position.x,
-                                            y: position.y,
-                                        });
-                                }
+                                let position = event.position();
+                                this.commands
+                                    .toggle_quick_row_menu(QuickCommandRowMenuState {
+                                        command_id: menu_command_id.clone(),
+                                        x: position.x,
+                                        y: position.y,
+                                    });
                                 cx.notify();
                             }
                         }),
@@ -174,12 +159,11 @@ impl NyaTermApp {
                                 let menu_command_id = command_id.clone();
                                 move |this, event: &gpui::MouseDownEvent, _, cx| {
                                     cx.stop_propagation();
-                                    this.commands.quick.list.row_menu =
-                                        Some(QuickCommandRowMenuState {
-                                            command_id: menu_command_id.clone(),
-                                            x: event.position.x,
-                                            y: event.position.y,
-                                        });
+                                    this.commands.open_quick_row_menu(QuickCommandRowMenuState {
+                                        command_id: menu_command_id.clone(),
+                                        x: event.position.x,
+                                        y: event.position.y,
+                                    });
                                     cx.notify();
                                 }
                             }),
@@ -197,7 +181,7 @@ impl NyaTermApp {
                                 .gap_1()
                                 .cursor_pointer()
                                 .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.commands.quick.list.row_menu = None;
+                                    this.commands.close_quick_row_menu();
                                     this.run_quick_command_by_id(
                                         compact_click_command_id.clone(),
                                         cx,
@@ -244,11 +228,11 @@ impl NyaTermApp {
                         execution_mode,
                         menu_open,
                         cx.listener(move |this, _, _, cx| {
-                            this.commands.quick.list.row_menu = None;
+                            this.commands.close_quick_row_menu();
                             this.run_quick_command_by_id(run_command_id.clone(), cx);
                         }),
                         cx.listener(move |this, event: &ClickEvent, window, cx| {
-                            this.commands.quick.list.row_menu = None;
+                            this.commands.close_quick_row_menu();
                             let position = event.position();
                             this.open_quick_command_details(
                                 detail_command_id.clone(),
@@ -262,24 +246,13 @@ impl NyaTermApp {
                             let menu_command_id = command_id.clone();
                             move |this, event: &ClickEvent, _, cx| {
                                 cx.stop_propagation();
-                                if this
-                                    .commands
-                                    .quick
-                                    .list
-                                    .row_menu
-                                    .as_ref()
-                                    .is_some_and(|menu| menu.command_id == menu_command_id)
-                                {
-                                    this.commands.quick.list.row_menu = None;
-                                } else {
-                                    let position = event.position();
-                                    this.commands.quick.list.row_menu =
-                                        Some(QuickCommandRowMenuState {
-                                            command_id: menu_command_id.clone(),
-                                            x: position.x,
-                                            y: position.y,
-                                        });
-                                }
+                                let position = event.position();
+                                this.commands
+                                    .toggle_quick_row_menu(QuickCommandRowMenuState {
+                                        command_id: menu_command_id.clone(),
+                                        x: position.x,
+                                        y: position.y,
+                                    });
                                 cx.notify();
                             }
                         }),
@@ -308,12 +281,11 @@ impl NyaTermApp {
                                 let menu_command_id = command_id.clone();
                                 move |this, event: &gpui::MouseDownEvent, _, cx| {
                                     cx.stop_propagation();
-                                    this.commands.quick.list.row_menu =
-                                        Some(QuickCommandRowMenuState {
-                                            command_id: menu_command_id.clone(),
-                                            x: event.position.x,
-                                            y: event.position.y,
-                                        });
+                                    this.commands.open_quick_row_menu(QuickCommandRowMenuState {
+                                        command_id: menu_command_id.clone(),
+                                        x: event.position.x,
+                                        y: event.position.y,
+                                    });
                                     cx.notify();
                                 }
                             }),
@@ -330,7 +302,7 @@ impl NyaTermApp {
                                 .gap_2()
                                 .cursor_pointer()
                                 .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.commands.quick.list.row_menu = None;
+                                    this.commands.close_quick_row_menu();
                                     this.run_quick_command_by_id(
                                         list_header_command_id.clone(),
                                         cx,

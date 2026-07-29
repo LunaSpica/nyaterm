@@ -37,10 +37,7 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         let editor = self
             .commands
-            .quick
-            .editor
-            .draft
-            .clone()
+            .quick_editor_snapshot()
             .unwrap_or_else(QuickCommandEditorState::blank);
         let title = self.quick_command_editor_title();
         let uncategorized_label = self.tr("quickCommands.uncategorized");
@@ -219,7 +216,7 @@ impl NyaTermApp {
             .when(!native_window, |this| this.justify_center())
             .when(native_window, |this| this.justify_start())
             .overflow_y_scroll()
-            .track_focus(&self.commands.quick.editor.focus)
+            .track_focus(self.commands.quick_editor_focus())
             // No blanket focus grab: it kept the surface "focused" for the old
             // label-div fields, and would now steal focus back from whichever
             // box the pointer just landed on, since click follows mouse-down.

@@ -183,7 +183,13 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   popover sub-structs, built from one `QuickCommandFeatureFocus` bundle.
   Twenty-seven `NyaTermApp` fields collapse into one, and `app_state` no longer
   imports any of the eleven quick command UI model types. This UI owner is now
-  nested under the unified `CommandFeatureState` described below.
+  nested privately under the unified `CommandFeatureState` described below.
+  Views and runtime adapters use read-only queries and semantic transitions;
+  toolbar/menu exclusion, editor and detached-window cleanup, category-delete
+  reference cleanup, duplicate-variable synchronization, and import prompt
+  admission can no longer be updated piecemeal outside the owner. Persistence,
+  native window creation, text inputs, GPUI focus and rendering remain in their
+  existing adapters.
 - Remote page state is grouped into `RemoteOpsFeatureState` with one struct per
   pane: `docker`, `process` and `stats`. The three panes turn out to share the
   same refresh bookkeeping (job id, owning session, pending flag, failure
@@ -1363,6 +1369,7 @@ Current ownership map:
 | Secret unlock/reveal interaction | Private state in `NyaTermApp.security` | Secret-bearing transient UI state | Prompt admission, pending actions, success/failure, revealed values and lock cleanup enter through `SecurityFeatureState`; secret-bearing children have no `Debug` implementation. |
 | Whole-application screen lock | Private state in `NyaTermApp.security` | Transient lock/input/idle state | Locked status, password draft, focus and idle timing are queried or changed only through `SecurityFeatureState`; storage verification, input widgets and GPUI focus remain in runtime/view adapters. |
 | Quick-command catalog | Private catalog in `NyaTermApp.commands` | Persisted domain state | Views receive read-only slices/snapshots; successful storage operations replace commands and categories together through `CommandFeatureState`. |
+| Quick-command UI | Private child in `NyaTermApp.commands` | Transient UI/window state | List filters and menus, editor/dialog drafts, import admission and AI prompt state are queried or changed only through `CommandFeatureState`; GPUI focus, windows, rendering and persistence stay in adapters. |
 | Command history and persistence worker | Private state in `NyaTermApp.commands` | Persisted catalog plus background runtime | History snapshots, queue admission, event polling and idle checks enter through `CommandFeatureState`; failed optimistic use-count updates roll back on the owner. |
 | Serial ports | Private catalog in `NyaTermApp.connection_catalog` | Runtime/discovered state | Replaced through the catalog after session-manager discovery and never persisted. |
 | Tunnel/proxy configs | Private catalog in `NyaTermApp.tunnel_state` | Persisted network config | Views use read-only slices; pure move/upsert/delete candidates and successful commits stay on `TunnelFeatureState`. The Network page UI remains separate transient state. |
@@ -1580,7 +1587,12 @@ honest remaining list.
    through read-only views, and coupled optimistic use-count updates with
    persistence-failure rollback on `CommandFeatureState`. Storage access,
    portable-key selection and GPUI notification remain in their existing
-   adapters. What remains at the
+   adapters. The following quick-command UI encapsulation batch then made the
+   nested list, editor, dialog, import and AI children private. Menu exclusion,
+   editor/window closure, category-delete cleanup, variable synchronization and
+   import admission now execute as owner transitions, while persistence, GPUI
+   focus, native window creation, text inputs and rendering stay in adapters.
+   What remains at the
    composition root is stores, runtime and focused feature owners.
    Group by cohesion where a cluster exists; do not force the count down for
    its own sake.

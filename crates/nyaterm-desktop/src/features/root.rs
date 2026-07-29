@@ -595,40 +595,34 @@ impl NyaTermApp {
                 self.connection_state.inline_editor_panel_draft(),
                 |this, editor| this.child(self.connection_editor_panel(editor, cx)),
             )
-            .when(
-                self.commands.quick.editor.draft.is_some()
-                    && self.commands.quick.editor.window.is_none()
-                    && !self.commands.quick.editor.window_open_pending,
-                |this| this.child(self.quick_command_editor_overlay(cx)),
-            )
-            .when(self.commands.quick.dialogs.delete.is_some(), |this| {
+            .when(self.commands.quick_editor_is_inline(), |this| {
+                this.child(self.quick_command_editor_overlay(cx))
+            })
+            .when(self.commands.quick_delete().is_some(), |this| {
                 this.child(self.quick_command_delete_overlay(cx))
             })
-            .when(self.commands.quick.dialogs.details.is_some(), |this| {
+            .when(self.commands.quick_details().is_some(), |this| {
                 this.child(self.quick_command_details_overlay(cx))
             })
-            .when(self.commands.quick.list.row_menu.is_some(), |this| {
+            .when(self.commands.quick_row_menu().is_some(), |this| {
                 this.child(self.quick_command_row_menu_overlay(cx))
             })
-            .when(self.commands.quick.list.category_menu.is_some(), |this| {
+            .when(self.commands.quick_category_menu().is_some(), |this| {
                 this.child(self.quick_command_category_menu_overlay(cx))
             })
             .when(self.session.active_menu.is_some(), |this| {
                 this.child(self.active_session_menu_overlay(cx))
             })
-            .when(
-                self.commands.quick.dialogs.category_delete.is_some(),
-                |this| this.child(self.quick_command_category_delete_overlay(cx)),
-            )
-            .when(
-                self.commands.quick.dialogs.category_rename.is_some(),
-                |this| this.child(self.quick_command_category_rename_overlay(cx)),
-            )
-            .when(
-                self.commands.quick.dialogs.variable_prompt.is_some(),
-                |this| this.child(self.quick_command_variable_prompt_overlay(cx)),
-            )
-            .when(self.commands.quick.import.dialog_open, |this| {
+            .when(self.commands.quick_category_delete().is_some(), |this| {
+                this.child(self.quick_command_category_delete_overlay(cx))
+            })
+            .when(self.commands.quick_category_rename().is_some(), |this| {
+                this.child(self.quick_command_category_rename_overlay(cx))
+            })
+            .when(self.commands.quick_variable_prompt().is_some(), |this| {
+                this.child(self.quick_command_variable_prompt_overlay(cx))
+            })
+            .when(self.commands.quick_import_dialog_is_open(), |this| {
                 this.child(self.quick_command_import_overlay(cx))
             })
             .when(self.connection_state.import_dialog_is_open(), |this| {
@@ -666,8 +660,7 @@ impl NyaTermApp {
     fn modal_child_window_open(&self) -> bool {
         self.shell.navigation.settings.window.is_some()
             || self.shell.navigation.settings.window_open_pending
-            || self.commands.quick.editor.window.is_some()
-            || self.commands.quick.editor.window_open_pending
+            || self.commands.quick_editor_window_is_open_or_pending()
             || self.connection_state.editor_modal_window_open_or_pending()
             || !self.transfer.external_sync.windows.is_empty()
             || !self.transfer.external_sync.window_open_pending.is_empty()
@@ -678,9 +671,9 @@ impl NyaTermApp {
             self.activate_settings_window(cx)
         } else if self.shell.navigation.settings.window_open_pending {
             true
-        } else if self.commands.quick.editor.window.is_some() {
+        } else if self.commands.quick_editor_window().is_some() {
             self.activate_quick_command_window(cx)
-        } else if self.commands.quick.editor.window_open_pending {
+        } else if self.commands.quick_editor_window_is_pending() {
             true
         } else if self.connection_state.editor_has_window() {
             self.activate_connection_editor_window(cx)

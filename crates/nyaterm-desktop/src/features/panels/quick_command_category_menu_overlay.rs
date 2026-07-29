@@ -8,7 +8,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let Some(menu) = self.commands.quick.list.category_menu.clone() else {
+        let Some(menu) = self.commands.quick_category_menu().cloned() else {
             return div().into_any_element();
         };
         let category_id = menu.category_id.clone();
@@ -32,7 +32,7 @@ impl NyaTermApp {
             .left_0()
             .right_0()
             .on_click(cx.listener(|this, _, _, cx| {
-                this.commands.quick.list.category_menu = None;
+                this.commands.close_quick_menus();
                 cx.notify();
             }))
             .child(
@@ -63,7 +63,7 @@ impl NyaTermApp {
                         false,
                         cx.listener(move |this, _, window, cx| {
                             cx.stop_propagation();
-                            this.commands.quick.list.category_menu = None;
+                            this.commands.close_quick_menus();
                             this.open_rename_quick_command_category(rename_id.clone(), window, cx);
                         }),
                     ))
@@ -75,7 +75,7 @@ impl NyaTermApp {
                         true,
                         cx.listener(move |this, _, _, cx| {
                             cx.stop_propagation();
-                            this.commands.quick.list.category_menu = None;
+                            this.commands.close_quick_menus();
                             this.open_delete_quick_command_category_confirm(delete_id.clone(), cx);
                         }),
                     )),

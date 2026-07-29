@@ -8,7 +8,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let Some(menu) = self.commands.quick.list.row_menu.clone() else {
+        let Some(menu) = self.commands.quick_row_menu().cloned() else {
             return div().into_any_element();
         };
         let command_id = menu.command_id.clone();
@@ -34,7 +34,7 @@ impl NyaTermApp {
             .left_0()
             .right_0()
             .on_click(cx.listener(|this, _, _, cx| {
-                this.commands.quick.list.row_menu = None;
+                this.commands.close_quick_row_menu();
                 cx.notify();
             }))
             .child(
@@ -65,7 +65,7 @@ impl NyaTermApp {
                         false,
                         cx.listener(move |this, _, window, cx| {
                             cx.stop_propagation();
-                            this.commands.quick.list.row_menu = None;
+                            this.commands.close_quick_row_menu();
                             this.open_edit_quick_command_editor(
                                 edit_command_id.clone(),
                                 window,
@@ -81,7 +81,7 @@ impl NyaTermApp {
                             false,
                             cx.listener(move |this, _, _, cx| {
                                 cx.stop_propagation();
-                                this.commands.quick.list.row_menu = None;
+                                this.commands.close_quick_row_menu();
                                 this.send_quick_command_to_all_by_id(all_command_id.clone(), cx);
                             }),
                         ))
@@ -94,7 +94,7 @@ impl NyaTermApp {
                         true,
                         cx.listener(move |this, _, _, cx| {
                             cx.stop_propagation();
-                            this.commands.quick.list.row_menu = None;
+                            this.commands.close_quick_row_menu();
                             this.open_delete_quick_command_confirm(delete_command_id.clone(), cx);
                         }),
                     )),

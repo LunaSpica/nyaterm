@@ -3,14 +3,14 @@ use std::collections::{HashMap, HashSet};
 use gpui::{Context, KeyDownEvent};
 
 use crate::features::NyaTermApp;
-use crate::models::{QuickCommandVariableDef, QuickCommandVariablePromptState};
+use crate::models::QuickCommandVariableDef;
 
 impl NyaTermApp {
     pub(in crate::features) fn cancel_quick_command_variable_prompt(
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        self.commands.quick.dialogs.variable_prompt = None;
+        self.commands.clear_quick_variable_prompt();
         self.terminal.view.status = "quick command variables cancelled".to_string();
         cx.notify();
     }
@@ -19,7 +19,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        let Some(prompt) = self.commands.quick.dialogs.variable_prompt.take() else {
+        let Some(prompt) = self.commands.take_quick_variable_prompt() else {
             return;
         };
         let mut command_text = prompt.command.clone();
@@ -41,11 +41,7 @@ impl NyaTermApp {
         index: usize,
         cx: &mut Context<Self>,
     ) {
-        let Some(prompt) = self.commands.quick.dialogs.variable_prompt.as_mut() else {
-            return;
-        };
-        if index < prompt.variables.len() {
-            prompt.focused_index = index;
+        if self.commands.focus_quick_variable(index) {
             cx.notify();
         }
     }
@@ -56,26 +52,9 @@ impl NyaTermApp {
         delta: isize,
         cx: &mut Context<Self>,
     ) {
-        let Some(prompt) = self.commands.quick.dialogs.variable_prompt.as_mut() else {
-            return;
-        };
-        let Some(variable) = prompt.variables.get_mut(index) else {
-            return;
-        };
-        if variable.options.is_empty() {
-            return;
+        if self.commands.cycle_quick_variable_option(index, delta) {
+            cx.notify();
         }
-        let current = variable
-            .options
-            .iter()
-            .position(|option| option == &variable.value)
-            .unwrap_or(0);
-        let len = variable.options.len() as isize;
-        let next = (current as isize + delta).rem_euclid(len) as usize;
-        let value = variable.options[next].clone();
-        sync_quick_command_variable_value(prompt, index, value);
-        prompt.focused_index = index;
-        cx.notify();
     }
 
     pub(in crate::features) fn handle_quick_command_variable_key_down(
@@ -97,12 +76,12 @@ impl NyaTermApp {
             "escape" => self.cancel_quick_command_variable_prompt(cx),
             "enter" => self.submit_quick_command_variable_prompt(cx),
             "left" | "up" => {
-                if let Some(prompt) = self.commands.quick.dialogs.variable_prompt.as_ref() {
+                if let Some(prompt) = self.commands.quick_variable_prompt() {
                     self.cycle_quick_command_variable_option(prompt.focused_index, -1, cx);
                 }
             }
             "right" | "down" => {
-                if let Some(prompt) = self.commands.quick.dialogs.variable_prompt.as_ref() {
+                if let Some(prompt) = self.commands.quick_variable_prompt() {
                     self.cycle_quick_command_variable_option(prompt.focused_index, 1, cx);
                 }
             }
@@ -117,15 +96,9 @@ impl NyaTermApp {
         text: String,
         cx: &mut Context<Self>,
     ) {
-        let Some(prompt) = self.commands.quick.dialogs.variable_prompt.as_mut() else {
-            return;
-        };
-        if index >= prompt.variables.len() {
-            return;
+        if self.commands.set_quick_variable_value(index, text) {
+            cx.notify();
         }
-        prompt.focused_index = index;
-        sync_quick_command_variable_value(prompt, index, text);
-        cx.notify();
     }
 }
 
@@ -187,27 +160,9 @@ pub(super) fn parse_quick_command_variables(command: &str) -> Vec<QuickCommandVa
     variables
 }
 
-fn sync_quick_command_variable_value(
-    prompt: &mut QuickCommandVariablePromptState,
-    index: usize,
-    value: String,
-) {
-    let Some(variable) = prompt.variables.get(index) else {
-        return;
-    };
-    let name = variable.name.clone();
-    for variable in &mut prompt.variables {
-        if variable.name == name {
-            variable.value = value.clone();
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use crate::models::QuickCommandVariablePromptState;
-
-    use super::{parse_quick_command_variables, sync_quick_command_variable_value};
+    use super::parse_quick_command_variables;
 
     #[test]
     fn parses_quick_command_variables_like_tauri_dialog() {
@@ -250,18 +205,7 @@ mod tests {
         assert_eq!(variables[0].value, "dev");
         assert_eq!(variables[1].value, "dev");
 
-        let mut prompt = QuickCommandVariablePromptState {
-            command_id: "cmd".to_string(),
-            label: "Command".to_string(),
-            command: "{{host=prod}} {{host=dev}}".to_string(),
-            execute: true,
-            send_to_all: false,
-            variables,
-            focused_index: 0,
-        };
-        sync_quick_command_variable_value(&mut prompt, 0, "stage".to_string());
-
-        assert_eq!(prompt.variables[0].value, "stage");
-        assert_eq!(prompt.variables[1].value, "stage");
+        assert_eq!(variables[0].value, "dev");
+        assert_eq!(variables[1].value, "dev");
     }
 }
