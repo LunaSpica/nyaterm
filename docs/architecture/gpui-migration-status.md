@@ -271,6 +271,10 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   private to the `SettingsFeatureState` implementation too. Settings runtime
   adapters now replace keyword catalogs through the owner and update storage
   message/readiness atomically; no settings child remains directly writable.
+  A cross-feature follow-up migrated all persistence outcome branches in
+  connections, tunnels, commands, AI, shell, translation and transfers to the
+  same atomic status transition and removed the standalone readiness setter.
+  Message-only updates remain only for in-progress prompt/job presentation.
 - Translation and native-update background state now have authoritative
   `TranslationFeatureState` and `UpdateFeatureState` owners. Eighteen app fields
   became two feature fields; each owner constructs and retains its own job
@@ -1836,6 +1840,10 @@ honest remaining list.
    password state and storage status state-private too, migrated settings
    runtime writes onto semantic owner methods and tightened the architecture
    guard across the complete feature tree. No mutable child accessor was added.
+   The following cross-feature batch then removed the standalone storage-ready
+   setter and migrated every persisted success/failure outcome to one atomic
+   message/readiness transition; message-only updates remain valid for progress
+   states that deliberately preserve the last readiness result.
    The next terminal interaction batch made seven presentation children
    terminal-module-private: search, input, paste review, selection, layout,
    menus and paint caches. External views and coordinators now use immutable

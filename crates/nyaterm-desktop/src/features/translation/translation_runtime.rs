@@ -45,14 +45,12 @@ impl NyaTermApp {
             Ok(saved) => {
                 self.translation.settings_saved(saved);
                 self.settings
-                    .set_store_message("translation settings saved".to_string());
-                self.settings.set_store_ready(true);
+                    .update_store_status("translation settings saved", true);
             }
             Err(error) => {
                 self.translation.settings_save_failed(error);
                 self.settings
-                    .set_store_message(self.translation.status().to_string());
-                self.settings.set_store_ready(false);
+                    .update_store_status(self.translation.status().to_string(), false);
             }
         }
         cx.notify();

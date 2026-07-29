@@ -70,13 +70,12 @@ impl NyaTermApp {
                 self.connection_state.close_network_move_picker();
                 self.shell.status = format!("tunnel moved to {label}");
                 self.settings
-                    .set_store_message("tunnel group saved".to_string());
-                self.settings.set_store_ready(true);
+                    .update_store_status("tunnel group saved", true);
             }
             Err(error) => {
                 self.shell.status = format!("failed to move tunnel: {error}");
-                self.settings.set_store_message(self.shell.status.clone());
-                self.settings.set_store_ready(false);
+                self.settings
+                    .update_store_status(self.shell.status.clone(), false);
             }
         }
         cx.notify();
@@ -118,14 +117,12 @@ impl NyaTermApp {
                 self.tunnel_state.commit_proxies(next_proxies);
                 self.connection_state.close_network_move_picker();
                 self.shell.status = format!("proxy moved to {label}");
-                self.settings
-                    .set_store_message("proxy group saved".to_string());
-                self.settings.set_store_ready(true);
+                self.settings.update_store_status("proxy group saved", true);
             }
             Err(error) => {
                 self.shell.status = format!("failed to move proxy: {error}");
-                self.settings.set_store_message(self.shell.status.clone());
-                self.settings.set_store_ready(false);
+                self.settings
+                    .update_store_status(self.shell.status.clone(), false);
             }
         }
         cx.notify();
@@ -194,13 +191,13 @@ impl NyaTermApp {
                 } else {
                     format!("tunnel '{label}' was already deleted")
                 };
-                self.settings.set_store_message(self.shell.status.clone());
-                self.settings.set_store_ready(deleted);
+                self.settings
+                    .update_store_status(self.shell.status.clone(), deleted);
             }
             Err(error) => {
                 self.shell.status = format!("failed to delete tunnel: {error}");
-                self.settings.set_store_message(self.shell.status.clone());
-                self.settings.set_store_ready(false);
+                self.settings
+                    .update_store_status(self.shell.status.clone(), false);
             }
         }
         cx.notify();
@@ -228,13 +225,13 @@ impl NyaTermApp {
                 } else {
                     format!("proxy '{label}' was already deleted")
                 };
-                self.settings.set_store_message(self.shell.status.clone());
-                self.settings.set_store_ready(deleted);
+                self.settings
+                    .update_store_status(self.shell.status.clone(), deleted);
             }
             Err(error) => {
                 self.shell.status = format!("failed to delete proxy: {error}");
-                self.settings.set_store_message(self.shell.status.clone());
-                self.settings.set_store_ready(false);
+                self.settings
+                    .update_store_status(self.shell.status.clone(), false);
             }
         }
         cx.notify();

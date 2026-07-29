@@ -153,18 +153,19 @@ impl NyaTermApp {
                 self.commands
                     .replace_quick_command_catalog(config.commands, config.categories);
                 self.commands.clear_quick_delete();
-                self.settings.set_store_message(if deleted {
-                    format!("quick command '{}' deleted", delete.label)
-                } else {
-                    format!("quick command '{}' was already deleted", delete.label)
-                });
-                self.settings.set_store_ready(deleted);
+                self.settings.update_store_status(
+                    if deleted {
+                        format!("quick command '{}' deleted", delete.label)
+                    } else {
+                        format!("quick command '{}' was already deleted", delete.label)
+                    },
+                    deleted,
+                );
                 self.shell.status = self.settings.store_status().message.to_string();
             }
             Err(error) => {
                 self.settings
-                    .set_store_message(format!("quick command delete failed: {error}"));
-                self.settings.set_store_ready(false);
+                    .update_store_status(format!("quick command delete failed: {error}"), false);
                 self.shell.status = self.settings.store_status().message.to_string();
             }
         }
@@ -242,24 +243,27 @@ impl NyaTermApp {
                 self.commands
                     .replace_quick_command_catalog(config.commands, config.categories);
                 self.commands.finish_quick_category_delete(&delete.id);
-                self.settings.set_store_message(if deleted_category {
-                    format!(
-                        "quick command category '{}' deleted with {} command(s)",
-                        delete.name, deleted_commands
-                    )
-                } else {
-                    format!(
-                        "quick command category '{}' was already deleted",
-                        delete.name
-                    )
-                });
-                self.settings.set_store_ready(deleted_category);
+                self.settings.update_store_status(
+                    if deleted_category {
+                        format!(
+                            "quick command category '{}' deleted with {} command(s)",
+                            delete.name, deleted_commands
+                        )
+                    } else {
+                        format!(
+                            "quick command category '{}' was already deleted",
+                            delete.name
+                        )
+                    },
+                    deleted_category,
+                );
                 self.shell.status = self.settings.store_status().message.to_string();
             }
             Err(error) => {
-                self.settings
-                    .set_store_message(format!("quick command category delete failed: {error}"));
-                self.settings.set_store_ready(false);
+                self.settings.update_store_status(
+                    format!("quick command category delete failed: {error}"),
+                    false,
+                );
                 self.shell.status = self.settings.store_status().message.to_string();
             }
         }
@@ -362,28 +366,31 @@ impl NyaTermApp {
                     .replace_quick_command_catalog(config.commands, config.categories);
                 if renamed {
                     self.commands.clear_quick_category_rename();
-                    self.settings.set_store_message(format!(
-                        "quick command category '{}' renamed to '{}'",
-                        rename.original_name, name
-                    ));
-                    self.settings.set_store_ready(true);
+                    self.settings.update_store_status(
+                        format!(
+                            "quick command category '{}' renamed to '{}'",
+                            rename.original_name, name
+                        ),
+                        true,
+                    );
                 } else {
                     self.commands.set_quick_category_rename_error(
                         "Category is no longer available".to_string(),
                     );
-                    self.settings.set_store_message(
-                        "quick command category rename failed: category missing".to_string(),
+                    self.settings.update_store_status(
+                        "quick command category rename failed: category missing",
+                        false,
                     );
-                    self.settings.set_store_ready(false);
                 }
                 self.shell.status = self.settings.store_status().message.to_string();
             }
             Err(error) => {
                 self.commands
                     .set_quick_category_rename_error(error.to_string());
-                self.settings
-                    .set_store_message(format!("quick command category rename failed: {error}"));
-                self.settings.set_store_ready(false);
+                self.settings.update_store_status(
+                    format!("quick command category rename failed: {error}"),
+                    false,
+                );
                 self.shell.status = self.settings.store_status().message.to_string();
             }
         }

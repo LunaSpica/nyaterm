@@ -109,13 +109,13 @@ impl NyaTermApp {
                 self.tunnel_state.commit_tunnel_groups(groups);
                 self.connection_state.close_network_group_editor();
                 self.shell.status = format!("tunnel group '{name}' saved");
-                self.settings.set_store_message(self.shell.status.clone());
-                self.settings.set_store_ready(true);
+                self.settings
+                    .update_store_status(self.shell.status.clone(), true);
             }
             Err(error) => {
                 self.shell.status = format!("failed to save tunnel group: {error}");
-                self.settings.set_store_message(self.shell.status.clone());
-                self.settings.set_store_ready(false);
+                self.settings
+                    .update_store_status(self.shell.status.clone(), false);
             }
         }
         cx.notify();
@@ -146,13 +146,13 @@ impl NyaTermApp {
                 self.tunnel_state.commit_proxy_groups(groups);
                 self.connection_state.close_network_group_editor();
                 self.shell.status = format!("proxy group '{name}' saved");
-                self.settings.set_store_message(self.shell.status.clone());
-                self.settings.set_store_ready(true);
+                self.settings
+                    .update_store_status(self.shell.status.clone(), true);
             }
             Err(error) => {
                 self.shell.status = format!("failed to save proxy group: {error}");
-                self.settings.set_store_message(self.shell.status.clone());
-                self.settings.set_store_ready(false);
+                self.settings
+                    .update_store_status(self.shell.status.clone(), false);
             }
         }
         cx.notify();
@@ -220,13 +220,13 @@ impl NyaTermApp {
                     &deleted_tunnel_ids,
                 );
                 self.shell.status = format!("tunnel group '{label}' deleted");
-                self.settings.set_store_message(self.shell.status.clone());
-                self.settings.set_store_ready(true);
+                self.settings
+                    .update_store_status(self.shell.status.clone(), true);
             }
             Err(error) => {
                 self.shell.status = format!("failed to delete tunnel group: {error}");
-                self.settings.set_store_message(self.shell.status.clone());
-                self.settings.set_store_ready(false);
+                self.settings
+                    .update_store_status(self.shell.status.clone(), false);
             }
         }
         cx.notify();
@@ -256,13 +256,13 @@ impl NyaTermApp {
                     &deleted_proxy_ids,
                 );
                 self.shell.status = format!("proxy group '{label}' deleted");
-                self.settings.set_store_message(self.shell.status.clone());
-                self.settings.set_store_ready(true);
+                self.settings
+                    .update_store_status(self.shell.status.clone(), true);
             }
             Err(error) => {
                 self.shell.status = format!("failed to delete proxy group: {error}");
-                self.settings.set_store_message(self.shell.status.clone());
-                self.settings.set_store_ready(false);
+                self.settings
+                    .update_store_status(self.shell.status.clone(), false);
             }
         }
         cx.notify();

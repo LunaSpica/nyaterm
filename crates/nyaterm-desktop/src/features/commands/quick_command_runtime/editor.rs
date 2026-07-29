@@ -181,16 +181,14 @@ impl NyaTermApp {
                     .replace_quick_command_catalog(config.commands, config.categories);
                 self.commands.close_quick_editor();
                 self.settings
-                    .set_store_message(format!("quick command '{}' saved", command.label));
-                self.settings.set_store_ready(true);
+                    .update_store_status(format!("quick command '{}' saved", command.label), true);
                 self.shell.status = self.settings.store_status().message.to_string();
             }
             Err(error) => {
                 self.commands
                     .set_quick_editor_error(error.to_string(), None);
                 self.settings
-                    .set_store_message(format!("quick command save failed: {error}"));
-                self.settings.set_store_ready(false);
+                    .update_store_status(format!("quick command save failed: {error}"), false);
                 self.shell.status = self.settings.store_status().message.to_string();
             }
         }

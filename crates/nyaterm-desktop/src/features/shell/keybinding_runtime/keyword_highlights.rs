@@ -38,14 +38,14 @@ impl NyaTermApp {
             Ok(config) => {
                 self.settings.replace_keyword_config(config);
                 self.settings
-                    .set_store_message("keyword highlight settings saved".to_string());
-                self.settings.set_store_ready(true);
+                    .update_store_status("keyword highlight settings saved", true);
                 self.shell.status = "keyword highlight settings saved".to_string();
             }
             Err(error) => {
-                self.settings
-                    .set_store_message(format!("keyword highlight settings save failed: {error}"));
-                self.settings.set_store_ready(false);
+                self.settings.update_store_status(
+                    format!("keyword highlight settings save failed: {error}"),
+                    false,
+                );
                 self.shell.status = self.settings.store_status().message.to_string();
             }
         }
@@ -129,16 +129,16 @@ impl NyaTermApp {
                 self.shell.status = format!(
                     "imported {imported_rules} keyword highlight rule(s), updated {updated_rules}, total {total_rules}"
                 );
-                self.settings.set_store_message(self.shell.status.clone());
-                self.settings.set_store_ready(true);
+                self.settings
+                    .update_store_status(self.shell.status.clone(), true);
             }
             KeywordHighlightPathPromptResult::Cancelled => {
                 self.shell.status = "keyword highlight import cancelled".to_string();
             }
             KeywordHighlightPathPromptResult::Failed(error) => {
                 self.shell.status = format!("keyword highlight import failed: {error}");
-                self.settings.set_store_message(self.shell.status.clone());
-                self.settings.set_store_ready(false);
+                self.settings
+                    .update_store_status(self.shell.status.clone(), false);
             }
             KeywordHighlightPathPromptResult::Closed => {
                 self.shell.status =

@@ -86,15 +86,13 @@ impl NyaTermApp {
                     let count = self.apply_ai_model_discoveries(&event.profile_id, discoveries);
                     self.ai.panel.status = format!("Discovered {count} AI model(s)");
                     self.settings
-                        .set_store_message(self.ai.panel.status.clone());
-                    self.settings.set_store_ready(true);
+                        .update_store_status(self.ai.panel.status.clone(), true);
                     self.persist_ai_settings_now(cx);
                 }
                 Err(error) => {
                     self.ai.panel.status = format!("AI model discovery failed: {error}");
                     self.settings
-                        .set_store_message(self.ai.panel.status.clone());
-                    self.settings.set_store_ready(false);
+                        .update_store_status(self.ai.panel.status.clone(), false);
                 }
             }
         }

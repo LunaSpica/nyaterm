@@ -367,6 +367,10 @@ check_no_multiline_matches \
   "settings store status access must use SettingsFeatureState methods" \
   '(self|this|app)\.settings[[:space:]]*\.[[:space:]]*store_status[[:space:]]*(\.|=)' \
   crates/nyaterm-desktop/src/features
+check_no_matches \
+  "settings store readiness must change atomically with its result message" \
+  'set_store_ready' \
+  crates/nyaterm-desktop/src/features
 check_no_multiline_matches \
   "SettingsFeatureState compatibility children must stay private to their owner implementation" \
   'struct[[:space:]]+SettingsFeatureState[[:space:]]*\{[^}]*pub([[:space:]]|\([^)]*\))[[:space:]]+(summary|keyword_config|master_password)[[:space:]]*:' \

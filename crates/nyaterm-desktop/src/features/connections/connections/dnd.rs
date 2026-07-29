@@ -67,8 +67,8 @@ impl NyaTermApp {
             }
             Err(error) => {
                 self.shell.status = format!("reorder connection failed: {error}");
-                self.settings.set_store_message(self.shell.status.clone());
-                self.settings.set_store_ready(false);
+                self.settings
+                    .update_store_status(self.shell.status.clone(), false);
             }
         }
         self.connection_state.clear_list_drop_target();
@@ -139,8 +139,8 @@ impl NyaTermApp {
             }
             Err(error) => {
                 self.shell.status = format!("reorder connection failed: {error}");
-                self.settings.set_store_message(self.shell.status.clone());
-                self.settings.set_store_ready(false);
+                self.settings
+                    .update_store_status(self.shell.status.clone(), false);
             }
         }
         self.connection_state.clear_list_drop_target();
@@ -190,8 +190,8 @@ impl NyaTermApp {
             }
             Err(error) => {
                 self.shell.status = format!("move connection failed: {error}");
-                self.settings.set_store_message(self.shell.status.clone());
-                self.settings.set_store_ready(false);
+                self.settings
+                    .update_store_status(self.shell.status.clone(), false);
             }
         }
         cx.notify();
@@ -238,8 +238,8 @@ impl NyaTermApp {
             }
             Err(error) => {
                 self.shell.status = format!("move connections failed: {error}");
-                self.settings.set_store_message(self.shell.status.clone());
-                self.settings.set_store_ready(false);
+                self.settings
+                    .update_store_status(self.shell.status.clone(), false);
             }
         }
         cx.notify();

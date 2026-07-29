@@ -792,8 +792,7 @@ impl NyaTermApp {
                         "AI stream receiving".to_string()
                     };
                     self.settings
-                        .set_store_message(format!("AI session {session_id} streaming"));
-                    self.settings.set_store_ready(true);
+                        .update_store_status(format!("AI session {session_id} streaming"), true);
                 }
                 AiChatWorkerEvent::AgentToolCallDelta {
                     job_id,
@@ -833,10 +832,10 @@ impl NyaTermApp {
                             format!("Streaming arguments (+{arguments_delta_len} chars)")
                         },
                     );
-                    self.settings.set_store_message(format!(
-                        "AI session {session_id} streaming Agent tool call"
-                    ));
-                    self.settings.set_store_ready(true);
+                    self.settings.update_store_status(
+                        format!("AI session {session_id} streaming Agent tool call"),
+                        true,
+                    );
                 }
                 AiChatWorkerEvent::AgentBackgroundFinished {
                     job_id,
@@ -882,8 +881,7 @@ impl NyaTermApp {
                                 truncate_preview(&error, 140),
                             );
                             self.settings
-                                .set_store_message(self.ai.panel.status.clone());
-                            self.settings.set_store_ready(false);
+                                .update_store_status(self.ai.panel.status.clone(), false);
                         }
                     }
                 }
@@ -961,11 +959,10 @@ impl NyaTermApp {
                                     message.command_cards = output.command_cards.clone();
                                 }
                             }
-                            self.settings.set_store_message(format!(
-                                "AI session {} updated",
-                                event.session_id
-                            ));
-                            self.settings.set_store_ready(true);
+                            self.settings.update_store_status(
+                                format!("AI session {} updated", event.session_id),
+                                true,
+                            );
                             self.reset_text_input("ai.chat.prompt", "", cx);
                             self.ai.chat.prompt_draft.clear();
                             self.refresh_ai_usage_counts(cx);
@@ -1013,8 +1010,7 @@ impl NyaTermApp {
                                 );
                             }
                             self.settings
-                                .set_store_message(self.ai.panel.status.clone());
-                            self.settings.set_store_ready(false);
+                                .update_store_status(self.ai.panel.status.clone(), false);
                         }
                     }
                 }

@@ -127,15 +127,13 @@ impl NyaTermApp {
                     label
                 ));
                 self.settings
-                    .set_store_message(self.ai.panel_status().to_string());
-                self.settings.set_store_ready(true);
+                    .update_store_status(self.ai.panel_status().to_string(), true);
             }
             Err(error) => {
                 self.ai
                     .set_panel_status(format!("Quick command save failed: {error}"));
                 self.settings
-                    .set_store_message(self.ai.panel_status().to_string());
-                self.settings.set_store_ready(false);
+                    .update_store_status(self.ai.panel_status().to_string(), false);
             }
         }
         cx.notify();

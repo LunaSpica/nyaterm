@@ -38,8 +38,8 @@ impl NyaTermApp {
             Err(error) => {
                 self.connection_state.close_clear_all();
                 self.shell.status = format!("clear saved connections failed: {error}");
-                self.settings.set_store_message(self.shell.status.clone());
-                self.settings.set_store_ready(false);
+                self.settings
+                    .update_store_status(self.shell.status.clone(), false);
             }
         }
         cx.notify();

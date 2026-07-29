@@ -199,13 +199,13 @@ impl NyaTermApp {
                 self.tunnel_state.commit_proxies(next_proxies);
                 self.connection_state.close_network_proxy_editor();
                 self.shell.status = format!("proxy '{name}' saved");
-                self.settings.set_store_message(self.shell.status.clone());
-                self.settings.set_store_ready(true);
+                self.settings
+                    .update_store_status(self.shell.status.clone(), true);
             }
             Err(error) => {
                 self.shell.status = format!("failed to save proxy: {error}");
-                self.settings.set_store_message(self.shell.status.clone());
-                self.settings.set_store_ready(false);
+                self.settings
+                    .update_store_status(self.shell.status.clone(), false);
                 self.connection_state
                     .set_network_proxy_editor_error(self.shell.status.clone());
             }

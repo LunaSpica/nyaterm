@@ -181,8 +181,7 @@ impl NyaTermApp {
             if let Err(error) = task.await {
                 let _ = this.update(cx, |this, cx| {
                     this.settings
-                        .set_store_message(format!("AI audit save failed: {error}"));
-                    this.settings.set_store_ready(false);
+                        .update_store_status(format!("AI audit save failed: {error}"), false);
                     cx.notify();
                 });
             } else {

@@ -268,16 +268,14 @@ impl NyaTermApp {
         }
         if !self.commands.queue_command_history(submitted) {
             self.settings
-                .set_store_message("command history worker is unavailable".to_string());
-            self.settings.set_store_ready(false);
+                .update_store_status("command history worker is unavailable", false);
         }
     }
 
     pub(in crate::features) fn queue_quick_command_use_count(&mut self, command_id: String) {
         if !self.commands.queue_quick_command_use_count(command_id) {
             self.settings
-                .set_store_message("command persistence worker is unavailable".to_string());
-            self.settings.set_store_ready(false);
+                .update_store_status("command persistence worker is unavailable", false);
         }
     }
 
@@ -289,10 +287,8 @@ impl NyaTermApp {
                 CommandPersistencePoll::Empty => break,
                 CommandPersistencePoll::Disconnected { had_pending } => {
                     if had_pending {
-                        self.settings.set_store_message(
-                            "command persistence worker disconnected".to_string(),
-                        );
-                        self.settings.set_store_ready(false);
+                        self.settings
+                            .update_store_status("command persistence worker disconnected", false);
                         dirty = true;
                     }
                     break;
@@ -300,8 +296,7 @@ impl NyaTermApp {
             };
             dirty = true;
             if let Err(message) = self.commands.apply_persistence_result(event) {
-                self.settings.set_store_message(message);
-                self.settings.set_store_ready(false);
+                self.settings.update_store_status(message, false);
             }
         }
         dirty

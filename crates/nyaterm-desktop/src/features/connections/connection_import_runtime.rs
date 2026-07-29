@@ -142,8 +142,7 @@ impl NyaTermApp {
                     .tr("savedConnections.importSuccess")
                     .replace("{{count}}", &count.to_string());
                 self.shell.status = message.clone();
-                self.settings.set_store_message(message);
-                self.settings.set_store_ready(true);
+                self.settings.update_store_status(message, true);
             }
             ConnectionImportResult::Cancelled => {
                 self.shell.status = "connection import cancelled".to_string();
@@ -153,8 +152,7 @@ impl NyaTermApp {
                     .tr("savedConnections.importFailed")
                     .replace("{{error}}", &error);
                 self.shell.status = message.clone();
-                self.settings.set_store_message(message);
-                self.settings.set_store_ready(false);
+                self.settings.update_store_status(message, false);
             }
             ConnectionImportResult::Closed => {
                 self.shell.status = "connection import picker closed".to_string();

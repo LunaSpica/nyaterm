@@ -24,8 +24,7 @@ impl NyaTermApp {
             }
             Err(error) => {
                 self.settings
-                    .set_store_message(format!("quick command refresh failed: {error}"));
-                self.settings.set_store_ready(false);
+                    .update_store_status(format!("quick command refresh failed: {error}"), false);
             }
         }
     }
@@ -62,14 +61,14 @@ impl NyaTermApp {
             Ok(settings) => {
                 self.apply_gpui_settings(settings);
                 self.settings
-                    .set_store_message("quick command UI settings saved".to_string());
-                self.settings.set_store_ready(true);
+                    .update_store_status("quick command UI settings saved", true);
                 self.shell.status = "quick command UI settings saved".to_string();
             }
             Err(error) => {
-                self.settings
-                    .set_store_message(format!("quick command UI settings save failed: {error}"));
-                self.settings.set_store_ready(false);
+                self.settings.update_store_status(
+                    format!("quick command UI settings save failed: {error}"),
+                    false,
+                );
                 self.shell.status = self.settings.store_status().message.to_string();
             }
         }

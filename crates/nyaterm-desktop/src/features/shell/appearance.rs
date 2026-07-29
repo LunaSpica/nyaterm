@@ -582,14 +582,14 @@ impl NyaTermApp {
                 self.apply_gpui_settings(settings);
                 self.refresh_visible_terminal_surfaces(cx);
                 self.settings
-                    .set_store_message("appearance settings saved".to_string());
-                self.settings.set_store_ready(true);
+                    .update_store_status("appearance settings saved", true);
                 self.shell.status = "appearance settings saved".to_string();
             }
             Err(error) => {
-                self.settings
-                    .set_store_message(format!("appearance settings save failed: {error}"));
-                self.settings.set_store_ready(false);
+                self.settings.update_store_status(
+                    format!("appearance settings save failed: {error}"),
+                    false,
+                );
                 self.shell.status = self.settings.store_status().message.to_string();
             }
         }

@@ -244,13 +244,13 @@ impl NyaTermApp {
                 self.tunnel_state.commit_tunnels(next_tunnels);
                 self.connection_state.close_network_tunnel_editor();
                 self.shell.status = format!("tunnel '{name}' saved");
-                self.settings.set_store_message(self.shell.status.clone());
-                self.settings.set_store_ready(true);
+                self.settings
+                    .update_store_status(self.shell.status.clone(), true);
             }
             Err(error) => {
                 self.shell.status = format!("failed to save tunnel: {error}");
-                self.settings.set_store_message(self.shell.status.clone());
-                self.settings.set_store_ready(false);
+                self.settings
+                    .update_store_status(self.shell.status.clone(), false);
                 self.connection_state
                     .set_network_tunnel_editor_error(self.shell.status.clone());
             }

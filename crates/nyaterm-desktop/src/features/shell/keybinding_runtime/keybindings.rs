@@ -107,14 +107,13 @@ impl NyaTermApp {
             Ok(settings) => {
                 self.apply_gpui_settings(settings);
                 self.settings.finish_keybinding_recording();
-                self.settings.set_store_message(success_message.clone());
-                self.settings.set_store_ready(true);
+                self.settings
+                    .update_store_status(success_message.clone(), true);
                 self.shell.status = success_message;
             }
             Err(error) => {
                 self.settings
-                    .set_store_message(format!("shortcut save failed: {error}"));
-                self.settings.set_store_ready(false);
+                    .update_store_status(format!("shortcut save failed: {error}"), false);
                 self.shell.status = self.settings.store_status().message.to_string();
             }
         }

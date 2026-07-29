@@ -796,10 +796,6 @@ impl SettingsFeatureState {
         self.store_status.message = message.into();
     }
 
-    pub(in crate::features) fn set_store_ready(&mut self, ready: bool) {
-        self.store_status.ready = ready;
-    }
-
     pub(in crate::features) fn update_store_status(
         &mut self,
         message: impl Into<String>,
