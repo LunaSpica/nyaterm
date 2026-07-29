@@ -471,12 +471,12 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn title_context_label(&self) -> String {
-        if self.session.start.has_active_pending()
+        if self.session.start_has_active_pending()
             && let Some(pending) = self.pending_session_display_name()
         {
             return pending;
         }
-        if self.session.start.has_active_failed()
+        if self.session.start_has_active_failed()
             && let Some(failed) = self.failed_session_display_name()
         {
             return failed;
@@ -513,10 +513,10 @@ impl NyaTermApp {
     }
 
     fn title_context_icon(&self) -> Option<&'static str> {
-        if self.session.start.has_active_pending() {
+        if self.session.start_has_active_pending() {
             return Some("icons/conn/connect.svg");
         }
-        if self.session.start.has_active_failed() {
+        if self.session.start_has_active_failed() {
             return Some("icons/session/disconnect.svg");
         }
         if let Some(session_id) = self.session.active_id() {

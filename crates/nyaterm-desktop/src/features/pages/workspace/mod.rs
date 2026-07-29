@@ -41,10 +41,10 @@ impl NyaTermApp {
 
     fn workspace_terminal_area(&mut self, cx: &mut Context<Self>) -> gpui::AnyElement {
         let palette = self.theme_palette();
-        if self.session.start.has_active_pending() {
+        if self.session.start_has_active_pending() {
             return self.pending_workspace_state().into_any_element();
         }
-        if self.session.start.has_active_failed() {
+        if self.session.start_has_active_failed() {
             return self.failed_workspace_state().into_any_element();
         }
         if self.session.active_id().is_none() {

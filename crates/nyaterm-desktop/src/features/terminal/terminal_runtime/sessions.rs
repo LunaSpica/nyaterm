@@ -196,7 +196,7 @@ impl NyaTermApp {
         let open_sessions = self.ordered_sessions().len();
         if self.settings.summary().confirm_on_close && open_sessions > 0 {
             // Reuse close-all confirmation as quit-with-sessions gate (Tauri confirm_on_close).
-            self.session.dialogs.request_quit_after_close_all();
+            self.session.dialog_request_quit_after_close_all();
             self.open_close_all_sessions_confirm(window, cx);
             self.shell.status = format!("confirm close: {open_sessions} session(s) still open");
             cx.notify();
@@ -219,9 +219,9 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        self.session.dialogs.open_close_all_sessions_confirm();
+        self.session.dialog_open_close_all_sessions_confirm();
         self.shell.status = "close all sessions confirmation opened".to_string();
-        window.focus(self.session.dialogs.close_all_sessions_confirm_focus());
+        window.focus(self.session.dialog_close_all_sessions_confirm_focus());
         cx.notify();
     }
 
@@ -229,7 +229,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        self.session.dialogs.cancel_close_all_sessions_confirm();
+        self.session.dialog_cancel_close_all_sessions_confirm();
         self.shell.status = "close all sessions cancelled".to_string();
         cx.notify();
     }
@@ -239,7 +239,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let quit_after = self.session.dialogs.take_close_all_sessions_confirm();
+        let quit_after = self.session.dialog_take_close_all_sessions_confirm();
         self.close_all_sessions(cx);
         if quit_after {
             if self.settings.summary().startup_restore {

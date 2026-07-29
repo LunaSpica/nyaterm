@@ -738,6 +738,15 @@ check_no_multiline_matches \
   'struct[[:space:]]+SessionFeatureState[[:space:]]*\{[^}]*pub([[:space:]]|\([^)]*\))[[:space:]]+(manager|event_bridge|restore|events|command_history|active_search_draft|active_menu|busy_actions)[[:space:]]*:' \
   crates/nyaterm-desktop/src/features/session/state.rs
 check_no_multiline_matches \
+  "SessionFeatureState child implementations must stay inside the session module" \
+  'struct[[:space:]]+SessionFeatureState[[:space:]]*\{[^}]*pub([[:space:]]|\(in crate::features\))[[:space:]]+(start|prompts|dialogs)[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/session/state.rs
+check_no_multiline_matches_excluding \
+  "cross-domain session start, prompt and dialog access must use SessionFeatureState methods" \
+  '(self|this|app)[[:space:]]*\.[[:space:]]*session[[:space:]]*\.[[:space:]]*(start|prompts|dialogs)([[:space:]]*\.|[[:space:]]*=)' \
+  crates/nyaterm-desktop/src/features \
+  '**/session/**'
+check_no_multiline_matches \
   "session runtime coordination access must use SessionFeatureState methods" \
   '(self|this|app)[[:space:]]*\.[[:space:]]*session[[:space:]]*\.[[:space:]]*(manager|event_bridge|restore|events|command_history|active_search_draft|active_menu|busy_actions)([[:space:]]*\.|[[:space:]]*=)' \
   crates/nyaterm-desktop/src/features
@@ -793,6 +802,10 @@ check_no_matches \
 check_no_matches \
   "SessionPromptState fields must remain private; use owner transitions and read-only getters" \
   '^[[:space:]]*pub([[:space:]]|\([^)]*\))[[:space:]]+(duplicate_prompts|active_duplicate_prompt|host_key_prompts|active_host_key_prompt|credential_prompts|active_credential_prompt|active_keyboard_interactive_prompt|credential_prompt_focus_pending|credential_focus|otp_provider)[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/session/state.rs
+check_no_matches \
+  "session child implementation types must stay session-module-private" \
+  'pub([[:space:]]|\(in crate::features\))[[:space:]]+struct[[:space:]]+(SessionPromptState|SessionDialogState|SessionStartFeatureState)' \
   crates/nyaterm-desktop/src/features/session/state.rs
 
 check_no_matches \

@@ -30,8 +30,7 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         let Some(session_id) = self
             .session
-            .dialogs
-            .tab_actions_session_id()
+            .dialog_tab_actions_session_id()
             .map(str::to_string)
         else {
             return div().into_any_element();
@@ -42,7 +41,7 @@ impl NyaTermApp {
             .find(|session| session.id == session_id)
             .cloned()
         else {
-            self.session.dialogs.close_tab_actions();
+            self.session.dialog_close_tab_actions();
             return div().into_any_element();
         };
 

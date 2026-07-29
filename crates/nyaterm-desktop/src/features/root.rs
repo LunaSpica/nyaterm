@@ -449,12 +449,12 @@ impl NyaTermApp {
     ) -> Stateful<Div> {
         let terminal_overlays = self.terminal.overlay_visibility();
         let overlay = OverlayFlags {
-            tab_actions_open: self.session.dialogs.tab_actions_session_id().is_some(),
-            rename_open: self.session.dialogs.rename_is_open(),
-            color_picker_open: self.session.dialogs.color_picker_is_open(),
-            session_info_open: self.session.dialogs.session_info_is_open(),
-            startup_command_open: self.session.dialogs.startup_command_is_open(),
-            temporary_ssh_link_open: self.session.dialogs.temporary_ssh_link_is_open(),
+            tab_actions_open: self.session.dialog_tab_actions_session_id().is_some(),
+            rename_open: self.session.dialog_rename_is_open(),
+            color_picker_open: self.session.dialog_color_picker_is_open(),
+            session_info_open: self.session.dialog_session_info_is_open(),
+            startup_command_open: self.session.dialog_startup_command_is_open(),
+            temporary_ssh_link_open: self.session.dialog_temporary_ssh_link_is_open(),
             multi_line_paste_open: terminal_overlays.paste_review,
             terminal_actions_open: terminal_overlays.actions,
             terminal_context_menu_open: terminal_overlays.context_menu,
@@ -464,8 +464,7 @@ impl NyaTermApp {
             credential_suggestions_open: self.terminal.credential_suggestions_open(),
             close_all_sessions_confirm_open: self
                 .session
-                .dialogs
-                .close_all_sessions_confirm_is_open(),
+                .dialog_close_all_sessions_confirm_is_open(),
             locked: self.security.screen_locked(),
         };
         let quick_switch_open = self.quick_switch_open(cx);
@@ -474,7 +473,7 @@ impl NyaTermApp {
             .properties_dialog_is_open_for_session(self.session.active_id());
         let transfer_editor_open = self.transfer.editor_inline_overlay_is_open();
         let transfer_external_sync_open = self.active_external_editor_sync_prompt().is_some();
-        let ssh_auth_prompt_open = self.session.prompts.has_active_ssh_auth();
+        let ssh_auth_prompt_open = self.session.prompt_has_active_ssh_auth();
 
         content
             .when(overlay.tab_actions_open, |this| {
@@ -686,10 +685,10 @@ impl NyaTermApp {
     }
 
     fn ssh_auth_prompt_overlay(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
-        let host_key_prompt = self.session.prompts.active_host_key().cloned();
-        let credential_prompt = self.session.prompts.active_credential().cloned();
+        let host_key_prompt = self.session.prompt_active_host_key().cloned();
+        let credential_prompt = self.session.prompt_active_credential().cloned();
         let keyboard_interactive_prompt =
-            self.session.prompts.active_keyboard_interactive().cloned();
+            self.session.prompt_active_keyboard_interactive().cloned();
         let dialog_width = if keyboard_interactive_prompt.is_some() {
             384.
         } else {
@@ -707,14 +706,14 @@ impl NyaTermApp {
             .items_center()
             .justify_center()
             .p_3()
-            .track_focus(self.session.prompts.credential_focus())
+            .track_focus(self.session.prompt_credential_focus())
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
             .on_mouse_down(MouseButton::Middle, |_, _, cx| cx.stop_propagation())
             .on_click(cx.listener(|this, _, window, cx| {
                 cx.stop_propagation();
                 if !this.focus_active_ssh_prompt_input(window, cx) {
-                    window.focus(this.session.prompts.credential_focus());
+                    window.focus(this.session.prompt_credential_focus());
                 }
                 cx.notify();
             }))

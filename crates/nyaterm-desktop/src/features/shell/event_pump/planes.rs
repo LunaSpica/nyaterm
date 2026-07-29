@@ -41,7 +41,7 @@ impl NyaTermApp {
     fn drive_pending_focus(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
         if !self.ai.chat_focus_is_pending()
             && !self.transfer.rename_focus_is_pending()
-            && !self.session.prompts.credential_focus_is_pending()
+            && !self.session.prompt_credential_focus_is_pending()
         {
             return false;
         }
@@ -54,12 +54,12 @@ impl NyaTermApp {
             window.focus(&focus);
             dirty = true;
         }
-        if self.session.prompts.credential_focus_is_pending()
-            && (self.session.prompts.has_active_credential()
-                || self.session.prompts.has_active_keyboard_interactive())
+        if self.session.prompt_credential_focus_is_pending()
+            && (self.session.prompt_has_active_credential()
+                || self.session.prompt_has_active_keyboard_interactive())
         {
             self.focus_active_ssh_prompt_input(window, cx);
-            self.session.prompts.finish_credential_focus();
+            self.session.prompt_finish_credential_focus();
             dirty = true;
         }
         dirty
@@ -289,8 +289,8 @@ impl NyaTermApp {
                 frame_event_count = self.terminal.frame_queue_metrics().event_count,
                 frame_event_wake_count = self.terminal.frame_queue_metrics().event_wake_count,
                 pending_frame_events = self.terminal.frame_queue_metrics().pending_event_count,
-                pending_session_starts = self.session.start.pending_count(),
-                queued_saved_connection_starts = self.session.start.saved_connection_queue_len(),
+                pending_session_starts = self.session.start_pending_count(),
+                queued_saved_connection_starts = self.session.start_saved_connection_queue_len(),
                 output_pressure,
                 next_tick_delay_ms = self.window_runtime_tick_delay().as_millis(),
                 visual_dirty,
@@ -411,10 +411,10 @@ impl NyaTermApp {
         let mut dirty = false;
 
         // Common idle path: no connecting sessions and no auth/SFTP prompts.
-        if !self.session.start.has_pending()
-            && !self.session.start.has_cancelled_results()
-            && !self.session.start.has_queued_saved_connections()
-            && !self.session.prompts.has_pending_or_active_prompt()
+        if !self.session.start_has_pending()
+            && !self.session.start_has_cancelled_results()
+            && !self.session.start_has_queued_saved_connections()
+            && !self.session.prompt_has_pending_or_active_prompt()
         {
             return RuntimeControlPlaneResult {
                 dirty: false,
@@ -572,7 +572,7 @@ impl NyaTermApp {
         // Layout restore opens the config DB — never do it while sessions are
         // still connecting or the data plane is under pressure.
         if !self.terminal.terminal_windows_restore_is_complete()
-            && !self.session.start.has_pending()
+            && !self.session.start_has_pending()
             && !self.runtime_output_pressure_active()
             && !connect_settle
         {
@@ -582,7 +582,7 @@ impl NyaTermApp {
             }
         }
         // Auto-recording opens files; keep it off the first calm frames after connect.
-        if !self.session.start.has_pending()
+        if !self.session.start_has_pending()
             && !self.runtime_output_pressure_active()
             && !connect_settle
             && let Some((session_id, session_name)) = self.recording.take_pending_auto_start()
@@ -666,7 +666,7 @@ impl NyaTermApp {
         let render_work_pressure = terminal_render_work_pressure_active(
             output_pressure,
             self.has_pending_session_start(),
-            self.session.start.has_queued_saved_connections(),
+            self.session.start_has_queued_saved_connections(),
         );
         // Large-output protection recovery accounting.
         // Under pressure only touch views that already need recovery accounting.

@@ -360,6 +360,11 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   connection-store updates, session registration and GPUI notification remain
   application-level coordination, and session/persistence formats are
   unchanged.
+  A later child-boundary closure made the start, prompt and dialog
+  implementations session-module-private. Cross-domain views and coordinators
+  now use `SessionFeatureState` queries and semantic actions instead of
+  traversing `session.start`, `session.prompts` or `session.dialogs`; no child
+  reference or mutable accessor is exposed.
   The session runtime-coordination encapsulation pass then made the manager,
   event bridge, restore lifecycle, pending event queue, per-session command
   history, active-session search/menu state and reconnect/disconnect busy map
@@ -1565,6 +1570,7 @@ Current ownership map:
 | Remote Docker/process/stats panes | Private children in `NyaTermApp.remote_ops` | Transient UI state plus typed background-event lifecycle | Views use immutable presentation values; menu exclusion, list-offset clamping, Docker details/Compose/confirmation cleanup, process PID-scoped cleanup, Stats expansion/data and job identity/failure timing enter through `RemoteOpsFeatureState`. SSH service launch, active-session policy, terminal status mirroring and GPUI notification remain in adapters. |
 | Live session manager/event bridge | Private services in `NyaTermApp.session` | Runtime services | Callers receive a shared manager reference/handle and use bridge routing, drain and metrics methods; neither service field is writable outside `SessionFeatureState`. |
 | Session restore/event queue | Private state in `NyaTermApp.session` | Transient runtime coordination | Restore completion is idempotent and pending transport events are counted, extended and popped only through owner methods; event interpretation stays in the event-pump adapter. |
+| Session start/prompts/dialogs | Session-module-private children in `NyaTermApp.session` | Background admission plus transient prompt/dialog state | Cross-domain renderers and coordinators use `SessionFeatureState` queries and semantic actions. Worker channels, prompt brokers and dialog drafts remain inside the session module; GPUI rendering and notification stay in adapters. |
 | Session command history/search/menu/busy state | Private state in `NyaTermApp.session` | Transient per-session interaction state | History append/migration/deletion and active-menu/busy transitions are owner operations; beginning reconnect/disconnect closes the menu in the same transition. |
 | Session catalog and presentation | Private state in `NyaTermApp.session` | Runtime catalog plus transient presentation | Order/metadata registration, tab movement, disconnect marking, reconnect migration and removal are owner transitions; custom names, OSC titles/CWDs and tab colors are exposed through read-only queries and semantic updates. |
 | Active session selection and derived config | Private state in `NyaTermApp.session` | Transient selection over the runtime catalog | The active child stores only the session id; SSH config and AI execution profile are queried from private runtime metadata, and select/clear/remove transitions preserve the `None`/`SendOnly` fallback. |
@@ -1578,7 +1584,7 @@ Current ownership map:
 | Built-in transfer editor | Private child in `NyaTermApp.transfer` | Editor workspace, tab/confirmation state and detached-window lifecycle | Tab admission/activation/close/discard, save result reconciliation, session cleanup, menu state and window admission enter through `TransferFeatureState`. `RemoteTextEditor` keeps its dedicated selection/undo/IME path through narrow active-tab access; GPUI windows, SFTP work and rendering remain in adapters. |
 | Serial ports | Private catalog child in `NyaTermApp.connection_state` | Runtime/discovered state | Replaced through `ConnectionFeatureState` after session-manager discovery and never persisted. |
 | Tunnel/proxy configs | Private catalog in `NyaTermApp.tunnel_state` | Persisted network config | Views use read-only slices; pure move/upsert/delete candidates and successful commits stay on `TunnelFeatureState`. The Network page UI remains separate transient state. |
-| Queued saved-connection starts | `NyaTermApp.session.start` private queue | Transient session-start state | Admission, duplicate detection, draining and runtime cadence reads go through `SessionStartFeatureState` methods. |
+| Queued saved-connection starts | Session-module-private child in `NyaTermApp.session` | Transient session-start state | Admission, duplicate detection, draining and runtime cadence reads cross domain boundaries through `SessionFeatureState`; the queue remains owned by the nested start state. |
 | List search/sort/hover/selection/DnD | `NyaTermApp.connection_state` private list child | Temporary UI state | Runtime and rendering enter through `ConnectionFeatureState` methods; state is not persisted except sort setting remains synced to settings as before. |
 | Connection import dialog | `NyaTermApp.connection_state` private import child | Temporary UI/runtime prompt state | File import still runs through existing runtime paths; runtime and rendering enter through `ConnectionFeatureState` methods. |
 | Connection editor | `NyaTermApp.connection_state` private editor child | Editing draft/window UI state | Runtime key handling, window lifecycle, rendering popovers, and sideband projection use `ConnectionFeatureState` methods; draft remains separate from saved connection data. |
@@ -1817,6 +1823,10 @@ honest remaining list.
    a private child, coupled session removal with worker cleanup, added drop-time
    worker termination, and moved blocking multiplex disconnects onto named
    background workers after owner-controlled reference checks.
+   The later session child-boundary batch made start, prompt and dialog
+   implementation types session-module-private and migrated all cross-domain
+   views and coordinators to `SessionFeatureState` methods. No child reference
+   or mutable accessor was added.
    The following transfer-browser batch completed the transfer feature's child
    encapsulation: the browser implementation is transfers-module-private,
    cross-domain consumers receive a borrowed immutable view, and navigation,

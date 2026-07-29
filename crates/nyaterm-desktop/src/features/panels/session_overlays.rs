@@ -14,7 +14,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let rename_draft = self.session.dialogs.rename_draft().to_string();
+        let rename_draft = self.session.dialog_rename_draft().to_string();
         let rename_input = self
             .text_input_box(
                 "session.rename",
@@ -23,7 +23,7 @@ impl NyaTermApp {
                 cx,
             )
             .into_any_element();
-        let can_save = !self.session.dialogs.rename_draft().trim().is_empty();
+        let can_save = !self.session.dialog_rename_draft().trim().is_empty();
         let dialog_width = (self.shell.viewport_size().0 - 32.).clamp(280., 320.);
 
         div()
@@ -37,9 +37,9 @@ impl NyaTermApp {
             .flex()
             .items_center()
             .justify_center()
-            .track_focus(self.session.dialogs.rename_focus())
+            .track_focus(self.session.dialog_rename_focus())
             .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(this.session.dialogs.rename_focus());
+                window.focus(this.session.dialog_rename_focus());
                 cx.notify();
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
@@ -144,9 +144,9 @@ impl NyaTermApp {
             .flex()
             .items_center()
             .justify_center()
-            .track_focus(self.session.dialogs.color_picker_focus())
+            .track_focus(self.session.dialog_color_picker_focus())
             .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(this.session.dialogs.color_picker_focus());
+                window.focus(this.session.dialog_color_picker_focus());
                 cx.notify();
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
@@ -248,9 +248,9 @@ impl NyaTermApp {
             .flex()
             .items_center()
             .justify_center()
-            .track_focus(self.session.dialogs.session_info_focus())
+            .track_focus(self.session.dialog_session_info_focus())
             .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(this.session.dialogs.session_info_focus());
+                window.focus(this.session.dialog_session_info_focus());
                 cx.notify();
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
@@ -334,12 +334,12 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let action = self.session.dialogs.startup_command_action();
+        let action = self.session.dialog_startup_command_action();
         let action_title = self.tr(match action {
             StartupCommandAction::Duplicate => "tabCtx.runCommandTitle",
             StartupCommandAction::Multiplex => "tabCtx.multiplexSshWithCommand",
         });
-        let startup_command_draft = self.session.dialogs.startup_command_draft().to_string();
+        let startup_command_draft = self.session.dialog_startup_command_draft().to_string();
         let command_input = self
             .text_input_box(
                 "session.startup-command",
@@ -350,11 +350,10 @@ impl NyaTermApp {
             .into_any_element();
         let can_submit = !self
             .session
-            .dialogs
-            .startup_command_draft()
+            .dialog_startup_command_draft()
             .trim()
             .is_empty();
-        let delay_label = format!("{} ms", self.session.dialogs.startup_command_delay_ms());
+        let delay_label = format!("{} ms", self.session.dialog_startup_command_delay_ms());
         let dialog_width = (self.shell.viewport_size().0 - 32.).clamp(280., 448.);
 
         div()
@@ -368,9 +367,9 @@ impl NyaTermApp {
             .flex()
             .items_center()
             .justify_center()
-            .track_focus(self.session.dialogs.startup_command_focus())
+            .track_focus(self.session.dialog_startup_command_focus())
             .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(this.session.dialogs.startup_command_focus());
+                window.focus(this.session.dialog_startup_command_focus());
                 cx.notify();
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
@@ -456,7 +455,7 @@ impl NyaTermApp {
                                         "startup-delay-zero",
                                         "0",
                                         cx.listener(|this, _, _, cx| {
-                                            this.session.dialogs.reset_startup_command_delay();
+                                            this.session.dialog_reset_startup_command_delay();
                                             cx.notify();
                                         }),
                                     ))

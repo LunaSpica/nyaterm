@@ -190,8 +190,7 @@ impl NyaTermApp {
         let name = connection.name.clone();
         let pending_count = self
             .session
-            .start
-            .queue_saved_connection(connection, options);
+            .start_queue_saved_connection(connection, options);
         self.shell.status = format!("queued {name} ({} pending)", pending_count);
         self.shell.show_workspace();
         cx.notify();
@@ -217,23 +216,23 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        if !self.session.start.has_queued_saved_connections() || self.has_pending_session_start() {
+        if !self.session.start_has_queued_saved_connections() || self.has_pending_session_start() {
             return false;
         }
         let mut dirty = false;
         while !self.has_pending_session_start() {
-            let Some(start) = self.session.start.pop_saved_connection() else {
+            let Some(start) = self.session.start_pop_saved_connection() else {
                 return dirty;
             };
             if self.saved_connection_start_is_pending(&start.connection) {
                 dirty = true;
                 continue;
             }
-            let before_pending_count = self.session.start.pending_count();
+            let before_pending_count = self.session.start_pending_count();
             self.start_saved_connection_with_options(start.connection, start.options, window, cx);
             dirty = true;
             if self.has_pending_session_start()
-                || self.session.start.pending_count() > before_pending_count
+                || self.session.start_pending_count() > before_pending_count
             {
                 return true;
             }

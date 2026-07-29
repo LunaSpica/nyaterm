@@ -300,8 +300,7 @@ impl NyaTermApp {
         let session_count = sessions.len();
         let mut transient_tabs: Vec<TransientSessionTab> = self
             .session
-            .start
-            .pending_entries()
+            .start_pending_entries()
             .filter_map(|(request_id, pending)| {
                 if pending.reconnect_session_id.is_some() {
                     return None;
@@ -330,8 +329,7 @@ impl NyaTermApp {
             .collect::<Vec<_>>();
         transient_tabs.extend(
             self.session
-                .start
-                .failed_entries()
+                .start_failed_entries()
                 .map(|(request_id, failed)| {
                     let pending = &failed.pending;
                     let name = pending
@@ -400,7 +398,7 @@ impl NyaTermApp {
             {
                 let (_, _, _, request_id, name, error) = transient_tabs[transient_cursor].clone();
                 let tab_number = tab_index + transient_cursor + 1;
-                let active = self.session.start.request_is_active(&request_id);
+                let active = self.session.start_request_is_active(&request_id);
                 tabs = tabs.child(match error {
                     Some(error) => self
                         .failed_session_tab(request_id, name, error, tab_number, active, cx)
@@ -657,7 +655,7 @@ impl NyaTermApp {
         while transient_cursor < transient_tabs.len() {
             let (_, _, _, request_id, name, error) = transient_tabs[transient_cursor].clone();
             let tab_number = session_count + transient_cursor + 1;
-            let active = self.session.start.request_is_active(&request_id);
+            let active = self.session.start_request_is_active(&request_id);
             tabs = tabs.child(match error {
                 Some(error) => self
                     .failed_session_tab(request_id, name, error, tab_number, active, cx)

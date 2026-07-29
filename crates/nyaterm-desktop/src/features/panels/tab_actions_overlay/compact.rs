@@ -35,12 +35,12 @@ impl NyaTermApp {
     ) -> gpui::AnyElement {
         let (viewport_w, viewport_h) = self.shell.viewport_size();
         let menu_max_height = (viewport_h - 16.).clamp(160., 440.);
-        let (menu_x, menu_y) = if let Some((x, y)) = self.session.dialogs.tab_actions_anchor() {
+        let (menu_x, menu_y) = if let Some((x, y)) = self.session.dialog_tab_actions_anchor() {
             clamp_tab_actions_position(x, y, 240., menu_max_height, viewport_w, viewport_h)
         } else {
             (((viewport_w - 240.).max(16.) * 0.5).max(8.), 74.0)
         };
-        let active_submenu = self.session.dialogs.tab_actions_submenu();
+        let active_submenu = self.session.dialog_tab_actions_submenu();
 
         let mut color_row = div().p_2().flex().flex_wrap().gap_1().items_center();
         for (name, color) in TAB_PRESET_COLORS {
@@ -276,7 +276,7 @@ impl NyaTermApp {
             .left_0()
             .right_0()
             .bg(rgba(0x00000000))
-            .track_focus(self.session.dialogs.tab_actions_focus())
+            .track_focus(self.session.dialog_tab_actions_focus())
             .on_click(cx.listener(|this, _, _, cx| {
                 this.close_tab_actions(cx);
             }))
@@ -568,7 +568,7 @@ impl NyaTermApp {
     }
 
     fn open_tab_actions_submenu(&mut self, submenu: TabActionsSubmenu, cx: &mut Context<Self>) {
-        if self.session.dialogs.select_tab_actions_submenu(submenu) {
+        if self.session.dialog_select_tab_actions_submenu(submenu) {
             cx.notify();
         }
     }

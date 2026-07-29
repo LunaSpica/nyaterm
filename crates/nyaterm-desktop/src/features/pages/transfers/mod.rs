@@ -61,7 +61,7 @@ impl NyaTermApp {
                 .active_id()
                 .is_some_and(|session_id| !self.is_session_disconnected(session_id));
         let transfer_height = self.transfer.panel_height().clamp(60., 600.);
-        let duplicate_prompt = self.session.prompts.active_duplicate().cloned();
+        let duplicate_prompt = self.session.prompt_active_duplicate().cloned();
 
         // Tauri AppPanelContent: FileExplorer (flex-1) + vertical resize + FileTransfer fixed height.
         let palette = self.theme_palette();

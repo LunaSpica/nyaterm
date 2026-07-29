@@ -28,11 +28,11 @@ use super::zmodem_runtime::ZmodemSessionState;
 pub(in crate::features) struct SessionFeatureState {
     manager: Arc<SessionManager>,
     event_bridge: SessionEventBridge,
-    pub start: SessionStartFeatureState,
+    pub(super) start: SessionStartFeatureState,
     restore: SessionRestoreState,
     events: SessionEventQueueState,
-    pub prompts: SessionPromptState,
-    pub dialogs: SessionDialogState,
+    pub(super) prompts: SessionPromptState,
+    pub(super) dialogs: SessionDialogState,
     command_history: HashMap<String, Vec<String>>,
     active_search_draft: String,
     active_menu: Option<ActiveSessionMenuState>,
@@ -77,7 +77,7 @@ pub(in crate::features) struct SessionFeatureFocus {
 }
 
 /// Native authentication and transfer prompts tied to the session runtime.
-pub(in crate::features) struct SessionPromptState {
+pub(super) struct SessionPromptState {
     duplicate_prompts: Arc<SftpDuplicatePromptBroker>,
     active_duplicate_prompt: Option<SftpDuplicatePromptState>,
     host_key_prompts: Arc<HostKeyPromptBroker>,
@@ -103,7 +103,7 @@ pub(in crate::features) struct PromptInputTarget {
 }
 
 /// Session-scoped overlays, confirmations and editing dialogs.
-pub(in crate::features) struct SessionDialogState {
+pub(super) struct SessionDialogState {
     tab_actions_session_id: Option<String>,
     tab_actions_anchor: Option<(f32, f32)>,
     tab_actions_submenu: Option<TabActionsSubmenu>,
@@ -213,6 +213,273 @@ impl SessionFeatureState {
 
     pub(in crate::features) fn manager_handle(&self) -> Arc<SessionManager> {
         Arc::clone(&self.manager)
+    }
+
+    pub(in crate::features) fn start_has_pending(&self) -> bool {
+        self.start.has_pending()
+    }
+
+    pub(in crate::features) fn start_pending_count(&self) -> usize {
+        self.start.pending_count()
+    }
+
+    pub(in crate::features) fn start_has_cancelled_results(&self) -> bool {
+        self.start.has_cancelled_results()
+    }
+
+    pub(in crate::features) fn start_has_active_pending(&self) -> bool {
+        self.start.has_active_pending()
+    }
+
+    pub(in crate::features) fn start_has_active_failed(&self) -> bool {
+        self.start.has_active_failed()
+    }
+
+    pub(in crate::features) fn start_request_is_active(&self, request_id: &str) -> bool {
+        self.start.request_is_active(request_id)
+    }
+
+    pub(in crate::features) fn start_pending_entries(
+        &self,
+    ) -> impl Iterator<Item = (&String, &PendingSessionStart)> {
+        self.start.pending_entries()
+    }
+
+    pub(in crate::features) fn start_failed_entries(
+        &self,
+    ) -> impl Iterator<Item = (&String, &FailedSessionStart)> {
+        self.start.failed_entries()
+    }
+
+    pub(in crate::features) fn start_queue_saved_connection(
+        &mut self,
+        connection: SavedConnection,
+        options: SavedConnectionStartOptions,
+    ) -> usize {
+        self.start.queue_saved_connection(connection, options)
+    }
+
+    pub(in crate::features) fn start_pop_saved_connection(
+        &mut self,
+    ) -> Option<PendingSavedConnectionStart> {
+        self.start.pop_saved_connection()
+    }
+
+    pub(in crate::features) fn start_saved_connection_queue_len(&self) -> usize {
+        self.start.saved_connection_queue_len()
+    }
+
+    pub(in crate::features) fn start_has_queued_saved_connections(&self) -> bool {
+        self.start.has_queued_saved_connections()
+    }
+
+    pub(in crate::features) fn start_reconnect_is_pending(&self, session_id: &str) -> bool {
+        self.start.reconnect_is_pending(session_id)
+    }
+
+    pub(in crate::features) fn start_reconnect_failure(&self, session_id: &str) -> Option<&str> {
+        self.start.reconnect_failure(session_id)
+    }
+
+    pub(in crate::features) fn start_set_pending_workspace_split(
+        &mut self,
+        direction: WorkspaceSplitDirection,
+        source_session_id: String,
+    ) {
+        self.start
+            .set_pending_workspace_split(direction, source_session_id);
+    }
+
+    pub(in crate::features) fn start_take_pending_workspace_split(
+        &mut self,
+    ) -> Option<(WorkspaceSplitDirection, String)> {
+        self.start.take_pending_workspace_split()
+    }
+
+    pub(in crate::features) fn prompt_duplicate_broker(&self) -> Arc<SftpDuplicatePromptBroker> {
+        self.prompts.duplicate_broker()
+    }
+
+    pub(in crate::features) fn prompt_otp_provider(&self) -> Arc<NativeOtpProvider> {
+        self.prompts.otp_provider()
+    }
+
+    pub(in crate::features) fn prompt_credential_focus(&self) -> &FocusHandle {
+        self.prompts.credential_focus()
+    }
+
+    pub(in crate::features) fn prompt_credential_focus_is_pending(&self) -> bool {
+        self.prompts.credential_focus_is_pending()
+    }
+
+    pub(in crate::features) fn prompt_finish_credential_focus(&mut self) {
+        self.prompts.finish_credential_focus();
+    }
+
+    pub(in crate::features) fn prompt_active_duplicate(&self) -> Option<&SftpDuplicatePromptState> {
+        self.prompts.active_duplicate()
+    }
+
+    pub(in crate::features) fn prompt_active_host_key(&self) -> Option<&HostKeyPromptRequest> {
+        self.prompts.active_host_key()
+    }
+
+    pub(in crate::features) fn prompt_active_credential(&self) -> Option<&CredentialPromptState> {
+        self.prompts.active_credential()
+    }
+
+    pub(in crate::features) fn prompt_active_keyboard_interactive(
+        &self,
+    ) -> Option<&KeyboardInteractivePromptState> {
+        self.prompts.active_keyboard_interactive()
+    }
+
+    pub(in crate::features) fn prompt_has_active_credential(&self) -> bool {
+        self.prompts.has_active_credential()
+    }
+
+    pub(in crate::features) fn prompt_has_active_keyboard_interactive(&self) -> bool {
+        self.prompts.has_active_keyboard_interactive()
+    }
+
+    pub(in crate::features) fn prompt_has_active_ssh_auth(&self) -> bool {
+        self.prompts.has_active_ssh_auth()
+    }
+
+    pub(in crate::features) fn prompt_has_pending_or_active_prompt(&self) -> bool {
+        self.prompts.has_pending_or_active_prompt()
+    }
+
+    pub(in crate::features) fn prompt_focus_keyboard_interactive_response(
+        &mut self,
+        prompt_id: &str,
+        index: usize,
+    ) -> bool {
+        self.prompts
+            .focus_keyboard_interactive_response(prompt_id, index)
+    }
+
+    pub(in crate::features) fn dialog_tab_actions_session_id(&self) -> Option<&str> {
+        self.dialogs.tab_actions_session_id()
+    }
+
+    pub(in crate::features) fn dialog_tab_actions_anchor(&self) -> Option<(f32, f32)> {
+        self.dialogs.tab_actions_anchor()
+    }
+
+    pub(in crate::features) fn dialog_tab_actions_submenu(&self) -> Option<TabActionsSubmenu> {
+        self.dialogs.tab_actions_submenu()
+    }
+
+    pub(in crate::features) fn dialog_tab_actions_focus(&self) -> &FocusHandle {
+        self.dialogs.tab_actions_focus()
+    }
+
+    pub(in crate::features) fn dialog_close_tab_actions(&mut self) {
+        self.dialogs.close_tab_actions();
+    }
+
+    pub(in crate::features) fn dialog_select_tab_actions_submenu(
+        &mut self,
+        submenu: TabActionsSubmenu,
+    ) -> bool {
+        self.dialogs.select_tab_actions_submenu(submenu)
+    }
+
+    pub(in crate::features) fn dialog_should_quit_after_close_all(&self) -> bool {
+        self.dialogs.should_quit_after_close_all()
+    }
+
+    pub(in crate::features) fn dialog_close_all_sessions_confirm_is_open(&self) -> bool {
+        self.dialogs.close_all_sessions_confirm_is_open()
+    }
+
+    pub(in crate::features) fn dialog_close_all_sessions_confirm_focus(&self) -> &FocusHandle {
+        self.dialogs.close_all_sessions_confirm_focus()
+    }
+
+    pub(in crate::features) fn dialog_request_quit_after_close_all(&mut self) {
+        self.dialogs.request_quit_after_close_all();
+    }
+
+    pub(in crate::features) fn dialog_open_close_all_sessions_confirm(&mut self) {
+        self.dialogs.open_close_all_sessions_confirm();
+    }
+
+    pub(in crate::features) fn dialog_cancel_close_all_sessions_confirm(&mut self) {
+        self.dialogs.cancel_close_all_sessions_confirm();
+    }
+
+    pub(in crate::features) fn dialog_take_close_all_sessions_confirm(&mut self) -> bool {
+        self.dialogs.take_close_all_sessions_confirm()
+    }
+
+    pub(in crate::features) fn dialog_rename_is_open(&self) -> bool {
+        self.dialogs.rename_is_open()
+    }
+
+    pub(in crate::features) fn dialog_rename_draft(&self) -> &str {
+        self.dialogs.rename_draft()
+    }
+
+    pub(in crate::features) fn dialog_rename_focus(&self) -> &FocusHandle {
+        self.dialogs.rename_focus()
+    }
+
+    pub(in crate::features) fn dialog_color_picker_is_open(&self) -> bool {
+        self.dialogs.color_picker_is_open()
+    }
+
+    pub(in crate::features) fn dialog_color_picker_focus(&self) -> &FocusHandle {
+        self.dialogs.color_picker_focus()
+    }
+
+    pub(in crate::features) fn dialog_session_info_is_open(&self) -> bool {
+        self.dialogs.session_info_is_open()
+    }
+
+    pub(in crate::features) fn dialog_session_info_focus(&self) -> &FocusHandle {
+        self.dialogs.session_info_focus()
+    }
+
+    pub(in crate::features) fn dialog_startup_command_is_open(&self) -> bool {
+        self.dialogs.startup_command_is_open()
+    }
+
+    pub(in crate::features) fn dialog_startup_command_action(&self) -> StartupCommandAction {
+        self.dialogs.startup_command_action()
+    }
+
+    pub(in crate::features) fn dialog_startup_command_draft(&self) -> &str {
+        self.dialogs.startup_command_draft()
+    }
+
+    pub(in crate::features) fn dialog_startup_command_delay_ms(&self) -> u64 {
+        self.dialogs.startup_command_delay_ms()
+    }
+
+    pub(in crate::features) fn dialog_startup_command_focus(&self) -> &FocusHandle {
+        self.dialogs.startup_command_focus()
+    }
+
+    pub(in crate::features) fn dialog_reset_startup_command_delay(&mut self) {
+        self.dialogs.reset_startup_command_delay();
+    }
+
+    pub(in crate::features) fn dialog_temporary_ssh_link_is_open(&self) -> bool {
+        self.dialogs.temporary_ssh_link_is_open()
+    }
+
+    pub(in crate::features) fn dialog_temporary_ssh_link_draft(&self) -> &str {
+        self.dialogs.temporary_ssh_link_draft()
+    }
+
+    pub(in crate::features) fn dialog_temporary_ssh_link_error(&self) -> Option<&'static str> {
+        self.dialogs.temporary_ssh_link_error()
+    }
+
+    pub(in crate::features) fn dialog_temporary_ssh_link_focus(&self) -> &FocusHandle {
+        self.dialogs.temporary_ssh_link_focus()
     }
 
     pub(in crate::features) fn restore_is_complete(&self) -> bool {
@@ -1505,7 +1772,7 @@ pub(in crate::features) struct FailedSessionStart {
     pub error: String,
 }
 
-pub(in crate::features) struct SessionStartFeatureState {
+pub(super) struct SessionStartFeatureState {
     tx: mpsc::Sender<SessionStartResult>,
     rx: mpsc::Receiver<SessionStartResult>,
     pending: HashMap<String, PendingSessionStart>,
@@ -2200,7 +2467,7 @@ mod tests {
         );
 
         assert!(Arc::ptr_eq(&sessions.manager_handle(), &manager));
-        assert!(!sessions.start.has_pending());
+        assert!(!sessions.start_has_pending());
         assert!(!sessions.start.has_failed());
         assert!(sessions.command_history_for("missing").is_none());
         assert!(sessions.active_id().is_none());
@@ -2212,12 +2479,12 @@ mod tests {
         assert!(sessions.order.is_empty());
         assert!(sessions.metadata.is_empty());
         assert_eq!(sessions.protocol_runtime_counts(), (0, 0, 0));
-        assert!(Arc::ptr_eq(&sessions.prompts.otp_provider(), &otp_provider));
-        assert!(sessions.prompts.active_credential().is_none());
-        assert!(sessions.prompts.active_keyboard_interactive().is_none());
-        assert!(!sessions.dialogs.close_all_sessions_confirm_is_open());
-        assert!(!sessions.dialogs.rename_is_open());
-        assert!(!sessions.dialogs.startup_command_is_open());
+        assert!(Arc::ptr_eq(&sessions.prompt_otp_provider(), &otp_provider));
+        assert!(sessions.prompt_active_credential().is_none());
+        assert!(sessions.prompt_active_keyboard_interactive().is_none());
+        assert!(!sessions.dialog_close_all_sessions_confirm_is_open());
+        assert!(!sessions.dialog_rename_is_open());
+        assert!(!sessions.dialog_startup_command_is_open());
 
         assert!(!sessions.restore_is_complete());
         assert!(sessions.mark_restore_complete());

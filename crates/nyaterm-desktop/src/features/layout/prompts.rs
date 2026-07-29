@@ -451,8 +451,7 @@ impl NyaTermApp {
             let click_listener = cx.listener(move |this, _, _, cx| {
                 cx.stop_propagation();
                 this.session
-                    .prompts
-                    .focus_keyboard_interactive_response(&request_id, index);
+                    .prompt_focus_keyboard_interactive_response(&request_id, index);
                 cx.notify();
             });
             let input = self.text_input_box(field_id.clone(), &value, setup, cx);

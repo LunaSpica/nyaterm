@@ -223,7 +223,7 @@ impl NyaTermApp {
             return;
         }
         // Do not open the config DB during connect/register; wait for idle.
-        if self.session.start.has_pending() || self.runtime_output_pressure_active() {
+        if self.session.start_has_pending() || self.runtime_output_pressure_active() {
             return;
         }
         let ordered = self

@@ -31,7 +31,7 @@ impl NyaTermApp {
         };
         let duplicate_policy = self.transfer.duplicate_policy();
         let duplicate_resolver = (duplicate_policy == SftpDuplicatePolicy::Ask)
-            .then(|| self.session.prompts.duplicate_broker() as Arc<dyn SftpDuplicateResolver>);
+            .then(|| self.session.prompt_duplicate_broker() as Arc<dyn SftpDuplicateResolver>);
         let transfer_options = self.sftp_transfer_options();
         self.enqueue_sftp_download_job_for_target(
             self.session.active_id_owned(),
@@ -305,7 +305,7 @@ impl NyaTermApp {
                 let duplicate_policy = self.transfer.duplicate_policy();
                 let duplicate_resolver =
                     (duplicate_policy == SftpDuplicatePolicy::Ask).then(|| {
-                        self.session.prompts.duplicate_broker() as Arc<dyn SftpDuplicateResolver>
+                        self.session.prompt_duplicate_broker() as Arc<dyn SftpDuplicateResolver>
                     });
                 let transfer_options = self.sftp_transfer_options();
                 let control = SftpTransferControl::new();
@@ -352,7 +352,7 @@ impl NyaTermApp {
                 let duplicate_policy = self.transfer.duplicate_policy();
                 let duplicate_resolver =
                     (duplicate_policy == SftpDuplicatePolicy::Ask).then(|| {
-                        self.session.prompts.duplicate_broker() as Arc<dyn SftpDuplicateResolver>
+                        self.session.prompt_duplicate_broker() as Arc<dyn SftpDuplicateResolver>
                     });
                 let transfer_options = self.sftp_transfer_options();
                 let control = SftpTransferControl::new();
