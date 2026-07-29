@@ -20,10 +20,9 @@ use crate::models::{
     TransferBrowserPendingRenameState, TransferBrowserSessionCacheState, TransferBrowserSortColumn,
     TransferBrowserSortDirection, TransferBrowserUploadMenuState, TransferDeleteState,
     TransferEditorWorkspaceState, TransferExternalSyncPromptState, TransferHeightResizeState,
-    TransferInputField, TransferJobDeleteState, TransferJobMenuState, TransferJobResult,
-    TransferJobState, TransferMoveState, TransferNewFileState, TransferNewFolderState,
-    TransferNewSymlinkState, TransferPathPromptKind, TransferPropertiesState, TransferRenameState,
-    TransferUnknownFileState,
+    TransferJobDeleteState, TransferJobMenuState, TransferJobResult, TransferJobState,
+    TransferMoveState, TransferNewFileState, TransferNewFolderState, TransferNewSymlinkState,
+    TransferPathPromptKind, TransferPropertiesState, TransferRenameState, TransferUnknownFileState,
 };
 
 use super::super::remote_editor_window::RemoteFileEditorWindow;
@@ -35,7 +34,7 @@ pub(in crate::features) struct TransferFeatureState {
     pub file_ops: TransferFileOpsState,
     pub editor: TransferEditorState,
     pub external_sync: TransferExternalSyncState,
-    pub panel: TransferPanelState,
+    panel: TransferPanelState,
 }
 
 /// Focus handles the transfer feature needs at construction time.
@@ -158,11 +157,10 @@ pub(in crate::features) struct TransferExternalSyncState {
 }
 
 /// Panel chrome: focus routing and height.
-pub(in crate::features) struct TransferPanelState {
-    pub focus: FocusHandle,
-    pub focused_field: TransferInputField,
-    pub height: f32,
-    pub height_resize: Option<TransferHeightResizeState>,
+struct TransferPanelState {
+    focus: FocusHandle,
+    height: f32,
+    height_resize: Option<TransferHeightResizeState>,
 }
 
 impl TransferFeatureState {
@@ -263,11 +261,61 @@ impl TransferFeatureState {
             },
             panel: TransferPanelState {
                 focus: focus.panel,
-                focused_field: TransferInputField::Remote,
                 height: panel_height,
                 height_resize: None,
             },
         }
+    }
+
+    pub(in crate::features) fn panel_focus(&self) -> &FocusHandle {
+        &self.panel.focus
+    }
+
+    pub(in crate::features) fn panel_height(&self) -> f32 {
+        self.panel.height
+    }
+
+    pub(in crate::features) fn set_panel_height(&mut self, height: f32) {
+        self.panel.height = height;
+    }
+
+    pub(in crate::features) fn start_panel_height_resize(&mut self, start_y: Pixels) {
+        self.panel.start_height_resize(start_y);
+    }
+
+    pub(in crate::features) fn update_panel_height_resize(
+        &mut self,
+        current_y: Pixels,
+    ) -> Option<f32> {
+        self.panel.update_height_resize(current_y)
+    }
+
+    pub(in crate::features) fn finish_panel_height_resize(&mut self) -> bool {
+        self.panel.finish_height_resize()
+    }
+}
+
+impl TransferPanelState {
+    const HEIGHT_MIN: f32 = 60.;
+    const HEIGHT_MAX: f32 = 600.;
+
+    fn start_height_resize(&mut self, start_y: Pixels) {
+        self.height_resize = Some(TransferHeightResizeState {
+            start_y,
+            start_height: gpui::px(self.height),
+        });
+    }
+
+    fn update_height_resize(&mut self, current_y: Pixels) -> Option<f32> {
+        let state = self.height_resize?;
+        let delta = f32::from(current_y - state.start_y);
+        self.height =
+            (f32::from(state.start_height) - delta).clamp(Self::HEIGHT_MIN, Self::HEIGHT_MAX);
+        Some(self.height)
+    }
+
+    fn finish_height_resize(&mut self) -> bool {
+        self.height_resize.take().is_some()
     }
 }
 
@@ -320,5 +368,33 @@ impl TransferBrowserState {
 impl TransferQueueState {
     pub(in crate::features) fn close_job_menu(&mut self) {
         self.job_menu = None;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use gpui::{TestAppContext, px};
+
+    use super::TransferPanelState;
+
+    #[test]
+    fn transfer_panel_owns_focus_height_and_resize_lifecycle() {
+        let cx = TestAppContext::single();
+        let mut panel = TransferPanelState {
+            focus: cx.update(|cx| cx.focus_handle()),
+            height: 120.,
+            height_resize: None,
+        };
+
+        panel.start_height_resize(px(400.));
+        assert_eq!(panel.update_height_resize(px(450.)), Some(70.));
+        assert_eq!(panel.update_height_resize(px(800.)), Some(60.));
+        assert!(panel.finish_height_resize());
+        assert!(!panel.finish_height_resize());
+        assert!(panel.update_height_resize(px(300.)).is_none());
+
+        panel.start_height_resize(px(400.));
+        assert_eq!(panel.update_height_resize(px(-200.)), Some(600.));
+        assert!(panel.finish_height_resize());
     }
 }

@@ -10,7 +10,7 @@ use std::time::Duration;
 use crate::features::NyaTermApp;
 use crate::models::{
     TransferBrowserContextMenuState, TransferBrowserDragSelectionState,
-    TransferBrowserPendingRenameState, TransferInputField,
+    TransferBrowserPendingRenameState,
 };
 
 use super::{
@@ -31,7 +31,6 @@ impl NyaTermApp {
             .selected_remote_paths
             .insert(path.clone());
         self.transfer.paths.remote = path.clone();
-        self.transfer.panel.focused_field = TransferInputField::Remote;
         self.terminal.view.status = format!("selected remote {path}");
         cx.notify();
     }
@@ -74,7 +73,6 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         window.focus(&self.transfer.browser.focus);
-        self.transfer.panel.focused_field = TransferInputField::Remote;
         if self
             .transfer
             .browser
@@ -254,7 +252,6 @@ impl NyaTermApp {
     ) {
         window.focus(&self.transfer.browser.focus);
         self.transfer.browser.drag_selection = None;
-        self.transfer.panel.focused_field = TransferInputField::Remote;
         if self.transfer.browser.selected_remote_paths.contains(&path) {
             self.transfer.browser.selected_remote_path = Some(path.clone());
             self.transfer.paths.remote = path;
@@ -402,7 +399,6 @@ impl NyaTermApp {
         self.transfer.browser.selected_remote_paths = next_selection;
         self.transfer.browser.selected_remote_path = Some(target_path.clone());
         self.transfer.paths.remote = target_path;
-        self.transfer.panel.focused_field = TransferInputField::Remote;
         self.terminal.view.status = format!(
             "{} remote item(s) marked",
             self.transfer.browser.selected_remote_paths.len()
@@ -425,7 +421,6 @@ impl NyaTermApp {
         }
         self.transfer.browser.selected_remote_path = Some(path.clone());
         self.transfer.paths.remote = path.clone();
-        self.transfer.panel.focused_field = TransferInputField::Remote;
         self.terminal.view.status = format!(
             "{} remote item(s) marked",
             self.transfer.browser.selected_remote_paths.len()

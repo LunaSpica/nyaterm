@@ -303,12 +303,6 @@ pub(crate) enum TransferJobOutput {
     },
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum TransferInputField {
-    Remote,
-    Local,
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct TransferBrowserSessionCacheState {
     pub(crate) entries: Vec<SftpFileEntry>,

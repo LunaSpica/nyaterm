@@ -352,6 +352,12 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   `editor`, and `external_sync` for handing a file to an outside editor, plus
   manual `paths` and `panel` chrome. Their lifetimes are unrelated, which the
   flat `transfer_*` prefix hid completely.
+  The transfer-panel encapsulation pass then made its focus, height and resize
+  state private and removed the write-only focused-endpoint marker. Runtime and
+  views use `TransferFeatureState` queries and transitions; the owner now
+  performs the complete height-drag calculation and clamps it to the existing
+  60-600px range. Mouse events, terminal status, layout persistence and element
+  construction remain in the application adapters.
 - The SFTP browser parity pass covers the six Tauri file-manager areas: toolbar
   commands and state, editable path/history/breadcrumb navigation, resizable
   sortable columns, range/additive selection and context actions, transfer
@@ -1416,6 +1422,7 @@ Current ownership map:
 | Session catalog and presentation | Private state in `NyaTermApp.session` | Runtime catalog plus transient presentation | Order/metadata registration, tab movement, disconnect marking, reconnect migration and removal are owner transitions; custom names, OSC titles/CWDs and tab colors are exposed through read-only queries and semantic updates. |
 | Active session selection and derived config | Private state in `NyaTermApp.session` | Transient selection over the runtime catalog | The active child stores only the session id; SSH config and AI execution profile are queried from private runtime metadata, and select/clear/remove transitions preserve the `None`/`SendOnly` fallback. |
 | Session protocol resources | Private child in `NyaTermApp.session` | Per-session runtime resources | ZMODEM/trzsz maps and SSH multiplex handles are private; session removal stops protocol workers atomically, state drops stop remaining workers, and multiplex disconnect runs off the GPUI update path after owner reference checks. |
+| Transfer panel interaction | Private child in `NyaTermApp.transfer` | Transient focus and resize state | Focus routing, height and resize state enter through `TransferFeatureState`; the write-only focused-endpoint marker was removed, and height-drag calculation and clamping are pure owner transitions while rendering and persistence stay in adapters. |
 | Serial ports | Private catalog in `NyaTermApp.connection_catalog` | Runtime/discovered state | Replaced through the catalog after session-manager discovery and never persisted. |
 | Tunnel/proxy configs | Private catalog in `NyaTermApp.tunnel_state` | Persisted network config | Views use read-only slices; pure move/upsert/delete candidates and successful commits stay on `TunnelFeatureState`. The Network page UI remains separate transient state. |
 | Queued saved-connection starts | `NyaTermApp.session.start` private queue | Transient session-start state | Admission, duplicate detection, draining and runtime cadence reads go through `SessionStartFeatureState` methods. |
@@ -1668,8 +1675,10 @@ honest remaining list.
    the shell, sync input, the send command bar, AI, quick commands, cloud sync,
    recording, session starts and terminal paste review;
    the transfer browser one made `TransferBrowserColumnResizeState` stop leaking
-   into the page layer, while cloud sync made secret-field routing inaccessible
-   outside its owner, and
+   into the page layer; the transfer-panel pass likewise made focus and
+   height-resize state private, removed a write-only focused-endpoint marker,
+   and moved the complete drag lifecycle onto `TransferFeatureState`, while
+   cloud sync made secret-field routing inaccessible outside its owner, and
    recording cleanup can no longer leave its manager, busy map and pipeline out
    of sync; recording action and path-prompt admission are atomic owner
    transitions, and sync-input views cannot mutate group/broadcast state while

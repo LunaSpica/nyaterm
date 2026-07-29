@@ -9,9 +9,7 @@ use nyaterm_transport::{
 
 use crate::features::NyaTermApp;
 use crate::features::formatting::download_file_name_from_remote_path;
-use crate::models::{
-    NavItem, TransferInputField, TransferPathPromptKind, TransferPathPromptResult,
-};
+use crate::models::{NavItem, TransferPathPromptKind, TransferPathPromptResult};
 
 impl NyaTermApp {
     pub(in crate::features) fn prompt_transfer_download_path_setting(
@@ -343,7 +341,6 @@ impl NyaTermApp {
                 };
                 let total = remote_paths.len();
                 self.transfer.paths.local = directory.display().to_string();
-                self.transfer.panel.focused_field = TransferInputField::Local;
                 for remote_path in remote_paths {
                     let local_path =
                         directory.join(download_file_name_from_remote_path(&remote_path));
@@ -404,7 +401,6 @@ impl NyaTermApp {
                     self.transfer.paths.local = format!("{total} selected upload files");
                 }
                 self.transfer.paths.remote = remote_path.clone();
-                self.transfer.panel.focused_field = TransferInputField::Local;
                 self.transfer.browser.status = if total == 1 {
                     format!(
                         "Uploading {} to {}",

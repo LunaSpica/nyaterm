@@ -264,6 +264,27 @@ check_no_matches \
   '(self|this)\.recording\.(manager|active_count|pending_auto_start|pipeline|search_draft|busy_actions|path_prompt)(\.|[[:space:]]*=)' \
   crates/nyaterm-desktop/src/features
 
+check_no_multiline_matches \
+  "TransferFeatureState panel child must remain private" \
+  'struct[[:space:]]+TransferFeatureState[[:space:]]*\{[^}]*pub([[:space:]]|\([^)]*\))[[:space:]]+panel[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/transfers/state.rs
+check_no_multiline_matches \
+  "TransferPanelState fields must remain private" \
+  'struct[[:space:]]+TransferPanelState[[:space:]]*\{[^}]*pub([[:space:]]|\([^)]*\))[[:space:]]+(focus|focused_field|height|height_resize)[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/transfers/state.rs
+check_no_matches \
+  "transfer panel state access must use TransferFeatureState methods" \
+  '(self|this)\.transfer\.panel(\.|[[:space:]]*=)' \
+  crates/nyaterm-desktop/src/features
+check_no_matches \
+  "transfer height resize state must stay on the transfer owner" \
+  'TransferHeightResizeState' \
+  crates/nyaterm-desktop/src/features/shell/panel_resize_runtime.rs
+check_no_matches \
+  "obsolete transfer panel focused-endpoint state must not return" \
+  'TransferInputField' \
+  crates/nyaterm-desktop/src
+
 check_no_matches \
   "SyncInputFeatureState must expose methods, not writable fields" \
   '^[[:space:]]*pub([[:space:]]|\([^)]*\))[[:space:]]+(groups|open|focus|search_draft|selected_id|delete_pending|broadcast_to_all)[[:space:]]*:' \

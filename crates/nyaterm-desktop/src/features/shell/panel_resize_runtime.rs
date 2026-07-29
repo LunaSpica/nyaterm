@@ -6,8 +6,7 @@ use nyaterm_core::ConnectionStore;
 
 use crate::features::NyaTermApp;
 use crate::models::{
-    BottomPanelMode, NavItem, PanelResizeSide, PanelSide, TransferHeightResizeState,
-    panel_collapsed_from_persistence,
+    BottomPanelMode, NavItem, PanelResizeSide, PanelSide, panel_collapsed_from_persistence,
 };
 
 const QUICK_CMD_HEIGHT_MIN: f32 = 36.;
@@ -79,7 +78,8 @@ impl NyaTermApp {
     pub(in crate::features) fn apply_ui_layout_from_settings(&mut self) {
         self.shell.panels.left_width = self.settings.summary.ui_left_panel_width as f32;
         self.shell.panels.right_width = self.settings.summary.ui_right_panel_width as f32;
-        self.transfer.panel.height = self.settings.summary.ui_transfer_height as f32;
+        self.transfer
+            .set_panel_height(self.settings.summary.ui_transfer_height as f32);
         self.shell.bottom_panel.quick_commands_height =
             self.settings.summary.ui_quick_cmd_height as f32;
         self.shell.bottom_panel.command_send_height =
@@ -123,7 +123,7 @@ impl NyaTermApp {
         self.settings.summary.ui_right_panel_width =
             self.shell.panels.right_width.round().clamp(200., 720.) as u32;
         self.settings.summary.ui_transfer_height =
-            self.transfer.panel.height.round().clamp(60., 600.) as u32;
+            self.transfer.panel_height().round().clamp(60., 600.) as u32;
         self.settings.summary.ui_quick_cmd_height =
             self.shell
                 .bottom_panel
@@ -209,10 +209,7 @@ impl NyaTermApp {
         event: &MouseDownEvent,
         cx: &mut Context<Self>,
     ) {
-        self.transfer.panel.height_resize = Some(TransferHeightResizeState {
-            start_y: event.position.y,
-            start_height: px(self.transfer.panel.height),
-        });
+        self.transfer.start_panel_height_resize(event.position.y);
         self.terminal.view.status = "resizing transfer queue".to_string();
         cx.notify();
     }
@@ -222,24 +219,10 @@ impl NyaTermApp {
         event: &MouseMoveEvent,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.transfer.panel.height_resize else {
+        let Some(height) = self.transfer.update_panel_height_resize(event.position.y) else {
             return;
         };
-        // Handle sits above the queue: drag down grows height (Tauri subtracts delta from height
-        // because its handle is above and delta is positive downward; we invert equivalently).
-        let delta = f32::from(event.position.y - state.start_y);
-        let start = f32::from(state.start_height);
-        // Tauri: transfer_height = clamp(prev - delta). With handle above queue, positive mouse-down
-        // should increase queue height when dragging the handle downward from FE into queue...
-        // In App.tsx: onTransferResize uses Math.max(60, Math.min(600, prev - delta)).
-        // Vertical ResizeHandle delta = currentY - startY (positive down). Dragging handle down
-        // shrinks FE / grows transfer? Handle is between FE and transfer; drag down => FE larger,
-        // transfer smaller => height decreases with positive delta. So: start - delta.
-        self.transfer.panel.height = (start - delta).clamp(60., 600.);
-        self.terminal.view.status = format!(
-            "transfer queue: {:.0}px",
-            self.transfer.panel.height.round()
-        );
+        self.terminal.view.status = format!("transfer queue: {:.0}px", height.round());
         cx.notify();
     }
 
@@ -248,10 +231,12 @@ impl NyaTermApp {
         _event: &MouseUpEvent,
         cx: &mut Context<Self>,
     ) {
-        if self.transfer.panel.height_resize.take().is_some() {
+        if self.transfer.finish_panel_height_resize() {
             self.persist_ui_layout();
-            self.terminal.view.status =
-                format!("transfer queue {:.0}px", self.transfer.panel.height.round());
+            self.terminal.view.status = format!(
+                "transfer queue {:.0}px",
+                self.transfer.panel_height().round()
+            );
             cx.notify();
         }
     }
