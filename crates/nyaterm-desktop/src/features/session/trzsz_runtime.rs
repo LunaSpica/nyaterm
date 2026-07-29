@@ -762,7 +762,7 @@ impl NyaTermApp {
         directory_mode: bool,
         cx: &mut Context<Self>,
     ) -> bool {
-        if self.transfer.paths.prompt.is_some() {
+        if self.transfer.path_prompt_is_open() {
             self.terminal.view.status = "native path picker is already open".to_string();
             cx.notify();
             return false;
@@ -778,12 +778,17 @@ impl NyaTermApp {
                 "Select trzsz upload files"
             })),
         };
-        let receiver = cx.prompt_for_paths(options);
-        self.transfer.paths.prompt = Some(if directory_mode {
+        let prompt_kind = if directory_mode {
             TransferPathPromptKind::UploadDirectory
         } else {
             TransferPathPromptKind::UploadFile
-        });
+        };
+        if !self.transfer.begin_path_prompt(prompt_kind) {
+            self.terminal.view.status = "native path picker is already open".to_string();
+            cx.notify();
+            return false;
+        }
+        let receiver = cx.prompt_for_paths(options);
         self.terminal.view.status = if directory_mode {
             "selecting trzsz upload directories".to_string()
         } else {
@@ -826,7 +831,14 @@ impl NyaTermApp {
         result: TransferPathPromptResult,
         cx: &mut Context<Self>,
     ) {
-        self.transfer.paths.prompt = None;
+        let prompt_kind = if directory_mode {
+            TransferPathPromptKind::UploadDirectory
+        } else {
+            TransferPathPromptKind::UploadFile
+        };
+        if !self.transfer.finish_path_prompt(prompt_kind) {
+            return;
+        }
         match result {
             TransferPathPromptResult::Selected(paths) => {
                 self.accept_trzsz_upload_paths(

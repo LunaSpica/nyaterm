@@ -284,6 +284,22 @@ check_no_matches \
   "obsolete transfer panel focused-endpoint state must not return" \
   'TransferInputField' \
   crates/nyaterm-desktop/src
+check_no_multiline_matches \
+  "TransferFeatureState paths child must remain private" \
+  'struct[[:space:]]+TransferFeatureState[[:space:]]*\{[^}]*pub([[:space:]]|\([^)]*\))[[:space:]]+paths[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/transfers/state.rs
+check_no_matches \
+  "TransferPathState must remain private" \
+  'pub([[:space:]]|\([^)]*\))[[:space:]]+struct[[:space:]]+TransferPathState' \
+  crates/nyaterm-desktop/src/features/transfers/state.rs
+check_no_multiline_matches \
+  "TransferPathState fields must remain private" \
+  'struct[[:space:]]+TransferPathState[[:space:]]*\{[^}]*pub([[:space:]]|\([^)]*\))[[:space:]]+(remote|local|duplicate_policy|prompt)[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/transfers/state.rs
+check_no_matches \
+  "transfer path state access must use TransferFeatureState methods" \
+  '(self|this|app)\.transfer\.paths(\.|[[:space:]]*=)' \
+  crates/nyaterm-desktop/src/features
 
 check_no_matches \
   "SyncInputFeatureState must expose methods, not writable fields" \

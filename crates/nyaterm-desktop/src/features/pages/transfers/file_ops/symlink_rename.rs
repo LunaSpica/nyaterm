@@ -19,7 +19,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let parent_path = if self.transfer.browser.path.trim().is_empty() {
-            self.normalized_transfer_remote_path()
+            self.transfer.normalized_remote_path()
         } else {
             self.transfer.browser.path.clone()
         };

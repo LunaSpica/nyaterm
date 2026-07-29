@@ -22,7 +22,7 @@ impl NyaTermApp {
                 cx,
             )
             .into_any_element();
-        let policy = self.transfer.paths.duplicate_policy;
+        let policy = self.transfer.duplicate_policy();
 
         div()
             .flex()

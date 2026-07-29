@@ -30,7 +30,7 @@ impl NyaTermApp {
             .browser
             .selected_remote_paths
             .insert(path.clone());
-        self.transfer.paths.remote = path.clone();
+        self.transfer.set_remote_path(path.clone());
         self.terminal.view.status = format!("selected remote {path}");
         cx.notify();
     }
@@ -254,7 +254,7 @@ impl NyaTermApp {
         self.transfer.browser.drag_selection = None;
         if self.transfer.browser.selected_remote_paths.contains(&path) {
             self.transfer.browser.selected_remote_path = Some(path.clone());
-            self.transfer.paths.remote = path;
+            self.transfer.set_remote_path(path);
             self.terminal.view.status = format!(
                 "{} remote item(s) marked",
                 self.transfer.browser.selected_remote_paths.len()
@@ -398,7 +398,7 @@ impl NyaTermApp {
 
         self.transfer.browser.selected_remote_paths = next_selection;
         self.transfer.browser.selected_remote_path = Some(target_path.clone());
-        self.transfer.paths.remote = target_path;
+        self.transfer.set_remote_path(target_path);
         self.terminal.view.status = format!(
             "{} remote item(s) marked",
             self.transfer.browser.selected_remote_paths.len()
@@ -420,7 +420,7 @@ impl NyaTermApp {
                 .insert(path.clone());
         }
         self.transfer.browser.selected_remote_path = Some(path.clone());
-        self.transfer.paths.remote = path.clone();
+        self.transfer.set_remote_path(path.clone());
         self.terminal.view.status = format!(
             "{} remote item(s) marked",
             self.transfer.browser.selected_remote_paths.len()
@@ -437,7 +437,7 @@ impl NyaTermApp {
             entries.iter().map(|entry| entry.path.clone()).collect();
         if let Some(entry) = entries.first() {
             self.transfer.browser.selected_remote_path = Some(entry.path.clone());
-            self.transfer.paths.remote = entry.path.clone();
+            self.transfer.set_remote_path(entry.path.clone());
         }
         self.terminal.view.status = format!(
             "{} remote item(s) marked",

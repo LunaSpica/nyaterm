@@ -66,7 +66,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.transfer.browser.selected_remote_path = Some(entry.path.clone());
-        self.transfer.paths.remote = entry.path.clone();
+        self.transfer.set_remote_path(entry.path.clone());
         self.forget_text_inputs("transfer.properties.");
         self.transfer.file_ops.properties = Some(transfer_properties_state_from_entry(
             entry.clone(),

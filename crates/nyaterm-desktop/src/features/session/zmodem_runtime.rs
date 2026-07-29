@@ -211,7 +211,7 @@ impl NyaTermApp {
             remote_dir
         };
 
-        let policy = self.transfer.paths.duplicate_policy;
+        let policy = self.transfer.duplicate_policy();
         let resolver = self.session.prompts.duplicate_broker();
         let id = self.next_transfer_id("zmodem-probe");
         self.transfer.queue.jobs.push(TransferJobState {

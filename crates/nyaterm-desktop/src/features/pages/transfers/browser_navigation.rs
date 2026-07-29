@@ -61,7 +61,7 @@ impl NyaTermApp {
         let Some(cache) = self.transfer.browser.session_cache.get(session_id).cloned() else {
             return false;
         };
-        self.transfer.paths.remote = cache.current_path.clone();
+        self.transfer.set_remote_path(cache.current_path.clone());
         self.transfer.browser.path = cache.current_path;
         self.transfer.browser.home_dir = cache.home_dir;
         self.transfer.browser.home_dir_pending = false;
@@ -91,7 +91,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn reset_transfer_browser_for_active_session(&mut self) {
-        self.transfer.paths.remote = ".".to_string();
+        self.transfer.set_remote_path(".");
         self.transfer.browser.path = ".".to_string();
         self.transfer.browser.home_dir.clear();
         self.transfer.browser.home_dir_pending = false;
@@ -140,7 +140,7 @@ impl NyaTermApp {
     ) {
         self.forget_text_inputs("transfer.browser.path");
         self.transfer.browser.list_offset = 0;
-        self.transfer.paths.remote = path.clone();
+        self.transfer.set_remote_path(path.clone());
         self.transfer.browser.path = path.clone();
         self.transfer.browser.path_draft.clear();
         self.transfer.browser.path_editing = false;
@@ -487,7 +487,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        self.transfer.paths.remote = parent.clone();
+        self.transfer.set_remote_path(parent.clone());
         self.transfer.browser.path = parent.clone();
         self.transfer.browser.selected_remote_path = None;
         self.transfer.browser.selected_remote_paths.clear();
@@ -504,7 +504,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let path = if self.transfer.browser.path.trim().is_empty() {
-            self.normalized_transfer_remote_path()
+            self.transfer.normalized_remote_path()
         } else {
             self.transfer.browser.path.clone()
         };
@@ -543,7 +543,7 @@ impl NyaTermApp {
 
     fn capture_transfer_browser_navigation(&self) -> TransferBrowserNavigationSnapshot {
         TransferBrowserNavigationSnapshot {
-            remote_path: self.transfer.paths.remote.clone(),
+            remote_path: self.transfer.remote_path().to_string(),
             browser_path: self.transfer.browser.path.clone(),
             entries: self.transfer.browser.entries.clone(),
             loading: self.transfer.browser.loading,
@@ -562,7 +562,7 @@ impl NyaTermApp {
         &mut self,
         snapshot: TransferBrowserNavigationSnapshot,
     ) {
-        self.transfer.paths.remote = snapshot.remote_path;
+        self.transfer.set_remote_path(snapshot.remote_path);
         self.transfer.browser.path = snapshot.browser_path;
         self.transfer.browser.entries = snapshot.entries;
         self.transfer.browser.loading = snapshot.loading;

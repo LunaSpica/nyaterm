@@ -79,7 +79,7 @@ impl NyaTermApp {
         };
 
         self.transfer.browser.selected_remote_path = Some(entry.path.clone());
-        self.transfer.paths.remote = entry.path.clone();
+        self.transfer.set_remote_path(entry.path.clone());
 
         let remote_path = entry.path.clone();
         let action_id = action.id.clone();
@@ -246,7 +246,7 @@ impl NyaTermApp {
             return;
         }
         self.transfer.browser.selected_remote_path = Some(entry.path.clone());
-        self.transfer.paths.remote = entry.path.clone();
+        self.transfer.set_remote_path(entry.path.clone());
         let tab = TransferEditorState {
             id: tab_id.clone(),
             session_id: session_id.clone(),
@@ -373,7 +373,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.transfer.browser.selected_remote_path = Some(entry.path.clone());
-        self.transfer.paths.remote = entry.path.clone();
+        self.transfer.set_remote_path(entry.path.clone());
         let remote_path = entry.path.clone();
         let local_path = self.transfer_external_open_path(&entry, session_id.as_deref());
         let default_editor = self.settings.summary.transfer_default_editor.clone();

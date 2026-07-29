@@ -29,7 +29,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        let duplicate_policy = self.transfer.paths.duplicate_policy;
+        let duplicate_policy = self.transfer.duplicate_policy();
         let duplicate_resolver = (duplicate_policy == SftpDuplicatePolicy::Ask)
             .then(|| self.session.prompts.duplicate_broker() as Arc<dyn SftpDuplicateResolver>);
         let transfer_options = self.sftp_transfer_options();
@@ -326,7 +326,7 @@ impl NyaTermApp {
                 remote_path,
                 local_path,
             } => {
-                let duplicate_policy = self.transfer.paths.duplicate_policy;
+                let duplicate_policy = self.transfer.duplicate_policy();
                 let duplicate_resolver =
                     (duplicate_policy == SftpDuplicatePolicy::Ask).then(|| {
                         self.session.prompts.duplicate_broker() as Arc<dyn SftpDuplicateResolver>
@@ -370,7 +370,7 @@ impl NyaTermApp {
                 local_path,
                 remote_path,
             } => {
-                let duplicate_policy = self.transfer.paths.duplicate_policy;
+                let duplicate_policy = self.transfer.duplicate_policy();
                 let duplicate_resolver =
                     (duplicate_policy == SftpDuplicatePolicy::Ask).then(|| {
                         self.session.prompts.duplicate_broker() as Arc<dyn SftpDuplicateResolver>

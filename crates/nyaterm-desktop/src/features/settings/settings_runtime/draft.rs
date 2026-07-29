@@ -277,9 +277,10 @@ impl NyaTermApp {
                 self.sync_ai_drafts_from_active_profile();
                 self.recording
                     .set_memory_limit(self.settings.summary.recording_memory_limit_bytes as usize);
-                self.transfer.paths.duplicate_policy = SftpDuplicatePolicy::from_legacy_value(
-                    &self.settings.summary.transfer_duplicate_strategy,
-                );
+                self.transfer
+                    .set_duplicate_policy(SftpDuplicatePolicy::from_legacy_value(
+                        &self.settings.summary.transfer_duplicate_strategy,
+                    ));
                 self.sync_terminal_encodings_from_settings();
                 self.enforce_terminal_scrollback_limit();
                 if !self
@@ -341,9 +342,10 @@ impl NyaTermApp {
             self.settings.master_password.draft = snapshot.master_password_draft;
             self.recording
                 .set_memory_limit(self.settings.summary.recording_memory_limit_bytes as usize);
-            self.transfer.paths.duplicate_policy = SftpDuplicatePolicy::from_legacy_value(
-                &self.settings.summary.transfer_duplicate_strategy,
-            );
+            self.transfer
+                .set_duplicate_policy(SftpDuplicatePolicy::from_legacy_value(
+                    &self.settings.summary.transfer_duplicate_strategy,
+                ));
             self.sync_terminal_encodings_from_settings();
             self.invalidate_terminal_cell_metrics(cx);
             self.invalidate_paint_theme_caches();

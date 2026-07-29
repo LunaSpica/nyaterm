@@ -48,10 +48,10 @@ impl NyaTermApp {
                     | TransferJobStatus::Cancelling
             )
         });
-        let download_path = if self.transfer.paths.local.trim().is_empty() {
+        let download_path = if self.transfer.local_path().trim().is_empty() {
             format!("{}: -", self.tr("fileTransfer.downloadPath"))
         } else {
-            truncate_preview(&self.transfer.paths.local, 48)
+            truncate_preview(self.transfer.local_path(), 48)
         };
 
         let mut list = div().flex().flex_col();

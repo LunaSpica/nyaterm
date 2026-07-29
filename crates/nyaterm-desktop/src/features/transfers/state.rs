@@ -29,7 +29,7 @@ use super::super::remote_editor_window::RemoteFileEditorWindow;
 
 pub(in crate::features) struct TransferFeatureState {
     pub queue: TransferQueueState,
-    pub paths: TransferPathState,
+    paths: TransferPathState,
     pub browser: TransferBrowserState,
     pub file_ops: TransferFileOpsState,
     pub editor: TransferEditorState,
@@ -70,11 +70,11 @@ pub(in crate::features) struct TransferQueueState {
 }
 
 /// Manual transfer endpoints and the duplicate policy that applies to them.
-pub(in crate::features) struct TransferPathState {
-    pub remote: String,
-    pub local: String,
-    pub duplicate_policy: SftpDuplicatePolicy,
-    pub prompt: Option<TransferPathPromptKind>,
+struct TransferPathState {
+    remote: String,
+    local: String,
+    duplicate_policy: SftpDuplicatePolicy,
+    prompt: Option<TransferPathPromptKind>,
 }
 
 /// SFTP browser: current listing, navigation history, selection and menus.
@@ -183,12 +183,7 @@ impl TransferFeatureState {
                 focus: focus.queue,
                 job_delete_focus: focus.job_delete,
             },
-            paths: TransferPathState {
-                remote: remote_path,
-                local: local_path,
-                duplicate_policy,
-                prompt: None,
-            },
+            paths: TransferPathState::new(remote_path, local_path, duplicate_policy),
             browser: TransferBrowserState {
                 path: ".".to_string(),
                 home_dir: String::new(),
@@ -271,6 +266,46 @@ impl TransferFeatureState {
         &self.panel.focus
     }
 
+    pub(in crate::features) fn remote_path(&self) -> &str {
+        self.paths.remote_path()
+    }
+
+    pub(in crate::features) fn set_remote_path(&mut self, path: impl Into<String>) {
+        self.paths.set_remote_path(path);
+    }
+
+    pub(in crate::features) fn normalized_remote_path(&self) -> String {
+        self.paths.normalized_remote_path()
+    }
+
+    pub(in crate::features) fn local_path(&self) -> &str {
+        self.paths.local_path()
+    }
+
+    pub(in crate::features) fn set_local_path(&mut self, path: impl Into<String>) {
+        self.paths.set_local_path(path);
+    }
+
+    pub(in crate::features) fn duplicate_policy(&self) -> SftpDuplicatePolicy {
+        self.paths.duplicate_policy()
+    }
+
+    pub(in crate::features) fn set_duplicate_policy(&mut self, policy: SftpDuplicatePolicy) {
+        self.paths.set_duplicate_policy(policy);
+    }
+
+    pub(in crate::features) fn path_prompt_is_open(&self) -> bool {
+        self.paths.prompt.is_some()
+    }
+
+    pub(in crate::features) fn begin_path_prompt(&mut self, kind: TransferPathPromptKind) -> bool {
+        self.paths.begin_prompt(kind)
+    }
+
+    pub(in crate::features) fn finish_path_prompt(&mut self, kind: TransferPathPromptKind) -> bool {
+        self.paths.finish_prompt(kind)
+    }
+
     pub(in crate::features) fn panel_height(&self) -> f32 {
         self.panel.height
     }
@@ -292,6 +327,66 @@ impl TransferFeatureState {
 
     pub(in crate::features) fn finish_panel_height_resize(&mut self) -> bool {
         self.panel.finish_height_resize()
+    }
+}
+
+impl TransferPathState {
+    fn new(remote: String, local: String, duplicate_policy: SftpDuplicatePolicy) -> Self {
+        Self {
+            remote,
+            local,
+            duplicate_policy,
+            prompt: None,
+        }
+    }
+
+    fn remote_path(&self) -> &str {
+        &self.remote
+    }
+
+    fn set_remote_path(&mut self, path: impl Into<String>) {
+        self.remote = path.into();
+    }
+
+    fn normalized_remote_path(&self) -> String {
+        let path = self.remote.trim();
+        if path.is_empty() {
+            ".".to_string()
+        } else {
+            path.to_string()
+        }
+    }
+
+    fn local_path(&self) -> &str {
+        &self.local
+    }
+
+    fn set_local_path(&mut self, path: impl Into<String>) {
+        self.local = path.into();
+    }
+
+    fn duplicate_policy(&self) -> SftpDuplicatePolicy {
+        self.duplicate_policy
+    }
+
+    fn set_duplicate_policy(&mut self, policy: SftpDuplicatePolicy) {
+        self.duplicate_policy = policy;
+    }
+
+    fn begin_prompt(&mut self, kind: TransferPathPromptKind) -> bool {
+        if self.prompt.is_some() {
+            return false;
+        }
+        self.prompt = Some(kind);
+        true
+    }
+
+    fn finish_prompt(&mut self, kind: TransferPathPromptKind) -> bool {
+        if self.prompt != Some(kind) {
+            return false;
+        }
+        self.prompt = None;
+        true
     }
 }
 
@@ -374,8 +469,39 @@ impl TransferQueueState {
 #[cfg(test)]
 mod tests {
     use gpui::{TestAppContext, px};
+    use nyaterm_transport::SftpDuplicatePolicy;
 
-    use super::TransferPanelState;
+    use crate::models::TransferPathPromptKind;
+
+    use super::{TransferPanelState, TransferPathState};
+
+    #[test]
+    fn transfer_paths_own_endpoints_policy_and_prompt_admission() {
+        let mut paths = TransferPathState::new(
+            "  ".to_string(),
+            "/tmp/download".to_string(),
+            SftpDuplicatePolicy::Ask,
+        );
+
+        assert_eq!(paths.normalized_remote_path(), ".");
+        assert_eq!(paths.local_path(), "/tmp/download");
+        assert_eq!(paths.duplicate_policy(), SftpDuplicatePolicy::Ask);
+
+        paths.set_remote_path("/srv/files");
+        paths.set_local_path("/tmp/upload");
+        paths.set_duplicate_policy(SftpDuplicatePolicy::Overwrite);
+        assert_eq!(paths.remote_path(), "/srv/files");
+        assert_eq!(paths.normalized_remote_path(), "/srv/files");
+        assert_eq!(paths.local_path(), "/tmp/upload");
+        assert_eq!(paths.duplicate_policy(), SftpDuplicatePolicy::Overwrite);
+
+        assert!(paths.begin_prompt(TransferPathPromptKind::UploadFile));
+        assert!(!paths.begin_prompt(TransferPathPromptKind::DownloadDirectory));
+        assert!(!paths.finish_prompt(TransferPathPromptKind::DownloadDirectory));
+        assert!(!paths.begin_prompt(TransferPathPromptKind::UploadDirectory));
+        assert!(paths.finish_prompt(TransferPathPromptKind::UploadFile));
+        assert!(!paths.finish_prompt(TransferPathPromptKind::UploadFile));
+    }
 
     #[test]
     fn transfer_panel_owns_focus_height_and_resize_lifecycle() {

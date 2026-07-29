@@ -16,7 +16,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        if self.transfer.paths.prompt.is_some() {
+        if self.transfer.path_prompt_is_open() {
             self.terminal.view.status = "native path picker is already open".to_string();
             cx.notify();
             return;
@@ -144,20 +144,11 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::features) fn normalized_transfer_remote_path(&self) -> String {
-        let value = self.transfer.paths.remote.trim();
-        if value.is_empty() {
-            ".".to_string()
-        } else {
-            value.to_string()
-        }
-    }
-
     pub(in crate::features) fn normalized_transfer_local_path(&self) -> PathBuf {
-        let value = self.transfer.paths.local.trim();
+        let value = self.transfer.local_path().trim();
         if value.is_empty() {
             let file_name =
-                download_file_name_from_remote_path(&self.normalized_transfer_remote_path());
+                download_file_name_from_remote_path(&self.transfer.normalized_remote_path());
             let download_path = self.settings.summary.transfer_download_path.trim();
             if download_path.is_empty() {
                 PathBuf::from(file_name)
@@ -180,7 +171,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        if self.transfer.paths.prompt.is_some() {
+        if self.transfer.path_prompt_is_open() {
             self.terminal.view.status = "native path picker is already open".to_string();
             cx.notify();
             return;
@@ -193,7 +184,7 @@ impl NyaTermApp {
         };
         let session_id = self.session.active_id_owned();
 
-        let duplicate_policy = self.transfer.paths.duplicate_policy;
+        let duplicate_policy = self.transfer.duplicate_policy();
         let duplicate_resolver = (duplicate_policy == SftpDuplicatePolicy::Ask)
             .then(|| self.session.prompts.duplicate_broker() as Arc<dyn SftpDuplicateResolver>);
         let transfer_options = self.sftp_transfer_options();
@@ -203,8 +194,15 @@ impl NyaTermApp {
             multiple: false,
             prompt: Some(SharedString::from("Select download directory")),
         };
+        if !self
+            .transfer
+            .begin_path_prompt(TransferPathPromptKind::DownloadDirectory)
+        {
+            self.terminal.view.status = "native path picker is already open".to_string();
+            cx.notify();
+            return;
+        }
         let receiver = cx.prompt_for_paths(options);
-        self.transfer.paths.prompt = Some(TransferPathPromptKind::DownloadDirectory);
         self.terminal.view.status = "selecting download directory".to_string();
         cx.spawn(async move |this, cx| {
             let result = match receiver.await {
@@ -250,7 +248,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        if self.transfer.paths.prompt.is_some() {
+        if self.transfer.path_prompt_is_open() {
             self.terminal.view.status = "native path picker is already open".to_string();
             cx.notify();
             return;
@@ -261,7 +259,7 @@ impl NyaTermApp {
             return;
         };
         let session_id = self.session.active_id_owned();
-        let duplicate_policy = self.transfer.paths.duplicate_policy;
+        let duplicate_policy = self.transfer.duplicate_policy();
         let duplicate_resolver = (duplicate_policy == SftpDuplicatePolicy::Ask)
             .then(|| self.session.prompts.duplicate_broker() as Arc<dyn SftpDuplicateResolver>);
         let transfer_options = self.sftp_transfer_options();
@@ -282,8 +280,12 @@ impl NyaTermApp {
             TransferPathPromptKind::DownloadDirectory => unreachable!(),
         };
         let remote_path = self.normalized_transfer_browser_upload_target();
+        if !self.transfer.begin_path_prompt(kind) {
+            self.terminal.view.status = "native path picker is already open".to_string();
+            cx.notify();
+            return;
+        }
         let receiver = cx.prompt_for_paths(options);
-        self.transfer.paths.prompt = Some(kind);
         self.terminal.view.status = match kind {
             TransferPathPromptKind::UploadFile => "selecting upload file".to_string(),
             TransferPathPromptKind::UploadDirectory => "selecting upload directory".to_string(),
@@ -332,7 +334,12 @@ impl NyaTermApp {
         result: TransferPathPromptResult,
         cx: &mut Context<Self>,
     ) {
-        self.transfer.paths.prompt = None;
+        if !self
+            .transfer
+            .finish_path_prompt(TransferPathPromptKind::DownloadDirectory)
+        {
+            return;
+        }
         match result {
             TransferPathPromptResult::Selected(paths) => {
                 let Some(directory) = paths.into_iter().next() else {
@@ -340,7 +347,8 @@ impl NyaTermApp {
                     return;
                 };
                 let total = remote_paths.len();
-                self.transfer.paths.local = directory.display().to_string();
+                self.transfer
+                    .set_local_path(directory.display().to_string());
                 for remote_path in remote_paths {
                     let local_path =
                         directory.join(download_file_name_from_remote_path(&remote_path));
@@ -386,7 +394,9 @@ impl NyaTermApp {
         result: TransferPathPromptResult,
         cx: &mut Context<Self>,
     ) {
-        self.transfer.paths.prompt = None;
+        if !self.transfer.finish_path_prompt(kind) {
+            return;
+        }
         match result {
             TransferPathPromptResult::Selected(paths) => {
                 if paths.is_empty() {
@@ -396,11 +406,12 @@ impl NyaTermApp {
                 }
                 let total = paths.len();
                 if total == 1 {
-                    self.transfer.paths.local = paths[0].display().to_string();
+                    self.transfer.set_local_path(paths[0].display().to_string());
                 } else {
-                    self.transfer.paths.local = format!("{total} selected upload files");
+                    self.transfer
+                        .set_local_path(format!("{total} selected upload files"));
                 }
-                self.transfer.paths.remote = remote_path.clone();
+                self.transfer.set_remote_path(remote_path.clone());
                 self.transfer.browser.status = if total == 1 {
                     format!(
                         "Uploading {} to {}",
@@ -451,7 +462,7 @@ impl NyaTermApp {
     fn normalized_transfer_browser_upload_target(&self) -> String {
         let value = self.transfer.browser.path.trim();
         if value.is_empty() {
-            self.normalized_transfer_remote_path()
+            self.transfer.normalized_remote_path()
         } else if value == "/" {
             "/".to_string()
         } else {

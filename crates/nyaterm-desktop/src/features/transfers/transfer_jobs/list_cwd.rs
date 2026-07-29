@@ -93,7 +93,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        let remote_path = self.normalized_transfer_remote_path();
+        let remote_path = self.transfer.normalized_remote_path();
         self.transfer.browser.path = remote_path.clone();
         self.transfer.browser.status = format!("Listing {remote_path}...");
         self.transfer.browser.loading = true;
