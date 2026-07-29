@@ -9,7 +9,7 @@ Last updated from the working tree on 2026-07-29.
 
 | Metric | Current value | Notes |
 | --- | ---: | --- |
-| `NyaTermApp` fields | 21 | Counted from `features/app_state/mod.rs`; down from 585. The remaining fields are composition services and focused feature owners. |
+| `NyaTermApp` fields | 20 | Counted from `features/app_state/mod.rs`; down from 585. The remaining fields are composition services and focused feature owners. |
 | `impl NyaTermApp` blocks | 237 | Spread across 232 files under `crates/nyaterm-desktop/src`. |
 | `#[path = "..."]` declarations in desktop | 0 | Cleared. Every directory is a real module; the boundary script fails on any new occurrence. |
 | `use super::*` imports in desktop | 0 | Cleared in production and test modules; guarded crate-wide. |
@@ -586,6 +586,15 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   43 fields to 32. `ConnectionStore` remains the persistence implementation;
   table names, keys, serialized fields, encryption and fallback behavior did
   not change.
+- Saved connections, groups and runtime-discovered serial ports now sit in the
+  private catalog child of `ConnectionFeatureState`, alongside that feature's
+  list, editor, confirmation, import and Network-page state. The former root
+  `connection_catalog` field and its facade export are gone. Catalog replacement
+  prunes stale list references in the same owner transition, and derived list,
+  group-tree, group-expansion and SSH tunnel-editor queries no longer require
+  callers to pass the owner's own collections back into it. `ConnectionStore`
+  remains the persistence execution boundary and its compatibility contracts
+  are unchanged.
 - Command state now has one top-level `CommandFeatureState` owner. Its
   `catalog`, `quick`, `history` and `runtime` children replace the separate
   quick-command collections, UI state, command-history collection and
@@ -1015,10 +1024,10 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   are pruned against the loaded connection/group IDs through
   `ConnectionFeatureState` methods backed by its private list child.
 - Selected-connection and visible-connection-id derivation now live behind
-  `ConnectionFeatureState` and `state/list_logic.rs`. Callers that need those
-  projections pass the persisted connection/group collections into
-  `ConnectionFeatureState`; list filtering, sorting, expanded-group traversal
-  and selection projection stay out of the app coordinator.
+  `ConnectionFeatureState` and `state/list_logic.rs`. Those projections read the
+  feature's private catalog directly; list filtering, sorting, expanded-group
+  traversal and selection projection stay out of the app coordinator and
+  callers cannot supply a divergent collection.
 - Saved-connection group-tree derivation also lives behind
   `ConnectionFeatureState`; starting all connections in a folder and deciding
   whether the group context menu should show "open all" no longer duplicate the
@@ -1522,8 +1531,8 @@ Current ownership map:
 
 | Area | Current owner | Kind | Notes |
 | --- | --- | --- | --- |
-| Saved connections | Private catalog in `NyaTermApp.connection_catalog` | Persisted domain state | Views receive read-only slices; grouped load/clear, copy refresh and recently-used replacement enter through `ConnectionCatalogState` methods. |
-| Connection groups | Private catalog in `NyaTermApp.connection_catalog` | Persisted domain state | Same compatibility boundary and method-only owner as saved connections. |
+| Saved connections | Private catalog child in `NyaTermApp.connection_state` | Persisted domain state | `ConnectionFeatureState` is authoritative and exposes read-only slices plus semantic replacement/update operations; `ConnectionStore` remains the persistence boundary. |
+| Connection groups | Private catalog child in `NyaTermApp.connection_state` | Persisted domain state | Catalog replacement and stale list-reference cleanup occur in one `ConnectionFeatureState` transition. |
 | SSH keys | Private catalog in `NyaTermApp.security` | Secret-adjacent persisted catalog | The security feature is authoritative; consumers use a read-only slice and the catalog has no `Debug` implementation. |
 | OTP entries | Private catalog in `NyaTermApp.security` | Secret-adjacent persisted catalog | Consumers use a read-only slice; do not log secrets or widen Debug exposure. |
 | Saved passwords/credentials | Private catalog in `NyaTermApp.security` | Secret-bearing persisted catalogs | Credential autofill and security settings use read-only owner APIs; grouped store loads and clears replace all four catalogs together. |
@@ -1553,7 +1562,7 @@ Current ownership map:
 | Transfer file-operation dialogs | Private child in `NyaTermApp.transfer` | Transient dialog drafts, focus and property-operation lifecycle | Rename/move/delete/create/properties/unknown-file state enters through `TransferFeatureState`; deferred rename focus is consumed atomically, creation options update semantically, and property results require matching session/path ownership. Renderers receive read-only dialog state while GPUI focus, text inputs, status and SFTP launch remain in adapters. |
 | Transfer external-editor sync | Private child in `NyaTermApp.transfer` | Transient prompts, child-window tracking and always-upload policy | Prompt admission/filtering/resolution, window admission/tracking and session cleanup enter through `TransferFeatureState`; consuming or dismissing a prompt reconciles its tracked window state. GPUI window operations, status updates and SFTP upload launch remain in adapters. |
 | Built-in transfer editor | Private child in `NyaTermApp.transfer` | Editor workspace, tab/confirmation state and detached-window lifecycle | Tab admission/activation/close/discard, save result reconciliation, session cleanup, menu state and window admission enter through `TransferFeatureState`. `RemoteTextEditor` keeps its dedicated selection/undo/IME path through narrow active-tab access; GPUI windows, SFTP work and rendering remain in adapters. |
-| Serial ports | Private catalog in `NyaTermApp.connection_catalog` | Runtime/discovered state | Replaced through the catalog after session-manager discovery and never persisted. |
+| Serial ports | Private catalog child in `NyaTermApp.connection_state` | Runtime/discovered state | Replaced through `ConnectionFeatureState` after session-manager discovery and never persisted. |
 | Tunnel/proxy configs | Private catalog in `NyaTermApp.tunnel_state` | Persisted network config | Views use read-only slices; pure move/upsert/delete candidates and successful commits stay on `TunnelFeatureState`. The Network page UI remains separate transient state. |
 | Queued saved-connection starts | `NyaTermApp.session.start` private queue | Transient session-start state | Admission, duplicate detection, draining and runtime cadence reads go through `SessionStartFeatureState` methods. |
 | List search/sort/hover/selection/DnD | `NyaTermApp.connection_state` private list child | Temporary UI state | Runtime and rendering enter through `ConnectionFeatureState` methods; state is not persisted except sort setting remains synced to settings as before. |
@@ -1607,7 +1616,9 @@ use the existing behavior.
   now live under the normal `features/connections` tree and are governed.
   Connection views intentionally remain in the shared `pages` presentation
   tree; they enter state through `ConnectionFeatureState` rather than owning a
-  second connection domain.
+  second connection domain. Saved connections, groups and discovered serial
+  ports are now a private child of that same owner, so no root-level catalog or
+  caller-supplied catalog projection remains.
 - `core/storage.rs` and `transport/lib.rs` are down from 7,662 and 8,418 lines
   to 4,020 and 4,423. What is left in each is genuinely central: the store and
   its shared transaction/JSON/crypto helpers on one side, the session manager
@@ -1710,7 +1721,7 @@ honest remaining list.
    compiler-confirmed final pass also removed `features/prelude.rs`, so modules
    cannot regain the same implicit dependency surface through a shared import
    bucket.
-3. Largely done. `NyaTermApp` is down from 585 fields to 21, across eighteen
+3. Largely done. `NyaTermApp` is down from 585 fields to 20, across eighteen
    feature-state structs. The latest cohesive cuts moved sixteen terminal
    command-assistance and credential-prompt fields into
    `TerminalFeatureState::assist`, then seventeen transient settings fields
@@ -1833,6 +1844,10 @@ honest remaining list.
    queue admission, deduplication and drain onto `ShellFeatureState`. The shell
    event pump keeps direct access inside its ownership boundary; GPUI timers,
    persistence execution and terminal repaint work remain in their adapters.
+   The connection-owner unification batch then removed the last separate root
+   catalog, nested saved connections, groups and serial discovery under
+   `ConnectionFeatureState`, and coupled catalog replacement with list-reference
+   cleanup while keeping `ConnectionStore` as the persistence executor.
    What remains at the
    composition root is stores, runtime and focused feature owners.
    Group by cohesion where a cluster exists; do not force the count down for

@@ -41,7 +41,7 @@ impl NyaTermApp {
         );
         let mut tunnel_list = div().flex().flex_col().gap_2();
         if self.tunnel_state.tunnels().is_empty() && self.tunnel_state.tunnel_groups().is_empty() {
-            let (title, description) = if self.connection_catalog.connections().is_empty() {
+            let (title, description) = if self.connection_state.connections().is_empty() {
                 (
                     self.tr("network.noConnections").to_string(),
                     self.tr("network.noConnectionsHint").to_string(),
@@ -86,7 +86,7 @@ impl NyaTermApp {
             NetworkTab::Tunnels => self.tr("network.tunnelConfig").to_string(),
             NetworkTab::Proxies => self.tr("network.proxyConfig").to_string(),
         };
-        let has_connections = !self.connection_catalog.connections().is_empty();
+        let has_connections = !self.connection_state.connections().is_empty();
 
         div()
             .flex()

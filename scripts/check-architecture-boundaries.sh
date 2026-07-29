@@ -628,13 +628,38 @@ check_no_matches \
   '^[[:space:]]*pub\(in crate::features\)[[:space:]]+(connections|connection_groups|connection_ssh_keys|connection_otp_entries|connection_saved_passwords|connection_saved_credentials|connection_serial_ports|tunnels|tunnel_groups|proxies|proxy_groups|tunnel_runtime)[[:space:]]*:' \
   crates/nyaterm-desktop/src/features/app_state/mod.rs
 check_no_matches \
+  "the retired root connection_catalog owner must not return" \
+  'connection_catalog' \
+  crates/nyaterm-desktop/src
+check_no_multiline_matches \
+  "the connection catalog child must stay private to ConnectionFeatureState" \
+  'struct[[:space:]]+ConnectionFeatureState[[:space:]]*\{[^}]*pub([[:space:]]|\(crate\)|\(in crate\)|\(in crate::features\))[[:space:]]+catalog[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/connections/state.rs
+check_no_matches \
+  "ConnectionCatalogState must stay inside the connections module" \
+  'pub([[:space:]]|\(crate\)|\(in crate\)|\(in crate::features\))[[:space:]]+struct[[:space:]]+ConnectionCatalogState' \
+  crates/nyaterm-desktop/src/features/connections/catalog.rs
+check_no_matches \
+  "ConnectionCatalogState must not be exported through a feature facade" \
+  'ConnectionCatalogState' \
+  crates/nyaterm-desktop/src/features/mod.rs
+check_no_matches \
+  "ConnectionCatalogState must not be exported through the connections facade" \
+  'ConnectionCatalogState' \
+  crates/nyaterm-desktop/src/features/connections/mod.rs
+check_no_matches \
   "ConnectionCatalogState must expose methods, not writable fields" \
   '^[[:space:]]*pub([[:space:]]|\([^)]*\))[[:space:]]+(connections|groups|serial_ports)[[:space:]]*:' \
   crates/nyaterm-desktop/src/features/connections/catalog.rs
-check_no_multiline_matches \
-  "connection catalog access must use ConnectionCatalogState methods" \
-  '(self|this|app)\.connection_catalog[[:space:]]*\.[[:space:]]*(connections|groups|serial_ports)([[:space:]]*\.|[[:space:]]*=)' \
-  crates/nyaterm-desktop/src/features
+check_no_multiline_matches_excluding \
+  "connection catalog access must use ConnectionFeatureState methods outside connections" \
+  '\.[[:space:]]*connection_state[[:space:]]*\.[[:space:]]*catalog[[:space:]]*(\.|=|\[)' \
+  crates/nyaterm-desktop/src/features \
+  'crates/nyaterm-desktop/src/features/connections/**'
+check_no_matches \
+  "connection state must not expose mutable catalog accessors" \
+  'fn[[:space:]]+catalog(_mut|_mutable)|->[[:space:]]*&mut[[:space:]]+ConnectionCatalogState' \
+  crates/nyaterm-desktop/src/features/connections
 check_no_matches \
   "connection catalog transformations must stay on ConnectionCatalogState" \
   'fn[[:space:]]+(connections_reordered_into_group|group_is_descendant)[[:space:]]*\(' \

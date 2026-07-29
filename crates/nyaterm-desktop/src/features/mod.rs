@@ -44,9 +44,8 @@ pub(in crate::features) use commands::{
     quick_command_view_mode_from_setting,
 };
 pub(in crate::features) use connections::{
-    ConnectionCatalogState, ConnectionDragKind, ConnectionDragPayload, ConnectionDragPreview,
-    ConnectionDropPosition, ConnectionDropTarget, ConnectionEditorToggle, ConnectionFeatureFocus,
-    ConnectionFeatureState,
+    ConnectionDragKind, ConnectionDragPayload, ConnectionDragPreview, ConnectionDropPosition,
+    ConnectionDropTarget, ConnectionEditorToggle, ConnectionFeatureFocus, ConnectionFeatureState,
 };
 pub(in crate::features) use formatting::{
     compact_id, configured_cloud_sync_provider, docker_compose_project_key, docker_state_color,

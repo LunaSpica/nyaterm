@@ -530,9 +530,8 @@ impl NyaTermApp {
                 let path = store.db_path().display().to_string();
                 match store.load_sessions() {
                     Ok(config) => {
-                        self.connection_catalog
+                        self.connection_state
                             .replace_loaded(config.connections, config.groups);
-                        self.retain_connection_list_references_from_loaded_store();
                         self.security.replace_catalog(
                             store.list_ssh_keys().unwrap_or_default(),
                             store.list_otp_entries().unwrap_or_default(),
@@ -595,7 +594,7 @@ impl NyaTermApp {
                         );
                     }
                     Err(error) => {
-                        self.connection_catalog.clear_loaded();
+                        self.connection_state.clear_loaded();
                         self.security.clear_catalog();
                         self.tunnel_state.clear_catalog();
                         self.commands.clear_loaded();
@@ -614,7 +613,7 @@ impl NyaTermApp {
                 }
             }
             Err(error) => {
-                self.connection_catalog.clear_connections();
+                self.connection_state.clear_connections();
                 self.tunnel_state.clear_catalog();
                 self.commands.clear_loaded();
                 self.apply_gpui_settings(AppSettingsSummary::default());
@@ -633,22 +632,5 @@ impl NyaTermApp {
                 );
             }
         }
-    }
-
-    fn retain_connection_list_references_from_loaded_store(&mut self) {
-        let connection_ids = self
-            .connection_catalog
-            .connections()
-            .iter()
-            .map(|connection| connection.id.clone())
-            .collect::<std::collections::HashSet<_>>();
-        let group_ids = self
-            .connection_catalog
-            .groups()
-            .iter()
-            .map(|group| group.id.clone())
-            .collect::<std::collections::HashSet<_>>();
-        self.connection_state
-            .retain_loaded_list_references(&connection_ids, &group_ids);
     }
 }

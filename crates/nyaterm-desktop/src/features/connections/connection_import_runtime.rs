@@ -137,12 +137,7 @@ impl NyaTermApp {
         match result {
             ConnectionImportResult::Imported(count) => {
                 self.refresh_store_from_runtime();
-                self.connection_state.expand_list_groups(
-                    self.connection_catalog
-                        .groups()
-                        .iter()
-                        .map(|group| group.id.clone()),
-                );
+                self.connection_state.expand_all_catalog_groups();
                 let message = self
                     .tr("savedConnections.importSuccess")
                     .replace("{{count}}", &count.to_string());

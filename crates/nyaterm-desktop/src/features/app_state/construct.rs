@@ -17,15 +17,15 @@ use std::sync::Arc;
 use super::super::settings::{SettingsFeatureFocus, SettingsFeatureState};
 use super::super::{
     AiFeatureFocus, AiFeatureState, CloudSyncFeatureState, CommandFeatureInit, CommandFeatureState,
-    ConnectionCatalogState, ConnectionFeatureFocus, ConnectionFeatureState,
-    INITIAL_TERMINAL_BANNER, NativeOtpProvider, QuickCommandFeatureFocus, RecordingFeatureState,
-    RemoteOpsFeatureFocus, RemoteOpsFeatureState, SecurityCatalogState, SecurityFeatureFocus,
-    SecurityFeatureState, SendCommandFeatureFocus, SendCommandFeatureState, SessionFeatureFocus,
-    SessionFeatureState, ShellFeatureInit, ShellFeatureState, SyncInputFeatureState,
-    TerminalFeatureFocus, TerminalFeatureState, TextInputRegistry, TransferFeatureFocus,
-    TransferFeatureState, TranslationFeatureState, TunnelCatalogState, TunnelFeatureState,
-    UpdateFeatureState, ai_active_profile_drafts, ai_usage_counts, appearance_font_options,
-    quick_command_sort_mode_from_setting, quick_command_view_mode_from_setting,
+    ConnectionFeatureFocus, ConnectionFeatureState, INITIAL_TERMINAL_BANNER, NativeOtpProvider,
+    QuickCommandFeatureFocus, RecordingFeatureState, RemoteOpsFeatureFocus, RemoteOpsFeatureState,
+    SecurityCatalogState, SecurityFeatureFocus, SecurityFeatureState, SendCommandFeatureFocus,
+    SendCommandFeatureState, SessionFeatureFocus, SessionFeatureState, ShellFeatureInit,
+    ShellFeatureState, SyncInputFeatureState, TerminalFeatureFocus, TerminalFeatureState,
+    TextInputRegistry, TransferFeatureFocus, TransferFeatureState, TranslationFeatureState,
+    TunnelCatalogState, TunnelFeatureState, UpdateFeatureState, ai_active_profile_drafts,
+    ai_usage_counts, appearance_font_options, quick_command_sort_mode_from_setting,
+    quick_command_view_mode_from_setting,
 };
 use super::NyaTermApp;
 use crate::models::panel_collapsed_from_persistence;
@@ -267,8 +267,9 @@ impl NyaTermApp {
         Self {
             stores,
             runtime,
-            connection_catalog: ConnectionCatalogState::new(connections, connection_groups),
             connection_state: ConnectionFeatureState::new(
+                connections,
+                connection_groups,
                 &settings,
                 ConnectionFeatureFocus {
                     filter_placeholder: connections_filter_placeholder.into(),

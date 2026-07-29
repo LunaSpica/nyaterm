@@ -229,7 +229,7 @@ impl NyaTermApp {
             serial_sessions,
             open_tunnels,
             pending_tunnels: self.tunnel_state.pending_count(),
-            saved_connections: self.connection_catalog.connections().len(),
+            saved_connections: self.connection_state.connections().len(),
             saved_tunnels: self.tunnel_state.tunnels().len(),
             running_transfers,
             paused_transfers,

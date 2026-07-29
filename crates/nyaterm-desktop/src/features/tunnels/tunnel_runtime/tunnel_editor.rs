@@ -1,5 +1,5 @@
 use gpui::{Context, Window};
-use nyaterm_core::{ConnectionStore, ConnectionType, TunnelConfig, uuid};
+use nyaterm_core::{ConnectionStore, TunnelConfig, uuid};
 
 use super::helpers::{network_section_key, parse_port};
 use crate::features::NyaTermApp;
@@ -125,17 +125,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn cycle_network_tunnel_connection(&mut self, cx: &mut Context<Self>) {
-        let connection_ids = self
-            .connection_catalog
-            .connections()
-            .iter()
-            .filter(|connection| matches!(&connection.config, ConnectionType::Ssh { .. }))
-            .map(|connection| connection.id.as_str())
-            .collect::<Vec<_>>();
-        if self
-            .connection_state
-            .cycle_network_tunnel_connection(connection_ids)
-        {
+        if self.connection_state.cycle_network_tunnel_connection() {
             self.shell.status = "tunnel SSH connection changed".to_string();
             cx.notify();
         }
@@ -192,7 +182,7 @@ impl NyaTermApp {
             return;
         };
         if !self
-            .connection_catalog
+            .connection_state
             .connections()
             .iter()
             .any(|connection| connection.id == connection_id)

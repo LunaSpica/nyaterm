@@ -2,7 +2,7 @@ use nyaterm_core::AppRuntime;
 
 use super::ai::AiFeatureState;
 use super::commands::CommandFeatureState;
-use super::connections::{ConnectionCatalogState, ConnectionFeatureState};
+use super::connections::ConnectionFeatureState;
 use super::panels::SendCommandFeatureState;
 use super::recording::RecordingFeatureState;
 use super::remote::RemoteOpsFeatureState;
@@ -26,7 +26,6 @@ pub(in crate::features) use types::SettingsDraftSnapshot;
 pub struct NyaTermApp {
     pub(in crate::features) stores: crate::entities::UiStoreHandles,
     pub(in crate::features) runtime: AppRuntime,
-    pub(in crate::features) connection_catalog: ConnectionCatalogState,
     pub(in crate::features) connection_state: ConnectionFeatureState,
     /// Real text inputs for the panels that have not been given their own,
     /// keyed by an id the panel picks. See `features::text_inputs`.

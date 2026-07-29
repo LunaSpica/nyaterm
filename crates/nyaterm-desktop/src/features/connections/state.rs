@@ -4,8 +4,9 @@ use gpui::{
     App, AppContext as _, Context, Entity, FocusHandle, Pixels, ScrollHandle, SharedString,
     Subscription, WindowHandle,
 };
-use nyaterm_core::{AppSettingsSummary, Group, SavedConnection};
+use nyaterm_core::{AppSettingsSummary, ConnectionType, Group, SavedConnection};
 
+use super::catalog::ConnectionCatalogState;
 use super::connection_runtime::{ConnectionEditorToggle, ConnectionEditorWindow};
 use super::connections::{ConnectionDragKind, ConnectionDropPosition, ConnectionDropTarget};
 use crate::features::NyaTermApp;
@@ -62,6 +63,7 @@ use self::network_logic::{
 };
 
 pub(in crate::features) struct ConnectionFeatureState {
+    catalog: ConnectionCatalogState,
     list: ConnectionListState,
     import: ConnectionImportState,
     editor: ConnectionEditorFeatureState,
@@ -172,6 +174,8 @@ struct NetworkFeatureState {
 
 impl ConnectionFeatureState {
     pub fn new(
+        connections: Vec<SavedConnection>,
+        groups: Vec<Group>,
         settings: &AppSettingsSummary,
         focus: ConnectionFeatureFocus,
         cx: &mut Context<NyaTermApp>,
@@ -190,6 +194,7 @@ impl ConnectionFeatureState {
             },
         );
         Self {
+            catalog: ConnectionCatalogState::new(connections, groups),
             list: ConnectionListState {
                 search_field,
                 search_draft: String::new(),
@@ -260,6 +265,76 @@ impl ConnectionFeatureState {
         }
     }
 
+    pub fn connections(&self) -> &[SavedConnection] {
+        self.catalog.connections()
+    }
+
+    pub fn groups(&self) -> &[Group] {
+        self.catalog.groups()
+    }
+
+    pub fn serial_ports(&self) -> &[String] {
+        self.catalog.serial_ports()
+    }
+
+    pub fn replace_loaded(&mut self, connections: Vec<SavedConnection>, groups: Vec<Group>) {
+        self.catalog.replace_loaded(connections, groups);
+        self.retain_list_references_for_catalog();
+    }
+
+    pub fn clear_loaded(&mut self) {
+        self.catalog.clear_loaded();
+        self.retain_list_references_for_catalog();
+    }
+
+    pub fn clear_connections(&mut self) {
+        self.catalog.clear_connections();
+        self.retain_list_references_for_catalog();
+    }
+
+    pub fn replace_connections(&mut self, connections: Vec<SavedConnection>) {
+        self.catalog.replace_connections(connections);
+        self.retain_list_references_for_catalog();
+    }
+
+    pub fn replace_serial_ports(&mut self, serial_ports: Vec<String>) {
+        self.catalog.replace_serial_ports(serial_ports);
+    }
+
+    pub fn update_connection(&mut self, updated: SavedConnection) -> bool {
+        self.catalog.update_connection(updated)
+    }
+
+    pub fn connections_reordered_into_group(
+        &self,
+        source_ids: &[String],
+        group_id: &Option<String>,
+    ) -> Vec<SavedConnection> {
+        self.catalog
+            .connections_reordered_into_group(source_ids, group_id)
+    }
+
+    pub fn group_is_descendant(&self, candidate_id: &str, ancestor_id: &str) -> bool {
+        self.catalog.group_is_descendant(candidate_id, ancestor_id)
+    }
+
+    fn retain_list_references_for_catalog(&mut self) {
+        let connection_ids = self
+            .catalog
+            .connections()
+            .iter()
+            .map(|connection| connection.id.clone())
+            .collect::<HashSet<_>>();
+        let group_ids = self
+            .catalog
+            .groups()
+            .iter()
+            .map(|group| group.id.clone())
+            .collect::<HashSet<_>>();
+        self.list
+            .retain_loaded_references(&connection_ids, &group_ids);
+    }
+
     pub fn list_search_query(&self) -> String {
         self.list.search_query()
     }
@@ -292,27 +367,22 @@ impl ConnectionFeatureState {
         self.list.contains_selected_id(connection_id)
     }
 
-    pub fn selected_connections(&self, connections: &[SavedConnection]) -> Vec<SavedConnection> {
-        selected_connections_for_list_state(connections, &self.list.selected_ids)
+    pub fn selected_connections(&self) -> Vec<SavedConnection> {
+        selected_connections_for_list_state(self.catalog.connections(), &self.list.selected_ids)
     }
 
-    pub fn saved_connections_in_group_tree(
-        &self,
-        connections: &[SavedConnection],
-        groups: &[Group],
-        group_id: &str,
-    ) -> Vec<SavedConnection> {
-        saved_connections_in_group_tree_for_list_state(connections, groups, group_id)
+    pub fn saved_connections_in_group_tree(&self, group_id: &str) -> Vec<SavedConnection> {
+        saved_connections_in_group_tree_for_list_state(
+            self.catalog.connections(),
+            self.catalog.groups(),
+            group_id,
+        )
     }
 
-    pub fn visible_connection_ids(
-        &self,
-        connections: &[SavedConnection],
-        groups: &[Group],
-    ) -> Vec<String> {
+    pub fn visible_connection_ids(&self) -> Vec<String> {
         visible_connection_ids_for_list_state(
-            connections,
-            groups,
+            self.catalog.connections(),
+            self.catalog.groups(),
             &self.list.search_query(),
             self.list.sort_mode,
             &self.list.expanded_group_ids,
@@ -443,7 +513,13 @@ impl ConnectionFeatureState {
         self.list.expand_group(group_id);
     }
 
-    pub fn expand_list_groups(&mut self, group_ids: impl IntoIterator<Item = String>) {
+    pub fn expand_all_catalog_groups(&mut self) {
+        let group_ids = self
+            .catalog
+            .groups()
+            .iter()
+            .map(|group| group.id.clone())
+            .collect::<Vec<_>>();
         self.list.expand_groups(group_ids);
     }
 
@@ -481,15 +557,6 @@ impl ConnectionFeatureState {
 
     pub fn remove_list_group_references(&mut self, group_id: &str) {
         self.list.remove_group_references(group_id);
-    }
-
-    pub fn retain_loaded_list_references(
-        &mut self,
-        connection_ids: &HashSet<String>,
-        group_ids: &HashSet<String>,
-    ) {
-        self.list
-            .retain_loaded_references(connection_ids, group_ids);
     }
 
     /// The editor's fields, for handing to the render sections.
@@ -994,11 +1061,16 @@ impl ConnectionFeatureState {
         self.network.cycle_tunnel_type()
     }
 
-    pub fn cycle_network_tunnel_connection<'a>(
-        &mut self,
-        connection_ids: impl IntoIterator<Item = &'a str>,
-    ) -> bool {
-        self.network.cycle_tunnel_connection(connection_ids)
+    pub fn cycle_network_tunnel_connection(&mut self) -> bool {
+        let connection_ids = self
+            .catalog
+            .connections()
+            .iter()
+            .filter(|connection| matches!(&connection.config, ConnectionType::Ssh { .. }))
+            .map(|connection| connection.id.clone())
+            .collect::<Vec<_>>();
+        self.network
+            .cycle_tunnel_connection(connection_ids.iter().map(String::as_str))
     }
 
     pub fn cycle_network_tunnel_group<'a>(

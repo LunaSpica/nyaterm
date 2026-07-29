@@ -5,14 +5,14 @@
 
 use nyaterm_core::{Group, SavedConnection};
 
-pub(in crate::features) struct ConnectionCatalogState {
+pub(super) struct ConnectionCatalogState {
     connections: Vec<SavedConnection>,
     groups: Vec<Group>,
     serial_ports: Vec<String>,
 }
 
 impl ConnectionCatalogState {
-    pub(in crate::features) fn new(connections: Vec<SavedConnection>, groups: Vec<Group>) -> Self {
+    pub(super) fn new(connections: Vec<SavedConnection>, groups: Vec<Group>) -> Self {
         Self {
             connections,
             groups,
@@ -20,45 +20,41 @@ impl ConnectionCatalogState {
         }
     }
 
-    pub(in crate::features) fn connections(&self) -> &[SavedConnection] {
+    pub(super) fn connections(&self) -> &[SavedConnection] {
         &self.connections
     }
 
-    pub(in crate::features) fn groups(&self) -> &[Group] {
+    pub(super) fn groups(&self) -> &[Group] {
         &self.groups
     }
 
-    pub(in crate::features) fn serial_ports(&self) -> &[String] {
+    pub(super) fn serial_ports(&self) -> &[String] {
         &self.serial_ports
     }
 
-    pub(in crate::features) fn replace_loaded(
-        &mut self,
-        connections: Vec<SavedConnection>,
-        groups: Vec<Group>,
-    ) {
+    pub(super) fn replace_loaded(&mut self, connections: Vec<SavedConnection>, groups: Vec<Group>) {
         self.connections = connections;
         self.groups = groups;
     }
 
-    pub(in crate::features) fn clear_loaded(&mut self) {
+    pub(super) fn clear_loaded(&mut self) {
         self.connections.clear();
         self.groups.clear();
     }
 
-    pub(in crate::features) fn clear_connections(&mut self) {
+    pub(super) fn clear_connections(&mut self) {
         self.connections.clear();
     }
 
-    pub(in crate::features) fn replace_connections(&mut self, connections: Vec<SavedConnection>) {
+    pub(super) fn replace_connections(&mut self, connections: Vec<SavedConnection>) {
         self.connections = connections;
     }
 
-    pub(in crate::features) fn replace_serial_ports(&mut self, serial_ports: Vec<String>) {
+    pub(super) fn replace_serial_ports(&mut self, serial_ports: Vec<String>) {
         self.serial_ports = serial_ports;
     }
 
-    pub(in crate::features) fn update_connection(&mut self, updated: SavedConnection) -> bool {
+    pub(super) fn update_connection(&mut self, updated: SavedConnection) -> bool {
         let Some(connection) = self
             .connections
             .iter_mut()
@@ -70,7 +66,7 @@ impl ConnectionCatalogState {
         true
     }
 
-    pub(in crate::features) fn connections_reordered_into_group(
+    pub(super) fn connections_reordered_into_group(
         &self,
         source_ids: &[String],
         group_id: &Option<String>,
@@ -97,11 +93,7 @@ impl ConnectionCatalogState {
         staying
     }
 
-    pub(in crate::features) fn group_is_descendant(
-        &self,
-        candidate_id: &str,
-        ancestor_id: &str,
-    ) -> bool {
+    pub(super) fn group_is_descendant(&self, candidate_id: &str, ancestor_id: &str) -> bool {
         let mut current = Some(candidate_id);
         for _ in 0..=64 {
             let Some(id) = current else {
@@ -174,6 +166,29 @@ mod tests {
 
         assert!(catalog.connections().is_empty());
         assert!(catalog.groups().is_empty());
+        assert_eq!(catalog.serial_ports(), ["ttyUSB0"]);
+    }
+
+    #[test]
+    fn clearing_connections_preserves_groups_and_runtime_discovery() {
+        let group = Group {
+            id: "group-1".to_string(),
+            name: "Group".to_string(),
+            parent_id: None,
+            sort_order: 0,
+            created_at_ms: None,
+            updated_at_ms: None,
+        };
+        let mut catalog = ConnectionCatalogState::new(
+            vec![connection("connection-1", Some("group-1"), 0)],
+            vec![group.clone()],
+        );
+        catalog.replace_serial_ports(vec!["ttyUSB0".to_string()]);
+
+        catalog.clear_connections();
+
+        assert!(catalog.connections().is_empty());
+        assert_eq!(catalog.groups(), [group]);
         assert_eq!(catalog.serial_ports(), ["ttyUSB0"]);
     }
 

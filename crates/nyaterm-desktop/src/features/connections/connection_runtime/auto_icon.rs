@@ -27,7 +27,7 @@ impl NyaTermApp {
         };
 
         let Some(connection) = self
-            .connection_catalog
+            .connection_state
             .connections()
             .iter()
             .find(|connection| connection.id == connection_id)

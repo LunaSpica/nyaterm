@@ -177,7 +177,7 @@ impl NyaTermApp {
 
         let mut items = session_items;
 
-        let mut connections = self.connection_catalog.connections().to_vec();
+        let mut connections = self.connection_state.connections().to_vec();
         connections.sort_by(|left, right| {
             left.name
                 .to_ascii_lowercase()

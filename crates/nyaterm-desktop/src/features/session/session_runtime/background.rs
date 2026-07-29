@@ -499,7 +499,7 @@ impl NyaTermApp {
                             store.get_connection(connection_id)
                         }) {
                             Ok(Some(updated)) => {
-                                self.connection_catalog.update_connection(updated);
+                                self.connection_state.update_connection(updated);
                             }
                             Ok(None) => {}
                             Err(error) => tracing::warn!(

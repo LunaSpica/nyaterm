@@ -16,7 +16,7 @@ pub(in crate::features::pages::tunnels) fn network_tunnel_editor_panel(
         .connection_id
         .as_deref()
         .and_then(|id| {
-            app.connection_catalog
+            app.connection_state
                 .connections()
                 .iter()
                 .find(|connection| connection.id == id)

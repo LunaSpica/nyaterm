@@ -54,7 +54,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(connection) = self
-            .connection_catalog
+            .connection_state
             .connections()
             .iter()
             .find(|connection| connection.id == connection_id)
@@ -82,9 +82,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let selected = self
-            .connection_state
-            .selected_connections(self.connection_catalog.connections());
+        let selected = self.connection_state.selected_connections();
         if selected.is_empty() {
             self.shell.status = "select saved connections before connecting".to_string();
             cx.notify();
@@ -101,11 +99,9 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let connections = self.connection_state.saved_connections_in_group_tree(
-            self.connection_catalog.connections(),
-            self.connection_catalog.groups(),
-            &group_id,
-        );
+        let connections = self
+            .connection_state
+            .saved_connections_in_group_tree(&group_id);
         if connections.is_empty() {
             self.shell.status = "group has no connections".to_string();
             cx.notify();
@@ -123,7 +119,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(group) = self
-            .connection_catalog
+            .connection_state
             .groups()
             .iter()
             .find(|group| group.id == group_id)
@@ -132,11 +128,7 @@ impl NyaTermApp {
         };
         let connection_count = self
             .connection_state
-            .saved_connections_in_group_tree(
-                self.connection_catalog.connections(),
-                self.connection_catalog.groups(),
-                &group_id,
-            )
+            .saved_connections_in_group_tree(&group_id)
             .len();
         if connection_count == 0 {
             return;
