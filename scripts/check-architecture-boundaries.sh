@@ -176,6 +176,18 @@ check_no_matches \
   "remote event identity matching must stay on RemoteJobState" \
   'fn[[:space:]]+remote_job_event_matches[[:space:]]*\(' \
   crates/nyaterm-desktop/src/features
+check_no_multiline_matches \
+  "RemoteOpsFeatureState pane children must remain private" \
+  'struct[[:space:]]+RemoteOpsFeatureState[[:space:]]*\{[^}]*pub([[:space:]]|\([^)]*\))[[:space:]]+(docker|process|stats)[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/remote/state.rs
+check_no_matches \
+  "remote pane implementation types must remain private" \
+  'pub([[:space:]]|\([^)]*\))[[:space:]]+struct[[:space:]]+(DockerPaneState|ProcessPaneState|StatsPaneState)' \
+  crates/nyaterm-desktop/src/features/remote/state.rs
+check_no_multiline_matches \
+  "remote pane state must be accessed through RemoteOpsFeatureState" \
+  '(self|this|app)\.remote_ops[[:space:]]*\.(docker|process|stats)(\.|[[:space:]]*=)' \
+  crates/nyaterm-desktop/src/features
 
 check_no_matches \
   "settings transient UI fields must stay grouped under SettingsFeatureState" \

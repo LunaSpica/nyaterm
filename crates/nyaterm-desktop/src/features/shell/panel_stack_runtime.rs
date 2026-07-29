@@ -582,35 +582,20 @@ impl NyaTermApp {
                     SharedString::from(self.transfer.browser.entries.len().to_string())
                 }
             }
-            NavItem::Processes => {
-                if self.session.active_ssh_config().is_none()
-                    || !self.remote_ops.process.snapshot_loaded
-                    || self.remote_ops.process.items.is_empty()
-                {
-                    SharedString::from("")
-                } else {
-                    SharedString::from(self.remote_ops.process.items.len().to_string())
-                }
-            }
+            NavItem::Processes => self
+                .session
+                .active_ssh_config()
+                .and_then(|_| self.remote_ops.loaded_process_count())
+                .map(|count| SharedString::from(count.to_string()))
+                .unwrap_or_else(|| SharedString::from("")),
             NavItem::Docker => {
                 if self.session.active_ssh_config().is_none() {
                     return SharedString::from("");
                 }
-                let Some(overview) = self
-                    .remote_ops
-                    .docker
-                    .overview
-                    .as_ref()
-                    .filter(|overview| overview.available)
-                else {
+                let Some(version) = self.remote_ops.docker_engine_version() else {
                     return SharedString::from("");
                 };
-                let version = if overview.version.trim().is_empty() {
-                    "-"
-                } else {
-                    overview.version.trim()
-                };
-                SharedString::from(format!("Engine {}", truncate_preview(version, 24)))
+                SharedString::from(format!("Engine {}", truncate_preview(&version, 24)))
             }
             // Tauri SecurityAuthPanel header actions show active-tab count.
             NavItem::SecurityAuth => {
@@ -725,7 +710,7 @@ impl NyaTermApp {
             NavItem::Stats => {
                 let palette = self.theme_palette();
                 let can_refresh = self.session.active_ssh_config().is_some()
-                    && !self.remote_ops.stats.is_pending();
+                    && !self.remote_ops.stats_is_pending();
                 Some(
                     header_svg_icon_button(
                         palette,
@@ -743,7 +728,7 @@ impl NyaTermApp {
             NavItem::Processes => {
                 let palette = self.theme_palette();
                 let can_refresh = self.session.active_ssh_config().is_some()
-                    && !self.remote_ops.process.is_pending();
+                    && !self.remote_ops.process_is_pending();
                 Some(
                     header_svg_icon_button(
                         palette,
@@ -761,14 +746,8 @@ impl NyaTermApp {
             NavItem::Docker => {
                 let palette = self.theme_palette();
                 let can_refresh = self.session.active_ssh_config().is_some()
-                    && !self.remote_ops.docker.is_pending();
-                let can_prune = can_refresh
-                    && self
-                        .remote_ops
-                        .docker
-                        .overview
-                        .as_ref()
-                        .is_some_and(|overview| overview.available);
+                    && !self.remote_ops.docker_is_pending();
+                let can_prune = can_refresh && self.remote_ops.docker_can_prune();
                 let more_label = self.tr("dockerManager.moreActions").to_string();
                 let prune_label = self.tr("dockerManager.prune");
                 Some(
@@ -797,12 +776,11 @@ impl NyaTermApp {
                                     more_label,
                                     can_prune,
                                     cx.listener(|this, _, _, cx| {
-                                        this.remote_ops.docker.header_menu_open =
-                                            !this.remote_ops.docker.header_menu_open;
+                                        this.remote_ops.toggle_docker_header_menu();
                                         cx.notify();
                                     }),
                                 ))
-                                .when(self.remote_ops.docker.header_menu_open, |this| {
+                                .when(self.remote_ops.docker_header_menu_open(), |this| {
                                     this.child(
                                         div()
                                             .id("docker-header-more-menu")
@@ -837,8 +815,7 @@ impl NyaTermApp {
                                                     )
                                                     .child(prune_label)
                                                     .on_click(cx.listener(|this, _, _, cx| {
-                                                        this.remote_ops.docker.header_menu_open =
-                                                            false;
+                                                        this.remote_ops.close_docker_menus();
                                                         this.prune_docker_system(cx);
                                                     })),
                                             ),

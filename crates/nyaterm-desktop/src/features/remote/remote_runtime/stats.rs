@@ -13,27 +13,29 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(config) = self.session.active_ssh_config_owned() else {
-            self.remote_ops.stats.status =
-                "start an SSH session before inspecting stats".to_string();
-            self.terminal.view.status = self.remote_ops.stats.status.clone();
+            self.remote_ops
+                .set_stats_status("start an SSH session before inspecting stats");
+            self.terminal.view.status = self.remote_ops.stats_status().to_string();
             cx.notify();
             return;
         };
         let Some(job_session_id) = self.session.active_id_owned() else {
-            self.remote_ops.stats.status =
-                "start an SSH session before inspecting stats".to_string();
+            self.remote_ops
+                .set_stats_status("start an SSH session before inspecting stats");
             cx.notify();
             return;
         };
-        if self.remote_ops.stats.is_pending_for(&job_session_id) {
-            self.remote_ops.stats.status = "stats refresh already running".to_string();
+        if self.remote_ops.stats_is_pending_for(&job_session_id) {
+            self.remote_ops
+                .set_stats_status("stats refresh already running");
             cx.notify();
             return;
         }
 
-        let ticket = self.remote_ops.stats.begin_job(job_session_id.clone());
-        self.remote_ops.stats.mark_refresh_started();
-        self.remote_ops.stats.status = "loading remote system stats".to_string();
+        let ticket = self.remote_ops.begin_stats_job(job_session_id.clone());
+        self.remote_ops.mark_stats_refresh_started();
+        self.remote_ops
+            .set_stats_status("loading remote system stats");
         std::thread::spawn(move || {
             let result = RemoteStatsService::new(config)
                 .snapshot()
@@ -48,20 +50,19 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn toggle_stats_cpu_expanded(&mut self, cx: &mut Context<Self>) {
-        self.remote_ops.stats.toggle_cpu_expanded();
+        self.remote_ops.toggle_stats_cpu_expanded();
         cx.notify();
     }
 
     pub(in crate::features) fn drain_stats_events(&mut self) -> bool {
         let mut dirty = false;
         for _ in 0..STATS_EVENT_DRAIN_LIMIT {
-            let Some(event) = self.remote_ops.stats.next_event() else {
+            let Some(event) = self.remote_ops.next_stats_event() else {
                 break;
             };
             if !self
                 .remote_ops
-                .stats
-                .complete_event(event.job_id, &event.session_id)
+                .complete_stats_event(event.job_id, &event.session_id)
             {
                 continue;
             }
@@ -71,8 +72,8 @@ impl NyaTermApp {
             }
             match event.result {
                 Ok(stats) => {
-                    self.remote_ops.stats.reset_refresh_failures();
-                    self.remote_ops.stats.status = format!(
+                    self.remote_ops.reset_stats_refresh_failures();
+                    self.remote_ops.set_stats_status(format!(
                         "loaded stats for {} · load {:.2}/{:.2}/{:.2}",
                         if stats.system.hostname.trim().is_empty() {
                             "remote host"
@@ -82,19 +83,18 @@ impl NyaTermApp {
                         stats.load.load1,
                         stats.load.load5,
                         stats.load.load15
-                    );
-                    self.terminal.view.status = self.remote_ops.stats.status.clone();
+                    ));
+                    self.terminal.view.status = self.remote_ops.stats_status().to_string();
                     // The snapshot is the only place the remote OS is reported,
                     // so this is where a connection's icon can be filled in.
                     self.apply_auto_detected_connection_icon(&event.session_id, &stats.system);
-                    self.remote_ops.stats.data = Some(stats);
+                    self.remote_ops.apply_stats(stats);
                 }
                 Err(error) => {
-                    if self.remote_ops.stats.record_refresh_failure() >= 3 {
-                        self.remote_ops.stats.data = None;
-                    }
-                    self.remote_ops.stats.status = format!("stats refresh failed: {error}");
-                    self.terminal.view.status = self.remote_ops.stats.status.clone();
+                    self.remote_ops.record_stats_refresh_failure();
+                    self.remote_ops
+                        .set_stats_status(format!("stats refresh failed: {error}"));
+                    self.terminal.view.status = self.remote_ops.stats_status().to_string();
                 }
             }
         }

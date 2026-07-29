@@ -203,8 +203,13 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   switches, and the channels are private to the state module. Docker tab/search/
   confirm/details transitions, process filter/sort/selection/nice/signal state,
   Stats expansion, result collection and session-switch cleanup also execute on
-  the pane owners. `NyaTermApp` retains SSH service launch, terminal status
-  mirroring, active-session policy and GPUI notification.
+  the pane owners. The complete follow-up encapsulation pass then made all three
+  pane children and their implementation types private. Views now receive
+  immutable per-render presentation values; menus, virtual-list offsets,
+  Docker details/Compose caches and confirmations, process PID-scoped
+  interaction, Stats data and every typed job transition enter through
+  `RemoteOpsFeatureState`. `NyaTermApp` retains SSH service launch, terminal
+  status mirroring, active-session policy and GPUI notification.
 - Security panel state is grouped into `SecurityFeatureState`: the four editors
   and their focus handles in `editors`, revealed passwords/credentials and
   generated OTP codes in `revealed`, and the master password prompt in
@@ -1461,6 +1466,7 @@ Current ownership map:
 | Command history and persistence worker | Private state in `NyaTermApp.commands` | Persisted catalog plus background runtime | History snapshots, queue admission, event polling and idle checks enter through `CommandFeatureState`; failed optimistic use-count updates roll back on the owner. |
 | Send-command composer/options/progress | Private children in `NyaTermApp.send_command` | Transient editor and send lifecycle | Views receive immutable presentation data; control edits, mutually-exclusive menus, data/mode defaults, progress counters and cancellation enter through `SendCommandFeatureState`. Session selection, terminal writes, GPUI/text-input routing and status remain in adapters. |
 | Settings interaction and prompts | Private children in `NyaTermApp.settings` | Transient settings UI and prompt lifecycle | Search-engine rows, keyword-highlight editing, appearance menus, keybinding recording/search and config/diagnostics/import/password prompt admission enter through `SettingsFeatureState`; views use immutable presentation values and read-only focus/font access. Persistence, native filesystem prompts, text inputs and GPUI notification remain in adapters. |
+| Remote Docker/process/stats panes | Private children in `NyaTermApp.remote_ops` | Transient UI state plus typed background-event lifecycle | Views use immutable presentation values; menu exclusion, list-offset clamping, Docker details/Compose/confirmation cleanup, process PID-scoped cleanup, Stats expansion/data and job identity/failure timing enter through `RemoteOpsFeatureState`. SSH service launch, active-session policy, terminal status mirroring and GPUI notification remain in adapters. |
 | Live session manager/event bridge | Private services in `NyaTermApp.session` | Runtime services | Callers receive a shared manager reference/handle and use bridge routing, drain and metrics methods; neither service field is writable outside `SessionFeatureState`. |
 | Session restore/event queue | Private state in `NyaTermApp.session` | Transient runtime coordination | Restore completion is idempotent and pending transport events are counted, extended and popped only through owner methods; event interpretation stays in the event-pump adapter. |
 | Session command history/search/menu/busy state | Private state in `NyaTermApp.session` | Transient per-session interaction state | History append/migration/deletion and active-menu/busy transitions are owner operations; beginning reconnect/disconnect closes the menu in the same transition. |
@@ -1752,7 +1758,11 @@ honest remaining list.
    search-row deletion with index correction, mutually exclusive menus,
    keyword edit cleanup, keybinding recording state and kind-matched prompt
    completion on `SettingsFeatureState` while leaving persistence and native
-   path prompts in adapters. Cloud sync
+   path prompts in adapters. The RemoteOps encapsulation pass then made all
+   three Docker/process/Stats pane children private, routed views through
+   immutable presentation values, and moved menu, scrolling, details/Compose,
+   PID-scoped interaction and typed job transitions behind the domain owner.
+   SSH launch and terminal-status mirroring remain app-level adapters. Cloud sync
    made secret-field routing inaccessible outside
    its owner, and
    recording cleanup can no longer leave its manager, busy map and pipeline out

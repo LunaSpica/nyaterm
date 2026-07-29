@@ -93,8 +93,7 @@ impl NyaTermApp {
                         || this.shell.chrome.new_session_menu_open
                         || this.shell.chrome.new_session_all_sessions_open
                         || !this.shell.chrome.new_session_group_menu_path.is_empty()
-                        || this.remote_ops.docker.tab_menu_open
-                        || this.remote_ops.docker.header_menu_open
+                        || this.remote_ops.docker_menus_open()
                         || this.connection_state.list_more_menu_is_open();
                     if changed {
                         this.shell.chrome.title_menu_open = None;
@@ -104,8 +103,7 @@ impl NyaTermApp {
                         this.shell.chrome.new_session_menu_open = false;
                         this.shell.chrome.new_session_all_sessions_open = false;
                         this.shell.chrome.new_session_group_menu_path.clear();
-                        this.remote_ops.docker.tab_menu_open = false;
-                        this.remote_ops.docker.header_menu_open = false;
+                        this.remote_ops.close_docker_menus();
                         this.connection_state.close_list_more_menu();
                         cx.notify();
                     }

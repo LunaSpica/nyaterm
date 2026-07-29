@@ -13,6 +13,7 @@ use super::docker::{
 
 impl NyaTermApp {
     pub(in crate::features) fn docker_view(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        let mut docker = self.remote_ops.docker_presentation();
         let palette = self.theme_palette();
         let labels = DockerLabels {
             search: self.tr("dockerManager.search"),
@@ -84,7 +85,7 @@ impl NyaTermApp {
         let docker_search_input = self
             .text_input_box(
                 "remote.docker.filter",
-                &self.remote_ops.docker.search_draft.clone(),
+                &docker.search_draft.clone(),
                 TextInputSetup::placeholder(labels.search),
                 cx,
             )
@@ -95,10 +96,8 @@ impl NyaTermApp {
                 .bg(self.shell_transparent_color(palette.surface))
                 .child(empty_panel(labels.no_session, palette));
         }
-        let Some(overview) = self.remote_ops.docker.overview.clone() else {
-            let message = if self.remote_ops.docker.is_pending()
-                || !self.remote_ops.docker.status.contains("failed")
-            {
+        let Some(overview) = docker.overview.take() else {
+            let message = if docker.pending || !docker.status.contains("failed") {
                 labels.loading
             } else {
                 labels.error
@@ -114,18 +113,12 @@ impl NyaTermApp {
                 .bg(self.shell_transparent_color(palette.surface))
                 .child(empty_panel(labels.unavailable, palette));
         }
-        let active_tab =
-            if self.remote_ops.docker.tab == DockerTab::Compose && !overview.compose_available {
-                DockerTab::Containers
-            } else {
-                self.remote_ops.docker.tab
-            };
-        let query = self
-            .remote_ops
-            .docker
-            .search_draft
-            .trim()
-            .to_ascii_lowercase();
+        let active_tab = if docker.tab == DockerTab::Compose && !overview.compose_available {
+            DockerTab::Containers
+        } else {
+            docker.tab
+        };
+        let query = docker.search_draft.trim().to_ascii_lowercase();
         let filtered_containers = overview
             .containers
             .iter()
@@ -162,9 +155,7 @@ impl NyaTermApp {
             const DOCKER_VIEWPORT_ROWS: usize = 16;
             let total = filtered_containers.len();
             let max_offset = total.saturating_sub(DOCKER_VIEWPORT_ROWS.min(total));
-            if self.remote_ops.docker.list_offset > max_offset {
-                self.remote_ops.docker.list_offset = max_offset;
-            }
+            docker.list_offset = self.remote_ops.clamp_docker_list_offset(max_offset);
         }
         {
             const DOCKER_RESOURCE_VIEWPORT_ROWS: usize = 14;
@@ -175,9 +166,7 @@ impl NyaTermApp {
                 _ => 0,
             };
             let max_offset = total.saturating_sub(DOCKER_RESOURCE_VIEWPORT_ROWS.min(total));
-            if self.remote_ops.docker.resource_list_offset > max_offset {
-                self.remote_ops.docker.resource_list_offset = max_offset;
-            }
+            docker.resource_list_offset = self.remote_ops.clamp_docker_resource_offset(max_offset);
         }
 
         let menu_bg = self.shell_surface_color(palette.surface);
@@ -186,13 +175,13 @@ impl NyaTermApp {
             DockerTab::Containers => docker_containers_panel(
                 palette,
                 menu_bg,
-                self.remote_ops.docker.overview.is_some(),
+                true,
                 self.session.active_ssh_config().is_some(),
                 overview.available,
                 &filtered_containers,
                 query.is_empty(),
-                self.remote_ops.docker.container_menu_id.as_deref(),
-                self.remote_ops.docker.list_offset,
+                docker.container_menu_id.as_deref(),
+                docker.list_offset,
                 labels,
                 cx,
             )
@@ -200,7 +189,7 @@ impl NyaTermApp {
             DockerTab::Images => docker_images_panel(
                 palette,
                 &filtered_images,
-                self.remote_ops.docker.resource_list_offset,
+                docker.resource_list_offset,
                 labels,
                 cx,
             )
@@ -208,7 +197,7 @@ impl NyaTermApp {
             DockerTab::Volumes => docker_volumes_panel(
                 palette,
                 &filtered_volumes,
-                self.remote_ops.docker.resource_list_offset,
+                docker.resource_list_offset,
                 labels,
                 cx,
             )
@@ -216,7 +205,7 @@ impl NyaTermApp {
             DockerTab::Networks => docker_networks_panel(
                 palette,
                 &filtered_networks,
-                self.remote_ops.docker.resource_list_offset,
+                docker.resource_list_offset,
                 labels,
                 cx,
             )
@@ -225,10 +214,10 @@ impl NyaTermApp {
                 palette,
                 menu_bg,
                 &filtered_compose_projects,
-                &self.remote_ops.docker.compose_expanded,
-                &self.remote_ops.docker.compose_services,
-                &self.remote_ops.docker.compose_service_errors,
-                self.remote_ops.docker.compose_menu_id.as_deref(),
+                &docker.compose_expanded,
+                &docker.compose_services,
+                &docker.compose_service_errors,
+                docker.compose_menu_id.as_deref(),
                 labels,
                 cx,
             )
@@ -246,24 +235,17 @@ impl NyaTermApp {
             .p(px(10.))
             .gap(px(10.))
             .bg(self.shell_transparent_color(palette.surface))
-            .when(
-                self.remote_ops
-                    .docker
-                    .overview
-                    .as_ref()
-                    .is_some_and(|snapshot| snapshot.available),
-                |this| {
-                    this.child(docker_overview_strip(
-                        palette,
-                        &overview,
-                        [
-                            self.tr("dockerManager.running").to_string(),
-                            self.tr("dockerManager.stopped").to_string(),
-                            self.tr("dockerManager.images").to_string(),
-                        ],
-                    ))
-                },
-            )
+            .when(overview.available, |this| {
+                this.child(docker_overview_strip(
+                    palette,
+                    &overview,
+                    [
+                        self.tr("dockerManager.running").to_string(),
+                        self.tr("dockerManager.stopped").to_string(),
+                        self.tr("dockerManager.images").to_string(),
+                    ],
+                ))
+            })
             .child(
                 div()
                     .h(px(32.))
@@ -291,7 +273,7 @@ impl NyaTermApp {
                 ],
                 self.tr("common.more").to_string(),
                 self.shell.panels.right_width,
-                self.remote_ops.docker.tab_menu_open,
+                docker.tab_menu_open,
                 cx,
             ))
             .child(
@@ -301,25 +283,22 @@ impl NyaTermApp {
                     .overflow_hidden()
                     .child(docker_content),
             )
-            .when_some(
-                self.remote_ops.docker.details_container_id.clone(),
-                |this, container_id| {
-                    this.child(docker_details_panel(
-                        palette,
-                        dialog_bg,
-                        Some(container_id.clone()),
-                        self.remote_ops.docker.details.clone(),
-                        overview
-                            .containers
-                            .iter()
-                            .find(|container| container.id == container_id)
-                            .cloned(),
-                        labels,
-                        cx,
-                    ))
-                },
-            )
-            .when_some(self.remote_ops.docker.confirm.clone(), |this, confirm| {
+            .when_some(docker.details_container_id.clone(), |this, container_id| {
+                this.child(docker_details_panel(
+                    palette,
+                    dialog_bg,
+                    Some(container_id.clone()),
+                    docker.details.clone(),
+                    overview
+                        .containers
+                        .iter()
+                        .find(|container| container.id == container_id)
+                        .cloned(),
+                    labels,
+                    cx,
+                ))
+            })
+            .when_some(docker.confirm.clone(), |this, confirm| {
                 this.child(docker_confirm_panel(
                     palette, dialog_bg, confirm, labels, cx,
                 ))

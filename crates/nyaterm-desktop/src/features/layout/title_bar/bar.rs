@@ -355,7 +355,8 @@ impl NyaTermApp {
         {
             return None;
         }
-        let stats = self.remote_ops.stats.data.as_ref()?;
+        let stats_state = self.remote_ops.stats_presentation();
+        let stats = stats_state.data.as_ref()?;
         if mode == HeaderStatusMode::Host {
             let hostname = stats.system.hostname.trim();
             return Some(format!(
@@ -397,12 +398,13 @@ impl NyaTermApp {
             self.tr("panel.resourceMonitorNoSession").to_string()
         } else if !self.settings.summary.ui_show_remote_stats {
             self.tr("panel.resourceMonitorDisabled").to_string()
-        } else if self.remote_ops.stats.consecutive_refresh_failures() > 0
-            && self.remote_ops.stats.data.is_none()
-        {
-            self.tr("panel.resourceMonitorError").to_string()
         } else {
-            self.tr("common.loading").to_string()
+            let stats = self.remote_ops.stats_presentation();
+            if stats.consecutive_refresh_failures > 0 && stats.data.is_none() {
+                self.tr("panel.resourceMonitorError").to_string()
+            } else {
+                self.tr("common.loading").to_string()
+            }
         }
     }
 

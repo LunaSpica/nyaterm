@@ -57,7 +57,7 @@ pub(in crate::features::pages::remote) fn docker_compose_services_panel(
                         let project_name = project_name.clone();
                         let config_files = config_files.clone();
                         move |this, _, window, cx| {
-                            this.remote_ops.docker.compose_menu_id = None;
+                            this.remote_ops.close_docker_compose_menu();
                             this.load_docker_compose_services(
                                 project_name.clone(),
                                 config_files.clone(),
@@ -219,13 +219,7 @@ pub(in crate::features::pages::remote) fn docker_compose_service_row(
                             let menu_id = menu_id.clone();
                             move |this, _, _, cx| {
                                 cx.stop_propagation();
-                                if this.remote_ops.docker.compose_menu_id.as_deref()
-                                    == Some(menu_id.as_str())
-                                {
-                                    this.remote_ops.docker.compose_menu_id = None;
-                                } else {
-                                    this.remote_ops.docker.compose_menu_id = Some(menu_id.clone());
-                                }
+                                this.remote_ops.toggle_docker_compose_menu(menu_id.clone());
                                 cx.notify();
                             }
                         }),

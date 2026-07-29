@@ -6,7 +6,7 @@
 //! visible instead of spreading fifty-five prefixed fields across `NyaTermApp`.
 
 use std::collections::{HashMap, HashSet};
-use std::sync::mpsc;
+use std::sync::{Arc, mpsc};
 use std::time::Instant;
 
 use nyaterm_transport::{
@@ -20,7 +20,7 @@ use crate::models::{
     RemoteProcessSortKey,
 };
 
-pub(super) struct RemoteJobTicket<Event> {
+pub(in crate::features) struct RemoteJobTicket<Event> {
     pub job_id: u64,
     pub tx: mpsc::Sender<Event>,
 }
@@ -114,15 +114,15 @@ impl<Event> RemoteJobState<Event> {
 }
 
 pub(in crate::features) struct RemoteOpsFeatureState {
-    pub docker: DockerPaneState,
-    pub process: ProcessPaneState,
-    pub stats: StatsPaneState,
+    docker: DockerPaneState,
+    process: ProcessPaneState,
+    stats: StatsPaneState,
 }
 
 /// Focus handles the Remote page needs at construction time.
 pub(in crate::features) struct RemoteOpsFeatureFocus {}
 
-pub(in crate::features) struct DockerPaneState {
+struct DockerPaneState {
     job: RemoteJobState<DockerJobResult>,
     pub overview: Option<RemoteDockerOverview>,
     pub status: String,
@@ -143,9 +143,9 @@ pub(in crate::features) struct DockerPaneState {
     pub resource_list_offset: usize,
 }
 
-pub(in crate::features) struct ProcessPaneState {
+struct ProcessPaneState {
     job: RemoteJobState<ProcessJobResult>,
-    pub items: Vec<RemoteProcess>,
+    pub items: Arc<[RemoteProcess]>,
     pub snapshot_loaded: bool,
     pub status: String,
     pub search_draft: String,
@@ -158,11 +158,56 @@ pub(in crate::features) struct ProcessPaneState {
     pub signal_confirm: Option<RemoteProcessSignalConfirmState>,
 }
 
-pub(in crate::features) struct StatsPaneState {
+struct StatsPaneState {
     job: RemoteJobState<StatsJobResult>,
     pub data: Option<RemoteStats>,
     pub status: String,
     pub cpu_expanded: bool,
+}
+
+#[derive(Clone)]
+pub(in crate::features) struct DockerPresentationState {
+    pub overview: Option<RemoteDockerOverview>,
+    pub status: String,
+    pub details: Option<DockerContainerDetails>,
+    pub details_container_id: Option<String>,
+    pub confirm: Option<DockerConfirmState>,
+    pub container_menu_id: Option<String>,
+    pub compose_menu_id: Option<String>,
+    pub tab: DockerTab,
+    pub tab_menu_open: bool,
+    pub search_draft: String,
+    pub compose_expanded: HashSet<String>,
+    pub compose_services: HashMap<String, Vec<DockerComposeService>>,
+    pub compose_service_errors: HashMap<String, String>,
+    pub list_offset: usize,
+    pub resource_list_offset: usize,
+    pub pending: bool,
+}
+
+#[derive(Clone)]
+pub(in crate::features) struct ProcessPresentationState {
+    pub items: Arc<[RemoteProcess]>,
+    pub snapshot_loaded: bool,
+    pub status: String,
+    pub search_draft: String,
+    pub sort_key: RemoteProcessSortKey,
+    pub sort_direction: RemoteProcessSortDirection,
+    pub list_offset: usize,
+    pub selected_pid: Option<u32>,
+    pub menu_pid: Option<u32>,
+    pub nice_draft: String,
+    pub signal_confirm: Option<RemoteProcessSignalConfirmState>,
+    pub pending: bool,
+}
+
+#[derive(Clone)]
+pub(in crate::features) struct StatsPresentationState {
+    pub data: Option<RemoteStats>,
+    pub status: String,
+    pub cpu_expanded: bool,
+    pub pending: bool,
+    pub consecutive_refresh_failures: u8,
 }
 
 impl RemoteOpsFeatureState {
@@ -190,7 +235,7 @@ impl RemoteOpsFeatureState {
             },
             process: ProcessPaneState {
                 job: RemoteJobState::new(),
-                items: Vec::new(),
+                items: Arc::from([]),
                 snapshot_loaded: false,
                 status: "ready".to_string(),
                 search_draft: String::new(),
@@ -215,6 +260,526 @@ impl RemoteOpsFeatureState {
         self.process.reset_for_session_switch();
         self.stats.reset_for_session_switch();
         self.docker.reset_for_session_switch();
+    }
+
+    pub(in crate::features) fn docker_presentation(&self) -> DockerPresentationState {
+        DockerPresentationState {
+            overview: self.docker.overview.clone(),
+            status: self.docker.status.clone(),
+            details: self.docker.details.clone(),
+            details_container_id: self.docker.details_container_id.clone(),
+            confirm: self.docker.confirm.clone(),
+            container_menu_id: self.docker.container_menu_id.clone(),
+            compose_menu_id: self.docker.compose_menu_id.clone(),
+            tab: self.docker.tab,
+            tab_menu_open: self.docker.tab_menu_open,
+            search_draft: self.docker.search_draft.clone(),
+            compose_expanded: self.docker.compose_expanded.clone(),
+            compose_services: self.docker.compose_services.clone(),
+            compose_service_errors: self.docker.compose_service_errors.clone(),
+            list_offset: self.docker.list_offset,
+            resource_list_offset: self.docker.resource_list_offset,
+            pending: self.docker.is_pending(),
+        }
+    }
+
+    pub(in crate::features) fn process_presentation(&self) -> ProcessPresentationState {
+        ProcessPresentationState {
+            items: self.process.items.clone(),
+            snapshot_loaded: self.process.snapshot_loaded,
+            status: self.process.status.clone(),
+            search_draft: self.process.search_draft.clone(),
+            sort_key: self.process.sort_key,
+            sort_direction: self.process.sort_direction,
+            list_offset: self.process.list_offset,
+            selected_pid: self.process.selected_pid,
+            menu_pid: self.process.menu_pid,
+            nice_draft: self.process.nice_draft.clone(),
+            signal_confirm: self.process.signal_confirm.clone(),
+            pending: self.process.is_pending(),
+        }
+    }
+
+    pub(in crate::features) fn stats_presentation(&self) -> StatsPresentationState {
+        StatsPresentationState {
+            data: self.stats.data.clone(),
+            status: self.stats.status.clone(),
+            cpu_expanded: self.stats.cpu_expanded,
+            pending: self.stats.is_pending(),
+            consecutive_refresh_failures: self.stats.consecutive_refresh_failures(),
+        }
+    }
+
+    pub(in crate::features) fn docker_status(&self) -> &str {
+        &self.docker.status
+    }
+
+    pub(in crate::features) fn set_docker_status(&mut self, status: impl Into<String>) {
+        self.docker.status = status.into();
+    }
+
+    pub(in crate::features) fn process_status(&self) -> &str {
+        &self.process.status
+    }
+
+    pub(in crate::features) fn set_process_status(&mut self, status: impl Into<String>) {
+        self.process.status = status.into();
+    }
+
+    pub(in crate::features) fn stats_status(&self) -> &str {
+        &self.stats.status
+    }
+
+    pub(in crate::features) fn set_stats_status(&mut self, status: impl Into<String>) {
+        self.stats.status = status.into();
+    }
+
+    pub(in crate::features) fn has_pending_job(&self) -> bool {
+        self.docker.is_pending() || self.process.is_pending() || self.stats.is_pending()
+    }
+
+    pub(in crate::features) fn loaded_process_count(&self) -> Option<usize> {
+        (self.process.snapshot_loaded && !self.process.items.is_empty())
+            .then_some(self.process.items.len())
+    }
+
+    pub(in crate::features) fn docker_engine_version(&self) -> Option<String> {
+        let overview = self
+            .docker
+            .overview
+            .as_ref()
+            .filter(|overview| overview.available)?;
+        let version = overview.version.trim();
+        Some(if version.is_empty() {
+            "-".to_string()
+        } else {
+            version.to_string()
+        })
+    }
+
+    pub(in crate::features) fn docker_can_prune(&self) -> bool {
+        self.docker
+            .overview
+            .as_ref()
+            .is_some_and(|overview| overview.available)
+    }
+
+    pub(in crate::features) fn docker_header_menu_open(&self) -> bool {
+        self.docker.header_menu_open
+    }
+
+    pub(in crate::features) fn docker_is_pending(&self) -> bool {
+        self.docker.is_pending()
+    }
+
+    pub(in crate::features) fn process_is_pending(&self) -> bool {
+        self.process.is_pending()
+    }
+
+    pub(in crate::features) fn stats_is_pending(&self) -> bool {
+        self.stats.is_pending()
+    }
+
+    pub(in crate::features) fn docker_last_refresh_at(&self) -> Option<Instant> {
+        self.docker.last_refresh_at()
+    }
+
+    pub(in crate::features) fn process_last_refresh_at(&self) -> Option<Instant> {
+        self.process.last_refresh_at()
+    }
+
+    pub(in crate::features) fn stats_last_refresh_at(&self) -> Option<Instant> {
+        self.stats.last_refresh_at()
+    }
+
+    pub(in crate::features) fn docker_details_refresh(&self) -> Option<(String, Instant)> {
+        Some((
+            self.docker.details_container_id.clone()?,
+            self.docker.details_last_refresh_at?,
+        ))
+        .filter(|_| self.docker.details.is_some())
+    }
+
+    pub(in crate::features) fn set_docker_tab(&mut self, tab: DockerTab) {
+        self.docker.set_tab(tab);
+    }
+
+    pub(in crate::features) fn toggle_docker_tab_menu(&mut self) {
+        self.docker.toggle_tab_menu();
+        if self.docker.tab_menu_open {
+            self.docker.header_menu_open = false;
+            self.docker.container_menu_id = None;
+            self.docker.compose_menu_id = None;
+        }
+    }
+
+    pub(in crate::features) fn toggle_docker_header_menu(&mut self) {
+        self.docker.header_menu_open = !self.docker.header_menu_open;
+        if self.docker.header_menu_open {
+            self.docker.tab_menu_open = false;
+            self.docker.container_menu_id = None;
+            self.docker.compose_menu_id = None;
+        }
+    }
+
+    pub(in crate::features) fn close_docker_menus(&mut self) {
+        self.docker.tab_menu_open = false;
+        self.docker.header_menu_open = false;
+        self.docker.container_menu_id = None;
+        self.docker.compose_menu_id = None;
+    }
+
+    pub(in crate::features) fn docker_menus_open(&self) -> bool {
+        self.docker.tab_menu_open || self.docker.header_menu_open
+    }
+
+    pub(in crate::features) fn toggle_docker_container_menu(&mut self, id: String) {
+        let open = self.docker.container_menu_id.as_deref() != Some(id.as_str());
+        self.docker.container_menu_id = open.then_some(id);
+        if open {
+            self.docker.tab_menu_open = false;
+            self.docker.header_menu_open = false;
+            self.docker.compose_menu_id = None;
+        }
+    }
+
+    pub(in crate::features) fn close_docker_container_menu(&mut self) {
+        self.docker.container_menu_id = None;
+    }
+
+    pub(in crate::features) fn toggle_docker_compose_menu(&mut self, id: String) {
+        let open = self.docker.compose_menu_id.as_deref() != Some(id.as_str());
+        self.docker.compose_menu_id = open.then_some(id);
+        if open {
+            self.docker.tab_menu_open = false;
+            self.docker.header_menu_open = false;
+            self.docker.container_menu_id = None;
+        }
+    }
+
+    pub(in crate::features) fn close_docker_compose_menu(&mut self) {
+        self.docker.compose_menu_id = None;
+    }
+
+    pub(in crate::features) fn apply_docker_search(&mut self, text: String) {
+        self.docker.apply_search(text);
+    }
+
+    pub(in crate::features) fn clamp_docker_list_offset(&mut self, max: usize) -> usize {
+        self.docker.list_offset = self.docker.list_offset.min(max);
+        self.docker.list_offset
+    }
+
+    pub(in crate::features) fn set_docker_list_offset(&mut self, offset: usize) -> bool {
+        if self.docker.list_offset == offset {
+            return false;
+        }
+        self.docker.list_offset = offset;
+        true
+    }
+
+    pub(in crate::features) fn clamp_docker_resource_offset(&mut self, max: usize) -> usize {
+        self.docker.resource_list_offset = self.docker.resource_list_offset.min(max);
+        self.docker.resource_list_offset
+    }
+
+    pub(in crate::features) fn set_docker_resource_offset(&mut self, offset: usize) -> bool {
+        if self.docker.resource_list_offset == offset {
+            return false;
+        }
+        self.docker.resource_list_offset = offset;
+        true
+    }
+
+    pub(in crate::features) fn close_docker_details(&mut self) {
+        self.docker.close_details();
+    }
+
+    pub(in crate::features) fn request_docker_confirm(&mut self, confirm: DockerConfirmState) {
+        self.docker.request_confirm(confirm);
+    }
+
+    pub(in crate::features) fn cancel_docker_confirm(&mut self) {
+        self.docker.cancel_confirm();
+    }
+
+    pub(in crate::features) fn docker_confirm(&self) -> Option<DockerConfirmState> {
+        self.docker.confirm.clone()
+    }
+
+    pub(in crate::features) fn toggle_compose_project(
+        &mut self,
+        key: String,
+        project_name: &str,
+    ) -> bool {
+        if self.docker.compose_expanded.remove(&key) {
+            self.docker.status = format!("collapsed compose project {project_name}");
+            return false;
+        }
+        self.docker.compose_expanded.insert(key.clone());
+        self.docker.status = format!("expanded compose project {project_name}");
+        !self.docker.compose_services.contains_key(&key)
+            && !self.docker.compose_service_errors.contains_key(&key)
+    }
+
+    pub(in crate::features) fn apply_process_search(&mut self, text: String) {
+        self.process.apply_search(text);
+    }
+
+    pub(in crate::features) fn toggle_process_sort(&mut self, key: RemoteProcessSortKey) {
+        self.process.toggle_sort(key);
+    }
+
+    pub(in crate::features) fn constrain_process_sort(
+        &mut self,
+        allow_memory: bool,
+        allow_user: bool,
+    ) -> RemoteProcessSortKey {
+        if (!allow_user && self.process.sort_key == RemoteProcessSortKey::User)
+            || (!allow_memory && self.process.sort_key == RemoteProcessSortKey::Memory)
+        {
+            self.process.sort_key = RemoteProcessSortKey::Cpu;
+        }
+        self.process.sort_key
+    }
+
+    pub(in crate::features) fn toggle_process_selection(&mut self, pid: u32) {
+        self.process.toggle_selection(pid);
+    }
+
+    pub(in crate::features) fn toggle_process_menu(&mut self, pid: u32) {
+        self.process.menu_pid = (self.process.menu_pid != Some(pid)).then_some(pid);
+    }
+
+    pub(in crate::features) fn close_process_menu(&mut self) {
+        self.process.menu_pid = None;
+    }
+
+    pub(in crate::features) fn clamp_process_list_offset(&mut self, max: usize) -> usize {
+        self.process.list_offset = self.process.list_offset.min(max);
+        self.process.list_offset
+    }
+
+    pub(in crate::features) fn set_process_list_offset(&mut self, offset: usize) -> bool {
+        if self.process.list_offset == offset {
+            return false;
+        }
+        self.process.list_offset = offset;
+        true
+    }
+
+    pub(in crate::features) fn apply_process_nice_input(&mut self, text: String) {
+        self.process.apply_nice_input(text);
+    }
+
+    pub(in crate::features) fn validated_process_nice_draft(&mut self) -> Option<(u32, i32)> {
+        self.process.validated_nice_draft()
+    }
+
+    pub(in crate::features) fn request_process_signal(
+        &mut self,
+        pid: u32,
+        signal: &'static str,
+    ) -> bool {
+        self.process.request_signal(pid, signal)
+    }
+
+    pub(in crate::features) fn cancel_process_signal(&mut self) {
+        self.process.cancel_signal_confirm();
+    }
+
+    pub(in crate::features) fn clear_process_signal(&mut self) {
+        self.process.signal_confirm = None;
+    }
+
+    pub(in crate::features) fn take_process_signal(
+        &mut self,
+    ) -> Option<RemoteProcessSignalConfirmState> {
+        self.process.take_signal_confirm()
+    }
+
+    pub(in crate::features) fn toggle_stats_cpu_expanded(&mut self) {
+        self.stats.toggle_cpu_expanded();
+    }
+
+    pub(in crate::features) fn docker_is_pending_for(&self, session_id: &str) -> bool {
+        self.docker.is_pending_for(session_id)
+    }
+
+    pub(in crate::features) fn begin_docker_job(
+        &mut self,
+        session_id: String,
+    ) -> RemoteJobTicket<DockerJobResult> {
+        self.docker.begin_job(session_id)
+    }
+
+    pub(in crate::features) fn mark_docker_refresh_started(&mut self) {
+        self.docker.mark_refresh_started();
+    }
+
+    pub(in crate::features) fn next_docker_event(&self) -> Option<DockerJobResult> {
+        self.docker.next_event()
+    }
+
+    pub(in crate::features) fn complete_docker_event(
+        &mut self,
+        job_id: u64,
+        session_id: &str,
+    ) -> bool {
+        self.docker.complete_event(job_id, session_id)
+    }
+
+    pub(in crate::features) fn start_docker_container_action(&mut self, status: String) {
+        self.docker.status = status;
+        self.docker.details = None;
+        self.docker.details_container_id = None;
+    }
+
+    pub(in crate::features) fn start_docker_details(
+        &mut self,
+        container_id: String,
+        status: String,
+    ) {
+        self.docker.details_container_id = Some(container_id);
+        self.docker.details_last_refresh_at = Some(Instant::now());
+        self.docker.status = status;
+    }
+
+    pub(in crate::features) fn apply_docker_overview(&mut self, overview: RemoteDockerOverview) {
+        self.docker.apply_overview(overview);
+    }
+
+    pub(in crate::features) fn apply_docker_details(
+        &mut self,
+        container_id: String,
+        details: DockerContainerDetails,
+    ) {
+        self.docker.details = Some(details);
+        self.docker.details_container_id = Some(container_id);
+    }
+
+    pub(in crate::features) fn clear_compose_service_error(&mut self, key: &str) {
+        self.docker.compose_service_errors.remove(key);
+    }
+
+    pub(in crate::features) fn set_compose_services(
+        &mut self,
+        key: String,
+        services: Vec<DockerComposeService>,
+    ) {
+        self.docker.compose_service_errors.remove(&key);
+        self.docker.compose_services.insert(key, services);
+    }
+
+    pub(in crate::features) fn set_compose_service_error(&mut self, key: String, error: String) {
+        self.docker.compose_services.remove(&key);
+        self.docker.compose_service_errors.insert(key, error);
+    }
+
+    pub(in crate::features) fn clear_docker_confirm(&mut self) {
+        self.docker.confirm = None;
+    }
+
+    pub(in crate::features) fn reset_docker_refresh_failures(&mut self) {
+        self.docker.reset_refresh_failures();
+    }
+
+    pub(in crate::features) fn record_docker_refresh_failure(&mut self) -> u8 {
+        self.docker.record_refresh_failure()
+    }
+
+    pub(in crate::features) fn clear_docker_overview(&mut self) {
+        self.docker.overview = None;
+    }
+
+    pub(in crate::features) fn process_is_pending_for(&self, session_id: &str) -> bool {
+        self.process.is_pending_for(session_id)
+    }
+
+    pub(in crate::features) fn begin_process_job(
+        &mut self,
+        session_id: String,
+    ) -> RemoteJobTicket<ProcessJobResult> {
+        self.process.begin_job(session_id)
+    }
+
+    pub(in crate::features) fn mark_process_refresh_started(&mut self) {
+        self.process.mark_refresh_started();
+    }
+
+    pub(in crate::features) fn next_process_event(&self) -> Option<ProcessJobResult> {
+        self.process.next_event()
+    }
+
+    pub(in crate::features) fn complete_process_event(
+        &mut self,
+        job_id: u64,
+        session_id: &str,
+    ) -> bool {
+        self.process.complete_event(job_id, session_id)
+    }
+
+    pub(in crate::features) fn reset_process_refresh_failures(&mut self) {
+        self.process.reset_refresh_failures();
+    }
+
+    pub(in crate::features) fn record_process_refresh_failure(&mut self, terminal: bool) -> u8 {
+        self.process.record_refresh_failure(terminal)
+    }
+
+    pub(in crate::features) fn clear_process_data(&mut self) {
+        self.process.items = Arc::from([]);
+        self.process.snapshot_loaded = false;
+        self.process.selected_pid = None;
+        self.process.menu_pid = None;
+        self.process.signal_confirm = None;
+    }
+
+    pub(in crate::features) fn apply_processes(&mut self, processes: Vec<RemoteProcess>) {
+        self.process.apply_processes(processes);
+    }
+
+    pub(in crate::features) fn stats_is_pending_for(&self, session_id: &str) -> bool {
+        self.stats.is_pending_for(session_id)
+    }
+
+    pub(in crate::features) fn begin_stats_job(
+        &mut self,
+        session_id: String,
+    ) -> RemoteJobTicket<StatsJobResult> {
+        self.stats.begin_job(session_id)
+    }
+
+    pub(in crate::features) fn mark_stats_refresh_started(&mut self) {
+        self.stats.mark_refresh_started();
+    }
+
+    pub(in crate::features) fn next_stats_event(&self) -> Option<StatsJobResult> {
+        self.stats.next_event()
+    }
+
+    pub(in crate::features) fn complete_stats_event(
+        &mut self,
+        job_id: u64,
+        session_id: &str,
+    ) -> bool {
+        self.stats.complete_event(job_id, session_id)
+    }
+
+    pub(in crate::features) fn reset_stats_refresh_failures(&mut self) {
+        self.stats.reset_refresh_failures();
+    }
+
+    pub(in crate::features) fn apply_stats(&mut self, stats: RemoteStats) {
+        self.stats.data = Some(stats);
+    }
+
+    pub(in crate::features) fn record_stats_refresh_failure(&mut self) -> u8 {
+        let failures = self.stats.record_refresh_failure();
+        if failures >= 3 {
+            self.stats.data = None;
+        }
+        failures
     }
 }
 
@@ -312,6 +877,7 @@ impl DockerPaneState {
         {
             self.details = None;
             self.details_container_id = None;
+            self.details_last_refresh_at = None;
         }
         let active_compose_keys = overview
             .compose_projects
@@ -384,6 +950,8 @@ impl ProcessPaneState {
     pub(in crate::features) fn apply_search(&mut self, text: String) {
         self.search_draft = text;
         self.selected_pid = None;
+        self.menu_pid = None;
+        self.nice_draft = "0".to_string();
         self.list_offset = 0;
     }
 
@@ -483,20 +1051,28 @@ impl ProcessPaneState {
     }
 
     pub(in crate::features) fn apply_processes(&mut self, processes: Vec<RemoteProcess>) {
-        if self
-            .selected_pid
-            .is_some_and(|pid| !processes.iter().any(|process| process.pid == pid))
-        {
+        let contains_pid = |pid| processes.iter().any(|process| process.pid == pid);
+        if self.selected_pid.is_some_and(|pid| !contains_pid(pid)) {
             self.selected_pid = None;
             self.nice_draft = "0".to_string();
         }
-        self.items = processes;
+        if self.menu_pid.is_some_and(|pid| !contains_pid(pid)) {
+            self.menu_pid = None;
+        }
+        if self
+            .signal_confirm
+            .as_ref()
+            .is_some_and(|confirm| !contains_pid(confirm.pid))
+        {
+            self.signal_confirm = None;
+        }
+        self.items = processes.into();
         self.snapshot_loaded = true;
     }
 
     fn reset_for_session_switch(&mut self) {
         self.job.reset_for_session_switch();
-        self.items.clear();
+        self.items = Arc::from([]);
         self.snapshot_loaded = false;
         self.selected_pid = None;
         self.menu_pid = None;
@@ -564,7 +1140,25 @@ impl StatsPaneState {
 
 #[cfg(test)]
 mod tests {
+    use nyaterm_transport::{DockerContainerDetails, RemoteDockerOverview, RemoteProcess};
+
     use super::{RemoteJobState, RemoteOpsFeatureFocus, RemoteOpsFeatureState};
+
+    fn process(pid: u32) -> RemoteProcess {
+        RemoteProcess {
+            pid,
+            ppid: 1,
+            user: "user".to_string(),
+            state: "S".to_string(),
+            cpu_percent: 1.0,
+            memory_percent: 2.0,
+            rss_kb: 3,
+            vsz_kb: 4,
+            elapsed: "00:01".to_string(),
+            command: "sleep".to_string(),
+            command_line: "sleep 10".to_string(),
+        }
+    }
 
     #[test]
     fn remote_job_state_matches_job_and_session_before_completion() {
@@ -598,25 +1192,78 @@ mod tests {
     }
 
     #[test]
-    fn remote_pane_transitions_keep_related_fields_in_sync() {
+    fn docker_owner_excludes_menus_and_cleans_removed_details_and_compose_data() {
         let mut state = RemoteOpsFeatureState::new(RemoteOpsFeatureFocus {});
-        state.process.selected_pid = Some(42);
-        state.process.apply_nice_input("-1234x".to_string());
-        assert_eq!(state.process.nice_draft, "-123");
-        assert_eq!(state.process.validated_nice_draft(), None);
-        assert_eq!(state.process.status, "nice must be between -20 and 19");
 
-        state.process.toggle_selection(7);
-        assert_eq!(state.process.selected_pid, Some(7));
-        assert_eq!(state.process.nice_draft, "0");
+        state.toggle_docker_tab_menu();
+        state.toggle_docker_header_menu();
+        let presentation = state.docker_presentation();
+        assert!(!presentation.tab_menu_open);
+        assert!(state.docker_header_menu_open());
 
-        state.stats.toggle_cpu_expanded();
-        assert!(state.stats.cpu_expanded);
-        assert_eq!(state.stats.status, "showing per-core CPU usage");
+        state.toggle_docker_container_menu("container".to_string());
+        state.toggle_docker_compose_menu("compose".to_string());
+        let presentation = state.docker_presentation();
+        assert!(!state.docker_header_menu_open());
+        assert!(presentation.container_menu_id.is_none());
+        assert_eq!(presentation.compose_menu_id.as_deref(), Some("compose"));
+
+        state.start_docker_details("gone".to_string(), "loading".to_string());
+        state.apply_docker_details("gone".to_string(), DockerContainerDetails::default());
+        state.toggle_compose_project("old".to_string(), "old");
+        state.set_compose_services("old".to_string(), Vec::new());
+        state.toggle_compose_project("failed".to_string(), "failed");
+        state.set_compose_service_error("failed".to_string(), "error".to_string());
+        state.apply_docker_overview(RemoteDockerOverview::default());
+
+        let presentation = state.docker_presentation();
+        assert!(presentation.details.is_none());
+        assert!(presentation.details_container_id.is_none());
+        assert!(state.docker_details_refresh().is_none());
+        assert!(presentation.compose_expanded.is_empty());
+        assert!(presentation.compose_services.is_empty());
+        assert!(presentation.compose_service_errors.is_empty());
+    }
+
+    #[test]
+    fn process_owner_cleans_pid_scoped_interaction_when_results_change() {
+        let mut state = RemoteOpsFeatureState::new(RemoteOpsFeatureFocus {});
+        state.apply_processes(vec![process(42)]);
+        state.toggle_process_selection(42);
+        state.toggle_process_menu(42);
+        assert!(state.request_process_signal(42, "KILL"));
+        state.apply_process_nice_input("-1234x".to_string());
+
+        let presentation = state.process_presentation();
+        assert_eq!(presentation.nice_draft, "-123");
+        assert_eq!(presentation.selected_pid, Some(42));
+        assert_eq!(presentation.menu_pid, Some(42));
+        assert!(presentation.signal_confirm.is_some());
+
+        state.apply_processes(Vec::new());
+
+        let presentation = state.process_presentation();
+        assert!(presentation.selected_pid.is_none());
+        assert!(presentation.menu_pid.is_none());
+        assert!(presentation.signal_confirm.is_none());
+        assert_eq!(presentation.nice_draft, "0");
+    }
+
+    #[test]
+    fn stats_owner_resets_session_runtime_without_losing_expansion_preference() {
+        let mut state = RemoteOpsFeatureState::new(RemoteOpsFeatureFocus {});
+        state.toggle_stats_cpu_expanded();
+        state.begin_stats_job("session-a".to_string());
 
         state.reset_for_session_switch();
-        assert!(state.process.selected_pid.is_none());
-        assert!(!state.stats.is_pending());
-        assert!(state.docker.overview.is_none());
+
+        let presentation = state.stats_presentation();
+        assert!(!presentation.pending);
+        assert!(presentation.data.is_none());
+        assert!(presentation.cpu_expanded);
+        assert_eq!(
+            presentation.status,
+            "start an SSH session to inspect remote stats"
+        );
     }
 }

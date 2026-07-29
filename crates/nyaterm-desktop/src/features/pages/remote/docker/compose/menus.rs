@@ -42,7 +42,7 @@ pub(in crate::features::pages::remote) fn docker_compose_project_action_menu(
                 let project_name = project_name.clone();
                 let config_files = config_files.clone();
                 move |this, _, window, cx| {
-                    this.remote_ops.docker.compose_menu_id = None;
+                    this.remote_ops.close_docker_compose_menu();
                     this.docker_compose_action(
                         project_name.clone(),
                         config_files.clone(),
@@ -62,7 +62,7 @@ pub(in crate::features::pages::remote) fn docker_compose_project_action_menu(
                 let project_name = project_name.clone();
                 let config_files = config_files.clone();
                 move |this, _, window, cx| {
-                    this.remote_ops.docker.compose_menu_id = None;
+                    this.remote_ops.close_docker_compose_menu();
                     this.docker_compose_action(
                         project_name.clone(),
                         config_files.clone(),
@@ -80,7 +80,7 @@ pub(in crate::features::pages::remote) fn docker_compose_project_action_menu(
             labels.down,
             false,
             cx.listener(move |this, _, _, cx| {
-                this.remote_ops.docker.compose_menu_id = None;
+                this.remote_ops.close_docker_compose_menu();
                 this.request_docker_confirm(
                     DockerConfirmState {
                         title: labels.confirm_action_title.to_string(),
@@ -136,7 +136,7 @@ pub(in crate::features::pages::remote) fn docker_compose_service_action_menu(
                 let config_files = config_files.clone();
                 let service_name = service_name.clone();
                 move |this, _, _, cx| {
-                    this.remote_ops.docker.compose_menu_id = None;
+                    this.remote_ops.close_docker_compose_menu();
                     this.send_docker_compose_service_logs_to_terminal(
                         project_name.clone(),
                         config_files.clone(),
@@ -152,7 +152,7 @@ pub(in crate::features::pages::remote) fn docker_compose_service_action_menu(
             labels.enter,
             !can_enter,
             cx.listener(move |this, _, _, cx| {
-                this.remote_ops.docker.compose_menu_id = None;
+                this.remote_ops.close_docker_compose_menu();
                 if let Some(container_id) = running_container_id.clone() {
                     this.enter_docker_container_terminal(container_id, cx);
                 }
@@ -169,7 +169,7 @@ pub(in crate::features::pages::remote) fn docker_compose_service_action_menu(
                 let config_files = config_files.clone();
                 let service_name = service_name.clone();
                 move |this, _, window, cx| {
-                    this.remote_ops.docker.compose_menu_id = None;
+                    this.remote_ops.close_docker_compose_menu();
                     this.docker_compose_service_action(
                         project_name.clone(),
                         config_files.clone(),
@@ -191,7 +191,7 @@ pub(in crate::features::pages::remote) fn docker_compose_service_action_menu(
                 let config_files = config_files.clone();
                 let service_name = service_name.clone();
                 move |this, _, window, cx| {
-                    this.remote_ops.docker.compose_menu_id = None;
+                    this.remote_ops.close_docker_compose_menu();
                     this.docker_compose_service_action(
                         project_name.clone(),
                         config_files.clone(),
@@ -213,7 +213,7 @@ pub(in crate::features::pages::remote) fn docker_compose_service_action_menu(
                 let config_files = config_files.clone();
                 let service_name = service_name.clone();
                 move |this, _, window, cx| {
-                    this.remote_ops.docker.compose_menu_id = None;
+                    this.remote_ops.close_docker_compose_menu();
                     this.docker_compose_service_action(
                         project_name.clone(),
                         config_files.clone(),

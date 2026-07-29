@@ -11,6 +11,7 @@ use super::process::usage_color;
 
 impl NyaTermApp {
     pub(in crate::features) fn stats_view(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        let stats_state = self.remote_ops.stats_presentation();
         let palette = self.theme_palette();
         if self.session.active_ssh_config().is_none() {
             return div()
@@ -21,10 +22,10 @@ impl NyaTermApp {
                     palette,
                 ));
         }
-        let Some(stats) = self.remote_ops.stats.data.clone() else {
-            let message = if self.remote_ops.stats.is_pending() {
+        let Some(stats) = stats_state.data else {
+            let message = if stats_state.pending {
                 self.tr("common.loading")
-            } else if self.remote_ops.stats.status.contains("failed") {
+            } else if stats_state.status.contains("failed") {
                 self.tr("panel.resourceMonitorError")
             } else {
                 self.tr("common.loading")
@@ -227,7 +228,7 @@ impl NyaTermApp {
                                 this.child(cpu_core_summary(
                                     palette,
                                     &stats.cpu.per_core,
-                                    self.remote_ops.stats.cpu_expanded,
+                                    stats_state.cpu_expanded,
                                     cpu_label,
                                     cx,
                                 ))
