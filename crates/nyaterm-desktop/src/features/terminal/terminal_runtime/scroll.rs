@@ -1,4 +1,3 @@
-use std::collections::HashSet;
 use std::time::{Duration, Instant};
 
 use gpui::{Context, KeyDownEvent, Timer};
@@ -196,34 +195,6 @@ fn terminal_scroll_key(session_id: Option<&str>) -> String {
         .filter(|id| !id.is_empty())
         .unwrap_or_default()
         .to_string()
-}
-
-fn terminal_scroll_position_flush_repaint_sessions(
-    pending_repaint_sessions: &mut HashSet<String>,
-) -> Vec<String> {
-    let mut sessions = pending_repaint_sessions.drain().collect::<Vec<_>>();
-    sessions.sort();
-    sessions
-}
-
-fn terminal_scroll_position_flush_queued_sessions(
-    pending_repaint_sessions: &mut HashSet<String>,
-    pending_snapshot_only_sessions: &mut HashSet<String>,
-) -> (Vec<String>, Vec<String>) {
-    let repaint_sessions =
-        terminal_scroll_position_flush_repaint_sessions(pending_repaint_sessions);
-    for session_id in &repaint_sessions {
-        pending_snapshot_only_sessions.remove(session_id);
-    }
-    let mut snapshot_only_sessions = pending_snapshot_only_sessions.drain().collect::<Vec<_>>();
-    snapshot_only_sessions.sort();
-    (repaint_sessions, snapshot_only_sessions)
-}
-
-fn terminal_scrollbar_drag_flush_sessions(pending_sessions: &mut HashSet<String>) -> Vec<String> {
-    let mut sessions = pending_sessions.drain().collect::<Vec<_>>();
-    sessions.sort();
-    sessions
 }
 
 fn terminal_scroll_should_request_immediate_text_snapshot(
@@ -689,18 +660,9 @@ impl NyaTermApp {
         // immediately, but defer target snapshot/decorations to the coalesced
         // position notify below.
         self.notify_terminal_scroll_visual_only(session_id, cx);
-        self.shell
-            .runtime
-            .pending_terminal_scroll_snapshot_only_sessions
-            .remove(session_id);
-        self.shell
-            .runtime
-            .pending_terminal_scroll_position_sessions
-            .insert(session_id.to_string());
-        if self.shell.runtime.terminal_scroll_position_notify_armed {
-            return;
+        if self.shell.queue_terminal_scroll_position(session_id, false) {
+            self.schedule_terminal_scroll_position_notify(cx);
         }
-        self.arm_terminal_scroll_position_notify(cx);
     }
 
     pub(in crate::features) fn queue_terminal_scroll_position_after_local_surface_update(
@@ -712,49 +674,17 @@ impl NyaTermApp {
             return;
         }
         self.mark_terminal_user_scroll_activity(session_id, cx);
-        if !self
-            .shell
-            .runtime
-            .pending_terminal_scroll_position_sessions
-            .contains(session_id)
-        {
-            self.shell
-                .runtime
-                .pending_terminal_scroll_snapshot_only_sessions
-                .insert(session_id.to_string());
+        if self.shell.queue_terminal_scroll_position(session_id, true) {
+            self.schedule_terminal_scroll_position_notify(cx);
         }
-        self.arm_terminal_scroll_position_notify(cx);
     }
 
-    fn arm_terminal_scroll_position_notify(&mut self, cx: &mut Context<Self>) {
-        if self.shell.runtime.terminal_scroll_position_notify_armed {
-            return;
-        }
-        self.shell.runtime.terminal_scroll_position_notify_armed = true;
+    fn schedule_terminal_scroll_position_notify(&mut self, cx: &mut Context<Self>) {
         cx.spawn(async move |this, cx| {
             Timer::after(TERMINAL_SCROLL_POSITION_NOTIFY_DELAY).await;
             let _ = this.update(cx, |this, cx| {
-                this.shell.runtime.terminal_scroll_position_notify_armed = false;
                 let (session_ids, snapshot_only_session_ids) =
-                    terminal_scroll_position_flush_queued_sessions(
-                        &mut this
-                            .shell
-                            .runtime
-                            .pending_terminal_scroll_position_repaint_sessions,
-                        &mut this
-                            .shell
-                            .runtime
-                            .pending_terminal_scroll_snapshot_only_sessions,
-                    );
-                let mut session_ids = session_ids;
-                session_ids.extend(
-                    this.shell
-                        .runtime
-                        .pending_terminal_scroll_position_sessions
-                        .drain(),
-                );
-                session_ids.sort();
-                session_ids.dedup();
+                    this.shell.drain_terminal_scroll_position();
                 for session_id in snapshot_only_session_ids {
                     if let Some(offset) = this
                         .terminal
@@ -838,15 +768,12 @@ impl NyaTermApp {
         if session_id.is_empty() {
             return;
         }
-        self.shell.runtime.last_terminal_user_scroll_at = Some(Instant::now());
-        self.shell
-            .runtime
-            .pending_terminal_user_scroll_idle_sessions
-            .insert(session_id.to_string());
-        if self.shell.runtime.terminal_user_scroll_idle_notify_armed {
+        if !self
+            .shell
+            .queue_terminal_user_scroll_idle(session_id, Instant::now())
+        {
             return;
         }
-        self.shell.runtime.terminal_user_scroll_idle_notify_armed = true;
         cx.spawn(async move |this, cx| {
             Timer::after(TERMINAL_USER_SCROLL_ACTIVE_WINDOW).await;
             let _ = this.update(cx, |this, cx| {
@@ -859,7 +786,7 @@ impl NyaTermApp {
     fn flush_terminal_user_scroll_idle_notify(&mut self, cx: &mut Context<Self>) {
         let now = Instant::now();
         if let Some(delay) = terminal_user_scroll_idle_remaining_delay(
-            self.shell.runtime.last_terminal_user_scroll_at,
+            self.shell.last_terminal_user_scroll_at(),
             now,
             TERMINAL_USER_SCROLL_ACTIVE_WINDOW,
         ) {
@@ -872,13 +799,7 @@ impl NyaTermApp {
             .detach();
             return;
         }
-        self.shell.runtime.terminal_user_scroll_idle_notify_armed = false;
-        let session_ids = self
-            .shell
-            .runtime
-            .pending_terminal_user_scroll_idle_sessions
-            .drain()
-            .collect::<Vec<_>>();
+        let session_ids = self.shell.drain_terminal_user_scroll_idle_sessions();
         for session_id in session_ids {
             if self.terminal_visual_scroll_active_for_session(Some(&session_id)) {
                 let offset = self.terminal_display_offset_for_session(Some(&session_id));
@@ -1352,14 +1273,9 @@ impl NyaTermApp {
             return;
         }
         self.mark_terminal_user_scroll_activity(session_id.as_str(), cx);
-        self.shell
-            .runtime
-            .pending_terminal_scrollbar_drag_sessions
-            .insert(session_id);
-        if self.shell.runtime.terminal_scrollbar_drag_notify_armed {
+        if !self.shell.queue_terminal_scrollbar_drag(session_id) {
             return;
         }
-        self.shell.runtime.terminal_scrollbar_drag_notify_armed = true;
         cx.spawn(async move |this, cx| {
             Timer::after(TERMINAL_SCROLLBAR_DRAG_NOTIFY_DELAY).await;
             let _ = this.update(cx, |this, cx| {
@@ -1370,10 +1286,7 @@ impl NyaTermApp {
     }
 
     fn flush_terminal_scrollbar_drag_visual_notify(&mut self, cx: &mut Context<Self>) {
-        self.shell.runtime.terminal_scrollbar_drag_notify_armed = false;
-        let session_ids = terminal_scrollbar_drag_flush_sessions(
-            &mut self.shell.runtime.pending_terminal_scrollbar_drag_sessions,
-        );
+        let session_ids = self.shell.drain_terminal_scrollbar_drag_sessions();
         for session_id in session_ids {
             self.notify_terminal_scroll_visual_only(session_id.as_str(), cx);
         }
@@ -1468,8 +1381,9 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn drive_terminal_resize(&mut self) -> bool {
-        if let Some(last) = self.shell.runtime.last_terminal_resize_at
-            && last.elapsed() < Duration::from_millis(100)
+        if self
+            .shell
+            .terminal_resize_throttled(Instant::now(), Duration::from_millis(100))
         {
             return false;
         }
@@ -1587,7 +1501,7 @@ impl NyaTermApp {
             self.terminal.view.screen.resize(cols, rows);
             self.clear_terminal_scroll_residual_for_session(None);
         }
-        self.shell.runtime.last_terminal_resize_at = Some(Instant::now());
+        self.shell.note_terminal_resize(Instant::now());
         true
     }
 
@@ -1651,7 +1565,6 @@ impl NyaTermApp {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
     use std::time::{Duration, Instant};
 
     use gpui::{Bounds, point, px, size};
@@ -1664,14 +1577,12 @@ mod tests {
         terminal_resize_geometry_for_bounds, terminal_scroll_delta_lines_from_raw,
         terminal_scroll_needs_text_first_repaint,
         terminal_scroll_offset_reanchored_for_scrollback_growth,
-        terminal_scroll_offset_state_needs_update, terminal_scroll_position_flush_queued_sessions,
-        terminal_scroll_position_flush_repaint_sessions,
-        terminal_scroll_predictive_prefetch_offset, terminal_scroll_residual_clamped_for_offset,
-        terminal_scroll_should_consume_raw_lines,
+        terminal_scroll_offset_state_needs_update, terminal_scroll_predictive_prefetch_offset,
+        terminal_scroll_residual_clamped_for_offset, terminal_scroll_should_consume_raw_lines,
         terminal_scroll_should_request_immediate_text_snapshot,
         terminal_scroll_to_bottom_state_needs_update, terminal_scroll_track_ratio,
-        terminal_scrollbar_drag_flush_sessions, terminal_should_apply_session_cwd,
-        terminal_user_scroll_idle_remaining_delay, terminal_visual_scroll_active_for_state,
+        terminal_should_apply_session_cwd, terminal_user_scroll_idle_remaining_delay,
+        terminal_visual_scroll_active_for_state,
     };
 
     #[test]
@@ -1921,40 +1832,6 @@ mod tests {
             terminal_scroll_predictive_prefetch_offset(190, 12, 40, 200),
             Some(200)
         );
-    }
-
-    #[test]
-    fn terminal_scroll_position_flush_repaint_sessions_drains_sorted() {
-        let mut repaint = HashSet::from(["b".to_string(), "a".to_string()]);
-
-        assert_eq!(
-            terminal_scroll_position_flush_repaint_sessions(&mut repaint),
-            vec!["a".to_string(), "b".to_string()]
-        );
-        assert!(repaint.is_empty());
-    }
-
-    #[test]
-    fn terminal_scroll_position_flush_keeps_snapshot_only_separate() {
-        let mut repaint = HashSet::from(["b".to_string(), "a".to_string()]);
-        let mut snapshot_only = HashSet::from(["c".to_string(), "a".to_string()]);
-
-        let (repaint, snapshot_only) =
-            terminal_scroll_position_flush_queued_sessions(&mut repaint, &mut snapshot_only);
-
-        assert_eq!(repaint, vec!["a".to_string(), "b".to_string()]);
-        assert_eq!(snapshot_only, vec!["c".to_string()]);
-    }
-
-    #[test]
-    fn terminal_scrollbar_drag_flush_sessions_drains_sorted() {
-        let mut sessions = HashSet::from(["b".to_string(), "a".to_string()]);
-
-        assert_eq!(
-            terminal_scrollbar_drag_flush_sessions(&mut sessions),
-            vec!["a".to_string(), "b".to_string()]
-        );
-        assert!(sessions.is_empty());
     }
 
     #[test]

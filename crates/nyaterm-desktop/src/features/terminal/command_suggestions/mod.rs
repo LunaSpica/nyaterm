@@ -429,7 +429,7 @@ impl NyaTermApp {
                     }
                     let now = Instant::now();
                     if let Some(delay) = command_suggestion_refresh_input_delay(
-                        this.shell.runtime.last_terminal_input_at,
+                        this.shell.last_terminal_input_at(),
                         now,
                     ) {
                         this.schedule_command_suggestion_refresh_after(delay, cx);

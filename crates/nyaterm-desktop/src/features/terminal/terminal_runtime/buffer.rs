@@ -607,9 +607,11 @@ impl NyaTermApp {
                 }
             }
 
+            let (session_event_backlog_active, session_event_queued_output_bytes) =
+                self.shell.terminal_frame_input_pressure();
             let allow_deferred_events = terminal_frame_deferred_events_can_apply(
-                self.shell.runtime.session_event_backlog_active,
-                self.shell.runtime.session_event_queued_output_bytes,
+                session_event_backlog_active,
+                session_event_queued_output_bytes,
                 self.session.event_bridge_queued_output_bytes(),
                 pending_terminal_frame_output_events(&self.terminal.view.pending_frame_events),
                 self.terminal.view.frame_pipeline.queued_output_bytes(),
@@ -651,25 +653,17 @@ impl NyaTermApp {
         }
 
         if drained_events > 0 {
-            self.shell.runtime.last_terminal_frame_apply_at = Some(started_at);
+            self.shell.note_terminal_frame_apply(started_at);
         }
         let surface_notify_count =
             dirty_surface_sessions.len() + scroll_position_surface_sessions.len();
         for session_id in dirty_surface_sessions {
             self.sync_terminal_surface_paint(&session_id, cx);
-            self.shell.runtime.terminal_surface_frame_notify_count = self
-                .shell
-                .runtime
-                .terminal_surface_frame_notify_count
-                .saturating_add(1);
+            self.shell.note_terminal_surface_frame_notifies(1);
         }
         for session_id in scroll_position_surface_sessions {
             self.notify_terminal_scroll_position_only(&session_id, cx);
-            self.shell.runtime.terminal_surface_frame_notify_count = self
-                .shell
-                .runtime
-                .terminal_surface_frame_notify_count
-                .saturating_add(1);
+            self.shell.note_terminal_surface_frame_notifies(1);
         }
         let total_duration = started_at.elapsed();
         if (total_duration >= TERMINAL_FRAME_EVENT_DRAIN_SLOW_TOTAL
@@ -692,11 +686,7 @@ impl NyaTermApp {
                 surface_paint_delta,
                 layout_cache_hits,
                 layout_cache_misses,
-                connect_settle_active = self
-                    .shell
-                    .runtime
-                    .connect_settle_until
-                    .is_some_and(|until| Instant::now() < until),
+                connect_settle_active = self.shell.connect_settle_active(Instant::now()),
                 pending_events = self.terminal.view.pending_frame_events.len(),
                 total_ms = total_duration.as_millis(),
                 max_apply_ms = max_apply_duration.as_millis(),
@@ -755,14 +745,7 @@ impl NyaTermApp {
         let has_snapshot = snapshot.is_some();
         let is_active = self.session.active_id() == Some(session_id.as_str());
         let is_visible = self.terminal_session_has_visible_surface(&session_id);
-        if is_visible
-            && accepted_bytes > 0
-            && self
-                .shell
-                .runtime
-                .connect_settle_until
-                .is_none_or(|until| Instant::now() >= until)
-        {
+        if is_visible && accepted_bytes > 0 && !self.shell.connect_settle_active(Instant::now()) {
             self.enter_connect_settle();
         }
         let effects_need_ui_apply = terminal_effects_need_ui_apply(&effects);
@@ -883,11 +866,7 @@ impl NyaTermApp {
         let chrome_notify =
             terminal_output_frame_needs_chrome_notify(unread_changed, effects_need_ui_apply);
         if chrome_notify {
-            self.shell.runtime.terminal_chrome_frame_notify_count = self
-                .shell
-                .runtime
-                .terminal_chrome_frame_notify_count
-                .saturating_add(1);
+            self.shell.note_terminal_chrome_frame_notify();
         }
         // Only chrome dirtiness bubbles to NyaTermApp full-shell notify.
         TerminalFrameApplyResult {
@@ -1232,7 +1211,7 @@ impl NyaTermApp {
             clipboard_store = effects.clipboard_store;
             clipboard_loads = effects.clipboard_loads;
             if effects.bell {
-                self.shell.runtime.visual_bell_ticks = 4;
+                self.shell.trigger_visual_bell();
             }
             if let Some(title) = effects.title {
                 self.session.set_dynamic_title(session_id, Some(title));
@@ -1260,7 +1239,7 @@ impl NyaTermApp {
             clipboard_store = effects.clipboard_store;
             clipboard_loads = effects.clipboard_loads;
             if effects.bell {
-                self.shell.runtime.visual_bell_ticks = 4;
+                self.shell.trigger_visual_bell();
             }
         }
 
@@ -1312,7 +1291,7 @@ impl NyaTermApp {
         let mut clipboard_store = effects.clipboard_store;
         let mut clipboard_loads = effects.clipboard_loads;
         if effects.bell {
-            self.shell.runtime.visual_bell_ticks = 4;
+            self.shell.trigger_visual_bell();
         }
         if let Some(title) = effects.title {
             self.session.set_dynamic_title(session_id, Some(title));

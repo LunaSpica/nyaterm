@@ -21,7 +21,7 @@ impl NyaTermApp {
         if !self.settings.summary().startup_restore {
             return;
         }
-        self.shell.runtime.open_tabs_persist_dirty = true;
+        self.shell.mark_open_tabs_persist_dirty();
         // Keep multi-leaf layout indexes aligned with the same ordered tab list.
         self.persist_terminal_window_layout();
     }
@@ -29,12 +29,10 @@ impl NyaTermApp {
     /// Force a durable open-tabs write (window close / explicit quit paths).
     pub(in crate::features) fn flush_open_tabs_now(&mut self) {
         if !self.settings.summary().startup_restore {
-            self.shell.runtime.open_tabs_persist_dirty = false;
-            self.shell.runtime.window_layout_persist_dirty = false;
+            self.shell.clear_session_persistence_dirty();
             return;
         }
-        self.shell.runtime.open_tabs_persist_dirty = true;
-        self.shell.runtime.window_layout_persist_dirty = true;
+        self.shell.mark_session_persistence_dirty();
         self.flush_pending_session_persistence_sync();
     }
 
@@ -45,19 +43,18 @@ impl NyaTermApp {
     /// and the first idle frame after connect.
     pub(in crate::features) fn flush_pending_session_persistence(&mut self) {
         if !self.settings.summary().startup_restore {
-            self.shell.runtime.open_tabs_persist_dirty = false;
-            self.shell.runtime.window_layout_persist_dirty = false;
+            self.shell.clear_session_persistence_dirty();
             return;
         }
-        let need_tabs = self.shell.runtime.open_tabs_persist_dirty;
-        let need_layout = self.shell.runtime.window_layout_persist_dirty
-            && self.settings.summary().startup_restore_window_layout;
-        if !need_tabs && !need_layout {
+        let dirty = self
+            .shell
+            .pending_session_persistence(self.settings.summary().startup_restore_window_layout);
+        if dirty.is_empty() {
             return;
         }
 
-        let tabs = need_tabs.then(|| self.serialize_open_tabs());
-        let layout = if need_layout {
+        let tabs = dirty.open_tabs().then(|| self.serialize_open_tabs());
+        let layout = if dirty.window_layout() {
             let ordered = self
                 .ordered_tab_sessions()
                 .into_iter()
@@ -70,12 +67,7 @@ impl NyaTermApp {
 
         // Clear dirty before spawn so repeated idle ticks do not re-queue while
         // the worker is still writing. Window-close uses the sync path below.
-        if need_tabs {
-            self.shell.runtime.open_tabs_persist_dirty = false;
-        }
-        if need_layout {
-            self.shell.runtime.window_layout_persist_dirty = false;
-        }
+        self.shell.acknowledge_session_persistence(dirty);
 
         let config_dir = self.runtime.config_dir().to_path_buf();
         let portable_key = self.runtime.portable_key_path().map(ToOwned::to_owned);
@@ -116,19 +108,18 @@ impl NyaTermApp {
     /// Synchronous durable write used by window-close / quit (must not race exit).
     fn flush_pending_session_persistence_sync(&mut self) {
         if !self.settings.summary().startup_restore {
-            self.shell.runtime.open_tabs_persist_dirty = false;
-            self.shell.runtime.window_layout_persist_dirty = false;
+            self.shell.clear_session_persistence_dirty();
             return;
         }
-        let need_tabs = self.shell.runtime.open_tabs_persist_dirty;
-        let need_layout = self.shell.runtime.window_layout_persist_dirty
-            && self.settings.summary().startup_restore_window_layout;
-        if !need_tabs && !need_layout {
+        let dirty = self
+            .shell
+            .pending_session_persistence(self.settings.summary().startup_restore_window_layout);
+        if dirty.is_empty() {
             return;
         }
 
-        let tabs = need_tabs.then(|| self.serialize_open_tabs());
-        let layout = if need_layout {
+        let tabs = dirty.open_tabs().then(|| self.serialize_open_tabs());
+        let layout = if dirty.window_layout() {
             let ordered = self
                 .ordered_tab_sessions()
                 .into_iter()
@@ -145,7 +136,7 @@ impl NyaTermApp {
             Ok(store) => {
                 if let Some(tabs) = tabs.as_ref() {
                     match store.save_open_tabs(tabs) {
-                        Ok(()) => self.shell.runtime.open_tabs_persist_dirty = false,
+                        Ok(()) => self.shell.acknowledge_open_tabs_persistence(),
                         Err(error) => {
                             self.shell.status = format!("failed to save open tabs: {error}");
                         }
@@ -153,7 +144,7 @@ impl NyaTermApp {
                 }
                 if let Some(layout) = layout.as_ref() {
                     match store.save_terminal_window_layout(layout.as_ref()) {
-                        Ok(()) => self.shell.runtime.window_layout_persist_dirty = false,
+                        Ok(()) => self.shell.acknowledge_window_layout_persistence(),
                         Err(error) => {
                             self.shell.status = format!("failed to save window layout: {error}");
                         }

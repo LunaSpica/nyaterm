@@ -786,8 +786,7 @@ impl Render for NyaTermApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let render_started_at = Instant::now();
         FULL_SHELL_PAINT_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        self.shell.runtime.full_shell_paint_count =
-            self.shell.runtime.full_shell_paint_count.saturating_add(1);
+        let full_shell_paint_count = self.shell.note_full_shell_paint();
         let root_started_at = Instant::now();
         let content = self.root_chrome(window, cx);
         let root_duration = root_started_at.elapsed();
@@ -805,13 +804,9 @@ impl Render for NyaTermApp {
                 overlay_host_ms = overlay_duration.as_millis(),
                 active_session_id = self.session.active_id().unwrap_or(""),
                 visible_session_count = self.visible_terminal_session_ids().len(),
-                connect_settle_active = self
-                    .shell
-                    .runtime
-                    .connect_settle_until
-                    .is_some_and(|until| Instant::now() < until),
+                connect_settle_active = self.shell.connect_settle_active(Instant::now()),
                 output_pressure = self.runtime_output_pressure_active(),
-                full_shell_paint_count = self.shell.runtime.full_shell_paint_count,
+                full_shell_paint_count,
                 surface_paint_count = terminal_surface_paint_count(),
                 "slow root render"
             );

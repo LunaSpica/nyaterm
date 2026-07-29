@@ -23,7 +23,7 @@ pub(in crate::features) struct ShellFeatureState {
     /// Application-wide transient status shown by shell chrome and terminal overlays.
     pub(in crate::features) status: String,
     /// GPUI event-pump, repaint, and shell-persistence scheduling bookkeeping.
-    pub(in crate::features) runtime: ShellRuntimeState,
+    pub(super) runtime: ShellRuntimeState,
     pub(super) bottom_panel: ShellBottomPanelState,
     pub(super) viewport: ShellViewportState,
     pub(super) navigation: ShellNavigationState,

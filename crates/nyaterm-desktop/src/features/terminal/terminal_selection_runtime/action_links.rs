@@ -102,8 +102,8 @@ impl NyaTermApp {
                 self.terminal_visual_scroll_active_for_session(Some(session_id))
             });
         if action_link_hover_should_yield_to_terminal_latency(
-            self.shell.runtime.last_terminal_input_at,
-            self.shell.runtime.last_terminal_user_scroll_at,
+            self.shell.last_terminal_input_at(),
+            self.shell.last_terminal_user_scroll_at(),
             visual_scroll_active,
             now,
         ) {

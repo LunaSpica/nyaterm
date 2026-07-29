@@ -1,4 +1,3 @@
-use std::collections::HashSet;
 use std::time::Duration;
 
 use gpui::{
@@ -380,14 +379,9 @@ impl NyaTermApp {
         if session_id.is_empty() {
             return;
         }
-        self.shell
-            .runtime
-            .pending_terminal_selection_drag_sessions
-            .insert(session_id);
-        if self.shell.runtime.terminal_selection_drag_notify_armed {
+        if !self.shell.queue_terminal_selection_drag(session_id) {
             return;
         }
-        self.shell.runtime.terminal_selection_drag_notify_armed = true;
         cx.spawn(async move |this, cx| {
             Timer::after(TERMINAL_SELECTION_DRAG_NOTIFY_DELAY).await;
             let _ = this.update(cx, |this, cx| {
@@ -398,10 +392,7 @@ impl NyaTermApp {
     }
 
     fn flush_terminal_selection_drag_visual_notify(&mut self, cx: &mut Context<Self>) {
-        self.shell.runtime.terminal_selection_drag_notify_armed = false;
-        let session_ids = terminal_selection_drag_flush_sessions(
-            &mut self.shell.runtime.pending_terminal_selection_drag_sessions,
-        );
+        let session_ids = self.shell.drain_terminal_selection_drag_sessions();
         for session_id in session_ids {
             self.notify_terminal_selection_visual_only(session_id.as_str(), cx);
         }
@@ -470,34 +461,15 @@ fn terminal_all_lines_text(lines: Vec<String>) -> Option<String> {
     if text.is_empty() { None } else { Some(text) }
 }
 
-fn terminal_selection_drag_flush_sessions(pending_sessions: &mut HashSet<String>) -> Vec<String> {
-    let mut sessions = pending_sessions.drain().collect::<Vec<_>>();
-    sessions.sort();
-    sessions
-}
-
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
     use std::time::Duration;
 
     use crate::terminal::{TerminalTextCell, terminal_text_cell_slice, terminal_text_cells};
 
     use super::{
-        TERMINAL_SELECTION_DRAG_NOTIFY_DELAY, terminal_all_lines_text,
-        terminal_selection_drag_flush_sessions, terminal_text_cell_is_word,
+        TERMINAL_SELECTION_DRAG_NOTIFY_DELAY, terminal_all_lines_text, terminal_text_cell_is_word,
     };
-
-    #[test]
-    fn terminal_selection_drag_flush_sessions_drains_sorted() {
-        let mut sessions = HashSet::from(["b".to_string(), "a".to_string()]);
-
-        assert_eq!(
-            terminal_selection_drag_flush_sessions(&mut sessions),
-            vec!["a".to_string(), "b".to_string()]
-        );
-        assert!(sessions.is_empty());
-    }
 
     #[test]
     fn terminal_selection_drag_notify_delay_is_frame_coalesced() {

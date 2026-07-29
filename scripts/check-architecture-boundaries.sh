@@ -260,17 +260,25 @@ check_no_matches \
 
 check_no_multiline_matches \
   "shell feature children must not be visible outside the shell module" \
-  'struct[[:space:]]+ShellFeatureState[[:space:]]*\{[^}]*pub([[:space:]]|\(in crate::features\)|\(crate\))[[:space:]]+(bottom_panel|viewport|navigation|panels|chrome|workspace|diagnostics)[[:space:]]*:' \
+  'struct[[:space:]]+ShellFeatureState[[:space:]]*\{[^}]*pub([[:space:]]|\(in crate::features\)|\(crate\))[[:space:]]+(runtime|bottom_panel|viewport|navigation|panels|chrome|workspace|diagnostics)[[:space:]]*:' \
   crates/nyaterm-desktop/src/features/shell/state.rs
 check_no_matches \
   "shell child implementation types must not be visible outside the shell module" \
   'pub([[:space:]]|\(in crate::features\)|\(crate\))[[:space:]]+struct[[:space:]]+Shell(BottomPanel|Viewport|Navigation|SettingsNavigation|Panel|Chrome|Workspace|Diagnostic)State' \
   crates/nyaterm-desktop/src/features/shell/state.rs
+check_no_matches \
+  "shell runtime implementation type must not be visible outside the shell module" \
+  'pub([[:space:]]|\(in crate::features\)|\(crate\))[[:space:]]+struct[[:space:]]+ShellRuntimeState' \
+  crates/nyaterm-desktop/src/features/shell/runtime_state.rs
 check_no_multiline_matches_excluding \
   "shell child state must be accessed through ShellFeatureState outside the shell module" \
-  '(self|this|app)\.shell[[:space:]]*\.(bottom_panel|viewport|navigation|panels|chrome|workspace|diagnostics)(\.|[[:space:]]*=)' \
+  '(self|this|app)[[:space:]]*\.[[:space:]]*shell[[:space:]]*\.[[:space:]]*(runtime|bottom_panel|viewport|navigation|panels|chrome|workspace|diagnostics)(\.|[[:space:]]*=)' \
   crates/nyaterm-desktop/src/features \
   'crates/nyaterm-desktop/src/features/shell/**'
+check_no_matches \
+  "shell runtime state must not expose mutable-reference accessors" \
+  'fn[[:space:]]+runtime(_mut|_mutable)|->[[:space:]]*&mut[[:space:]]+ShellRuntimeState' \
+  crates/nyaterm-desktop/src/features/shell
 
 check_no_matches \
   "screen lock fields must stay grouped under SecurityFeatureState" \

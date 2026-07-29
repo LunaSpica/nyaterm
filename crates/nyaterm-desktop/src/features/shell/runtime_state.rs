@@ -1,80 +1,100 @@
 use std::collections::HashSet;
 use std::time::{Duration, Instant};
 
+use super::state::ShellFeatureState;
+
 /// GPUI event-pump, repaint and shell-persistence scheduling state.
-pub(in crate::features) struct ShellRuntimeState {
-    pub event_pump_started: bool,
-    pub session_event_backlog_active: bool,
-    pub session_event_queued_events: usize,
-    pub session_event_queued_output_bytes: usize,
-    pub session_event_dropped_output_bytes: u64,
-    pub session_event_last_output_event_count: usize,
-    pub session_event_last_drained_output_bytes: usize,
-    pub last_session_start_drain_duration: Duration,
-    pub last_pending_session_status_at: Option<Instant>,
-    pub last_terminal_resize_at: Option<Instant>,
-    pub last_terminal_frame_apply_at: Option<Instant>,
+pub(super) struct ShellRuntimeState {
+    pub(super) event_pump_started: bool,
+    pub(super) session_event_backlog_active: bool,
+    pub(super) session_event_queued_events: usize,
+    pub(super) session_event_queued_output_bytes: usize,
+    pub(super) session_event_dropped_output_bytes: u64,
+    pub(super) session_event_last_output_event_count: usize,
+    pub(super) session_event_last_drained_output_bytes: usize,
+    pub(super) last_session_start_drain_duration: Duration,
+    pub(super) last_pending_session_status_at: Option<Instant>,
+    pub(super) last_terminal_resize_at: Option<Instant>,
+    pub(super) last_terminal_frame_apply_at: Option<Instant>,
     /// Last user-driven terminal scroll input. During this short window the
     /// terminal paint path favors text/position over enhanced decorations.
-    pub last_terminal_user_scroll_at: Option<Instant>,
+    pub(super) last_terminal_user_scroll_at: Option<Instant>,
     /// Last successful user terminal input write. During this short window the
     /// terminal paint path favors low-latency echo over enhanced decorations.
-    pub last_terminal_input_at: Option<Instant>,
+    pub(super) last_terminal_input_at: Option<Instant>,
     /// Sessions whose scroll position changed and should repaint on the next frame tick.
-    pub pending_terminal_scroll_position_sessions: HashSet<String>,
+    pub(super) pending_terminal_scroll_position_sessions: HashSet<String>,
     /// Sessions already scrolled locally by TerminalSurface; only snapshot requests
     /// should run on the app sync tick.
-    pub pending_terminal_scroll_snapshot_only_sessions: HashSet<String>,
-    /// Sessions whose position changed again after the immediate scroll repaint.
-    pub pending_terminal_scroll_position_repaint_sessions: HashSet<String>,
+    pub(super) pending_terminal_scroll_snapshot_only_sessions: HashSet<String>,
     /// True while a frame-coalesced scroll-position repaint task is armed.
-    pub terminal_scroll_position_notify_armed: bool,
+    pub(super) terminal_scroll_position_notify_armed: bool,
     /// Sessions whose scrollbar drag position changed and should repaint soon.
-    pub pending_terminal_scrollbar_drag_sessions: HashSet<String>,
+    pub(super) pending_terminal_scrollbar_drag_sessions: HashSet<String>,
     /// True while a coalesced scrollbar-drag visual repaint task is armed.
-    pub terminal_scrollbar_drag_notify_armed: bool,
+    pub(super) terminal_scrollbar_drag_notify_armed: bool,
     /// Sessions whose selection drag changed and should repaint soon.
-    pub pending_terminal_selection_drag_sessions: HashSet<String>,
+    pub(super) pending_terminal_selection_drag_sessions: HashSet<String>,
     /// True while a coalesced selection-drag visual repaint task is armed.
-    pub terminal_selection_drag_notify_armed: bool,
+    pub(super) terminal_selection_drag_notify_armed: bool,
     /// Sessions that need a full decoration repaint once user scrolling idles.
-    pub pending_terminal_user_scroll_idle_sessions: HashSet<String>,
+    pub(super) pending_terminal_user_scroll_idle_sessions: HashSet<String>,
     /// True while a delayed scroll-idle repaint task is armed.
-    pub terminal_user_scroll_idle_notify_armed: bool,
+    pub(super) terminal_user_scroll_idle_notify_armed: bool,
     /// Sessions that need a full decoration repaint once typing idles.
-    pub pending_terminal_input_idle_sessions: HashSet<String>,
+    pub(super) pending_terminal_input_idle_sessions: HashSet<String>,
     /// True while a delayed input-idle repaint task is armed.
-    pub terminal_input_idle_notify_armed: bool,
+    pub(super) terminal_input_idle_notify_armed: bool,
     /// After connect success, demote idle/visual work until this time (no faster tick).
-    pub connect_settle_until: Option<Instant>,
+    pub(super) connect_settle_until: Option<Instant>,
     /// A short post-input pump task is armed to drain echo output/frame events.
-    pub terminal_input_wake_armed: bool,
+    pub(super) terminal_input_wake_armed: bool,
     /// Incremented on every user input write so an armed wake can extend itself.
-    pub terminal_input_wake_generation: u64,
+    pub(super) terminal_input_wake_generation: u64,
     /// Last full-shell cx.notify from the runtime tick (paint throttle).
-    pub last_ui_notify_at: Option<Instant>,
+    pub(super) last_ui_notify_at: Option<Instant>,
     /// A visual update was deferred by paint throttle and still needs a notify.
-    pub pending_ui_notify: bool,
+    pub(super) pending_ui_notify: bool,
     /// Full NyaTermApp shell paints (chrome + workspace structure).
-    pub full_shell_paint_count: u64,
+    pub(super) full_shell_paint_count: u64,
     /// Output frames that notified only a TerminalSurface.
-    pub terminal_surface_frame_notify_count: u64,
+    pub(super) terminal_surface_frame_notify_count: u64,
     /// Output frames that also dirtied chrome (unread/effects).
-    pub terminal_chrome_frame_notify_count: u64,
+    pub(super) terminal_chrome_frame_notify_count: u64,
     /// Last periodic terminal performance heartbeat.
-    pub last_terminal_perf_heartbeat_at: Option<Instant>,
-    pub last_perf_full_shell_paint_count: u64,
-    pub last_perf_surface_paint_count: u64,
-    pub last_perf_surface_frame_notify_count: u64,
-    pub last_perf_chrome_frame_notify_count: u64,
-    pub last_perf_layout_cache_hits: u64,
-    pub last_perf_layout_cache_misses: u64,
+    pub(super) last_terminal_perf_heartbeat_at: Option<Instant>,
+    pub(super) last_perf_full_shell_paint_count: u64,
+    pub(super) last_perf_surface_paint_count: u64,
+    pub(super) last_perf_surface_frame_notify_count: u64,
+    pub(super) last_perf_chrome_frame_notify_count: u64,
+    pub(super) last_perf_layout_cache_hits: u64,
+    pub(super) last_perf_layout_cache_misses: u64,
     /// Open-tabs / window-layout settings need a durable write.
-    pub open_tabs_persist_dirty: bool,
-    pub window_layout_persist_dirty: bool,
-    pub cursor_blink_on: bool,
-    pub cursor_blink_next_at: Option<Instant>,
-    pub visual_bell_ticks: u8,
+    pub(super) open_tabs_persist_dirty: bool,
+    pub(super) window_layout_persist_dirty: bool,
+    pub(super) cursor_blink_on: bool,
+    pub(super) cursor_blink_next_at: Option<Instant>,
+    pub(super) visual_bell_ticks: u8,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(in crate::features) struct ShellPersistenceDirty {
+    open_tabs: bool,
+    window_layout: bool,
+}
+
+impl ShellPersistenceDirty {
+    pub(in crate::features) fn open_tabs(self) -> bool {
+        self.open_tabs
+    }
+
+    pub(in crate::features) fn window_layout(self) -> bool {
+        self.window_layout
+    }
+
+    pub(in crate::features) fn is_empty(self) -> bool {
+        !self.open_tabs && !self.window_layout
+    }
 }
 
 impl Default for ShellRuntimeState {
@@ -95,7 +115,6 @@ impl Default for ShellRuntimeState {
             last_terminal_input_at: None,
             pending_terminal_scroll_position_sessions: HashSet::new(),
             pending_terminal_scroll_snapshot_only_sessions: HashSet::new(),
-            pending_terminal_scroll_position_repaint_sessions: HashSet::new(),
             terminal_scroll_position_notify_armed: false,
             pending_terminal_scrollbar_drag_sessions: HashSet::new(),
             terminal_scrollbar_drag_notify_armed: false,
@@ -126,5 +145,340 @@ impl Default for ShellRuntimeState {
             cursor_blink_next_at: None,
             visual_bell_ticks: 0,
         }
+    }
+}
+
+impl ShellFeatureState {
+    pub(in crate::features) fn note_full_shell_paint(&mut self) -> u64 {
+        self.runtime.full_shell_paint_count = self.runtime.full_shell_paint_count.saturating_add(1);
+        self.runtime.full_shell_paint_count
+    }
+
+    pub(in crate::features) fn connect_settle_active(&self, now: Instant) -> bool {
+        self.runtime
+            .connect_settle_until
+            .is_some_and(|until| now < until)
+    }
+
+    pub(in crate::features) fn session_event_queued_output_bytes(&self) -> usize {
+        self.runtime.session_event_queued_output_bytes
+    }
+
+    pub(in crate::features) fn terminal_frame_input_pressure(&self) -> (bool, usize) {
+        (
+            self.runtime.session_event_backlog_active,
+            self.runtime.session_event_queued_output_bytes,
+        )
+    }
+
+    pub(in crate::features) fn note_terminal_frame_apply(&mut self, at: Instant) {
+        self.runtime.last_terminal_frame_apply_at = Some(at);
+    }
+
+    pub(in crate::features) fn note_terminal_surface_frame_notifies(&mut self, count: usize) {
+        self.runtime.terminal_surface_frame_notify_count = self
+            .runtime
+            .terminal_surface_frame_notify_count
+            .saturating_add(count as u64);
+    }
+
+    pub(in crate::features) fn note_terminal_chrome_frame_notify(&mut self) {
+        self.runtime.terminal_chrome_frame_notify_count = self
+            .runtime
+            .terminal_chrome_frame_notify_count
+            .saturating_add(1);
+    }
+
+    pub(in crate::features) fn last_terminal_input_at(&self) -> Option<Instant> {
+        self.runtime.last_terminal_input_at
+    }
+
+    pub(in crate::features) fn last_terminal_user_scroll_at(&self) -> Option<Instant> {
+        self.runtime.last_terminal_user_scroll_at
+    }
+
+    pub(in crate::features) fn terminal_user_scroll_idle_pending(&self, session_id: &str) -> bool {
+        self.runtime
+            .pending_terminal_user_scroll_idle_sessions
+            .contains(session_id)
+    }
+
+    pub(in crate::features) fn cursor_blink_on(&self) -> bool {
+        self.runtime.cursor_blink_on
+    }
+
+    pub(in crate::features) fn visual_bell_active(&self) -> bool {
+        self.runtime.visual_bell_ticks > 0
+    }
+
+    pub(in crate::features) fn trigger_visual_bell(&mut self) {
+        self.runtime.visual_bell_ticks = 4;
+    }
+
+    pub(in crate::features) fn mark_open_tabs_persist_dirty(&mut self) {
+        self.runtime.open_tabs_persist_dirty = true;
+    }
+
+    pub(in crate::features) fn mark_session_persistence_dirty(&mut self) {
+        self.runtime.open_tabs_persist_dirty = true;
+        self.runtime.window_layout_persist_dirty = true;
+    }
+
+    pub(in crate::features) fn clear_session_persistence_dirty(&mut self) {
+        self.runtime.open_tabs_persist_dirty = false;
+        self.runtime.window_layout_persist_dirty = false;
+    }
+
+    pub(in crate::features) fn pending_session_persistence(
+        &self,
+        include_window_layout: bool,
+    ) -> ShellPersistenceDirty {
+        ShellPersistenceDirty {
+            open_tabs: self.runtime.open_tabs_persist_dirty,
+            window_layout: include_window_layout && self.runtime.window_layout_persist_dirty,
+        }
+    }
+
+    pub(in crate::features) fn acknowledge_session_persistence(
+        &mut self,
+        dirty: ShellPersistenceDirty,
+    ) {
+        if dirty.open_tabs {
+            self.runtime.open_tabs_persist_dirty = false;
+        }
+        if dirty.window_layout {
+            self.runtime.window_layout_persist_dirty = false;
+        }
+    }
+
+    pub(in crate::features) fn acknowledge_open_tabs_persistence(&mut self) {
+        self.runtime.open_tabs_persist_dirty = false;
+    }
+
+    pub(in crate::features) fn acknowledge_window_layout_persistence(&mut self) {
+        self.runtime.window_layout_persist_dirty = false;
+    }
+
+    pub(in crate::features) fn queue_terminal_scroll_position(
+        &mut self,
+        session_id: &str,
+        snapshot_only: bool,
+    ) -> bool {
+        if session_id.is_empty() {
+            return false;
+        }
+        if snapshot_only {
+            if !self
+                .runtime
+                .pending_terminal_scroll_position_sessions
+                .contains(session_id)
+            {
+                self.runtime
+                    .pending_terminal_scroll_snapshot_only_sessions
+                    .insert(session_id.to_string());
+            }
+        } else {
+            self.runtime
+                .pending_terminal_scroll_snapshot_only_sessions
+                .remove(session_id);
+            self.runtime
+                .pending_terminal_scroll_position_sessions
+                .insert(session_id.to_string());
+        }
+        arm_once(&mut self.runtime.terminal_scroll_position_notify_armed)
+    }
+
+    pub(in crate::features) fn drain_terminal_scroll_position(
+        &mut self,
+    ) -> (Vec<String>, Vec<String>) {
+        self.runtime.terminal_scroll_position_notify_armed = false;
+        for session_id in &self.runtime.pending_terminal_scroll_position_sessions {
+            self.runtime
+                .pending_terminal_scroll_snapshot_only_sessions
+                .remove(session_id);
+        }
+        (
+            drain_sorted(&mut self.runtime.pending_terminal_scroll_position_sessions),
+            drain_sorted(&mut self.runtime.pending_terminal_scroll_snapshot_only_sessions),
+        )
+    }
+
+    pub(in crate::features) fn queue_terminal_scrollbar_drag(
+        &mut self,
+        session_id: String,
+    ) -> bool {
+        if session_id.is_empty() {
+            return false;
+        }
+        self.runtime
+            .pending_terminal_scrollbar_drag_sessions
+            .insert(session_id);
+        arm_once(&mut self.runtime.terminal_scrollbar_drag_notify_armed)
+    }
+
+    pub(in crate::features) fn drain_terminal_scrollbar_drag_sessions(&mut self) -> Vec<String> {
+        self.runtime.terminal_scrollbar_drag_notify_armed = false;
+        drain_sorted(&mut self.runtime.pending_terminal_scrollbar_drag_sessions)
+    }
+
+    pub(in crate::features) fn queue_terminal_selection_drag(
+        &mut self,
+        session_id: String,
+    ) -> bool {
+        if session_id.is_empty() {
+            return false;
+        }
+        self.runtime
+            .pending_terminal_selection_drag_sessions
+            .insert(session_id);
+        arm_once(&mut self.runtime.terminal_selection_drag_notify_armed)
+    }
+
+    pub(in crate::features) fn drain_terminal_selection_drag_sessions(&mut self) -> Vec<String> {
+        self.runtime.terminal_selection_drag_notify_armed = false;
+        drain_sorted(&mut self.runtime.pending_terminal_selection_drag_sessions)
+    }
+
+    pub(in crate::features) fn queue_terminal_user_scroll_idle(
+        &mut self,
+        session_id: &str,
+        at: Instant,
+    ) -> bool {
+        if session_id.is_empty() {
+            return false;
+        }
+        self.runtime.last_terminal_user_scroll_at = Some(at);
+        self.runtime
+            .pending_terminal_user_scroll_idle_sessions
+            .insert(session_id.to_string());
+        arm_once(&mut self.runtime.terminal_user_scroll_idle_notify_armed)
+    }
+
+    pub(in crate::features) fn drain_terminal_user_scroll_idle_sessions(&mut self) -> Vec<String> {
+        self.runtime.terminal_user_scroll_idle_notify_armed = false;
+        drain_sorted(&mut self.runtime.pending_terminal_user_scroll_idle_sessions)
+    }
+
+    pub(in crate::features) fn terminal_resize_throttled(
+        &self,
+        now: Instant,
+        minimum_interval: Duration,
+    ) -> bool {
+        self.runtime
+            .last_terminal_resize_at
+            .is_some_and(|last| now.saturating_duration_since(last) < minimum_interval)
+    }
+
+    pub(in crate::features) fn note_terminal_resize(&mut self, at: Instant) {
+        self.runtime.last_terminal_resize_at = Some(at);
+    }
+}
+
+fn arm_once(armed: &mut bool) -> bool {
+    if *armed {
+        false
+    } else {
+        *armed = true;
+        true
+    }
+}
+
+fn drain_sorted(sessions: &mut HashSet<String>) -> Vec<String> {
+    let mut sessions = sessions.drain().collect::<Vec<_>>();
+    sessions.sort();
+    sessions
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+    use std::time::{Duration, Instant};
+
+    use crate::models::{ActivityBarLayoutState, BottomPanelMode};
+
+    use super::super::state::ShellFeatureInit;
+    use super::ShellFeatureState;
+
+    fn shell() -> ShellFeatureState {
+        ShellFeatureState::new(ShellFeatureInit {
+            status: String::new(),
+            bottom_panel_mode: BottomPanelMode::Hidden,
+            quick_commands_height: 120.,
+            command_send_height: 180.,
+            active_left_panel: None,
+            active_right_panel: None,
+            left_open_panels: Vec::new(),
+            right_open_panels: Vec::new(),
+            panel_stack_sizes: HashMap::new(),
+            panel_multi_open: false,
+            left_sidebar_collapsed: true,
+            right_inspector_collapsed: true,
+            left_panel_width: 240.,
+            right_panel_width: 320.,
+            activity_bar_layout: ActivityBarLayoutState::default(),
+        })
+    }
+
+    #[test]
+    fn coalesced_queues_arm_once_deduplicate_and_drain_sorted() {
+        let mut shell = shell();
+
+        assert!(!shell.queue_terminal_selection_drag(String::new()));
+        assert!(shell.queue_terminal_selection_drag("b".to_string()));
+        assert!(!shell.queue_terminal_selection_drag("a".to_string()));
+        assert!(!shell.queue_terminal_selection_drag("a".to_string()));
+        assert_eq!(
+            shell.drain_terminal_selection_drag_sessions(),
+            vec!["a".to_string(), "b".to_string()]
+        );
+        assert!(shell.queue_terminal_selection_drag("c".to_string()));
+    }
+
+    #[test]
+    fn scroll_position_queue_promotes_snapshot_only_work() {
+        let mut shell = shell();
+
+        assert!(shell.queue_terminal_scroll_position("snapshot", true));
+        assert!(!shell.queue_terminal_scroll_position("paint", true));
+        assert!(!shell.queue_terminal_scroll_position("paint", false));
+        let (paint, snapshot_only) = shell.drain_terminal_scroll_position();
+
+        assert_eq!(paint, vec!["paint".to_string()]);
+        assert_eq!(snapshot_only, vec!["snapshot".to_string()]);
+        assert!(shell.queue_terminal_scroll_position("next", false));
+    }
+
+    #[test]
+    fn persistence_snapshot_masks_layout_and_clears_only_taken_work() {
+        let mut shell = shell();
+        shell.mark_session_persistence_dirty();
+
+        let hidden = shell.pending_session_persistence(false);
+        assert!(hidden.open_tabs());
+        assert!(!hidden.window_layout());
+        assert!(!hidden.is_empty());
+        shell.acknowledge_session_persistence(hidden);
+
+        let remaining = shell.pending_session_persistence(true);
+        assert!(!remaining.open_tabs());
+        assert!(remaining.window_layout());
+    }
+
+    #[test]
+    fn counters_and_resize_deadline_saturate_without_exposing_runtime() {
+        let mut shell = shell();
+        shell.runtime.full_shell_paint_count = u64::MAX;
+        shell.runtime.terminal_surface_frame_notify_count = u64::MAX - 1;
+        assert_eq!(shell.note_full_shell_paint(), u64::MAX);
+        shell.note_terminal_surface_frame_notifies(4);
+        assert_eq!(shell.runtime.terminal_surface_frame_notify_count, u64::MAX);
+
+        let now = Instant::now();
+        shell.note_terminal_resize(now);
+        assert!(shell.terminal_resize_throttled(now, Duration::from_millis(100)));
+        assert!(!shell.terminal_resize_throttled(
+            now + Duration::from_millis(100),
+            Duration::from_millis(100)
+        ));
     }
 }

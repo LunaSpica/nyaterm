@@ -165,7 +165,7 @@ impl NyaTermApp {
             && !is_disconnected
             && display_offset == 0
             && remote_cursor_visible
-            && (!blink_enabled || self.shell.runtime.cursor_blink_on);
+            && (!blink_enabled || self.shell.cursor_blink_on());
         let cursor_style = match snapshot.cursor.shape {
             nyaterm_terminal::CursorShape::Underline => "underline".to_string(),
             nyaterm_terminal::CursorShape::Beam => "bar".to_string(),
@@ -560,7 +560,7 @@ impl NyaTermApp {
                     })
                 })
                 .unwrap_or((0, 0, 0, 0));
-        let show_visual_bell = is_active && self.shell.runtime.visual_bell_ticks > 0;
+        let show_visual_bell = is_active && self.shell.visual_bell_active();
         let file_drop_hover = self
             .terminal
             .terminal_file_drop_hover_matches(session_id.as_str());

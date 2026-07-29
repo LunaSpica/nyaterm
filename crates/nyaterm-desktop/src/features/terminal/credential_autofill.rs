@@ -127,7 +127,7 @@ impl NyaTermApp {
             self.session.active_id(),
             !self.security.credentials().is_empty()
                 || self.terminal.assist.credential_autofill_pending.is_some(),
-            self.shell.runtime.session_event_queued_output_bytes,
+            self.shell.session_event_queued_output_bytes(),
             self.session.pending_event_count(),
             self.terminal.view.pending_frame_events.len(),
             self.terminal.view.frame_pipeline.queued_event_count(),
@@ -144,7 +144,7 @@ impl NyaTermApp {
             credential_autofill_pending_detection_can_run(
                 self.session.active_id(),
                 self.terminal.assist.credential_autofill_detection_pending,
-                self.shell.runtime.session_event_queued_output_bytes,
+                self.shell.session_event_queued_output_bytes(),
                 self.session.pending_event_count(),
                 self.terminal.view.pending_frame_events.len(),
                 self.terminal.view.frame_pipeline.queued_event_count(),
