@@ -81,15 +81,14 @@ impl NyaTermApp {
         {
             Ok(settings) => {
                 self.apply_gpui_settings(settings);
-                self.settings.store_status.message = "diagnostics settings saved".to_string();
-                self.settings.store_status.ready = true;
+                self.settings
+                    .update_store_status("diagnostics settings saved", true);
                 self.shell.status = "diagnostics settings saved".to_string();
             }
             Err(error) => {
-                self.settings.store_status.message =
-                    format!("diagnostics settings save failed: {error}");
-                self.settings.store_status.ready = false;
-                self.shell.status = self.settings.store_status.message.clone();
+                let message = format!("diagnostics settings save failed: {error}");
+                self.settings.update_store_status(message.clone(), false);
+                self.shell.status = message;
             }
         }
         cx.notify();
@@ -107,15 +106,14 @@ impl NyaTermApp {
         {
             Ok(settings) => {
                 self.apply_gpui_settings(settings);
-                self.settings.store_status.message = "general settings saved".to_string();
-                self.settings.store_status.ready = true;
+                self.settings
+                    .update_store_status("general settings saved", true);
                 self.shell.status = "general settings saved".to_string();
             }
             Err(error) => {
-                self.settings.store_status.message =
-                    format!("general settings save failed: {error}");
-                self.settings.store_status.ready = false;
-                self.shell.status = self.settings.store_status.message.clone();
+                let message = format!("general settings save failed: {error}");
+                self.settings.update_store_status(message.clone(), false);
+                self.shell.status = message;
             }
         }
         cx.notify();
@@ -215,15 +213,14 @@ impl NyaTermApp {
         {
             Ok(settings) => {
                 self.apply_gpui_settings(settings);
-                self.settings.store_status.message = "interaction settings saved".to_string();
-                self.settings.store_status.ready = true;
+                self.settings
+                    .update_store_status("interaction settings saved", true);
                 self.shell.status = "interaction settings saved".to_string();
             }
             Err(error) => {
-                self.settings.store_status.message =
-                    format!("interaction settings save failed: {error}");
-                self.settings.store_status.ready = false;
-                self.shell.status = self.settings.store_status.message.clone();
+                let message = format!("interaction settings save failed: {error}");
+                self.settings.update_store_status(message.clone(), false);
+                self.shell.status = message;
             }
         }
         cx.notify();
@@ -257,15 +254,14 @@ impl NyaTermApp {
         {
             Ok(settings) => {
                 self.apply_gpui_settings(settings);
-                self.settings.store_status.message = "screen lock settings saved".to_string();
-                self.settings.store_status.ready = true;
+                self.settings
+                    .update_store_status("screen lock settings saved", true);
                 self.shell.status = "screen lock settings saved".to_string();
             }
             Err(error) => {
-                self.settings.store_status.message =
-                    format!("screen lock settings save failed: {error}");
-                self.settings.store_status.ready = false;
-                self.shell.status = self.settings.store_status.message.clone();
+                let message = format!("screen lock settings save failed: {error}");
+                self.settings.update_store_status(message.clone(), false);
+                self.shell.status = message;
             }
         }
         cx.notify();

@@ -24,13 +24,12 @@ impl NyaTermApp {
             Ok(settings) => {
                 self.apply_gpui_settings(settings);
                 self.shell.status = format!("host key policy set to {policy}");
-                self.settings.store_status.message = "settings saved".to_string();
-                self.settings.store_status.ready = true;
+                self.settings.update_store_status("settings saved", true);
             }
             Err(error) => {
                 self.shell.status = format!("failed to save host key policy: {error}");
-                self.settings.store_status.message = format!("settings save failed: {error}");
-                self.settings.store_status.ready = false;
+                self.settings
+                    .update_store_status(format!("settings save failed: {error}"), false);
             }
         }
         cx.notify();
@@ -77,15 +76,14 @@ impl NyaTermApp {
                 self.recording.set_memory_limit(
                     self.settings.summary().recording_memory_limit_bytes as usize,
                 );
-                self.settings.store_status.message = "recording settings saved".to_string();
-                self.settings.store_status.ready = true;
+                self.settings
+                    .update_store_status("recording settings saved", true);
                 self.shell.status = "recording settings saved".to_string();
             }
             Err(error) => {
-                self.settings.store_status.message =
-                    format!("recording settings save failed: {error}");
-                self.settings.store_status.ready = false;
-                self.shell.status = self.settings.store_status.message.clone();
+                let message = format!("recording settings save failed: {error}");
+                self.settings.update_store_status(message.clone(), false);
+                self.shell.status = message;
             }
         }
         cx.notify();
@@ -197,15 +195,14 @@ impl NyaTermApp {
                     .set_duplicate_policy(SftpDuplicatePolicy::from_legacy_value(
                         &self.settings.summary().transfer_duplicate_strategy,
                     ));
-                self.settings.store_status.message = "transfer settings saved".to_string();
-                self.settings.store_status.ready = true;
+                self.settings
+                    .update_store_status("transfer settings saved", true);
                 self.shell.status = success_status.to_string();
             }
             Err(error) => {
-                self.settings.store_status.message =
-                    format!("transfer settings save failed: {error}");
-                self.settings.store_status.ready = false;
-                self.shell.status = self.settings.store_status.message.clone();
+                let message = format!("transfer settings save failed: {error}");
+                self.settings.update_store_status(message.clone(), false);
+                self.shell.status = message;
             }
         }
         cx.notify();

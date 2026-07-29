@@ -17,9 +17,9 @@ use super::catalog::{SettingsMasterPasswordState, StoreStatus};
 pub(in crate::features) struct SettingsFeatureState {
     /// Compatibility-sensitive values loaded and persisted through `nyaterm-core`.
     summary: AppSettingsSummary,
-    pub(super) keyword_config: KeywordHighlightConfig,
-    pub(super) master_password: SettingsMasterPasswordState,
-    pub(super) store_status: StoreStatus,
+    keyword_config: KeywordHighlightConfig,
+    master_password: SettingsMasterPasswordState,
+    store_status: StoreStatus,
     search_engines: SearchEngineSettingsState,
     keyword_highlights: KeywordHighlightSettingsState,
     appearance: AppearanceSettingsState,
@@ -800,6 +800,15 @@ impl SettingsFeatureState {
         self.store_status.ready = ready;
     }
 
+    pub(in crate::features) fn update_store_status(
+        &mut self,
+        message: impl Into<String>,
+        ready: bool,
+    ) {
+        self.store_status.message = message.into();
+        self.store_status.ready = ready;
+    }
+
     pub(in crate::features) fn replace_store_status(
         &mut self,
         path: String,
@@ -1448,8 +1457,7 @@ mod tests {
     fn settings_owner_controls_store_status_updates_and_replacement() {
         let mut state = settings_state();
 
-        state.set_store_message("saving settings");
-        state.set_store_ready(false);
+        state.update_store_status("saving settings", false);
         let status = state.store_status();
         assert_eq!(status.path, "");
         assert_eq!(status.message, "saving settings");
@@ -1540,12 +1548,8 @@ mod tests {
     #[test]
     fn settings_owner_exposes_master_password_as_a_borrowed_view() {
         let mut state = settings_state();
-        assert_eq!(state.master_password.toggle(false), Ok(true));
-        assert!(
-            state
-                .master_password
-                .edit_draft("replacement secret".to_string())
-        );
+        assert_eq!(state.toggle_master_password(false), Ok(true));
+        assert!(state.edit_master_password_draft("replacement secret".to_string()));
 
         let view = state.master_password();
         assert!(view.enabled);

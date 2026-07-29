@@ -26,7 +26,8 @@ impl NyaTermApp {
         let config_dir = self.runtime.config_dir().to_path_buf();
         let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
         self.shell.status = "selecting config backup destination".to_string();
-        self.settings.store_status.message = "selecting backup destination".to_string();
+        self.settings
+            .set_store_message("selecting backup destination");
         cx.spawn(async move |this, cx| {
             let result = match receiver.await {
                 Ok(Ok(Some(path))) => {
@@ -87,7 +88,7 @@ impl NyaTermApp {
         let config_dir = self.runtime.config_dir().to_path_buf();
         let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
         self.shell.status = "selecting portable snapshot to import".to_string();
-        self.settings.store_status.message = "selecting .nya snapshot".to_string();
+        self.settings.set_store_message("selecting .nya snapshot");
         cx.spawn(async move |this, cx| {
             let result = match receiver.await {
                 Ok(Ok(Some(paths))) => match paths.into_iter().next() {
@@ -158,7 +159,7 @@ impl NyaTermApp {
             }
         }
         .to_string();
-        self.settings.store_status.message = match kind {
+        let store_message = match kind {
             SnapshotPasswordPromptKind::CloudPush
             | SnapshotPasswordPromptKind::CloudPull
             | SnapshotPasswordPromptKind::CloudForcePush
@@ -171,6 +172,7 @@ impl NyaTermApp {
             }
             _ => "awaiting .nya master password".to_string(),
         };
+        self.settings.set_store_message(store_message);
         cx.notify();
     }
 
@@ -251,7 +253,7 @@ impl NyaTermApp {
                 "forced provider cloud sync pull cancelled".to_string()
             }
         };
-        self.settings.store_status.message = "config picker cancelled".to_string();
+        self.settings.set_store_message("config picker cancelled");
         cx.notify();
     }
 
@@ -306,8 +308,8 @@ impl NyaTermApp {
         let config_dir = self.runtime.config_dir().to_path_buf();
         let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
         self.shell.status = "selecting encrypted portable snapshot destination".to_string();
-        self.settings.store_status.message =
-            "selecting encrypted .nya export destination".to_string();
+        self.settings
+            .set_store_message("selecting encrypted .nya export destination");
         cx.spawn(async move |this, cx| {
             let result = match receiver.await {
                 Ok(Ok(Some(path))) => {
@@ -365,7 +367,8 @@ impl NyaTermApp {
         let config_dir = self.runtime.config_dir().to_path_buf();
         let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
         self.shell.status = "selecting encrypted portable snapshot to import".to_string();
-        self.settings.store_status.message = "selecting encrypted .nya snapshot".to_string();
+        self.settings
+            .set_store_message("selecting encrypted .nya snapshot");
         cx.spawn(async move |this, cx| {
             let result = match receiver.await {
                 Ok(Ok(Some(paths))) => match paths.into_iter().next() {
@@ -411,8 +414,7 @@ impl NyaTermApp {
         }
         match result {
             ConfigPathPromptResult::Exported(info) => {
-                self.settings.store_status.path = info.database_path.display().to_string();
-                self.settings.store_status.message = match kind {
+                let message = match kind {
                     ConfigPathPromptKind::PortableExport => {
                         format!("exported {} byte .nya snapshot", info.bytes)
                     }
@@ -421,7 +423,11 @@ impl NyaTermApp {
                     }
                     _ => format!("exported {} byte config backup", info.bytes),
                 };
-                self.settings.store_status.ready = true;
+                self.settings.replace_store_status(
+                    info.database_path.display().to_string(),
+                    message,
+                    true,
+                );
                 self.shell.status = match kind {
                     ConfigPathPromptKind::PortableExport => {
                         format!(
@@ -446,7 +452,7 @@ impl NyaTermApp {
                     .as_ref()
                     .map(|path| format!("; previous db saved to {}", path.display()))
                     .unwrap_or_default();
-                self.settings.store_status.message = match kind {
+                let message = match kind {
                     ConfigPathPromptKind::PortableImport => {
                         format!("imported {} byte .nya snapshot{safety}", info.bytes)
                     }
@@ -458,7 +464,7 @@ impl NyaTermApp {
                     }
                     _ => format!("imported {} byte config backup{safety}", info.bytes),
                 };
-                self.settings.store_status.ready = true;
+                self.settings.update_store_status(message, true);
                 self.shell.status = match kind {
                     ConfigPathPromptKind::PortableImport => {
                         format!(
@@ -492,7 +498,7 @@ impl NyaTermApp {
                         "encrypted portable snapshot import cancelled".to_string()
                     }
                 };
-                self.settings.store_status.message = "config picker cancelled".to_string();
+                self.settings.set_store_message("config picker cancelled");
             }
             ConfigPathPromptResult::Failed(error) => {
                 self.shell.status = match kind {
@@ -511,12 +517,12 @@ impl NyaTermApp {
                         format!("encrypted portable snapshot import failed: {error}")
                     }
                 };
-                self.settings.store_status.message = self.shell.status.clone();
-                self.settings.store_status.ready = false;
+                self.settings
+                    .update_store_status(self.shell.status.clone(), false);
             }
             ConfigPathPromptResult::Closed => {
                 self.shell.status = "config path picker closed before returning".to_string();
-                self.settings.store_status.message = "config picker closed".to_string();
+                self.settings.set_store_message("config picker closed");
             }
         }
     }
@@ -550,8 +556,9 @@ impl NyaTermApp {
                             quick_commands.categories,
                             store.list_command_history(64).unwrap_or_default(),
                         );
-                        self.settings.keyword_config =
-                            store.load_keyword_highlights().unwrap_or_default();
+                        self.settings.replace_keyword_config(
+                            store.load_keyword_highlights().unwrap_or_default(),
+                        );
                         self.apply_gpui_settings(
                             store.load_app_settings_summary().unwrap_or_default(),
                         );
@@ -598,7 +605,8 @@ impl NyaTermApp {
                         self.security.clear_catalog();
                         self.tunnel_state.clear_catalog();
                         self.commands.clear_loaded();
-                        self.settings.keyword_config = KeywordHighlightConfig::default();
+                        self.settings
+                            .replace_keyword_config(KeywordHighlightConfig::default());
                         self.apply_gpui_settings(AppSettingsSummary::default());
                         self.translation.replace_settings(
                             TranslationSettings::default(),

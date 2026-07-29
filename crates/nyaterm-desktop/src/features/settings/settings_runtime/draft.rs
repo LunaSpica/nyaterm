@@ -29,7 +29,7 @@ impl NyaTermApp {
                 cloud_sync_secret_draft,
                 translation_settings,
                 translation_secret_draft,
-                keyword_highlights: self.settings.keyword_config.clone(),
+                keyword_highlights: self.settings.keyword_config().clone(),
                 master_password_enabled: master_password.enabled,
                 master_password_draft: master_password.draft.to_string(),
             });
@@ -68,8 +68,8 @@ impl NyaTermApp {
         if !self.shell.has_settings_draft() {
             return false;
         }
-        self.settings.store_status.message = "settings draft changed".to_string();
-        self.settings.store_status.ready = true;
+        self.settings
+            .update_store_status("settings draft changed", true);
         self.shell.status = "settings draft changed; apply to persist".to_string();
         cx.notify();
         true
@@ -183,8 +183,8 @@ impl NyaTermApp {
             return false;
         }
         self.shell.status = "apply or cancel settings before importing".to_string();
-        self.settings.store_status.message = self.shell.status.clone();
-        self.settings.store_status.ready = false;
+        self.settings
+            .update_store_status(self.shell.status.clone(), false);
         cx.notify();
         true
     }
@@ -210,8 +210,7 @@ impl NyaTermApp {
             return;
         }
         if let Some(error) = self.pending_settings_cloud_error() {
-            self.settings.store_status.message = error.clone();
-            self.settings.store_status.ready = false;
+            self.settings.update_store_status(error.clone(), false);
             self.shell.status = format!("settings apply blocked: {error}");
             cx.notify();
             return;
@@ -279,7 +278,8 @@ impl NyaTermApp {
                     saved_translation_settings,
                     TranslationSecretDraft::default(),
                 );
-                self.settings.keyword_config = saved_keyword_highlights;
+                self.settings
+                    .replace_keyword_config(saved_keyword_highlights);
                 self.sync_ai_drafts_from_active_profile();
                 self.recording.set_memory_limit(
                     self.settings.summary().recording_memory_limit_bytes as usize,
@@ -310,8 +310,7 @@ impl NyaTermApp {
                     });
                 }
                 self.shell.clear_settings_draft_snapshot();
-                self.settings.store_status.message = "settings applied".to_string();
-                self.settings.store_status.ready = true;
+                self.settings.update_store_status("settings applied", true);
                 self.shell.status = "settings applied".to_string();
                 if close_after_apply {
                     self.finish_settings_page(cx);
@@ -321,9 +320,9 @@ impl NyaTermApp {
                 }
             }
             Err(error) => {
-                self.settings.store_status.message = format!("settings apply failed: {error}");
-                self.settings.store_status.ready = false;
-                self.shell.status = self.settings.store_status.message.clone();
+                let message = format!("settings apply failed: {error}");
+                self.settings.update_store_status(message.clone(), false);
+                self.shell.status = message;
                 cx.notify();
             }
         }

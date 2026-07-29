@@ -152,15 +152,14 @@ impl NyaTermApp {
             Ok(settings) => {
                 self.apply_gpui_settings(settings);
                 self.enforce_terminal_scrollback_limit();
-                self.settings.store_status.message = "terminal settings saved".to_string();
-                self.settings.store_status.ready = true;
+                self.settings
+                    .update_store_status("terminal settings saved", true);
                 self.shell.status = "terminal settings saved".to_string();
             }
             Err(error) => {
-                self.settings.store_status.message =
-                    format!("terminal settings save failed: {error}");
-                self.settings.store_status.ready = false;
-                self.shell.status = self.settings.store_status.message.clone();
+                let message = format!("terminal settings save failed: {error}");
+                self.settings.update_store_status(message.clone(), false);
+                self.shell.status = message;
             }
         }
         cx.notify();
