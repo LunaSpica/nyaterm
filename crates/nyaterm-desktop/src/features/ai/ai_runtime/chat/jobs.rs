@@ -1,122 +1,53 @@
-use std::sync::{
-    Arc,
-    atomic::{AtomicBool, Ordering},
-};
-
 use gpui::{Context, KeyDownEvent};
-use nyaterm_core::{
-    AgentOutputCaptureProcessor, AiAction, AiChatRequest, AiContext, AiMessage, AiMessageRole,
-    AiMode, now_rfc3339, truncate_preview, uuid,
-};
+use nyaterm_core::{AiAction, AiChatRequest, AiContext, AiMode};
 use nyaterm_transport::SessionInfo;
 
 use crate::features::{
-    AiAgentStepStatus, AiChatJobResult, AiChatWorkerEvent, NyaTermApp, compact_id,
-    recent_terminal_output, session_kind_label,
+    AiChatJobResult, AiChatWorkerEvent, NyaTermApp, compact_id, recent_terminal_output,
+    session_kind_label,
 };
 use crate::models::SessionLaunchConfig;
 
 use super::super::super::ai_jobs::{observation_summary, run_ai_ask_job};
+use super::super::super::state::AiAgentBackgroundEffect;
 
 const AI_CHAT_EVENT_DRAIN_LIMIT: usize = 256;
 
 impl NyaTermApp {
-    pub(in crate::features) fn begin_ai_chat_job(&mut self) -> (u64, Arc<AtomicBool>) {
-        self.ai.chat.job_id = self.ai.chat.job_id.wrapping_add(1).max(1);
-        let cancel = Arc::new(AtomicBool::new(false));
-        self.ai.chat.cancel = Some(cancel.clone());
-        (self.ai.chat.job_id, cancel)
-    }
-
     pub(in crate::features) fn cancel_ai_chat(&mut self, cx: &mut Context<Self>) {
-        if let Some(cancel) = self.ai.chat.cancel.as_ref() {
-            cancel.store(true, Ordering::Relaxed);
-        }
-        self.ai.chat.job_id = self.ai.chat.job_id.wrapping_add(1).max(1);
-        self.ai.chat.pending = false;
-        self.ai.chat.cancel = None;
-        let cancelled_step = self
-            .ai
-            .agent
-            .loop_state
-            .as_ref()
-            .map(|state| state.step_index)
-            .or_else(|| self.ai.agent.steps.last().map(|step| step.step_index));
-        if let Some(state) = self.ai.agent.loop_state.take()
-            && let Some(marker_id) = state.marker_id.as_deref()
-        {
-            self.ai.agent.capture.cancel(marker_id);
-        }
-        self.ai.agent.capture = AgentOutputCaptureProcessor::new();
+        self.ai.cancel_chat_and_agent();
         self.sync_session_event_bridge_policy();
-        self.ai.agent.task_prompt = None;
-        self.ai.chat.command_cards.clear();
-        self.ai.chat.response_preview = "AI request cancelled".to_string();
-        if let Some(assistant_id) = self.ai.chat.streaming_assistant_id.take() {
-            if let Some(message) = self
-                .ai
-                .chat
-                .messages
-                .iter_mut()
-                .rev()
-                .find(|message| message.id == assistant_id)
-            {
-                if message.content.trim().is_empty() {
-                    message.content = "AI request cancelled".to_string();
-                }
-            }
-        }
-        self.ai.set_panel_status("AI request cancelled".to_string());
-        if let Some(step_index) = cancelled_step {
-            self.upsert_ai_agent_step(
-                step_index,
-                AiAgentStepStatus::Cancelled,
-                "Cancelled",
-                "AI Agent request was cancelled",
-            );
-        }
         self.settings
             .set_store_message(self.ai.panel_status().to_string());
         cx.notify();
     }
 
     pub(in crate::features) fn start_ai_ask(&mut self, cx: &mut Context<Self>) {
-        if self.ai.chat.pending {
-            self.ai.chat.response_preview = "AI request already running".to_string();
-            cx.notify();
-            return;
-        }
-        if self.ai.agent.loop_state.is_some() {
-            self.ai.chat.response_preview = "AI Agent step already running".to_string();
+        if self.ai.chat_is_pending() {
             self.ai
-                .set_panel_status(self.ai.chat.response_preview.clone());
+                .reject_chat_start("AI request already running", false);
             cx.notify();
             return;
         }
-        let prompt = self.ai.chat.prompt_draft.trim().to_string();
-        if prompt.is_empty() {
-            self.ai.chat.response_preview = "Enter a prompt first".to_string();
+        if self.ai.agent_loop_snapshot().is_some() {
+            self.ai
+                .reject_chat_start("AI Agent step already running", true);
             cx.notify();
             return;
         }
-        let request_prompt = self
-            .ai
-            .chat
-            .quoted_text
-            .as_ref()
-            .map(|quoted| quoted.trim())
-            .filter(|quoted| !quoted.is_empty())
-            .map(|quoted| format!("> {quoted}\n\n{prompt}"))
-            .unwrap_or_else(|| prompt.clone());
+        let Some(request_prompt) = self.ai.chat_request_prompt() else {
+            self.ai.reject_chat_start("Enter a prompt first", false);
+            cx.notify();
+            return;
+        };
         if !self.ai.settings.config.enabled {
-            self.ai.chat.response_preview = "AI assistant is disabled".to_string();
+            self.ai.reject_chat_start("AI assistant is disabled", false);
             cx.notify();
             return;
         }
         let Some(model_id) = self.ai_selected_model_id() else {
-            self.ai.chat.response_preview = "Enable an AI model before sending".to_string();
             self.ai
-                .set_panel_status(self.ai.chat.response_preview.clone());
+                .reject_chat_start("Enable an AI model before sending", true);
             cx.notify();
             return;
         };
@@ -126,14 +57,12 @@ impl NyaTermApp {
         let target_session_ids = self.ai_effective_target_session_ids();
         let target_session_id = target_session_ids.first().cloned();
         if mode == AiMode::Agent && target_session_id.is_none() {
-            self.ai.chat.response_preview =
-                "Start a terminal session before running Agent mode".to_string();
             self.ai
-                .set_panel_status(self.ai.chat.response_preview.clone());
+                .reject_chat_start("Start a terminal session before running Agent mode", true);
             cx.notify();
             return;
         }
-        let prepared_request = self.ai.chat.prepared_request.clone();
+        let prepared_request = self.ai.chat_prepared_request_cloned();
         let action = prepared_request
             .as_ref()
             .map(|request| request.action.clone())
@@ -145,7 +74,7 @@ impl NyaTermApp {
         let source_label = prepared_request
             .as_ref()
             .map(|request| request.source_label.clone());
-        let session_id = self.ai.chat.session_id.clone();
+        let session_id = self.ai.chat_session_id().to_string();
         let request = AiChatRequest {
             stream_id: None,
             session_id: Some(session_id.clone()),
@@ -161,72 +90,13 @@ impl NyaTermApp {
         };
         let config_dir = self.runtime.config_dir().to_path_buf();
         let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
-        let tx = self.ai.chat.tx.clone();
-        let (job_id, cancel) = self.begin_ai_chat_job();
-
-        if mode == AiMode::Agent {
-            self.ai.agent.task_prompt = Some(request.user_input.clone());
-            self.ai.agent.step_index = 0;
-            self.ai.agent.steps.clear();
-            self.ai.agent.thought_expanded.clear();
-            self.ai.agent.output_expanded.clear();
-            self.upsert_ai_agent_step(
-                0,
-                AiAgentStepStatus::Planning,
-                "Planning",
-                truncate_preview(&request.user_input, 120),
-            );
-        } else {
-            self.ai.agent.task_prompt = None;
-            self.ai.agent.step_index = 0;
-            self.ai.agent.loop_state = None;
-            self.ai.agent.steps.clear();
-            self.ai.agent.thought_expanded.clear();
-            self.ai.agent.output_expanded.clear();
-        }
-        self.ai.chat.pending = true;
-        self.ai.chat.response_preview = if mode == AiMode::Agent {
-            "Running AI Agent step...".to_string()
-        } else {
-            "Running AI request...".to_string()
-        };
-        self.ai.chat.command_cards.clear();
-        let now = now_rfc3339();
-        let assistant_id = format!("assistant-{}", uuid());
-        self.ai.chat.messages.push(AiMessage {
-            id: format!("user-{}", uuid()),
-            session_id: self.ai.chat.session_id.clone(),
-            role: AiMessageRole::User,
-            content: request_prompt.clone(),
-            created_at: now.clone(),
-            reasoning_content: None,
-            command_cards: Vec::new(),
-        });
-        self.ai.chat.messages.push(AiMessage {
-            id: assistant_id.clone(),
-            session_id: self.ai.chat.session_id.clone(),
-            role: AiMessageRole::Assistant,
-            content: String::new(),
-            created_at: now,
-            reasoning_content: None,
-            command_cards: Vec::new(),
-        });
+        let launch =
+            self.ai
+                .begin_chat_request(request_prompt, mode.clone(), source_label.as_deref());
         self.reset_text_input("ai.chat.prompt", "", cx);
-        self.ai.chat.prompt_draft.clear();
-        self.ai.chat.quoted_text = None;
-        self.ai.chat.message_menu = None;
-        self.ai.chat.mention_open = false;
-        self.ai.chat.mention_query.clear();
-        self.ai.chat.mention_index = 0;
-        self.ai.chat.streaming_assistant_id = Some(assistant_id);
-        self.ai.set_panel_status(if mode == AiMode::Agent {
-            "AI Agent step started".to_string()
-        } else if let Some(source_label) = source_label.as_ref() {
-            format!("AI file action started: {source_label}")
-        } else {
-            "AI Ask request started".to_string()
-        });
-        self.ai.chat.prepared_request = None;
+        let job_id = launch.job_id;
+        let cancel = launch.cancel;
+        let tx = launch.tx;
         std::thread::spawn(move || {
             let result = run_ai_ask_job(
                 config_dir,
@@ -397,7 +267,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn ai_effective_target_session_ids(&self) -> Vec<String> {
         let mut session_ids = Vec::new();
-        for session_id in &self.ai.chat.target_session_ids {
+        for session_id in self.ai.chat_target_session_ids() {
             if !session_ids.iter().any(|id| id == session_id)
                 && self.session_info(session_id).is_some()
                 && !self.is_session_disconnected(session_id)
@@ -495,7 +365,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn ai_mention_candidates(&self) -> Vec<SessionInfo> {
-        let query = self.ai.chat.mention_query.trim().to_ascii_lowercase();
+        let query = self.ai.chat_mention_query().trim().to_ascii_lowercase();
         self.ordered_sessions()
             .into_iter()
             .filter(|session| !self.is_session_disconnected(&session.id))
@@ -518,62 +388,19 @@ impl NyaTermApp {
         session_id: String,
         cx: &mut Context<Self>,
     ) {
-        self.ai
-            .chat
-            .target_session_ids
-            .retain(|target_id| target_id != &session_id);
-        if self.ai.chat.target_session_ids.is_empty() {
-            self.ai
-                .set_panel_status("AI target sessions cleared".to_string());
-        } else {
-            self.ai
-                .set_panel_status("AI target session removed".to_string());
-        }
+        self.ai.remove_chat_target_session(&session_id);
         cx.notify();
-    }
-
-    fn sync_ai_mention_from_prompt(&mut self) {
-        self.ai.chat.sync_mention_from_prompt();
     }
 
     pub(in crate::features) fn select_ai_mention_candidate(&mut self, cx: &mut Context<Self>) {
         let candidates = self.ai_mention_candidates();
-        let Some(session) = candidates.get(self.ai.chat.mention_index).cloned() else {
-            self.ai.chat.mention_open = false;
-            self.ai.chat.mention_query.clear();
-            self.ai.chat.mention_index = 0;
+        let Some(session) = candidates.get(self.ai.chat_mention_index()).cloned() else {
+            self.ai.close_chat_mention();
             cx.notify();
             return;
         };
-
-        if self
-            .ai
-            .chat
-            .target_session_ids
-            .iter()
-            .any(|session_id| session_id == &session.id)
-        {
-            self.ai
-                .chat
-                .target_session_ids
-                .retain(|session_id| session_id != &session.id);
-        } else {
-            self.ai.chat.target_session_ids.push(session.id.clone());
-        }
-
-        if let Some(at_index) = self.ai.chat.prompt_draft.rfind('@') {
-            let suffix = &self.ai.chat.prompt_draft[at_index + 1..];
-            if !suffix.chars().any(char::is_whitespace) {
-                self.ai.chat.prompt_draft.truncate(at_index);
-            }
-        }
-        self.ai.chat.mention_open = false;
-        self.ai.chat.mention_query.clear();
-        self.ai.chat.mention_index = 0;
-        self.ai.set_panel_status(format!(
-            "AI target session selected: {}",
-            self.session_display_name_by_info(&session)
-        ));
+        let display_name = self.session_display_name_by_info(&session);
+        self.ai.select_chat_mention(session.id, display_name);
         cx.notify();
     }
 
@@ -639,12 +466,8 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.mark_user_activity();
-        if self.ai.chat.pending
-            || self.ai.agent.loop_state.is_some()
-            || !self.ai.settings.config.enabled
-        {
-            self.ai.chat.mention_open = false;
-            self.ai.chat.mention_query.clear();
+        if self.ai.chat_or_agent_is_running() || !self.ai.settings.config.enabled {
+            self.ai.hide_chat_mention();
             cx.notify();
             return;
         }
@@ -655,29 +478,21 @@ impl NyaTermApp {
 
         // While the @-mention list is open it owns the keys that walk and pick;
         // the box keeps the text either way.
-        if self.ai.chat.mention_open {
+        if self.ai.chat_mention_is_open() {
             let candidate_count = self.ai_mention_candidates().len();
             match keystroke.key.as_str() {
                 "escape" => {
-                    self.ai.chat.mention_open = false;
-                    self.ai.chat.mention_query.clear();
-                    self.ai.chat.mention_index = 0;
+                    self.ai.close_chat_mention();
                     cx.notify();
                     return;
                 }
                 "up" => {
-                    if candidate_count > 0 {
-                        self.ai.chat.mention_index =
-                            (self.ai.chat.mention_index + candidate_count - 1) % candidate_count;
-                    }
+                    self.ai.move_chat_mention_index(candidate_count, -1);
                     cx.notify();
                     return;
                 }
                 "down" => {
-                    if candidate_count > 0 {
-                        self.ai.chat.mention_index =
-                            (self.ai.chat.mention_index + 1) % candidate_count;
-                    }
+                    self.ai.move_chat_mention_index(candidate_count, 1);
                     cx.notify();
                     return;
                 }
@@ -694,9 +509,7 @@ impl NyaTermApp {
         match keystroke.key.as_str() {
             "enter" if !keystroke.modifiers.shift => self.start_ai_ask(cx),
             "escape" => {
-                self.ai.chat.mention_open = false;
-                self.ai.chat.mention_query.clear();
-                self.ai.chat.response_preview = "AI prompt blurred".to_string();
+                self.ai.blur_chat_prompt();
                 cx.notify();
             }
             _ => {}
@@ -714,33 +527,23 @@ impl NyaTermApp {
     ) {
         let text = text.into();
         self.reset_text_input("ai.chat.prompt", &text, cx);
-        self.ai.chat.prompt_draft = text;
-        self.sync_ai_mention_from_prompt();
+        self.ai.set_chat_prompt_draft(text);
         cx.notify();
     }
 
     /// Apply an edit from the AI prompt box.
     pub(in crate::features) fn apply_ai_prompt(&mut self, text: String, cx: &mut Context<Self>) {
-        if self.ai.chat.pending
-            || self.ai.agent.loop_state.is_some()
-            || !self.ai.settings.config.enabled
-        {
+        if self.ai.chat_or_agent_is_running() || !self.ai.settings.config.enabled {
             return;
         }
-        self.ai.chat.prompt_draft = text;
-        self.sync_ai_mention_from_prompt();
+        self.ai.set_chat_prompt_draft(text);
         cx.notify();
     }
 
     pub(in crate::features) fn drain_ai_chat_events(&mut self, cx: &mut Context<Self>) -> bool {
-        if !self.ai.chat.pending {
-            return false;
-        }
+        let events = self.ai.drain_chat_events(AI_CHAT_EVENT_DRAIN_LIMIT);
         let mut dirty = false;
-        for _ in 0..AI_CHAT_EVENT_DRAIN_LIMIT {
-            let Ok(event) = self.ai.chat.rx.try_recv() else {
-                break;
-            };
+        for event in events {
             match event {
                 AiChatWorkerEvent::Delta {
                     job_id,
@@ -748,47 +551,16 @@ impl NyaTermApp {
                     text_delta,
                     reasoning_delta,
                 } => {
-                    if job_id != self.ai.chat.job_id {
-                        continue;
+                    if self
+                        .ai
+                        .apply_chat_delta(job_id, &text_delta, reasoning_delta.as_deref())
+                    {
+                        dirty = true;
+                        self.settings.update_store_status(
+                            format!("AI session {session_id} streaming"),
+                            true,
+                        );
                     }
-                    dirty = true;
-                    if self.ai.chat.response_preview == "Running AI request..." {
-                        self.ai.chat.response_preview.clear();
-                    }
-                    self.ai.chat.response_preview.push_str(&text_delta);
-                    self.ai.chat.response_preview =
-                        truncate_preview(&self.ai.chat.response_preview, 320);
-                    if let Some(assistant_id) = self.ai.chat.streaming_assistant_id.clone() {
-                        if let Some(message) = self
-                            .ai
-                            .chat
-                            .messages
-                            .iter_mut()
-                            .rev()
-                            .find(|message| message.id == assistant_id)
-                        {
-                            message.content.push_str(&text_delta);
-                            if let Some(delta) = reasoning_delta.as_ref() {
-                                if !delta.trim().is_empty() {
-                                    let existing =
-                                        message.reasoning_content.take().unwrap_or_default();
-                                    message.reasoning_content = Some(format!("{existing}{delta}"));
-                                }
-                            }
-                        }
-                    }
-                    self.ai.set_panel_status(
-                        if reasoning_delta
-                            .as_deref()
-                            .is_some_and(|delta| !delta.trim().is_empty())
-                        {
-                            "AI stream receiving; reasoning captured".to_string()
-                        } else {
-                            "AI stream receiving".to_string()
-                        },
-                    );
-                    self.settings
-                        .update_store_status(format!("AI session {session_id} streaming"), true);
                 }
                 AiChatWorkerEvent::AgentToolCallDelta {
                     job_id,
@@ -796,224 +568,64 @@ impl NyaTermApp {
                     tool_name,
                     arguments_delta_len,
                 } => {
-                    if job_id != self.ai.chat.job_id {
-                        continue;
+                    if self.ai.apply_agent_tool_delta(
+                        job_id,
+                        tool_name.as_deref(),
+                        arguments_delta_len,
+                    ) {
+                        dirty = true;
+                        self.settings.update_store_status(
+                            format!("AI session {session_id} streaming Agent tool call"),
+                            true,
+                        );
                     }
-                    dirty = true;
-                    let tool_label = tool_name
-                        .as_deref()
-                        .filter(|name| !name.trim().is_empty())
-                        .unwrap_or("tool");
-                    self.ai.set_panel_status(if arguments_delta_len == 0 {
-                        format!("AI Agent selected {tool_label}")
-                    } else {
-                        format!(
-                            "AI Agent streaming {tool_label} arguments (+{arguments_delta_len} chars)"
-                        )
-                    });
-                    let step_index = self
-                        .ai
-                        .agent
-                        .steps
-                        .last()
-                        .map(|step| step.step_index)
-                        .unwrap_or(0);
-                    self.upsert_ai_agent_step(
-                        step_index,
-                        AiAgentStepStatus::Tool,
-                        format!("Tool {tool_label}"),
-                        if arguments_delta_len == 0 {
-                            "Provider selected an Agent tool".to_string()
-                        } else {
-                            format!("Streaming arguments (+{arguments_delta_len} chars)")
-                        },
-                    );
-                    self.settings.update_store_status(
-                        format!("AI session {session_id} streaming Agent tool call"),
-                        true,
-                    );
                 }
                 AiChatWorkerEvent::AgentBackgroundFinished {
                     job_id,
                     state,
                     result,
                 } => {
-                    if job_id != self.ai.chat.job_id {
-                        continue;
-                    }
-                    dirty = true;
-                    self.ai.chat.cancel = None;
-                    let Some(active_state) = self.ai.agent.loop_state.take() else {
-                        continue;
-                    };
-                    if active_state.background_job_id != Some(job_id) {
-                        self.ai.agent.loop_state = Some(active_state);
-                        continue;
-                    }
-                    match result {
-                        Ok(observation) => {
-                            self.ai.set_panel_status(match observation.exit_code {
-                                Some(code) => {
-                                    format!("AI Agent background command exited with {code}")
-                                }
-                                None => "AI Agent background command completed".to_string(),
-                            });
-                            self.upsert_ai_agent_step(
-                                state.step_index,
-                                AiAgentStepStatus::Completed,
-                                "Observed",
-                                observation_summary(&observation),
-                            );
-                            self.start_ai_agent_continuation(state, observation, cx);
+                    match self.ai.finish_agent_background(
+                        job_id,
+                        state,
+                        result,
+                        observation_summary,
+                    ) {
+                        AiAgentBackgroundEffect::Ignored => {}
+                        AiAgentBackgroundEffect::MatchedStale => dirty = true,
+                        AiAgentBackgroundEffect::Continue(state, observation) => {
+                            dirty = true;
+                            self.start_ai_agent_continuation(*state, observation, cx);
                         }
-                        Err(error) => {
-                            self.ai.set_panel_status(format!(
-                                "AI Agent background command failed: {error}"
-                            ));
-                            self.ai.chat.response_preview = self.ai.panel_status().to_string();
-                            self.upsert_ai_agent_step(
-                                state.step_index,
-                                AiAgentStepStatus::Failed,
-                                "Failed",
-                                truncate_preview(&error, 140),
-                            );
+                        AiAgentBackgroundEffect::Failed => {
+                            dirty = true;
                             self.settings
                                 .update_store_status(self.ai.panel_status().to_string(), false);
                         }
                     }
                 }
                 AiChatWorkerEvent::Finished(event) => {
-                    if event.job_id != self.ai.chat.job_id {
-                        continue;
-                    }
-                    dirty = true;
-                    self.ai.chat.pending = false;
-                    self.ai.chat.cancel = None;
-                    match event.result {
-                        Ok(output) => {
-                            let command_count = output.command_cards.len();
-                            self.ai.chat.response_preview = if output.text.trim().is_empty() {
-                                "AI returned an empty response".to_string()
+                    if let Some(effect) =
+                        self.ai
+                            .finish_chat_job(event.job_id, event.session_id, event.result)
+                    {
+                        dirty = true;
+                        self.settings.update_store_status(
+                            if effect.succeeded {
+                                format!("AI session {} updated", effect.session_id)
                             } else {
-                                truncate_preview(&output.text, 320)
-                            };
-                            let mode_label = if output.mode == AiMode::Agent {
-                                "AI Agent"
-                            } else {
-                                "AI Ask"
-                            };
-                            let mut panel_status = format!(
-                                "{mode_label} completed; {} command card(s) parsed",
-                                command_count
-                            );
-                            if output.reasoning.is_some() {
-                                panel_status.push_str("; reasoning captured");
-                            }
-                            if let Some(note) = output.approval_note.as_deref() {
-                                panel_status.push_str("; ");
-                                panel_status.push_str(note);
-                            }
-                            let auto_execute_first = output.auto_execute_first;
-                            if output.mode == AiMode::Agent
-                                && command_count > 0
-                                && !auto_execute_first
-                            {
-                                panel_status.push_str("; awaiting command approval");
-                            }
-                            self.ai.set_panel_status(panel_status);
-                            let agent_step_index = self
-                                .ai
-                                .agent
-                                .steps
-                                .last()
-                                .map(|step| step.step_index)
-                                .unwrap_or(0);
-                            if output.mode == AiMode::Agent {
-                                let (step_status, step_title) = if command_count == 0 {
-                                    (AiAgentStepStatus::Completed, "Final Answer")
-                                } else if auto_execute_first {
-                                    (AiAgentStepStatus::Running, "Auto Execute")
-                                } else {
-                                    (AiAgentStepStatus::NeedsApproval, "Needs Approval")
-                                };
-                                self.upsert_ai_agent_step(
-                                    agent_step_index,
-                                    step_status,
-                                    step_title,
-                                    truncate_preview(&output.text, 140),
-                                );
-                            }
-                            self.ai.chat.command_cards = output.command_cards.clone();
-                            if let Some(assistant_id) = self.ai.chat.streaming_assistant_id.take() {
-                                if let Some(message) = self
-                                    .ai
-                                    .chat
-                                    .messages
-                                    .iter_mut()
-                                    .rev()
-                                    .find(|message| message.id == assistant_id)
-                                {
-                                    if !output.text.trim().is_empty() {
-                                        message.content = output.text.clone();
-                                    } else if message.content.trim().is_empty() {
-                                        message.content =
-                                            "AI returned an empty response".to_string();
-                                    }
-                                    message.reasoning_content = output.reasoning.clone();
-                                    message.command_cards = output.command_cards.clone();
-                                }
-                            }
-                            self.settings.update_store_status(
-                                format!("AI session {} updated", event.session_id),
-                                true,
-                            );
+                                self.ai.panel_status().to_string()
+                            },
+                            effect.succeeded,
+                        );
+                        if effect.clear_prompt_input {
                             self.reset_text_input("ai.chat.prompt", "", cx);
-                            self.ai.chat.prompt_draft.clear();
-                            self.refresh_ai_usage_counts(cx);
-                            if output.mode == AiMode::Agent {
-                                if command_count == 0 {
-                                    self.ai.agent.loop_state = None;
-                                    self.ai.agent.task_prompt = None;
-                                }
-                            }
-                            if auto_execute_first && !self.ai.chat.command_cards.is_empty() {
-                                self.run_ai_command_card(0, cx);
-                            }
                         }
-                        Err(error) => {
-                            self.ai.chat.response_preview = format!("AI request failed: {error}");
-                            self.ai.chat.command_cards.clear();
-                            self.ai
-                                .set_panel_status(self.ai.chat.response_preview.clone());
-                            if let Some(assistant_id) = self.ai.chat.streaming_assistant_id.take() {
-                                if let Some(message) = self
-                                    .ai
-                                    .chat
-                                    .messages
-                                    .iter_mut()
-                                    .rev()
-                                    .find(|message| message.id == assistant_id)
-                                {
-                                    message.content = format!("AI request failed: {error}");
-                                }
-                            }
-                            if self.ai.agent.task_prompt.is_some() {
-                                let step_index = self
-                                    .ai
-                                    .agent
-                                    .steps
-                                    .last()
-                                    .map(|step| step.step_index)
-                                    .unwrap_or(0);
-                                self.upsert_ai_agent_step(
-                                    step_index,
-                                    AiAgentStepStatus::Failed,
-                                    "Failed",
-                                    truncate_preview(&error, 140),
-                                );
-                            }
-                            self.settings
-                                .update_store_status(self.ai.panel_status().to_string(), false);
+                        if effect.refresh_usage_counts {
+                            self.refresh_ai_usage_counts(cx);
+                        }
+                        if effect.auto_execute_first {
+                            self.run_ai_command_card(0, cx);
                         }
                     }
                 }

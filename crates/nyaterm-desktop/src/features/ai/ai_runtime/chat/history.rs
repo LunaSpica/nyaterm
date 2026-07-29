@@ -50,7 +50,7 @@ impl NyaTermApp {
         let Some(job_id) = self.begin_ai_history_operation("loading AI session", cx) else {
             return;
         };
-        let source_session_id = self.ai.chat.session_id.clone();
+        let source_session_id = self.ai.chat_session_id().to_string();
         let config_dir = self.runtime.config_dir().to_path_buf();
         let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
         let job_session_id = session_id.clone();
@@ -114,7 +114,7 @@ impl NyaTermApp {
         let Some(job_id) = self.begin_ai_history_operation("clearing AI history", cx) else {
             return;
         };
-        let source_session_id = self.ai.chat.session_id.clone();
+        let source_session_id = self.ai.chat_session_id().to_string();
         let config_dir = self.runtime.config_dir().to_path_buf();
         let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
         let task = cx.background_spawn(async move {

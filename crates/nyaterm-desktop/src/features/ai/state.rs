@@ -6,9 +6,9 @@
 //! impossible to see which ones move together.
 
 use std::collections::{HashMap, HashSet};
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use gpui::FocusHandle;
 use nyaterm_core::{
@@ -16,7 +16,10 @@ use nyaterm_core::{
     AiCommandCard, AiMessage, AiMessageRole, AiMode, AiSession, AiSettings, truncate_preview, uuid,
 };
 
-use crate::features::{AiAgentLoopState, AiAgentStepView, AiChatWorkerEvent, AiDiscoveryJobResult};
+use crate::features::{
+    AiAgentLoopState, AiAgentStepStatus, AiAgentStepView, AiChatJobOutput, AiChatWorkerEvent,
+    AiDiscoveryJobResult,
+};
 use crate::models::{
     AiActionEditorField, AiActionListKind, AiCredentialEditorField, AiDetectedErrorState,
     AiInputField, AiMessageMenuState, AiPreparedRequest,
@@ -24,10 +27,10 @@ use crate::models::{
 
 pub(in crate::features) struct AiFeatureState {
     pub(super) settings: AiSettingsState,
-    pub(super) chat: AiChatState,
+    chat: AiChatState,
     history: AiHistoryState,
     discovery: AiDiscoveryState,
-    pub(super) agent: AiAgentState,
+    agent: AiAgentState,
     panel: AiPanelState,
 }
 
@@ -61,27 +64,27 @@ pub(super) struct AiSettingsState {
 }
 
 /// Composer, in-flight request and the visible transcript.
-pub(super) struct AiChatState {
-    pub(super) tx: mpsc::Sender<AiChatWorkerEvent>,
-    pub(super) rx: mpsc::Receiver<AiChatWorkerEvent>,
-    pub(super) pending: bool,
-    pub(super) job_id: u64,
-    pub(super) cancel: Option<Arc<AtomicBool>>,
-    pub(super) session_id: String,
-    pub(super) prompt_draft: String,
-    pub(super) target_session_ids: Vec<String>,
-    pub(super) mention_open: bool,
-    pub(super) mention_query: String,
-    pub(super) mention_index: usize,
-    pub(super) prepared_request: Option<AiPreparedRequest>,
-    pub(super) response_preview: String,
-    pub(super) messages: Vec<AiMessage>,
-    pub(super) streaming_assistant_id: Option<String>,
-    pub(super) message_menu: Option<AiMessageMenuState>,
-    pub(super) quoted_text: Option<String>,
-    pub(super) command_cards: Vec<AiCommandCard>,
-    pub(super) focus: FocusHandle,
-    pub(super) focus_pending: bool,
+struct AiChatState {
+    tx: mpsc::Sender<AiChatWorkerEvent>,
+    rx: mpsc::Receiver<AiChatWorkerEvent>,
+    pending: bool,
+    job_id: u64,
+    cancel: Option<Arc<AtomicBool>>,
+    session_id: String,
+    prompt_draft: String,
+    target_session_ids: Vec<String>,
+    mention_open: bool,
+    mention_query: String,
+    mention_index: usize,
+    prepared_request: Option<AiPreparedRequest>,
+    response_preview: String,
+    messages: Vec<AiMessage>,
+    streaming_assistant_id: Option<String>,
+    message_menu: Option<AiMessageMenuState>,
+    quoted_text: Option<String>,
+    command_cards: Vec<AiCommandCard>,
+    focus: FocusHandle,
+    focus_pending: bool,
 }
 
 /// Stored sessions, the history browser and the counters shown beside it.
@@ -111,16 +114,44 @@ struct AiDiscoveryState {
 }
 
 /// Agent loop: the running task, its steps and their disclosure state.
-pub(super) struct AiAgentState {
-    pub(super) task_prompt: Option<String>,
-    pub(super) step_index: u16,
-    pub(super) loop_state: Option<AiAgentLoopState>,
-    pub(super) capture: AgentOutputCaptureProcessor,
-    pub(super) steps: Vec<AiAgentStepView>,
-    pub(super) thought_expanded: HashSet<u16>,
-    pub(super) output_expanded: HashSet<u16>,
-    pub(super) auto_execution_confirm_open: bool,
-    pub(super) auto_execution_confirm_focus: FocusHandle,
+struct AiAgentState {
+    task_prompt: Option<String>,
+    step_index: u16,
+    loop_state: Option<AiAgentLoopState>,
+    capture: AgentOutputCaptureProcessor,
+    steps: Vec<AiAgentStepView>,
+    thought_expanded: HashSet<u16>,
+    output_expanded: HashSet<u16>,
+    auto_execution_confirm_open: bool,
+    auto_execution_confirm_focus: FocusHandle,
+}
+
+pub(in crate::features) struct AiChatLaunch {
+    pub(in crate::features) job_id: u64,
+    pub(in crate::features) cancel: Arc<AtomicBool>,
+    pub(in crate::features) tx: mpsc::Sender<AiChatWorkerEvent>,
+    pub(in crate::features) session_id: String,
+}
+
+pub(in crate::features) struct AiChatFinishEffect {
+    pub(in crate::features) session_id: String,
+    pub(in crate::features) succeeded: bool,
+    pub(in crate::features) clear_prompt_input: bool,
+    pub(in crate::features) refresh_usage_counts: bool,
+    pub(in crate::features) auto_execute_first: bool,
+}
+
+pub(in crate::features) enum AiAgentBackgroundEffect {
+    Ignored,
+    MatchedStale,
+    Continue(Box<AiAgentLoopState>, nyaterm_core::CommandObservation),
+    Failed,
+}
+
+pub(in crate::features) enum AiAgentObservationPoll {
+    Waiting,
+    Target(AiAgentLoopState),
+    TimedOut(AiAgentLoopState),
 }
 
 /// Panel chrome: status line, focus routing and the detected-error banner.
@@ -324,6 +355,10 @@ impl AiFeatureState {
         self.chat.pending || self.agent.loop_state.is_some()
     }
 
+    pub(in crate::features) fn chat_is_pending(&self) -> bool {
+        self.chat.pending
+    }
+
     pub(in crate::features) fn has_background_work(&self) -> bool {
         self.chat.pending || self.agent.loop_state.is_some() || self.discovery.pending
     }
@@ -348,8 +383,43 @@ impl AiFeatureState {
         &self.chat.prompt_draft
     }
 
+    pub(in crate::features) fn chat_request_prompt(&self) -> Option<String> {
+        let prompt = self.chat.prompt_draft.trim();
+        if prompt.is_empty() {
+            return None;
+        }
+        Some(
+            self.chat
+                .quoted_text
+                .as_deref()
+                .map(str::trim)
+                .filter(|quoted| !quoted.is_empty())
+                .map(|quoted| format!("> {quoted}\n\n{prompt}"))
+                .unwrap_or_else(|| prompt.to_string()),
+        )
+    }
+
+    pub(in crate::features) fn reject_chat_start(
+        &mut self,
+        message: impl Into<String>,
+        update_panel: bool,
+    ) {
+        self.chat.response_preview = message.into();
+        if update_panel {
+            self.panel.status = self.chat.response_preview.clone();
+        }
+    }
+
+    pub(in crate::features) fn chat_prepared_request_cloned(&self) -> Option<AiPreparedRequest> {
+        self.chat.prepared_request.clone()
+    }
+
     pub(in crate::features) fn chat_target_session_ids(&self) -> &[String] {
         &self.chat.target_session_ids
+    }
+
+    pub(in crate::features) fn chat_mention_query(&self) -> &str {
+        &self.chat.mention_query
     }
 
     pub(in crate::features) fn chat_targets_session(&self, session_id: &str) -> bool {
@@ -378,6 +448,450 @@ impl AiFeatureState {
 
     pub(in crate::features) fn set_chat_mention_index(&mut self, index: usize) {
         self.chat.mention_index = index;
+    }
+
+    pub(in crate::features) fn close_chat_mention(&mut self) {
+        self.chat.close_mention();
+    }
+
+    pub(in crate::features) fn hide_chat_mention(&mut self) {
+        self.chat.mention_open = false;
+        self.chat.mention_query.clear();
+    }
+
+    pub(in crate::features) fn move_chat_mention_index(
+        &mut self,
+        candidate_count: usize,
+        delta: isize,
+    ) {
+        if candidate_count == 0 {
+            return;
+        }
+        self.chat.mention_index = if delta < 0 {
+            (self.chat.mention_index + candidate_count - 1) % candidate_count
+        } else {
+            (self.chat.mention_index + 1) % candidate_count
+        };
+    }
+
+    pub(in crate::features) fn set_chat_prompt_draft(&mut self, text: String) {
+        self.chat.prompt_draft = text;
+        self.chat.sync_mention_from_prompt();
+    }
+
+    pub(in crate::features) fn blur_chat_prompt(&mut self) {
+        self.hide_chat_mention();
+        self.chat.response_preview = "AI prompt blurred".to_string();
+    }
+
+    pub(in crate::features) fn remove_chat_target_session(&mut self, session_id: &str) {
+        self.chat
+            .target_session_ids
+            .retain(|target_id| target_id != session_id);
+        self.panel.status = if self.chat.target_session_ids.is_empty() {
+            "AI target sessions cleared".to_string()
+        } else {
+            "AI target session removed".to_string()
+        };
+    }
+
+    pub(in crate::features) fn select_chat_mention(
+        &mut self,
+        session_id: String,
+        display_name: String,
+    ) {
+        if self
+            .chat
+            .target_session_ids
+            .iter()
+            .any(|target_id| target_id == &session_id)
+        {
+            self.chat
+                .target_session_ids
+                .retain(|target_id| target_id != &session_id);
+        } else {
+            self.chat.target_session_ids.push(session_id);
+        }
+        if let Some(at_index) = self.chat.prompt_draft.rfind('@') {
+            let suffix = &self.chat.prompt_draft[at_index + 1..];
+            if !suffix.chars().any(char::is_whitespace) {
+                self.chat.prompt_draft.truncate(at_index);
+            }
+        }
+        self.chat.close_mention();
+        self.panel.status = format!("AI target session selected: {display_name}");
+    }
+
+    pub(in crate::features) fn begin_chat_job(&mut self) -> AiChatLaunch {
+        self.chat.job_id = self.chat.job_id.wrapping_add(1).max(1);
+        let cancel = Arc::new(AtomicBool::new(false));
+        self.chat.cancel = Some(cancel.clone());
+        AiChatLaunch {
+            job_id: self.chat.job_id,
+            cancel,
+            tx: self.chat.tx.clone(),
+            session_id: self.chat.session_id.clone(),
+        }
+    }
+
+    pub(in crate::features) fn begin_chat_request(
+        &mut self,
+        request_prompt: String,
+        mode: AiMode,
+        source_label: Option<&str>,
+    ) -> AiChatLaunch {
+        let launch = self.begin_chat_job();
+        if mode == AiMode::Agent {
+            self.agent.task_prompt = Some(request_prompt.clone());
+            self.agent.step_index = 0;
+            self.agent.steps.clear();
+            self.agent.thought_expanded.clear();
+            self.agent.output_expanded.clear();
+            self.upsert_agent_step(
+                0,
+                AiAgentStepStatus::Planning,
+                "Planning",
+                truncate_preview(&request_prompt, 120),
+            );
+        } else {
+            self.agent.task_prompt = None;
+            self.agent.step_index = 0;
+            self.agent.loop_state = None;
+            self.agent.steps.clear();
+            self.agent.thought_expanded.clear();
+            self.agent.output_expanded.clear();
+        }
+        self.chat.pending = true;
+        self.chat.response_preview = if mode == AiMode::Agent {
+            "Running AI Agent step...".to_string()
+        } else {
+            "Running AI request...".to_string()
+        };
+        self.chat.command_cards.clear();
+        let now = nyaterm_core::now_rfc3339();
+        let assistant_id = format!("assistant-{}", uuid());
+        self.chat.messages.push(AiMessage {
+            id: format!("user-{}", uuid()),
+            session_id: self.chat.session_id.clone(),
+            role: AiMessageRole::User,
+            content: request_prompt,
+            created_at: now.clone(),
+            reasoning_content: None,
+            command_cards: Vec::new(),
+        });
+        self.chat.messages.push(AiMessage {
+            id: assistant_id.clone(),
+            session_id: self.chat.session_id.clone(),
+            role: AiMessageRole::Assistant,
+            content: String::new(),
+            created_at: now,
+            reasoning_content: None,
+            command_cards: Vec::new(),
+        });
+        self.chat.prompt_draft.clear();
+        self.chat.quoted_text = None;
+        self.chat.message_menu = None;
+        self.chat.close_mention();
+        self.chat.streaming_assistant_id = Some(assistant_id);
+        self.panel.status = if mode == AiMode::Agent {
+            "AI Agent step started".to_string()
+        } else if let Some(source_label) = source_label {
+            format!("AI file action started: {source_label}")
+        } else {
+            "AI Ask request started".to_string()
+        };
+        self.chat.prepared_request = None;
+        launch
+    }
+
+    pub(in crate::features) fn cancel_chat_and_agent(&mut self) {
+        if let Some(cancel) = self.chat.cancel.as_ref() {
+            cancel.store(true, Ordering::Relaxed);
+        }
+        self.chat.job_id = self.chat.job_id.wrapping_add(1).max(1);
+        self.chat.pending = false;
+        self.chat.cancel = None;
+        let cancelled_step = self
+            .agent
+            .loop_state
+            .as_ref()
+            .map(|state| state.step_index)
+            .or_else(|| self.agent.steps.last().map(|step| step.step_index));
+        if let Some(state) = self.agent.loop_state.take()
+            && let Some(marker_id) = state.marker_id.as_deref()
+        {
+            self.agent.capture.cancel(marker_id);
+        }
+        self.agent.capture = AgentOutputCaptureProcessor::new();
+        self.agent.task_prompt = None;
+        self.chat.command_cards.clear();
+        self.chat.response_preview = "AI request cancelled".to_string();
+        if let Some(assistant_id) = self.chat.streaming_assistant_id.take()
+            && let Some(message) = self
+                .chat
+                .messages
+                .iter_mut()
+                .rev()
+                .find(|message| message.id == assistant_id)
+            && message.content.trim().is_empty()
+        {
+            message.content = "AI request cancelled".to_string();
+        }
+        self.panel.status = "AI request cancelled".to_string();
+        if let Some(step_index) = cancelled_step {
+            self.upsert_agent_step(
+                step_index,
+                AiAgentStepStatus::Cancelled,
+                "Cancelled",
+                "AI Agent request was cancelled",
+            );
+        }
+    }
+
+    pub(in crate::features) fn drain_chat_events(
+        &mut self,
+        limit: usize,
+    ) -> Vec<AiChatWorkerEvent> {
+        if !self.chat.pending {
+            return Vec::new();
+        }
+        let mut events = Vec::new();
+        for _ in 0..limit {
+            let Ok(event) = self.chat.rx.try_recv() else {
+                break;
+            };
+            events.push(event);
+        }
+        events
+    }
+
+    pub(in crate::features) fn apply_chat_delta(
+        &mut self,
+        job_id: u64,
+        text_delta: &str,
+        reasoning_delta: Option<&str>,
+    ) -> bool {
+        if job_id != self.chat.job_id {
+            return false;
+        }
+        if self.chat.response_preview == "Running AI request..." {
+            self.chat.response_preview.clear();
+        }
+        self.chat.response_preview.push_str(text_delta);
+        self.chat.response_preview = truncate_preview(&self.chat.response_preview, 320);
+        if let Some(assistant_id) = self.chat.streaming_assistant_id.as_deref()
+            && let Some(message) = self
+                .chat
+                .messages
+                .iter_mut()
+                .rev()
+                .find(|message| message.id == assistant_id)
+        {
+            message.content.push_str(text_delta);
+            if let Some(delta) = reasoning_delta.filter(|delta| !delta.trim().is_empty()) {
+                let existing = message.reasoning_content.take().unwrap_or_default();
+                message.reasoning_content = Some(format!("{existing}{delta}"));
+            }
+        }
+        self.panel.status = if reasoning_delta.is_some_and(|delta| !delta.trim().is_empty()) {
+            "AI stream receiving; reasoning captured".to_string()
+        } else {
+            "AI stream receiving".to_string()
+        };
+        true
+    }
+
+    pub(in crate::features) fn apply_agent_tool_delta(
+        &mut self,
+        job_id: u64,
+        tool_name: Option<&str>,
+        arguments_delta_len: usize,
+    ) -> bool {
+        if job_id != self.chat.job_id {
+            return false;
+        }
+        let tool_label = tool_name
+            .filter(|name| !name.trim().is_empty())
+            .unwrap_or("tool");
+        self.panel.status = if arguments_delta_len == 0 {
+            format!("AI Agent selected {tool_label}")
+        } else {
+            format!("AI Agent streaming {tool_label} arguments (+{arguments_delta_len} chars)")
+        };
+        self.upsert_agent_step(
+            self.last_agent_step_index(),
+            AiAgentStepStatus::Tool,
+            format!("Tool {tool_label}"),
+            if arguments_delta_len == 0 {
+                "Provider selected an Agent tool".to_string()
+            } else {
+                format!("Streaming arguments (+{arguments_delta_len} chars)")
+            },
+        );
+        true
+    }
+
+    pub(in crate::features) fn finish_agent_background(
+        &mut self,
+        job_id: u64,
+        state: AiAgentLoopState,
+        result: Result<nyaterm_core::CommandObservation, String>,
+        observation_summary: impl FnOnce(&nyaterm_core::CommandObservation) -> String,
+    ) -> AiAgentBackgroundEffect {
+        if job_id != self.chat.job_id {
+            return AiAgentBackgroundEffect::Ignored;
+        }
+        self.chat.cancel = None;
+        let Some(active_state) = self.agent.loop_state.take() else {
+            return AiAgentBackgroundEffect::MatchedStale;
+        };
+        if active_state.background_job_id != Some(job_id) {
+            self.agent.loop_state = Some(active_state);
+            return AiAgentBackgroundEffect::MatchedStale;
+        }
+        match result {
+            Ok(observation) => {
+                self.panel.status = match observation.exit_code {
+                    Some(code) => format!("AI Agent background command exited with {code}"),
+                    None => "AI Agent background command completed".to_string(),
+                };
+                let detail = observation_summary(&observation);
+                self.upsert_agent_step(
+                    state.step_index,
+                    AiAgentStepStatus::Completed,
+                    "Observed",
+                    detail,
+                );
+                AiAgentBackgroundEffect::Continue(Box::new(state), observation)
+            }
+            Err(error) => {
+                self.panel.status = format!("AI Agent background command failed: {error}");
+                self.chat.response_preview = self.panel.status.clone();
+                self.upsert_agent_step(
+                    state.step_index,
+                    AiAgentStepStatus::Failed,
+                    "Failed",
+                    truncate_preview(&error, 140),
+                );
+                AiAgentBackgroundEffect::Failed
+            }
+        }
+    }
+
+    pub(in crate::features) fn finish_chat_job(
+        &mut self,
+        job_id: u64,
+        session_id: String,
+        result: Result<AiChatJobOutput, String>,
+    ) -> Option<AiChatFinishEffect> {
+        if job_id != self.chat.job_id {
+            return None;
+        }
+        self.chat.pending = false;
+        self.chat.cancel = None;
+        match result {
+            Ok(output) => {
+                let command_count = output.command_cards.len();
+                self.chat.response_preview = if output.text.trim().is_empty() {
+                    "AI returned an empty response".to_string()
+                } else {
+                    truncate_preview(&output.text, 320)
+                };
+                let mode_label = if output.mode == AiMode::Agent {
+                    "AI Agent"
+                } else {
+                    "AI Ask"
+                };
+                let mut status =
+                    format!("{mode_label} completed; {command_count} command card(s) parsed");
+                if output.reasoning.is_some() {
+                    status.push_str("; reasoning captured");
+                }
+                if let Some(note) = output.approval_note.as_deref() {
+                    status.push_str("; ");
+                    status.push_str(note);
+                }
+                if output.mode == AiMode::Agent && command_count > 0 && !output.auto_execute_first {
+                    status.push_str("; awaiting command approval");
+                }
+                self.panel.status = status;
+                if output.mode == AiMode::Agent {
+                    let (step_status, step_title) = if command_count == 0 {
+                        (AiAgentStepStatus::Completed, "Final Answer")
+                    } else if output.auto_execute_first {
+                        (AiAgentStepStatus::Running, "Auto Execute")
+                    } else {
+                        (AiAgentStepStatus::NeedsApproval, "Needs Approval")
+                    };
+                    self.upsert_agent_step(
+                        self.last_agent_step_index(),
+                        step_status,
+                        step_title,
+                        truncate_preview(&output.text, 140),
+                    );
+                }
+                self.chat.command_cards = output.command_cards.clone();
+                if let Some(assistant_id) = self.chat.streaming_assistant_id.take()
+                    && let Some(message) = self
+                        .chat
+                        .messages
+                        .iter_mut()
+                        .rev()
+                        .find(|message| message.id == assistant_id)
+                {
+                    if !output.text.trim().is_empty() {
+                        message.content = output.text.clone();
+                    } else if message.content.trim().is_empty() {
+                        message.content = "AI returned an empty response".to_string();
+                    }
+                    message.reasoning_content = output.reasoning;
+                    message.command_cards = output.command_cards;
+                }
+                self.chat.prompt_draft.clear();
+                if output.mode == AiMode::Agent && command_count == 0 {
+                    self.agent.loop_state = None;
+                    self.agent.task_prompt = None;
+                }
+                Some(AiChatFinishEffect {
+                    session_id,
+                    succeeded: true,
+                    clear_prompt_input: true,
+                    refresh_usage_counts: true,
+                    auto_execute_first: output.auto_execute_first
+                        && !self.chat.command_cards.is_empty(),
+                })
+            }
+            Err(error) => {
+                self.chat.response_preview = format!("AI request failed: {error}");
+                self.chat.command_cards.clear();
+                self.panel.status = self.chat.response_preview.clone();
+                if let Some(assistant_id) = self.chat.streaming_assistant_id.take()
+                    && let Some(message) = self
+                        .chat
+                        .messages
+                        .iter_mut()
+                        .rev()
+                        .find(|message| message.id == assistant_id)
+                {
+                    message.content = format!("AI request failed: {error}");
+                }
+                if self.agent.task_prompt.is_some() {
+                    self.upsert_agent_step(
+                        self.last_agent_step_index(),
+                        AiAgentStepStatus::Failed,
+                        "Failed",
+                        truncate_preview(&error, 140),
+                    );
+                }
+                Some(AiChatFinishEffect {
+                    session_id,
+                    succeeded: false,
+                    clear_prompt_input: false,
+                    refresh_usage_counts: false,
+                    auto_execute_first: false,
+                })
+            }
+        }
     }
 
     pub(in crate::features) fn chat_prepared_request(&self) -> Option<&AiPreparedRequest> {
@@ -860,6 +1374,244 @@ impl AiFeatureState {
         &self.agent.steps
     }
 
+    pub(in crate::features) fn upsert_agent_step(
+        &mut self,
+        step_index: u16,
+        status: AiAgentStepStatus,
+        title: impl Into<String>,
+        detail: impl Into<String>,
+    ) {
+        let title = title.into();
+        let detail = detail.into();
+        let lower_title = title.to_ascii_lowercase();
+        let looks_like_command = matches!(
+            status,
+            AiAgentStepStatus::Running | AiAgentStepStatus::Tool | AiAgentStepStatus::NeedsApproval
+        ) || lower_title.contains("background")
+            || lower_title.contains("auto execute")
+            || lower_title.contains("needs approval")
+            || lower_title.contains("shell")
+            || lower_title.contains("running");
+        let looks_like_observation = lower_title.contains("observ")
+            || lower_title == "done"
+            || lower_title == "completed"
+            || lower_title == "failed"
+            || matches!(
+                status,
+                AiAgentStepStatus::Completed | AiAgentStepStatus::Failed
+            );
+        let looks_like_thought = lower_title.contains("plan")
+            || lower_title.contains("think")
+            || lower_title.contains("final answer")
+            || matches!(status, AiAgentStepStatus::Planning);
+
+        if let Some(step) = self
+            .agent
+            .steps
+            .iter_mut()
+            .find(|step| step.step_index == step_index)
+        {
+            step.status = status;
+            step.title = title;
+            if !detail.trim().is_empty() {
+                step.detail = detail.clone();
+            }
+            if looks_like_command && !detail.trim().is_empty() {
+                step.command = Some(detail.clone());
+            }
+            if looks_like_observation && !detail.trim().is_empty() {
+                step.observation = Some(detail.clone());
+            }
+            if looks_like_thought && !detail.trim().is_empty() {
+                step.thought = Some(detail);
+            }
+        } else {
+            self.agent.steps.push(AiAgentStepView {
+                step_index,
+                status,
+                title,
+                detail: detail.clone(),
+                thought: (looks_like_thought && !detail.trim().is_empty()).then(|| detail.clone()),
+                command: (looks_like_command && !detail.trim().is_empty()).then(|| detail.clone()),
+                observation: (looks_like_observation && !detail.trim().is_empty())
+                    .then_some(detail),
+            });
+        }
+        let overflow = self.agent.steps.len().saturating_sub(16);
+        if overflow > 0 {
+            let removed: Vec<u16> = self
+                .agent
+                .steps
+                .iter()
+                .take(overflow)
+                .map(|step| step.step_index)
+                .collect();
+            self.agent.steps.drain(..overflow);
+            for index in removed {
+                self.agent.thought_expanded.remove(&index);
+                self.agent.output_expanded.remove(&index);
+            }
+        }
+    }
+
+    pub(in crate::features) fn toggle_agent_thought_expanded(&mut self, step_index: u16) {
+        if !self.agent.thought_expanded.remove(&step_index) {
+            self.agent.thought_expanded.insert(step_index);
+        }
+    }
+
+    pub(in crate::features) fn toggle_agent_output_expanded(&mut self, step_index: u16) {
+        if !self.agent.output_expanded.remove(&step_index) {
+            self.agent.output_expanded.insert(step_index);
+        }
+    }
+
+    pub(in crate::features) fn agent_task_prompt_or_preview(&self) -> String {
+        self.agent
+            .task_prompt
+            .clone()
+            .unwrap_or_else(|| self.chat.response_preview.clone())
+    }
+
+    pub(in crate::features) fn begin_agent_step(
+        &mut self,
+        max_steps: u16,
+    ) -> Result<(String, u16), String> {
+        let step_index = self.agent.step_index;
+        if step_index.saturating_add(1) >= max_steps {
+            self.agent.loop_state = None;
+            return Err(format!(
+                "AI Agent reached max step limit ({max_steps}); review terminal output"
+            ));
+        }
+        self.agent.step_index = self.agent.step_index.saturating_add(1);
+        Ok((self.agent_task_prompt_or_preview(), step_index))
+    }
+
+    pub(in crate::features) fn register_agent_capture(&mut self, marker_id: String) {
+        self.agent.capture.register(marker_id);
+    }
+
+    pub(in crate::features) fn set_agent_loop(&mut self, state: AiAgentLoopState) {
+        self.agent.loop_state = Some(state);
+    }
+
+    pub(in crate::features) fn stop_agent_for_closed_target(&mut self) -> Option<u16> {
+        let state = self.agent.loop_state.take()?;
+        self.panel.status = "AI Agent loop stopped because the target session closed".to_string();
+        self.upsert_agent_step(
+            state.step_index,
+            AiAgentStepStatus::Failed,
+            "Stopped",
+            "Target session closed",
+        );
+        Some(state.step_index)
+    }
+
+    pub(in crate::features) fn poll_agent_observation(
+        &mut self,
+        now: Instant,
+        current_len: usize,
+        quiet: Duration,
+    ) -> AiAgentObservationPoll {
+        if self.chat.pending {
+            return AiAgentObservationPoll::Waiting;
+        }
+        let Some(state) = self.agent.loop_state.as_mut() else {
+            return AiAgentObservationPoll::Waiting;
+        };
+        if state.background_job_id.is_some() {
+            return AiAgentObservationPoll::Waiting;
+        }
+        if current_len != state.last_seen_len {
+            state.last_seen_len = current_len;
+            state.stable_since = now;
+            return AiAgentObservationPoll::Waiting;
+        }
+        if now < state.min_wait_until {
+            return AiAgentObservationPoll::Waiting;
+        }
+        let has_observed_output = current_len > state.output_start_len;
+        let output_is_quiet = now.duration_since(state.stable_since) >= quiet;
+        let timed_out = now >= state.timeout_at;
+        if timed_out && state.marker_id.is_some() {
+            let state = self.agent.loop_state.take().expect("agent loop is present");
+            if let Some(marker_id) = state.marker_id.as_deref() {
+                self.agent.capture.cancel(marker_id);
+            }
+            self.panel.status = format!("AI Agent command capture timed out: {}", state.command);
+            return AiAgentObservationPoll::TimedOut(state);
+        }
+        if !timed_out && (!has_observed_output || !output_is_quiet) {
+            return AiAgentObservationPoll::Waiting;
+        }
+        if state.marker_id.is_some() {
+            return AiAgentObservationPoll::Waiting;
+        }
+        AiAgentObservationPoll::Target(self.agent.loop_state.take().expect("agent loop is present"))
+    }
+
+    pub(in crate::features) fn take_agent_loop_for_marker(
+        &mut self,
+        marker_id: &str,
+    ) -> Option<AiAgentLoopState> {
+        if !self
+            .agent
+            .loop_state
+            .as_ref()
+            .is_some_and(|state| state.marker_id.as_deref() == Some(marker_id))
+        {
+            return None;
+        }
+        self.agent.loop_state.take()
+    }
+
+    pub(in crate::features) fn take_agent_loop_for_session(
+        &mut self,
+        session_id: &str,
+    ) -> Option<AiAgentLoopState> {
+        if !self
+            .agent
+            .loop_state
+            .as_ref()
+            .is_some_and(|state| state.terminal_session_id == session_id)
+        {
+            return None;
+        }
+        let state = self.agent.loop_state.take()?;
+        if let Some(marker_id) = state.marker_id.as_deref() {
+            self.agent.capture.cancel(marker_id);
+        }
+        Some(state)
+    }
+
+    pub(in crate::features) fn begin_agent_continuation(
+        &mut self,
+        state: &AiAgentLoopState,
+    ) -> Option<AiChatLaunch> {
+        if self.chat.pending {
+            self.agent.loop_state = Some(state.clone());
+            return None;
+        }
+        let mut launch = self.begin_chat_job();
+        launch.session_id = state.ai_session_id.clone();
+        self.chat.pending = true;
+        self.chat.response_preview = format!(
+            "Running AI Agent continuation step {}/{}...",
+            state.step_index + 2,
+            state.max_steps
+        );
+        self.chat.command_cards.clear();
+        self.panel.status = self.chat.response_preview.clone();
+        self.upsert_agent_step(
+            state.step_index.saturating_add(1),
+            AiAgentStepStatus::Planning,
+            "Planning",
+            "Continuing from the latest command observation",
+        );
+        Some(launch)
+    }
+
     pub(in crate::features) fn agent_thought_is_expanded(&self, step_index: u16) -> bool {
         self.agent.thought_expanded.contains(&step_index)
     }
@@ -1008,7 +1760,7 @@ impl AiFeatureState {
 }
 
 impl AiChatState {
-    pub(in crate::features) fn close_message_menu(&mut self) {
+    fn close_message_menu(&mut self) {
         self.message_menu = None;
     }
 
@@ -1016,7 +1768,7 @@ impl AiChatState {
     ///
     /// Only a trailing run with no whitespace counts, so the picker closes as
     /// soon as the user types past the mention. The rules are unchanged.
-    pub(in crate::features) fn sync_mention_from_prompt(&mut self) {
+    fn sync_mention_from_prompt(&mut self) {
         let Some(at_index) = self.prompt_draft.rfind('@') else {
             self.close_mention();
             return;
@@ -1047,7 +1799,7 @@ impl AiHistoryState {
 }
 
 impl AiAgentState {
-    pub(in crate::features) fn cancel_auto_execution_confirm(&mut self) {
+    fn cancel_auto_execution_confirm(&mut self) {
         self.auto_execution_confirm_open = false;
     }
 }
@@ -1110,6 +1862,7 @@ impl AiFeatureState {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::atomic::Ordering;
     use std::time::{Duration, Instant};
 
     use gpui::{TestAppContext, px};
@@ -1117,7 +1870,10 @@ mod tests {
         AiAction, AiContext, AiMessage, AiMessageRole, AiMode, AiSession, AiSettings,
     };
 
-    use crate::features::AiDiscoveryJobResult;
+    use crate::features::{
+        AiAgentLoopState, AiAgentStepStatus, AiChatJobOutput, AiChatWorkerEvent,
+        AiDiscoveryJobResult,
+    };
     use crate::models::{AiMessageMenuState, AiPreparedRequest};
 
     use super::{AiFeatureFocus, AiFeatureState};
@@ -1331,6 +2087,186 @@ mod tests {
         assert!(state.discovery_query().is_empty());
         assert!(!state.escape_discovery_search(1));
         assert!(!state.discovery_menu_is_open());
+    }
+
+    #[test]
+    fn chat_start_stream_and_finish_are_reduced_by_the_owner() {
+        let cx = TestAppContext::single();
+        let mut state = state(&cx);
+        state.set_chat_prompt_draft("deploy".to_string());
+
+        let launch = state.begin_chat_request("deploy".to_string(), AiMode::Agent, None);
+
+        assert!(state.chat_is_pending());
+        assert_eq!(state.chat_messages().len(), 2);
+        assert!(state.chat_prompt_draft().is_empty());
+        assert_eq!(state.agent_steps().len(), 1);
+        assert_eq!(state.agent_steps()[0].status, AiAgentStepStatus::Planning);
+        launch
+            .tx
+            .send(AiChatWorkerEvent::Delta {
+                job_id: launch.job_id,
+                session_id: launch.session_id.clone(),
+                text_delta: "working".to_string(),
+                reasoning_delta: Some("reason".to_string()),
+            })
+            .unwrap();
+        let event = state.drain_chat_events(1).pop().unwrap();
+        let AiChatWorkerEvent::Delta {
+            job_id,
+            text_delta,
+            reasoning_delta,
+            ..
+        } = event
+        else {
+            panic!("expected stream delta");
+        };
+        assert!(state.apply_chat_delta(job_id, &text_delta, reasoning_delta.as_deref()));
+        assert_eq!(
+            state.chat_response_preview(),
+            "Running AI Agent step...working"
+        );
+        assert_eq!(
+            state.chat_messages()[1].reasoning_content.as_deref(),
+            Some("reason")
+        );
+
+        let effect = state
+            .finish_chat_job(
+                launch.job_id,
+                launch.session_id,
+                Ok(AiChatJobOutput {
+                    mode: AiMode::Agent,
+                    text: "done".to_string(),
+                    reasoning: Some("final reason".to_string()),
+                    command_cards: Vec::new(),
+                    auto_execute_first: false,
+                    approval_note: None,
+                }),
+            )
+            .unwrap();
+        assert!(effect.succeeded);
+        assert!(effect.clear_prompt_input);
+        assert!(!state.chat_is_pending());
+        assert_eq!(state.chat_response_preview(), "done");
+        assert_eq!(state.agent_steps()[0].title, "Final Answer");
+        assert!(state.agent_loop_snapshot().is_none());
+    }
+
+    #[test]
+    fn chat_cancel_invalidates_the_job_and_clears_agent_lifecycle() {
+        let cx = TestAppContext::single();
+        let mut state = state(&cx);
+        let launch = state.begin_chat_request("inspect".to_string(), AiMode::Agent, None);
+
+        state.cancel_chat_and_agent();
+
+        assert!(launch.cancel.load(Ordering::Relaxed));
+        assert!(!state.chat_is_pending());
+        assert_eq!(state.chat_response_preview(), "AI request cancelled");
+        assert_eq!(state.agent_steps()[0].status, AiAgentStepStatus::Cancelled);
+        assert!(
+            state
+                .finish_chat_job(launch.job_id, launch.session_id, Err("late".to_string()),)
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn mention_selection_and_navigation_are_atomic_owner_transitions() {
+        let cx = TestAppContext::single();
+        let mut state = state(&cx);
+        state.set_chat_prompt_draft("run @server".to_string());
+        assert!(state.chat_mention_is_open());
+        assert_eq!(state.chat_mention_query(), "server");
+
+        state.move_chat_mention_index(3, -1);
+        assert_eq!(state.chat_mention_index(), 2);
+        state.hide_chat_mention();
+        assert_eq!(state.chat_mention_index(), 2);
+        state.set_chat_prompt_draft("run @server".to_string());
+        state.select_chat_mention("session-a".to_string(), "Server A".to_string());
+
+        assert_eq!(state.chat_prompt_draft(), "run ");
+        assert_eq!(state.chat_target_session_ids(), &["session-a".to_string()]);
+        assert!(!state.chat_mention_is_open());
+        assert_eq!(state.panel_status(), "AI target session selected: Server A");
+
+        state.remove_chat_target_session("session-a");
+        assert!(state.chat_target_session_ids().is_empty());
+        assert_eq!(state.panel_status(), "AI target sessions cleared");
+    }
+
+    #[test]
+    fn background_completion_distinguishes_foreign_and_matched_stale_jobs() {
+        let cx = TestAppContext::single();
+        let mut state = state(&cx);
+        let launch = state.begin_chat_job();
+        let now = Instant::now();
+        let loop_state = AiAgentLoopState {
+            ai_session_id: "session-a".to_string(),
+            terminal_session_id: "terminal-a".to_string(),
+            task_prompt: "inspect".to_string(),
+            command: "pwd".to_string(),
+            marker_id: None,
+            background_job_id: Some(launch.job_id),
+            step_index: 0,
+            max_steps: 3,
+            output_start_len: 0,
+            started_at: now,
+            min_wait_until: now,
+            timeout_at: now + Duration::from_secs(1),
+            last_seen_len: 0,
+            stable_since: now,
+        };
+
+        assert!(matches!(
+            state.finish_agent_background(
+                launch.job_id.wrapping_add(1),
+                loop_state.clone(),
+                Err("foreign".to_string()),
+                |_| String::new(),
+            ),
+            super::AiAgentBackgroundEffect::Ignored
+        ));
+        assert!(matches!(
+            state.finish_agent_background(
+                launch.job_id,
+                loop_state,
+                Err("stale".to_string()),
+                |_| String::new(),
+            ),
+            super::AiAgentBackgroundEffect::MatchedStale
+        ));
+    }
+
+    #[test]
+    fn agent_step_limit_and_observation_poll_stay_on_the_owner() {
+        let cx = TestAppContext::single();
+        let mut state = state(&cx);
+        assert!(state.begin_agent_step(1).is_err());
+
+        let now = Instant::now();
+        state.set_agent_loop(AiAgentLoopState {
+            ai_session_id: "session-a".to_string(),
+            terminal_session_id: "terminal-a".to_string(),
+            task_prompt: "inspect".to_string(),
+            command: "pwd".to_string(),
+            marker_id: None,
+            background_job_id: None,
+            step_index: 0,
+            max_steps: 3,
+            output_start_len: 4,
+            started_at: now - Duration::from_secs(2),
+            min_wait_until: now - Duration::from_secs(1),
+            timeout_at: now + Duration::from_secs(10),
+            last_seen_len: 8,
+            stable_since: now - Duration::from_secs(1),
+        });
+
+        let poll = state.poll_agent_observation(now, 8, Duration::from_millis(100));
+        assert!(matches!(poll, super::AiAgentObservationPoll::Target(_)));
+        assert!(state.agent_loop_snapshot().is_none());
     }
 
     #[test]

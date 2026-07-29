@@ -361,6 +361,18 @@ check_no_multiline_matches \
   "AI history and discovery state must be accessed through AiFeatureState" \
   '(self|this|app)\.ai[[:space:]]*\.(history|discovery)(\.|[[:space:]]*=)' \
   crates/nyaterm-desktop/src/features
+check_no_multiline_matches \
+  "AI chat and agent children must remain private to AiFeatureState" \
+  'struct[[:space:]]+AiFeatureState[[:space:]]*\{[^}]*pub([[:space:]]|\([^)]*\))[[:space:]]+(chat|agent)[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/ai/state.rs
+check_no_matches \
+  "AI chat and agent implementation types must remain private" \
+  'pub([[:space:]]|\([^)]*\))[[:space:]]+struct[[:space:]]+Ai(Chat|Agent)State' \
+  crates/nyaterm-desktop/src/features/ai/state.rs
+check_no_multiline_matches \
+  "AI chat and agent state must be accessed through AiFeatureState" \
+  '(self|this|app)\.ai[[:space:]]*\.(chat|agent)(\.|[[:space:]]*=)' \
+  crates/nyaterm-desktop/src/features
 
 check_no_matches \
   "settings transient UI fields must stay grouped under SettingsFeatureState" \

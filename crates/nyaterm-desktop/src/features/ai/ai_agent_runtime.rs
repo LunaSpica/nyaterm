@@ -10,7 +10,7 @@ use nyaterm_transport::{SessionKind, SshProcessService, run_local_command};
 
 use crate::features::{
     AI_AGENT_DEFAULT_STEP_TIMEOUT, AI_AGENT_OBSERVATION_MIN_WAIT, AI_AGENT_OBSERVATION_QUIET,
-    AiAgentBackgroundTarget, AiAgentLoopState, AiAgentStepStatus, AiAgentStepView, AiChatJobResult,
+    AiAgentBackgroundTarget, AiAgentLoopState, AiAgentStepStatus, AiChatJobResult,
     AiChatWorkerEvent, NyaTermApp,
 };
 use crate::models::SessionLaunchConfig;
@@ -18,6 +18,7 @@ use crate::models::SessionLaunchConfig;
 use super::ai_jobs::{
     ai_job_cancelled, observation_summary, remote_command_observation, run_ai_ask_job,
 };
+use super::state::AiAgentObservationPoll;
 
 impl NyaTermApp {
     pub(in crate::features) fn upsert_ai_agent_step(
@@ -27,94 +28,7 @@ impl NyaTermApp {
         title: impl Into<String>,
         detail: impl Into<String>,
     ) {
-        let title = title.into();
-        let detail = detail.into();
-        // Infer Tauri AgentStepView sections from existing call-site titles.
-        let lower_title = title.to_ascii_lowercase();
-        let looks_like_command = matches!(
-            status,
-            AiAgentStepStatus::Running | AiAgentStepStatus::Tool | AiAgentStepStatus::NeedsApproval
-        ) || lower_title.contains("background")
-            || lower_title.contains("auto execute")
-            || lower_title.contains("needs approval")
-            || lower_title.contains("shell")
-            || lower_title.contains("running");
-        let looks_like_observation = lower_title.contains("observ")
-            || lower_title == "done"
-            || lower_title == "completed"
-            || lower_title == "failed"
-            || matches!(
-                status,
-                AiAgentStepStatus::Completed | AiAgentStepStatus::Failed
-            );
-        let looks_like_thought = lower_title.contains("plan")
-            || lower_title.contains("think")
-            || lower_title.contains("final answer")
-            || matches!(status, AiAgentStepStatus::Planning);
-
-        if let Some(step) = self
-            .ai
-            .agent
-            .steps
-            .iter_mut()
-            .find(|step| step.step_index == step_index)
-        {
-            step.status = status;
-            step.title = title;
-            if !detail.trim().is_empty() {
-                step.detail = detail.clone();
-            }
-            if looks_like_command && !detail.trim().is_empty() {
-                step.command = Some(detail.clone());
-            }
-            if looks_like_observation && !detail.trim().is_empty() {
-                step.observation = Some(detail.clone());
-            }
-            if looks_like_thought && !detail.trim().is_empty() {
-                step.thought = Some(detail);
-            }
-        } else {
-            let command = if looks_like_command && !detail.trim().is_empty() {
-                Some(detail.clone())
-            } else {
-                None
-            };
-            let observation = if looks_like_observation && !detail.trim().is_empty() {
-                Some(detail.clone())
-            } else {
-                None
-            };
-            let thought = if looks_like_thought && !detail.trim().is_empty() {
-                Some(detail.clone())
-            } else {
-                None
-            };
-            self.ai.agent.steps.push(AiAgentStepView {
-                step_index,
-                status,
-                title,
-                detail,
-                thought,
-                command,
-                observation,
-            });
-        }
-        let overflow = self.ai.agent.steps.len().saturating_sub(16);
-        if overflow > 0 {
-            let removed: Vec<u16> = self
-                .ai
-                .agent
-                .steps
-                .iter()
-                .take(overflow)
-                .map(|step| step.step_index)
-                .collect();
-            self.ai.agent.steps.drain(..overflow);
-            for idx in removed {
-                self.ai.agent.thought_expanded.remove(&idx);
-                self.ai.agent.output_expanded.remove(&idx);
-            }
-        }
+        self.ai.upsert_agent_step(step_index, status, title, detail);
     }
 
     pub(in crate::features) fn toggle_ai_agent_thought_expanded(
@@ -122,11 +36,7 @@ impl NyaTermApp {
         step_index: u16,
         cx: &mut Context<Self>,
     ) {
-        if self.ai.agent.thought_expanded.contains(&step_index) {
-            self.ai.agent.thought_expanded.remove(&step_index);
-        } else {
-            self.ai.agent.thought_expanded.insert(step_index);
-        }
+        self.ai.toggle_agent_thought_expanded(step_index);
         cx.notify();
     }
 
@@ -135,11 +45,7 @@ impl NyaTermApp {
         step_index: u16,
         cx: &mut Context<Self>,
     ) {
-        if self.ai.agent.output_expanded.contains(&step_index) {
-            self.ai.agent.output_expanded.remove(&step_index);
-        } else {
-            self.ai.agent.output_expanded.insert(step_index);
-        }
+        self.ai.toggle_agent_output_expanded(step_index);
         cx.notify();
     }
 
@@ -160,7 +66,7 @@ impl NyaTermApp {
             } else {
                 "ai.command_card_insert".to_string()
             },
-            user_input: Some(self.ai.chat.response_preview.clone()),
+            user_input: Some(self.ai.chat_response_preview().to_string()),
             generated_command: Some(card.command.clone()),
             risk_level: card.risk_level.clone(),
             inserted_to_terminal,
@@ -199,22 +105,14 @@ impl NyaTermApp {
         let Some(terminal_session_id) = self.ai_effective_target_session_id() else {
             return Ok(None);
         };
-        let task_prompt = self
-            .ai
-            .agent
-            .task_prompt
-            .clone()
-            .unwrap_or_else(|| self.ai.chat.response_preview.clone());
         let max_steps = self.ai.settings.config.max_agent_steps.unwrap_or(10).max(1);
-        let step_index = self.ai.agent.step_index;
-        if step_index.saturating_add(1) >= max_steps {
-            self.ai.agent.loop_state = None;
-            self.ai.set_panel_status(format!(
-                "AI Agent reached max step limit ({max_steps}); review terminal output"
-            ));
-            return Ok(None);
-        }
-        self.ai.agent.step_index = self.ai.agent.step_index.saturating_add(1);
+        let (task_prompt, step_index) = match self.ai.begin_agent_step(max_steps) {
+            Ok(step) => step,
+            Err(error) => {
+                self.ai.set_panel_status(error);
+                return Ok(None);
+            }
+        };
         let now = Instant::now();
         let timeout = self
             .ai
@@ -231,7 +129,7 @@ impl NyaTermApp {
         let (marker_id, wrapped_command) =
             match build_agent_capture_command(profile, &marker_id, command.trim()) {
                 Some(wrapped) => {
-                    self.ai.agent.capture.register(marker_id.clone());
+                    self.ai.register_agent_capture(marker_id.clone());
                     (Some(marker_id), Some(wrapped))
                 }
                 None => (None, None),
@@ -239,8 +137,8 @@ impl NyaTermApp {
         let output_start_len = self
             .terminal_buffer_text_for_session(&terminal_session_id)
             .len();
-        self.ai.agent.loop_state = Some(AiAgentLoopState {
-            ai_session_id: self.ai.chat.session_id.clone(),
+        self.ai.set_agent_loop(AiAgentLoopState {
+            ai_session_id: self.ai.chat_session_id().to_string(),
             terminal_session_id,
             task_prompt,
             command: command.trim().to_string(),
@@ -314,21 +212,8 @@ impl NyaTermApp {
                 ));
             }
         };
-        let task_prompt = self
-            .ai
-            .agent
-            .task_prompt
-            .clone()
-            .unwrap_or_else(|| self.ai.chat.response_preview.clone());
         let max_steps = self.ai.settings.config.max_agent_steps.unwrap_or(10).max(1);
-        let step_index = self.ai.agent.step_index;
-        if step_index.saturating_add(1) >= max_steps {
-            self.ai.agent.loop_state = None;
-            return Err(format!(
-                "AI Agent reached max step limit ({max_steps}); review terminal output"
-            ));
-        }
-        self.ai.agent.step_index = self.ai.agent.step_index.saturating_add(1);
+        let (task_prompt, step_index) = self.ai.begin_agent_step(max_steps)?;
         let now = Instant::now();
         let timeout = self
             .ai
@@ -337,12 +222,14 @@ impl NyaTermApp {
             .agent_step_timeout_ms
             .map(Duration::from_millis)
             .unwrap_or(AI_AGENT_DEFAULT_STEP_TIMEOUT);
-        let (job_id, cancel) = self.begin_ai_chat_job();
+        let launch = self.ai.begin_chat_job();
+        let job_id = launch.job_id;
+        let cancel = launch.cancel;
         let output_start_len = self
             .terminal_buffer_text_for_session(&terminal_session_id)
             .len();
         let state = AiAgentLoopState {
-            ai_session_id: self.ai.chat.session_id.clone(),
+            ai_session_id: self.ai.chat_session_id().to_string(),
             terminal_session_id,
             task_prompt,
             command: command.trim().to_string(),
@@ -357,7 +244,7 @@ impl NyaTermApp {
             last_seen_len: output_start_len,
             stable_since: now,
         };
-        self.ai.agent.loop_state = Some(state.clone());
+        self.ai.set_agent_loop(state.clone());
         self.ai.set_panel_status(format!(
             "AI Agent running {target_label} background command for step {}/{}",
             step_index + 1,
@@ -369,7 +256,7 @@ impl NyaTermApp {
             format!("{target_label} background"),
             truncate_preview(command.trim(), 140),
         );
-        let tx = self.ai.chat.tx.clone();
+        let tx = launch.tx;
         let command = state.command.clone();
         std::thread::spawn(move || {
             let started = Instant::now();
@@ -401,115 +288,79 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn drive_ai_agent_loop(&mut self, cx: &mut Context<Self>) -> bool {
-        if self.ai.chat.pending {
-            return false;
-        }
-        let Some(state) = self.ai.agent.loop_state.as_ref() else {
+        let Some(snapshot) = self.ai.agent_loop_snapshot() else {
             return false;
         };
-        if state.background_job_id.is_some() {
+        if self.ai.chat_is_pending() || snapshot.background_job_id.is_some() {
             return false;
         }
-        let terminal_session_id = state.terminal_session_id.clone();
+        let terminal_session_id = snapshot.terminal_session_id.clone();
         if self.session_info(&terminal_session_id).is_none()
             || self.is_session_disconnected(&terminal_session_id)
         {
-            let step_index = state.step_index;
-            self.ai.agent.loop_state = None;
-            self.ai.set_panel_status(
-                "AI Agent loop stopped because the target session closed".to_string(),
-            );
-            self.upsert_ai_agent_step(
-                step_index,
-                AiAgentStepStatus::Failed,
-                "Stopped",
-                "Target session closed",
-            );
+            self.ai.stop_agent_for_closed_target();
             let _ = cx;
             return true;
         }
-
-        let Some(state) = self.ai.agent.loop_state.as_mut() else {
-            return false;
-        };
-
         let now = Instant::now();
         let current_len = self
             .terminal
-            .session_output_len_or_default(&state.terminal_session_id);
-        if current_len != state.last_seen_len {
-            state.last_seen_len = current_len;
-            state.stable_since = now;
-            return false;
+            .session_output_len_or_default(&terminal_session_id);
+        match self
+            .ai
+            .poll_agent_observation(now, current_len, AI_AGENT_OBSERVATION_QUIET)
+        {
+            AiAgentObservationPoll::Waiting => false,
+            AiAgentObservationPoll::TimedOut(state) => {
+                self.sync_session_event_bridge_policy();
+                let duration_ms = now
+                    .duration_since(state.started_at)
+                    .as_millis()
+                    .try_into()
+                    .unwrap_or(u64::MAX);
+                let observation = CommandObservation {
+                    output:
+                        "(command timed out; capture markers were not detected in terminal output)"
+                            .to_string(),
+                    exit_code: None,
+                    duration_ms,
+                };
+                self.upsert_ai_agent_step(
+                    state.step_index,
+                    AiAgentStepStatus::Failed,
+                    "Timed out",
+                    observation_summary(&observation),
+                );
+                self.start_ai_agent_continuation(state, observation, cx);
+                true
+            }
+            AiAgentObservationPoll::Target(state) => {
+                let terminal_output =
+                    self.terminal_buffer_text_for_session(&state.terminal_session_id);
+                let output = terminal_output
+                    .get(state.output_start_len..)
+                    .unwrap_or_default()
+                    .to_string();
+                let duration_ms = now
+                    .duration_since(state.started_at)
+                    .as_millis()
+                    .try_into()
+                    .unwrap_or(u64::MAX);
+                let observation = CommandObservation {
+                    output,
+                    exit_code: None,
+                    duration_ms,
+                };
+                self.upsert_ai_agent_step(
+                    state.step_index,
+                    AiAgentStepStatus::Completed,
+                    "Observed",
+                    observation_summary(&observation),
+                );
+                self.start_ai_agent_continuation(state, observation, cx);
+                true
+            }
         }
-        if now < state.min_wait_until {
-            return false;
-        }
-        let has_observed_output = current_len > state.output_start_len;
-        let output_is_quiet = now.duration_since(state.stable_since) >= AI_AGENT_OBSERVATION_QUIET;
-        let timed_out = now >= state.timeout_at;
-        if timed_out && let Some(marker_id) = state.marker_id.clone() {
-            let timeout_ms = now
-                .duration_since(state.started_at)
-                .as_millis()
-                .try_into()
-                .unwrap_or(u64::MAX);
-            let command = state.command.clone();
-            self.ai.agent.capture.cancel(&marker_id);
-            self.sync_session_event_bridge_policy();
-            let Some(state) = self.ai.agent.loop_state.take() else {
-                return false;
-            };
-            let observation = CommandObservation {
-                output: "(command timed out; capture markers were not detected in terminal output)"
-                    .to_string(),
-                exit_code: None,
-                duration_ms: timeout_ms,
-            };
-            self.ai
-                .set_panel_status(format!("AI Agent command capture timed out: {command}"));
-            self.upsert_ai_agent_step(
-                state.step_index,
-                AiAgentStepStatus::Failed,
-                "Timed out",
-                observation_summary(&observation),
-            );
-            self.start_ai_agent_continuation(state, observation, cx);
-            return true;
-        }
-        if !timed_out && (!has_observed_output || !output_is_quiet) {
-            return false;
-        }
-        if state.marker_id.is_some() {
-            return false;
-        }
-
-        let Some(state) = self.ai.agent.loop_state.take() else {
-            return false;
-        };
-        let terminal_output = self.terminal_buffer_text_for_session(&state.terminal_session_id);
-        let output = terminal_output
-            .get(state.output_start_len..)
-            .unwrap_or_default()
-            .to_string();
-        let duration_ms = now
-            .duration_since(state.started_at)
-            .as_millis()
-            .try_into()
-            .unwrap_or(u64::MAX);
-        let observation = CommandObservation {
-            output,
-            exit_code: None,
-            duration_ms,
-        };
-        self.upsert_ai_agent_step(
-            state.step_index,
-            AiAgentStepStatus::Completed,
-            "Observed",
-            observation_summary(&observation),
-        );
-        self.start_ai_agent_continuation(state, observation, cx);
-        true
     }
 
     pub(in crate::features) fn handle_ai_agent_captured_output(
@@ -517,13 +368,9 @@ impl NyaTermApp {
         captured: AgentCapturedOutput,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.ai.agent.loop_state.take() else {
+        let Some(state) = self.ai.take_agent_loop_for_marker(&captured.marker_id) else {
             return;
         };
-        if state.marker_id.as_deref() != Some(captured.marker_id.as_str()) {
-            self.ai.agent.loop_state = Some(state);
-            return;
-        }
         let observation = CommandObservation {
             output: captured.output,
             exit_code: captured.exit_code,
@@ -548,20 +395,10 @@ impl NyaTermApp {
         dropped_bytes: usize,
         cx: &mut Context<Self>,
     ) -> bool {
-        if !self
-            .ai
-            .agent
-            .loop_state
-            .as_ref()
-            .is_some_and(|state| state.terminal_session_id == session_id)
-        {
-            return false;
-        }
-        let Some(state) = self.ai.agent.loop_state.take() else {
+        let Some(state) = self.ai.take_agent_loop_for_session(session_id) else {
             return false;
         };
-        if let Some(marker_id) = state.marker_id.as_deref() {
-            self.ai.agent.capture.cancel(marker_id);
+        if state.marker_id.is_some() {
             self.sync_session_event_bridge_policy();
         }
         let duration_ms = state
@@ -615,10 +452,9 @@ impl NyaTermApp {
         observation: CommandObservation,
         cx: &mut Context<Self>,
     ) {
-        if self.ai.chat.pending {
-            self.ai.agent.loop_state = Some(state);
+        let Some(launch) = self.ai.begin_agent_continuation(&state) else {
             return;
-        }
+        };
         let observation_message = build_observation_message(
             &observation,
             &state.command,
@@ -644,25 +480,10 @@ impl NyaTermApp {
         };
         let config_dir = self.runtime.config_dir().to_path_buf();
         let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
-        let tx = self.ai.chat.tx.clone();
-        let session_id = state.ai_session_id;
-        let (job_id, cancel) = self.begin_ai_chat_job();
-
-        self.ai.chat.pending = true;
-        self.ai.chat.response_preview = format!(
-            "Running AI Agent continuation step {}/{}...",
-            state.step_index + 2,
-            state.max_steps
-        );
-        self.ai.chat.command_cards.clear();
-        self.ai
-            .set_panel_status(self.ai.chat.response_preview.clone());
-        self.upsert_ai_agent_step(
-            state.step_index.saturating_add(1),
-            AiAgentStepStatus::Planning,
-            "Planning",
-            "Continuing from the latest command observation",
-        );
+        let tx = launch.tx;
+        let session_id = launch.session_id;
+        let job_id = launch.job_id;
+        let cancel = launch.cancel;
         std::thread::spawn(move || {
             let result = run_ai_ask_job(
                 config_dir,

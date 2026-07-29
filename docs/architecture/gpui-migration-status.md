@@ -501,6 +501,19 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   reject any return to direct `ai.history.*` or `ai.discovery.*` access. AI
   history formats, storage behavior, discovery merging and visible status text
   are unchanged.
+  The next cohesive pass made the coupled `chat` and `agent` children private
+  to `AiFeatureState` as well. Ask/Agent request admission, cancellation and job
+  invalidation, prompt/mention transitions, stream and completion reduction,
+  Agent step projection, observation polling, capture matching, background-job
+  completion and continuation admission now execute through semantic owner
+  transitions. Runtime adapters still collect terminal/session context, launch
+  provider and local/SSH work, update GPUI text inputs and notifications, and
+  publish persistence status. Typed effects carry only the follow-up work an
+  adapter must coordinate; neither child nor its channel/cancellation handles
+  are mutable from a runtime. Architecture checks reject direct
+  `ai.chat.*`/`ai.agent.*` access and visibility regressions. Request payloads,
+  stream/status wording, command execution policy and persisted AI history are
+  unchanged.
 - Terminal presentation state is grouped into `TerminalFeatureState`: `search`,
   `view` runtime, `input` focus and IME, inline command/credential `assist`,
   dedicated multi-line `paste` review editor, `selection` and mouse reporting,
