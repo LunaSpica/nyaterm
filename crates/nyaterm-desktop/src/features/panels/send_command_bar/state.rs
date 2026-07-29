@@ -2,10 +2,11 @@ use nyaterm_core::truncate_preview;
 use nyaterm_transport::SessionKind;
 
 use super::super::send_command_hex_preview;
-use crate::features::NyaTermApp;
+use crate::features::{NyaTermApp, SendCommandPresentationState};
 use crate::send_command::{SendCommandDataType, SendCommandLineEnding, SendCommandMode};
 
 pub(super) struct SendCommandBarViewState {
+    pub(super) send: SendCommandPresentationState,
     pub(super) palette: crate::theme::ThemePalette,
     pub(super) group_targets: Vec<(String, String, usize)>,
     pub(super) target_kind: &'static str,
@@ -21,6 +22,7 @@ pub(super) struct SendCommandBarViewState {
 
 impl NyaTermApp {
     pub(super) fn send_command_bar_view_state(&self) -> SendCommandBarViewState {
+        let send = self.send_command.presentation();
         let palette = self.theme_palette();
         let active_kind = self.active_session_kind();
         let group_targets = self.send_command_group_target_options();
@@ -32,10 +34,9 @@ impl NyaTermApp {
             None => self.tr("serialSend.unavailable"),
         };
         let is_serial_text_line = matches!(active_kind, Some(SessionKind::Serial))
-            && self.send_command.options.data_type == SendCommandDataType::Text
-            && self.send_command.options.mode == SendCommandMode::Line;
-        let unit_result =
-            self.build_send_command_units(&self.send_command.composer.draft.clone(), active_kind);
+            && send.data_type == SendCommandDataType::Text
+            && send.mode == SendCommandMode::Line;
+        let unit_result = self.build_send_command_units(&send.draft, active_kind);
         let (validation_error, unit_count, byte_count) = match &unit_result {
             Ok(units) => {
                 let bytes = units.iter().map(Vec::len).sum::<usize>();
@@ -43,30 +44,30 @@ impl NyaTermApp {
             }
             Err(_) => (true, 0usize, 0usize),
         };
-        let preview = if self.send_command.options.data_type == SendCommandDataType::Hex {
-            send_command_hex_preview(&self.send_command.composer.draft)
+        let preview = if send.data_type == SendCommandDataType::Hex {
+            send_command_hex_preview(&send.draft)
         } else {
-            truncate_preview(&self.send_command.composer.draft.replace('\n', "\\n"), 96)
+            truncate_preview(&send.draft.replace('\n', "\\n"), 96)
         };
-        let input_hint = if self.send_command.options.data_type == SendCommandDataType::Hex {
+        let input_hint = if send.data_type == SendCommandDataType::Hex {
             self.tr("serialSend.hexPlaceholder")
         } else {
             self.tr("serialSend.textPlaceholder")
         };
-        let line_ending_label = match self.send_command.options.line_ending {
+        let line_ending_label = match send.line_ending {
             SendCommandLineEnding::None => self.tr("serialSend.noLineEnding"),
             SendCommandLineEnding::Cr => "CR",
             SendCommandLineEnding::Lf => "LF",
             SendCommandLineEnding::Crlf => "CR+LF",
         };
         let _ = (unit_count, byte_count);
-        let is_sending = self.send_command.progress.sending;
-        let infinite_progress = is_sending && self.send_command.progress.rounds == 0;
-        let progress_total = self.send_command.progress.total.max(1);
+        let is_sending = send.sending;
+        let infinite_progress = is_sending && send.rounds == 0;
+        let progress_total = send.total.max(1);
         let progress_completed = if infinite_progress {
-            self.send_command.progress.completed
+            send.completed
         } else {
-            self.send_command.progress.completed.min(progress_total)
+            send.completed.min(progress_total)
         };
         let progress_ratio = if infinite_progress {
             // Indeterminate-ish pulse from completed units.
@@ -76,10 +77,9 @@ impl NyaTermApp {
         };
         let progress_label = if is_sending {
             if infinite_progress {
-                let round = self.tr("serialSend.shellProgressInfinite").replace(
-                    "{{current}}",
-                    &self.send_command.progress.round.max(1).to_string(),
-                );
+                let round = self
+                    .tr("serialSend.shellProgressInfinite")
+                    .replace("{{current}}", &send.round.max(1).to_string());
                 let units = self
                     .tr("serialSend.shellProgressUnits")
                     .replace("{{completed}}", &progress_completed.to_string())
@@ -89,17 +89,11 @@ impl NyaTermApp {
                 let units = self
                     .tr("serialSend.shellProgressUnits")
                     .replace("{{completed}}", &progress_completed.to_string())
-                    .replace("{{total}}", &self.send_command.progress.total.to_string());
+                    .replace("{{total}}", &send.total.to_string());
                 let round = self
                     .tr("serialSend.shellProgressRound")
-                    .replace(
-                        "{{current}}",
-                        &self.send_command.progress.round.max(1).to_string(),
-                    )
-                    .replace(
-                        "{{total}}",
-                        &self.send_command.progress.rounds.max(1).to_string(),
-                    );
+                    .replace("{{current}}", &send.round.max(1).to_string())
+                    .replace("{{total}}", &send.rounds.max(1).to_string());
                 format!("{units} · {round}")
             }
         } else {
@@ -107,6 +101,7 @@ impl NyaTermApp {
         };
 
         SendCommandBarViewState {
+            send,
             palette,
             group_targets,
             target_kind,

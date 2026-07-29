@@ -306,7 +306,7 @@ impl NyaTermApp {
                                 cx.listener(|this, _, window, cx| {
                                     this.terminal.menus.actions_open = false;
                                     this.set_bottom_panel_mode(BottomPanelMode::CommandSend);
-                                    window.focus(&this.send_command.composer.focus);
+                                    window.focus(this.send_command.editor_focus());
                                     cx.notify();
                                 }),
                             )),

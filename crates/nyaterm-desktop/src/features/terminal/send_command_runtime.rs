@@ -1,41 +1,28 @@
 use std::sync::{
     Arc,
-    atomic::{AtomicBool, AtomicUsize, Ordering},
+    atomic::{AtomicUsize, Ordering},
 };
 use std::time::Duration;
 
-use gpui::{AppContext, Context, KeyDownEvent, Timer, Window};
+use gpui::{Context, KeyDownEvent, Timer, Window};
 use nyaterm_transport::SessionKind;
 
+use crate::features::SendCommandMenu;
 use crate::features::{NyaTermApp, TextInputSetup};
 use crate::send_command::{
     SendCommandControlFocus, SendCommandDataType, SendCommandLineEnding, SendCommandMode,
-    SendCommandTarget, build_send_command_units_for, format_send_command_hex_display,
+    SendCommandTarget,
 };
 
 impl NyaTermApp {
-    fn send_command_count_label(&self) -> String {
-        self.send_command
-            .options
-            .count
-            .map(|n| n.to_string())
-            .unwrap_or_else(|| "∞".to_string())
-    }
-
-    fn sync_send_command_count_input(&mut self, cx: &mut impl AppContext) {
-        self.send_command.options.count_input = self.send_command_count_label();
-        let value = self.send_command.options.count_input.clone();
-        self.reset_text_input("send-command.count", &value, cx);
-    }
-
-    fn sync_send_command_interval_input(&mut self, cx: &mut impl AppContext) {
-        self.send_command.options.sync_interval_input();
-        let value = self.send_command.options.interval_input.clone();
-        self.reset_text_input("send-command.interval", &value, cx);
-    }
-
-    pub(in crate::features) fn close_send_command_menus(&mut self) {
-        self.send_command.options.close_menus();
+    fn commit_send_command_control_input(&mut self, cx: &mut Context<Self>) {
+        if let Some((control, value)) = self.send_command.finish_control_edit() {
+            let id = match control {
+                SendCommandControlFocus::Count => "send-command.count",
+                SendCommandControlFocus::Interval => "send-command.interval",
+            };
+            self.reset_text_input(id, &value, cx);
+        }
     }
 
     pub(in crate::features) fn focus_send_command_control(
@@ -44,27 +31,14 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.send_command.progress.sending {
+        let Some(value) = self.send_command.begin_control_edit(control) else {
             return;
-        }
-        self.close_send_command_menus();
-        self.send_command.composer.control_focus = Some(control);
-        let (id, value) = match control {
-            SendCommandControlFocus::Count => {
-                self.sync_send_command_count_input(cx);
-                (
-                    "send-command.count",
-                    self.send_command.options.count_input.clone(),
-                )
-            }
-            SendCommandControlFocus::Interval => {
-                self.sync_send_command_interval_input(cx);
-                (
-                    "send-command.interval",
-                    self.send_command.options.interval_input.clone(),
-                )
-            }
         };
+        let id = match control {
+            SendCommandControlFocus::Count => "send-command.count",
+            SendCommandControlFocus::Interval => "send-command.interval",
+        };
+        self.reset_text_input(id, &value, cx);
         let input = self.text_input(id, &value, TextInputSetup::default(), cx);
         window.focus(&input.read(cx).focus_handle());
         cx.notify();
@@ -75,19 +49,8 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        match self.send_command.composer.control_focus {
-            Some(SendCommandControlFocus::Count) => {
-                self.apply_send_command_count_input(false);
-                self.sync_send_command_count_input(cx);
-            }
-            Some(SendCommandControlFocus::Interval) => {
-                self.apply_send_command_interval_input(false, cx);
-                self.sync_send_command_interval_input(cx);
-            }
-            None => {}
-        }
-        self.send_command.composer.control_focus = None;
-        window.focus(&self.send_command.composer.focus);
+        self.commit_send_command_control_input(cx);
+        window.focus(self.send_command.editor_focus());
         cx.notify();
     }
 
@@ -98,7 +61,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.mark_user_activity();
-        let Some(control) = self.send_command.composer.control_focus else {
+        let Some(control) = self.send_command.control_focus() else {
             return;
         };
         let keystroke = &event.keystroke;
@@ -112,21 +75,19 @@ impl NyaTermApp {
             }
             "tab" => match control {
                 SendCommandControlFocus::Count => {
-                    self.apply_send_command_count_input(false);
-                    self.sync_send_command_count_input(cx);
+                    self.commit_send_command_control_input(cx);
                     self.focus_send_command_control(SendCommandControlFocus::Interval, window, cx);
                 }
                 SendCommandControlFocus::Interval => {
-                    self.apply_send_command_interval_input(false, cx);
-                    self.sync_send_command_interval_input(cx);
+                    self.commit_send_command_control_input(cx);
                     self.focus_send_command_control(SendCommandControlFocus::Count, window, cx);
                 }
             },
             "escape" => {
-                self.send_command.composer.control_focus = None;
-                self.sync_send_command_count_input(cx);
-                self.sync_send_command_interval_input(cx);
-                window.focus(&self.send_command.composer.focus);
+                let (count, interval) = self.send_command.cancel_control_edit();
+                self.reset_text_input("send-command.count", &count, cx);
+                self.reset_text_input("send-command.interval", &interval, cx);
+                window.focus(self.send_command.editor_focus());
                 cx.notify();
             }
             _ => {}
@@ -147,23 +108,13 @@ impl NyaTermApp {
             return;
         };
         let filtered = normalize_send_command_control_input(control, &text);
-        if self.send_command.progress.sending {
-            match control {
-                SendCommandControlFocus::Count => self.sync_send_command_count_input(cx),
-                SendCommandControlFocus::Interval => self.sync_send_command_interval_input(cx),
-            }
+        if !self
+            .send_command
+            .apply_control_input(control, filtered.clone())
+        {
+            let value = self.send_command.synced_control_input(control);
+            self.reset_text_input(&format!("send-command.{control_id}"), &value, cx);
             return;
-        }
-        self.send_command.composer.control_focus = Some(control);
-        match control {
-            SendCommandControlFocus::Count => {
-                self.send_command.options.count_input = filtered.clone();
-                self.apply_send_command_count_input(true);
-            }
-            SendCommandControlFocus::Interval => {
-                self.send_command.options.interval_input = filtered.clone();
-                self.apply_send_command_interval_input(true, cx);
-            }
         }
         if filtered != text {
             self.reset_text_input(&format!("send-command.{control_id}"), &filtered, cx);
@@ -171,66 +122,31 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    fn apply_send_command_count_input(&mut self, live: bool) {
-        self.send_command.options.apply_count_input(live);
-    }
-
-    fn apply_send_command_interval_input(&mut self, live: bool, cx: &mut impl AppContext) {
-        let trimmed = self.send_command.options.interval_input.trim();
-        if let Ok(value) = trimmed.parse::<f64>() {
-            if value.is_finite() && value >= 0.0 {
-                self.send_command.options.interval_seconds = value.clamp(0.0, 60.0);
-            }
-        } else if !live {
-            self.apply_send_command_default_interval(cx);
-        }
-    }
-
     pub(in crate::features) fn toggle_send_command_data_menu(&mut self, cx: &mut Context<Self>) {
-        if self.send_command.progress.sending {
-            return;
+        if self.send_command.toggle_menu(SendCommandMenu::Data) {
+            cx.notify();
         }
-        self.send_command.composer.control_focus = None;
-        let next = !self.send_command.options.data_menu_open;
-        self.close_send_command_menus();
-        self.send_command.options.data_menu_open = next;
-        cx.notify();
     }
 
     pub(in crate::features) fn toggle_send_command_mode_menu(&mut self, cx: &mut Context<Self>) {
-        if self.send_command.progress.sending {
-            return;
+        if self.send_command.toggle_menu(SendCommandMenu::Mode) {
+            cx.notify();
         }
-        self.send_command.composer.control_focus = None;
-        let next = !self.send_command.options.mode_menu_open;
-        self.close_send_command_menus();
-        self.send_command.options.mode_menu_open = next;
-        cx.notify();
     }
 
     pub(in crate::features) fn toggle_send_command_target_menu(&mut self, cx: &mut Context<Self>) {
-        if self.send_command.progress.sending {
-            return;
+        if self.send_command.toggle_menu(SendCommandMenu::Target) {
+            cx.notify();
         }
-        self.send_command.composer.control_focus = None;
-        let next = !self.send_command.options.target_menu_open;
-        self.close_send_command_menus();
-        self.send_command.options.target_menu_open = next;
-        cx.notify();
     }
 
     pub(in crate::features) fn toggle_send_command_line_ending_menu(
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        if self.send_command.progress.sending {
-            return;
+        if self.send_command.toggle_menu(SendCommandMenu::LineEnding) {
+            cx.notify();
         }
-        self.send_command.composer.control_focus = None;
-        let next = !self.send_command.options.line_ending_menu_open;
-        self.close_send_command_menus();
-        self.send_command.options.line_ending_menu_open = next;
-        cx.notify();
     }
 
     pub(in crate::features) fn handle_send_command_key_down(
@@ -250,7 +166,7 @@ impl NyaTermApp {
         match keystroke.key.as_str() {
             "enter" if accel => self.send_bottom_command(true, cx),
             "escape" if !accel => {
-                self.send_command.composer.draft.clear();
+                self.send_command.clear_draft();
                 self.reset_text_input("send-command.draft", "", cx);
                 self.terminal.view.status = "command send cleared".to_string();
                 cx.notify();
@@ -269,16 +185,8 @@ impl NyaTermApp {
         text: String,
         cx: &mut Context<Self>,
     ) {
-        if self.send_command.options.data_type == SendCommandDataType::Hex {
-            let cleaned: String = text.chars().filter(|ch| ch.is_ascii_hexdigit()).collect();
-            let formatted = format_send_command_hex_display(&cleaned);
-            self.send_command.composer.draft = formatted.clone();
-            self.clamp_send_command_hex_scroll();
-            if formatted != text {
-                self.reset_text_input("send-command.draft", &formatted, cx);
-            }
-        } else {
-            self.send_command.composer.draft = text;
+        if let Some(formatted) = self.send_command.apply_draft(text) {
+            self.reset_text_input("send-command.draft", &formatted, cx);
         }
         cx.notify();
     }
@@ -288,16 +196,13 @@ impl NyaTermApp {
         append_enter: bool,
         cx: &mut Context<Self>,
     ) {
-        if self.send_command.progress.sending {
+        if self.send_command.is_sending() {
             self.stop_send_command(cx);
             return;
         }
 
         let session_kind = self.active_session_kind();
-        let mut draft = self.send_command.composer.draft.clone();
-        if append_enter && self.send_command.options.data_type == SendCommandDataType::Text {
-            draft.push('\n');
-        }
+        let draft = self.send_command.draft_for_send(append_enter);
         let units = match self.build_send_command_units(&draft, session_kind) {
             Ok(units) => units,
             Err(message) => {
@@ -313,7 +218,7 @@ impl NyaTermApp {
         }
         let target_session_ids = self.send_command_target_session_ids();
         if target_session_ids.is_empty() {
-            if matches!(self.send_command.options.target, SendCommandTarget::Current)
+            if matches!(self.send_command.target(), SendCommandTarget::Current)
                 && self
                     .session
                     .active_id()
@@ -329,25 +234,14 @@ impl NyaTermApp {
             return;
         }
 
-        // None => infinite rounds (Tauri SendCommandCount null / ∞).
-        let infinite = self.send_command.options.count.is_none();
-        let rounds = self.send_command.options.count.unwrap_or(1).max(1);
-        let interval = self.send_command.options.interval_seconds.max(0.0);
         let units_per_round = units.len() as u32;
-        let total_units = if infinite {
-            0
-        } else {
-            units_per_round.saturating_mul(rounds)
-        };
-        let cancel = Arc::new(AtomicBool::new(false));
         let failed_writes = Arc::new(AtomicUsize::new(0));
-        let raw_units = self.send_command.options.data_type == SendCommandDataType::Hex;
-        self.send_command.progress.cancel = Some(cancel.clone());
-        self.send_command.progress.sending = true;
-        self.send_command.progress.completed = 0;
-        self.send_command.progress.total = total_units;
-        self.send_command.progress.round = 0;
-        self.send_command.progress.rounds = if infinite { 0 } else { rounds };
+        let run = self.send_command.begin_send(units_per_round);
+        let cancel = run.cancel;
+        let infinite = run.infinite;
+        let rounds = run.rounds;
+        let interval = run.interval_seconds;
+        let raw_units = run.raw_units;
         self.terminal.view.status = if infinite {
             format!("sending {units_per_round} unit(s) × ∞")
         } else {
@@ -370,7 +264,7 @@ impl NyaTermApp {
                 }
                 round = round.saturating_add(1);
                 let _ = this.update(cx, |this, cx| {
-                    this.send_command.progress.round = round;
+                    this.send_command.set_progress_round(round);
                     cx.notify();
                 });
                 for unit in &units {
@@ -408,26 +302,24 @@ impl NyaTermApp {
                                 failed_writes.fetch_add(1, Ordering::SeqCst);
                             }
                         }
-                        this.send_command.progress.completed =
-                            this.send_command.progress.completed.saturating_add(1);
+                        this.send_command.complete_progress_unit();
                         cx.notify();
                     });
                 }
             }
             let _ = this.update(cx, |this, cx| {
-                this.send_command.progress.sending = false;
-                this.send_command.progress.cancel = None;
+                let progress = this.send_command.finish_send();
                 let failed_writes = failed_writes.load(Ordering::SeqCst);
                 if aborted {
                     this.terminal.view.status = if infinite {
                         format!(
                             "command send stopped at {} unit(s) · round {}",
-                            this.send_command.progress.completed, this.send_command.progress.round
+                            progress.completed, progress.round
                         )
                     } else {
                         format!(
                             "command send stopped at {}/{}",
-                            this.send_command.progress.completed, this.send_command.progress.total
+                            progress.completed, progress.total
                         )
                     };
                     if failed_writes > 0 {
@@ -438,12 +330,12 @@ impl NyaTermApp {
                     this.terminal.view.status = if failed_writes == 0 {
                         format!(
                             "command send completed: {} unit(s)",
-                            this.send_command.progress.completed
+                            progress.completed
                         )
                     } else {
                         format!(
                             "command send completed: {} unit(s), {failed_writes} failed write(s)",
-                            this.send_command.progress.completed
+                            progress.completed
                         )
                     };
                 } else {
@@ -462,8 +354,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn stop_send_command(&mut self, cx: &mut Context<Self>) {
-        if let Some(cancel) = self.send_command.progress.cancel.as_ref() {
-            cancel.store(true, Ordering::SeqCst);
+        if self.send_command.request_cancel() {
             self.terminal.view.status = "stopping command send…".to_string();
             cx.notify();
         }
@@ -488,7 +379,7 @@ impl NyaTermApp {
                 None => true,
             }
         };
-        match &self.send_command.options.target {
+        match self.send_command.target() {
             SendCommandTarget::Current => self
                 .session
                 .active_id()
@@ -598,9 +489,10 @@ impl NyaTermApp {
         target: SendCommandTarget,
         cx: &mut Context<Self>,
     ) {
-        self.send_command.options.target = target;
-        self.close_send_command_menus();
-        let label = match &self.send_command.options.target {
+        if !self.send_command.set_target(target) {
+            return;
+        }
+        let label = match self.send_command.target() {
             SendCommandTarget::Current => "Current".to_string(),
             SendCommandTarget::AllCompatible => "All compatible".to_string(),
             SendCommandTarget::Group(id) => self
@@ -620,13 +512,7 @@ impl NyaTermApp {
         draft: &str,
         session_kind: Option<SessionKind>,
     ) -> Result<Vec<Vec<u8>>, String> {
-        build_send_command_units_for(
-            draft,
-            self.send_command.options.data_type,
-            self.send_command.options.mode,
-            self.send_command.options.line_ending,
-            session_kind,
-        )
+        self.send_command.build_units(draft, session_kind)
     }
 
     pub(in crate::features) fn active_session_kind(&self) -> Option<SessionKind> {
@@ -642,35 +528,11 @@ impl NyaTermApp {
         delta: i32,
         cx: &mut Context<Self>,
     ) {
-        if self.send_command.progress.sending {
+        let Some(value) = self.send_command.adjust_count(delta) else {
             return;
-        }
-        // Tauri: decrement from 1 -> ∞ (None); increment from ∞ -> 1.
-        self.send_command.options.count = match (self.send_command.options.count, delta) {
-            (None, d) if d < 0 => None,
-            (None, _) => Some(1),
-            (Some(1), d) if d < 0 => None,
-            (Some(n), d) => Some((n as i32 + d).clamp(1, 9999) as u32),
         };
-        self.sync_send_command_count_input(cx);
+        self.reset_text_input("send-command.count", &value, cx);
         cx.notify();
-    }
-
-    /// Tauri defaults: line=1.00s, char/byte=0.02s, packet=0.
-    pub(in crate::features) fn apply_send_command_default_interval(
-        &mut self,
-        cx: &mut impl AppContext,
-    ) {
-        self.send_command.options.interval_seconds = match (
-            self.send_command.options.data_type,
-            self.send_command.options.mode,
-        ) {
-            (SendCommandDataType::Hex, SendCommandMode::Byte) => 0.02,
-            (SendCommandDataType::Hex, _) => 0.0,
-            (SendCommandDataType::Text, SendCommandMode::Line) => 1.0,
-            (SendCommandDataType::Text, _) => 0.02,
-        };
-        self.sync_send_command_interval_input(cx);
     }
 
     pub(in crate::features) fn set_send_command_data_type(
@@ -678,29 +540,10 @@ impl NyaTermApp {
         data_type: SendCommandDataType,
         cx: &mut Context<Self>,
     ) {
-        self.send_command.options.data_type = data_type;
-        self.close_send_command_menus();
-        match data_type {
-            SendCommandDataType::Hex => {
-                if matches!(
-                    self.send_command.options.mode,
-                    SendCommandMode::Line | SendCommandMode::Character
-                ) {
-                    self.send_command.options.mode = SendCommandMode::Byte;
-                }
-            }
-            SendCommandDataType::Text => {
-                if matches!(
-                    self.send_command.options.mode,
-                    SendCommandMode::Packet | SendCommandMode::Byte
-                ) {
-                    self.send_command.options.mode = SendCommandMode::Line;
-                }
-            }
-        }
-        self.apply_send_command_default_interval(cx);
-        self.send_command.composer.hex_scroll_x = 0.;
-        self.send_command.composer.hex_scroll_y = 0.;
+        let Some(interval) = self.send_command.set_data_type(data_type) else {
+            return;
+        };
+        self.reset_text_input("send-command.interval", &interval, cx);
         self.terminal.view.status = format!(
             "command send data: {}",
             match data_type {
@@ -716,9 +559,10 @@ impl NyaTermApp {
         mode: SendCommandMode,
         cx: &mut Context<Self>,
     ) {
-        self.send_command.options.mode = mode;
-        self.close_send_command_menus();
-        self.apply_send_command_default_interval(cx);
+        let Some(interval) = self.send_command.set_mode(mode) else {
+            return;
+        };
+        self.reset_text_input("send-command.interval", &interval, cx);
         cx.notify();
     }
 
@@ -727,13 +571,9 @@ impl NyaTermApp {
         line_ending: SendCommandLineEnding,
         cx: &mut Context<Self>,
     ) {
-        self.send_command.options.line_ending = line_ending;
-        self.close_send_command_menus();
-        cx.notify();
-    }
-
-    pub(in crate::features) fn clamp_send_command_hex_scroll(&mut self) {
-        self.send_command.composer.clamp_hex_scroll();
+        if self.send_command.set_line_ending(line_ending) {
+            cx.notify();
+        }
     }
 }
 

@@ -452,7 +452,13 @@ these as staged extraction candidates, not as formatting-only refactor targets.
 - Send-command bar state is grouped into `SendCommandFeatureState`, split into
   the three phases the bar actually has: `composer` (payload and caret),
   `options` (how it is interpreted and delivered, plus the menus that set
-  those), and `progress` (in-flight send, cancellation, counters).
+  those), and `progress` (in-flight send, cancellation, counters). A later
+  encapsulation pass made all three children and their fields private. Views
+  consume one immutable per-render presentation value; input normalization,
+  menu exclusion, data/mode compatibility, progress accounting and cancel
+  ownership execute on `SendCommandFeatureState`. Session targeting, terminal
+  writes, GPUI focus, text-input synchronization and status text remain in the
+  application adapters.
 - Sync-input groups now have one authoritative `SyncInputFeatureState` owner.
   The group collection, overlay/search/selection/delete state and broadcast-all
   flag moved together and all owner fields are now private. Views and command
@@ -1445,6 +1451,7 @@ Current ownership map:
 | Quick-command catalog | Private catalog in `NyaTermApp.commands` | Persisted domain state | Views receive read-only slices/snapshots; successful storage operations replace commands and categories together through `CommandFeatureState`. |
 | Quick-command UI | Private child in `NyaTermApp.commands` | Transient UI/window state | List filters and menus, editor/dialog drafts, import admission and AI prompt state are queried or changed only through `CommandFeatureState`; GPUI focus, windows, rendering and persistence stay in adapters. |
 | Command history and persistence worker | Private state in `NyaTermApp.commands` | Persisted catalog plus background runtime | History snapshots, queue admission, event polling and idle checks enter through `CommandFeatureState`; failed optimistic use-count updates roll back on the owner. |
+| Send-command composer/options/progress | Private children in `NyaTermApp.send_command` | Transient editor and send lifecycle | Views receive immutable presentation data; control edits, mutually-exclusive menus, data/mode defaults, progress counters and cancellation enter through `SendCommandFeatureState`. Session selection, terminal writes, GPUI/text-input routing and status remain in adapters. |
 | Live session manager/event bridge | Private services in `NyaTermApp.session` | Runtime services | Callers receive a shared manager reference/handle and use bridge routing, drain and metrics methods; neither service field is writable outside `SessionFeatureState`. |
 | Session restore/event queue | Private state in `NyaTermApp.session` | Transient runtime coordination | Restore completion is idempotent and pending transport events are counted, extended and popped only through owner methods; event interpretation stays in the event-pump adapter. |
 | Session command history/search/menu/busy state | Private state in `NyaTermApp.session` | Transient per-session interaction state | History append/migration/deletion and active-menu/busy transitions are owner operations; beginning reconnect/disconnect closes the menu in the same transition. |
@@ -1727,8 +1734,12 @@ honest remaining list.
    while leaving GPUI windows and SFTP uploads in their adapters; the built-in
    editor pass then made workspace/tab/menu/window state private and moved
    dirty-close, save-result, session-cleanup and window-admission transitions to
-   the transfer owner while preserving the dedicated editor surface. Cloud sync made
-   secret-field routing inaccessible outside
+   the transfer owner while preserving the dedicated editor surface. The
+   send-command encapsulation pass similarly made its composer, options and
+   in-flight progress children private, replacing writable view/runtime access
+   with owner transitions and a single per-render presentation value while
+   leaving session routing and terminal writes in the app adapter. Cloud sync
+   made secret-field routing inaccessible outside
    its owner, and
    recording cleanup can no longer leave its manager, busy map and pipeline out
    of sync; recording action and path-prompt admission are atomic owner

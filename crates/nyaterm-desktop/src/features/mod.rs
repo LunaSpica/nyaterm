@@ -67,7 +67,9 @@ pub(in crate::features) use icons::{
     SEARCH_ENGINE_ICON_IDS, file_entry_icon, infer_connection_icon_key_from_remote_system,
     quick_command_icon, resolve_connection_icon, search_engine_icon,
 };
-pub(in crate::features) use panels::{SendCommandFeatureFocus, SendCommandFeatureState};
+pub(in crate::features) use panels::{
+    SendCommandFeatureFocus, SendCommandFeatureState, SendCommandMenu, SendCommandPresentationState,
+};
 pub(in crate::features) use quick_command_window::QuickCommandWindow;
 pub(in crate::features) use recording::RecordingFeatureState;
 pub(in crate::features) use remote::{RemoteOpsFeatureFocus, RemoteOpsFeatureState};

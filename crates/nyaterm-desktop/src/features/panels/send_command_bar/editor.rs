@@ -21,12 +21,12 @@ impl NyaTermApp {
         let is_sending = state.is_sending;
         let progress_label = state.progress_label.clone();
         let progress_ratio = state.progress_ratio;
+        let send = &state.send;
         let target_available = !self.send_command_target_session_ids().is_empty();
-        let has_payload = if self.send_command.options.data_type == SendCommandDataType::Hex {
-            send_command_hex_byte_count(&self.send_command.composer.draft)
-                .is_some_and(|count| count > 0)
+        let has_payload = if send.data_type == SendCommandDataType::Hex {
+            send_command_hex_byte_count(&send.draft).is_some_and(|count| count > 0)
         } else {
-            !self.send_command.composer.draft.is_empty()
+            !send.draft.is_empty()
         };
         let send_disabled = !is_sending && (validation_error || !has_payload || !target_available);
         // Built before the panel, which reads `self` throughout: creating the
@@ -35,7 +35,7 @@ impl NyaTermApp {
         let send_input = self
             .text_input_box(
                 "send-command.draft",
-                &self.send_command.composer.draft.clone(),
+                &send.draft,
                 TextInputSetup::multi_line(input_hint),
                 cx,
             )
@@ -54,148 +54,123 @@ impl NyaTermApp {
                     .flex_1()
                     .min_w_0()
                     .min_h(px(72.))
-                    .when(
-                        self.send_command.options.data_type == SendCommandDataType::Hex,
-                        |this| this.flex_none().flex_basis(gpui::relative(1.0 / 1.85)),
-                    )
-                    .when(
-                        self.send_command.options.data_type == SendCommandDataType::Hex,
-                        |this| {
-                            // Tauri overlays dashed 4-byte guides per line above the hex textarea.
-                            // Scroll-sync: wheel adjusts hexScroll.{top,left} approximation.
-                            let guide_rows =
-                                send_command_hex_guide_rows(&self.send_command.composer.draft);
-                            const HEX_LINE_PX: f32 = 15.;
-                            const HEX_CHAR_PX: f32 = 7.2;
-                            const VIEWPORT_LINES: f32 = 5.;
-                            const VIEWPORT_CHARS: f32 = 48.;
-                            let display =
-                                format_send_command_hex_display(&self.send_command.composer.draft);
-                            let lines: Vec<&str> = display.lines().collect();
-                            let line_count = lines.len().max(1) as f32;
-                            let max_line_chars = lines
-                                .iter()
-                                .map(|line| line.chars().count())
-                                .max()
-                                .unwrap_or(0)
-                                as f32;
-                            let max_scroll_y =
-                                ((line_count - VIEWPORT_LINES).max(0.)) * HEX_LINE_PX;
-                            let max_scroll_x =
-                                ((max_line_chars - VIEWPORT_CHARS).max(0.)) * HEX_CHAR_PX;
-                            let scroll_y = self
-                                .send_command
-                                .composer
-                                .hex_scroll_y
-                                .clamp(0., max_scroll_y);
-                            let scroll_x = self
-                                .send_command
-                                .composer
-                                .hex_scroll_x
-                                .clamp(0., max_scroll_x);
-                            this.on_scroll_wheel(cx.listener(
-                                move |this, event: &ScrollWheelEvent, _, cx| {
-                                    let (delta_x, delta_y) = match event.delta {
-                                        ScrollDelta::Lines(delta) => {
-                                            (delta.x * HEX_CHAR_PX * 4., delta.y * HEX_LINE_PX)
-                                        }
-                                        ScrollDelta::Pixels(delta) => {
-                                            (f32::from(delta.x), f32::from(delta.y))
-                                        }
-                                    };
-                                    // Match GPUI / DOM: scroll offsets move opposite wheel delta.
-                                    let next_y = (this.send_command.composer.hex_scroll_y
-                                        - delta_y)
-                                        .clamp(0., max_scroll_y);
-                                    let next_x = (this.send_command.composer.hex_scroll_x
-                                        - delta_x)
-                                        .clamp(0., max_scroll_x);
-                                    let changed = (next_y
-                                        - this.send_command.composer.hex_scroll_y)
-                                        .abs()
-                                        > 0.01
-                                        || (next_x - this.send_command.composer.hex_scroll_x).abs()
-                                            > 0.01;
-                                    if changed {
-                                        this.send_command.composer.hex_scroll_y = next_y;
-                                        this.send_command.composer.hex_scroll_x = next_x;
-                                        cx.stop_propagation();
-                                        cx.notify();
+                    .when(send.data_type == SendCommandDataType::Hex, |this| {
+                        this.flex_none().flex_basis(gpui::relative(1.0 / 1.85))
+                    })
+                    .when(send.data_type == SendCommandDataType::Hex, |this| {
+                        // Tauri overlays dashed 4-byte guides per line above the hex textarea.
+                        // Scroll-sync: wheel adjusts hexScroll.{top,left} approximation.
+                        let guide_rows = send_command_hex_guide_rows(&send.draft);
+                        const HEX_LINE_PX: f32 = 15.;
+                        const HEX_CHAR_PX: f32 = 7.2;
+                        const VIEWPORT_LINES: f32 = 5.;
+                        const VIEWPORT_CHARS: f32 = 48.;
+                        let display = format_send_command_hex_display(&send.draft);
+                        let lines: Vec<&str> = display.lines().collect();
+                        let line_count = lines.len().max(1) as f32;
+                        let max_line_chars = lines
+                            .iter()
+                            .map(|line| line.chars().count())
+                            .max()
+                            .unwrap_or(0) as f32;
+                        let max_scroll_y = ((line_count - VIEWPORT_LINES).max(0.)) * HEX_LINE_PX;
+                        let max_scroll_x =
+                            ((max_line_chars - VIEWPORT_CHARS).max(0.)) * HEX_CHAR_PX;
+                        let scroll_y = send.hex_scroll_y.clamp(0., max_scroll_y);
+                        let scroll_x = send.hex_scroll_x.clamp(0., max_scroll_x);
+                        this.on_scroll_wheel(cx.listener(
+                            move |this, event: &ScrollWheelEvent, _, cx| {
+                                let (delta_x, delta_y) = match event.delta {
+                                    ScrollDelta::Lines(delta) => {
+                                        (delta.x * HEX_CHAR_PX * 4., delta.y * HEX_LINE_PX)
                                     }
-                                },
-                            ))
-                            .child(
-                                div()
-                                    .absolute()
-                                    .top_0()
-                                    .left_0()
-                                    .right_0()
-                                    .h(px(22.))
-                                    .px_2()
-                                    .flex()
-                                    .items_center()
-                                    .justify_between()
-                                    .border_b_1()
-                                    .border_color(rgb(palette.surface_elevated))
-                                    .bg(self.shell_surface_color(palette.bg))
-                                    .child(
-                                        div()
-                                            .text_size(px(10.))
-                                            .font_weight(FontWeight(600.))
-                                            .text_color(rgb(palette.text_dimmed))
-                                            .child(self.tr("serialSend.hexEditor")),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_size(px(10.))
-                                            .text_color(if validation_error {
-                                                rgb(palette.danger)
-                                            } else {
-                                                rgb(palette.text_dimmed)
-                                            })
-                                            .child(if validation_error {
-                                                self.tr("serialSend.hexError")
-                                            } else {
-                                                ""
-                                            }),
-                                    ),
-                            )
-                            .child(
-                                div()
-                                    .absolute()
-                                    .inset_0()
-                                    .top(px(22.))
-                                    .px_2()
-                                    .py_1()
-                                    .overflow_hidden()
-                                    .child(
-                                        div()
-                                            .relative()
-                                            .top(px(-scroll_y))
-                                            .left(px(-scroll_x))
-                                            .flex()
-                                            .flex_col()
-                                            .children(guide_rows.into_iter().map(|marks| {
-                                                div()
-                                                    .h(px(HEX_LINE_PX))
-                                                    .relative()
-                                                    .w_full()
-                                                    .flex_none()
-                                                    .children(marks.into_iter().map(|mark| {
-                                                        div()
-                                                            .absolute()
-                                                            .top(px(0.))
-                                                            .left(px(mark as f32 * 7.2))
-                                                            .h(px(HEX_LINE_PX + 2.))
-                                                            .w(px(2.))
-                                                            .bg(rgb(0x1f6feb))
-                                                            .opacity(0.55)
-                                                    }))
-                                            })),
-                                    ),
-                            )
-                        },
-                    )
+                                    ScrollDelta::Pixels(delta) => {
+                                        (f32::from(delta.x), f32::from(delta.y))
+                                    }
+                                };
+                                // Match GPUI / DOM: scroll offsets move opposite wheel delta.
+                                if this.send_command.scroll_hex_by(
+                                    delta_x,
+                                    delta_y,
+                                    max_scroll_x,
+                                    max_scroll_y,
+                                ) {
+                                    cx.stop_propagation();
+                                    cx.notify();
+                                }
+                            },
+                        ))
+                        .child(
+                            div()
+                                .absolute()
+                                .top_0()
+                                .left_0()
+                                .right_0()
+                                .h(px(22.))
+                                .px_2()
+                                .flex()
+                                .items_center()
+                                .justify_between()
+                                .border_b_1()
+                                .border_color(rgb(palette.surface_elevated))
+                                .bg(self.shell_surface_color(palette.bg))
+                                .child(
+                                    div()
+                                        .text_size(px(10.))
+                                        .font_weight(FontWeight(600.))
+                                        .text_color(rgb(palette.text_dimmed))
+                                        .child(self.tr("serialSend.hexEditor")),
+                                )
+                                .child(
+                                    div()
+                                        .text_size(px(10.))
+                                        .text_color(if validation_error {
+                                            rgb(palette.danger)
+                                        } else {
+                                            rgb(palette.text_dimmed)
+                                        })
+                                        .child(if validation_error {
+                                            self.tr("serialSend.hexError")
+                                        } else {
+                                            ""
+                                        }),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .absolute()
+                                .inset_0()
+                                .top(px(22.))
+                                .px_2()
+                                .py_1()
+                                .overflow_hidden()
+                                .child(
+                                    div()
+                                        .relative()
+                                        .top(px(-scroll_y))
+                                        .left(px(-scroll_x))
+                                        .flex()
+                                        .flex_col()
+                                        .children(guide_rows.into_iter().map(|marks| {
+                                            div()
+                                                .h(px(HEX_LINE_PX))
+                                                .relative()
+                                                .w_full()
+                                                .flex_none()
+                                                .children(marks.into_iter().map(|mark| {
+                                                    div()
+                                                        .absolute()
+                                                        .top(px(0.))
+                                                        .left(px(mark as f32 * 7.2))
+                                                        .h(px(HEX_LINE_PX + 2.))
+                                                        .w(px(2.))
+                                                        .bg(rgb(0x1f6feb))
+                                                        .opacity(0.55)
+                                                }))
+                                        })),
+                                ),
+                        )
+                    })
                     .child(
                         div()
                             .flex_1()
@@ -207,76 +182,73 @@ impl NyaTermApp {
                             .child(send_input),
                     ),
             )
-            .when(
-                self.send_command.options.data_type == SendCommandDataType::Hex,
-                |this| {
-                    let byte_count = send_command_hex_byte_count(&self.send_command.composer.draft);
-                    this.child(
-                        div()
-                            .flex_none()
-                            .flex_basis(gpui::relative(0.85 / 1.85))
-                            .min_w(px(140.))
-                            .min_h(px(72.))
-                            .rounded_md()
-                            .border_1()
-                            .border_color(rgb(palette.border))
-                            .bg(self.shell_surface_color(palette.bg))
-                            .px_2()
-                            .py_1()
-                            .flex()
-                            .flex_col()
-                            .gap_1()
-                            .child(
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .justify_between()
-                                    .gap_1()
-                                    .child(
-                                        div()
-                                            .text_size(px(10.))
-                                            .font_weight(FontWeight(600.))
-                                            .text_color(rgb(palette.text_dimmed))
-                                            .child(self.tr("serialSend.hexPreview")),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_size(px(10.))
-                                            .text_color(rgb(palette.text_dimmed))
-                                            .child(match byte_count {
-                                                Some(n) => self
-                                                    .tr("serialSend.hexByteCount")
-                                                    .replace("{{count}}", &n.to_string()),
-                                                None => self
-                                                    .tr("serialSend.hexByteCount")
-                                                    .replace("{{count}}", "0"),
-                                            }),
-                                    ),
-                            )
-                            .child(
-                                div()
-                                    .id(SharedString::from("bottom-command-hex-preview-scroll"))
-                                    .min_h_0()
-                                    .flex_1()
-                                    .overflow_scroll()
-                                    .scrollbar_width(px(6.))
-                                    .font_family(crate::features::gpui_code_font_family())
-                                    .text_size(px(11.))
-                                    .line_height(px(15.))
-                                    .text_color(if validation_error {
-                                        rgb(palette.danger)
-                                    } else {
-                                        rgb(palette.text)
-                                    })
-                                    .child(if preview.trim().is_empty() {
-                                        "·".to_string()
-                                    } else {
-                                        preview.clone()
-                                    }),
-                            ),
-                    )
-                },
-            )
+            .when(send.data_type == SendCommandDataType::Hex, |this| {
+                let byte_count = send_command_hex_byte_count(&send.draft);
+                this.child(
+                    div()
+                        .flex_none()
+                        .flex_basis(gpui::relative(0.85 / 1.85))
+                        .min_w(px(140.))
+                        .min_h(px(72.))
+                        .rounded_md()
+                        .border_1()
+                        .border_color(rgb(palette.border))
+                        .bg(self.shell_surface_color(palette.bg))
+                        .px_2()
+                        .py_1()
+                        .flex()
+                        .flex_col()
+                        .gap_1()
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .justify_between()
+                                .gap_1()
+                                .child(
+                                    div()
+                                        .text_size(px(10.))
+                                        .font_weight(FontWeight(600.))
+                                        .text_color(rgb(palette.text_dimmed))
+                                        .child(self.tr("serialSend.hexPreview")),
+                                )
+                                .child(
+                                    div()
+                                        .text_size(px(10.))
+                                        .text_color(rgb(palette.text_dimmed))
+                                        .child(match byte_count {
+                                            Some(n) => self
+                                                .tr("serialSend.hexByteCount")
+                                                .replace("{{count}}", &n.to_string()),
+                                            None => self
+                                                .tr("serialSend.hexByteCount")
+                                                .replace("{{count}}", "0"),
+                                        }),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .id(SharedString::from("bottom-command-hex-preview-scroll"))
+                                .min_h_0()
+                                .flex_1()
+                                .overflow_scroll()
+                                .scrollbar_width(px(6.))
+                                .font_family(crate::features::gpui_code_font_family())
+                                .text_size(px(11.))
+                                .line_height(px(15.))
+                                .text_color(if validation_error {
+                                    rgb(palette.danger)
+                                } else {
+                                    rgb(palette.text)
+                                })
+                                .child(if preview.trim().is_empty() {
+                                    "·".to_string()
+                                } else {
+                                    preview.clone()
+                                }),
+                        ),
+                )
+            })
             .when(is_sending, |this| {
                 this.child(send_command_progress_popover(
                     palette,
@@ -291,7 +263,7 @@ impl NyaTermApp {
                 self.tr("serialSend.send"),
                 self.tr("serialSend.stop"),
                 cx.listener(|this, _, _, cx| {
-                    if this.send_command.progress.sending {
+                    if this.send_command.is_sending() {
                         this.stop_send_command(cx);
                     } else {
                         this.send_bottom_command(false, cx);

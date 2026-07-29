@@ -365,6 +365,23 @@ check_no_multiline_matches \
   '(self|this|app)\.transfer[[:space:]]*\.editor(\.|[[:space:]]*=)' \
   crates/nyaterm-desktop/src/features
 
+check_no_multiline_matches \
+  "SendCommandFeatureState children must remain private" \
+  'struct[[:space:]]+SendCommandFeatureState[[:space:]]*\{[^}]*pub([[:space:]]|\([^)]*\))[[:space:]]+(composer|options|progress)[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/panels/send_command_state.rs
+check_no_matches \
+  "send-command child state types must remain private" \
+  'pub([[:space:]]|\([^)]*\))[[:space:]]+struct[[:space:]]+SendCommand(Composer|Options|Progress)State' \
+  crates/nyaterm-desktop/src/features/panels/send_command_state.rs
+check_no_multiline_matches \
+  "send-command child fields must remain private" \
+  'struct[[:space:]]+SendCommand(Composer|Options|Progress)State[[:space:]]*\{[^}]*pub([[:space:]]|\([^)]*\))[[:space:]]+(draft|focus|control_focus|hex_scroll_x|hex_scroll_y|data_type|mode|line_ending|target|count|count_input|interval_seconds|interval_input|data_menu_open|mode_menu_open|target_menu_open|line_ending_menu_open|sending|cancel|completed|total|round|rounds)[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/panels/send_command_state.rs
+check_no_multiline_matches \
+  "send-command child access must use SendCommandFeatureState methods" \
+  '(self|this|app)\.send_command[[:space:]]*\.(composer|options|progress)(\.|[[:space:]]*=)' \
+  crates/nyaterm-desktop/src/features
+
 check_no_matches \
   "SyncInputFeatureState must expose methods, not writable fields" \
   '^[[:space:]]*pub([[:space:]]|\([^)]*\))[[:space:]]+(groups|open|focus|search_draft|selected_id|delete_pending|broadcast_to_all)[[:space:]]*:' \
