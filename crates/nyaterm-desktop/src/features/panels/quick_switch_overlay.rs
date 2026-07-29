@@ -159,7 +159,7 @@ impl NyaTermApp {
             .pt(px(viewport_h * 0.18))
             .on_click(cx.listener(|this, _, window, cx| {
                 this.close_quick_switch(cx);
-                window.focus(&this.terminal.input.focus);
+                window.focus(this.terminal.input_focus());
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 cx.stop_propagation();

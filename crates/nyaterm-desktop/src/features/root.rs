@@ -447,6 +447,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
+        let terminal_overlays = self.terminal.overlay_visibility();
         let overlay = OverlayFlags {
             tab_actions_open: self.session.dialogs.tab_actions_session_id().is_some(),
             rename_open: self.session.dialogs.rename_is_open(),
@@ -454,11 +455,11 @@ impl NyaTermApp {
             session_info_open: self.session.dialogs.session_info_is_open(),
             startup_command_open: self.session.dialogs.startup_command_is_open(),
             temporary_ssh_link_open: self.session.dialogs.temporary_ssh_link_is_open(),
-            multi_line_paste_open: self.terminal.paste.draft.is_some(),
-            terminal_actions_open: self.terminal.menus.actions_open,
-            terminal_context_menu_open: self.terminal.menus.context_menu.is_some(),
-            action_link_menu_open: self.terminal.menus.action_link_menu.is_some(),
-            action_link_tooltip_open: self.terminal.menus.action_link_tooltip.is_some(),
+            multi_line_paste_open: terminal_overlays.paste_review,
+            terminal_actions_open: terminal_overlays.actions,
+            terminal_context_menu_open: terminal_overlays.context_menu,
+            action_link_menu_open: terminal_overlays.action_link_menu,
+            action_link_tooltip_open: terminal_overlays.action_link_tooltip,
             command_suggestions_open: self.terminal.assist.command_suggestions.is_some(),
             credential_suggestions_open: self.terminal.assist.credential_suggestions.is_some(),
             close_all_sessions_confirm_open: self

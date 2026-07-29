@@ -15,11 +15,14 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         let (viewport_w, viewport_h) = self.shell.viewport_size();
-        let draft = self
-            .terminal
-            .paste
+        let paste_review = self.terminal.paste_review();
+        let paste_focus = paste_review.focus.clone();
+        let selection = paste_review.selected_byte_range;
+        let cursor = paste_review.cursor;
+        let marked_range = paste_review.marked_range;
+        let draft = paste_review
             .draft
-            .clone()
+            .cloned()
             .unwrap_or_else(|| MultiLinePasteDraft::new(String::new()));
         let input_entity = cx.entity();
         let draft_text = draft.text.clone();
@@ -56,9 +59,8 @@ impl NyaTermApp {
         if normalized.is_empty() {
             preview = preview.child(self.tr("terminal.multiLinePasteTextPlaceholder"));
         } else {
-            let selection = self.terminal.paste.selected_byte_range();
             let show_caret = selection.is_empty();
-            let cursor = self.terminal.paste.cursor.min(normalized.len());
+            let cursor = cursor.min(normalized.len());
             let display_text = if show_caret {
                 let mut display = normalized.clone();
                 display.insert(cursor, '|');
@@ -76,7 +78,7 @@ impl NyaTermApp {
                     },
                 ));
             }
-            if let Some(marked_range) = self.terminal.paste.marked_range.clone() {
+            if let Some(marked_range) = marked_range {
                 highlights.push((
                     display_range_after_caret(marked_range, cursor, show_caret),
                     gpui::HighlightStyle {
@@ -104,9 +106,9 @@ impl NyaTermApp {
             .flex()
             .items_center()
             .justify_center()
-            .track_focus(&self.terminal.paste.focus)
+            .track_focus(&paste_focus)
             .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(&this.terminal.paste.focus);
+                window.focus(this.terminal.paste_review().focus);
                 cx.notify();
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
@@ -144,17 +146,21 @@ impl NyaTermApp {
                     .child(
                         preview
                             .relative()
-                            .track_focus(&self.terminal.paste.focus)
+                            .track_focus(&paste_focus)
                             .on_click(cx.listener(|this, _, window, cx| {
-                                window.focus(&this.terminal.paste.focus);
+                                window.focus(this.terminal.paste_review().focus);
                                 cx.notify();
                             }))
                             .child(
                                 gpui::canvas(
                                     |_bounds, _window, _cx| {},
                                     move |bounds, _state, window, cx| {
-                                        let focus =
-                                            input_entity.read(cx).terminal.paste.focus.clone();
+                                        let focus = input_entity
+                                            .read(cx)
+                                            .terminal
+                                            .paste_review()
+                                            .focus
+                                            .clone();
                                         window.handle_input(
                                             &focus,
                                             gpui::ElementInputHandler::new(

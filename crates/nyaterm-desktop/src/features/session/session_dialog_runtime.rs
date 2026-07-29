@@ -217,10 +217,7 @@ impl NyaTermApp {
             .view
             .frame_pipeline
             .remove_session(session_id.to_string());
-        self.terminal
-            .layout
-            .session_surface_bounds
-            .remove(session_id);
+        self.terminal.remove_session_surface_bounds(session_id);
         self.transfer.remove_browser_session_cache(session_id);
         self.transfer.clear_external_sync_for_session(session_id);
         self.transfer

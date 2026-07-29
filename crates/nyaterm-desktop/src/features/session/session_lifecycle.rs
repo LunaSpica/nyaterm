@@ -406,12 +406,8 @@ impl NyaTermApp {
         new_id: &str,
     ) {
         self.session.start.clear_reconnect_failure(old_id);
-        if let Some(bounds) = self.terminal.layout.session_surface_bounds.remove(old_id) {
-            self.terminal
-                .layout
-                .session_surface_bounds
-                .insert(new_id.to_string(), bounds);
-        }
+        self.terminal
+            .move_session_surface_bounds(old_id, new_id.to_string());
         self.session.migrate_session_presentation(old_id, new_id);
 
         self.shell.replace_workspace_session_id(old_id, new_id);

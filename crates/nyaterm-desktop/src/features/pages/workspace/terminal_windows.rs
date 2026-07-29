@@ -185,7 +185,7 @@ impl NyaTermApp {
                                     select_id.clone(),
                                     cx,
                                 );
-                                window.focus(&this.terminal.input.focus);
+                                window.focus(this.terminal.input_focus());
                             }))
                             .on_mouse_down(
                                 gpui::MouseButton::Right,

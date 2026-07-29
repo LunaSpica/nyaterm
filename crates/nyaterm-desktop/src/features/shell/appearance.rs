@@ -83,7 +83,7 @@ impl NyaTermApp {
         if self.settings.summary().terminal_low_latency_mode {
             return Arc::new(Vec::new());
         }
-        if let Some(cached) = self.terminal.paint.cached_keyword_highlight_rules.as_ref() {
+        if let Some(cached) = self.terminal.cached_keyword_highlight_rules() {
             return cached.clone();
         }
         // Cache miss (settings path / first call without ensure): build once without storing.
@@ -105,10 +105,11 @@ impl NyaTermApp {
 
     fn ensure_keyword_highlight_rules_cache(&mut self) {
         if self.settings.summary().terminal_low_latency_mode {
-            self.terminal.paint.cached_keyword_highlight_rules = Some(Arc::new(Vec::new()));
+            self.terminal
+                .cache_keyword_highlight_rules(Arc::new(Vec::new()));
             return;
         }
-        if self.terminal.paint.cached_keyword_highlight_rules.is_some() {
+        if self.terminal.cached_keyword_highlight_rules().is_some() {
             return;
         }
         let rules = if !self.settings.keyword_config().enabled {
@@ -122,7 +123,7 @@ impl NyaTermApp {
                 self.terminal_theme_is_dark(),
             ))
         };
-        self.terminal.paint.cached_keyword_highlight_rules = Some(rules);
+        self.terminal.cache_keyword_highlight_rules(rules);
     }
 
     /// Terminal surface palette: follows optional `terminal_theme`, else UI theme.
@@ -138,12 +139,12 @@ impl NyaTermApp {
             .unwrap_or("");
         let contrast = self.settings.summary().minimum_contrast_ratio.as_str();
         if let Some((cached_ui, cached_term, cached_contrast, palette)) =
-            self.terminal.paint.cached_terminal_theme_palette.as_ref()
+            self.terminal.cached_terminal_theme_palette()
+            && cached_ui == ui_theme
+            && cached_term == terminal_theme
+            && cached_contrast == contrast
         {
-            if cached_ui == ui_theme && cached_term == terminal_theme && cached_contrast == contrast
-            {
-                return *palette;
-            }
+            return palette;
         }
         Self::compute_terminal_theme_palette(
             ui_theme,
@@ -169,14 +170,12 @@ impl NyaTermApp {
             .to_string();
         let contrast = self.settings.summary().minimum_contrast_ratio.clone();
         if let Some((cached_ui, cached_term, cached_contrast, _)) =
-            self.terminal.paint.cached_terminal_theme_palette.as_ref()
+            self.terminal.cached_terminal_theme_palette()
+            && cached_ui == ui_theme
+            && cached_term == terminal_theme
+            && cached_contrast == contrast
         {
-            if cached_ui == &ui_theme
-                && cached_term == &terminal_theme
-                && cached_contrast == &contrast
-            {
-                return;
-            }
+            return;
         }
         let palette = Self::compute_terminal_theme_palette(
             &ui_theme,
@@ -187,8 +186,8 @@ impl NyaTermApp {
             },
             &contrast,
         );
-        self.terminal.paint.cached_terminal_theme_palette =
-            Some((ui_theme, terminal_theme, contrast, palette));
+        self.terminal
+            .cache_terminal_theme_palette(ui_theme, terminal_theme, contrast, palette);
     }
 
     fn compute_terminal_theme_palette(
@@ -208,8 +207,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn invalidate_paint_theme_caches(&mut self) {
-        self.terminal.paint.cached_terminal_theme_palette = None;
-        self.terminal.paint.cached_keyword_highlight_rules = None;
+        self.terminal.invalidate_paint_caches();
     }
 
     pub(in crate::features) fn refresh_visible_terminal_surfaces(
@@ -254,7 +252,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn invalidate_terminal_cell_metrics(&mut self, cx: &mut Context<Self>) {
-        self.terminal.layout.cell_metrics = None;
+        self.terminal.invalidate_cell_metrics();
         // Refresh the measured metrics before resizing the terminal. Using the
         // font-size fallback here makes the app and surface briefly disagree;
         // that is especially visible while scrolled or dragging a selection.

@@ -16,7 +16,7 @@ use crate::features::shell::event_pump::helpers::{
 use crate::features::{
     NyaTermApp, TextInputSetup, credential_prompt_target, keyboard_interactive_prompt_target,
 };
-use crate::models::{NavItem, TerminalSearchMode, terminal_frame_search_result_is_current};
+use crate::models::{NavItem, terminal_frame_search_result_is_current};
 
 mod bridge;
 mod helpers;
@@ -59,7 +59,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        let before_metrics = self.terminal.layout.cell_metrics;
+        let before_metrics = self.terminal.cell_metrics();
         let vs = window.viewport_size();
         let viewport_changed = self
             .shell
@@ -69,15 +69,15 @@ impl NyaTermApp {
             // Geometry churn (resize / some window managers during move).
             self.notify_terminal_surfaces_for_viewport_change(cx);
         }
-        if terminal_cell_metrics_refresh_needed(self.terminal.layout.cell_metrics) {
+        if terminal_cell_metrics_refresh_needed(self.terminal.cell_metrics()) {
             self.refresh_terminal_cell_metrics(cx);
         }
-        if self.terminal.layout.cell_metrics != before_metrics {
+        if self.terminal.cell_metrics() != before_metrics {
             self.sync_terminal_cell_metrics_to_screens();
             self.resize_all_known_terminal_surfaces();
             self.refresh_visible_terminal_surfaces(cx);
         }
-        viewport_changed || self.terminal.layout.cell_metrics != before_metrics
+        viewport_changed || self.terminal.cell_metrics() != before_metrics
     }
 
     fn notify_terminal_surfaces_for_viewport_change(&mut self, cx: &mut Context<Self>) {
@@ -319,7 +319,7 @@ impl NyaTermApp {
             return false;
         }
         if self.shell.viewport.size != viewport_size
-            || terminal_cell_metrics_refresh_needed(self.terminal.layout.cell_metrics)
+            || terminal_cell_metrics_refresh_needed(self.terminal.cell_metrics())
         {
             return true;
         }
@@ -421,7 +421,7 @@ impl NyaTermApp {
         {
             return true;
         }
-        if !self.terminal.search.open || self.terminal.search.mode != TerminalSearchMode::Buffer {
+        if !self.terminal.buffer_search_is_open() {
             return false;
         }
         let Some(session_id) = self.session.active_id() else {
@@ -471,7 +471,7 @@ impl NyaTermApp {
             && !self.terminal_frame_backlog_active()
             && !self.session.has_protocol_runtime_sessions()
             && !self.session.prompts.has_pending_or_active_prompt()
-            && self.terminal.menus.action_link_hover_pending.is_none()
+            && !self.terminal.action_link_hover_is_pending()
             && !self.recording.has_pending_auto_start()
             && !self.tunnel_state.has_pending()
             && self.transfer.transfer_jobs_are_empty()

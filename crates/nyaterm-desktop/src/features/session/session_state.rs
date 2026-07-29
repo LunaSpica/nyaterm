@@ -282,7 +282,7 @@ impl NyaTermApp {
             self.terminal.view.output_decoder.reset_decoder();
             self.terminal.view.screen.clear();
         }
-        if switching_sessions && self.terminal.input.focus_active {
+        if switching_sessions && self.terminal.input_focus_is_active() {
             if let Some(previous_session_id) = previous_session_id.as_deref() {
                 self.write_terminal_focus_report_to_session(previous_session_id, false);
             }
@@ -337,25 +337,7 @@ impl NyaTermApp {
     }
 
     fn clear_terminal_activation_interaction_state(&mut self) -> bool {
-        let mut chrome_changed = false;
-        if self.terminal.selection.selection.take().is_some() {
-            chrome_changed = true;
-        }
-        if self.terminal.selection.dragging {
-            self.terminal.selection.dragging = false;
-            chrome_changed = true;
-        }
-        if self.terminal.menus.context_menu.take().is_some() {
-            chrome_changed = true;
-        }
-        if self.terminal.menus.action_link_menu.take().is_some() {
-            chrome_changed = true;
-        }
-        if self.terminal.menus.action_link_tooltip.take().is_some() {
-            chrome_changed = true;
-        }
-        self.terminal.menus.action_link_hover_pending = None;
-        chrome_changed
+        self.terminal.clear_activation_interaction()
     }
 
     pub(in crate::features) fn select_session(

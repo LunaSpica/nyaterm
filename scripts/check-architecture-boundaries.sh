@@ -142,6 +142,24 @@ check_no_matches \
   '^[[:space:]]*pub\(in crate::features\)[[:space:]]+(action_link_menu|action_link_tooltip|action_link_hover_pending|multi_line_paste|multi_line_paste_marked_text|multi_line_paste_marked_range|multi_line_paste_cursor|multi_line_paste_anchor|multi_line_paste_focus|pending_terminal_frame_events|cached_terminal_theme_palette|cached_keyword_highlight_rules)[[:space:]]*:' \
   crates/nyaterm-desktop/src/features/app_state/mod.rs
 
+check_no_multiline_matches \
+  "terminal interaction children must stay inside the terminal module" \
+  'struct[[:space:]]+TerminalFeatureState[[:space:]]*\{[^}]*pub([[:space:]]|\(crate\)|\(in crate\)|\(in crate::features\))[[:space:]]+(search|input|paste|selection|layout|menus|paint)[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/terminal/state.rs
+check_no_matches \
+  "terminal interaction implementation types must stay inside the terminal module" \
+  'pub([[:space:]]|\(crate\)|\(in crate\)|\(in crate::features\))[[:space:]]+struct[[:space:]]+Terminal(Search|Input|PasteReview|Selection|Layout|Menu|PaintCache)State' \
+  crates/nyaterm-desktop/src/features/terminal/state.rs
+check_no_multiline_matches_excluding \
+  "terminal interaction child access must use TerminalFeatureState methods outside terminal" \
+  '(self|this|app)\.terminal[[:space:]]*\.[[:space:]]*(search|input|paste|selection|layout|menus|paint)[[:space:]]*(\.|=|\[)' \
+  crates/nyaterm-desktop/src/features \
+  'crates/nyaterm-desktop/src/features/terminal/**'
+check_no_matches \
+  "terminal interaction state must not expose mutable-reference accessors" \
+  'fn[[:space:]]+(search|input|paste|selection|layout|menus|paint)(_mut|_mutable)|->[[:space:]]*&mut[[:space:]]+Terminal(Search|Input|PasteReview|Selection|Layout|Menu|PaintCache)State' \
+  crates/nyaterm-desktop/src/features/terminal
+
 check_no_matches \
   "sync input fields must stay grouped under SyncInputFeatureState" \
   '^[[:space:]]*pub\(in crate::features\)[[:space:]]+(sync_groups|sync_groups_open|sync_groups_focus|sync_groups_search_draft|sync_groups_selected_id|sync_groups_delete_pending|broadcast_to_all)[[:space:]]*:' \

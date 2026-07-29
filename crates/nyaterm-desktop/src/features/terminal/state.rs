@@ -26,15 +26,15 @@ use crate::models::{
 use crate::theme::ThemePalette;
 
 pub(in crate::features) struct TerminalFeatureState {
-    pub search: TerminalSearchState,
+    pub(super) search: TerminalSearchState,
     pub view: TerminalViewRuntimeState,
-    pub input: TerminalInputState,
-    pub paste: TerminalPasteReviewState,
+    pub(super) input: TerminalInputState,
+    pub(super) paste: TerminalPasteReviewState,
     pub assist: TerminalAssistState,
-    pub selection: TerminalSelectionState,
-    pub layout: TerminalLayoutState,
-    pub menus: TerminalMenuState,
-    pub paint: TerminalPaintCacheState,
+    pub(super) selection: TerminalSelectionState,
+    pub(super) layout: TerminalLayoutState,
+    pub(super) menus: TerminalMenuState,
+    pub(super) paint: TerminalPaintCacheState,
     pub windows: TerminalWindowState,
 }
 
@@ -47,16 +47,16 @@ pub(in crate::features) struct TerminalFeatureFocus {
 }
 
 /// In-terminal find bar and recording history search.
-pub(in crate::features) struct TerminalSearchState {
-    pub open: bool,
-    pub query: String,
-    pub mode: TerminalSearchMode,
-    pub case_sensitive: bool,
-    pub regex: bool,
-    pub whole_word: bool,
-    pub active_index: usize,
-    pub history_pending_key: Option<RecordingHistorySearchKey>,
-    pub history_result: Option<RecordingHistorySearchEvent>,
+pub(super) struct TerminalSearchState {
+    pub(super) open: bool,
+    pub(super) query: String,
+    pub(super) mode: TerminalSearchMode,
+    pub(super) case_sensitive: bool,
+    pub(super) regex: bool,
+    pub(super) whole_word: bool,
+    pub(super) active_index: usize,
+    pub(super) history_pending_key: Option<RecordingHistorySearchKey>,
+    pub(super) history_result: Option<RecordingHistorySearchEvent>,
 }
 
 /// Live terminal views, their surfaces, and the frame/scroll pipeline.
@@ -80,24 +80,24 @@ pub(in crate::features) struct TerminalViewRuntimeState {
 }
 
 /// Keyboard focus and IME composition for the terminal surface.
-pub(in crate::features) struct TerminalInputState {
-    pub focus: FocusHandle,
-    pub focus_active: bool,
-    pub focus_subscriptions: Vec<Subscription>,
-    pub ime_marked_text: String,
+pub(super) struct TerminalInputState {
+    pub(super) focus: FocusHandle,
+    pub(super) focus_active: bool,
+    pub(super) focus_subscriptions: Vec<Subscription>,
+    pub(super) ime_marked_text: String,
 }
 
 /// Dedicated multi-line paste editor state.
 ///
 /// This remains separate from registry-backed single-line inputs because it
 /// owns a byte cursor, selection anchor and IME composition range.
-pub(in crate::features) struct TerminalPasteReviewState {
-    pub draft: Option<MultiLinePasteDraft>,
-    pub marked_text: String,
-    pub marked_range: Option<Range<usize>>,
-    pub cursor: usize,
-    pub anchor: Option<usize>,
-    pub focus: FocusHandle,
+pub(super) struct TerminalPasteReviewState {
+    pub(super) draft: Option<MultiLinePasteDraft>,
+    pub(super) marked_text: String,
+    pub(super) marked_range: Option<Range<usize>>,
+    pub(super) cursor: usize,
+    pub(super) anchor: Option<usize>,
+    pub(super) focus: FocusHandle,
 }
 
 /// Inline command completion and terminal-output credential prompt assistance.
@@ -125,40 +125,40 @@ pub(in crate::features) struct TerminalAssistState {
 }
 
 /// Text selection and mouse reporting.
-pub(in crate::features) struct TerminalSelectionState {
-    pub selection: Option<TerminalSelection>,
-    pub session_id: Option<String>,
-    pub dragging: bool,
-    pub mouse_report_button: Option<u8>,
-    pub mouse_report_session_id: Option<String>,
-    pub mouse_report_peer_session_ids: Vec<String>,
-    pub mouse_report_position: Option<(u16, u16)>,
+pub(super) struct TerminalSelectionState {
+    pub(super) selection: Option<TerminalSelection>,
+    pub(super) session_id: Option<String>,
+    pub(super) dragging: bool,
+    pub(super) mouse_report_button: Option<u8>,
+    pub(super) mouse_report_session_id: Option<String>,
+    pub(super) mouse_report_peer_session_ids: Vec<String>,
+    pub(super) mouse_report_position: Option<(u16, u16)>,
 }
 
 /// Last painted geometry, used to map pointer positions onto cells.
-pub(in crate::features) struct TerminalLayoutState {
+pub(super) struct TerminalLayoutState {
     /// Last painted bounds of the active terminal text area (window coords).
-    pub surface_bounds: Option<gpui::Bounds<gpui::Pixels>>,
-    pub session_surface_bounds: HashMap<String, gpui::Bounds<gpui::Pixels>>,
-    pub scale_factor: f32,
-    pub cell_metrics: Option<(f32, f32)>,
+    pub(super) surface_bounds: Option<gpui::Bounds<gpui::Pixels>>,
+    pub(super) session_surface_bounds: HashMap<String, gpui::Bounds<gpui::Pixels>>,
+    pub(super) scale_factor: f32,
+    pub(super) cell_metrics: Option<(f32, f32)>,
 }
 
 /// Terminal actions overlay and context menu.
-pub(in crate::features) struct TerminalMenuState {
-    pub actions_open: bool,
-    pub actions_focus: FocusHandle,
-    pub context_menu: Option<TerminalContextMenuState>,
-    pub action_link_menu: Option<ActionLinkMenuState>,
-    pub action_link_tooltip: Option<ActionLinkTooltipState>,
+pub(super) struct TerminalMenuState {
+    pub(super) actions_open: bool,
+    pub(super) actions_focus: FocusHandle,
+    pub(super) context_menu: Option<TerminalContextMenuState>,
+    pub(super) action_link_menu: Option<ActionLinkMenuState>,
+    pub(super) action_link_tooltip: Option<ActionLinkTooltipState>,
     /// Pending action-link hover (Tauri 250ms delay before showing tooltip).
-    pub action_link_hover_pending: Option<(String, Instant, ActionLinkTooltipState)>,
+    pub(super) action_link_hover_pending: Option<(String, Instant, ActionLinkTooltipState)>,
 }
 
 /// Paint-time caches invalidated whenever appearance settings change.
-pub(in crate::features) struct TerminalPaintCacheState {
-    pub cached_terminal_theme_palette: Option<(String, String, String, ThemePalette)>,
-    pub cached_keyword_highlight_rules: Option<Arc<Vec<ResolvedKeywordHighlightRule>>>,
+pub(super) struct TerminalPaintCacheState {
+    pub(super) cached_terminal_theme_palette: Option<(String, String, String, ThemePalette)>,
+    pub(super) cached_keyword_highlight_rules: Option<Arc<Vec<ResolvedKeywordHighlightRule>>>,
 }
 
 /// Split/tab window tree and drag-and-drop targets over it.
@@ -168,6 +168,23 @@ pub(in crate::features) struct TerminalWindowState {
     /// Whether we already attempted startup restore of multi-leaf layout.
     pub restored: bool,
     pub file_drop_hover: Option<String>,
+}
+
+pub(in crate::features) struct TerminalPasteReviewView<'a> {
+    pub draft: Option<&'a MultiLinePasteDraft>,
+    pub selected_byte_range: Range<usize>,
+    pub cursor: usize,
+    pub marked_range: Option<Range<usize>>,
+    pub focus: &'a FocusHandle,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(in crate::features) struct TerminalOverlayVisibility {
+    pub paste_review: bool,
+    pub actions: bool,
+    pub context_menu: bool,
+    pub action_link_menu: bool,
+    pub action_link_tooltip: bool,
 }
 
 impl TerminalFeatureState {
@@ -253,6 +270,125 @@ impl TerminalFeatureState {
             },
         }
     }
+
+    pub(in crate::features) fn set_search_mode(&mut self, mode: TerminalSearchMode) {
+        self.search.mode = mode;
+    }
+
+    pub(in crate::features) fn buffer_search_is_open(&self) -> bool {
+        self.search.open && self.search.mode == TerminalSearchMode::Buffer
+    }
+
+    pub(in crate::features) fn input_focus(&self) -> &FocusHandle {
+        &self.input.focus
+    }
+
+    pub(in crate::features) fn input_focus_is_active(&self) -> bool {
+        self.input.focus_active
+    }
+
+    pub(in crate::features) fn paste_review(&self) -> TerminalPasteReviewView<'_> {
+        TerminalPasteReviewView {
+            draft: self.paste.draft.as_ref(),
+            selected_byte_range: self.paste.selected_byte_range(),
+            cursor: self.paste.cursor,
+            marked_range: self.paste.marked_range.clone(),
+            focus: &self.paste.focus,
+        }
+    }
+
+    pub(in crate::features) fn overlay_visibility(&self) -> TerminalOverlayVisibility {
+        TerminalOverlayVisibility {
+            paste_review: self.paste.draft.is_some(),
+            actions: self.menus.actions_open,
+            context_menu: self.menus.context_menu.is_some(),
+            action_link_menu: self.menus.action_link_menu.is_some(),
+            action_link_tooltip: self.menus.action_link_tooltip.is_some(),
+        }
+    }
+
+    pub(in crate::features) fn actions_focus(&self) -> &FocusHandle {
+        &self.menus.actions_focus
+    }
+
+    pub(in crate::features) fn close_actions(&mut self) {
+        self.menus.actions_open = false;
+    }
+
+    pub(in crate::features) fn action_link_hover_is_pending(&self) -> bool {
+        self.menus.action_link_hover_pending.is_some()
+    }
+
+    pub(in crate::features) fn clear_activation_interaction(&mut self) -> bool {
+        let had_interaction = self.selection.selection.take().is_some()
+            || self.selection.dragging
+            || self.menus.context_menu.is_some()
+            || self.menus.action_link_menu.is_some()
+            || self.menus.action_link_tooltip.is_some();
+        self.selection.dragging = false;
+        self.menus.context_menu = None;
+        self.menus.action_link_menu = None;
+        self.menus.action_link_tooltip = None;
+        self.menus.action_link_hover_pending = None;
+        had_interaction
+    }
+
+    pub(in crate::features) fn cell_metrics(&self) -> Option<(f32, f32)> {
+        self.layout.cell_metrics
+    }
+
+    pub(in crate::features) fn invalidate_cell_metrics(&mut self) {
+        self.layout.cell_metrics = None;
+    }
+
+    pub(in crate::features) fn move_session_surface_bounds(&mut self, from: &str, to: String) {
+        if let Some(bounds) = self.layout.session_surface_bounds.remove(from) {
+            self.layout.session_surface_bounds.insert(to, bounds);
+        }
+    }
+
+    pub(in crate::features) fn remove_session_surface_bounds(&mut self, session_id: &str) {
+        self.layout.session_surface_bounds.remove(session_id);
+    }
+
+    pub(in crate::features) fn cached_keyword_highlight_rules(
+        &self,
+    ) -> Option<&Arc<Vec<ResolvedKeywordHighlightRule>>> {
+        self.paint.cached_keyword_highlight_rules.as_ref()
+    }
+
+    pub(in crate::features) fn cache_keyword_highlight_rules(
+        &mut self,
+        rules: Arc<Vec<ResolvedKeywordHighlightRule>>,
+    ) {
+        self.paint.cached_keyword_highlight_rules = Some(rules);
+    }
+
+    pub(in crate::features) fn cached_terminal_theme_palette(
+        &self,
+    ) -> Option<(&str, &str, &str, ThemePalette)> {
+        self.paint.cached_terminal_theme_palette.as_ref().map(
+            |(ui, terminal, contrast, palette)| {
+                (ui.as_str(), terminal.as_str(), contrast.as_str(), *palette)
+            },
+        )
+    }
+
+    pub(in crate::features) fn cache_terminal_theme_palette(
+        &mut self,
+        ui_theme: String,
+        terminal_theme: String,
+        contrast: String,
+        palette: ThemePalette,
+    ) {
+        self.paint.cached_terminal_theme_palette =
+            Some((ui_theme, terminal_theme, contrast, palette));
+    }
+
+    pub(in crate::features) fn invalidate_paint_caches(&mut self) {
+        self.paint.cached_terminal_theme_palette = None;
+        self.paint.cached_keyword_highlight_rules = None;
+    }
 }
 
 impl TerminalPasteReviewState {
@@ -267,7 +403,7 @@ impl TerminalPasteReviewState {
         }
     }
 
-    pub(in crate::features) fn open(&mut self, text: String) {
+    pub(super) fn open(&mut self, text: String) {
         let text = normalize_paste_newlines(&text);
         self.cursor = text.len();
         self.anchor = None;
@@ -276,25 +412,25 @@ impl TerminalPasteReviewState {
         self.marked_text.clear();
     }
 
-    pub(in crate::features) fn clear(&mut self) {
+    pub(super) fn clear(&mut self) {
         self.draft = None;
         self.reset_editing_state();
     }
 
-    pub(in crate::features) fn take_normalized_text(&mut self) -> Option<String> {
+    pub(super) fn take_normalized_text(&mut self) -> Option<String> {
         let text = self.draft.take().map(|draft| draft.normalized_text());
         self.reset_editing_state();
         text
     }
 
-    pub(in crate::features) fn text(&self) -> &str {
+    pub(super) fn text(&self) -> &str {
         self.draft
             .as_ref()
             .map(|draft| draft.text.as_str())
             .unwrap_or_default()
     }
 
-    pub(in crate::features) fn selected_byte_range(&self) -> Range<usize> {
+    pub(super) fn selected_byte_range(&self) -> Range<usize> {
         let cursor = floor_char_boundary(self.text(), self.cursor);
         let anchor = floor_char_boundary(self.text(), self.anchor.unwrap_or(cursor));
         if anchor <= cursor {
@@ -304,29 +440,29 @@ impl TerminalPasteReviewState {
         }
     }
 
-    pub(in crate::features) fn select_all(&mut self) {
+    pub(super) fn select_all(&mut self) {
         self.anchor = Some(0);
         self.cursor = self.text().len();
         self.clear_marked_text();
     }
 
-    pub(in crate::features) fn previous_char_boundary(&self) -> usize {
+    pub(super) fn previous_char_boundary(&self) -> usize {
         previous_char_boundary(self.text(), self.cursor)
     }
 
-    pub(in crate::features) fn next_char_boundary(&self) -> usize {
+    pub(super) fn next_char_boundary(&self) -> usize {
         next_char_boundary(self.text(), self.cursor)
     }
 
-    pub(in crate::features) fn current_line_start(&self) -> usize {
+    pub(super) fn current_line_start(&self) -> usize {
         line_start(self.text(), self.cursor)
     }
 
-    pub(in crate::features) fn current_line_end(&self) -> usize {
+    pub(super) fn current_line_end(&self) -> usize {
         line_end(self.text(), self.cursor)
     }
 
-    pub(in crate::features) fn move_cursor(&mut self, cursor: usize, extend: bool) {
+    pub(super) fn move_cursor(&mut self, cursor: usize, extend: bool) {
         let cursor = floor_char_boundary(self.text(), cursor);
         if extend {
             self.anchor.get_or_insert(self.cursor);
@@ -337,7 +473,7 @@ impl TerminalPasteReviewState {
         self.clear_marked_text();
     }
 
-    pub(in crate::features) fn move_vertical(&mut self, delta: isize, extend: bool) {
+    pub(super) fn move_vertical(&mut self, delta: isize, extend: bool) {
         let text = self.text();
         let cursor = floor_char_boundary(text, self.cursor);
         let current_start = line_start(text, cursor);
@@ -365,11 +501,11 @@ impl TerminalPasteReviewState {
         self.move_cursor(target, extend);
     }
 
-    pub(in crate::features) fn replace_selection(&mut self, text: &str) -> bool {
+    pub(super) fn replace_selection(&mut self, text: &str) -> bool {
         self.replace_range(self.selected_byte_range(), text)
     }
 
-    pub(in crate::features) fn replace_range(&mut self, range: Range<usize>, text: &str) -> bool {
+    pub(super) fn replace_range(&mut self, range: Range<usize>, text: &str) -> bool {
         let Some(draft) = self.draft.as_mut() else {
             return false;
         };
@@ -496,15 +632,105 @@ impl TerminalAssistState {
 
 #[cfg(test)]
 mod tests {
-    use gpui::TestAppContext;
+    use gpui::{Bounds, TestAppContext, point, px, size};
     use nyaterm_core::TerminalInputState as CommandInputState;
+    use nyaterm_terminal::{TerminalOutputDecoder, TerminalScreen};
 
-    use super::{TerminalAssistState, TerminalPasteReviewState};
+    use super::{
+        TerminalAssistState, TerminalFeatureFocus, TerminalFeatureState, TerminalPasteReviewState,
+    };
+    use crate::models::{TerminalFramePipeline, TerminalSearchMode};
 
     fn paste_state() -> TerminalPasteReviewState {
         let cx = TestAppContext::single();
         let focus = cx.update(|cx| cx.focus_handle());
         TerminalPasteReviewState::new(focus)
+    }
+
+    fn terminal_state() -> TerminalFeatureState {
+        let cx = TestAppContext::single();
+        cx.update(|cx| {
+            TerminalFeatureState::new(
+                TerminalScreen::new(80, 24),
+                TerminalOutputDecoder::default(),
+                TerminalFramePipeline::default(),
+                String::new(),
+                "idle".to_string(),
+                1.0,
+                TerminalFeatureFocus {
+                    actions: cx.focus_handle(),
+                    x11_display: cx.focus_handle(),
+                    terminal: cx.focus_handle(),
+                    paste: cx.focus_handle(),
+                },
+            )
+        })
+    }
+
+    #[test]
+    fn terminal_owner_projects_overlay_visibility_and_search_mode() {
+        let mut state = terminal_state();
+        state.paste.open("echo hello".to_string());
+        state.menus.actions_open = true;
+        state.search.open = true;
+        state.set_search_mode(TerminalSearchMode::History);
+
+        let overlays = state.overlay_visibility();
+        assert!(overlays.paste_review);
+        assert!(overlays.actions);
+        assert!(!overlays.context_menu);
+        assert!(!state.buffer_search_is_open());
+
+        state.set_search_mode(TerminalSearchMode::Buffer);
+        assert!(state.buffer_search_is_open());
+    }
+
+    #[test]
+    fn terminal_owner_clears_activation_interaction_as_one_transition() {
+        let mut state = terminal_state();
+        state.selection.dragging = true;
+        state.menus.action_link_hover_pending = Some((
+            "https://example.com".to_string(),
+            std::time::Instant::now(),
+            crate::models::ActionLinkTooltipState {
+                x: px(10.),
+                y: px(20.),
+                kind_label: "URL".to_string(),
+                value: "https://example.com".to_string(),
+                default_action_label: "Open".to_string(),
+                default_action_preview: "https://example.com".to_string(),
+                has_more_actions: false,
+                match_key: "url|https://example.com|0|19".to_string(),
+            },
+        ));
+
+        assert!(state.clear_activation_interaction());
+        assert!(!state.selection.dragging);
+        assert!(!state.action_link_hover_is_pending());
+        assert!(!state.clear_activation_interaction());
+    }
+
+    #[test]
+    fn terminal_owner_migrates_session_surface_bounds_atomically() {
+        let mut state = terminal_state();
+        let bounds = Bounds::new(point(px(10.), px(20.)), size(px(800.), px(480.)));
+        state
+            .layout
+            .session_surface_bounds
+            .insert("old-session".to_string(), bounds);
+
+        state.move_session_surface_bounds("old-session", "new-session".to_string());
+
+        assert!(
+            !state
+                .layout
+                .session_surface_bounds
+                .contains_key("old-session")
+        );
+        assert_eq!(
+            state.layout.session_surface_bounds.get("new-session"),
+            Some(&bounds)
+        );
     }
 
     #[test]
