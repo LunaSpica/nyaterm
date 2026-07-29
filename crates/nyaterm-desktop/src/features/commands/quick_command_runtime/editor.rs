@@ -38,21 +38,30 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        let Some(editor) = self.commands.quick.editor.draft.as_mut() else {
+        let Some(draft) = self
+            .commands
+            .quick
+            .editor
+            .draft
+            .as_ref()
+            .map(|editor| editor.category_draft.trim().to_string())
+        else {
             return;
         };
-        let draft = editor.category_draft.trim().to_string();
         if draft.is_empty() {
             return;
         }
-        if let Some(existing) = self
+        let category_id = self
             .commands
-            .catalog
-            .categories
+            .quick_command_categories()
             .iter()
             .find(|category| category.name.eq_ignore_ascii_case(&draft))
-        {
-            editor.category_id = Some(existing.id.clone());
+            .map(|category| category.id.clone());
+        let Some(editor) = self.commands.quick.editor.draft.as_mut() else {
+            return;
+        };
+        if let Some(category_id) = category_id {
+            editor.category_id = Some(category_id);
             editor.category_draft.clear();
         } else {
             editor.category_id = None;
@@ -120,6 +129,7 @@ impl NyaTermApp {
     pub(in crate::features) fn save_quick_command_editor(&mut self, cx: &mut Context<Self>) {
         let label_required = self.tr("quickCommands.errorLabelRequired").to_string();
         let command_required = self.tr("quickCommands.errorCommandRequired").to_string();
+        let categories = self.commands.quick_command_categories().to_vec();
         let Some(editor) = self.commands.quick.editor.draft.as_mut() else {
             return;
         };
@@ -143,10 +153,7 @@ impl NyaTermApp {
         let category_draft = editor.category_draft.trim().to_string();
         let (category_id, new_category) = if category_draft.is_empty() {
             (editor.category_id.clone(), None)
-        } else if let Some(existing) = self
-            .commands
-            .catalog
-            .categories
+        } else if let Some(existing) = categories
             .iter()
             .find(|category| category.name.eq_ignore_ascii_case(&category_draft))
         {
@@ -191,8 +198,7 @@ impl NyaTermApp {
         {
             Ok(config) => {
                 self.commands
-                    .catalog
-                    .replace(config.commands, config.categories);
+                    .replace_quick_command_catalog(config.commands, config.categories);
                 self.commands.quick.editor.draft = None;
                 self.commands.quick.editor.window = None;
                 self.commands.quick.editor.window_open_pending = false;

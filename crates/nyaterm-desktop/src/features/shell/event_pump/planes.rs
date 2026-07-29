@@ -189,7 +189,7 @@ impl NyaTermApp {
             && !self.ai.chat.pending
             && self.ai.agent.loop_state.is_none()
             && !self.ai.discovery.pending
-            && self.commands.runtime.is_idle()
+            && self.commands.persistence_is_idle()
         {
             dirty |= self.drive_pending_focus(window, cx);
             // During connect settle, skip blink notifies so first frames stay free.

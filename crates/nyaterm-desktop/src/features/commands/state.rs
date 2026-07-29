@@ -6,7 +6,7 @@ use std::sync::Arc;
 use gpui::{FocusHandle, WindowHandle};
 use nyaterm_core::{CommandHistoryEntry, QuickCommand, QuickCommandCategory};
 
-use crate::features::QuickCommandWindow;
+use crate::features::{CommandPersistenceRequest, CommandPersistenceResult, QuickCommandWindow};
 use crate::models::{
     QuickCommandCategoryDeleteState, QuickCommandCategoryMenuState,
     QuickCommandCategoryRenameState, QuickCommandDeleteState, QuickCommandDetailsState,
@@ -14,13 +14,13 @@ use crate::models::{
     QuickCommandSortMode, QuickCommandVariablePromptState, QuickCommandViewMode,
 };
 
-use super::runtime_state::CommandRuntimeState;
+use super::runtime_state::{CommandPersistencePoll, CommandRuntimeState};
 
 pub(in crate::features) struct CommandFeatureState {
-    pub catalog: CommandCatalogState,
+    catalog: CommandCatalogState,
     pub quick: QuickCommandFeatureState,
-    pub history: Arc<[CommandHistoryEntry]>,
-    pub runtime: CommandRuntimeState,
+    history: Arc<[CommandHistoryEntry]>,
+    runtime: CommandRuntimeState,
 }
 
 pub(in crate::features) struct CommandFeatureInit {
@@ -34,9 +34,9 @@ pub(in crate::features) struct CommandFeatureInit {
     pub portable_key_path: Option<PathBuf>,
 }
 
-pub(in crate::features) struct CommandCatalogState {
-    pub commands: Arc<[QuickCommand]>,
-    pub categories: Vec<QuickCommandCategory>,
+struct CommandCatalogState {
+    commands: Arc<[QuickCommand]>,
+    categories: Vec<QuickCommandCategory>,
 }
 
 pub(in crate::features) struct QuickCommandFeatureState {
@@ -71,6 +71,90 @@ impl CommandFeatureState {
         self.catalog.clear();
         self.history = Arc::default();
     }
+
+    pub(in crate::features) fn quick_commands(&self) -> &[QuickCommand] {
+        &self.catalog.commands
+    }
+
+    pub(in crate::features) fn quick_commands_snapshot(&self) -> Arc<[QuickCommand]> {
+        self.catalog.commands.clone()
+    }
+
+    pub(in crate::features) fn quick_command_categories(&self) -> &[QuickCommandCategory] {
+        &self.catalog.categories
+    }
+
+    pub(in crate::features) fn command_history(&self) -> &[CommandHistoryEntry] {
+        &self.history
+    }
+
+    pub(in crate::features) fn command_history_snapshot(&self) -> Arc<[CommandHistoryEntry]> {
+        self.history.clone()
+    }
+
+    pub(in crate::features) fn replace_quick_command_catalog(
+        &mut self,
+        commands: Vec<QuickCommand>,
+        categories: Vec<QuickCommandCategory>,
+    ) {
+        self.catalog.replace(commands, categories);
+    }
+
+    pub(in crate::features) fn replace_command_history(
+        &mut self,
+        history: Vec<CommandHistoryEntry>,
+    ) {
+        self.history = Arc::from(history);
+    }
+
+    pub(in crate::features) fn queue_command_history(&mut self, commands: Vec<String>) -> bool {
+        self.runtime
+            .queue(CommandPersistenceRequest::AppendHistory(commands))
+    }
+
+    pub(in crate::features) fn queue_quick_command_use_count(
+        &mut self,
+        command_id: String,
+    ) -> bool {
+        if !self
+            .runtime
+            .queue(CommandPersistenceRequest::IncrementQuickCommand(
+                command_id.clone(),
+            ))
+        {
+            return false;
+        }
+        self.catalog.increment_use_count(&command_id);
+        true
+    }
+
+    pub(in crate::features) fn poll_persistence(&mut self) -> CommandPersistencePoll {
+        self.runtime.poll()
+    }
+
+    pub(in crate::features) fn persistence_is_idle(&self) -> bool {
+        self.runtime.is_idle()
+    }
+
+    pub(in crate::features) fn apply_persistence_result(
+        &mut self,
+        event: CommandPersistenceResult,
+    ) -> Result<(), String> {
+        match event {
+            CommandPersistenceResult::History(Ok(history)) => {
+                self.replace_command_history(history);
+                Ok(())
+            }
+            CommandPersistenceResult::History(Err(error)) => {
+                Err(format!("command history save failed: {error}"))
+            }
+            CommandPersistenceResult::QuickCommandUseCount { command_id, result } => result
+                .map_err(|error| {
+                    self.catalog.rollback_use_count(&command_id);
+                    format!("quick command use count update failed: {error}")
+                }),
+        }
+    }
 }
 
 impl CommandCatalogState {
@@ -93,6 +177,24 @@ impl CommandCatalogState {
     fn clear(&mut self) {
         self.commands = Arc::default();
         self.categories.clear();
+    }
+
+    fn increment_use_count(&mut self, command_id: &str) {
+        if let Some(command) = Arc::make_mut(&mut self.commands)
+            .iter_mut()
+            .find(|command| command.id == command_id)
+        {
+            command.use_count = Some(command.use_count.unwrap_or_default().saturating_add(1));
+        }
+    }
+
+    fn rollback_use_count(&mut self, command_id: &str) {
+        if let Some(command) = Arc::make_mut(&mut self.commands)
+            .iter_mut()
+            .find(|command| command.id == command_id)
+        {
+            command.use_count = Some(command.use_count.unwrap_or_default().saturating_sub(1));
+        }
     }
 }
 
@@ -250,5 +352,16 @@ mod tests {
         catalog.clear();
         assert!(catalog.commands.is_empty());
         assert!(catalog.categories.is_empty());
+    }
+
+    #[test]
+    fn command_catalog_use_count_increment_can_be_rolled_back() {
+        let mut catalog = CommandCatalogState::new(vec![command("command-1")], Vec::new());
+
+        catalog.increment_use_count("command-1");
+        assert_eq!(catalog.commands[0].use_count, Some(1));
+
+        catalog.rollback_use_count("command-1");
+        assert_eq!(catalog.commands[0].use_count, Some(0));
     }
 }

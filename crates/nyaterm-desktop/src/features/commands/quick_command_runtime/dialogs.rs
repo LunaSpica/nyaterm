@@ -36,8 +36,7 @@ impl NyaTermApp {
         self.commands.quick.list.row_menu = None;
         let Some(command) = self
             .commands
-            .catalog
-            .commands
+            .quick_commands()
             .iter()
             .find(|command| command.id == command_id)
             .cloned()
@@ -77,8 +76,7 @@ impl NyaTermApp {
         self.commands.quick.list.row_menu = None;
         let Some(command) = self
             .commands
-            .catalog
-            .commands
+            .quick_commands()
             .iter()
             .find(|command| command.id == command_id)
             .cloned()
@@ -88,7 +86,10 @@ impl NyaTermApp {
             return;
         };
         self.commands.quick.dialogs.details = Some(QuickCommandDetailsState {
-            category: quick_command_category_label(&self.commands.catalog.categories, &command),
+            category: quick_command_category_label(
+                self.commands.quick_command_categories(),
+                &command,
+            ),
             command,
             x,
             y,
@@ -112,8 +113,7 @@ impl NyaTermApp {
         self.commands.quick.list.row_menu = None;
         let Some(command) = self
             .commands
-            .catalog
-            .commands
+            .quick_commands()
             .iter()
             .find(|command| command.id == command_id)
             .cloned()
@@ -154,8 +154,7 @@ impl NyaTermApp {
         }) {
             Ok((config, deleted)) => {
                 self.commands
-                    .catalog
-                    .replace(config.commands, config.categories);
+                    .replace_quick_command_catalog(config.commands, config.categories);
                 self.commands.quick.dialogs.delete = None;
                 self.settings.store_status.message = if deleted {
                     format!("quick command '{}' deleted", delete.label)
@@ -182,8 +181,7 @@ impl NyaTermApp {
     ) {
         let Some(category) = self
             .commands
-            .catalog
-            .categories
+            .quick_command_categories()
             .iter()
             .find(|category| category.id == category_id)
             .cloned()
@@ -194,8 +192,7 @@ impl NyaTermApp {
         };
         let command_count = self
             .commands
-            .catalog
-            .commands
+            .quick_commands()
             .iter()
             .filter(|command| command.category_id.as_deref() == Some(category.id.as_str()))
             .count();
@@ -245,8 +242,7 @@ impl NyaTermApp {
         }) {
             Ok((config, deleted_category, deleted_commands)) => {
                 self.commands
-                    .catalog
-                    .replace(config.commands, config.categories);
+                    .replace_quick_command_catalog(config.commands, config.categories);
                 self.commands.quick.dialogs.category_delete = None;
                 if self.commands.quick.list.selected_category == delete.id {
                     self.commands.quick.list.selected_category = "all".to_string();
@@ -289,8 +285,7 @@ impl NyaTermApp {
     ) {
         let Some(category) = self
             .commands
-            .catalog
-            .categories
+            .quick_command_categories()
             .iter()
             .find(|category| category.id == category_id)
             .cloned()
@@ -335,9 +330,14 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        if self.commands.catalog.categories.iter().any(|category| {
-            category.id != rename.id && category.name.trim().eq_ignore_ascii_case(name.as_str())
-        }) {
+        if self
+            .commands
+            .quick_command_categories()
+            .iter()
+            .any(|category| {
+                category.id != rename.id && category.name.trim().eq_ignore_ascii_case(name.as_str())
+            })
+        {
             let message = self.tr("quickCommands.categoryNameDuplicated").to_string();
             if let Some(state) = self.commands.quick.dialogs.category_rename.as_mut() {
                 state.error = Some(message);
@@ -375,8 +375,7 @@ impl NyaTermApp {
         }) {
             Ok((config, renamed)) => {
                 self.commands
-                    .catalog
-                    .replace(config.commands, config.categories);
+                    .replace_quick_command_catalog(config.commands, config.categories);
                 if renamed {
                     self.commands.quick.dialogs.category_rename = None;
                     self.settings.store_status.message = format!(

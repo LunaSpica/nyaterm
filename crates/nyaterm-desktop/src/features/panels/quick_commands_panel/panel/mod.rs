@@ -17,24 +17,23 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let filtered_commands = filtered_quick_commands(
-            &self.commands.catalog.commands,
-            &self.commands.catalog.categories,
+            self.commands.quick_commands(),
+            self.commands.quick_command_categories(),
             &self.commands.quick.list.search_draft,
             &self.commands.quick.list.selected_category,
             self.commands.quick.list.sort_mode,
         );
-        let total_commands = self.commands.catalog.commands.len();
+        let total_commands = self.commands.quick_commands().len();
         let visible_commands = filtered_commands.len();
         let _pinned_commands = self
             .commands
-            .catalog
-            .commands
+            .quick_commands()
             .iter()
             .filter(|command| command.pinned.unwrap_or_default())
             .count();
         let categories = quick_command_category_options(
-            &self.commands.catalog.commands,
-            &self.commands.catalog.categories,
+            self.commands.quick_commands(),
+            self.commands.quick_command_categories(),
             self.tr("quickCommands.allCategories"),
             self.tr("quickCommands.uncategorized"),
         );

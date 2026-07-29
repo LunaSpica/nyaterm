@@ -93,8 +93,7 @@ impl NyaTermApp {
             .as_deref()
             .and_then(|id| {
                 self.commands
-                    .catalog
-                    .categories
+                    .quick_command_categories()
                     .iter()
                     .find(|category| category.id == id)
             })
@@ -104,8 +103,7 @@ impl NyaTermApp {
         let category_query = category_draft.to_lowercase();
         let exact_category_match = self
             .commands
-            .catalog
-            .categories
+            .quick_command_categories()
             .iter()
             .any(|category| category.name.eq_ignore_ascii_case(&category_draft));
         let category_display = if category_draft.is_empty() {
@@ -162,9 +160,8 @@ impl NyaTermApp {
         }
         for category in self
             .commands
-            .catalog
-            .categories
-            .clone()
+            .quick_command_categories()
+            .to_vec()
             .into_iter()
             .filter(|category| {
                 category_query.is_empty() || category.name.to_lowercase().contains(&category_query)

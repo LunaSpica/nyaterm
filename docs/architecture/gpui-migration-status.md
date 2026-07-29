@@ -426,8 +426,12 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   persistence runtime fields, taking `NyaTermApp` from 32 fields to 28. The
   owner constructs the command persistence worker and provides grouped
   load/clear transitions, while catalog writes replace commands and categories
-  together. Quick-command serialization, command-history storage, portable-key
-  handling and worker behavior are unchanged.
+  together. A later encapsulation pass made `catalog`, `history` and `runtime`
+  private: views receive slices or immutable `Arc` snapshots, worker admission
+  and polling enter through the owner, and failed use-count persistence rolls
+  back the optimistic catalog increment on the same state. Quick-command
+  serialization, command-history storage, portable-key handling and worker
+  behavior are unchanged.
 - The Entity Store projection layer is gone entirely, in two steps.
 
   First, the six domain stores (`Ai`, `CloudSync`, `Connections`, `RemoteOps`,
@@ -1345,7 +1349,7 @@ these as staged extraction candidates, not as formatting-only refactor targets.
 
 ## Migrating
 
-Connections are the active architecture convergence target.
+Feature-owner encapsulation is the active architecture convergence target.
 
 Current ownership map:
 
@@ -1358,6 +1362,8 @@ Current ownership map:
 | Saved passwords/credentials | Private catalog in `NyaTermApp.security` | Secret-bearing persisted catalogs | Credential autofill and security settings use read-only owner APIs; grouped store loads and clears replace all four catalogs together. |
 | Secret unlock/reveal interaction | Private state in `NyaTermApp.security` | Secret-bearing transient UI state | Prompt admission, pending actions, success/failure, revealed values and lock cleanup enter through `SecurityFeatureState`; secret-bearing children have no `Debug` implementation. |
 | Whole-application screen lock | Private state in `NyaTermApp.security` | Transient lock/input/idle state | Locked status, password draft, focus and idle timing are queried or changed only through `SecurityFeatureState`; storage verification, input widgets and GPUI focus remain in runtime/view adapters. |
+| Quick-command catalog | Private catalog in `NyaTermApp.commands` | Persisted domain state | Views receive read-only slices/snapshots; successful storage operations replace commands and categories together through `CommandFeatureState`. |
+| Command history and persistence worker | Private state in `NyaTermApp.commands` | Persisted catalog plus background runtime | History snapshots, queue admission, event polling and idle checks enter through `CommandFeatureState`; failed optimistic use-count updates roll back on the owner. |
 | Serial ports | Private catalog in `NyaTermApp.connection_catalog` | Runtime/discovered state | Replaced through the catalog after session-manager discovery and never persisted. |
 | Tunnel/proxy configs | Private catalog in `NyaTermApp.tunnel_state` | Persisted network config | Views use read-only slices; pure move/upsert/delete candidates and successful commits stay on `TunnelFeatureState`. The Network page UI remains separate transient state. |
 | Queued saved-connection starts | `NyaTermApp.session.start` private queue | Transient session-start state | Admission, duplicate detection, draining and runtime cadence reads go through `SessionStartFeatureState` methods. |
@@ -1568,7 +1574,13 @@ honest remaining list.
    well, replacing direct reads and writes across root rendering, shortcuts,
    the event pump, settings and the lock overlay with owner queries and atomic
    lifecycle transitions. Password verification, text-input ownership and GPUI
-   focus remain in their existing adapters. What remains at the
+   focus remain in their existing adapters. The following command-data
+   encapsulation batch made the quick-command catalog, command-history snapshot
+   and persistence worker private, routed rendering and suggestion searches
+   through read-only views, and coupled optimistic use-count updates with
+   persistence-failure rollback on `CommandFeatureState`. Storage access,
+   portable-key selection and GPUI notification remain in their existing
+   adapters. What remains at the
    composition root is stores, runtime and focused feature owners.
    Group by cohesion where a cluster exists; do not force the count down for
    its own sake.

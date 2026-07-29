@@ -149,8 +149,7 @@ impl NyaTermApp {
     ) {
         let Some(command) = self
             .commands
-            .catalog
-            .commands
+            .quick_commands()
             .iter()
             .find(|command| command.id == command_id)
             .cloned()
@@ -185,8 +184,7 @@ impl NyaTermApp {
         }
         let Some(command) = self
             .commands
-            .catalog
-            .commands
+            .quick_commands()
             .iter()
             .find(|command| command.id == command_id)
             .cloned()

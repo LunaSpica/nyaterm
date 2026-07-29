@@ -20,8 +20,7 @@ impl NyaTermApp {
         {
             Ok(config) => {
                 self.commands
-                    .catalog
-                    .replace(config.commands, config.categories);
+                    .replace_quick_command_catalog(config.commands, config.categories);
             }
             Err(error) => {
                 self.settings.store_status.message =

@@ -1,11 +1,9 @@
-use std::sync::Arc;
-
 use gpui::Context;
 use nyaterm_core::{AiCommandCard, truncate_preview};
 
 use crate::features::{
-    AiAgentStepStatus, CommandPersistencePoll, CommandPersistenceRequest, CommandPersistenceResult,
-    NyaTermApp, SESSION_COMMAND_HISTORY_LIMIT, is_agent_command_card,
+    AiAgentStepStatus, CommandPersistencePoll, NyaTermApp, SESSION_COMMAND_HISTORY_LIMIT,
+    is_agent_command_card,
 };
 
 const COMMAND_PERSISTENCE_EVENT_DRAIN_LIMIT: usize = 32;
@@ -294,11 +292,7 @@ impl NyaTermApp {
                 self.record_session_command_history(session_id, command);
             }
         }
-        if !self
-            .commands
-            .runtime
-            .queue(CommandPersistenceRequest::AppendHistory(submitted))
-        {
+        if !self.commands.queue_command_history(submitted) {
             self.settings.store_status.message =
                 "command history worker is unavailable".to_string();
             self.settings.store_status.ready = false;
@@ -306,20 +300,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn queue_quick_command_use_count(&mut self, command_id: String) {
-        if self
-            .commands
-            .runtime
-            .queue(CommandPersistenceRequest::IncrementQuickCommand(
-                command_id.clone(),
-            ))
-        {
-            if let Some(command) = Arc::make_mut(&mut self.commands.catalog.commands)
-                .iter_mut()
-                .find(|command| command.id == command_id)
-            {
-                command.use_count = Some(command.use_count.unwrap_or_default().saturating_add(1));
-            }
-        } else {
+        if !self.commands.queue_quick_command_use_count(command_id) {
             self.settings.store_status.message =
                 "command persistence worker is unavailable".to_string();
             self.settings.store_status.ready = false;
@@ -329,7 +310,7 @@ impl NyaTermApp {
     pub(in crate::features) fn drain_command_persistence_events(&mut self) -> bool {
         let mut dirty = false;
         for _ in 0..COMMAND_PERSISTENCE_EVENT_DRAIN_LIMIT {
-            let event = match self.commands.runtime.poll() {
+            let event = match self.commands.poll_persistence() {
                 CommandPersistencePoll::Event(event) => event,
                 CommandPersistencePoll::Empty => break,
                 CommandPersistencePoll::Disconnected { had_pending } => {
@@ -343,29 +324,9 @@ impl NyaTermApp {
                 }
             };
             dirty = true;
-            match event {
-                CommandPersistenceResult::History(Ok(history)) => {
-                    self.commands.history = Arc::from(history);
-                }
-                CommandPersistenceResult::History(Err(error)) => {
-                    self.settings.store_status.message =
-                        format!("command history save failed: {error}");
-                    self.settings.store_status.ready = false;
-                }
-                CommandPersistenceResult::QuickCommandUseCount { command_id, result } => {
-                    if let Err(error) = result {
-                        if let Some(command) = Arc::make_mut(&mut self.commands.catalog.commands)
-                            .iter_mut()
-                            .find(|command| command.id == command_id)
-                        {
-                            command.use_count =
-                                Some(command.use_count.unwrap_or_default().saturating_sub(1));
-                        }
-                        self.settings.store_status.message =
-                            format!("quick command use count update failed: {error}");
-                        self.settings.store_status.ready = false;
-                    }
-                }
+            if let Err(message) = self.commands.apply_persistence_result(event) {
+                self.settings.store_status.message = message;
+                self.settings.store_status.ready = false;
             }
         }
         dirty
