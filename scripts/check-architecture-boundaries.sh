@@ -372,6 +372,14 @@ check_no_multiline_matches \
   "SettingsFeatureState compatibility children must stay inside the settings module" \
   'struct[[:space:]]+SettingsFeatureState[[:space:]]*\{[^}]*pub([[:space:]]|\(crate\)|\(in crate\)|\(in crate::features\))[[:space:]]+(summary|keyword_config|master_password)[[:space:]]*:' \
   crates/nyaterm-desktop/src/features/settings/state.rs
+check_no_multiline_matches \
+  "SettingsFeatureState summary must stay private to its owner implementation" \
+  'struct[[:space:]]+SettingsFeatureState[[:space:]]*\{[^}]*pub([[:space:]]|\([^)]*\))[[:space:]]+summary[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/settings/state.rs
+check_no_multiline_matches \
+  "settings summary access must use SettingsFeatureState methods" \
+  '(self|this|app)\.settings[[:space:]]*\.[[:space:]]*summary[[:space:]]*(\.|=|\[)' \
+  crates/nyaterm-desktop/src/features
 check_no_matches \
   "SettingsMasterPasswordState implementation must stay inside the settings module" \
   'pub([[:space:]]|\(crate\)|\(in crate\)|\(in crate::features\))[[:space:]]+struct[[:space:]]+SettingsMasterPasswordState' \

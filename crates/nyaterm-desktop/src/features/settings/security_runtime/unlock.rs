@@ -6,7 +6,7 @@ use crate::models::{NavItem, SecurityAuthTab, SecurityUnlockAction, SettingsTab}
 
 impl NyaTermApp {
     pub(in crate::features) fn security_secrets_locked(&self) -> bool {
-        self.settings.summary.has_master_password && !self.security.secrets_unlocked()
+        self.settings.summary().has_master_password && !self.security.secrets_unlocked()
     }
 
     pub(in crate::features) fn require_security_secrets_unlocked(
@@ -15,7 +15,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
         pending_action: Option<SecurityUnlockAction>,
     ) -> bool {
-        if self.settings.summary.has_master_password && self.security.secrets_unlocked() {
+        if self.settings.summary().has_master_password && self.security.secrets_unlocked() {
             return true;
         }
         self.security.set_pending_unlock_action(pending_action);
@@ -28,7 +28,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if !self.settings.summary.has_master_password {
+        if !self.settings.summary().has_master_password {
             self.security.show_master_required_prompt();
             self.forget_text_inputs("security.unlock.password");
             cx.notify();
@@ -81,7 +81,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if !self.settings.summary.has_master_password {
+        if !self.settings.summary().has_master_password {
             self.security.show_master_required_prompt();
             self.forget_text_inputs("security.unlock.password");
             cx.notify();

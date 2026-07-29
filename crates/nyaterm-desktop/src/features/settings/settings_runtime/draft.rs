@@ -20,7 +20,7 @@ impl NyaTermApp {
         let master_password = self.settings.master_password();
         self.shell
             .set_settings_draft_snapshot(SettingsDraftSnapshot {
-                settings: self.settings.summary.clone(),
+                settings: self.settings.summary().clone(),
                 ai_settings,
                 ai_model_draft,
                 ai_base_url_draft,
@@ -281,24 +281,25 @@ impl NyaTermApp {
                 );
                 self.settings.keyword_config = saved_keyword_highlights;
                 self.sync_ai_drafts_from_active_profile();
-                self.recording
-                    .set_memory_limit(self.settings.summary.recording_memory_limit_bytes as usize);
+                self.recording.set_memory_limit(
+                    self.settings.summary().recording_memory_limit_bytes as usize,
+                );
                 self.transfer
                     .set_duplicate_policy(SftpDuplicatePolicy::from_legacy_value(
-                        &self.settings.summary.transfer_duplicate_strategy,
+                        &self.settings.summary().transfer_duplicate_strategy,
                     ));
                 self.sync_terminal_encodings_from_settings();
                 self.enforce_terminal_scrollback_limit();
                 if !self
                     .settings
-                    .summary
+                    .summary()
                     .interaction_command_suggestions_enabled
                 {
                     self.terminal.clear_command_tracking();
                 }
                 self.invalidate_terminal_cell_metrics(cx);
                 self.refresh_visible_terminal_surfaces(cx);
-                if !self.settings.summary.startup_restore_window_layout {
+                if !self.settings.summary().startup_restore_window_layout {
                     let _ = ConnectionStore::open_with_portable_key_path(
                         self.runtime.config_dir(),
                         self.runtime.portable_key_path().map(ToOwned::to_owned),

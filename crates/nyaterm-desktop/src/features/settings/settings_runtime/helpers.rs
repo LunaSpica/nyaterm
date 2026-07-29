@@ -1,12 +1,3 @@
-pub(super) fn adjust_u32_setting(current: u32, delta: i32, min: u32, max: u32) -> u32 {
-    let next = if delta.is_negative() {
-        current.saturating_sub(delta.unsigned_abs())
-    } else {
-        current.saturating_add(delta as u32)
-    };
-    next.clamp(min, max)
-}
-
 pub(super) fn urlencoding_query(query: &str) -> String {
     let mut out = String::new();
     for ch in query.chars() {

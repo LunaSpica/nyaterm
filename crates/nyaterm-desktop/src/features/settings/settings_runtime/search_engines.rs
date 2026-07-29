@@ -92,7 +92,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn test_search_engine(&mut self, index: usize, cx: &mut Context<Self>) {
-        let Some(engine) = self.settings.summary.search_custom_engines.get(index) else {
+        let Some(engine) = self.settings.summary().search_custom_engines.get(index) else {
             self.shell.status = "search engine not found".to_string();
             cx.notify();
             return;
@@ -117,8 +117,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn toggle_terminal_action_links(&mut self, cx: &mut Context<Self>) {
-        self.settings.summary.terminal_action_links_enabled =
-            !self.settings.summary.terminal_action_links_enabled;
+        self.settings.toggle_terminal_action_links();
         self.save_terminal_settings(cx);
     }
 
@@ -127,26 +126,8 @@ impl NyaTermApp {
         which: &'static str,
         cx: &mut Context<Self>,
     ) {
-        match which {
-            "ipv4" => {
-                self.settings.summary.terminal_action_links_matchers.ipv4 =
-                    !self.settings.summary.terminal_action_links_matchers.ipv4;
-            }
-            "archive" => {
-                self.settings.summary.terminal_action_links_matchers.archive =
-                    !self.settings.summary.terminal_action_links_matchers.archive;
-            }
-            "host_port" => {
-                self.settings
-                    .summary
-                    .terminal_action_links_matchers
-                    .host_port = !self
-                    .settings
-                    .summary
-                    .terminal_action_links_matchers
-                    .host_port;
-            }
-            _ => return,
+        if !self.settings.toggle_terminal_action_link_matcher(which) {
+            return;
         }
         self.save_terminal_settings(cx);
     }

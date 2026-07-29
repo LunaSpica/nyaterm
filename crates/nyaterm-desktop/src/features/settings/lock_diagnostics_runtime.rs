@@ -11,7 +11,7 @@ use crate::models::TransferJobStatus;
 
 impl NyaTermApp {
     pub(in crate::features) fn lock_app(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let lock_status = if self.settings.summary.has_master_password {
+        let lock_status = if self.settings.summary().has_master_password {
             self.tr("lockScreen.passwordPlaceholder").to_string()
         } else {
             String::new()
@@ -19,7 +19,7 @@ impl NyaTermApp {
         self.security.activate_screen_lock(lock_status);
         self.forget_text_inputs("lock-screen.password");
         self.shell.status = "screen locked".to_string();
-        if self.settings.summary.has_master_password {
+        if self.settings.summary().has_master_password {
             let field = self.text_input("lock-screen.password", "", TextInputSetup::masked(), cx);
             window.focus(&field.read(cx).focus_handle());
         } else {
@@ -36,7 +36,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn submit_lock_unlock(&mut self, cx: &mut Context<Self>) {
-        if !self.settings.summary.has_master_password {
+        if !self.settings.summary().has_master_password {
             self.unlock_app(cx);
             return;
         }
@@ -77,7 +77,7 @@ impl NyaTermApp {
 
         match keystroke.key.as_str() {
             "enter" => self.submit_lock_unlock(cx),
-            "escape" if !self.settings.summary.has_master_password => self.unlock_app(cx),
+            "escape" if !self.settings.summary().has_master_password => self.unlock_app(cx),
             "escape" => {
                 let status = self.tr("lockScreen.passwordPlaceholder").to_string();
                 self.security.clear_screen_lock_password_with_status(status);
@@ -179,9 +179,9 @@ impl NyaTermApp {
     pub(in crate::features) fn diagnostics_export_options(&self) -> DiagnosticsExportOptions {
         DiagnosticsExportOptions {
             app_version: env!("CARGO_PKG_VERSION").to_string(),
-            language: self.settings.summary.language.clone(),
-            log_level: self.settings.summary.diagnostics_level.clone(),
-            retention_days: self.settings.summary.diagnostics_retention_days,
+            language: self.settings.summary().language.clone(),
+            log_level: self.settings.summary().diagnostics_level.clone(),
+            retention_days: self.settings.summary().diagnostics_retention_days,
             runtime_snapshot: self.diagnostics_runtime_snapshot(),
         }
     }

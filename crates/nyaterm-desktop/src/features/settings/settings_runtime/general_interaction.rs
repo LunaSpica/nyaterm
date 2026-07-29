@@ -9,12 +9,12 @@ impl NyaTermApp {
         language: &'static str,
         cx: &mut Context<Self>,
     ) {
-        self.settings.summary.language = language.to_string();
+        self.settings.set_language(language);
         self.save_general_settings(cx);
     }
 
     pub(in crate::features) fn toggle_startup_restore(&mut self, cx: &mut Context<Self>) {
-        self.settings.summary.startup_restore = !self.settings.summary.startup_restore;
+        self.settings.toggle_startup_restore();
         self.save_general_settings(cx);
     }
 
@@ -22,11 +22,9 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        self.settings.summary.startup_restore_window_layout =
-            !self.settings.summary.startup_restore_window_layout;
+        let restore_window_layout = self.settings.toggle_startup_restore_window_layout();
         self.save_general_settings(cx);
-        if !self.settings.summary.startup_restore_window_layout && !self.shell.has_settings_draft()
-        {
+        if !restore_window_layout && !self.shell.has_settings_draft() {
             // Clear stored layouts when the user disables restore.
             let _ = ConnectionStore::open_with_portable_key_path(
                 self.runtime.config_dir(),
@@ -40,12 +38,12 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn toggle_confirm_on_close(&mut self, cx: &mut Context<Self>) {
-        self.settings.summary.confirm_on_close = !self.settings.summary.confirm_on_close;
+        self.settings.toggle_confirm_on_close();
         self.save_general_settings(cx);
     }
 
     pub(in crate::features) fn toggle_minimize_to_tray(&mut self, cx: &mut Context<Self>) {
-        self.settings.summary.minimize_to_tray = !self.settings.summary.minimize_to_tray;
+        self.settings.toggle_minimize_to_tray();
         self.save_general_settings(cx);
     }
 
@@ -54,14 +52,9 @@ impl NyaTermApp {
         level: &'static str,
         cx: &mut Context<Self>,
     ) {
-        let level = match level {
-            "warn" | "debug" => level,
-            _ => "info",
-        };
-        if self.settings.summary.diagnostics_level == level {
+        if !self.settings.set_diagnostics_level(level) {
             return;
         }
-        self.settings.summary.diagnostics_level = level.to_string();
         self.save_diagnostics_settings(cx);
     }
 
@@ -70,14 +63,9 @@ impl NyaTermApp {
         days: u32,
         cx: &mut Context<Self>,
     ) {
-        let days = match days {
-            3 | 7 | 14 | 30 => days,
-            _ => 7,
-        };
-        if self.settings.summary.diagnostics_retention_days == days {
+        if !self.settings.set_diagnostics_retention_days(days) {
             return;
         }
-        self.settings.summary.diagnostics_retention_days = days;
         self.save_diagnostics_settings(cx);
     }
 
@@ -89,7 +77,7 @@ impl NyaTermApp {
             self.runtime.config_dir(),
             self.runtime.portable_key_path().map(ToOwned::to_owned),
         )
-        .and_then(|store| store.save_diagnostics_settings(&self.settings.summary))
+        .and_then(|store| store.save_diagnostics_settings(self.settings.summary()))
         {
             Ok(settings) => {
                 self.apply_gpui_settings(settings);
@@ -115,7 +103,7 @@ impl NyaTermApp {
             self.runtime.config_dir(),
             self.runtime.portable_key_path().map(ToOwned::to_owned),
         )
-        .and_then(|store| store.save_general_settings(&self.settings.summary))
+        .and_then(|store| store.save_general_settings(self.settings.summary()))
         {
             Ok(settings) => {
                 self.apply_gpui_settings(settings);
@@ -137,8 +125,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        self.settings.summary.interaction_copy_on_select =
-            !self.settings.summary.interaction_copy_on_select;
+        self.settings.toggle_interaction_copy_on_select();
         self.save_interaction_settings(cx);
     }
 
@@ -146,24 +133,13 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        self.settings.summary.interaction_right_click_paste =
-            !self.settings.summary.interaction_right_click_paste;
+        self.settings.toggle_interaction_right_click_paste();
         self.save_interaction_settings(cx);
     }
 
     pub(in crate::features) fn toggle_command_suggestions(&mut self, cx: &mut Context<Self>) {
-        self.settings
-            .summary
-            .interaction_command_suggestions_enabled = !self
-            .settings
-            .summary
-            .interaction_command_suggestions_enabled;
-        if !self
-            .settings
-            .summary
-            .interaction_command_suggestions_enabled
-            && !self.shell.has_settings_draft()
-        {
+        let suggestions_enabled = self.settings.toggle_command_suggestions();
+        if !suggestions_enabled && !self.shell.has_settings_draft() {
             self.terminal.clear_command_tracking();
         }
         self.save_interaction_settings(cx);
@@ -174,19 +150,7 @@ impl NyaTermApp {
         delta: i32,
         cx: &mut Context<Self>,
     ) {
-        let max_chars = self
-            .settings
-            .summary
-            .interaction_command_suggestion_max_chars;
-        let next = (self
-            .settings
-            .summary
-            .interaction_command_suggestion_min_chars as i32
-            + delta)
-            .clamp(1, max_chars as i32) as u32;
-        self.settings
-            .summary
-            .interaction_command_suggestion_min_chars = next;
+        self.settings.adjust_command_suggestion_min_chars(delta);
         self.save_interaction_settings(cx);
     }
 
@@ -195,19 +159,7 @@ impl NyaTermApp {
         delta: i32,
         cx: &mut Context<Self>,
     ) {
-        let min_chars = self
-            .settings
-            .summary
-            .interaction_command_suggestion_min_chars;
-        let next = (self
-            .settings
-            .summary
-            .interaction_command_suggestion_max_chars as i32
-            + delta)
-            .clamp(min_chars as i32, 500) as u32;
-        self.settings
-            .summary
-            .interaction_command_suggestion_max_chars = next;
+        self.settings.adjust_command_suggestion_max_chars(delta);
         self.save_interaction_settings(cx);
     }
 
@@ -216,27 +168,18 @@ impl NyaTermApp {
         delta_ms: i32,
         cx: &mut Context<Self>,
     ) {
-        let next = (self
-            .settings
-            .summary
-            .interaction_duplicate_session_command_delay_ms as i32
-            + delta_ms)
-            .clamp(0, 60_000) as u32;
         self.settings
-            .summary
-            .interaction_duplicate_session_command_delay_ms = next;
+            .adjust_duplicate_session_command_delay(delta_ms);
         self.save_interaction_settings(cx);
     }
 
     pub(in crate::features) fn toggle_alt_as_meta(&mut self, cx: &mut Context<Self>) {
-        self.settings.summary.interaction_alt_as_meta =
-            !self.settings.summary.interaction_alt_as_meta;
+        self.settings.toggle_alt_as_meta();
         self.save_interaction_settings(cx);
     }
 
     pub(in crate::features) fn toggle_mac_ime_compatibility(&mut self, cx: &mut Context<Self>) {
-        self.settings.summary.interaction_mac_ime_compatibility =
-            !self.settings.summary.interaction_mac_ime_compatibility;
+        self.settings.toggle_mac_ime_compatibility();
         self.save_interaction_settings(cx);
     }
 
@@ -245,7 +188,7 @@ impl NyaTermApp {
         encoding: &'static str,
         cx: &mut Context<Self>,
     ) {
-        self.settings.summary.interaction_default_encoding = encoding.to_string();
+        self.settings.set_interaction_encoding(encoding);
         self.sync_terminal_encodings_from_settings();
         self.save_interaction_settings(cx);
     }
@@ -256,7 +199,7 @@ impl NyaTermApp {
         text: String,
         cx: &mut Context<Self>,
     ) {
-        self.settings.summary.interaction_word_separators = text;
+        self.settings.set_interaction_word_separators(text);
         cx.notify();
     }
 
@@ -268,7 +211,7 @@ impl NyaTermApp {
             self.runtime.config_dir(),
             self.runtime.portable_key_path().map(ToOwned::to_owned),
         )
-        .and_then(|store| store.save_interaction_settings(&self.settings.summary))
+        .and_then(|store| store.save_interaction_settings(self.settings.summary()))
         {
             Ok(settings) => {
                 self.apply_gpui_settings(settings);
@@ -287,7 +230,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn toggle_screen_lock_enabled(&mut self, cx: &mut Context<Self>) {
-        self.settings.summary.enable_screen_lock = !self.settings.summary.enable_screen_lock;
+        self.settings.toggle_screen_lock_enabled();
         self.security.reset_screen_lock_idle_timer();
         self.save_screen_lock_settings(cx);
     }
@@ -297,9 +240,7 @@ impl NyaTermApp {
         delta: i32,
         cx: &mut Context<Self>,
     ) {
-        let current = self.settings.summary.idle_lock_minutes as i32;
-        let next = (current + delta).clamp(0, 1440);
-        self.settings.summary.idle_lock_minutes = next as u32;
+        self.settings.adjust_idle_lock_minutes(delta);
         self.security.reset_screen_lock_idle_timer();
         self.save_screen_lock_settings(cx);
     }
@@ -312,7 +253,7 @@ impl NyaTermApp {
             self.runtime.config_dir(),
             self.runtime.portable_key_path().map(ToOwned::to_owned),
         )
-        .and_then(|store| store.save_screen_lock_settings(&self.settings.summary))
+        .and_then(|store| store.save_screen_lock_settings(self.settings.summary()))
         {
             Ok(settings) => {
                 self.apply_gpui_settings(settings);

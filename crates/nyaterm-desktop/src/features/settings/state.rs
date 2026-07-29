@@ -16,7 +16,7 @@ use super::catalog::{SettingsMasterPasswordState, StoreStatus};
 
 pub(in crate::features) struct SettingsFeatureState {
     /// Compatibility-sensitive values loaded and persisted through `nyaterm-core`.
-    pub(super) summary: AppSettingsSummary,
+    summary: AppSettingsSummary,
     pub(super) keyword_config: KeywordHighlightConfig,
     pub(super) master_password: SettingsMasterPasswordState,
     pub(super) store_status: StoreStatus,
@@ -190,6 +190,278 @@ impl SettingsFeatureState {
 
     pub(in crate::features) fn replace_summary(&mut self, summary: AppSettingsSummary) {
         self.summary = summary;
+    }
+
+    pub(in crate::features) fn set_language(&mut self, language: &str) {
+        self.summary.language = language.to_string();
+    }
+
+    pub(in crate::features) fn toggle_startup_restore(&mut self) {
+        self.summary.startup_restore = !self.summary.startup_restore;
+    }
+
+    pub(in crate::features) fn toggle_startup_restore_window_layout(&mut self) -> bool {
+        self.summary.startup_restore_window_layout = !self.summary.startup_restore_window_layout;
+        self.summary.startup_restore_window_layout
+    }
+
+    pub(in crate::features) fn toggle_confirm_on_close(&mut self) {
+        self.summary.confirm_on_close = !self.summary.confirm_on_close;
+    }
+
+    pub(in crate::features) fn toggle_minimize_to_tray(&mut self) {
+        self.summary.minimize_to_tray = !self.summary.minimize_to_tray;
+    }
+
+    pub(in crate::features) fn set_diagnostics_level(&mut self, level: &str) -> bool {
+        let level = match level {
+            "warn" | "debug" => level,
+            _ => "info",
+        };
+        if self.summary.diagnostics_level == level {
+            return false;
+        }
+        self.summary.diagnostics_level = level.to_string();
+        true
+    }
+
+    pub(in crate::features) fn set_diagnostics_retention_days(&mut self, days: u32) -> bool {
+        let days = match days {
+            3 | 7 | 14 | 30 => days,
+            _ => 7,
+        };
+        if self.summary.diagnostics_retention_days == days {
+            return false;
+        }
+        self.summary.diagnostics_retention_days = days;
+        true
+    }
+
+    pub(in crate::features) fn toggle_interaction_copy_on_select(&mut self) {
+        self.summary.interaction_copy_on_select = !self.summary.interaction_copy_on_select;
+    }
+
+    pub(in crate::features) fn toggle_interaction_right_click_paste(&mut self) {
+        self.summary.interaction_right_click_paste = !self.summary.interaction_right_click_paste;
+    }
+
+    pub(in crate::features) fn toggle_command_suggestions(&mut self) -> bool {
+        self.summary.interaction_command_suggestions_enabled =
+            !self.summary.interaction_command_suggestions_enabled;
+        self.summary.interaction_command_suggestions_enabled
+    }
+
+    pub(in crate::features) fn adjust_command_suggestion_min_chars(&mut self, delta: i32) {
+        let max_chars = self.summary.interaction_command_suggestion_max_chars;
+        self.summary.interaction_command_suggestion_min_chars =
+            (self.summary.interaction_command_suggestion_min_chars as i32 + delta)
+                .clamp(1, max_chars as i32) as u32;
+    }
+
+    pub(in crate::features) fn adjust_command_suggestion_max_chars(&mut self, delta: i32) {
+        let min_chars = self.summary.interaction_command_suggestion_min_chars;
+        self.summary.interaction_command_suggestion_max_chars =
+            (self.summary.interaction_command_suggestion_max_chars as i32 + delta)
+                .clamp(min_chars as i32, 500) as u32;
+    }
+
+    pub(in crate::features) fn adjust_duplicate_session_command_delay(&mut self, delta_ms: i32) {
+        self.summary.interaction_duplicate_session_command_delay_ms =
+            (self.summary.interaction_duplicate_session_command_delay_ms as i32 + delta_ms)
+                .clamp(0, 60_000) as u32;
+    }
+
+    pub(in crate::features) fn toggle_alt_as_meta(&mut self) {
+        self.summary.interaction_alt_as_meta = !self.summary.interaction_alt_as_meta;
+    }
+
+    pub(in crate::features) fn toggle_mac_ime_compatibility(&mut self) {
+        self.summary.interaction_mac_ime_compatibility =
+            !self.summary.interaction_mac_ime_compatibility;
+    }
+
+    pub(in crate::features) fn set_interaction_encoding(&mut self, encoding: &str) {
+        self.summary.interaction_default_encoding = encoding.to_string();
+    }
+
+    pub(in crate::features) fn set_interaction_word_separators(&mut self, text: String) {
+        self.summary.interaction_word_separators = text;
+    }
+
+    pub(in crate::features) fn toggle_screen_lock_enabled(&mut self) {
+        self.summary.enable_screen_lock = !self.summary.enable_screen_lock;
+    }
+
+    pub(in crate::features) fn adjust_idle_lock_minutes(&mut self, delta: i32) {
+        self.summary.idle_lock_minutes =
+            (self.summary.idle_lock_minutes as i32 + delta).clamp(0, 1440) as u32;
+    }
+
+    pub(in crate::features) fn set_terminal_x11_display(&mut self, text: String) {
+        self.summary.x11_display = text;
+    }
+
+    pub(in crate::features) fn toggle_terminal_hardware_acceleration(&mut self) {
+        self.summary.terminal_hardware_acceleration = !self.summary.terminal_hardware_acceleration;
+    }
+
+    pub(in crate::features) fn toggle_terminal_low_latency_mode(&mut self) -> bool {
+        self.summary.terminal_low_latency_mode = !self.summary.terminal_low_latency_mode;
+        self.summary.terminal_low_latency_mode
+    }
+
+    pub(in crate::features) fn adjust_terminal_scrollback_lines(&mut self, delta: i32) {
+        self.summary.terminal_scrollback_lines =
+            (self.summary.terminal_scrollback_lines as i32 + delta).clamp(100, 100_000) as u32;
+    }
+
+    pub(in crate::features) fn adjust_terminal_keep_alive_interval(&mut self, delta: i32) {
+        self.summary.terminal_keep_alive_interval =
+            (self.summary.terminal_keep_alive_interval as i32 + delta).clamp(0, 600) as u32;
+    }
+
+    pub(in crate::features) fn toggle_terminal_workspace_padding(&mut self) {
+        self.summary.terminal_show_workspace_padding =
+            !self.summary.terminal_show_workspace_padding;
+    }
+
+    pub(in crate::features) fn toggle_terminal_line_numbers(&mut self) {
+        self.summary.terminal_show_line_numbers = !self.summary.terminal_show_line_numbers;
+    }
+
+    pub(in crate::features) fn toggle_terminal_timestamps(&mut self) {
+        self.summary.terminal_show_timestamps = !self.summary.terminal_show_timestamps;
+    }
+
+    pub(in crate::features) fn toggle_terminal_timestamp_milliseconds(&mut self) {
+        self.summary.terminal_show_timestamp_milliseconds =
+            !self.summary.terminal_show_timestamp_milliseconds;
+    }
+
+    pub(in crate::features) fn toggle_multi_line_paste_dialog(&mut self) {
+        self.summary.terminal_show_multi_line_paste_dialog =
+            !self.summary.terminal_show_multi_line_paste_dialog;
+    }
+
+    pub(in crate::features) fn toggle_paste_image_as_path(&mut self) {
+        self.summary.terminal_paste_image_as_path = !self.summary.terminal_paste_image_as_path;
+    }
+
+    pub(in crate::features) fn toggle_remote_stats_panel(&mut self) {
+        self.summary.ui_show_remote_stats = !self.summary.ui_show_remote_stats;
+    }
+
+    pub(in crate::features) fn adjust_remote_stats_interval(&mut self, delta: i32) {
+        self.summary.ui_remote_stats_interval =
+            (self.summary.ui_remote_stats_interval as i32 + delta).clamp(1, 60) as u32;
+    }
+
+    pub(in crate::features) fn toggle_process_manager_panel(&mut self) {
+        self.summary.ui_show_process_manager = !self.summary.ui_show_process_manager;
+    }
+
+    pub(in crate::features) fn adjust_process_manager_interval(&mut self, delta: i32) {
+        self.summary.ui_process_manager_interval =
+            (self.summary.ui_process_manager_interval as i32 + delta).clamp(3, 120) as u32;
+    }
+
+    pub(in crate::features) fn toggle_docker_manager_panel(&mut self) {
+        self.summary.ui_show_docker_manager = !self.summary.ui_show_docker_manager;
+    }
+
+    pub(in crate::features) fn adjust_docker_manager_interval(&mut self, delta: i32) {
+        self.summary.ui_docker_manager_interval =
+            (self.summary.ui_docker_manager_interval as i32 + delta).clamp(3, 120) as u32;
+    }
+
+    pub(in crate::features) fn toggle_terminal_action_links(&mut self) {
+        self.summary.terminal_action_links_enabled = !self.summary.terminal_action_links_enabled;
+    }
+
+    pub(in crate::features) fn toggle_terminal_action_link_matcher(&mut self, which: &str) -> bool {
+        let matcher = &mut self.summary.terminal_action_links_matchers;
+        match which {
+            "ipv4" => matcher.ipv4 = !matcher.ipv4,
+            "archive" => matcher.archive = !matcher.archive,
+            "host_port" => matcher.host_port = !matcher.host_port,
+            _ => return false,
+        }
+        true
+    }
+
+    pub(in crate::features) fn set_host_key_policy(&mut self, policy: &str) {
+        self.summary.host_key_policy = policy.to_string();
+    }
+
+    pub(in crate::features) fn toggle_recording_auto_start(&mut self) {
+        self.summary.recording_auto_start = !self.summary.recording_auto_start;
+    }
+
+    pub(in crate::features) fn toggle_recording_io_labels(&mut self) {
+        self.summary.recording_include_io_labels = !self.summary.recording_include_io_labels;
+    }
+
+    pub(in crate::features) fn toggle_recording_timestamps(&mut self) {
+        self.summary.recording_include_timestamps = !self.summary.recording_include_timestamps;
+    }
+
+    pub(in crate::features) fn adjust_recording_memory_limit(&mut self, delta_mib: i64) {
+        let current_mib = (self.summary.recording_memory_limit_bytes / (1024 * 1024)).max(1);
+        let next_mib = if delta_mib.is_negative() {
+            current_mib.saturating_sub(delta_mib.unsigned_abs()).max(1)
+        } else {
+            current_mib.saturating_add(delta_mib as u64).min(512)
+        };
+        self.summary.recording_memory_limit_bytes = next_mib * 1024 * 1024;
+    }
+
+    pub(in crate::features) fn set_transfer_duplicate_strategy(&mut self, strategy: String) {
+        self.summary.transfer_duplicate_strategy = strategy;
+    }
+
+    pub(in crate::features) fn set_transfer_editor_type(&mut self, editor_type: &str) {
+        self.summary.transfer_editor_type = editor_type.to_string();
+    }
+
+    pub(in crate::features) fn toggle_transfer_ask_save_location(&mut self) {
+        self.summary.transfer_ask_save_location = !self.summary.transfer_ask_save_location;
+    }
+
+    pub(in crate::features) fn toggle_transfer_preserve_timestamps(&mut self) {
+        self.summary.transfer_preserve_timestamps = !self.summary.transfer_preserve_timestamps;
+    }
+
+    pub(in crate::features) fn toggle_transfer_resume_broken(&mut self) {
+        self.summary.transfer_resume_broken_transfer =
+            !self.summary.transfer_resume_broken_transfer;
+    }
+
+    pub(in crate::features) fn adjust_transfer_download_threads(&mut self, delta: i32) {
+        self.summary.transfer_download_threads =
+            adjust_u32_setting(self.summary.transfer_download_threads, delta, 1, 10);
+    }
+
+    pub(in crate::features) fn adjust_transfer_upload_threads(&mut self, delta: i32) {
+        self.summary.transfer_upload_threads =
+            adjust_u32_setting(self.summary.transfer_upload_threads, delta, 1, 10);
+    }
+
+    pub(in crate::features) fn adjust_transfer_max_retries(&mut self, delta: i32) {
+        self.summary.transfer_max_retries =
+            adjust_u32_setting(self.summary.transfer_max_retries, delta, 0, 10);
+    }
+
+    pub(in crate::features) fn adjust_transfer_buffer_size(&mut self, delta: i32) {
+        self.summary.transfer_buffer_size = adjust_u32_setting(
+            self.summary.transfer_buffer_size,
+            delta.saturating_mul(8),
+            8,
+            256,
+        );
+    }
+
+    pub(in crate::features) fn set_transfer_file_permissions(&mut self, permissions: &str) {
+        self.summary.transfer_default_file_permissions = permissions.to_string();
     }
 
     pub(in crate::features) fn keyword_config(&self) -> &KeywordHighlightConfig {
@@ -929,6 +1201,15 @@ fn adjusted_index_after_remove(value: Option<usize>, removed: usize) -> Option<u
     }
 }
 
+fn adjust_u32_setting(current: u32, delta: i32, min: u32, max: u32) -> u32 {
+    let next = if delta.is_negative() {
+        current.saturating_sub(delta.unsigned_abs())
+    } else {
+        current.saturating_add(delta as u32)
+    };
+    next.clamp(min, max)
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
@@ -962,6 +1243,108 @@ mod tests {
                 keybindings: focus(),
             },
         )
+    }
+
+    #[test]
+    fn settings_owner_normalizes_general_and_interaction_transitions() {
+        let mut state = settings_state();
+        state.summary.diagnostics_level = "info".to_string();
+        state.summary.diagnostics_retention_days = 7;
+        state.summary.interaction_command_suggestion_min_chars = 5;
+        state.summary.interaction_command_suggestion_max_chars = 10;
+        state.summary.interaction_duplicate_session_command_delay_ms = 100;
+
+        assert!(state.set_diagnostics_level("debug"));
+        assert!(!state.set_diagnostics_level("debug"));
+        assert!(state.set_diagnostics_level("trace"));
+        assert_eq!(state.summary().diagnostics_level, "info");
+        assert!(state.set_diagnostics_retention_days(30));
+        assert!(state.set_diagnostics_retention_days(99));
+        assert_eq!(state.summary().diagnostics_retention_days, 7);
+
+        state.adjust_command_suggestion_min_chars(50);
+        assert_eq!(state.summary().interaction_command_suggestion_min_chars, 10);
+        state.adjust_command_suggestion_max_chars(-50);
+        assert_eq!(state.summary().interaction_command_suggestion_max_chars, 10);
+        state.adjust_duplicate_session_command_delay(-500);
+        assert_eq!(
+            state
+                .summary()
+                .interaction_duplicate_session_command_delay_ms,
+            0
+        );
+
+        let restore_layout = state.summary().startup_restore_window_layout;
+        assert_eq!(
+            state.toggle_startup_restore_window_layout(),
+            !restore_layout
+        );
+        let suggestions_enabled = state.summary().interaction_command_suggestions_enabled;
+        assert_eq!(state.toggle_command_suggestions(), !suggestions_enabled);
+    }
+
+    #[test]
+    fn settings_owner_clamps_terminal_and_remote_transitions() {
+        let mut state = settings_state();
+        state.summary.terminal_scrollback_lines = 100;
+        state.summary.terminal_keep_alive_interval = 0;
+        state.summary.ui_remote_stats_interval = 1;
+        state.summary.ui_process_manager_interval = 3;
+        state.summary.ui_docker_manager_interval = 120;
+
+        state.adjust_terminal_scrollback_lines(-1000);
+        state.adjust_terminal_keep_alive_interval(-10);
+        state.adjust_remote_stats_interval(-5);
+        state.adjust_process_manager_interval(-5);
+        state.adjust_docker_manager_interval(5);
+
+        let summary = state.summary();
+        assert_eq!(summary.terminal_scrollback_lines, 100);
+        assert_eq!(summary.terminal_keep_alive_interval, 0);
+        assert_eq!(summary.ui_remote_stats_interval, 1);
+        assert_eq!(summary.ui_process_manager_interval, 3);
+        assert_eq!(summary.ui_docker_manager_interval, 120);
+
+        let low_latency = summary.terminal_low_latency_mode;
+        assert_eq!(state.toggle_terminal_low_latency_mode(), !low_latency);
+        assert!(state.toggle_terminal_action_link_matcher("ipv4"));
+        assert!(!state.toggle_terminal_action_link_matcher("unknown"));
+    }
+
+    #[test]
+    fn settings_owner_clamps_recording_and_transfer_transitions() {
+        let mut state = settings_state();
+        state.summary.recording_memory_limit_bytes = 1024 * 1024;
+        state.summary.transfer_download_threads = 1;
+        state.summary.transfer_upload_threads = 10;
+        state.summary.transfer_max_retries = 0;
+        state.summary.transfer_buffer_size = 8;
+
+        state.adjust_recording_memory_limit(-1);
+        assert_eq!(state.summary().recording_memory_limit_bytes, 1024 * 1024);
+        state.adjust_recording_memory_limit(1_000);
+        assert_eq!(
+            state.summary().recording_memory_limit_bytes,
+            512 * 1024 * 1024
+        );
+
+        state.adjust_transfer_download_threads(-1);
+        state.adjust_transfer_upload_threads(1);
+        state.adjust_transfer_max_retries(-1);
+        state.adjust_transfer_buffer_size(-1);
+        let summary = state.summary();
+        assert_eq!(summary.transfer_download_threads, 1);
+        assert_eq!(summary.transfer_upload_threads, 10);
+        assert_eq!(summary.transfer_max_retries, 0);
+        assert_eq!(summary.transfer_buffer_size, 8);
+
+        state.set_transfer_duplicate_strategy("rename".to_string());
+        state.set_transfer_editor_type("internal");
+        state.set_transfer_file_permissions("640");
+        let summary = state.summary();
+        assert_eq!(summary.transfer_duplicate_strategy, "rename");
+        assert_eq!(summary.transfer_editor_type, "internal");
+        assert_eq!(summary.transfer_default_file_permissions, "640");
     }
 
     #[test]

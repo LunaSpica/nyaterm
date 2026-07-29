@@ -4,15 +4,13 @@ use nyaterm_transport::SftpDuplicatePolicy;
 
 use crate::features::{NyaTermApp, duplicate_policy_label};
 
-use super::helpers::adjust_u32_setting;
-
 impl NyaTermApp {
     pub(in crate::features) fn update_host_key_policy(
         &mut self,
         policy: &'static str,
         cx: &mut Context<Self>,
     ) {
-        self.settings.summary.host_key_policy = policy.to_string();
+        self.settings.set_host_key_policy(policy);
         if self.defer_settings_persistence(cx) {
             self.shell.status = format!("host key policy staged as {policy}");
             return;
@@ -39,19 +37,17 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn toggle_recording_auto_start(&mut self, cx: &mut Context<Self>) {
-        self.settings.summary.recording_auto_start = !self.settings.summary.recording_auto_start;
+        self.settings.toggle_recording_auto_start();
         self.save_recording_settings(cx);
     }
 
     pub(in crate::features) fn toggle_recording_io_labels(&mut self, cx: &mut Context<Self>) {
-        self.settings.summary.recording_include_io_labels =
-            !self.settings.summary.recording_include_io_labels;
+        self.settings.toggle_recording_io_labels();
         self.save_recording_settings(cx);
     }
 
     pub(in crate::features) fn toggle_recording_timestamps(&mut self, cx: &mut Context<Self>) {
-        self.settings.summary.recording_include_timestamps =
-            !self.settings.summary.recording_include_timestamps;
+        self.settings.toggle_recording_timestamps();
         self.save_recording_settings(cx);
     }
 
@@ -60,20 +56,13 @@ impl NyaTermApp {
         delta_mib: i64,
         cx: &mut Context<Self>,
     ) {
-        let current_mib =
-            (self.settings.summary.recording_memory_limit_bytes / (1024 * 1024)).max(1);
-        let next_mib = if delta_mib.is_negative() {
-            current_mib.saturating_sub(delta_mib.unsigned_abs()).max(1)
-        } else {
-            current_mib.saturating_add(delta_mib as u64).min(512)
-        };
-        self.settings.summary.recording_memory_limit_bytes = next_mib * 1024 * 1024;
+        self.settings.adjust_recording_memory_limit(delta_mib);
         self.save_recording_settings(cx);
     }
 
     pub(in crate::features) fn save_recording_settings(&mut self, cx: &mut Context<Self>) {
         self.recording
-            .set_memory_limit(self.settings.summary.recording_memory_limit_bytes as usize);
+            .set_memory_limit(self.settings.summary().recording_memory_limit_bytes as usize);
         if self.defer_settings_persistence(cx) {
             return;
         }
@@ -81,12 +70,13 @@ impl NyaTermApp {
             self.runtime.config_dir(),
             self.runtime.portable_key_path().map(ToOwned::to_owned),
         )
-        .and_then(|store| store.save_recording_settings(&self.settings.summary))
+        .and_then(|store| store.save_recording_settings(self.settings.summary()))
         {
             Ok(settings) => {
                 self.apply_gpui_settings(settings);
-                self.recording
-                    .set_memory_limit(self.settings.summary.recording_memory_limit_bytes as usize);
+                self.recording.set_memory_limit(
+                    self.settings.summary().recording_memory_limit_bytes as usize,
+                );
                 self.settings.store_status.message = "recording settings saved".to_string();
                 self.settings.store_status.ready = true;
                 self.shell.status = "recording settings saved".to_string();
@@ -107,8 +97,8 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.transfer.set_duplicate_policy(policy);
-        self.settings.summary.transfer_duplicate_strategy =
-            duplicate_policy_label(policy).to_string();
+        self.settings
+            .set_transfer_duplicate_strategy(duplicate_policy_label(policy).to_string());
         self.save_transfer_settings("transfer duplicate policy saved", cx);
     }
 
@@ -117,7 +107,7 @@ impl NyaTermApp {
         editor_type: &'static str,
         cx: &mut Context<Self>,
     ) {
-        self.settings.summary.transfer_editor_type = editor_type.to_string();
+        self.settings.set_transfer_editor_type(editor_type);
         self.save_transfer_settings("transfer editor preference saved", cx);
     }
 
@@ -125,8 +115,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        self.settings.summary.transfer_ask_save_location =
-            !self.settings.summary.transfer_ask_save_location;
+        self.settings.toggle_transfer_ask_save_location();
         self.save_transfer_settings("transfer save-location preference saved", cx);
     }
 
@@ -134,14 +123,12 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        self.settings.summary.transfer_preserve_timestamps =
-            !self.settings.summary.transfer_preserve_timestamps;
+        self.settings.toggle_transfer_preserve_timestamps();
         self.save_transfer_settings("transfer timestamp preference saved", cx);
     }
 
     pub(in crate::features) fn toggle_transfer_resume_broken(&mut self, cx: &mut Context<Self>) {
-        self.settings.summary.transfer_resume_broken_transfer =
-            !self.settings.summary.transfer_resume_broken_transfer;
+        self.settings.toggle_transfer_resume_broken();
         self.save_transfer_settings("transfer resume preference saved", cx);
     }
 
@@ -150,12 +137,7 @@ impl NyaTermApp {
         delta: i32,
         cx: &mut Context<Self>,
     ) {
-        self.settings.summary.transfer_download_threads = adjust_u32_setting(
-            self.settings.summary.transfer_download_threads,
-            delta,
-            1,
-            10,
-        );
+        self.settings.adjust_transfer_download_threads(delta);
         self.save_transfer_settings("transfer download concurrency saved", cx);
     }
 
@@ -164,8 +146,7 @@ impl NyaTermApp {
         delta: i32,
         cx: &mut Context<Self>,
     ) {
-        self.settings.summary.transfer_upload_threads =
-            adjust_u32_setting(self.settings.summary.transfer_upload_threads, delta, 1, 10);
+        self.settings.adjust_transfer_upload_threads(delta);
         self.save_transfer_settings("transfer upload concurrency saved", cx);
     }
 
@@ -174,8 +155,7 @@ impl NyaTermApp {
         delta: i32,
         cx: &mut Context<Self>,
     ) {
-        self.settings.summary.transfer_max_retries =
-            adjust_u32_setting(self.settings.summary.transfer_max_retries, delta, 0, 10);
+        self.settings.adjust_transfer_max_retries(delta);
         self.save_transfer_settings("transfer retry setting saved", cx);
     }
 
@@ -184,13 +164,7 @@ impl NyaTermApp {
         delta: i32,
         cx: &mut Context<Self>,
     ) {
-        let step_delta = delta.saturating_mul(8);
-        self.settings.summary.transfer_buffer_size = adjust_u32_setting(
-            self.settings.summary.transfer_buffer_size,
-            step_delta,
-            8,
-            256,
-        );
+        self.settings.adjust_transfer_buffer_size(delta);
         self.save_transfer_settings("transfer buffer setting saved", cx);
     }
 
@@ -199,7 +173,7 @@ impl NyaTermApp {
         permissions: &'static str,
         cx: &mut Context<Self>,
     ) {
-        self.settings.summary.transfer_default_file_permissions = permissions.to_string();
+        self.settings.set_transfer_file_permissions(permissions);
         self.save_transfer_settings("transfer default permissions saved", cx);
     }
 
@@ -215,13 +189,13 @@ impl NyaTermApp {
             self.runtime.config_dir(),
             self.runtime.portable_key_path().map(ToOwned::to_owned),
         )
-        .and_then(|store| store.save_transfer_settings(&self.settings.summary))
+        .and_then(|store| store.save_transfer_settings(self.settings.summary()))
         {
             Ok(settings) => {
                 self.apply_gpui_settings(settings);
                 self.transfer
                     .set_duplicate_policy(SftpDuplicatePolicy::from_legacy_value(
-                        &self.settings.summary.transfer_duplicate_strategy,
+                        &self.settings.summary().transfer_duplicate_strategy,
                     ));
                 self.settings.store_status.message = "transfer settings saved".to_string();
                 self.settings.store_status.ready = true;
@@ -243,7 +217,7 @@ impl NyaTermApp {
         text: String,
         cx: &mut Context<Self>,
     ) {
-        self.settings.summary.transfer_default_editor = text;
+        self.settings.set_transfer_default_editor(text);
         self.shell.status = "transfer editor command edited".to_string();
         cx.notify();
     }
@@ -254,7 +228,7 @@ impl NyaTermApp {
         text: String,
         cx: &mut Context<Self>,
     ) {
-        self.settings.summary.transfer_download_path = text;
+        self.settings.set_transfer_download_path(text);
         cx.notify();
     }
 
@@ -264,7 +238,7 @@ impl NyaTermApp {
         text: String,
         cx: &mut Context<Self>,
     ) {
-        self.settings.summary.recording_path = text;
+        self.settings.set_recording_path(text);
         cx.notify();
     }
 }

@@ -260,7 +260,13 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   immutable access, appearance/keyword/browser preferences enter through
   semantic transitions, and the shell persists its complete UI layout through
   one typed owner update instead of piecemeal field writes. Filesystem prompts,
-  persistence and GPUI notification stay in their existing adapters.
+  persistence and GPUI notification stay in their existing adapters. A later
+  summary-ownership batch made `AppSettingsSummary` private to
+  `SettingsFeatureState` itself and moved roughly fifty general, diagnostics,
+  interaction, terminal, remote-panel, recording, transfer and action-link
+  edits onto semantic owner methods. Runtime adapters now borrow the summary
+  read-only and retain only persistence, cross-feature synchronization, status
+  and GPUI notification responsibilities.
 - Translation and native-update background state now have authoritative
   `TranslationFeatureState` and `UpdateFeatureState` owners. Eighteen app fields
   became two feature fields; each owner constructs and retains its own job
@@ -1543,7 +1549,7 @@ Current ownership map:
 | Command history and persistence worker | Private state in `NyaTermApp.commands` | Persisted catalog plus background runtime | History snapshots, queue admission, event polling and idle checks enter through `CommandFeatureState`; failed optimistic use-count updates roll back on the owner. |
 | Send-command composer/options/progress | Private children in `NyaTermApp.send_command` | Transient editor and send lifecycle | Views receive immutable presentation data; control edits, mutually-exclusive menus, data/mode defaults, progress counters and cancellation enter through `SendCommandFeatureState`. Session selection, terminal writes, GPUI/text-input routing and status remain in adapters. |
 | Settings interaction and prompts | Private children in `NyaTermApp.settings` | Transient settings UI and prompt lifecycle | Search-engine rows, keyword-highlight editing, appearance menus, keybinding recording/search and config/diagnostics/import/password prompt admission enter through `SettingsFeatureState`; views use immutable presentation values and read-only focus/font access. Persistence, native filesystem prompts, text inputs and GPUI notification remain in adapters. |
-| Application settings and keyword catalogs | Settings-module-private children in `NyaTermApp.settings` | Compatibility-sensitive persisted configuration plus staged master-password input | Cross-domain consumers borrow immutable summaries/configs and use semantic owner transitions. Shell UI layout is replaced through one typed update; master-password presentation is a non-`Debug` borrowed view. Serialization, encryption and persistence remain in `nyaterm-core` and existing adapters. |
+| Application settings and keyword catalogs | State-private summary plus settings-module-private children in `NyaTermApp.settings` | Compatibility-sensitive persisted configuration plus staged master-password input | `AppSettingsSummary` mutations enter only through `SettingsFeatureState`; consumers borrow it immutably. Keyword configuration and staged master-password state remain settings-module-private. Serialization, encryption and persistence remain in `nyaterm-core` and existing adapters. |
 | Global storage status | Settings-module-private child in `NyaTermApp.settings` | Runtime persistence health/presentation state | Cross-domain persistence adapters update message/readiness through `SettingsFeatureState`; rendering receives a borrowed immutable view, while store reopen replaces path/message/readiness together. Database work and compatibility handling remain in existing adapters and `nyaterm-core`. |
 | AI settings/chat/history/discovery/agent/panel | AI-module-private children in `NyaTermApp.ai` | Persisted settings plus transient UI and background lifecycle | Desktop consumers use read-only slices/queries and semantic transitions; settings draft groups, menu exclusion, confirmations, request/focus preparation, detected-error throttling, picker clamping and Agent capture/reset enter through `AiFeatureState`. Persistence, terminal-context collection, GPUI focus/rendering and notification remain in adapters. |
 | Shell viewport/navigation/panels/chrome/workspace/runtime | Private children in `NyaTermApp.shell` | Transient GPUI composition, interaction, status and event-pump scheduling state | Other desktop modules use semantic shell operations for the application-wide status line and GPUI event-pump/repaint/persistence scheduling. Menu exclusion, settings-window lifecycle, mobile panels, failure chrome, submenu paths, pane ownership, persistence dirty snapshots and coalesced terminal repaint admission remain `ShellFeatureState` operations. Persistence execution, rendering, GPUI windows/notification and terminal coordination remain in adapters. |
@@ -1817,7 +1823,11 @@ honest remaining list.
    and staged master-password state are now settings-module-private, all
    cross-domain reads are immutable, keyword/appearance/browser mutations use
    owner transitions, and UI layout persistence applies one typed atomic
-   update. No mutable-reference accessor was introduced.
+   update. No mutable-reference accessor was introduced. The later settings-
+   summary ownership batch then made the summary state-private as well and
+   moved roughly fifty general, interaction, terminal, remote-panel, recording,
+   transfer and action-link transitions off `NyaTermApp`; persistence execution,
+   cross-feature synchronization and GPUI notification remain in adapters.
    The next terminal interaction batch made seven presentation children
    terminal-module-private: search, input, paste review, selection, layout,
    menus and paint caches. External views and coordinators now use immutable

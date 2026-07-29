@@ -559,7 +559,7 @@ impl NyaTermApp {
                         let translation_settings = store
                             .load_translation_settings()
                             .unwrap_or_else(|_| TranslationSettings {
-                                target_language: self.settings.summary.language.clone(),
+                                target_language: self.settings.summary().language.clone(),
                                 ..TranslationSettings::default()
                             });
                         self.translation.replace_settings(
@@ -567,7 +567,7 @@ impl NyaTermApp {
                             TranslationSecretDraft::default(),
                         );
                         self.recording.set_memory_limit(
-                            self.settings.summary.recording_memory_limit_bytes as usize,
+                            self.settings.summary().recording_memory_limit_bytes as usize,
                         );
                         let cloud_sync_settings = store
                             .load_cloud_sync_settings()
@@ -585,7 +585,7 @@ impl NyaTermApp {
                             .replace_loaded(cloud_sync_settings, cloud_sync_state);
                         self.transfer
                             .set_duplicate_policy(SftpDuplicatePolicy::from_legacy_value(
-                                &self.settings.summary.transfer_duplicate_strategy,
+                                &self.settings.summary().transfer_duplicate_strategy,
                             ));
                         self.settings.replace_store_status(
                             path,
