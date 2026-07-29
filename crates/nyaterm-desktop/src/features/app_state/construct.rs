@@ -17,18 +17,19 @@ use std::sync::Arc;
 use super::super::settings::{SettingsFeatureFocus, SettingsFeatureState};
 use super::super::{
     AiFeatureFocus, AiFeatureState, CloudSyncFeatureState, CommandFeatureInit, CommandFeatureState,
-    ConnectionFeatureFocus, ConnectionFeatureState, INITIAL_TERMINAL_BANNER, NativeOtpProvider,
-    QuickCommandFeatureFocus, RecordingFeatureState, RemoteOpsFeatureFocus, RemoteOpsFeatureState,
-    SecurityCatalogState, SecurityFeatureFocus, SecurityFeatureState, SendCommandFeatureFocus,
-    SendCommandFeatureState, SessionFeatureFocus, SessionFeatureState, ShellFeatureInit,
-    ShellFeatureState, SyncInputFeatureState, TerminalFeatureFocus, TerminalFeatureState,
-    TextInputRegistry, TransferFeatureFocus, TransferFeatureState, TranslationFeatureState,
-    TunnelCatalogState, TunnelFeatureState, UpdateFeatureState, ai_active_profile_drafts,
-    ai_usage_counts, appearance_font_options, quick_command_sort_mode_from_setting,
+    ConnectionFeatureFocus, ConnectionFeatureState, NativeOtpProvider, QuickCommandFeatureFocus,
+    RecordingFeatureState, RemoteOpsFeatureFocus, RemoteOpsFeatureState, SecurityCatalogState,
+    SecurityFeatureFocus, SecurityFeatureState, SendCommandFeatureFocus, SendCommandFeatureState,
+    SessionFeatureFocus, SessionFeatureState, ShellFeatureInit, ShellFeatureState,
+    SyncInputFeatureState, TerminalFeatureFocus, TerminalFeatureState, TextInputRegistry,
+    TransferFeatureFocus, TransferFeatureState, TranslationFeatureState, TunnelCatalogState,
+    TunnelFeatureState, UpdateFeatureState, ai_active_profile_drafts, ai_usage_counts,
+    appearance_font_options, quick_command_sort_mode_from_setting,
     quick_command_view_mode_from_setting,
 };
 use super::NyaTermApp;
 use crate::models::panel_collapsed_from_persistence;
+use crate::terminal::INITIAL_TERMINAL_BANNER;
 impl NyaTermApp {
     pub fn new(
         runtime: AppRuntime,

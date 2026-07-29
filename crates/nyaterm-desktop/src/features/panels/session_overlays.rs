@@ -4,9 +4,11 @@ use gpui::{
 use nyaterm_core::truncate_preview;
 
 use crate::features::view_widgets::dialog_action_button;
-use crate::features::{NyaTermApp, TAB_PRESET_COLORS, TextInputSetup};
+use crate::features::{NyaTermApp, TextInputSetup};
 use crate::models::StartupCommandAction;
 use crate::widgets::{session_info_row, small_button};
+
+use super::TAB_PRESET_COLORS;
 
 impl NyaTermApp {
     pub(in crate::features) fn rename_session_overlay(

@@ -9,7 +9,6 @@ use nyaterm_core::{
 use nyaterm_transport::{SessionKind, SshProcessService, run_local_command};
 
 use crate::features::{
-    AI_AGENT_DEFAULT_STEP_TIMEOUT, AI_AGENT_OBSERVATION_MIN_WAIT, AI_AGENT_OBSERVATION_QUIET,
     AiAgentBackgroundTarget, AiAgentLoopState, AiAgentStepStatus, AiChatJobResult,
     AiChatWorkerEvent, NyaTermApp,
 };
@@ -19,6 +18,7 @@ use super::ai_jobs::{
     ai_job_cancelled, observation_summary, remote_command_observation, run_ai_ask_job,
 };
 use super::state::AiAgentObservationPoll;
+use super::{AGENT_DEFAULT_STEP_TIMEOUT, AGENT_OBSERVATION_MIN_WAIT, AGENT_OBSERVATION_QUIET};
 
 impl NyaTermApp {
     pub(in crate::features) fn upsert_ai_agent_step(
@@ -119,7 +119,7 @@ impl NyaTermApp {
             .settings_config()
             .agent_step_timeout_ms
             .map(Duration::from_millis)
-            .unwrap_or(AI_AGENT_DEFAULT_STEP_TIMEOUT);
+            .unwrap_or(AGENT_DEFAULT_STEP_TIMEOUT);
         let profile = self.active_ai_execution_profile();
         if profile == AiExecutionProfile::Disabled {
             return Err("AI Agent command execution is disabled for this session".to_string());
@@ -147,7 +147,7 @@ impl NyaTermApp {
             max_steps,
             output_start_len,
             started_at: now,
-            min_wait_until: now + AI_AGENT_OBSERVATION_MIN_WAIT,
+            min_wait_until: now + AGENT_OBSERVATION_MIN_WAIT,
             timeout_at: now + timeout,
             last_seen_len: output_start_len,
             stable_since: now,
@@ -219,7 +219,7 @@ impl NyaTermApp {
             .settings_config()
             .agent_step_timeout_ms
             .map(Duration::from_millis)
-            .unwrap_or(AI_AGENT_DEFAULT_STEP_TIMEOUT);
+            .unwrap_or(AGENT_DEFAULT_STEP_TIMEOUT);
         let launch = self.ai.begin_chat_job();
         let job_id = launch.job_id;
         let cancel = launch.cancel;
@@ -306,7 +306,7 @@ impl NyaTermApp {
             .session_output_len_or_default(&terminal_session_id);
         match self
             .ai
-            .poll_agent_observation(now, current_len, AI_AGENT_OBSERVATION_QUIET)
+            .poll_agent_observation(now, current_len, AGENT_OBSERVATION_QUIET)
         {
             AiAgentObservationPoll::Waiting => false,
             AiAgentObservationPoll::TimedOut(state) => {

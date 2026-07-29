@@ -4,8 +4,12 @@ use gpui::{Context, FocusHandle, Window};
 use nyaterm_core::uuid;
 use nyaterm_transport::SessionInfo;
 
-use super::{NyaTermApp, SYNC_GROUP_COLORS};
+use super::NyaTermApp;
 use crate::models::SyncInputGroup;
+
+const GROUP_COLORS: [u32; 8] = [
+    0x3b82f6, 0xef4444, 0x22c55e, 0xf59e0b, 0x8b5cf6, 0xec4899, 0x06b6d4, 0xf97316,
+];
 
 pub(in crate::features) struct SyncInputFeatureState {
     groups: Vec<SyncInputGroup>,
@@ -376,11 +380,11 @@ impl SyncInputFeatureState {
     }
 
     fn next_group_color(&self) -> u32 {
-        SYNC_GROUP_COLORS
+        GROUP_COLORS
             .iter()
             .copied()
             .find(|color| self.groups.iter().all(|group| group.color != *color))
-            .unwrap_or(SYNC_GROUP_COLORS[self.groups.len() % SYNC_GROUP_COLORS.len()])
+            .unwrap_or(GROUP_COLORS[self.groups.len() % GROUP_COLORS.len()])
     }
 }
 

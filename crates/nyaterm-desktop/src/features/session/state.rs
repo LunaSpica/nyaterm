@@ -9,7 +9,6 @@ use nyaterm_transport::{
 };
 
 use crate::features::runtime_jobs::SessionStartResult;
-use crate::features::{DEFAULT_DUPLICATE_STARTUP_DELAY_MS, SESSION_COMMAND_HISTORY_LIMIT};
 use crate::models::{
     ActiveSessionMenuState, SessionEventBridge, SessionEventBridgeDrain, SessionEventBridgeStats,
     SessionLaunchConfig, SessionRuntimeMetadata, StartupCommandAction, StartupCommandRequest,
@@ -24,6 +23,9 @@ use super::auth_runtime::{
 };
 use super::trzsz_runtime::TrzszSessionState;
 use super::zmodem_runtime::ZmodemSessionState;
+
+const COMMAND_HISTORY_LIMIT: usize = 128;
+const DEFAULT_DUPLICATE_STARTUP_DELAY_MS: u64 = 500;
 
 pub(in crate::features) struct SessionFeatureState {
     manager: Arc<SessionManager>,
@@ -587,7 +589,7 @@ impl SessionFeatureState {
             .entry(session_id.to_string())
             .or_default();
         history.insert(0, command.to_string());
-        history.truncate(SESSION_COMMAND_HISTORY_LIMIT);
+        history.truncate(COMMAND_HISTORY_LIMIT);
     }
 
     pub(in crate::features) fn migrate_command_history(&mut self, old_id: &str, new_id: &str) {

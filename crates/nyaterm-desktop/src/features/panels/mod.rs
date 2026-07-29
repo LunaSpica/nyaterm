@@ -23,6 +23,20 @@ mod temporary_ssh_link_overlay;
 mod terminal_actions_overlay;
 mod update_overlay;
 
+const TAB_PRESET_COLORS: [(&str, u32); 11] = [
+    ("Red", 0xef4444),
+    ("Orange", 0xf97316),
+    ("Amber", 0xf59e0b),
+    ("Yellow", 0xeab308),
+    ("Green", 0x22c55e),
+    ("Emerald", 0x10b981),
+    ("Cyan", 0x06b6d4),
+    ("Blue", 0x3b82f6),
+    ("Indigo", 0x6366f1),
+    ("Purple", 0xa855f7),
+    ("Pink", 0xec4899),
+];
+
 pub(in crate::features::panels) use helpers::{
     QuickCommandCategoryOption, filtered_quick_commands, quick_command_category_options,
     quick_command_color, quick_command_editor_field, quick_command_editor_script_field,

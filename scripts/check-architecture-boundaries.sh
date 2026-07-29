@@ -110,7 +110,51 @@ check_no_matches_in_rust_fn() {
   rm -f "$tmp"
 }
 
+check_exact_struct_fields() {
+  local label="$1"
+  local struct_name="$2"
+  local file="$3"
+  shift 3
+  local actual
+  local expected
+  actual="$(mktemp)"
+  expected="$(mktemp)"
+
+  awk -v struct_name="$struct_name" '
+    $0 ~ "struct[[:space:]]+" struct_name "[[:space:]]*\\{" {
+      in_struct = 1
+      next
+    }
+    in_struct && /^[[:space:]]*}/ {
+      exit
+    }
+    in_struct {
+      print
+    }
+  ' "$file" \
+    | sed -nE 's/^[[:space:]]*(pub(\([^)]*\))?[[:space:]]+)?([[:alnum:]_]+)[[:space:]]*:.*/\3/p' \
+    | sort >"$actual"
+  printf '%s\n' "$@" | sort >"$expected"
+
+  if ! cmp -s "$expected" "$actual"; then
+    fail "$label"
+    diff -u "$expected" "$actual" | sed 's/^/  /' >&2 || true
+  fi
+  rm -f "$actual" "$expected"
+}
+
 require_rg || exit 1
+
+check_exact_struct_fields \
+  "NyaTermApp must remain a composition root with the approved owner set" \
+  NyaTermApp \
+  crates/nyaterm-desktop/src/features/app_state/mod.rs \
+  stores runtime connection_state text_inputs commands remote_ops security settings ai terminal \
+  send_command transfer translation update cloud_sync session shell sync_input recording tunnel_state
+check_no_matches \
+  "features/mod.rs must not become a shared domain-constant bucket" \
+  '^[[:space:]]*(pub([[:space:]]|\([^)]*\))[[:space:]]+)?const[[:space:]]' \
+  crates/nyaterm-desktop/src/features/mod.rs
 
 for retired_root_adapter in \
   connection_editor_window.rs \

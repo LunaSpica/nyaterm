@@ -5,10 +5,12 @@ use gpui::{
 use nyaterm_transport::SessionInfo;
 
 use super::{clamp_tab_actions_position, tab_actions_submenu_position};
+use crate::features::NyaTermApp;
 use crate::features::view_widgets::{tab_menu_item, tab_menu_item_enabled, tab_menu_separator};
-use crate::features::{NyaTermApp, TAB_PRESET_COLORS};
 use crate::models::{StartupCommandAction, TabActionsSubmenu, WorkspaceSplitDirection};
 use crate::theme::ThemePalette;
+
+use super::super::TAB_PRESET_COLORS;
 
 impl NyaTermApp {
     pub(in crate::features) fn compact_tab_actions_menu(

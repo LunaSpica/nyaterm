@@ -10,7 +10,7 @@ Last updated from the working tree on 2026-07-29.
 | Metric | Current value | Notes |
 | --- | ---: | --- |
 | `NyaTermApp` fields | 20 | Counted from `features/app_state/mod.rs`; down from 585. The remaining fields are composition services and focused feature owners. |
-| `impl NyaTermApp` blocks | 237 | Spread across 232 files under `crates/nyaterm-desktop/src`. |
+| `impl NyaTermApp` blocks | 237 | Spread across 232 files. The current audit classifies them as view/render, GPUI, persistence, service or cross-feature adapters; this is no longer a reduction target by itself. |
 | `#[path = "..."]` declarations in desktop | 0 | Cleared. Every directory is a real module; the boundary script fails on any new occurrence. |
 | `use super::*` imports in desktop | 0 | Cleared in production and test modules; guarded crate-wide. |
 | `features/prelude.rs` rough exported-token count | 0 | The transitional shared prelude is removed and guarded against reintroduction. |
@@ -1590,10 +1590,21 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   assets marked `keep` in the icon manifest, while fetched icon sets retain
   their pinned upstream mappings. The architecture script rejects any return
   of the retired dashboard, inventory crate or local source checkout.
+- The current method-ownership convergence pass is complete. A feature-by-
+  feature audit of all 237 remaining `impl NyaTermApp` blocks found render/view
+  construction, GPUI focus/window/notification work, persistence and service
+  execution, or cross-feature coordination rather than another cohesive set of
+  owner-local transitions. The former feature-root constant bucket was also
+  removed: terminal banner, AI agent timing, session policy, sync-group palette
+  and tab presentation constants now live with their consumers. The architecture
+  script enforces the exact twenty-field composition-root owner set and rejects
+  new domain constants in `features/mod.rs`.
 
-## Migrating
+## Current Ownership
 
-Feature-owner encapsulation is the active architecture convergence target.
+Feature-owner encapsulation is the established architecture boundary. New work
+must preserve it; future ownership migrations should be driven by a concrete
+cohesive cluster rather than an `impl NyaTermApp` count.
 
 Current ownership map:
 
@@ -1678,9 +1689,10 @@ use the existing behavior.
 
 - `features/prelude.rs`, desktop `#[path = "..."]`, and desktop `use super::*`
   debt are cleared and guarded against reintroduction.
-- `NyaTermApp` remains the dominant state owner. New state should move into a
-  focused FeatureState or a deliberately authoritative Entity, not into new
-  unrelated top-level fields.
+- `NyaTermApp` is the composition root for two application services and eighteen
+  focused feature owners. The architecture script checks that exact twenty-field
+  set. New state should move into a focused FeatureState or a deliberately
+  authoritative Entity, not into a new unrelated top-level field.
 - The connections state, runtime, list interaction and child-window adapters
   now live under the normal `features/connections` tree and are governed.
   Connection views intentionally remain in the shared `pages` presentation
@@ -1780,8 +1792,8 @@ while `features/mod.rs` still flattened every feature directory through
 still sit in the same crate-wide namespace, reachable from everywhere. Build the
 real module tree first, then the remaining steps actually enforce something.
 
-Items 1, 2, 4, 5, 6 and 7 are done. Item 3 remains active; what follows is the
-honest remaining list.
+Items 1 through 7 are done for the current convergence boundary. Item 8 remains
+a deliberately deferred architectural decision.
 
 1. Done. `#[path = "..."]` no longer appears in `nyaterm-desktop` or
    `nyaterm-terminal-gpui`, and a crate-wide guard keeps it that way.
@@ -1790,7 +1802,8 @@ honest remaining list.
    compiler-confirmed final pass also removed `features/prelude.rs`, so modules
    cannot regain the same implicit dependency surface through a shared import
    bucket.
-3. Largely done. `NyaTermApp` is down from 585 fields to 20, across eighteen
+3. Done for the current convergence boundary. `NyaTermApp` is down from 585
+   fields to 20, across eighteen
    feature-state structs. The latest cohesive cuts moved sixteen terminal
    command-assistance and credential-prompt fields into
    `TerminalFeatureState::assist`, then seventeen transient settings fields
@@ -2027,7 +2040,12 @@ honest remaining list.
    read one state — moving element construction onto a data struct trades one
    coupling for a worse one. And a method that reads a state plus `self.tr(...)`
    or a service is not a candidate; only move what is genuinely self-contained.
-   The remaining `impl NyaTermApp` blocks are mostly this second kind.
+   The final feature-by-feature audit confirmed that the remaining 237
+   `impl NyaTermApp` blocks are this second kind: view/render, GPUI, persistence,
+   service or cross-feature adapters. Their count is recorded as an inventory,
+   not treated as debt to reduce mechanically. The exact composition-root field
+   set and the absence of a root domain-constant bucket are now architecture
+   checks.
 4. Done. No store is a projection any more; the three that remain own real
    state. If a future domain wants Entity ownership, migrate it authoritatively
    rather than reintroducing a published read model.

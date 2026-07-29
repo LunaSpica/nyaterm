@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 mod ai;
 mod app_state;
 mod commands;
@@ -107,26 +105,3 @@ pub(in crate::features) use view_widgets::{
     modal_dialog_footer_localized_danger, modal_dialog_shell, mono_icon, panel_header_with_actions,
     stats_progress_bar, themed_icon, transfer_entry_icon, window_control_button,
 };
-
-pub(crate) const INITIAL_TERMINAL_BANNER: &str = "$ nyaterm --native\nGPUI shell initialized.\nStart a local terminal or open a saved connection.\n";
-const AI_AGENT_OBSERVATION_MIN_WAIT: Duration = Duration::from_millis(700);
-const AI_AGENT_OBSERVATION_QUIET: Duration = Duration::from_millis(900);
-const AI_AGENT_DEFAULT_STEP_TIMEOUT: Duration = Duration::from_millis(30_000);
-const SESSION_COMMAND_HISTORY_LIMIT: usize = 128;
-const DEFAULT_DUPLICATE_STARTUP_DELAY_MS: u64 = 500;
-const SYNC_GROUP_COLORS: [u32; 8] = [
-    0x3b82f6, 0xef4444, 0x22c55e, 0xf59e0b, 0x8b5cf6, 0xec4899, 0x06b6d4, 0xf97316,
-];
-const TAB_PRESET_COLORS: [(&str, u32); 11] = [
-    ("Red", 0xef4444),
-    ("Orange", 0xf97316),
-    ("Amber", 0xf59e0b),
-    ("Yellow", 0xeab308),
-    ("Green", 0x22c55e),
-    ("Emerald", 0x10b981),
-    ("Cyan", 0x06b6d4),
-    ("Blue", 0x3b82f6),
-    ("Indigo", 0x6366f1),
-    ("Purple", 0xa855f7),
-    ("Pink", 0xec4899),
-];

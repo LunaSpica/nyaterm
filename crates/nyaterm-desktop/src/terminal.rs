@@ -9,6 +9,8 @@ pub(crate) use nyaterm_terminal_gpui::{
     terminal_text_cells,
 };
 
+pub(crate) const INITIAL_TERMINAL_BANNER: &str = "$ nyaterm --native\nGPUI shell initialized.\nStart a local terminal or open a saved connection.\n";
+
 pub(crate) fn initial_terminal_screen() -> nyaterm_terminal::TerminalScreen {
-    nyaterm_terminal_gpui::initial_terminal_screen(crate::features::INITIAL_TERMINAL_BANNER)
+    nyaterm_terminal_gpui::initial_terminal_screen(INITIAL_TERMINAL_BANNER)
 }

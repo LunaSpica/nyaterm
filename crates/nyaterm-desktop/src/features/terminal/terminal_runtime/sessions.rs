@@ -3,9 +3,10 @@ use std::time::Duration;
 
 use gpui::{Context, Timer, Window};
 
+use crate::features::NyaTermApp;
 use crate::features::formatting::{normalize_startup_command, short_id};
-use crate::features::{INITIAL_TERMINAL_BANNER, NyaTermApp};
 use crate::models::StartupCommandRequest;
+use crate::terminal::INITIAL_TERMINAL_BANNER;
 use crate::terminal::initial_terminal_screen;
 
 impl NyaTermApp {
