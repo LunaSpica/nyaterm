@@ -13,7 +13,7 @@ use std::time::Instant;
 use gpui::FocusHandle;
 use nyaterm_core::{
     AgentCaptureProcessResult, AgentCommandExecutionMode, AgentOutputCaptureProcessor,
-    AiCommandCard, AiMessage, AiMode, AiSession, AiSettings, uuid,
+    AiCommandCard, AiMessage, AiMessageRole, AiMode, AiSession, AiSettings, truncate_preview, uuid,
 };
 
 use crate::features::{AiAgentLoopState, AiAgentStepView, AiChatWorkerEvent, AiDiscoveryJobResult};
@@ -25,8 +25,8 @@ use crate::models::{
 pub(in crate::features) struct AiFeatureState {
     pub(super) settings: AiSettingsState,
     pub(super) chat: AiChatState,
-    pub(super) history: AiHistoryState,
-    pub(super) discovery: AiDiscoveryState,
+    history: AiHistoryState,
+    discovery: AiDiscoveryState,
     pub(super) agent: AiAgentState,
     panel: AiPanelState,
 }
@@ -85,29 +85,29 @@ pub(super) struct AiChatState {
 }
 
 /// Stored sessions, the history browser and the counters shown beside it.
-pub(super) struct AiHistoryState {
-    pub(super) open: bool,
-    pub(super) query: String,
-    pub(super) job_id: u64,
-    pub(super) pending: bool,
-    pub(super) sessions: Vec<AiSession>,
-    pub(super) session_count: usize,
-    pub(super) message_count: usize,
-    pub(super) audit_count: usize,
-    pub(super) usage_count_job_id: u64,
-    pub(super) audit_write_lock: Arc<Mutex<()>>,
-    pub(super) clear_confirm_open: bool,
-    pub(super) clear_confirm_focus: FocusHandle,
+struct AiHistoryState {
+    open: bool,
+    query: String,
+    job_id: u64,
+    pending: bool,
+    sessions: Vec<AiSession>,
+    session_count: usize,
+    message_count: usize,
+    audit_count: usize,
+    usage_count_job_id: u64,
+    audit_write_lock: Arc<Mutex<()>>,
+    clear_confirm_open: bool,
+    clear_confirm_focus: FocusHandle,
 }
 
 /// Model discovery job and the model picker it feeds.
-pub(super) struct AiDiscoveryState {
-    pub(super) tx: mpsc::Sender<AiDiscoveryJobResult>,
-    pub(super) rx: mpsc::Receiver<AiDiscoveryJobResult>,
-    pub(super) pending: bool,
-    pub(super) menu_open: bool,
-    pub(super) query: String,
-    pub(super) index: usize,
+struct AiDiscoveryState {
+    tx: mpsc::Sender<AiDiscoveryJobResult>,
+    rx: mpsc::Receiver<AiDiscoveryJobResult>,
+    pending: bool,
+    menu_open: bool,
+    query: String,
+    index: usize,
 }
 
 /// Agent loop: the running task, its steps and their disclosure state.
@@ -564,6 +564,191 @@ impl AiFeatureState {
         self.history.sessions.is_empty() || self.history.pending || self.chat_or_agent_is_running()
     }
 
+    pub(in crate::features) fn history_audit_write_lock(&self) -> Arc<Mutex<()>> {
+        Arc::clone(&self.history.audit_write_lock)
+    }
+
+    pub(in crate::features) fn begin_history_operation(
+        &mut self,
+        status: impl Into<String>,
+    ) -> Option<u64> {
+        if self.history.pending {
+            self.panel.status = "AI history operation already in progress".to_string();
+            return None;
+        }
+        self.history.job_id = self.history.job_id.wrapping_add(1).max(1);
+        self.history.pending = true;
+        self.panel.status = status.into();
+        Some(self.history.job_id)
+    }
+
+    pub(in crate::features) fn finish_history_session_list(
+        &mut self,
+        job_id: u64,
+        result: Result<Vec<AiSession>, String>,
+    ) -> bool {
+        if self.history.job_id != job_id {
+            return false;
+        }
+        self.history.pending = false;
+        match result {
+            Ok(sessions) => {
+                self.history.sessions = sessions;
+                self.panel.status = "AI history loaded".to_string();
+            }
+            Err(error) => {
+                self.history.sessions.clear();
+                self.panel.status = format!("failed to load AI history: {error}");
+            }
+        }
+        true
+    }
+
+    pub(in crate::features) fn finish_history_message_load(
+        &mut self,
+        job_id: u64,
+        source_session_id: &str,
+        target_session_id: String,
+        result: Result<Vec<AiMessage>, String>,
+        loaded_status: String,
+    ) -> bool {
+        if self.history.job_id != job_id {
+            return false;
+        }
+        self.history.pending = false;
+        if self.chat.session_id != source_session_id {
+            self.panel.status = "AI session load cancelled".to_string();
+            return true;
+        }
+        match result {
+            Ok(messages) => {
+                self.chat.session_id = target_session_id;
+                self.chat.messages = messages;
+                self.chat.streaming_assistant_id = None;
+                self.history.open = false;
+                self.chat.message_menu = None;
+                self.chat.quoted_text = None;
+                self.chat.command_cards.clear();
+                if let Some(last) = self
+                    .chat
+                    .messages
+                    .iter()
+                    .rev()
+                    .find(|message| matches!(message.role, AiMessageRole::Assistant))
+                {
+                    self.chat.response_preview = truncate_preview(&last.content, 320);
+                    self.chat.command_cards = last.command_cards.clone();
+                } else {
+                    self.chat.response_preview.clear();
+                }
+                self.panel.status = loaded_status;
+            }
+            Err(error) => {
+                self.panel.status = format!("failed to load AI session: {error}");
+            }
+        }
+        true
+    }
+
+    pub(in crate::features) fn finish_history_session_delete(
+        &mut self,
+        job_id: u64,
+        session_id: &str,
+        result: Result<(), String>,
+    ) -> Option<bool> {
+        if self.history.job_id != job_id {
+            return None;
+        }
+        self.history.pending = false;
+        match result {
+            Ok(()) => {
+                if self.chat.session_id == session_id {
+                    self.chat.messages.clear();
+                    self.chat.command_cards.clear();
+                    self.chat.streaming_assistant_id = None;
+                    self.chat.message_menu = None;
+                    self.chat.quoted_text = None;
+                    self.chat.session_id = format!("ai-session-{}", uuid());
+                    self.chat.response_preview = "Ask mode ready".to_string();
+                }
+                self.history
+                    .sessions
+                    .retain(|session| session.id != session_id);
+                self.panel.status = "AI session deleted".to_string();
+                Some(true)
+            }
+            Err(error) => {
+                self.panel.status = format!("failed to delete AI session: {error}");
+                Some(false)
+            }
+        }
+    }
+
+    pub(in crate::features) fn finish_history_clear(
+        &mut self,
+        job_id: u64,
+        source_session_id: &str,
+        result: Result<(), String>,
+    ) -> Option<bool> {
+        if self.history.job_id != job_id {
+            return None;
+        }
+        self.history.pending = false;
+        match result {
+            Ok(()) => {
+                self.history.sessions.clear();
+                self.history.query.clear();
+                if self.chat.session_id == source_session_id {
+                    self.chat.messages.clear();
+                    self.chat.command_cards.clear();
+                    self.chat.streaming_assistant_id = None;
+                    self.chat.message_menu = None;
+                    self.chat.quoted_text = None;
+                    self.clear_detected_error();
+                    self.chat.session_id = format!("ai-session-{}", uuid());
+                    self.chat.response_preview =
+                        if self.settings.config.default_mode == AiMode::Agent {
+                            "Agent mode ready".to_string()
+                        } else {
+                            "Ask mode ready".to_string()
+                        };
+                }
+                self.panel.status = "AI history cleared".to_string();
+                Some(true)
+            }
+            Err(error) => {
+                self.panel.status = format!("failed to clear AI history: {error}");
+                Some(false)
+            }
+        }
+    }
+
+    pub(in crate::features) fn set_history_query(&mut self, query: String) {
+        self.history.query = query;
+    }
+
+    pub(in crate::features) fn begin_history_usage_count_job(&mut self) -> u64 {
+        self.history.usage_count_job_id = self.history.usage_count_job_id.wrapping_add(1).max(1);
+        self.history.usage_count_job_id
+    }
+
+    pub(in crate::features) fn finish_history_usage_counts(
+        &mut self,
+        job_id: u64,
+        result: Result<(usize, usize, usize), String>,
+    ) -> bool {
+        if self.history.usage_count_job_id != job_id {
+            return false;
+        }
+        let Ok((sessions, messages, audits)) = result else {
+            return false;
+        };
+        self.history.session_count = sessions;
+        self.history.message_count = messages;
+        self.history.audit_count = audits;
+        true
+    }
+
     pub(in crate::features) fn discovery_is_pending(&self) -> bool {
         self.discovery.pending
     }
@@ -611,6 +796,64 @@ impl AiFeatureState {
         self.discovery.menu_open = false;
         self.discovery.query.clear();
         self.discovery.index = 0;
+    }
+
+    pub(in crate::features) fn begin_discovery_job(
+        &mut self,
+    ) -> Option<mpsc::Sender<AiDiscoveryJobResult>> {
+        if self.discovery.pending {
+            self.panel.status = "AI model discovery already running".to_string();
+            return None;
+        }
+        self.discovery.pending = true;
+        self.panel.status = "Discovering AI models...".to_string();
+        Some(self.discovery.tx.clone())
+    }
+
+    pub(in crate::features) fn drain_discovery_events(
+        &mut self,
+        limit: usize,
+    ) -> Vec<AiDiscoveryJobResult> {
+        if !self.discovery.pending {
+            return Vec::new();
+        }
+        let mut events = Vec::new();
+        for _ in 0..limit {
+            let Ok(event) = self.discovery.rx.try_recv() else {
+                break;
+            };
+            self.discovery.pending = false;
+            events.push(event);
+        }
+        events
+    }
+
+    pub(in crate::features) fn set_discovery_query(&mut self, query: String) {
+        self.discovery.query = query;
+        self.discovery.index = 0;
+    }
+
+    /// Returns whether the text field must also be cleared.
+    pub(in crate::features) fn escape_discovery_search(&mut self, selected_index: usize) -> bool {
+        if self.discovery.query.is_empty() {
+            self.discovery.menu_open = false;
+            false
+        } else {
+            self.discovery.query.clear();
+            self.discovery.index = selected_index;
+            true
+        }
+    }
+
+    pub(in crate::features) fn move_discovery_index(&mut self, choice_count: usize, delta: isize) {
+        if choice_count == 0 {
+            return;
+        }
+        self.discovery.index = if delta < 0 {
+            (self.discovery.index + choice_count - 1) % choice_count
+        } else {
+            (self.discovery.index + 1) % choice_count
+        };
     }
 
     pub(in crate::features) fn agent_steps(&self) -> &[AiAgentStepView] {
@@ -798,7 +1041,7 @@ impl AiChatState {
 }
 
 impl AiHistoryState {
-    pub(in crate::features) fn cancel_clear_confirm(&mut self) {
+    fn cancel_clear_confirm(&mut self) {
         self.clear_confirm_open = false;
     }
 }
@@ -870,8 +1113,11 @@ mod tests {
     use std::time::{Duration, Instant};
 
     use gpui::{TestAppContext, px};
-    use nyaterm_core::{AiAction, AiContext, AiSession, AiSettings};
+    use nyaterm_core::{
+        AiAction, AiContext, AiMessage, AiMessageRole, AiMode, AiSession, AiSettings,
+    };
 
+    use crate::features::AiDiscoveryJobResult;
     use crate::models::{AiMessageMenuState, AiPreparedRequest};
 
     use super::{AiFeatureFocus, AiFeatureState};
@@ -960,6 +1206,131 @@ mod tests {
         assert!(state.confirm_agent_auto_execution());
         assert!(!state.agent_auto_confirm_is_open());
         assert_eq!(state.panel_status(), "Agent execution mode: auto");
+    }
+
+    #[test]
+    fn history_jobs_reject_overlap_and_ignore_stale_completions() {
+        let cx = TestAppContext::single();
+        let mut state = state(&cx);
+
+        let first = state.begin_history_operation("first").unwrap();
+        assert!(state.begin_history_operation("overlap").is_none());
+        assert!(state.history_is_pending());
+        assert_eq!(
+            state.panel_status(),
+            "AI history operation already in progress"
+        );
+        assert!(state.finish_history_session_list(first, Ok(Vec::new())));
+
+        let second = state.begin_history_operation("second").unwrap();
+        assert!(!state.finish_history_session_list(first, Ok(Vec::new())));
+        assert!(state.history_is_pending());
+        assert!(state.finish_history_session_list(second, Ok(Vec::new())));
+        assert!(!state.history_is_pending());
+    }
+
+    #[test]
+    fn history_usage_counts_ignore_superseded_jobs() {
+        let cx = TestAppContext::single();
+        let mut state = state(&cx);
+
+        let first = state.begin_history_usage_count_job();
+        let second = state.begin_history_usage_count_job();
+        assert!(!state.finish_history_usage_counts(first, Ok((1, 2, 3))));
+        assert_eq!(
+            (
+                state.history.session_count,
+                state.history.message_count,
+                state.history.audit_count,
+            ),
+            (0, 0, 0)
+        );
+        assert!(state.finish_history_usage_counts(second, Ok((4, 5, 6))));
+        assert_eq!(
+            (
+                state.history.session_count,
+                state.history.message_count,
+                state.history.audit_count,
+            ),
+            (4, 5, 6)
+        );
+    }
+
+    #[test]
+    fn history_completion_updates_history_and_chat_atomically() {
+        let cx = TestAppContext::single();
+        let mut state = state(&cx);
+        state.history.sessions = vec![AiSession {
+            id: "session-a".to_string(),
+            connection_id: None,
+            title: "Session A".to_string(),
+            created_at: String::new(),
+            updated_at: String::new(),
+        }];
+        state.chat.messages.push(AiMessage {
+            id: "assistant-a".to_string(),
+            session_id: "session-a".to_string(),
+            role: AiMessageRole::Assistant,
+            content: "answer".to_string(),
+            created_at: String::new(),
+            reasoning_content: None,
+            command_cards: Vec::new(),
+        });
+
+        let delete_job = state.begin_history_operation("delete").unwrap();
+        assert_eq!(
+            state.finish_history_session_delete(delete_job, "session-a", Ok(())),
+            Some(true)
+        );
+        assert!(state.history_sessions().is_empty());
+        assert!(state.chat_messages().is_empty());
+        assert_ne!(state.chat_session_id(), "session-a");
+
+        state.settings.config.default_mode = AiMode::Agent;
+        state.history.sessions.push(AiSession {
+            id: state.chat_session_id().to_string(),
+            connection_id: None,
+            title: "Current".to_string(),
+            created_at: String::new(),
+            updated_at: String::new(),
+        });
+        let source_session_id = state.chat_session_id().to_string();
+        let clear_job = state.begin_history_operation("clear").unwrap();
+        assert_eq!(
+            state.finish_history_clear(clear_job, &source_session_id, Ok(())),
+            Some(true)
+        );
+        assert!(state.history_sessions().is_empty());
+        assert!(state.history_query().is_empty());
+        assert_eq!(state.chat_response_preview(), "Agent mode ready");
+        assert_eq!(state.panel_status(), "AI history cleared");
+    }
+
+    #[test]
+    fn discovery_job_and_picker_lifecycles_stay_on_the_owner() {
+        let cx = TestAppContext::single();
+        let mut state = state(&cx);
+
+        let tx = state.begin_discovery_job().unwrap();
+        assert!(state.begin_discovery_job().is_none());
+        tx.send(AiDiscoveryJobResult {
+            profile_id: "profile".to_string(),
+            result: Ok(Vec::new()),
+        })
+        .unwrap();
+        assert_eq!(state.drain_discovery_events(8).len(), 1);
+        assert!(!state.discovery_is_pending());
+
+        state.toggle_discovery_menu(2);
+        state.set_discovery_query("server".to_string());
+        state.move_discovery_index(3, 1);
+        state.move_discovery_index(3, -1);
+        assert_eq!(state.discovery_index(), 0);
+        assert!(state.escape_discovery_search(2));
+        assert_eq!(state.discovery_index(), 2);
+        assert!(state.discovery_query().is_empty());
+        assert!(!state.escape_discovery_search(1));
+        assert!(!state.discovery_menu_is_open());
     }
 
     #[test]

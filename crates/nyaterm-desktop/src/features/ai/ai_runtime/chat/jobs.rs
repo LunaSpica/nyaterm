@@ -306,7 +306,7 @@ impl NyaTermApp {
     pub(in crate::features) fn ai_filtered_model_choices(
         &self,
     ) -> Vec<(nyaterm_core::AiModelConfigItem, String)> {
-        let query = self.ai.discovery.query.trim().to_ascii_lowercase();
+        let query = self.ai.discovery_query().trim().to_ascii_lowercase();
         self.ai_enabled_models()
             .into_iter()
             .filter_map(|model| {
@@ -331,13 +331,11 @@ impl NyaTermApp {
 
     pub(in crate::features) fn select_ai_model_choice(&mut self, cx: &mut Context<Self>) {
         let choices = self.ai_filtered_model_choices();
-        let Some((model, _)) = choices.get(self.ai.discovery.index).cloned() else {
+        let Some((model, _)) = choices.get(self.ai.discovery_index()).cloned() else {
             cx.notify();
             return;
         };
-        self.ai.discovery.menu_open = false;
-        self.ai.discovery.query.clear();
-        self.ai.discovery.index = 0;
+        self.ai.close_discovery_menu();
         self.set_ai_default_model(model.id.clone(), cx);
         self.ai
             .set_panel_status(format!("AI model selected: {}", model.name));
@@ -358,26 +356,18 @@ impl NyaTermApp {
         let choice_count = self.ai_filtered_model_choices().len();
         match keystroke.key.as_str() {
             "escape" => {
-                if self.ai.discovery.query.is_empty() {
-                    self.ai.discovery.menu_open = false;
-                } else {
+                let selected_index = self.ai_selected_model_index();
+                if self.ai.escape_discovery_search(selected_index) {
                     self.reset_text_input("ai.model-search", "", cx);
-                    self.ai.discovery.query.clear();
-                    self.ai.discovery.index = self.ai_selected_model_index();
                 }
                 cx.notify();
             }
             "up" => {
-                if choice_count > 0 {
-                    self.ai.discovery.index =
-                        (self.ai.discovery.index + choice_count - 1) % choice_count;
-                }
+                self.ai.move_discovery_index(choice_count, -1);
                 cx.notify();
             }
             "down" => {
-                if choice_count > 0 {
-                    self.ai.discovery.index = (self.ai.discovery.index + 1) % choice_count;
-                }
+                self.ai.move_discovery_index(choice_count, 1);
                 cx.notify();
             }
             "enter" => {
@@ -397,9 +387,7 @@ impl NyaTermApp {
         text: String,
         cx: &mut Context<Self>,
     ) {
-        self.ai.discovery.query = text;
-        // A new filter means a different list, so the highlight starts over.
-        self.ai.discovery.index = 0;
+        self.ai.set_discovery_query(text);
         cx.notify();
     }
 

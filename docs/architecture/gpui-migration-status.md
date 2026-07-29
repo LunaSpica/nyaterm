@@ -489,6 +489,18 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   execution-menu/focus/error transitions through owner methods; no runtime can
   directly mutate `ai.panel.*`. Status wording, persistence outcomes, streaming
   reduction and Agent execution behavior are unchanged.
+  The adjacent history/discovery ownership pass then made `history`,
+  `discovery`, `AiHistoryState`, and `AiDiscoveryState` private to the parent
+  owner. History job admission and stale-completion matching, list/load/delete/
+  clear transitions, usage counters and the audit-write lock now have semantic
+  owner APIs; transitions that also reset the active chat are atomic on
+  `AiFeatureState`. Model-discovery admission/event draining and picker query/
+  index/Escape transitions likewise no longer expose the child channel or
+  mutable picker fields. Background storage/HTTP work, GPUI notification and
+  settings persistence remain in application adapters. Architecture checks
+  reject any return to direct `ai.history.*` or `ai.discovery.*` access. AI
+  history formats, storage behavior, discovery merging and visible status text
+  are unchanged.
 - Terminal presentation state is grouped into `TerminalFeatureState`: `search`,
   `view` runtime, `input` focus and IME, inline command/credential `assist`,
   dedicated multi-line `paste` review editor, `selection` and mouse reporting,

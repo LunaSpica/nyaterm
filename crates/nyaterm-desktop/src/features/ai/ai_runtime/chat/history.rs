@@ -1,5 +1,5 @@
 use gpui::{AppContext, Context};
-use nyaterm_core::{AiMessageRole, AiMode, ConnectionStore, truncate_preview, uuid};
+use nyaterm_core::ConnectionStore;
 
 use crate::features::{NyaTermApp, compact_id};
 
@@ -27,22 +27,9 @@ impl NyaTermApp {
         cx.spawn(async move |this, cx| {
             let result = task.await;
             let _ = this.update(cx, |this, cx| {
-                if this.ai.history.job_id != job_id {
-                    return;
+                if this.ai.finish_history_session_list(job_id, result) {
+                    cx.notify();
                 }
-                this.ai.history.pending = false;
-                match result {
-                    Ok(sessions) => {
-                        this.ai.history.sessions = sessions;
-                        this.ai.set_panel_status("AI history loaded".to_string());
-                    }
-                    Err(error) => {
-                        this.ai.history.sessions.clear();
-                        this.ai
-                            .set_panel_status(format!("failed to load AI history: {error}"));
-                    }
-                }
-                cx.notify();
             });
         })
         .detach();
@@ -74,50 +61,18 @@ impl NyaTermApp {
         });
         cx.spawn(async move |this, cx| {
             let result = task.await;
-            let _ =
-                this.update(cx, |this, cx| {
-                    if this.ai.history.job_id != job_id {
-                        return;
-                    }
-                    this.ai.history.pending = false;
-                    if this.ai.chat.session_id != source_session_id {
-                        this.ai
-                            .set_panel_status("AI session load cancelled".to_string());
-                        cx.notify();
-                        return;
-                    }
-                    match result {
-                        Ok(messages) => {
-                            this.ai.chat.session_id = session_id;
-                            this.ai.chat.messages = messages;
-                            this.ai.chat.streaming_assistant_id = None;
-                            this.ai.history.open = false;
-                            this.ai.chat.message_menu = None;
-                            this.ai.chat.quoted_text = None;
-                            this.ai.chat.command_cards.clear();
-                            if let Some(last) =
-                                this.ai.chat.messages.iter().rev().find(|message| {
-                                    matches!(message.role, AiMessageRole::Assistant)
-                                })
-                            {
-                                this.ai.chat.response_preview =
-                                    truncate_preview(&last.content, 320);
-                                this.ai.chat.command_cards = last.command_cards.clone();
-                            } else {
-                                this.ai.chat.response_preview.clear();
-                            }
-                            this.ai.set_panel_status(format!(
-                                "loaded AI session {}",
-                                compact_id(&this.ai.chat.session_id)
-                            ));
-                        }
-                        Err(error) => {
-                            this.ai
-                                .set_panel_status(format!("failed to load AI session: {error}"));
-                        }
-                    }
+            let _ = this.update(cx, |this, cx| {
+                let loaded_status = format!("loaded AI session {}", compact_id(&session_id));
+                if this.ai.finish_history_message_load(
+                    job_id,
+                    &source_session_id,
+                    session_id,
+                    result,
+                    loaded_status,
+                ) {
                     cx.notify();
-                });
+                }
+            });
         })
         .detach();
     }
@@ -141,34 +96,15 @@ impl NyaTermApp {
         cx.spawn(async move |this, cx| {
             let result = task.await;
             let _ = this.update(cx, |this, cx| {
-                if this.ai.history.job_id != job_id {
-                    return;
-                }
-                this.ai.history.pending = false;
-                match result {
-                    Ok(()) => {
-                        if this.ai.chat.session_id == session_id {
-                            this.ai.chat.messages.clear();
-                            this.ai.chat.command_cards.clear();
-                            this.ai.chat.streaming_assistant_id = None;
-                            this.ai.chat.message_menu = None;
-                            this.ai.chat.quoted_text = None;
-                            this.ai.chat.session_id = format!("ai-session-{}", uuid());
-                            this.ai.chat.response_preview = "Ask mode ready".to_string();
-                        }
-                        this.ai
-                            .history
-                            .sessions
-                            .retain(|session| session.id != session_id);
-                        this.ai.set_panel_status("AI session deleted".to_string());
+                if let Some(succeeded) =
+                    this.ai
+                        .finish_history_session_delete(job_id, &session_id, result)
+                {
+                    if succeeded {
                         this.refresh_ai_usage_counts(cx);
                     }
-                    Err(error) => {
-                        this.ai
-                            .set_panel_status(format!("failed to delete AI session: {error}"));
-                    }
+                    cx.notify();
                 }
-                cx.notify();
             });
         })
         .detach();
@@ -189,38 +125,15 @@ impl NyaTermApp {
         cx.spawn(async move |this, cx| {
             let result = task.await;
             let _ = this.update(cx, |this, cx| {
-                if this.ai.history.job_id != job_id {
-                    return;
-                }
-                this.ai.history.pending = false;
-                match result {
-                    Ok(()) => {
-                        this.ai.history.sessions.clear();
-                        this.ai.history.query.clear();
-                        if this.ai.chat.session_id == source_session_id {
-                            this.ai.chat.messages.clear();
-                            this.ai.chat.command_cards.clear();
-                            this.ai.chat.streaming_assistant_id = None;
-                            this.ai.chat.message_menu = None;
-                            this.ai.chat.quoted_text = None;
-                            this.ai.clear_detected_error();
-                            this.ai.chat.session_id = format!("ai-session-{}", uuid());
-                            this.ai.chat.response_preview =
-                                if this.ai.settings.config.default_mode == AiMode::Agent {
-                                    "Agent mode ready".to_string()
-                                } else {
-                                    "Ask mode ready".to_string()
-                                };
-                        }
-                        this.ai.set_panel_status("AI history cleared".to_string());
+                if let Some(succeeded) =
+                    this.ai
+                        .finish_history_clear(job_id, &source_session_id, result)
+                {
+                    if succeeded {
                         this.refresh_ai_usage_counts(cx);
                     }
-                    Err(error) => {
-                        this.ai
-                            .set_panel_status(format!("failed to clear AI history: {error}"));
-                    }
+                    cx.notify();
                 }
-                cx.notify();
             });
         })
         .detach();
@@ -231,14 +144,12 @@ impl NyaTermApp {
         text: String,
         cx: &mut Context<Self>,
     ) {
-        self.ai.history.query = text;
+        self.ai.set_history_query(text);
         cx.notify();
     }
 
     pub(in crate::features) fn refresh_ai_usage_counts(&mut self, cx: &mut Context<Self>) {
-        self.ai.history.usage_count_job_id =
-            self.ai.history.usage_count_job_id.wrapping_add(1).max(1);
-        let job_id = self.ai.history.usage_count_job_id;
+        let job_id = self.ai.begin_history_usage_count_job();
         let config_dir = self.runtime.config_dir().to_path_buf();
         let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
         let task = cx.background_spawn(async move {
@@ -249,13 +160,7 @@ impl NyaTermApp {
         cx.spawn(async move |this, cx| {
             let result = task.await;
             let _ = this.update(cx, |this, cx| {
-                if this.ai.history.usage_count_job_id != job_id {
-                    return;
-                }
-                if let Ok((sessions, messages, audits)) = result {
-                    this.ai.history.session_count = sessions;
-                    this.ai.history.message_count = messages;
-                    this.ai.history.audit_count = audits;
+                if this.ai.finish_history_usage_counts(job_id, result) {
                     cx.notify();
                 }
             });
@@ -268,16 +173,8 @@ impl NyaTermApp {
         status: &'static str,
         cx: &mut Context<Self>,
     ) -> Option<u64> {
-        if self.ai.history.pending {
-            self.ai
-                .set_panel_status("AI history operation already in progress".to_string());
-            cx.notify();
-            return None;
-        }
-        self.ai.history.job_id = self.ai.history.job_id.wrapping_add(1).max(1);
-        self.ai.history.pending = true;
-        self.ai.set_panel_status(status.to_string());
+        let job_id = self.ai.begin_history_operation(status);
         cx.notify();
-        Some(self.ai.history.job_id)
+        job_id
     }
 }

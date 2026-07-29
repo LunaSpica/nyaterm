@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use gpui::{AppContext, Context};
@@ -153,7 +152,7 @@ impl NyaTermApp {
     ) {
         let config_dir = self.runtime.config_dir().to_path_buf();
         let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
-        let write_lock = Arc::clone(&self.ai.history.audit_write_lock);
+        let write_lock = self.ai.history_audit_write_lock();
         let request = AppendAiAuditRequest {
             connection_id: self.ai_effective_target_session_id(),
             action: if execute {

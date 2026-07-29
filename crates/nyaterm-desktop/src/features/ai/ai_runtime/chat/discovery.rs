@@ -9,7 +9,7 @@ const AI_DISCOVERY_EVENT_DRAIN_LIMIT: usize = 8;
 
 impl NyaTermApp {
     pub(in crate::features) fn discover_ai_models(&mut self, cx: &mut Context<Self>) {
-        if self.ai.discovery.pending {
+        if self.ai.discovery_is_pending() {
             self.ai
                 .set_panel_status("AI model discovery already running".to_string());
             cx.notify();
@@ -40,11 +40,11 @@ impl NyaTermApp {
             return;
         }
 
+        let Some(tx) = self.ai.begin_discovery_job() else {
+            cx.notify();
+            return;
+        };
         let settings = self.ai.settings.config.clone();
-        let tx = self.ai.discovery.tx.clone();
-        self.ai.discovery.pending = true;
-        self.ai
-            .set_panel_status("Discovering AI models...".to_string());
         std::thread::spawn(move || {
             let mut discoveries = Vec::new();
             let mut errors = Vec::new();
@@ -71,16 +71,11 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> bool {
-        if !self.ai.discovery.pending {
-            return false;
-        }
-        let mut dirty = false;
-        for _ in 0..AI_DISCOVERY_EVENT_DRAIN_LIMIT {
-            let Ok(event) = self.ai.discovery.rx.try_recv() else {
-                break;
-            };
-            dirty = true;
-            self.ai.discovery.pending = false;
+        let events = self
+            .ai
+            .drain_discovery_events(AI_DISCOVERY_EVENT_DRAIN_LIMIT);
+        let dirty = !events.is_empty();
+        for event in events {
             match event.result {
                 Ok(discoveries) if discoveries.is_empty() => {
                     self.ai
