@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 use gpui::{Pixels, ScrollHandle, WindowHandle};
 
 use super::super::app_state::SettingsDraftSnapshot;
-use super::super::settings_window::SettingsWindow;
+use super::super::settings::SettingsWindow;
 use super::runtime_state::ShellRuntimeState;
 use crate::models::{
     ActivityBarContextMenuState, ActivityBarLayoutState, BottomPanelMode, BottomPanelResizeState,

@@ -132,6 +132,13 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   `cloud_sync_runtime`, `transfer_jobs` and `remote_runtime` subtrees. Ten more
   `crate::features` level re-exports turned out to be unused once each consumer
   sat inside the owning subtree, and were removed.
+- Domain child-window adapters no longer float at the `features/` root. The
+  connection editor, quick-command editor and settings window now live under
+  their owning runtime modules; the built-in remote editor, its dedicated text
+  editing surface and the external-sync prompt window live under `transfers`.
+  Their implementation types are no longer re-exported from `features/mod.rs`,
+  and the architecture script rejects both the old root files and facade
+  exports. Window admission, focus, close and editor behavior are unchanged.
 - The `layout`, `panels`, `inspector`, `formatting` and `view_widgets` view
   areas are real module trees, including their nested `security_panel/panel`,
   `workspace/surface`, `quick_commands_panel/panel`, `send_command_bar`,
@@ -1585,10 +1592,11 @@ use the existing behavior.
 - `NyaTermApp` remains the dominant state owner. New state should move into a
   focused FeatureState or a deliberately authoritative Entity, not into new
   unrelated top-level fields.
-- Connections module tree is still transitional. The current state grouping is
-  real, and the connection runtime, connection list interaction, and
-  connections page trees are now governed, but adjacent connections
-  feature/runtime files still need staged cleanup.
+- The connections state, runtime, list interaction and child-window adapters
+  now live under the normal `features/connections` tree and are governed.
+  Connection views intentionally remain in the shared `pages` presentation
+  tree; they enter state through `ConnectionFeatureState` rather than owning a
+  second connection domain.
 - `core/storage.rs` and `transport/lib.rs` are down from 7,662 and 8,418 lines
   to 4,020 and 4,423. What is left in each is genuinely central: the store and
   its shared transaction/JSON/crypto helpers on one side, the session manager
@@ -1805,6 +1813,9 @@ honest remaining list.
    implementation type terminal-module-private. Cross-domain consumers now use
    typed queue metrics, immutable queries and session/render lifecycle
    transitions; direct external `terminal.view` access is zero.
+   The following module-ownership batch moved all six domain-specific window
+   and editor adapters out of the feature root into connections, commands,
+   settings and transfers, and removed their broad root facade exports.
    What remains at the
    composition root is stores, runtime and focused feature owners.
    Group by cohesion where a cluster exists; do not force the count down for

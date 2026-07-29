@@ -3,10 +3,10 @@ use gpui::{
     WindowBounds, WindowHandle, WindowKind, WindowOptions, div, prelude::*, px, rgb, size,
 };
 
-use super::{NyaTermApp, child_window_header, child_window_titlebar};
+use crate::features::{NyaTermApp, child_window_header, child_window_titlebar};
 use crate::models::ConnectionEditorField;
 
-pub(in crate::features) struct ConnectionEditorWindow {
+pub(in crate::features::connections) struct ConnectionEditorWindow {
     app: Entity<NyaTermApp>,
     _app_subscription: Subscription,
     /// Focus is per-window, so the field the main window focused means nothing

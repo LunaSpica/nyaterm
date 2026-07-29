@@ -4,7 +4,8 @@ use gpui::{
 };
 use nyaterm_core::truncate_preview;
 
-use crate::features::{NyaTermApp, RemoteTextEditor, dialog_action_button};
+use crate::features::transfers::RemoteTextEditor;
+use crate::features::{NyaTermApp, dialog_action_button};
 use crate::models::{
     TransferEditorField, TransferEditorState, TransferEditorWorkspaceState,
     TransferExternalSyncPromptState,

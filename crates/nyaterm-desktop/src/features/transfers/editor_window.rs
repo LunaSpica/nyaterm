@@ -5,9 +5,10 @@ use gpui::{
     WindowBounds, WindowHandle, WindowOptions, div, prelude::*, px, rgb, size,
 };
 
-use super::{NyaTermApp, RemoteTextEditor, child_window_header, child_window_titlebar};
+use super::remote_text_editor::RemoteTextEditor;
+use crate::features::{NyaTermApp, child_window_header, child_window_titlebar};
 
-pub(in crate::features) struct RemoteFileEditorWindow {
+pub(super) struct RemoteFileEditorWindow {
     app: Entity<NyaTermApp>,
     editors: HashMap<String, Entity<RemoteTextEditor>>,
     active_editor_id: Option<String>,

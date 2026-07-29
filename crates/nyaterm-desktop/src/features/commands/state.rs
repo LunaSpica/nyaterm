@@ -6,7 +6,8 @@ use std::sync::Arc;
 use gpui::{FocusHandle, WindowHandle};
 use nyaterm_core::{CommandHistoryEntry, QuickCommand, QuickCommandCategory};
 
-use crate::features::{CommandPersistenceRequest, CommandPersistenceResult, QuickCommandWindow};
+use super::quick_command_runtime::QuickCommandWindow;
+use crate::features::{CommandPersistenceRequest, CommandPersistenceResult};
 use crate::models::{
     QuickCommandCategoryDeleteState, QuickCommandCategoryMenuState,
     QuickCommandCategoryRenameState, QuickCommandDeleteState, QuickCommandDetailsState,
@@ -409,10 +410,14 @@ impl CommandFeatureState {
         }
     }
 
-    pub(in crate::features) fn quick_editor_window(
+    pub(in crate::features::commands) fn quick_editor_window(
         &self,
     ) -> Option<WindowHandle<QuickCommandWindow>> {
         self.quick.editor.window
+    }
+
+    pub(in crate::features) fn quick_editor_window_is_open(&self) -> bool {
+        self.quick.editor.window.is_some()
     }
 
     pub(in crate::features) fn quick_editor_window_is_pending(&self) -> bool {
@@ -440,7 +445,7 @@ impl CommandFeatureState {
         true
     }
 
-    pub(in crate::features) fn finish_quick_editor_window_open(
+    pub(in crate::features::commands) fn finish_quick_editor_window_open(
         &mut self,
         window: Option<WindowHandle<QuickCommandWindow>>,
     ) {
@@ -448,7 +453,7 @@ impl CommandFeatureState {
         self.quick.editor.window_open_pending = false;
     }
 
-    pub(in crate::features) fn clear_quick_editor_window_if(
+    pub(in crate::features::commands) fn clear_quick_editor_window_if(
         &mut self,
         expected: WindowHandle<QuickCommandWindow>,
     ) -> bool {

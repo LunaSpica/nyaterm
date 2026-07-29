@@ -3,9 +3,9 @@ use gpui::{
     WindowBounds, WindowHandle, WindowKind, WindowOptions, div, prelude::*, px, rgb, size,
 };
 
-use super::{NyaTermApp, child_window_header, child_window_titlebar};
+use crate::features::{NyaTermApp, child_window_header, child_window_titlebar};
 
-pub(in crate::features) struct TransferExternalSyncWindow {
+pub(super) struct TransferExternalSyncWindow {
     app: Entity<NyaTermApp>,
     prompt_id: String,
     _app_subscription: Subscription,

@@ -112,6 +112,22 @@ check_no_matches_in_rust_fn() {
 
 require_rg || exit 1
 
+for retired_root_adapter in \
+  connection_editor_window.rs \
+  quick_command_window.rs \
+  remote_editor_window.rs \
+  remote_text_editor.rs \
+  settings_window.rs \
+  transfer_external_sync_window.rs; do
+  if [[ -e "crates/nyaterm-desktop/src/features/$retired_root_adapter" ]]; then
+    fail "domain child-window/editor adapter returned to features root: $retired_root_adapter"
+  fi
+done
+check_no_matches \
+  "domain child-window implementation types must stay out of the features facade" \
+  '(ConnectionEditorWindow|QuickCommandWindow|RemoteFileEditorWindow|RemoteTextEditor|SettingsWindow|TransferExternalSyncWindow)' \
+  crates/nyaterm-desktop/src/features/mod.rs
+
 # Low-level crates must stay independent of GPUI and desktop presentation code.
 check_no_matches \
   "nyaterm-terminal must not depend on GPUI" \
@@ -1784,7 +1800,7 @@ check_no_matches_in_rust_fn \
 check_no_matches \
   "connection editor window lifecycle reads must use ConnectionFeatureState methods" \
   'connection_state\.editor\.(draft|window)(\.|[[:space:]]|$)|connection_state\.editor\.window_open_pending([[:space:]]|[=!&|),;}]|$)' \
-  crates/nyaterm-desktop/src/features/connection_editor_window.rs
+  crates/nyaterm-desktop/src/features/connections/connection_runtime/window.rs
 check_no_matches \
   "root connection editor window lifecycle reads must use ConnectionFeatureState methods" \
   'connection_state\.editor\.(draft|window)(\.|[[:space:]]|$)|connection_state\.editor\.window_open_pending([[:space:]]|[=!&|),;}]|$)' \

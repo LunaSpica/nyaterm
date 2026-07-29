@@ -6,8 +6,9 @@ use gpui::{
 };
 use nyaterm_core::{AppSettingsSummary, Group, SavedConnection};
 
+use super::connection_runtime::{ConnectionEditorToggle, ConnectionEditorWindow};
 use super::connections::{ConnectionDragKind, ConnectionDropPosition, ConnectionDropTarget};
-use crate::features::{ConnectionEditorToggle, ConnectionEditorWindow, NyaTermApp};
+use crate::features::NyaTermApp;
 use crate::models::{
     ConnectionContextMenuState, ConnectionDeleteConfirmState, ConnectionEditorAdvancedTab,
     ConnectionEditorField, ConnectionEditorMenu, ConnectionEditorPasswordSource,
@@ -605,7 +606,9 @@ impl ConnectionFeatureState {
         self.editor.focus_handle()
     }
 
-    pub fn editor_window_handle(&self) -> Option<WindowHandle<ConnectionEditorWindow>> {
+    pub(in crate::features::connections) fn editor_window_handle(
+        &self,
+    ) -> Option<WindowHandle<ConnectionEditorWindow>> {
         self.editor.window_handle()
     }
 
@@ -725,7 +728,7 @@ impl ConnectionFeatureState {
         self.editor.close();
     }
 
-    pub fn clear_editor_window_if_current(
+    pub(in crate::features::connections) fn clear_editor_window_if_current(
         &mut self,
         window: WindowHandle<ConnectionEditorWindow>,
     ) -> bool {
@@ -740,7 +743,10 @@ impl ConnectionFeatureState {
         self.editor.clear_window_pending();
     }
 
-    pub fn attach_editor_window(&mut self, window: WindowHandle<ConnectionEditorWindow>) {
+    pub(in crate::features::connections) fn attach_editor_window(
+        &mut self,
+        window: WindowHandle<ConnectionEditorWindow>,
+    ) {
         self.editor.attach_window(window);
     }
 

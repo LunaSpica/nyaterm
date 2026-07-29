@@ -3,7 +3,6 @@ use std::time::Duration;
 mod ai;
 mod app_state;
 mod commands;
-mod connection_editor_window;
 mod connections;
 mod formatting;
 mod icons;
@@ -11,22 +10,17 @@ mod inspector;
 mod layout;
 mod pages;
 mod panels;
-mod quick_command_window;
 mod recording;
 mod remote;
-mod remote_editor_window;
-mod remote_text_editor;
 mod root;
 mod runtime_jobs;
 mod session;
 mod settings;
-mod settings_window;
 mod shell;
 mod sync;
 mod sync_input;
 mod terminal;
 mod text_inputs;
-mod transfer_external_sync_window;
 mod transfers;
 mod translation;
 mod tunnels;
@@ -49,7 +43,6 @@ pub(in crate::features) use commands::{
     QuickCommandFeatureFocus, quick_command_category_label, quick_command_sort_mode_from_setting,
     quick_command_view_mode_from_setting,
 };
-pub(in crate::features) use connection_editor_window::ConnectionEditorWindow;
 pub(in crate::features) use connections::{
     ConnectionCatalogState, ConnectionDragKind, ConnectionDragPayload, ConnectionDragPreview,
     ConnectionDropPosition, ConnectionDropTarget, ConnectionEditorToggle, ConnectionFeatureFocus,
@@ -70,10 +63,8 @@ pub(in crate::features) use icons::{
 pub(in crate::features) use panels::{
     SendCommandFeatureFocus, SendCommandFeatureState, SendCommandMenu, SendCommandPresentationState,
 };
-pub(in crate::features) use quick_command_window::QuickCommandWindow;
 pub(in crate::features) use recording::RecordingFeatureState;
 pub(in crate::features) use remote::{RemoteOpsFeatureFocus, RemoteOpsFeatureState};
-pub(in crate::features) use remote_text_editor::RemoteTextEditor;
 pub(in crate::features) use runtime_jobs::{
     ActivitySide, AiAgentBackgroundTarget, AiAgentLoopState, AiAgentStepStatus, AiAgentStepView,
     AiChatJobOutput, AiChatJobResult, AiChatWorkerEvent, AiDiscoveryJobResult,
@@ -103,7 +94,6 @@ pub(in crate::features) use terminal::{
     terminal_surface_paint_count,
 };
 pub(in crate::features) use text_inputs::{TextInputRegistry, TextInputSetup, secret_input_setup};
-pub(in crate::features) use transfer_external_sync_window::TransferExternalSyncWindow;
 pub(in crate::features) use transfers::{
     TransferEditorCloseAfterSave, TransferEditorCloseOutcome, TransferEditorDiscardOutcome,
     TransferFeatureFocus, TransferFeatureState, duplicate_decision_label, duplicate_policy_label,

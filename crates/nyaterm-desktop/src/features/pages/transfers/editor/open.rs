@@ -239,7 +239,7 @@ impl NyaTermApp {
             self.transfer.activate_editor_tab(&tab_id);
             let status = format!("remote text file already open: {}", entry.path);
             self.open_remote_file_editor_window(cx);
-            if self.transfer.editor_window().is_none()
+            if !self.transfer.editor_window_is_open()
                 && !self.transfer.editor_window_open_is_pending()
             {
                 window.focus(self.transfer.editor_focus());
@@ -273,7 +273,7 @@ impl NyaTermApp {
         self.transfer.open_editor_tab(tab);
         self.shell.status = format!("opening remote text file {}", entry.path);
         self.open_remote_file_editor_window(cx);
-        if self.transfer.editor_window().is_none() && !self.transfer.editor_window_open_is_pending()
+        if !self.transfer.editor_window_is_open() && !self.transfer.editor_window_open_is_pending()
         {
             window.focus(self.transfer.editor_focus());
         }

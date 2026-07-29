@@ -14,7 +14,6 @@ use nyaterm_transport::{
     SftpDuplicatePolicy, SftpFileEntry, SftpFileProperties, SftpRemoteTextFile, SftpWriteTextResult,
 };
 
-use crate::features::TransferExternalSyncWindow;
 use crate::models::{
     TransferBrowserColumnResizeState, TransferBrowserColumnWidths, TransferBrowserContextMenuState,
     TransferBrowserDragSelectionState, TransferBrowserFavoritesMenuState,
@@ -28,7 +27,8 @@ use crate::models::{
     TransferPropertiesState, TransferRenameState, TransferUnknownFileState,
 };
 
-use super::super::remote_editor_window::RemoteFileEditorWindow;
+use super::editor_window::RemoteFileEditorWindow;
+use super::external_sync_window::TransferExternalSyncWindow;
 
 pub(in crate::features) struct TransferFeatureState {
     queue: TransferQueueState,
@@ -1845,10 +1845,14 @@ impl TransferFeatureState {
         std::mem::take(&mut self.editor.tabs_menu_open)
     }
 
-    pub(in crate::features) fn editor_window(
+    pub(in crate::features::transfers) fn editor_window(
         &self,
     ) -> Option<WindowHandle<RemoteFileEditorWindow>> {
         self.editor.window
+    }
+
+    pub(in crate::features) fn editor_window_is_open(&self) -> bool {
+        self.editor.window.is_some()
     }
 
     pub(in crate::features) fn editor_window_open_is_pending(&self) -> bool {
@@ -1866,7 +1870,7 @@ impl TransferFeatureState {
         true
     }
 
-    pub(in crate::features) fn finish_editor_window_open(
+    pub(in crate::features::transfers) fn finish_editor_window_open(
         &mut self,
         handle: WindowHandle<RemoteFileEditorWindow>,
     ) {
@@ -1874,7 +1878,7 @@ impl TransferFeatureState {
         self.editor.window_open_pending = false;
     }
 
-    pub(in crate::features) fn finish_editor_window_activation(
+    pub(in crate::features::transfers) fn finish_editor_window_activation(
         &mut self,
         handle: WindowHandle<RemoteFileEditorWindow>,
         activated: bool,
@@ -1887,7 +1891,7 @@ impl TransferFeatureState {
         false
     }
 
-    pub(in crate::features) fn clear_editor_window_if(
+    pub(in crate::features::transfers) fn clear_editor_window_if(
         &mut self,
         handle: WindowHandle<RemoteFileEditorWindow>,
     ) -> bool {
@@ -1992,7 +1996,7 @@ impl TransferFeatureState {
         !self.external_sync.window_open_pending.is_empty()
     }
 
-    pub(in crate::features) fn first_external_sync_window(
+    pub(in crate::features::transfers) fn first_external_sync_window(
         &self,
     ) -> Option<(String, WindowHandle<TransferExternalSyncWindow>)> {
         self.external_sync
@@ -2002,7 +2006,7 @@ impl TransferFeatureState {
             .map(|(prompt_id, handle)| (prompt_id.clone(), *handle))
     }
 
-    pub(in crate::features) fn external_sync_window(
+    pub(in crate::features::transfers) fn external_sync_window(
         &self,
         prompt_id: &str,
     ) -> Option<WindowHandle<TransferExternalSyncWindow>> {
@@ -2029,7 +2033,7 @@ impl TransferFeatureState {
         true
     }
 
-    pub(in crate::features) fn finish_external_sync_window_open(
+    pub(in crate::features::transfers) fn finish_external_sync_window_open(
         &mut self,
         prompt_id: String,
         handle: WindowHandle<TransferExternalSyncWindow>,

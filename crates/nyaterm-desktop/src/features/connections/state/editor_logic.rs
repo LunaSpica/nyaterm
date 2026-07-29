@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use gpui::WindowHandle;
 
-use crate::features::{ConnectionEditorToggle, ConnectionEditorWindow};
+use super::super::connection_runtime::{ConnectionEditorToggle, ConnectionEditorWindow};
 use crate::models::{
     ConnectionEditorAdvancedTab, ConnectionEditorField, ConnectionEditorMenu,
     ConnectionEditorPasswordSource, ConnectionEditorState, ConnectionEditorTelnetTab,

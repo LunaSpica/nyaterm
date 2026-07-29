@@ -20,3 +20,6 @@ mod catalog;
 mod dialogs;
 mod editor;
 mod run;
+mod window;
+
+pub(super) use window::QuickCommandWindow;

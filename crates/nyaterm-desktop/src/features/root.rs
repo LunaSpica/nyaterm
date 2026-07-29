@@ -653,7 +653,7 @@ impl NyaTermApp {
             self.activate_settings_window(cx)
         } else if self.shell.settings_window_open_pending() {
             true
-        } else if self.commands.quick_editor_window().is_some() {
+        } else if self.commands.quick_editor_window_is_open() {
             self.activate_quick_command_window(cx)
         } else if self.commands.quick_editor_window_is_pending() {
             true
