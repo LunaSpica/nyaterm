@@ -163,10 +163,7 @@ impl NyaTermApp {
                             cx.listener(move |this, _, window, cx| {
                                 this.select_session(multiplex_session_id.clone(), cx);
                                 this.close_tab_actions(cx);
-                                if this
-                                    .session
-                                    .busy_actions
-                                    .contains_key(&multiplex_session_id)
+                                if this.session.session_is_busy(&multiplex_session_id)
                                     || this.is_session_disconnected(&multiplex_session_id)
                                 {
                                     this.terminal.view.status =
@@ -187,8 +184,7 @@ impl NyaTermApp {
                                 this.close_tab_actions(cx);
                                 if this
                                     .session
-                                    .busy_actions
-                                    .contains_key(&multiplex_startup_session_id)
+                                    .session_is_busy(&multiplex_startup_session_id)
                                     || this.is_session_disconnected(&multiplex_startup_session_id)
                                 {
                                     this.terminal.view.status =
@@ -214,10 +210,7 @@ impl NyaTermApp {
                             cx.listener(move |this, _, window, cx| {
                                 this.select_session(explain_session_id.clone(), cx);
                                 this.close_tab_actions(cx);
-                                if this
-                                    .session
-                                    .busy_actions
-                                    .contains_key(&explain_session_id)
+                                if this.session.session_is_busy(&explain_session_id)
                                     || this.is_session_disconnected(&explain_session_id)
                                 {
                                     this.ai.panel.status =
@@ -248,10 +241,7 @@ impl NyaTermApp {
                             cx.listener(move |this, _, window, cx| {
                                 this.select_session(analyze_session_id.clone(), cx);
                                 this.close_tab_actions(cx);
-                                if this
-                                    .session
-                                    .busy_actions
-                                    .contains_key(&analyze_session_id)
+                                if this.session.session_is_busy(&analyze_session_id)
                                     || this.is_session_disconnected(&analyze_session_id)
                                 {
                                     this.ai.panel.status =
@@ -421,10 +411,7 @@ impl NyaTermApp {
                         cx.listener(move |this, _, window, cx| {
                             this.select_session(reconnect_session_id.clone(), cx);
                             this.close_tab_actions(cx);
-                            if this
-                                .session
-                                .busy_actions
-                                .contains_key(&reconnect_session_id)
+                            if this.session.session_is_busy(&reconnect_session_id)
                                 || this.has_pending_session_start()
                             {
                                 cx.notify();
@@ -440,10 +427,7 @@ impl NyaTermApp {
                         can_disconnect,
                         cx.listener(move |this, _, _, cx| {
                             this.close_tab_actions(cx);
-                            if this
-                                .session
-                                .busy_actions
-                                .contains_key(&disconnect_session_id)
+                            if this.session.session_is_busy(&disconnect_session_id)
                                 || this.is_session_disconnected(&disconnect_session_id)
                             {
                                 cx.notify();

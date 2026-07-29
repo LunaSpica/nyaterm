@@ -193,7 +193,7 @@ impl NyaTermApp {
         session_id: String,
         cx: &mut Context<Self>,
     ) {
-        if self.session.busy_actions.get(&session_id).is_some() {
+        if self.session.session_is_busy(&session_id) {
             self.terminal.view.status = "session action already in progress".to_string();
             cx.notify();
             return;
@@ -209,15 +209,12 @@ impl NyaTermApp {
             return;
         }
 
-        self.session
-            .busy_actions
-            .insert(session_id.clone(), "disconnect".to_string());
-        self.session.active_menu = None;
+        self.session.begin_disconnect_action(session_id.clone());
         // Backend may already be gone (race with Exited); still mark disconnected.
-        let _ = self.session.manager.close(&session_id);
+        let _ = self.session.manager().close(&session_id);
         self.cleanup_recording_for_session(&session_id);
         self.mark_session_disconnected(&session_id, cx);
-        self.session.busy_actions.remove(&session_id);
+        self.session.finish_busy_action(&session_id);
         self.terminal.view.status = format!("disconnected {}", short_id(&session_id));
         cx.notify();
     }
@@ -279,7 +276,7 @@ impl NyaTermApp {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.session.busy_actions.get(&session_id).is_some() {
+        if self.session.session_is_busy(&session_id) {
             self.terminal.view.status = "session action already in progress".to_string();
             cx.notify();
             return;
@@ -295,10 +292,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        self.session
-            .busy_actions
-            .insert(session_id.clone(), "reconnect".to_string());
-        self.session.active_menu = None;
+        self.session.begin_reconnect_action(session_id.clone());
         self.session.start.clear_active_selection();
         let old_id = session_id;
         self.session.start.clear_reconnect_failure(&old_id);
@@ -335,11 +329,11 @@ impl NyaTermApp {
             .unwrap_or(seed_output);
 
         // Close live backend if still present.
-        let _ = self.session.manager.close(&old_id);
+        let _ = self.session.manager().close(&old_id);
         self.cleanup_recording_for_session(&old_id);
         self.clear_terminal_mouse_report_for_session(&old_id);
         let Some(metadata) = self.session.metadata.get_mut(&old_id) else {
-            self.session.busy_actions.remove(&old_id);
+            self.session.finish_busy_action(&old_id);
             self.terminal.view.status = "session cannot be reconnected".to_string();
             cx.notify();
             return;
@@ -415,10 +409,8 @@ impl NyaTermApp {
             }
         }
         // Tauri clears busy when reconnect action returns (even if SSH still connecting).
-        self.session.busy_actions.remove(&old_id);
-        self.session
-            .busy_actions
-            .retain(|id, _| self.session.metadata.contains_key(id));
+        self.session.finish_busy_action(&old_id);
+        self.session.retain_busy_actions_for_live_sessions();
         self.shell.navigation.selected_nav = NavItem::Workspace;
         self.shell.navigation.main_mode = MainMode::Workspace;
         cx.notify();
@@ -456,11 +448,7 @@ impl NyaTermApp {
                 self.session.tab_colors.insert(new_id.to_string(), color);
             }
         }
-        if let Some(history) = self.session.command_history.remove(old_id) {
-            self.session
-                .command_history
-                .insert(new_id.to_string(), history);
-        }
+        self.session.migrate_command_history(old_id, new_id);
 
         self.shell.workspace.replace_session_id(old_id, new_id);
         if let Some(root) = self.terminal.windows.tree.as_mut() {

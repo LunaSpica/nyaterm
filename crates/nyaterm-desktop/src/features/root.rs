@@ -42,7 +42,7 @@ impl NyaTermApp {
         self.start_terminal_frame_event_wake(cx);
         self.try_restore_open_tabs(window, cx);
         let pending_session_start = self.has_pending_session_start();
-        let should_pump = !self.session.restore.is_complete()
+        let should_pump = !self.session.restore_is_complete()
             && self
                 .stores
                 .startup_restore
@@ -610,7 +610,7 @@ impl NyaTermApp {
             .when(self.commands.quick_category_menu().is_some(), |this| {
                 this.child(self.quick_command_category_menu_overlay(cx))
             })
-            .when(self.session.active_menu.is_some(), |this| {
+            .when(self.session.active_menu().is_some(), |this| {
                 this.child(self.active_session_menu_overlay(cx))
             })
             .when(self.commands.quick_category_delete().is_some(), |this| {

@@ -39,7 +39,7 @@ impl NyaTermApp {
     pub(in crate::features) fn active_sessions_header_count(&self) -> String {
         let sessions = self.sorted_active_sessions();
         let total = sessions.len();
-        let query = self.session.active_search_draft.trim().to_lowercase();
+        let query = self.session.active_search_draft().trim().to_lowercase();
         if query.is_empty() {
             return total.to_string();
         }
@@ -57,13 +57,13 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         let sessions = self.sorted_active_sessions();
-        let query = self.session.active_search_draft.trim().to_lowercase();
+        let query = self.session.active_search_draft().trim().to_lowercase();
         // Built before the panel, which reads `self` throughout: creating the
         // box needs it mutably.
         let search_input = self
             .text_input_box(
                 "sessions.filter",
-                &self.session.active_search_draft.clone(),
+                &self.session.active_search_draft().to_string(),
                 TextInputSetup::placeholder(self.tr("activeSessions.searchPlaceholder")),
                 cx,
             )
@@ -156,13 +156,17 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         let sessions = self.ordered_sessions();
         let session_count = sessions.len();
-        let query = self.session.active_search_draft.trim().to_ascii_lowercase();
+        let query = self
+            .session
+            .active_search_draft()
+            .trim()
+            .to_ascii_lowercase();
         // Built before the panel, which reads `self` throughout: creating the
         // box needs it mutably.
         let sessions_search_input = self
             .text_input_box(
                 "sessions.filter",
-                &self.session.active_search_draft.clone(),
+                &self.session.active_search_draft().to_string(),
                 TextInputSetup::placeholder("Search sessions"),
                 cx,
             )
@@ -408,12 +412,11 @@ impl NyaTermApp {
             .views
             .get(&session.id)
             .is_some_and(|view| view.has_unread);
-        let busy_action = self.session.busy_actions.get(&session.id).cloned();
+        let busy_action = self.session.busy_action(&session.id).map(str::to_string);
         let is_busy = busy_action.is_some();
         let menu_open = self
             .session
-            .active_menu
-            .as_ref()
+            .active_menu()
             .is_some_and(|menu| menu.session_id == session.id);
         let accent = if let Some(custom_color) = custom_color {
             rgb(custom_color)
@@ -523,10 +526,10 @@ impl NyaTermApp {
                                 !is_busy,
                                 cx.listener(move |this, _, window, cx| {
                                     cx.stop_propagation();
-                                    if this.session.busy_actions.contains_key(&rename_session_id) {
+                                    if this.session.session_is_busy(&rename_session_id) {
                                         return;
                                     }
-                                    this.session.active_menu = None;
+                                    this.session.close_active_menu();
                                     this.open_rename_session(rename_session_id.clone(), window, cx);
                                 }),
                             ))
@@ -538,31 +541,22 @@ impl NyaTermApp {
                                 !is_busy,
                                 cx.listener(move |this, event: &ClickEvent, _, cx| {
                                     cx.stop_propagation();
-                                    if this.session.busy_actions.contains_key(&menu_session_id) {
+                                    if this.session.session_is_busy(&menu_session_id) {
                                         return;
                                     }
                                     let point = event.position();
-                                    if this
-                                        .session
-                                        .active_menu
-                                        .as_ref()
-                                        .is_some_and(|menu| menu.session_id == menu_session_id)
-                                    {
-                                        this.session.active_menu = None;
-                                    } else {
-                                        this.session.active_menu = Some(ActiveSessionMenuState {
-                                            session_id: menu_session_id.clone(),
-                                            x: point.x,
-                                            y: point.y,
-                                        });
-                                    }
+                                    this.session.toggle_active_menu(ActiveSessionMenuState {
+                                        session_id: menu_session_id.clone(),
+                                        x: point.x,
+                                        y: point.y,
+                                    });
                                     cx.notify();
                                 }),
                             )),
                     ),
             )
             .on_click(cx.listener(move |this, _, _, cx| {
-                this.session.active_menu = None;
+                this.session.close_active_menu();
                 this.select_session(session_id.clone(), cx);
             }))
     }

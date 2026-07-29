@@ -8,11 +8,12 @@ use nyaterm_transport::{
     SessionEvent, SessionKind, SessionManager, SshMultiplexHandle, SshSessionConfig,
 };
 
-use crate::features::DEFAULT_DUPLICATE_STARTUP_DELAY_MS;
 use crate::features::runtime_jobs::SessionStartResult;
+use crate::features::{DEFAULT_DUPLICATE_STARTUP_DELAY_MS, SESSION_COMMAND_HISTORY_LIMIT};
 use crate::models::{
-    ActiveSessionMenuState, SessionEventBridge, SessionLaunchConfig, SessionRuntimeMetadata,
-    StartupCommandAction, StartupCommandRequest, TabActionsSubmenu, WorkspaceSplitDirection,
+    ActiveSessionMenuState, SessionEventBridge, SessionEventBridgeDrain, SessionEventBridgeStats,
+    SessionLaunchConfig, SessionRuntimeMetadata, StartupCommandAction, StartupCommandRequest,
+    TabActionsSubmenu, WorkspaceSplitDirection,
 };
 
 use super::auth_runtime::{
@@ -24,18 +25,18 @@ use super::trzsz_runtime::TrzszSessionState;
 use super::zmodem_runtime::ZmodemSessionState;
 
 pub(in crate::features) struct SessionFeatureState {
-    pub manager: Arc<SessionManager>,
-    pub event_bridge: SessionEventBridge,
+    manager: Arc<SessionManager>,
+    event_bridge: SessionEventBridge,
     pub start: SessionStartFeatureState,
-    pub restore: SessionRestoreState,
-    pub events: SessionEventQueueState,
+    restore: SessionRestoreState,
+    events: SessionEventQueueState,
     pub prompts: SessionPromptState,
     pub dialogs: SessionDialogState,
-    pub command_history: HashMap<String, Vec<String>>,
-    pub active_search_draft: String,
-    pub active_menu: Option<ActiveSessionMenuState>,
+    command_history: HashMap<String, Vec<String>>,
+    active_search_draft: String,
+    active_menu: Option<ActiveSessionMenuState>,
     /// Per-session reconnect/disconnect busy state ("reconnect" | "disconnect").
-    pub busy_actions: HashMap<String, String>,
+    busy_actions: HashMap<String, String>,
     pub active_id: Option<String>,
     pub active_ssh_config: Option<SshSessionConfig>,
     pub active_ai_execution_profile: AiExecutionProfile,
@@ -55,13 +56,13 @@ pub(in crate::features) struct SessionFeatureState {
 }
 
 #[derive(Default)]
-pub(in crate::features) struct SessionRestoreState {
+struct SessionRestoreState {
     complete: bool,
 }
 
 #[derive(Default)]
-pub(in crate::features) struct SessionEventQueueState {
-    pub pending: VecDeque<SessionEvent>,
+struct SessionEventQueueState {
+    pending: VecDeque<SessionEvent>,
 }
 
 pub(in crate::features) struct SessionFeatureFocus {
@@ -203,6 +204,204 @@ impl SessionFeatureState {
             tab_colors: HashMap::new(),
             multiplex_handles: HashMap::new(),
         }
+    }
+
+    pub(in crate::features) fn manager(&self) -> &SessionManager {
+        &self.manager
+    }
+
+    pub(in crate::features) fn manager_handle(&self) -> Arc<SessionManager> {
+        Arc::clone(&self.manager)
+    }
+
+    pub(in crate::features) fn restore_is_complete(&self) -> bool {
+        self.restore.is_complete()
+    }
+
+    pub(in crate::features) fn mark_restore_complete(&mut self) -> bool {
+        self.restore.mark_complete()
+    }
+
+    pub(in crate::features) fn configure_event_bridge(
+        &self,
+        encoding: String,
+        scrollback_limit: usize,
+    ) {
+        self.event_bridge.configure(encoding, scrollback_limit);
+    }
+
+    pub(in crate::features) fn route_session_events_to_ui(&self, session_id: &str) {
+        self.event_bridge.route_session_to_ui(session_id);
+    }
+
+    pub(in crate::features) fn resume_session_direct_output(&self, session_id: &str) {
+        self.event_bridge.resume_session_direct_output(session_id);
+    }
+
+    pub(in crate::features) fn clear_event_bridge_session(&self, session_id: &str) {
+        self.event_bridge.clear_session(session_id);
+    }
+
+    pub(in crate::features) fn drain_event_bridge(
+        &self,
+        max_events: usize,
+        max_output_bytes: usize,
+    ) -> SessionEventBridgeDrain {
+        self.event_bridge
+            .drain_events_with_output_budget(max_events, max_output_bytes)
+    }
+
+    pub(in crate::features) fn harvest_event_bridge_stats(&self) -> SessionEventBridgeStats {
+        self.event_bridge.harvest_direct_stats()
+    }
+
+    pub(in crate::features) fn event_bridge_has_pending_ui_work(&self) -> bool {
+        self.event_bridge.has_pending_ui_work()
+    }
+
+    pub(in crate::features) fn event_bridge_queued_event_count(&self) -> usize {
+        self.event_bridge.queued_event_count()
+    }
+
+    pub(in crate::features) fn event_bridge_source_queued_event_count(&self) -> usize {
+        self.event_bridge.source_queued_event_count()
+    }
+
+    pub(in crate::features) fn event_bridge_queued_output_bytes(&self) -> usize {
+        self.event_bridge.queued_output_bytes()
+    }
+
+    pub(in crate::features) fn event_bridge_source_queued_output_bytes(&self) -> usize {
+        self.event_bridge.source_queued_output_bytes()
+    }
+
+    pub(in crate::features) fn pending_event_count(&self) -> usize {
+        self.events.pending.len()
+    }
+
+    pub(in crate::features) fn pending_events_are_empty(&self) -> bool {
+        self.events.pending.is_empty()
+    }
+
+    pub(in crate::features) fn extend_pending_events(
+        &mut self,
+        events: impl IntoIterator<Item = SessionEvent>,
+    ) {
+        self.events.pending.extend(events);
+    }
+
+    pub(in crate::features) fn pop_pending_event(&mut self) -> Option<SessionEvent> {
+        self.events.pending.pop_front()
+    }
+
+    pub(in crate::features) fn pending_event_output_bytes(&self) -> usize {
+        self.events
+            .pending
+            .iter()
+            .map(|event| match event {
+                SessionEvent::Output { data, .. } => data.len(),
+                _ => 0,
+            })
+            .sum()
+    }
+
+    pub(in crate::features) fn command_history_for(&self, session_id: &str) -> Option<&[String]> {
+        self.command_history.get(session_id).map(Vec::as_slice)
+    }
+
+    pub(in crate::features) fn record_command_history(&mut self, session_id: &str, command: &str) {
+        let command = command.trim();
+        if command.is_empty() {
+            return;
+        }
+        let history = self
+            .command_history
+            .entry(session_id.to_string())
+            .or_default();
+        history.insert(0, command.to_string());
+        history.truncate(SESSION_COMMAND_HISTORY_LIMIT);
+    }
+
+    pub(in crate::features) fn remove_command_history(&mut self, session_id: &str) {
+        self.command_history.remove(session_id);
+    }
+
+    pub(in crate::features) fn migrate_command_history(&mut self, old_id: &str, new_id: &str) {
+        if let Some(history) = self.command_history.remove(old_id) {
+            self.command_history.insert(new_id.to_string(), history);
+        }
+    }
+
+    pub(in crate::features) fn remove_command_from_all_history(&mut self, command: &str) {
+        for history in self.command_history.values_mut() {
+            history.retain(|entry| entry != command);
+        }
+    }
+
+    pub(in crate::features) fn active_search_draft(&self) -> &str {
+        &self.active_search_draft
+    }
+
+    pub(in crate::features) fn set_active_search_draft(&mut self, draft: String) {
+        self.active_search_draft = draft;
+    }
+
+    pub(in crate::features) fn active_menu(&self) -> Option<&ActiveSessionMenuState> {
+        self.active_menu.as_ref()
+    }
+
+    fn set_active_menu(&mut self, menu: ActiveSessionMenuState) {
+        self.active_menu = Some(menu);
+    }
+
+    pub(in crate::features) fn toggle_active_menu(&mut self, menu: ActiveSessionMenuState) {
+        if self
+            .active_menu
+            .as_ref()
+            .is_some_and(|active| active.session_id == menu.session_id)
+        {
+            self.close_active_menu();
+        } else {
+            self.set_active_menu(menu);
+        }
+    }
+
+    pub(in crate::features) fn close_active_menu(&mut self) {
+        self.active_menu = None;
+    }
+
+    pub(in crate::features) fn busy_action(&self, session_id: &str) -> Option<&str> {
+        self.busy_actions.get(session_id).map(String::as_str)
+    }
+
+    pub(in crate::features) fn session_is_busy(&self, session_id: &str) -> bool {
+        self.busy_actions.contains_key(session_id)
+    }
+
+    fn begin_busy_action(&mut self, session_id: String, action: &'static str) -> bool {
+        if self.busy_actions.contains_key(&session_id) {
+            return false;
+        }
+        self.busy_actions.insert(session_id, action.to_string());
+        self.close_active_menu();
+        true
+    }
+
+    pub(in crate::features) fn begin_disconnect_action(&mut self, session_id: String) -> bool {
+        self.begin_busy_action(session_id, "disconnect")
+    }
+
+    pub(in crate::features) fn begin_reconnect_action(&mut self, session_id: String) -> bool {
+        self.begin_busy_action(session_id, "reconnect")
+    }
+
+    pub(in crate::features) fn finish_busy_action(&mut self, session_id: &str) {
+        self.busy_actions.remove(session_id);
+    }
+
+    pub(in crate::features) fn retain_busy_actions_for_live_sessions(&mut self) {
+        self.busy_actions
+            .retain(|id, _| self.metadata.contains_key(id));
     }
 }
 
@@ -1236,10 +1435,10 @@ mod tests {
     use std::sync::{Arc, mpsc};
     use std::time::Instant;
 
-    use gpui::TestAppContext;
+    use gpui::{TestAppContext, px};
     use nyaterm_core::{AiExecutionProfile, ConnectionType, SavedConnection};
     use nyaterm_transport::{
-        SessionKind, SessionManager, SshCredentialPrompt, SshCredentialPromptKind,
+        SessionEvent, SessionKind, SessionManager, SshCredentialPrompt, SshCredentialPromptKind,
         SshCredentialPromptReason, SshHostKey, SshKeyboardInteractivePrompt,
         SshKeyboardInteractiveRequest,
     };
@@ -1247,8 +1446,8 @@ mod tests {
     use crate::features::runtime_jobs::SessionStartResult;
     use crate::features::session::HostKeyPromptIssue;
     use crate::models::{
-        SessionEventBridge, StartupCommandAction, TabActionsSubmenu, TerminalFramePipeline,
-        WorkspaceSplitDirection,
+        ActiveSessionMenuState, SessionEventBridge, StartupCommandAction, TabActionsSubmenu,
+        TerminalFramePipeline, WorkspaceSplitDirection,
     };
 
     use super::{
@@ -1256,19 +1455,8 @@ mod tests {
         HostKeyPromptRequest, KeyboardInteractivePromptState, NativeOtpCodePreview,
         NativeOtpProvider, PendingSessionStart, PromptResolution, RenameSessionSubmission,
         SavedConnectionStartOptions, SessionFeatureFocus, SessionFeatureState, SessionPromptState,
-        SessionRestoreState, SessionStartEventRequest, SessionStartFeatureState,
-        SftpDuplicatePromptBroker,
+        SessionStartEventRequest, SessionStartFeatureState, SftpDuplicatePromptBroker,
     };
-
-    #[test]
-    fn startup_restore_completion_is_owned_and_idempotent() {
-        let mut restore = SessionRestoreState::default();
-
-        assert!(!restore.is_complete());
-        assert!(restore.mark_complete());
-        assert!(restore.is_complete());
-        assert!(!restore.mark_complete());
-    }
 
     fn pending(name: &str) -> PendingSessionStart {
         PendingSessionStart {
@@ -1497,10 +1685,10 @@ mod tests {
             },
         );
 
-        assert!(Arc::ptr_eq(&sessions.manager, &manager));
+        assert!(Arc::ptr_eq(&sessions.manager_handle(), &manager));
         assert!(!sessions.start.has_pending());
         assert!(!sessions.start.has_failed());
-        assert!(sessions.command_history.is_empty());
+        assert!(sessions.command_history_for("missing").is_none());
         assert!(sessions.active_id.is_none());
         assert!(sessions.active_ssh_config.is_none());
         assert_eq!(
@@ -1518,6 +1706,64 @@ mod tests {
         assert!(!sessions.dialogs.close_all_sessions_confirm_is_open());
         assert!(!sessions.dialogs.rename_is_open());
         assert!(!sessions.dialogs.startup_command_is_open());
+
+        assert!(!sessions.restore_is_complete());
+        assert!(sessions.mark_restore_complete());
+        assert!(!sessions.mark_restore_complete());
+
+        sessions.extend_pending_events([
+            SessionEvent::Output {
+                session_id: "session-a".to_string(),
+                data: vec![1, 2, 3],
+            },
+            SessionEvent::Error {
+                session_id: "session-a".to_string(),
+                message: "test error".to_string(),
+            },
+        ]);
+        assert_eq!(sessions.pending_event_count(), 2);
+        assert_eq!(sessions.pending_event_output_bytes(), 3);
+        assert!(matches!(
+            sessions.pop_pending_event(),
+            Some(SessionEvent::Output { data, .. }) if data == vec![1, 2, 3]
+        ));
+
+        sessions.record_command_history("session-a", "  git status  ");
+        sessions.record_command_history("session-a", "cargo check");
+        assert_eq!(
+            sessions.command_history_for("session-a"),
+            Some(["cargo check".to_string(), "git status".to_string()].as_slice())
+        );
+        sessions.migrate_command_history("session-a", "session-b");
+        sessions.remove_command_from_all_history("git status");
+        assert_eq!(
+            sessions.command_history_for("session-b"),
+            Some(["cargo check".to_string()].as_slice())
+        );
+
+        let menu = ActiveSessionMenuState {
+            session_id: "session-b".to_string(),
+            x: px(10.),
+            y: px(20.),
+        };
+        sessions.toggle_active_menu(menu.clone());
+        assert_eq!(
+            sessions.active_menu().map(|menu| menu.session_id.as_str()),
+            Some("session-b")
+        );
+        sessions.toggle_active_menu(menu);
+        assert!(sessions.active_menu().is_none());
+        sessions.set_active_menu(ActiveSessionMenuState {
+            session_id: "session-b".to_string(),
+            x: px(10.),
+            y: px(20.),
+        });
+        assert!(sessions.begin_reconnect_action("session-b".to_string()));
+        assert!(sessions.active_menu().is_none());
+        assert_eq!(sessions.busy_action("session-b"), Some("reconnect"));
+        assert!(!sessions.begin_disconnect_action("session-b".to_string()));
+        sessions.finish_busy_action("session-b");
+        assert!(!sessions.session_is_busy("session-b"));
 
         sessions
             .dialogs

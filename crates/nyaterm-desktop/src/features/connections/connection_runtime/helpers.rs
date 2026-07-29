@@ -609,8 +609,12 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn refresh_connection_serial_ports(&mut self) {
-        self.connection_catalog
-            .replace_serial_ports(self.session.manager.list_serial_ports().unwrap_or_default());
+        self.connection_catalog.replace_serial_ports(
+            self.session
+                .manager()
+                .list_serial_ports()
+                .unwrap_or_default(),
+        );
     }
 }
 

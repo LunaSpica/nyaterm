@@ -224,7 +224,7 @@ impl NyaTermApp {
         self.session.cwds.remove(session_id);
         self.clear_zmodem_session(session_id);
         self.clear_trzsz_session(session_id);
-        self.session.event_bridge.clear_session(session_id);
+        self.session.clear_event_bridge_session(session_id);
         self.session.tab_colors.remove(session_id);
         self.terminal.view.views.remove(session_id);
         self.remove_terminal_surface(session_id);
@@ -236,7 +236,7 @@ impl NyaTermApp {
             .layout
             .session_surface_bounds
             .remove(session_id);
-        self.session.command_history.remove(session_id);
+        self.session.remove_command_history(session_id);
         self.transfer.browser.session_cache.remove(session_id);
         self.transfer
             .external_sync
@@ -279,7 +279,7 @@ impl NyaTermApp {
         }
         self.purge_session_from_sync_groups(session_id);
         self.reconcile_terminal_windows();
-        if self.session.restore.is_complete() {
+        if self.session.restore_is_complete() {
             self.persist_open_tabs();
         }
         if let Some(multiplex_key) = multiplex_key {

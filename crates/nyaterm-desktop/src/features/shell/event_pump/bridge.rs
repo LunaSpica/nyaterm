@@ -2,7 +2,7 @@ use crate::features::NyaTermApp;
 
 impl NyaTermApp {
     pub(in crate::features) fn sync_session_event_bridge_config(&self) {
-        self.session.event_bridge.configure(
+        self.session.configure_event_bridge(
             self.settings.summary.interaction_default_encoding.clone(),
             self.terminal_scrollback_line_limit(),
         );
@@ -29,11 +29,9 @@ impl NyaTermApp {
         if self.session_has_active_ai_capture(session_id)
             || !self.session_sideband_detectors_idle(session_id)
         {
-            self.session.event_bridge.route_session_to_ui(session_id);
+            self.session.route_session_events_to_ui(session_id);
         } else {
-            self.session
-                .event_bridge
-                .resume_session_direct_output(session_id);
+            self.session.resume_session_direct_output(session_id);
         }
     }
 }

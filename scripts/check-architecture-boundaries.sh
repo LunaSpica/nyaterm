@@ -361,6 +361,14 @@ check_no_matches \
   "live session runtime state must stay grouped under SessionFeatureState" \
   '^[[:space:]]*pub\(in crate::features\)[[:space:]]+(session_manager|session_event_bridge|session_start|session_command_history|active_sessions_search_draft|active_session_menu|active_session_busy_actions|active_session_id|active_ssh_config|active_ai_execution_profile|session_order|session_metadata|session_custom_names|session_dynamic_titles|session_cwds|zmodem_sessions|trzsz_sessions|session_tab_colors|ssh_multiplex_handles)[[:space:]]*:' \
   crates/nyaterm-desktop/src/features/app_state/mod.rs
+check_no_multiline_matches \
+  "SessionFeatureState runtime coordination fields must remain private" \
+  'struct[[:space:]]+SessionFeatureState[[:space:]]*\{[^}]*pub([[:space:]]|\([^)]*\))[[:space:]]+(manager|event_bridge|restore|events|command_history|active_search_draft|active_menu|busy_actions)[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/session/state.rs
+check_no_multiline_matches \
+  "session runtime coordination access must use SessionFeatureState methods" \
+  '(self|this|app)[[:space:]]*\.[[:space:]]*session[[:space:]]*\.[[:space:]]*(manager|event_bridge|restore|events|command_history|active_search_draft|active_menu|busy_actions)([[:space:]]*\.|[[:space:]]*=)' \
+  crates/nyaterm-desktop/src/features
 
 check_no_matches \
   "session prompt runtime must stay grouped under SessionPromptState" \

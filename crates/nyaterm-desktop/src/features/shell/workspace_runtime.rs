@@ -71,7 +71,7 @@ impl NyaTermApp {
         self.sync_workspace_split_from_active_tab();
         if self.shell.workspace.pane_roots != before_roots {
             self.persist_workspace_pane_layout();
-            if self.session.restore.is_complete() {
+            if self.session.restore_is_complete() {
                 self.persist_open_tabs();
             }
         }
@@ -144,7 +144,7 @@ impl NyaTermApp {
                 self.shell.navigation.selected_nav = NavItem::Workspace;
                 self.shell.navigation.main_mode = MainMode::Workspace;
                 self.persist_workspace_pane_layout();
-                if self.session.restore.is_complete() {
+                if self.session.restore_is_complete() {
                     self.persist_open_tabs();
                 }
                 return;
@@ -165,7 +165,7 @@ impl NyaTermApp {
         self.shell.navigation.selected_nav = NavItem::Workspace;
         self.shell.navigation.main_mode = MainMode::Workspace;
         self.persist_workspace_pane_layout();
-        if self.session.restore.is_complete() {
+        if self.session.restore_is_complete() {
             self.persist_open_tabs();
         }
     }
@@ -257,7 +257,7 @@ impl NyaTermApp {
             self.rebuild_session_tab_owners();
             self.sync_workspace_split_from_active_tab();
             self.persist_workspace_pane_layout();
-            if self.session.restore.is_complete() {
+            if self.session.restore_is_complete() {
                 self.persist_open_tabs();
             }
             cx.notify();
@@ -269,7 +269,7 @@ impl NyaTermApp {
         self.sync_workspace_split_from_active_tab();
         self.terminal.view.status = "workspace split closed".to_string();
         self.persist_workspace_pane_layout();
-        if self.session.restore.is_complete() {
+        if self.session.restore_is_complete() {
             self.persist_open_tabs();
         }
         cx.notify();
@@ -460,7 +460,7 @@ impl NyaTermApp {
         {
             return;
         }
-        if !self.session.restore.is_complete() {
+        if !self.session.restore_is_complete() {
             return;
         }
         self.sync_workspace_split_from_active_tab();
@@ -521,7 +521,7 @@ impl NyaTermApp {
             .collect::<Vec<_>>();
         if ordered.len() < 2 {
             // After startup finishes, don't keep waiting forever for a second tab.
-            if self.session.restore.is_complete() {
+            if self.session.restore_is_complete() {
                 self.shell.workspace.pane_layout_restored = true;
             }
             return;

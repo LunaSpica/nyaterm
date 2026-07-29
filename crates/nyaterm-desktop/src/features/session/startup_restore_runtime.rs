@@ -12,7 +12,7 @@ use crate::models::{
 
 impl NyaTermApp {
     fn mark_startup_restore_complete(&mut self) {
-        self.session.restore.mark_complete();
+        self.session.mark_restore_complete();
     }
 
     /// Mark open tabs (and multi-leaf layout) dirty for a later idle flush.
@@ -426,7 +426,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.session.restore.is_complete() {
+        if self.session.restore_is_complete() {
             return;
         }
         if self.has_pending_session_start() {
@@ -449,7 +449,7 @@ impl NyaTermApp {
     }
 
     fn finish_startup_restore(&mut self, cx: &mut Context<Self>) {
-        if self.session.restore.is_complete() {
+        if self.session.restore_is_complete() {
             return;
         }
         self.mark_startup_restore_complete();

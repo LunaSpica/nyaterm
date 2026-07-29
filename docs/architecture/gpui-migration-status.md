@@ -307,6 +307,16 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   connection-store updates, session registration and GPUI notification remain
   application-level coordination, and session/persistence formats are
   unchanged.
+  The session runtime-coordination encapsulation pass then made the manager,
+  event bridge, restore lifecycle, pending event queue, per-session command
+  history, active-session search/menu state and reconnect/disconnect busy map
+  private. Runtime adapters now obtain only a shared manager handle or invoke
+  bridge/queue methods on `SessionFeatureState`; they cannot mutate the bridge
+  or its `VecDeque` directly. Command-history append, reconnect migration and
+  global deletion are owner transitions, while starting a busy action closes
+  the active-session menu atomically. Event processing, terminal updates,
+  worker spawning, rendering and GPUI notification remain on `NyaTermApp` and
+  its existing adapters.
 - Transfer state is grouped into `TransferFeatureState`. Seventy-eight fields
   turned out to be five separate things sharing one panel: the job `queue`, the
   SFTP `browser`, the file operation dialogs (`file_ops`), the built-in remote
@@ -1371,6 +1381,9 @@ Current ownership map:
 | Quick-command catalog | Private catalog in `NyaTermApp.commands` | Persisted domain state | Views receive read-only slices/snapshots; successful storage operations replace commands and categories together through `CommandFeatureState`. |
 | Quick-command UI | Private child in `NyaTermApp.commands` | Transient UI/window state | List filters and menus, editor/dialog drafts, import admission and AI prompt state are queried or changed only through `CommandFeatureState`; GPUI focus, windows, rendering and persistence stay in adapters. |
 | Command history and persistence worker | Private state in `NyaTermApp.commands` | Persisted catalog plus background runtime | History snapshots, queue admission, event polling and idle checks enter through `CommandFeatureState`; failed optimistic use-count updates roll back on the owner. |
+| Live session manager/event bridge | Private services in `NyaTermApp.session` | Runtime services | Callers receive a shared manager reference/handle and use bridge routing, drain and metrics methods; neither service field is writable outside `SessionFeatureState`. |
+| Session restore/event queue | Private state in `NyaTermApp.session` | Transient runtime coordination | Restore completion is idempotent and pending transport events are counted, extended and popped only through owner methods; event interpretation stays in the event-pump adapter. |
+| Session command history/search/menu/busy state | Private state in `NyaTermApp.session` | Transient per-session interaction state | History append/migration/deletion and active-menu/busy transitions are owner operations; beginning reconnect/disconnect closes the menu in the same transition. |
 | Serial ports | Private catalog in `NyaTermApp.connection_catalog` | Runtime/discovered state | Replaced through the catalog after session-manager discovery and never persisted. |
 | Tunnel/proxy configs | Private catalog in `NyaTermApp.tunnel_state` | Persisted network config | Views use read-only slices; pure move/upsert/delete candidates and successful commits stay on `TunnelFeatureState`. The Network page UI remains separate transient state. |
 | Queued saved-connection starts | `NyaTermApp.session.start` private queue | Transient session-start state | Admission, duplicate detection, draining and runtime cadence reads go through `SessionStartFeatureState` methods. |
@@ -1396,10 +1409,11 @@ For the final Chinese report, avoid broad behavior summaries. Use this wording
 instead:
 `没有改变持久化格式、表结构、序列化字段、加密或兼容逻辑；没有改变 nyaterm-terminal 的解析、快照或协议逻辑，也没有改变 nyaterm-transport 的 SSH/SFTP/传输协议执行逻辑。`
 
-The terminal-adjacent desktop changes only route quick switch IME state through
-the authoritative overlay Entity and add a test-only explicit import. That is a
-desktop state ownership/UI adapter change, not a terminal parser, terminal
-protocol, SSH/SFTP protocol, transfer protocol, or persistence-format change.
+The terminal-adjacent desktop changes route quick switch IME state through the
+authoritative overlay Entity and session event/manager access through the
+private `SessionFeatureState` boundary. These are desktop state ownership/UI
+adapter changes, not terminal parser, terminal protocol, SSH/SFTP protocol,
+transfer protocol, or persistence-format changes.
 The tunnel/proxy runtime action files were touched only to route Network page
 menu, editor, confirmation, and stale-reference UI state through
 `ConnectionFeatureState` after the existing persistence operations succeed.
@@ -1592,6 +1606,12 @@ honest remaining list.
    editor/window closure, category-delete cleanup, variable synchronization and
    import admission now execute as owner transitions, while persistence, GPUI
    focus, native window creation, text inputs and rendering stay in adapters.
+   The following session runtime-coordination batch made eight more
+   `SessionFeatureState` fields private and routed manager/bridge/event-queue,
+   history, search, menu and busy-state access through focused owner APIs.
+   Reconnect/disconnect admission now couples busy registration with menu
+   closure, and reconnect history migration cannot leave the old session id
+   behind.
    What remains at the
    composition root is stores, runtime and focused feature owners.
    Group by cohesion where a cluster exists; do not force the count down for

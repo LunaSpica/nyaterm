@@ -452,11 +452,11 @@ impl NyaTermApp {
         runtime_output_pressure_active_from_counts(
             self.terminal.view.runtime.session_event_backlog_active,
             self.terminal.view.runtime.session_event_queued_output_bytes,
-            self.session.events.pending.len(),
-            self.session.event_bridge.queued_event_count()
-                + self.session.event_bridge.source_queued_event_count(),
-            self.session.event_bridge.queued_output_bytes()
-                + self.session.event_bridge.source_queued_output_bytes(),
+            self.session.pending_event_count(),
+            self.session.event_bridge_queued_event_count()
+                + self.session.event_bridge_source_queued_event_count(),
+            self.session.event_bridge_queued_output_bytes()
+                + self.session.event_bridge_source_queued_output_bytes(),
             self.terminal.view.pending_frame_events.len(),
             self.terminal.view.frame_pipeline.queued_event_count(),
             self.terminal.view.frame_pipeline.queued_output_bytes(),
@@ -467,8 +467,8 @@ impl NyaTermApp {
         !self.runtime_output_pressure_active()
             && !self.session.start.has_pending()
             && !self.session.start.has_queued_saved_connections()
-            && self.session.events.pending.is_empty()
-            && !self.session.event_bridge.has_pending_ui_work()
+            && self.session.pending_events_are_empty()
+            && !self.session.event_bridge_has_pending_ui_work()
             && !self.terminal_frame_backlog_active()
             && self.session.zmodem.is_empty()
             && self.session.trzsz.is_empty()

@@ -202,7 +202,7 @@ impl NyaTermApp {
             cx,
         );
 
-        let session_manager = self.session.manager.clone();
+        let session_manager = self.session.manager_handle();
         let session_start_tx = self.session.start.sender();
         let request_id_for_worker = request_id.clone();
         std::thread::spawn(move || {
@@ -272,7 +272,7 @@ impl NyaTermApp {
             cx,
         );
 
-        let session_manager = self.session.manager.clone();
+        let session_manager = self.session.manager_handle();
         let session_start_tx = self.session.start.sender();
         let request_id_for_worker = request_id.clone();
         std::thread::spawn(move || {
@@ -343,7 +343,7 @@ impl NyaTermApp {
             cx,
         );
 
-        let session_manager = self.session.manager.clone();
+        let session_manager = self.session.manager_handle();
         let session_start_tx = self.session.start.sender();
         let request_id_for_worker = request_id.clone();
         std::thread::spawn(move || {
@@ -420,7 +420,7 @@ impl NyaTermApp {
                     SessionStartEventRequest::Cancelled => {
                         if let Ok(success) = event.result {
                             let session_id = success.session_info.id;
-                            if let Err(error) = self.session.manager.close(&session_id) {
+                            if let Err(error) = self.session.manager().close(&session_id) {
                                 tracing::warn!(
                                     request_id = %request_id,
                                     session_id = %session_id,
@@ -466,7 +466,7 @@ impl NyaTermApp {
                         .is_some_and(|stale_id| !self.session.metadata.contains_key(stale_id))
                     {
                         self.session.start.clear_reconnect_target();
-                        if let Err(error) = self.session.manager.close(&session_id) {
+                        if let Err(error) = self.session.manager().close(&session_id) {
                             tracing::warn!(
                                 request_id = %request_id,
                                 session_id = %session_id,

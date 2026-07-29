@@ -1267,7 +1267,7 @@ impl NyaTermApp {
         };
         if let Err(error) = self
             .session
-            .manager
+            .manager()
             .write(session_id, &encoded)
             .map_err(|error| error.to_string())
         {
@@ -1292,7 +1292,7 @@ impl NyaTermApp {
         debug_assert!(!disposition.encode_session_charset);
         if let Err(error) = self
             .session
-            .manager
+            .manager()
             .write(session_id, bytes)
             .map_err(|error| error.to_string())
         {
@@ -1319,7 +1319,7 @@ impl NyaTermApp {
         debug_assert!(!disposition.encode_session_charset);
         if let Err(error) = self
             .session
-            .manager
+            .manager()
             .write(session_id, wire_bytes)
             .map_err(|error| error.to_string())
         {
@@ -1347,7 +1347,7 @@ impl NyaTermApp {
         debug_assert!(!disposition.allow_command_history);
         if let Err(error) = self
             .session
-            .manager
+            .manager()
             .write(session_id, bytes)
             .map_err(|error| error.to_string())
         {

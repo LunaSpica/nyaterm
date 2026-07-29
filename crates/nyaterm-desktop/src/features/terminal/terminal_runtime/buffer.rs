@@ -595,7 +595,7 @@ impl NyaTermApp {
             let allow_deferred_events = terminal_frame_deferred_events_can_apply(
                 self.terminal.view.runtime.session_event_backlog_active,
                 self.terminal.view.runtime.session_event_queued_output_bytes,
-                self.session.event_bridge.queued_output_bytes(),
+                self.session.event_bridge_queued_output_bytes(),
                 pending_terminal_frame_output_events(&self.terminal.view.pending_frame_events),
                 self.terminal.view.frame_pipeline.queued_output_bytes(),
             );

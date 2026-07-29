@@ -26,7 +26,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> bool {
         let pending_session_start = self.has_pending_session_start();
-        let should_pump = !self.session.restore.is_complete()
+        let should_pump = !self.session.restore_is_complete()
             && self
                 .stores
                 .startup_restore
@@ -369,7 +369,7 @@ impl NyaTermApp {
                 || chrome_frame_notify_delta > 0
                 || self.terminal.view.runtime.session_event_queued_events > 0
                 || self.terminal.view.runtime.session_event_queued_output_bytes > 0
-                || self.session.event_bridge.queued_output_bytes() > 0
+                || self.session.event_bridge_queued_output_bytes() > 0
                 || self.terminal.view.frame_pipeline.queued_output_bytes() > 0
                 || self.terminal.view.frame_pipeline.queued_event_count() > 0
                 || !self.terminal.view.pending_frame_events.is_empty();
@@ -401,7 +401,7 @@ impl NyaTermApp {
                     queued_session_events = self.terminal.view.runtime.session_event_queued_events,
                     queued_session_output_bytes =
                         self.terminal.view.runtime.session_event_queued_output_bytes,
-                    bridge_output_bytes = self.session.event_bridge.queued_output_bytes(),
+                    bridge_output_bytes = self.session.event_bridge_queued_output_bytes(),
                     frame_command_count = self.terminal.view.frame_pipeline.queued_command_count(),
                     frame_command_output_bytes =
                         self.terminal.view.frame_pipeline.queued_output_bytes(),

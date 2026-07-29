@@ -31,7 +31,7 @@ impl NyaTermApp {
             self.terminal_scrollback_line_limit(),
         );
         self.reconcile_terminal_windows();
-        if self.session.restore.is_complete() {
+        if self.session.restore_is_complete() {
             self.persist_open_tabs();
         }
     }

@@ -2,8 +2,7 @@ use gpui::Context;
 use nyaterm_core::{AiCommandCard, truncate_preview};
 
 use crate::features::{
-    AiAgentStepStatus, CommandPersistencePoll, NyaTermApp, SESSION_COMMAND_HISTORY_LIMIT,
-    is_agent_command_card,
+    AiAgentStepStatus, CommandPersistencePoll, NyaTermApp, is_agent_command_card,
 };
 
 const COMMAND_PERSISTENCE_EVENT_DRAIN_LIMIT: usize = 32;
@@ -63,8 +62,8 @@ impl NyaTermApp {
         self.session
             .active_id
             .as_deref()
-            .and_then(|session_id| self.session.command_history.get(session_id))
-            .cloned()
+            .and_then(|session_id| self.session.command_history_for(session_id))
+            .map(<[String]>::to_vec)
             .unwrap_or_default()
     }
 
@@ -74,8 +73,7 @@ impl NyaTermApp {
     ) -> Option<String> {
         let session_id = self.session.active_id.as_deref()?;
         self.session
-            .command_history
-            .get(session_id)?
+            .command_history_for(session_id)?
             .get(index)
             .cloned()
     }
@@ -337,16 +335,6 @@ impl NyaTermApp {
         session_id: &str,
         command: &str,
     ) {
-        let normalized_command = command.trim();
-        if normalized_command.is_empty() {
-            return;
-        }
-        let history = self
-            .session
-            .command_history
-            .entry(session_id.to_string())
-            .or_default();
-        history.insert(0, normalized_command.to_string());
-        history.truncate(SESSION_COMMAND_HISTORY_LIMIT);
+        self.session.record_command_history(session_id, command);
     }
 }

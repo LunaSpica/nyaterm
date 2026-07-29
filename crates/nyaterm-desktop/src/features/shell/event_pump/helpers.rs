@@ -1,8 +1,5 @@
-use std::collections::VecDeque;
 use std::fmt::Write as _;
 use std::time::{Duration, Instant};
-
-use nyaterm_transport::SessionEvent;
 
 pub(super) const TRANSFER_AUTO_SYNC_CWD_INTERVAL_SECONDS: u32 = 3;
 pub(super) const SESSION_EVENT_DRAIN_BATCH: usize = 256;
@@ -368,16 +365,6 @@ pub(super) fn session_event_drain_should_yield(
     has_pending_events || transport_queued_events > 0 || transport_queued_output_bytes > 0
 }
 
-pub(super) fn session_events_output_bytes(events: &VecDeque<SessionEvent>) -> usize {
-    events
-        .iter()
-        .map(|event| match event {
-            SessionEvent::Output { data, .. } => data.len(),
-            _ => 0,
-        })
-        .sum()
-}
-
 pub(super) fn runtime_background_event_drain_budget_exhausted(started_at: Instant) -> bool {
     started_at.elapsed() >= RUNTIME_BACKGROUND_EVENT_DRAIN_WALL_BUDGET
 }
@@ -411,10 +398,7 @@ pub(super) fn terminal_log_plain_text(text: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::VecDeque;
     use std::time::{Duration, Instant};
-
-    use nyaterm_transport::SessionEvent;
 
     use super::{
         CONNECT_SETTLE_HOLD, PendingSessionAuthWait, RUNTIME_BACKGROUND_EVENT_DRAIN_WALL_BUDGET,
@@ -430,12 +414,12 @@ mod tests {
         runtime_tick_interval_for_pressure, runtime_ui_notify_allowed,
         session_event_backlog_active, session_event_drain_budget, session_event_drain_is_slow,
         session_event_drain_should_yield, session_event_input_wake_drain_budget,
-        session_events_output_bytes, terminal_cell_metrics_refresh_needed,
-        terminal_frame_apply_should_defer, terminal_frame_backlog_active_from_counts,
-        terminal_input_idle_remaining_delay, terminal_log_plain_text,
-        terminal_output_dropped_marker, terminal_performance_tick_session_ids,
-        terminal_render_work_pressure_active, terminal_user_scroll_frame_apply_pending,
-        viewport_change_terminal_session_ids, window_geometry_churn_active,
+        terminal_cell_metrics_refresh_needed, terminal_frame_apply_should_defer,
+        terminal_frame_backlog_active_from_counts, terminal_input_idle_remaining_delay,
+        terminal_log_plain_text, terminal_output_dropped_marker,
+        terminal_performance_tick_session_ids, terminal_render_work_pressure_active,
+        terminal_user_scroll_frame_apply_pending, viewport_change_terminal_session_ids,
+        window_geometry_churn_active,
     };
 
     #[test]
@@ -901,25 +885,6 @@ mod tests {
             1,
             budget
         ));
-    }
-
-    #[test]
-    fn session_events_output_bytes_counts_only_output_payloads() {
-        let mut events = VecDeque::new();
-        events.push_back(SessionEvent::Output {
-            session_id: "a".to_string(),
-            data: vec![1, 2, 3],
-        });
-        events.push_back(SessionEvent::Error {
-            session_id: "a".to_string(),
-            message: "nope".to_string(),
-        });
-        events.push_back(SessionEvent::Output {
-            session_id: "b".to_string(),
-            data: vec![4, 5],
-        });
-
-        assert_eq!(session_events_output_bytes(&events), 5);
     }
 
     #[test]

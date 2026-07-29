@@ -65,7 +65,7 @@ impl NyaTermApp {
         };
         for close_id in &close_ids {
             let disconnected = self.is_session_disconnected(close_id);
-            match self.session.manager.close(close_id) {
+            match self.session.manager().close(close_id) {
                 Ok(()) => {}
                 Err(_) if disconnected => {}
                 Err(error) if !disconnected && !self.session.metadata.contains_key(close_id) => {
@@ -120,7 +120,7 @@ impl NyaTermApp {
         let mut closed = 0usize;
         let mut failed = 0usize;
         for session_id in session_ids {
-            match self.session.manager.close(&session_id) {
+            match self.session.manager().close(&session_id) {
                 Ok(()) => {
                     self.cleanup_recording_for_session(&session_id);
                     self.remove_session_state(&session_id);

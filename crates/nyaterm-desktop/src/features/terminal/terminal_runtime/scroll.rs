@@ -1636,7 +1636,7 @@ impl NyaTermApp {
             }
             if backend_changed {
                 view.remember_backend_resize(cols, rows, pixel_width, pixel_height);
-                let _ = self.session.manager.resize_with_pixels(
+                let _ = self.session.manager().resize_with_pixels(
                     session_id,
                     cols,
                     rows,

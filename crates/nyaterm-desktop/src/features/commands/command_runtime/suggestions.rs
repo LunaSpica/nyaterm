@@ -919,9 +919,7 @@ impl NyaTermApp {
                 }
                 self.commands
                     .replace_command_history(store.list_command_history(64).unwrap_or_default());
-                for history in self.session.command_history.values_mut() {
-                    history.retain(|entry| entry != &command);
-                }
+                self.session.remove_command_from_all_history(&command);
             }
             Err(error) => {
                 self.terminal.view.status = format!("failed to open store: {error}");

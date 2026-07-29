@@ -272,7 +272,7 @@ impl NyaTermApp {
             cx,
         );
 
-        let session_manager = self.session.manager.clone();
+        let session_manager = self.session.manager_handle();
         let session_start_tx = self.session.start.sender();
         let request_id_for_worker = request_id.clone();
         std::thread::spawn(move || {

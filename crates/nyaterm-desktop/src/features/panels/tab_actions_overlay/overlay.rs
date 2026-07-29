@@ -53,7 +53,7 @@ impl NyaTermApp {
         let display_name = self.session_display_name_by_info(&session);
         let active_color = self.session.tab_colors.get(&session_id).copied();
         let can_copy_ssh = self.session_ssh_address(&session_id).is_some();
-        let busy_action = self.session.busy_actions.get(&session_id).cloned();
+        let busy_action = self.session.busy_action(&session_id).map(str::to_string);
         let is_busy = busy_action.is_some();
         let is_disconnected = self.is_session_disconnected(&session_id);
         let can_spawn_session = self.tab_action_can_spawn_session(&session_id);

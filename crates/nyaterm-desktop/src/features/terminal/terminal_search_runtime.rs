@@ -317,7 +317,7 @@ impl NyaTermApp {
         text: String,
         cx: &mut Context<Self>,
     ) {
-        self.session.active_search_draft = text;
+        self.session.set_active_search_draft(text);
         cx.notify();
     }
 }
