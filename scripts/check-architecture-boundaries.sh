@@ -161,6 +161,24 @@ check_no_matches \
   crates/nyaterm-desktop/src/features/terminal
 
 check_no_multiline_matches \
+  "terminal assist state must stay inside the terminal module" \
+  'struct[[:space:]]+TerminalFeatureState[[:space:]]*\{[^}]*pub([[:space:]]|\(crate\)|\(in crate\)|\(in crate::features\))[[:space:]]+assist[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/terminal/state.rs
+check_no_matches \
+  "terminal assist implementation type must stay inside the terminal module" \
+  'pub([[:space:]]|\(crate\)|\(in crate\)|\(in crate::features\))[[:space:]]+struct[[:space:]]+TerminalAssistState' \
+  crates/nyaterm-desktop/src/features/terminal/assist_state.rs
+check_no_multiline_matches_excluding \
+  "terminal assist child access must stay inside the terminal module" \
+  '\.[[:space:]]*terminal[[:space:]]*\.[[:space:]]*assist[[:space:]]*(\.|=|\[)' \
+  crates/nyaterm-desktop/src/features \
+  'crates/nyaterm-desktop/src/features/terminal/**'
+check_no_matches \
+  "terminal assist state must not expose mutable-reference accessors" \
+  'fn[[:space:]]+assist(_mut|_mutable)|->[[:space:]]*&mut[[:space:]]+TerminalAssistState' \
+  crates/nyaterm-desktop/src/features/terminal
+
+check_no_multiline_matches \
   "terminal window state must stay inside the terminal module" \
   'struct[[:space:]]+TerminalFeatureState[[:space:]]*\{[^}]*pub([[:space:]]|\(crate\)|\(in crate\)|\(in crate::features\))[[:space:]]+windows[[:space:]]*:' \
   crates/nyaterm-desktop/src/features/terminal/state.rs

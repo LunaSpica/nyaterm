@@ -26,9 +26,9 @@ impl NyaTermApp {
     pub(in crate::features) fn toggle_terminal_low_latency_mode(&mut self, cx: &mut Context<Self>) {
         self.settings.summary.terminal_low_latency_mode =
             !self.settings.summary.terminal_low_latency_mode;
-        self.terminal.assist.invalidate_command_suggestion_search();
+        self.terminal.invalidate_command_suggestion_search();
         if self.settings.summary.terminal_low_latency_mode {
-            self.terminal.assist.clear_command_tracking();
+            self.terminal.clear_command_tracking();
         }
         self.invalidate_paint_theme_caches();
         self.save_terminal_settings(cx);

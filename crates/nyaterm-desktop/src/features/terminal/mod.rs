@@ -1,5 +1,8 @@
 //! Terminal input, selection, search, painting surface and view runtime.
 
+mod assist_state;
+mod command_suggestions;
+mod credential_autofill;
 mod input_runtime;
 mod send_command_runtime;
 mod state;

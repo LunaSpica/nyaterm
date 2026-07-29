@@ -249,7 +249,7 @@ impl NyaTermApp {
             return;
         }
         let submitted: Vec<String> =
-            if let Some(command) = self.terminal.assist.pending_command_history_entry.take() {
+            if let Some(command) = self.terminal.take_pending_command_history_entry() {
                 vec![command]
             } else {
                 text.split(['\r', '\n'])

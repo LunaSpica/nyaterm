@@ -1,5 +1,4 @@
 use gpui::{Context, Window};
-use nyaterm_core::TerminalInputState;
 
 use crate::features::NyaTermApp;
 use crate::features::formatting::{short_id, ssh_multiplex_key};
@@ -248,9 +247,7 @@ impl NyaTermApp {
         }
 
         if self.session.active_id() == Some(session_id) {
-            self.terminal.assist.command_input_tracker = TerminalInputState::new();
-            self.terminal.assist.command_suggestions = None;
-            self.terminal.assist.credential_suggestions = None;
+            self.terminal.clear_active_session_assist();
         }
         self.prune_workspace_split();
         cx.notify();

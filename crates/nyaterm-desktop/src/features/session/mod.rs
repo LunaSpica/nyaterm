@@ -5,7 +5,6 @@ use std::collections::HashMap;
 use nyaterm_transport::SshMultiplexHandle;
 
 mod auth_runtime;
-mod credential_autofill_runtime;
 mod prompt_runtime;
 mod recording_runtime;
 mod session_dialog_runtime;

@@ -18,7 +18,9 @@ use crate::features::terminal::terminal_runtime::TERMINAL_INPUT_LATENCY_WINDOW;
 use crate::models::{CommandSuggestionItem, CommandSuggestionState};
 use crate::terminal::terminal_byte_index_for_cell_col;
 
-use super::helpers::command_suggestion_highlight_parts;
+mod helpers;
+
+use self::helpers::command_suggestion_highlight_parts;
 
 const COMMAND_SUGGESTION_INPUT_SLOW_THRESHOLD: Duration = Duration::from_millis(4);
 const COMMAND_SUGGESTION_REFRESH_SLOW_THRESHOLD: Duration = Duration::from_millis(8);

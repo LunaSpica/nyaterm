@@ -164,7 +164,7 @@ impl NyaTermApp {
             .interaction_command_suggestions_enabled
             && !self.shell.has_settings_draft()
         {
-            self.terminal.assist.clear_command_tracking();
+            self.terminal.clear_command_tracking();
         }
         self.save_interaction_settings(cx);
     }

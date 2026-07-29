@@ -460,8 +460,8 @@ impl NyaTermApp {
             terminal_context_menu_open: terminal_overlays.context_menu,
             action_link_menu_open: terminal_overlays.action_link_menu,
             action_link_tooltip_open: terminal_overlays.action_link_tooltip,
-            command_suggestions_open: self.terminal.assist.command_suggestions.is_some(),
-            credential_suggestions_open: self.terminal.assist.credential_suggestions.is_some(),
+            command_suggestions_open: self.terminal.command_suggestions_open(),
+            credential_suggestions_open: self.terminal.credential_suggestions_open(),
             close_all_sessions_confirm_open: self
                 .session
                 .dialogs

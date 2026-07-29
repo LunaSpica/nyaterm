@@ -294,7 +294,7 @@ impl NyaTermApp {
                     .summary
                     .interaction_command_suggestions_enabled
                 {
-                    self.terminal.assist.clear_command_tracking();
+                    self.terminal.clear_command_tracking();
                 }
                 self.invalidate_terminal_cell_metrics(cx);
                 self.refresh_visible_terminal_surfaces(cx);
