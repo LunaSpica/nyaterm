@@ -116,9 +116,9 @@ impl NyaTermApp {
             .flex()
             .items_center()
             .justify_center()
-            .track_focus(&self.transfer.external_sync.focus)
+            .track_focus(self.transfer.external_sync_focus())
             .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(&this.transfer.external_sync.focus);
+                window.focus(this.transfer.external_sync_focus());
                 cx.notify();
             }))
             .on_key_down(cx.listener(move |this, event: &KeyDownEvent, _, cx| {

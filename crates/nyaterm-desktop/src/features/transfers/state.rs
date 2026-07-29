@@ -34,7 +34,7 @@ pub(in crate::features) struct TransferFeatureState {
     pub browser: TransferBrowserState,
     file_ops: TransferFileOpsState,
     pub editor: TransferEditorState,
-    pub external_sync: TransferExternalSyncState,
+    external_sync: TransferExternalSyncState,
     panel: TransferPanelState,
 }
 
@@ -150,12 +150,12 @@ pub(in crate::features) struct TransferEditorState {
 }
 
 /// Handing a remote file to an external editor and syncing it back.
-pub(in crate::features) struct TransferExternalSyncState {
-    pub prompts: HashMap<String, TransferExternalSyncPromptState>,
-    pub windows: HashMap<String, WindowHandle<TransferExternalSyncWindow>>,
-    pub window_open_pending: HashSet<String>,
-    pub always_uploads: HashSet<String>,
-    pub focus: FocusHandle,
+struct TransferExternalSyncState {
+    prompts: HashMap<String, TransferExternalSyncPromptState>,
+    windows: HashMap<String, WindowHandle<TransferExternalSyncWindow>>,
+    window_open_pending: HashSet<String>,
+    always_uploads: HashSet<String>,
+    focus: FocusHandle,
 }
 
 /// Panel chrome: focus routing and height.
@@ -222,13 +222,7 @@ impl TransferFeatureState {
                 window: None,
                 window_open_pending: false,
             },
-            external_sync: TransferExternalSyncState {
-                prompts: HashMap::new(),
-                windows: HashMap::new(),
-                window_open_pending: HashSet::new(),
-                always_uploads: HashSet::new(),
-                focus: focus.external_sync,
-            },
+            external_sync: TransferExternalSyncState::new(focus.external_sync),
             panel: TransferPanelState {
                 focus: focus.panel,
                 height: panel_height,
@@ -810,6 +804,146 @@ impl TransferFeatureState {
         &self.file_ops.unknown_file_focus
     }
 
+    pub(in crate::features) fn external_sync_focus(&self) -> &FocusHandle {
+        &self.external_sync.focus
+    }
+
+    pub(in crate::features) fn external_sync_prompt(
+        &self,
+        prompt_id: &str,
+    ) -> Option<&TransferExternalSyncPromptState> {
+        self.external_sync.prompts.get(prompt_id)
+    }
+
+    pub(in crate::features) fn insert_external_sync_prompt(
+        &mut self,
+        prompt_id: String,
+        prompt: TransferExternalSyncPromptState,
+    ) {
+        self.external_sync.prompts.insert(prompt_id, prompt);
+    }
+
+    pub(in crate::features) fn active_external_sync_prompt(
+        &self,
+        session_id: &str,
+    ) -> Option<(String, TransferExternalSyncPromptState)> {
+        self.external_sync
+            .prompts
+            .iter()
+            .find(|(prompt_id, prompt)| {
+                prompt.session_id.as_deref() == Some(session_id)
+                    && !self.external_sync.windows.contains_key(*prompt_id)
+                    && !self.external_sync.window_open_pending.contains(*prompt_id)
+            })
+            .map(|(prompt_id, prompt)| (prompt_id.clone(), prompt.clone()))
+    }
+
+    pub(in crate::features) fn external_sync_always_uploads(&self, watch_key: &str) -> bool {
+        self.external_sync.always_uploads.contains(watch_key)
+    }
+
+    pub(in crate::features) fn take_external_sync_prompt_for_upload(
+        &mut self,
+        prompt_id: &str,
+        always_watch_key: Option<String>,
+    ) -> Option<TransferExternalSyncPromptState> {
+        let prompt = self.external_sync.prompts.remove(prompt_id)?;
+        self.external_sync.windows.remove(prompt_id);
+        self.external_sync.window_open_pending.remove(prompt_id);
+        if let Some(watch_key) = always_watch_key {
+            self.external_sync.always_uploads.insert(watch_key);
+        }
+        Some(prompt)
+    }
+
+    pub(in crate::features) fn dismiss_external_sync_prompt(&mut self, prompt_id: &str) -> bool {
+        let removed = self.external_sync.prompts.remove(prompt_id).is_some();
+        self.external_sync.windows.remove(prompt_id);
+        self.external_sync.window_open_pending.remove(prompt_id);
+        removed
+    }
+
+    pub(in crate::features) fn clear_external_sync_for_session(
+        &mut self,
+        session_id: &str,
+    ) -> usize {
+        let before = self.external_sync.prompts.len();
+        self.external_sync
+            .prompts
+            .retain(|_, prompt| prompt.session_id.as_deref() != Some(session_id));
+        let prompts = &self.external_sync.prompts;
+        self.external_sync
+            .windows
+            .retain(|prompt_id, _| prompts.contains_key(prompt_id));
+        self.external_sync
+            .window_open_pending
+            .retain(|prompt_id| prompts.contains_key(prompt_id));
+        before.saturating_sub(self.external_sync.prompts.len())
+    }
+
+    pub(in crate::features) fn external_sync_has_window(&self) -> bool {
+        !self.external_sync.windows.is_empty()
+    }
+
+    pub(in crate::features) fn external_sync_has_pending_window(&self) -> bool {
+        !self.external_sync.window_open_pending.is_empty()
+    }
+
+    pub(in crate::features) fn first_external_sync_window(
+        &self,
+    ) -> Option<(String, WindowHandle<TransferExternalSyncWindow>)> {
+        self.external_sync
+            .windows
+            .iter()
+            .next()
+            .map(|(prompt_id, handle)| (prompt_id.clone(), *handle))
+    }
+
+    pub(in crate::features) fn external_sync_window(
+        &self,
+        prompt_id: &str,
+    ) -> Option<WindowHandle<TransferExternalSyncWindow>> {
+        self.external_sync.windows.get(prompt_id).copied()
+    }
+
+    pub(in crate::features) fn external_sync_window_open_is_pending(
+        &self,
+        prompt_id: &str,
+    ) -> bool {
+        self.external_sync.window_open_pending.contains(prompt_id)
+    }
+
+    pub(in crate::features) fn begin_external_sync_window_open(&mut self, prompt_id: &str) -> bool {
+        if !self.external_sync.prompts.contains_key(prompt_id)
+            || self.external_sync.windows.contains_key(prompt_id)
+            || self.external_sync.window_open_pending.contains(prompt_id)
+        {
+            return false;
+        }
+        self.external_sync
+            .window_open_pending
+            .insert(prompt_id.to_string());
+        true
+    }
+
+    pub(in crate::features) fn finish_external_sync_window_open(
+        &mut self,
+        prompt_id: String,
+        handle: WindowHandle<TransferExternalSyncWindow>,
+    ) {
+        self.external_sync.windows.insert(prompt_id.clone(), handle);
+        self.external_sync.window_open_pending.remove(&prompt_id);
+    }
+
+    pub(in crate::features) fn clear_external_sync_window_tracking(
+        &mut self,
+        prompt_id: &str,
+    ) -> bool {
+        let removed_window = self.external_sync.windows.remove(prompt_id).is_some();
+        let removed_pending = self.external_sync.window_open_pending.remove(prompt_id);
+        removed_window || removed_pending
+    }
+
     pub(in crate::features) fn remote_path(&self) -> &str {
         self.paths.remote_path()
     }
@@ -947,6 +1081,18 @@ impl TransferFileOpsState {
         self.properties.as_mut().filter(|state| {
             state.session_id.as_deref() == session_id && state.entry.path == remote_path
         })
+    }
+}
+
+impl TransferExternalSyncState {
+    fn new(focus: FocusHandle) -> Self {
+        Self {
+            prompts: HashMap::new(),
+            windows: HashMap::new(),
+            window_open_pending: HashSet::new(),
+            always_uploads: HashSet::new(),
+            focus,
+        }
     }
 }
 
@@ -1392,9 +1538,9 @@ mod tests {
     };
 
     use crate::models::{
-        TransferJobEvent, TransferJobKind, TransferJobResult, TransferJobState, TransferJobStatus,
-        TransferNewFolderState, TransferPathPromptKind, TransferPropertiesField,
-        TransferPropertiesState, TransferRenameState,
+        TransferExternalSyncPromptState, TransferJobEvent, TransferJobKind, TransferJobResult,
+        TransferJobState, TransferJobStatus, TransferNewFolderState, TransferPathPromptKind,
+        TransferPropertiesField, TransferPropertiesState, TransferRenameState,
     };
 
     use super::{
@@ -1491,6 +1637,18 @@ mod tests {
         }
     }
 
+    fn external_sync_prompt(
+        session_id: Option<&str>,
+        job_id: &str,
+    ) -> TransferExternalSyncPromptState {
+        TransferExternalSyncPromptState {
+            session_id: session_id.map(str::to_string),
+            job_id: job_id.to_string(),
+            remote_path: format!("/remote/{job_id}.txt"),
+            local_path: PathBuf::from(format!("/local/{job_id}.txt")),
+        }
+    }
+
     #[test]
     fn transfer_paths_own_endpoints_policy_and_prompt_admission() {
         let mut paths = TransferPathState::new(
@@ -1575,6 +1733,116 @@ mod tests {
         assert_eq!(folder.value, "logs");
         assert!(folder.open_after_create);
         assert_eq!(folder.mode, 0o775);
+    }
+
+    #[test]
+    fn external_sync_prompts_are_filtered_by_session_and_window_admission() {
+        let cx = TestAppContext::single();
+        let mut transfer = transfer_state(&cx);
+        transfer.insert_external_sync_prompt(
+            "prompt-a".to_string(),
+            external_sync_prompt(Some("session-a"), "job-a"),
+        );
+        transfer.insert_external_sync_prompt(
+            "prompt-b".to_string(),
+            external_sync_prompt(Some("session-b"), "job-b"),
+        );
+
+        assert_eq!(
+            transfer
+                .active_external_sync_prompt("session-a")
+                .map(|(prompt_id, _)| prompt_id),
+            Some("prompt-a".to_string())
+        );
+        assert!(transfer.begin_external_sync_window_open("prompt-a"));
+        assert!(!transfer.begin_external_sync_window_open("prompt-a"));
+        assert!(transfer.active_external_sync_prompt("session-a").is_none());
+        assert_eq!(
+            transfer
+                .active_external_sync_prompt("session-b")
+                .map(|(prompt_id, _)| prompt_id),
+            Some("prompt-b".to_string())
+        );
+        assert!(!transfer.begin_external_sync_window_open("missing"));
+
+        assert!(transfer.clear_external_sync_window_tracking("prompt-a"));
+        assert!(!transfer.external_sync_window_open_is_pending("prompt-a"));
+        assert_eq!(
+            transfer
+                .active_external_sync_prompt("session-a")
+                .map(|(prompt_id, _)| prompt_id),
+            Some("prompt-a".to_string())
+        );
+
+        assert!(transfer.begin_external_sync_window_open("prompt-b"));
+        assert!(transfer.dismiss_external_sync_prompt("prompt-b"));
+        assert!(transfer.external_sync_prompt("prompt-b").is_none());
+        assert!(!transfer.external_sync_window_open_is_pending("prompt-b"));
+        assert!(!transfer.dismiss_external_sync_prompt("prompt-b"));
+    }
+
+    #[test]
+    fn external_sync_upload_resolution_cleans_tracking_and_records_policy() {
+        let cx = TestAppContext::single();
+        let mut transfer = transfer_state(&cx);
+        transfer.insert_external_sync_prompt(
+            "prompt-a".to_string(),
+            external_sync_prompt(Some("session-a"), "job-a"),
+        );
+        assert!(transfer.begin_external_sync_window_open("prompt-a"));
+
+        let prompt = transfer
+            .take_external_sync_prompt_for_upload(
+                "prompt-a",
+                Some("/remote/job-a.txt\n/local/job-a.txt".to_string()),
+            )
+            .expect("known prompt should resolve for upload");
+
+        assert_eq!(prompt.job_id, "job-a");
+        assert!(transfer.external_sync_prompt("prompt-a").is_none());
+        assert!(!transfer.external_sync_window_open_is_pending("prompt-a"));
+        assert!(transfer.external_sync_always_uploads("/remote/job-a.txt\n/local/job-a.txt"));
+        assert!(
+            transfer
+                .take_external_sync_prompt_for_upload("prompt-a", None)
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn external_sync_session_cleanup_preserves_other_sessions_and_policy() {
+        let cx = TestAppContext::single();
+        let mut transfer = transfer_state(&cx);
+        transfer.insert_external_sync_prompt(
+            "prompt-a-1".to_string(),
+            external_sync_prompt(Some("session-a"), "job-a-1"),
+        );
+        transfer.insert_external_sync_prompt(
+            "prompt-a-2".to_string(),
+            external_sync_prompt(Some("session-a"), "job-a-2"),
+        );
+        transfer.insert_external_sync_prompt(
+            "prompt-b".to_string(),
+            external_sync_prompt(Some("session-b"), "job-b"),
+        );
+        transfer.insert_external_sync_prompt(
+            "policy-source".to_string(),
+            external_sync_prompt(None, "policy-source"),
+        );
+        transfer.take_external_sync_prompt_for_upload(
+            "policy-source",
+            Some("persistent-watch-key".to_string()),
+        );
+        assert!(transfer.begin_external_sync_window_open("prompt-a-1"));
+        assert!(transfer.begin_external_sync_window_open("prompt-b"));
+
+        assert_eq!(transfer.clear_external_sync_for_session("session-a"), 2);
+        assert!(transfer.external_sync_prompt("prompt-a-1").is_none());
+        assert!(transfer.external_sync_prompt("prompt-a-2").is_none());
+        assert!(!transfer.external_sync_window_open_is_pending("prompt-a-1"));
+        assert!(transfer.external_sync_prompt("prompt-b").is_some());
+        assert!(transfer.external_sync_window_open_is_pending("prompt-b"));
+        assert!(transfer.external_sync_always_uploads("persistent-watch-key"));
     }
 
     #[test]

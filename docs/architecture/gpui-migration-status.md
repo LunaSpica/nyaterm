@@ -374,6 +374,12 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   closing a session removes only its properties dialog. GPUI focus, text-input
   registry cleanup, terminal/browser status and SFTP job launch remain in the
   application adapters.
+  The external-sync pass made its prompt catalog, child-window index, pending
+  window admissions and always-upload policy private. Active-session prompt
+  selection, upload/ignore resolution and session cleanup are now atomic owner
+  transitions, so consuming a prompt or closing its session also reconciles
+  associated window tracking. GPUI window creation and activation, terminal
+  status updates and SFTP upload work remain in the application adapters.
 - The SFTP browser parity pass covers the six Tauri file-manager areas: toolbar
   commands and state, editable path/history/breadcrumb navigation, resizable
   sortable columns, range/additive selection and context actions, transfer
@@ -1442,6 +1448,7 @@ Current ownership map:
 | Transfer endpoints and path prompts | Private child in `NyaTermApp.transfer` | Transient endpoints, compatibility-derived policy and prompt admission | Remote/local paths, duplicate policy and the shared native prompt slot enter through `TransferFeatureState`; normalization, single-prompt admission and kind-matched completion are owner transitions while GPUI prompts, jobs and settings persistence stay in adapters. |
 | Transfer job queue | Private child in `NyaTermApp.transfer` | Typed background-event queue plus transient interaction state | Monotonic job-id allocation, admission/removal, result-channel access, selection/menu/delete lifecycles, session-switch reset and session-scoped batch actions enter through `TransferFeatureState`; cleanup also prunes stale interaction references. Renderers receive a read-only slice, protocol adapters can update individual jobs without receiving the backing collection, and the event reducer temporarily extracts only its matched job while it coordinates browser/editor side effects. |
 | Transfer file-operation dialogs | Private child in `NyaTermApp.transfer` | Transient dialog drafts, focus and property-operation lifecycle | Rename/move/delete/create/properties/unknown-file state enters through `TransferFeatureState`; deferred rename focus is consumed atomically, creation options update semantically, and property results require matching session/path ownership. Renderers receive read-only dialog state while GPUI focus, text inputs, status and SFTP launch remain in adapters. |
+| Transfer external-editor sync | Private child in `NyaTermApp.transfer` | Transient prompts, child-window tracking and always-upload policy | Prompt admission/filtering/resolution, window admission/tracking and session cleanup enter through `TransferFeatureState`; consuming or dismissing a prompt reconciles its tracked window state. GPUI window operations, status updates and SFTP upload launch remain in adapters. |
 | Serial ports | Private catalog in `NyaTermApp.connection_catalog` | Runtime/discovered state | Replaced through the catalog after session-manager discovery and never persisted. |
 | Tunnel/proxy configs | Private catalog in `NyaTermApp.tunnel_state` | Persisted network config | Views use read-only slices; pure move/upsert/delete candidates and successful commits stay on `TunnelFeatureState`. The Network page UI remains separate transient state. |
 | Queued saved-connection starts | `NyaTermApp.session.start` private queue | Transient session-start state | Admission, duplicate detection, draining and runtime cadence reads go through `SessionStartFeatureState` methods. |
@@ -1706,7 +1713,10 @@ honest remaining list.
    interpretation in its existing desktop adapters; the file-operation pass
    then made all eight dialog slots and focus handles private, moving deferred
    rename focus, creation-option edits, property result matching and
-   session-scoped property cleanup onto the same owner. Cloud sync made
+   session-scoped property cleanup onto the same owner; the external-sync pass
+   then made prompt, child-window, pending-open and always-upload state private,
+   coupling prompt resolution and session cleanup with window-tracking cleanup
+   while leaving GPUI windows and SFTP uploads in their adapters. Cloud sync made
    secret-field routing inaccessible outside
    its owner, and
    recording cleanup can no longer leave its manager, busy map and pipeline out

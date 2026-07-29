@@ -659,8 +659,8 @@ impl NyaTermApp {
             || self.shell.navigation.settings.window_open_pending
             || self.commands.quick_editor_window_is_open_or_pending()
             || self.connection_state.editor_modal_window_open_or_pending()
-            || !self.transfer.external_sync.windows.is_empty()
-            || !self.transfer.external_sync.window_open_pending.is_empty()
+            || self.transfer.external_sync_has_window()
+            || self.transfer.external_sync_has_pending_window()
     }
 
     fn activate_modal_child_window(&mut self, cx: &mut Context<Self>) -> bool {
@@ -676,10 +676,10 @@ impl NyaTermApp {
             self.activate_connection_editor_window(cx)
         } else if self.connection_state.editor_window_open_pending() {
             true
-        } else if !self.transfer.external_sync.windows.is_empty() {
+        } else if self.transfer.external_sync_has_window() {
             self.activate_transfer_external_sync_window(cx)
         } else {
-            !self.transfer.external_sync.window_open_pending.is_empty()
+            self.transfer.external_sync_has_pending_window()
         }
     }
 

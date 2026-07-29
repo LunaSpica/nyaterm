@@ -229,20 +229,7 @@ impl NyaTermApp {
         &self,
     ) -> Option<(String, TransferExternalSyncPromptState)> {
         let active_session_id = self.session.active_id()?;
-        self.transfer
-            .external_sync
-            .prompts
-            .iter()
-            .find(|(prompt_id, prompt)| {
-                prompt.session_id.as_deref() == Some(active_session_id)
-                    && !self.transfer.external_sync.windows.contains_key(*prompt_id)
-                    && !self
-                        .transfer
-                        .external_sync
-                        .window_open_pending
-                        .contains(*prompt_id)
-            })
-            .map(|(prompt_id, prompt)| (prompt_id.clone(), prompt.clone()))
+        self.transfer.active_external_sync_prompt(active_session_id)
     }
 
     pub(in crate::features) fn upload_external_editor_sync_prompt(
@@ -251,19 +238,20 @@ impl NyaTermApp {
         always: bool,
         cx: &mut Context<Self>,
     ) {
-        let Some(prompt) = self.transfer.external_sync.prompts.remove(prompt_id) else {
+        let always_watch_key = if always {
+            self.transfer
+                .external_sync_prompt(prompt_id)
+                .map(|prompt| external_editor_watch_key(&prompt.remote_path, &prompt.local_path))
+        } else {
+            None
+        };
+        let Some(prompt) = self
+            .transfer
+            .take_external_sync_prompt_for_upload(prompt_id, always_watch_key)
+        else {
             cx.notify();
             return;
         };
-        self.transfer.external_sync.windows.remove(prompt_id);
-        self.transfer
-            .external_sync
-            .window_open_pending
-            .remove(prompt_id);
-        let watch_key = external_editor_watch_key(&prompt.remote_path, &prompt.local_path);
-        if always {
-            self.transfer.external_sync.always_uploads.insert(watch_key);
-        }
         self.upload_external_editor_sync(
             prompt.session_id,
             prompt.job_id,
@@ -278,12 +266,7 @@ impl NyaTermApp {
         prompt_id: &str,
         cx: &mut Context<Self>,
     ) {
-        self.transfer.external_sync.prompts.remove(prompt_id);
-        self.transfer.external_sync.windows.remove(prompt_id);
-        self.transfer
-            .external_sync
-            .window_open_pending
-            .remove(prompt_id);
+        self.transfer.dismiss_external_sync_prompt(prompt_id);
         self.terminal.view.status = "external edit sync skipped".to_string();
         cx.notify();
     }

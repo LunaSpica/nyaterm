@@ -28,18 +28,12 @@ impl Render for TransferExternalSyncWindow {
             .app
             .read(cx)
             .transfer
-            .external_sync
-            .prompts
-            .get(&self.prompt_id)
+            .external_sync_prompt(&self.prompt_id)
             .cloned()
         else {
             let prompt_id = self.prompt_id.clone();
             self.app.update(cx, |app, cx| {
-                app.transfer.external_sync.windows.remove(&prompt_id);
-                app.transfer
-                    .external_sync
-                    .window_open_pending
-                    .remove(&prompt_id);
+                app.transfer.clear_external_sync_window_tracking(&prompt_id);
                 cx.notify();
             });
             window.defer(cx, |window, _| window.remove_window());
@@ -94,14 +88,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> bool {
-        let Some((prompt_id, handle)) = self
-            .transfer
-            .external_sync
-            .windows
-            .iter()
-            .next()
-            .map(|(prompt_id, handle)| (prompt_id.clone(), *handle))
-        else {
+        let Some((prompt_id, handle)) = self.transfer.first_external_sync_window() else {
             return false;
         };
         let app = cx.entity();
@@ -111,7 +98,7 @@ impl NyaTermApp {
                 .is_err()
             {
                 let _ = app.update(cx, |app, cx| {
-                    app.transfer.external_sync.windows.remove(&prompt_id);
+                    app.transfer.clear_external_sync_window_tracking(&prompt_id);
                     cx.notify();
                 });
             }
@@ -124,7 +111,7 @@ impl NyaTermApp {
         prompt_id: String,
         cx: &mut Context<Self>,
     ) -> bool {
-        if let Some(handle) = self.transfer.external_sync.windows.get(&prompt_id).copied() {
+        if let Some(handle) = self.transfer.external_sync_window(&prompt_id) {
             let app = cx.entity();
             cx.defer(move |cx| {
                 if handle
@@ -132,7 +119,7 @@ impl NyaTermApp {
                     .is_err()
                 {
                     let _ = app.update(cx, |app, cx| {
-                        app.transfer.external_sync.windows.remove(&prompt_id);
+                        app.transfer.clear_external_sync_window_tracking(&prompt_id);
                         cx.notify();
                     });
                 }
@@ -141,29 +128,20 @@ impl NyaTermApp {
         }
         if self
             .transfer
-            .external_sync
-            .window_open_pending
-            .contains(&prompt_id)
+            .external_sync_window_open_is_pending(&prompt_id)
         {
             return true;
         }
-        if !self.transfer.external_sync.prompts.contains_key(&prompt_id) {
+        if !self.transfer.begin_external_sync_window_open(&prompt_id) {
             return false;
         }
-
-        self.transfer
-            .external_sync
-            .window_open_pending
-            .insert(prompt_id.clone());
         cx.notify();
         let app = cx.entity();
         cx.defer(move |cx| {
             let should_open = app
                 .read(cx)
                 .transfer
-                .external_sync
-                .window_open_pending
-                .contains(&prompt_id);
+                .external_sync_window_open_is_pending(&prompt_id);
             if should_open {
                 open_transfer_external_sync_window_now_from_app(app, prompt_id, cx);
             }
@@ -177,36 +155,23 @@ fn open_transfer_external_sync_window_now_from_app(
     prompt_id: String,
     cx: &mut App,
 ) {
-    if let Some(handle) = app
-        .read(cx)
-        .transfer
-        .external_sync
-        .windows
-        .get(&prompt_id)
-        .copied()
-    {
+    if let Some(handle) = app.read(cx).transfer.external_sync_window(&prompt_id) {
         let _ = handle.update(cx, |_, window, _| window.activate_window());
         let _ = app.update(cx, |app, cx| {
             app.transfer
-                .external_sync
-                .window_open_pending
-                .remove(&prompt_id);
+                .finish_external_sync_window_open(prompt_id.clone(), handle);
             cx.notify();
         });
         return;
     }
-    if !app
+    if app
         .read(cx)
         .transfer
-        .external_sync
-        .prompts
-        .contains_key(&prompt_id)
+        .external_sync_prompt(&prompt_id)
+        .is_none()
     {
         let _ = app.update(cx, |app, cx| {
-            app.transfer
-                .external_sync
-                .window_open_pending
-                .remove(&prompt_id);
+            app.transfer.clear_external_sync_window_tracking(&prompt_id);
             cx.notify();
         });
         return;
@@ -234,7 +199,7 @@ fn open_transfer_external_sync_window_now_from_app(
                 });
                 true
             });
-            let prompt_focus = view_app.read(cx).transfer.external_sync.focus.clone();
+            let prompt_focus = view_app.read(cx).transfer.external_sync_focus().clone();
             window.focus(&prompt_focus);
             cx.new(|cx| TransferExternalSyncWindow::new(view_app, view_prompt_id, cx))
         },
@@ -243,21 +208,11 @@ fn open_transfer_external_sync_window_now_from_app(
     let _ = app.update(cx, |app, cx| match result {
         Ok(handle) => {
             app.transfer
-                .external_sync
-                .windows
-                .insert(prompt_id.clone(), handle);
-            app.transfer
-                .external_sync
-                .window_open_pending
-                .remove(&prompt_id);
+                .finish_external_sync_window_open(prompt_id.clone(), handle);
             cx.notify();
         }
         Err(error) => {
-            app.transfer.external_sync.windows.remove(&prompt_id);
-            app.transfer
-                .external_sync
-                .window_open_pending
-                .remove(&prompt_id);
+            app.transfer.clear_external_sync_window_tracking(&prompt_id);
             app.terminal.view.status = format!("failed to open auto-upload window: {error}");
             cx.notify();
         }

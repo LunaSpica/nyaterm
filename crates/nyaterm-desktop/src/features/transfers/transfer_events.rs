@@ -187,12 +187,7 @@ impl NyaTermApp {
                 } => {
                     job.detail = format!("External edit changed {}", local_path.display());
                     let watch_key = format!("{remote_path}\n{}", local_path.display());
-                    if self
-                        .transfer
-                        .external_sync
-                        .always_uploads
-                        .contains(&watch_key)
-                    {
+                    if self.transfer.external_sync_always_uploads(&watch_key) {
                         external_sync_to_start = Some((
                             job_session_id.clone(),
                             job.id.clone(),
@@ -201,7 +196,7 @@ impl NyaTermApp {
                         ));
                     } else if let Some(session_id) = job_session_id.clone() {
                         let prompt_id = job.id.clone();
-                        self.transfer.external_sync.prompts.insert(
+                        self.transfer.insert_external_sync_prompt(
                             prompt_id.clone(),
                             TransferExternalSyncPromptState {
                                 session_id: Some(session_id),

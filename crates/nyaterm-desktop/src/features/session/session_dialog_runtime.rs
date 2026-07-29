@@ -222,18 +222,7 @@ impl NyaTermApp {
             .session_surface_bounds
             .remove(session_id);
         self.transfer.browser.session_cache.remove(session_id);
-        self.transfer
-            .external_sync
-            .prompts
-            .retain(|_, prompt| prompt.session_id.as_deref() != Some(session_id));
-        self.transfer
-            .external_sync
-            .windows
-            .retain(|prompt_id, _| self.transfer.external_sync.prompts.contains_key(prompt_id));
-        self.transfer
-            .external_sync
-            .window_open_pending
-            .retain(|prompt_id| self.transfer.external_sync.prompts.contains_key(prompt_id));
+        self.transfer.clear_external_sync_for_session(session_id);
         self.transfer
             .close_properties_dialog_for_session(session_id);
         if let Some(workspace) = self.transfer.editor.workspace.as_mut() {
