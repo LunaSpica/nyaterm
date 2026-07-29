@@ -339,7 +339,7 @@ check_no_matches \
 
 check_no_matches \
   "sync input pure mutations must stay on SyncInputFeatureState" \
-  'fn[[:space:]]+(delete_selected_sync_group|selected_sync_group_mut|next_sync_group_color)[[:space:]]*\(' \
+  'fn[[:space:]]+(delete_selected_sync_group|selected_sync_group_mut|next_sync_group_color|active_sync_group_for_session|is_session_paused_in_active_sync_group|purge_session_from_sync_groups|selected_sync_group)[[:space:]]*\(' \
   crates/nyaterm-desktop/src/features
 
 check_no_matches \
@@ -697,6 +697,10 @@ check_no_multiline_matches \
   "transfer editor child state access must use TransferFeatureState methods" \
   '(self|this|app)\.transfer[[:space:]]*\.editor(\.|[[:space:]]*=)' \
   crates/nyaterm-desktop/src/features
+check_no_matches \
+  "transfer owner-local queries and transitions must not return to NyaTermApp" \
+  'fn[[:space:]]+(next_transfer_id|active_transfer_editor_tab|active_transfer_editor_tab_mut|cancel_transfer_browser_pending_rename_without_notify)[[:space:]]*\(' \
+  crates/nyaterm-desktop/src/features
 
 check_no_multiline_matches \
   "SendCommandFeatureState children must remain private" \
@@ -861,6 +865,30 @@ check_no_multiline_matches \
 check_no_multiline_matches \
   "session catalog and presentation access must use SessionFeatureState methods" \
   '(self|this|app)[[:space:]]*\.[[:space:]]*session[[:space:]]*\.[[:space:]]*(order|metadata|custom_names|dynamic_titles|cwds|tab_colors)([[:space:]]*\.|[[:space:]]*=)' \
+  crates/nyaterm-desktop/src/features
+check_no_matches \
+  "session catalog queries must not return to NyaTermApp" \
+  'fn[[:space:]]+(session_display_name_by_info|session_display_name|session_endpoint|session_ssh_host|session_ssh_address|session_tab_tooltip_lines|is_session_disconnected)[[:space:]]*\(' \
+  crates/nyaterm-desktop/src/features
+check_no_matches \
+  "session list queries must stay on SessionFeatureState" \
+  'fn[[:space:]]+(ordered_sessions|session_info|live_session_count)[[:space:]]*\(' \
+  crates/nyaterm-desktop/src/features/session/session_order.rs
+check_no_matches \
+  "session command-history queries must not return to NyaTermApp" \
+  'fn[[:space:]]+(active_session_history_commands|active_session_history_command|record_session_command_history)[[:space:]]*\(' \
+  crates/nyaterm-desktop/src/features
+check_no_matches \
+  "session ordering transitions must stay on SessionFeatureState" \
+  'fn[[:space:]]+(move_session_after|move_session_to_index)[[:space:]]*\(' \
+  crates/nyaterm-desktop/src/features/session/session_order.rs
+check_no_matches \
+  "next-session selection must stay on SessionFeatureState" \
+  'fn[[:space:]]+next_session_after[[:space:]]*\(' \
+  crates/nyaterm-desktop/src/features/session/session_dialog_runtime.rs
+check_no_matches \
+  "session-start read queries must not return to NyaTermApp" \
+  'fn[[:space:]]+(has_pending_session_start|has_failed_session_start|pending_session_display_name|active_failed_session|failed_session_display_name|pending_session_status_source|saved_connection_start_is_pending|saved_connection_start_is_pending_or_queued)[[:space:]]*\(' \
   crates/nyaterm-desktop/src/features
 check_no_multiline_matches \
   "SessionFeatureState active selection must remain private" \

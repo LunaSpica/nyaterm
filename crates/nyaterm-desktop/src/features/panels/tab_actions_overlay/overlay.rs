@@ -35,7 +35,7 @@ impl NyaTermApp {
         else {
             return div().into_any_element();
         };
-        let sessions = self.ordered_sessions();
+        let sessions = self.session.ordered_sessions();
         let Some(session) = sessions
             .iter()
             .find(|session| session.id == session_id)
@@ -45,16 +45,16 @@ impl NyaTermApp {
             return div().into_any_element();
         };
 
-        let display_name = self.session_display_name_by_info(&session);
+        let display_name = self.session.display_name_by_info(&session);
         let active_color = self.session.tab_color(&session_id);
-        let can_copy_ssh = self.session_ssh_address(&session_id).is_some();
+        let can_copy_ssh = self.session.ssh_address(&session_id).is_some();
         let busy_action = self.session.busy_action(&session_id).map(str::to_string);
         let is_busy = busy_action.is_some();
-        let is_disconnected = self.is_session_disconnected(&session_id);
+        let is_disconnected = self.session.is_disconnected(&session_id);
         let can_spawn_session = self.tab_action_can_spawn_session(&session_id);
         let can_session_info = self.tab_action_can_show_session_info(&session_id);
         let can_multiplex = session.kind == SessionKind::Ssh && !is_busy && !is_disconnected;
-        let can_reconnect = can_spawn_session && !is_busy && !self.has_pending_session_start();
+        let can_reconnect = can_spawn_session && !is_busy && !self.session.start_has_pending();
         let can_disconnect = !is_busy && !is_disconnected;
         let can_use_ai = !is_busy && !is_disconnected;
         let can_close_inactive = sessions.len() > 1;

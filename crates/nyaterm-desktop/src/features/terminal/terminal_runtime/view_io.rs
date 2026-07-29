@@ -655,7 +655,7 @@ impl NyaTermApp {
             }
             return false;
         };
-        if self.is_session_disconnected(&session_id) {
+        if self.session.is_disconnected(&session_id) {
             // Key handler owns Enter-to-reconnect (needs Window). Block writes here.
             if self
                 .set_terminal_status_if_changed("session disconnected — press Enter to reconnect")
@@ -777,7 +777,7 @@ impl NyaTermApp {
             }
             return false;
         };
-        if self.is_session_disconnected(&session_id) {
+        if self.session.is_disconnected(&session_id) {
             if self
                 .set_terminal_status_if_changed("session disconnected — press Enter to reconnect")
             {
@@ -904,7 +904,7 @@ impl NyaTermApp {
         let Some(session_id) = self.session.active_id_owned() else {
             return false;
         };
-        if self.is_session_disconnected(&session_id) {
+        if self.session.is_disconnected(&session_id) {
             return false;
         }
         let Some(primary_bytes) =
@@ -964,7 +964,7 @@ impl NyaTermApp {
         if delta_lines == 0 || session_id.is_empty() {
             return false;
         }
-        if self.is_session_disconnected(session_id) {
+        if self.session.is_disconnected(session_id) {
             return false;
         }
         let Some(payload) = self.alternate_scroll_payload_for_session(session_id, delta_lines)
@@ -1006,7 +1006,7 @@ impl NyaTermApp {
         session_id: &str,
         delta_lines: i32,
     ) -> Option<Vec<u8>> {
-        if delta_lines == 0 || session_id.is_empty() || self.is_session_disconnected(session_id) {
+        if delta_lines == 0 || session_id.is_empty() || self.session.is_disconnected(session_id) {
             return None;
         }
         self.terminal_protocol_state_for_session(session_id)
@@ -1150,7 +1150,7 @@ impl NyaTermApp {
         if session_id.is_empty() {
             return MouseReportWriteResult::NotHandled;
         }
-        let disconnected = self.is_session_disconnected(session_id);
+        let disconnected = self.session.is_disconnected(session_id);
         let protocol = self.terminal_protocol_state_for_session(session_id);
         if !protocol.mouse_reporting {
             return MouseReportWriteResult::NotHandled;
@@ -1447,7 +1447,7 @@ impl NyaTermApp {
         session_id: &str,
         focused: bool,
     ) -> bool {
-        if self.is_session_disconnected(session_id) {
+        if self.session.is_disconnected(session_id) {
             return false;
         }
         if !self
@@ -1480,7 +1480,7 @@ impl NyaTermApp {
         if bytes.is_empty() {
             return false;
         }
-        if self.is_session_disconnected(&session_id) {
+        if self.session.is_disconnected(&session_id) {
             if self.set_terminal_status_if_changed(
                 "session disconnected — reconnect before sending".to_string(),
             ) {
@@ -1519,7 +1519,7 @@ impl NyaTermApp {
         if bytes.is_empty() {
             return false;
         }
-        if self.is_session_disconnected(&session_id) {
+        if self.session.is_disconnected(&session_id) {
             if self.set_terminal_status_if_changed(
                 "session disconnected — reconnect before sending".to_string(),
             ) {
@@ -1939,7 +1939,7 @@ impl NyaTermApp {
         self.ensure_paint_theme_caches();
         let surface = self.ensure_terminal_surface(session_id, cx);
         let is_active = self.session.active_id() == Some(session_id);
-        let is_disconnected = self.is_session_disconnected(session_id);
+        let is_disconnected = self.session.is_disconnected(session_id);
         let render_output_pressure = self.runtime_output_pressure_active();
         let view = self.terminal.view.views.get(session_id);
         let scroll_offset = view.map(|v| v.scroll_offset).unwrap_or(0);

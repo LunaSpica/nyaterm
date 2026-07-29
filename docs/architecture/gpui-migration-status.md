@@ -3,14 +3,14 @@
 This document records the current GPUI migration boundaries and debt in
 `nyaterm-desktop`. Keep dynamic counts here instead of in `AGENTS.md`.
 
-Last updated from the working tree on 2026-07-29.
+Last updated from the working tree on 2026-07-30.
 
 ## Current Metrics
 
 | Metric | Current value | Notes |
 | --- | ---: | --- |
 | `NyaTermApp` fields | 20 | Counted from `features/app_state/mod.rs`; down from 585. The remaining fields are composition services and focused feature owners. |
-| `impl NyaTermApp` blocks | 237 | Spread across 232 files. The current audit classifies them as view/render, GPUI, persistence, service or cross-feature adapters; this is no longer a reduction target by itself. |
+| `impl NyaTermApp` blocks | 237 | Spread across 232 files. A method-level forwarding audit, rather than the block count alone, is the current ownership check; the remaining blocks are view/render, GPUI, persistence, service or cross-feature adapters. |
 | `#[path = "..."]` declarations in desktop | 0 | Cleared. Every directory is a real module; the boundary script fails on any new occurrence. |
 | `use super::*` imports in desktop | 0 | Cleared in production and test modules; guarded crate-wide. |
 | `features/prelude.rs` rough exported-token count | 0 | The transitional shared prelude is removed and guarded against reintroduction. |
@@ -404,6 +404,15 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   GPUI update callbacks no longer call the blocking multiplex `disconnect()`.
   Protocol parsing, frames, file-transfer behavior and transport types remain
   in their existing modules.
+  A stronger method-level follow-up then found that the earlier block-level
+  audit had missed owner-local session facades. Session display names,
+  endpoints, SSH labels, disconnected/tooltip presentation, active command
+  history, order movement, next-session selection, list/info/live-count reads
+  and pending/failed start queries now execute directly on
+  `SessionFeatureState`. Thirty-two owner-local `NyaTermApp` methods were
+  removed across the session, transfer and sync-input clusters; registration,
+  persistence, background work, GPUI notification and workspace coordination
+  remain application adapters.
 - Transfer state is grouped into `TransferFeatureState`. Seventy-eight fields
   turned out to be five separate things sharing one panel: the job `queue`, the
   SFTP `browser`, the file operation dialogs (`file_ops`), the built-in remote
@@ -1590,15 +1599,18 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   assets marked `keep` in the icon manifest, while fetched icon sets retain
   their pinned upstream mappings. The architecture script rejects any return
   of the retired dashboard, inventory crate or local source checkout.
-- The current method-ownership convergence pass is complete. A feature-by-
-  feature audit of all 237 remaining `impl NyaTermApp` blocks found render/view
-  construction, GPUI focus/window/notification work, persistence and service
-  execution, or cross-feature coordination rather than another cohesive set of
-  owner-local transitions. The former feature-root constant bucket was also
-  removed: terminal banner, AI agent timing, session policy, sync-group palette
-  and tab presentation constants now live with their consumers. The architecture
+- The method-ownership convergence pass now uses method bodies and call sites,
+  not the number of `impl NyaTermApp` blocks, as its audit boundary. That
+  stronger pass corrected an earlier over-broad completion claim and removed
+  thirty-two owner-local session, transfer and sync-input facades. The 237
+  remaining blocks still contain render/view construction, GPUI focus/window/
+  notification work, persistence and service execution, or cross-feature
+  coordination, so the block count is an inventory rather than a reduction
+  target. The former feature-root constant bucket was also removed: terminal
+  banner, AI agent timing, session policy, sync-group palette and tab
+  presentation constants now live with their consumers. The architecture
   script enforces the exact twenty-field composition-root owner set and rejects
-  new domain constants in `features/mod.rs`.
+  reintroduction of the removed owner-local facades or root domain constants.
 
 ## Current Ownership
 
@@ -1630,18 +1642,18 @@ Current ownership map:
 | Remote Docker/process/stats panes | Private children in `NyaTermApp.remote_ops` | Transient UI state plus typed background-event lifecycle | Views use immutable presentation values; menu exclusion, list-offset clamping, Docker details/Compose/confirmation cleanup, process PID-scoped cleanup, Stats expansion/data and job identity/failure timing enter through `RemoteOpsFeatureState`. SSH service launch, active-session policy, terminal status mirroring and GPUI notification remain in adapters. |
 | Live session manager/event bridge | Private services in `NyaTermApp.session` | Runtime services | Callers receive a shared manager reference/handle and use bridge routing, drain and metrics methods; neither service field is writable outside `SessionFeatureState`. |
 | Session restore/event queue | Private state in `NyaTermApp.session` | Transient runtime coordination | Restore completion is idempotent and pending transport events are counted, extended and popped only through owner methods; event interpretation stays in the event-pump adapter. |
-| Session start/prompts/dialogs | Session-module-private children in `NyaTermApp.session` | Background admission plus transient prompt/dialog state | Cross-domain renderers and coordinators use `SessionFeatureState` queries and semantic actions. Worker channels, prompt brokers and dialog drafts remain inside the session module; GPUI rendering and notification stay in adapters. |
-| Session command history/search/menu/busy state | Private state in `NyaTermApp.session` | Transient per-session interaction state | History append/migration/deletion and active-menu/busy transitions are owner operations; beginning reconnect/disconnect closes the menu in the same transition. |
-| Session catalog and presentation | Private state in `NyaTermApp.session` | Runtime catalog plus transient presentation | Order/metadata registration, tab movement, disconnect marking, reconnect migration and removal are owner transitions; custom names, OSC titles/CWDs and tab colors are exposed through read-only queries and semantic updates. |
+| Session start/prompts/dialogs | Session-module-private children in `NyaTermApp.session` | Background admission plus transient prompt/dialog state | Cross-domain renderers and coordinators use `SessionFeatureState` queries and semantic actions, including pending/failed names, active failure and duplicate saved-start detection. Worker channels, prompt brokers and dialog drafts remain inside the session module; GPUI rendering and notification stay in adapters. |
+| Session command history/search/menu/busy state | Private state in `NyaTermApp.session` | Transient per-session interaction state | Active-history snapshots/indexed reads, append/migration/deletion and active-menu/busy transitions are owner operations; beginning reconnect/disconnect closes the menu in the same transition. |
+| Session catalog and presentation | Private state in `NyaTermApp.session` | Runtime catalog plus transient presentation | Order/metadata registration, tab movement, disconnect marking, reconnect migration and removal are owner transitions. Session lists/info/live count, display names, endpoints, SSH labels, disconnected state and tab tooltips are owner queries; custom names, OSC titles/CWDs and tab colors use read-only queries and semantic updates. |
 | Active session selection and derived config | Private state in `NyaTermApp.session` | Transient selection over the runtime catalog | The active child stores only the session id; SSH config and AI execution profile are queried from private runtime metadata, and select/clear/remove transitions preserve the `None`/`SendOnly` fallback. |
 | Session protocol resources | Private child in `NyaTermApp.session` | Per-session runtime resources | ZMODEM/trzsz maps and SSH multiplex handles are private; session removal stops protocol workers atomically, state drops stop remaining workers, and multiplex disconnect runs off the GPUI update path after owner reference checks. |
 | Transfer panel interaction | Private child in `NyaTermApp.transfer` | Transient focus and resize state | Focus routing, height and resize state enter through `TransferFeatureState`; the write-only focused-endpoint marker was removed, and height-drag calculation and clamping are pure owner transitions while rendering and persistence stay in adapters. |
 | Transfer endpoints and path prompts | Private child in `NyaTermApp.transfer` | Transient endpoints, compatibility-derived policy and prompt admission | Remote/local paths, duplicate policy and the shared native prompt slot enter through `TransferFeatureState`; normalization, single-prompt admission and kind-matched completion are owner transitions while GPUI prompts, jobs and settings persistence stay in adapters. |
-| Transfer job queue | Private child in `NyaTermApp.transfer` | Typed background-event queue plus transient interaction state | Monotonic job-id allocation, admission/removal, result-channel access, selection/menu/delete lifecycles, session-switch reset and session-scoped batch actions enter through `TransferFeatureState`; cleanup also prunes stale interaction references. Renderers receive a read-only slice, protocol adapters can update individual jobs without receiving the backing collection, and the event reducer temporarily extracts only its matched job while it coordinates browser/editor side effects. |
+| Transfer job queue | Private child in `NyaTermApp.transfer` | Typed background-event queue plus transient interaction state | Monotonic job-id allocation is called directly on `TransferFeatureState`; admission/removal, result-channel access, selection/menu/delete lifecycles, session-switch reset and session-scoped batch actions also enter through the owner. Cleanup prunes stale interaction references. Renderers receive a read-only slice, protocol adapters can update individual jobs without receiving the backing collection, and the event reducer temporarily extracts only its matched job while it coordinates browser/editor side effects. |
 | Transfer SFTP browser | Transfers-module-private child in `NyaTermApp.transfer` | Listing, navigation/cache, history/favorites, selection, menus and viewport interaction | Other desktop domains receive a borrowed immutable presentation view; navigation rollback/session restore, history/favorites, search/sort, path editing, selection/rename, menu exclusion, resize and auto-CWD timing use named `TransferFeatureState` transitions. Typed transfer event reduction stays inside the owning transfers module; rendering, focus, persistence and SFTP launch stay in adapters. |
 | Transfer file-operation dialogs | Private child in `NyaTermApp.transfer` | Transient dialog drafts, focus and property-operation lifecycle | Rename/move/delete/create/properties/unknown-file state enters through `TransferFeatureState`; deferred rename focus is consumed atomically, creation options update semantically, and property results require matching session/path ownership. Renderers receive read-only dialog state while GPUI focus, text inputs, status and SFTP launch remain in adapters. |
 | Transfer external-editor sync | Private child in `NyaTermApp.transfer` | Transient prompts, child-window tracking and always-upload policy | Prompt admission/filtering/resolution, window admission/tracking and session cleanup enter through `TransferFeatureState`; consuming or dismissing a prompt reconciles its tracked window state. GPUI window operations, status updates and SFTP upload launch remain in adapters. |
-| Built-in transfer editor | Private child in `NyaTermApp.transfer` | Editor workspace, tab/confirmation state and detached-window lifecycle | Tab admission/activation/close/discard, save result reconciliation, session cleanup, menu state and window admission enter through `TransferFeatureState`. `RemoteTextEditor` keeps its dedicated selection/undo/IME path through narrow active-tab access; GPUI windows, SFTP work and rendering remain in adapters. |
+| Built-in transfer editor | Private child in `NyaTermApp.transfer` | Editor workspace, tab/confirmation state and detached-window lifecycle | Tab admission/activation/close/discard, active-tab access, save result reconciliation, session cleanup, menu state and window admission enter directly through `TransferFeatureState`. `RemoteTextEditor` keeps its dedicated selection/undo/IME path through that narrow active-tab access; GPUI windows, SFTP work and rendering remain in adapters. |
 | Serial ports | Private catalog child in `NyaTermApp.connection_state` | Runtime/discovered state | Replaced through `ConnectionFeatureState` after session-manager discovery and never persisted. |
 | Tunnel/proxy configs | Private catalog in `NyaTermApp.tunnel_state` | Persisted network config | Views use read-only slices; pure move/upsert/delete candidates and successful commits stay on `TunnelFeatureState`. The Network page UI remains separate transient state. |
 | Queued saved-connection starts | Session-module-private child in `NyaTermApp.session` | Transient session-start state | Admission, duplicate detection, draining and runtime cadence reads cross domain boundaries through `SessionFeatureState`; the queue remains owned by the nested start state. |
@@ -2040,12 +2052,14 @@ a deliberately deferred architectural decision.
    read one state — moving element construction onto a data struct trades one
    coupling for a worse one. And a method that reads a state plus `self.tr(...)`
    or a service is not a candidate; only move what is genuinely self-contained.
-   The final feature-by-feature audit confirmed that the remaining 237
-   `impl NyaTermApp` blocks are this second kind: view/render, GPUI, persistence,
-   service or cross-feature adapters. Their count is recorded as an inventory,
-   not treated as debt to reduce mechanically. The exact composition-root field
-   set and the absence of a root domain-constant bucket are now architecture
-   checks.
+   A later method-level audit corrected the earlier claim that the block-level
+   review was sufficient: it found and removed thirty-two thin owner-local
+   session, transfer and sync-input facades without changing the 237-block
+   inventory. The remaining methods are view/render, GPUI, persistence, service
+   or cross-feature adapters, and future audits must inspect method bodies and
+   call sites rather than infer ownership from the block count. The exact
+   composition-root field set, removed-facade names and absence of a root
+   domain-constant bucket are now architecture checks.
 4. Done. No store is a projection any more; the three that remain own real
    state. If a future domain wants Entity ownership, migrate it authoritatively
    rather than reintroducing a published read model.

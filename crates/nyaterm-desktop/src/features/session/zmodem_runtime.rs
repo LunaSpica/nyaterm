@@ -172,7 +172,7 @@ impl NyaTermApp {
         if files.is_empty() {
             return;
         }
-        if self.is_session_disconnected(&session_id) {
+        if self.session.is_disconnected(&session_id) {
             self.shell
                 .set_status("session disconnected — reconnect before ZMODEM upload".to_string());
             cx.notify();
@@ -214,7 +214,7 @@ impl NyaTermApp {
 
         let policy = self.transfer.duplicate_policy();
         let resolver = self.session.prompts.duplicate_broker();
-        let id = self.next_transfer_id("zmodem-probe");
+        let id = self.transfer.next_transfer_job_id("zmodem-probe");
         self.transfer.enqueue_transfer_job(TransferJobState {
             id: id.clone(),
             session_id: Some(session_id.clone()),
@@ -272,7 +272,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        if self.is_session_disconnected(&session_id) {
+        if self.session.is_disconnected(&session_id) {
             self.shell
                 .set_status("session disconnected — reconnect before ZMODEM upload".to_string());
             cx.notify();
@@ -676,7 +676,7 @@ impl NyaTermApp {
             return;
         }
 
-        let id = self.next_transfer_id("zmodem");
+        let id = self.transfer.next_transfer_job_id("zmodem");
         let status = if completed {
             TransferJobStatus::Completed
         } else if fail_reason.is_some() {

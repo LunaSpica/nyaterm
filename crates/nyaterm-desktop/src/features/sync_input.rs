@@ -253,6 +253,11 @@ impl SyncInputFeatureState {
             .find(|group| group.enabled && group.session_ids.iter().any(|id| id == session_id))
     }
 
+    pub(in crate::features) fn session_is_paused_in_active_group(&self, session_id: &str) -> bool {
+        self.active_group_for_session(session_id)
+            .is_some_and(|group| group.paused_session_ids.iter().any(|id| id == session_id))
+    }
+
     pub(in crate::features) fn peer_session_ids(
         &self,
         session_id: &str,
@@ -463,6 +468,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn select_all_sync_group_sessions(&mut self, cx: &mut Context<Self>) {
         let session_ids = self
+            .session
             .ordered_sessions()
             .into_iter()
             .map(|session| session.id)
@@ -481,6 +487,7 @@ impl NyaTermApp {
     pub(in crate::features) fn add_filtered_sync_group_sessions(&mut self, cx: &mut Context<Self>) {
         let query = self.sync_input.search_draft().trim().to_ascii_lowercase();
         let session_ids = self
+            .session
             .ordered_sessions()
             .into_iter()
             .filter(|session| self.sync_group_session_matches_search(session, &query))
@@ -497,6 +504,7 @@ impl NyaTermApp {
     ) {
         let query = self.sync_input.search_draft().trim().to_ascii_lowercase();
         let remove_ids = self
+            .session
             .ordered_sessions()
             .into_iter()
             .filter(|session| self.sync_group_session_matches_search(session, &query))
@@ -512,21 +520,24 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let selected_ids = self
-            .selected_sync_group()
+            .sync_input
+            .selected_group()
             .map(|group| group.session_ids.clone())
             .unwrap_or_default();
         let selected_hosts = selected_ids
             .iter()
-            .filter_map(|id| self.session_ssh_host(id))
+            .filter_map(|id| self.session.ssh_host(id))
             .collect::<HashSet<_>>();
         if selected_hosts.is_empty() {
             return;
         }
         let matching_ids = self
+            .session
             .ordered_sessions()
             .into_iter()
             .filter(|session| {
-                self.session_ssh_host(&session.id)
+                self.session
+                    .ssh_host(&session.id)
                     .is_some_and(|host| selected_hosts.contains(&host))
             })
             .map(|session| session.id)
@@ -544,11 +555,11 @@ impl NyaTermApp {
         if query.is_empty() {
             return true;
         }
-        let endpoint = self.session_endpoint(&session.id).unwrap_or_default();
-        let host = self.session_ssh_host(&session.id).unwrap_or_default();
+        let endpoint = self.session.endpoint(&session.id).unwrap_or_default();
+        let host = self.session.ssh_host(&session.id).unwrap_or_default();
         format!(
             "{} {:?} {} {} {}",
-            self.session_display_name_by_info(session),
+            self.session.display_name_by_info(session),
             session.kind,
             endpoint,
             host,
@@ -644,23 +655,6 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    /// First enabled group that includes this session (paused still counts for chrome).
-    /// Matches Tauri `getActiveGroupForSession`.
-    pub(in crate::features) fn active_sync_group_for_session(
-        &self,
-        session_id: &str,
-    ) -> Option<&SyncInputGroup> {
-        self.sync_input.active_group_for_session(session_id)
-    }
-
-    pub(in crate::features) fn is_session_paused_in_active_sync_group(
-        &self,
-        session_id: &str,
-    ) -> bool {
-        self.active_sync_group_for_session(session_id)
-            .is_some_and(|group| group.paused_session_ids.iter().any(|id| id == session_id))
-    }
-
     /// Pause/resume the current session inside its active enabled sync group.
     pub(in crate::features) fn toggle_session_paused_in_active_sync_group(
         &mut self,
@@ -710,14 +704,6 @@ impl NyaTermApp {
         }
         self.shell.set_status("sync group closed".to_string());
         cx.notify();
-    }
-
-    pub(in crate::features) fn purge_session_from_sync_groups(&mut self, session_id: &str) {
-        self.sync_input.purge_session(session_id);
-    }
-
-    pub(in crate::features) fn selected_sync_group(&self) -> Option<&SyncInputGroup> {
-        self.sync_input.selected_group()
     }
 }
 

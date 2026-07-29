@@ -12,7 +12,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(current_name) = self.session_display_name(&session_id) else {
+        let Some(current_name) = self.session.display_name(&session_id) else {
             self.shell
                 .set_status("session no longer exists".to_string());
             cx.notify();
@@ -225,7 +225,7 @@ impl NyaTermApp {
         self.transfer
             .close_properties_dialog_for_session(session_id);
         self.transfer.remove_editor_tabs_for_session(session_id);
-        self.purge_session_from_sync_groups(session_id);
+        self.sync_input.purge_session(session_id);
         self.reconcile_terminal_windows();
         if self.session.restore_is_complete() {
             self.persist_open_tabs();
@@ -238,10 +238,5 @@ impl NyaTermApp {
                 super::disconnect_multiplex_handle(handle);
             }
         }
-    }
-
-    pub(in crate::features) fn next_session_after(&self, session_id: &str) -> Option<String> {
-        // Local metadata includes live + disconnected tabs; no transport lock.
-        self.session.next_session_after(session_id)
     }
 }

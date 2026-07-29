@@ -222,7 +222,7 @@ impl NyaTermApp {
                 && self
                     .session
                     .active_id()
-                    .is_some_and(|session_id| self.is_session_disconnected(session_id))
+                    .is_some_and(|session_id| self.session.is_disconnected(session_id))
             {
                 self.shell
                     .set_status("session disconnected — reconnect before sending".to_string());
@@ -366,9 +366,10 @@ impl NyaTermApp {
     pub(in crate::features) fn send_command_target_session_ids(&self) -> Vec<String> {
         // Live sessions only from local metadata (skip disconnected tabs).
         let sessions = self
+            .session
             .ordered_sessions()
             .into_iter()
-            .filter(|session| !self.is_session_disconnected(&session.id))
+            .filter(|session| !self.session.is_disconnected(&session.id))
             .collect::<Vec<_>>();
         let live_session_ids = sessions
             .iter()
@@ -441,9 +442,10 @@ impl NyaTermApp {
         &self,
     ) -> Vec<(String, String, usize)> {
         let sessions = self
+            .session
             .ordered_sessions()
             .into_iter()
-            .filter(|session| !self.is_session_disconnected(&session.id))
+            .filter(|session| !self.session.is_disconnected(&session.id))
             .collect::<Vec<_>>();
         let active_kind = self.active_session_kind();
         let is_compatible = |kind: SessionKind| -> bool {
@@ -521,10 +523,12 @@ impl NyaTermApp {
 
     pub(in crate::features) fn active_session_kind(&self) -> Option<SessionKind> {
         let active_id = self.session.active_id()?;
-        if self.is_session_disconnected(active_id) {
+        if self.session.is_disconnected(active_id) {
             return None;
         }
-        self.session_info(active_id).map(|session| session.kind)
+        self.session
+            .session_info(active_id)
+            .map(|session| session.kind)
     }
 
     pub(in crate::features) fn adjust_send_command_count(

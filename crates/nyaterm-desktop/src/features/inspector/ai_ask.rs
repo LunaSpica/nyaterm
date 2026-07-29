@@ -161,10 +161,10 @@ impl NyaTermApp {
         let target_sessions = target_session_ids
             .iter()
             .filter_map(|session_id| {
-                self.session_info(session_id).map(|session| {
+                self.session.session_info(session_id).map(|session| {
                     (
                         session_id.clone(),
-                        self.session_display_name_by_info(&session),
+                        self.session.display_name_by_info(&session),
                     )
                 })
             })
@@ -173,7 +173,7 @@ impl NyaTermApp {
             self.ai_mention_candidates()
                 .into_iter()
                 .map(|session| {
-                    let label = self.session_display_name_by_info(&session);
+                    let label = self.session.display_name_by_info(&session);
                     let kind = session_kind_label(session.kind).to_string();
                     let selected = target_session_ids
                         .iter()

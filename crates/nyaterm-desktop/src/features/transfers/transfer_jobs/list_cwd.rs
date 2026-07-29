@@ -29,7 +29,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        let id = self.next_transfer_id("sftp-children");
+        let id = self.transfer.next_transfer_job_id("sftp-children");
         if let Some(TransferBrowserPathMenuState {
             kind:
                 TransferBrowserPathMenuKind::Children {
@@ -101,7 +101,7 @@ impl NyaTermApp {
         self.transfer.browser.error = None;
         self.transfer.browser.selected_remote_path = None;
         self.transfer.browser.selected_remote_paths.clear();
-        let id = self.next_transfer_id("sftp-list");
+        let id = self.transfer.next_transfer_job_id("sftp-list");
         let job_session_id = self.session.active_id_owned();
         self.transfer
             .browser
@@ -159,7 +159,7 @@ impl NyaTermApp {
             return;
         };
         self.transfer.browser.auto_sync_cwd_last_at = Some(Instant::now());
-        let id = self.next_transfer_id("sftp-sync-cwd");
+        let id = self.transfer.next_transfer_job_id("sftp-sync-cwd");
         let job_session_id = self.session.active_id_owned();
         self.transfer
             .browser
@@ -244,7 +244,7 @@ impl NyaTermApp {
             return;
         };
         self.transfer.browser.home_dir_pending = true;
-        let id = self.next_transfer_id("sftp-home");
+        let id = self.transfer.next_transfer_job_id("sftp-home");
         self.transfer.enqueue_transfer_job(TransferJobState {
             id: id.clone(),
             session_id: self.session.active_id_owned(),

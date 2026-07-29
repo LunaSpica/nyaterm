@@ -41,7 +41,7 @@ impl NyaTermApp {
         self.refresh_window_render_inputs(window, cx);
         self.start_terminal_frame_event_wake(cx);
         self.try_restore_open_tabs(window, cx);
-        let pending_session_start = self.has_pending_session_start();
+        let pending_session_start = self.session.start_has_pending();
         let should_pump = !self.session.restore_is_complete()
             && self
                 .stores

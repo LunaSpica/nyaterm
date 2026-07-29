@@ -10,7 +10,7 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         // Tauri CommandHistory: a double-click sends the command; a single click only focuses it.
-        let history = self.active_session_history_commands();
+        let history = self.session.active_command_history_snapshot();
         let mut rows = div().flex().flex_col().gap_0().p_2();
         if history.is_empty() {
             rows = rows.child(

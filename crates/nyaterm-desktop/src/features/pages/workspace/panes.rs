@@ -14,7 +14,8 @@ impl NyaTermApp {
     fn workspace_reconnect_pending_state(&self, session_id: &str) -> impl IntoElement {
         let palette = self.theme_palette();
         let name = self
-            .session_display_name(session_id)
+            .session
+            .display_name(session_id)
             .unwrap_or_else(|| short_id(session_id).to_string());
         let detail = self
             .tr("savedConnections.connecting")

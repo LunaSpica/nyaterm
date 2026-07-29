@@ -473,19 +473,20 @@ impl NyaTermApp {
 
     pub(in crate::features) fn title_context_label(&self) -> String {
         if self.session.start_has_active_pending()
-            && let Some(pending) = self.pending_session_display_name()
+            && let Some(pending) = self.session.start_pending_display_name()
         {
             return pending;
         }
         if self.session.start_has_active_failed()
-            && let Some(failed) = self.failed_session_display_name()
+            && let Some(failed) = self.session.start_failed_display_name()
         {
             return failed;
         }
         if let Some(session_id) = self.session.active_id() {
             let tab_root = self.tab_root_for_session(session_id);
             let name = self
-                .session_display_name(&tab_root)
+                .session
+                .display_name(&tab_root)
                 .unwrap_or_else(|| short_id(&tab_root).to_string());
             let has_custom_name = self
                 .session
@@ -493,18 +494,19 @@ impl NyaTermApp {
                 .is_some_and(|value| !value.trim().is_empty());
             if !has_custom_name
                 && self
+                    .session
                     .session_info(session_id)
                     .is_some_and(|session| session.kind == SessionKind::Ssh)
-                && let Some(endpoint) = self.session_endpoint(session_id)
+                && let Some(endpoint) = self.session.endpoint(session_id)
             {
                 return format!("{name} — {endpoint}");
             }
             return name;
         }
-        if let Some(pending) = self.pending_session_display_name() {
+        if let Some(pending) = self.session.start_pending_display_name() {
             return pending;
         }
-        if let Some(failed) = self.failed_session_display_name() {
+        if let Some(failed) = self.session.start_failed_display_name() {
             return failed;
         }
         if let Some(failed) = self.shell.last_connect_failure_name() {
@@ -522,13 +524,14 @@ impl NyaTermApp {
         }
         if let Some(session_id) = self.session.active_id() {
             return self
+                .session
                 .session_info(session_id)
                 .map(|session| session_kind_icon_path(session.kind));
         }
-        if self.has_pending_session_start() {
+        if self.session.start_has_pending() {
             return Some("icons/conn/connect.svg");
         }
-        if self.has_failed_session_start() || self.shell.last_connect_failure_name().is_some() {
+        if self.session.start_has_failed() || self.shell.last_connect_failure_name().is_some() {
             return Some("icons/session/disconnect.svg");
         }
         None

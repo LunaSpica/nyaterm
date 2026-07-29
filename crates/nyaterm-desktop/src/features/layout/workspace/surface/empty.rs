@@ -108,7 +108,8 @@ impl NyaTermApp {
     pub(in crate::features) fn pending_workspace_state(&self) -> impl IntoElement {
         let palette = self.theme_palette();
         let name = self
-            .pending_session_display_name()
+            .session
+            .start_pending_display_name()
             .unwrap_or_else(|| self.tr("terminal.connecting").to_string());
 
         div()
@@ -149,7 +150,8 @@ impl NyaTermApp {
     pub(in crate::features) fn failed_workspace_state(&self) -> impl IntoElement {
         let palette = self.theme_palette();
         let error = self
-            .active_failed_session()
+            .session
+            .start_active_failed()
             .map(|failed| failed.error.clone())
             .or_else(|| self.shell.last_connect_failure_error().map(str::to_string))
             .unwrap_or_default();

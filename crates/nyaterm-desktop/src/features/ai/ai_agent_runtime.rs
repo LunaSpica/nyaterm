@@ -178,8 +178,9 @@ impl NyaTermApp {
             );
         };
         let session = self
+            .session
             .session_info(&terminal_session_id)
-            .filter(|_| !self.is_session_disconnected(&terminal_session_id))
+            .filter(|_| !self.session.is_disconnected(&terminal_session_id))
             .ok_or_else(|| "Active terminal session was not found".to_string())?;
         let (target, target_label) = match session.kind {
             SessionKind::Ssh => {
@@ -293,8 +294,8 @@ impl NyaTermApp {
             return false;
         }
         let terminal_session_id = snapshot.terminal_session_id.clone();
-        if self.session_info(&terminal_session_id).is_none()
-            || self.is_session_disconnected(&terminal_session_id)
+        if self.session.session_info(&terminal_session_id).is_none()
+            || self.session.is_disconnected(&terminal_session_id)
         {
             self.ai.stop_agent_for_closed_target();
             let _ = cx;
@@ -432,8 +433,9 @@ impl NyaTermApp {
         let Some(session_id) = self.session.active_id() else {
             return AiExecutionProfile::SendOnly;
         };
-        self.session_info(session_id)
-            .filter(|_| !self.is_session_disconnected(session_id))
+        self.session
+            .session_info(session_id)
+            .filter(|_| !self.session.is_disconnected(session_id))
             .map(|session| match session.kind {
                 SessionKind::LocalPty
                 | SessionKind::Ssh

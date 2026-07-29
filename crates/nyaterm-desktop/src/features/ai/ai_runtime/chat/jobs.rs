@@ -265,16 +265,16 @@ impl NyaTermApp {
         let mut session_ids = Vec::new();
         for session_id in self.ai.chat_target_session_ids() {
             if !session_ids.iter().any(|id| id == session_id)
-                && self.session_info(session_id).is_some()
-                && !self.is_session_disconnected(session_id)
+                && self.session.session_info(session_id).is_some()
+                && !self.session.is_disconnected(session_id)
             {
                 session_ids.push(session_id.clone());
             }
         }
         if session_ids.is_empty()
             && let Some(active_session_id) = self.session.active_id()
-            && self.session_info(active_session_id).is_some()
-            && !self.is_session_disconnected(active_session_id)
+            && self.session.session_info(active_session_id).is_some()
+            && !self.session.is_disconnected(active_session_id)
         {
             session_ids.push(active_session_id.to_string());
         }
@@ -294,7 +294,8 @@ impl NyaTermApp {
         let mut contexts = Vec::with_capacity(session_ids.len());
         for session_id in session_ids {
             contexts.push((
-                self.session_display_name(session_id)
+                self.session
+                    .display_name(session_id)
                     .unwrap_or_else(|| compact_id(session_id)),
                 self.ai_terminal_context_for_session_with_line_limit(
                     Some(session_id),
@@ -362,14 +363,15 @@ impl NyaTermApp {
 
     pub(in crate::features) fn ai_mention_candidates(&self) -> Vec<SessionInfo> {
         let query = self.ai.chat_mention_query().trim().to_ascii_lowercase();
-        self.ordered_sessions()
+        self.session
+            .ordered_sessions()
             .into_iter()
-            .filter(|session| !self.is_session_disconnected(&session.id))
+            .filter(|session| !self.session.is_disconnected(&session.id))
             .filter(|session| {
                 if query.is_empty() {
                     return true;
                 }
-                let display_name = self.session_display_name_by_info(session);
+                let display_name = self.session.display_name_by_info(session);
                 display_name.to_ascii_lowercase().contains(&query)
                     || session.id.to_ascii_lowercase().contains(&query)
                     || session_kind_label(session.kind)
@@ -395,7 +397,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        let display_name = self.session_display_name_by_info(&session);
+        let display_name = self.session.display_name_by_info(&session);
         self.ai.select_chat_mention(session.id, display_name);
         cx.notify();
     }
@@ -421,7 +423,7 @@ impl NyaTermApp {
             _ if session_id == self.session.active_id() => self.session.active_ssh_config(),
             _ => None,
         };
-        let session = session_id.and_then(|session_id| self.session_info(session_id));
+        let session = session_id.and_then(|session_id| self.session.session_info(session_id));
         let cwd = metadata
             .and_then(|metadata| match &metadata.launch_config {
                 SessionLaunchConfig::Local(config) => config.working_dir.as_ref(),

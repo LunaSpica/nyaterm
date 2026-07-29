@@ -199,7 +199,7 @@ impl NyaTermApp {
             .session
             .tab_color(&session.id)
             .map(|color| format!("#{color:06x}"));
-        let title = self.session_display_name_by_info(session);
+        let title = self.session.display_name_by_info(session);
         RestorableOpenTab::with_leaf_root(
             title,
             session_type,
@@ -225,7 +225,7 @@ impl NyaTermApp {
         if !root.is_split() {
             return None;
         }
-        let ordered = self.ordered_sessions();
+        let ordered = self.session.ordered_sessions();
         if ordered.len() < 2 {
             return None;
         }
@@ -261,6 +261,7 @@ impl NyaTermApp {
         match node {
             WorkspacePaneNode::Leaf { session_id } => {
                 let session = self
+                    .session
                     .ordered_sessions()
                     .into_iter()
                     .find(|session| &session.id == session_id)?;
@@ -321,7 +322,7 @@ impl NyaTermApp {
             self.mark_startup_restore_complete();
             return;
         }
-        if !self.ordered_sessions().is_empty() {
+        if !self.session.ordered_sessions().is_empty() {
             self.mark_startup_restore_complete();
             return;
         }
@@ -404,7 +405,7 @@ impl NyaTermApp {
         if self.session.restore_is_complete() {
             return;
         }
-        if self.has_pending_session_start() {
+        if self.session.start_has_pending() {
             return;
         }
         let Some(tab) = self
@@ -452,6 +453,7 @@ impl NyaTermApp {
             // Focus last requested active pane leaf if still present.
             if let Some(index) = pending_active.last().copied() {
                 let ordered = self
+                    .session
                     .ordered_sessions()
                     .into_iter()
                     .map(|session| session.id)
@@ -473,10 +475,10 @@ impl NyaTermApp {
         {
             self.shell
                 .set_status("restored workspace tabs and pane layout".to_string());
-        } else if !self.ordered_sessions().is_empty() {
+        } else if !self.session.ordered_sessions().is_empty() {
             self.shell.set_status("restored workspace tabs".to_string());
         }
-        if !self.ordered_sessions().is_empty() {
+        if !self.session.ordered_sessions().is_empty() {
             self.persist_open_tabs();
         }
         cx.notify();
@@ -552,6 +554,7 @@ impl NyaTermApp {
             return;
         }
         let ordered = self
+            .session
             .ordered_sessions()
             .into_iter()
             .map(|session| session.id)

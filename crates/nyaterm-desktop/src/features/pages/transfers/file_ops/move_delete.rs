@@ -113,7 +113,7 @@ impl NyaTermApp {
             return;
         };
         let parent_path = remote_parent_path(&old_path);
-        let id = self.next_transfer_id("sftp-move");
+        let id = self.transfer.next_transfer_job_id("sftp-move");
         self.transfer.enqueue_transfer_job(TransferJobState {
             id: id.clone(),
             session_id: self.session.active_id_owned(),
@@ -248,7 +248,7 @@ impl NyaTermApp {
             return;
         };
         let parent_path = remote_parent_path(&remote_path);
-        let id = self.next_transfer_id("sftp-delete");
+        let id = self.transfer.next_transfer_job_id("sftp-delete");
         self.transfer.enqueue_transfer_job(TransferJobState {
             id: id.clone(),
             session_id: self.session.active_id_owned(),

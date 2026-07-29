@@ -91,7 +91,7 @@ impl NyaTermApp {
         let action_name = action.name.clone();
         let prompt = action.prompt.clone();
         let max_bytes = self.ai.settings_config().max_ai_file_size_bytes;
-        let id = self.next_transfer_id("sftp-ai-file");
+        let id = self.transfer.next_transfer_job_id("sftp-ai-file");
         self.transfer.enqueue_transfer_job(TransferJobState {
             id: id.clone(),
             session_id: self.session.active_id_owned(),
@@ -350,12 +350,12 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        let Some(tab) = self.active_transfer_editor_tab().cloned() else {
+        let Some(tab) = self.transfer.active_editor_tab().cloned() else {
             return;
         };
         let Some(config) = self.transfer_editor_ssh_config(tab.session_id.as_deref()) else {
             let error = self.tr("fileEditor.sourceSessionUnavailable").to_string();
-            if let Some(tab) = self.active_transfer_editor_tab_mut() {
+            if let Some(tab) = self.transfer.active_editor_tab_mut() {
                 tab.error = Some(error.clone());
             }
             self.shell.set_status(error);
@@ -388,7 +388,7 @@ impl NyaTermApp {
         let local_path = self.transfer_external_open_path(&entry, session_id.as_deref());
         let default_editor = self.settings.summary().transfer_default_editor.clone();
         let transfer_options = self.sftp_transfer_options();
-        let id = self.next_transfer_id("sftp-open-external");
+        let id = self.transfer.next_transfer_job_id("sftp-open-external");
         let control = SftpTransferControl::new();
         self.transfer.enqueue_transfer_job(TransferJobState {
             id: id.clone(),

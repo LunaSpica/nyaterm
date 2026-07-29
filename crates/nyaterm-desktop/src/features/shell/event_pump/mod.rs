@@ -457,7 +457,7 @@ impl NyaTermApp {
     }
 
     pub(super) fn drive_pending_session_status(&mut self) -> bool {
-        let Some((name, requested_at)) = self.pending_session_status_source() else {
+        let Some((name, requested_at)) = self.session.start_pending_status_source() else {
             self.shell.runtime.last_pending_session_status_at = None;
             return false;
         };

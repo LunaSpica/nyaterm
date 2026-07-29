@@ -77,7 +77,10 @@ impl NyaTermApp {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.saved_connection_start_is_pending_or_queued(&connection) {
+        if self
+            .session
+            .start_saved_connection_is_pending_or_queued(&connection)
+        {
             self.shell.set_status(format!(
                 "{} is already connecting or queued",
                 connection.name
@@ -86,7 +89,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        if self.has_pending_session_start() {
+        if self.session.start_has_pending() {
             self.enqueue_saved_connection_start_with_options(connection, options, cx);
             return;
         }
@@ -211,26 +214,6 @@ impl NyaTermApp {
                 );
             }
         }
-    }
-
-    pub(in crate::features) fn saved_connection_start_is_pending(
-        &self,
-        connection: &SavedConnection,
-    ) -> bool {
-        self.session
-            .start
-            .source_connection_is_pending(&connection.id)
-    }
-
-    pub(in crate::features) fn saved_connection_start_is_pending_or_queued(
-        &self,
-        connection: &SavedConnection,
-    ) -> bool {
-        self.saved_connection_start_is_pending(connection)
-            || self
-                .session
-                .start
-                .saved_connection_is_queued(&connection.id)
     }
 
     pub(in crate::features) fn begin_background_saved_ssh_start(

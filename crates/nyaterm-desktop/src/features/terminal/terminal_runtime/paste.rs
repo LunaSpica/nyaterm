@@ -105,7 +105,7 @@ impl NyaTermApp {
             }
             return;
         };
-        if self.is_session_disconnected(&session_id) {
+        if self.session.is_disconnected(&session_id) {
             if self
                 .set_terminal_status_if_changed("session disconnected — press Enter to reconnect")
             {

@@ -936,13 +936,14 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        if self.is_session_disconnected(&session_id) {
+        if self.session.is_disconnected(&session_id) {
             self.shell
                 .set_status("session disconnected — reconnect before dropping files".to_string());
             cx.notify();
             return;
         }
         let kind = self
+            .session
             .ordered_sessions()
             .into_iter()
             .find(|s| s.id == session_id)

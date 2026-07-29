@@ -195,7 +195,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn diagnostics_runtime_snapshot(&self) -> DiagnosticsRuntimeSnapshot {
-        let sessions = self.ordered_sessions();
+        let sessions = self.session.ordered_sessions();
         let mut local_sessions = 0;
         let mut ssh_sessions = 0;
         let mut telnet_sessions = 0;

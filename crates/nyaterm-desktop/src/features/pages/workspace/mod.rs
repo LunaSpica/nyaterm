@@ -16,12 +16,12 @@ impl NyaTermApp {
         // Do not reconcile/prune layout here — paint must stay pure. Session
         // register/close/idle already keep terminal_windows coherent.
         let multi_leaf = self.terminal_windows_is_multi_leaf();
-        let has_connect_failure = self.has_failed_session_start()
+        let has_connect_failure = self.session.start_has_failed()
             || (self.shell.last_connect_failure_name().is_some()
                 && self.shell.last_connect_failure_error().is_some());
         let show_tab_strip = !multi_leaf
             && (self.ordered_tab_session_count() > 0
-                || self.has_pending_session_start()
+                || self.session.start_has_pending()
                 || has_connect_failure);
         let mut workspace = div()
             .flex_1()
@@ -48,10 +48,10 @@ impl NyaTermApp {
             return self.failed_workspace_state().into_any_element();
         }
         if self.session.active_id().is_none() {
-            if self.has_pending_session_start() {
+            if self.session.start_has_pending() {
                 return self.pending_workspace_state().into_any_element();
             }
-            if self.has_failed_session_start()
+            if self.session.start_has_failed()
                 || (self.shell.last_connect_failure_name().is_some()
                     && self.shell.last_connect_failure_error().is_some())
             {

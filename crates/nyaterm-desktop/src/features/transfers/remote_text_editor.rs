@@ -409,7 +409,7 @@ impl RemoteTextEditor {
         cx.stop_propagation();
         window.focus(&self.focus_handle);
         self.app.update(cx, |app, cx| {
-            if let Some(tab) = app.active_transfer_editor_tab_mut() {
+            if let Some(tab) = app.transfer.active_editor_tab_mut() {
                 tab.focused_field = TransferEditorField::Content;
             }
             cx.notify();
@@ -502,7 +502,7 @@ impl RemoteTextEditor {
                 }
                 "f" => {
                     self.app.update(cx, |app, cx| {
-                        if let Some(tab) = app.active_transfer_editor_tab_mut() {
+                        if let Some(tab) = app.transfer.active_editor_tab_mut() {
                             tab.focused_field = TransferEditorField::Search;
                         }
                         window.focus(app.transfer.editor_focus());

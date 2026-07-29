@@ -1281,7 +1281,7 @@ impl NyaTermApp {
             return;
         }
 
-        let id = self.next_transfer_id("trzsz-download");
+        let id = self.transfer.next_transfer_job_id("trzsz-download");
         let status = if update.completed {
             TransferJobStatus::Completed
         } else if update.fail_reason.is_some() {
@@ -1375,7 +1375,7 @@ impl NyaTermApp {
             return;
         }
 
-        let id = self.next_transfer_id("trzsz-upload");
+        let id = self.transfer.next_transfer_job_id("trzsz-upload");
         let status = if update.completed {
             TransferJobStatus::Completed
         } else if update.fail_reason.is_some() {

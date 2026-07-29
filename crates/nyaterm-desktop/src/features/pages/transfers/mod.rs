@@ -59,7 +59,7 @@ impl NyaTermApp {
             && self
                 .session
                 .active_id()
-                .is_some_and(|session_id| !self.is_session_disconnected(session_id));
+                .is_some_and(|session_id| !self.session.is_disconnected(session_id));
         let transfer_height = self.transfer.panel_height().clamp(60., 600.);
         let duplicate_prompt = self.session.prompt_active_duplicate().cloned();
 

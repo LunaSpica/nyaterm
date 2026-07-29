@@ -16,8 +16,8 @@ impl NyaTermApp {
         let close_session_id = session_id.clone();
         let busy_action = self.session.busy_action(&session_id).map(str::to_string);
         let is_busy = busy_action.is_some();
-        let is_disconnected = self.is_session_disconnected(&session_id);
-        let can_reconnect = !is_busy && !self.has_pending_session_start();
+        let is_disconnected = self.session.is_disconnected(&session_id);
+        let can_reconnect = !is_busy && !self.session.start_has_pending();
         let can_disconnect = !is_busy && !is_disconnected;
         let reconnect_label = if busy_action.as_deref() == Some("reconnect") {
             self.tr("tabCtx.reconnecting").to_string()
@@ -83,7 +83,7 @@ impl NyaTermApp {
                             cx.stop_propagation();
                             this.session.close_active_menu();
                             if this.session.session_is_busy(&reconnect_session_id)
-                                || this.has_pending_session_start()
+                                || this.session.start_has_pending()
                             {
                                 cx.notify();
                                 return;
@@ -104,7 +104,7 @@ impl NyaTermApp {
                             cx.stop_propagation();
                             this.session.close_active_menu();
                             if this.session.session_is_busy(&close_session_id)
-                                || this.is_session_disconnected(&close_session_id)
+                                || this.session.is_disconnected(&close_session_id)
                             {
                                 cx.notify();
                                 return;

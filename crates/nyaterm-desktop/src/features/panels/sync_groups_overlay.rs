@@ -21,7 +21,7 @@ impl NyaTermApp {
         let dialog_width = (viewport_w - 24.).clamp(280., 900.);
         let dialog_height = (viewport_h - 56.).clamp(280., 500.);
         let groups_width = (dialog_width * 0.23).clamp(160., 208.);
-        let selected_group = self.selected_sync_group().cloned();
+        let selected_group = self.sync_input.selected_group().cloned();
         let selected_group_id = selected_group.as_ref().map(|group| group.id.clone());
         let (group_name_input, group_name_focus) = if let Some(group) = selected_group.as_ref() {
             let field = self.text_input(
@@ -168,7 +168,7 @@ impl NyaTermApp {
             .flex_col()
             .gap_2();
         let query = self.sync_input.search_draft().trim().to_ascii_lowercase();
-        let all_sessions = self.ordered_sessions();
+        let all_sessions = self.session.ordered_sessions();
         let has_sessions = !all_sessions.is_empty();
         let sessions = all_sessions
             .into_iter()
@@ -196,7 +196,7 @@ impl NyaTermApp {
             let in_group = selected_members.contains(&session_id);
             let paused = selected_paused.contains(&session_id);
             let active = self.session.active_id() == Some(session_id.as_str());
-            let title = self.session_display_name_by_info(&session);
+            let title = self.session.display_name_by_info(&session);
             session_rows = session_rows.child(
                 div()
                     .id(SharedString::from(format!("sync-session-{session_id}")))

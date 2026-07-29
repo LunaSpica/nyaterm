@@ -70,8 +70,8 @@ pub(in crate::features) use runtime_jobs::{
     spawn_command_persistence_worker,
 };
 pub(in crate::features) use session::{
-    CredentialPromptBroker, FailedSessionStart, HostKeyPromptBroker, NativeOtpProvider,
-    PendingSessionStart, SavedConnectionStartOptions, SessionFeatureFocus, SessionFeatureState,
+    CredentialPromptBroker, HostKeyPromptBroker, NativeOtpProvider, PendingSessionStart,
+    SavedConnectionStartOptions, SessionFeatureFocus, SessionFeatureState,
     SessionStartEventRequest, credential_prompt_target, keyboard_interactive_prompt_target,
 };
 pub(in crate::features) use settings::{

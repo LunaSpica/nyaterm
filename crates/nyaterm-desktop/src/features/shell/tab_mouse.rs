@@ -327,7 +327,7 @@ impl NyaTermApp {
         if dragged_session_id == target_session_id {
             return;
         }
-        let sessions = self.ordered_sessions();
+        let sessions = self.session.ordered_sessions();
         let Some(target_index) = sessions
             .iter()
             .position(|session| session.id == target_session_id)
@@ -351,7 +351,8 @@ impl NyaTermApp {
         } else {
             target_index
         };
-        self.move_session_to_index(&dragged_session_id, next_index);
+        self.session
+            .move_session_to_index(&dragged_session_id, next_index);
         self.shell
             .set_status(format!("moved tab before {}", short_id(&target_session_id)));
         if self.session.restore_is_complete() {
@@ -367,7 +368,7 @@ impl NyaTermApp {
         dragged_session_id: String,
         cx: &mut Context<Self>,
     ) {
-        let sessions = self.ordered_sessions();
+        let sessions = self.session.ordered_sessions();
         if !sessions
             .iter()
             .any(|session| session.id == dragged_session_id)
@@ -378,7 +379,8 @@ impl NyaTermApp {
             return;
         }
         let last_index = sessions.len().saturating_sub(1);
-        self.move_session_to_index(&dragged_session_id, last_index);
+        self.session
+            .move_session_to_index(&dragged_session_id, last_index);
         self.shell.set_status("moved tab to end".to_string());
         if self.session.restore_is_complete() {
             self.persist_open_tabs();

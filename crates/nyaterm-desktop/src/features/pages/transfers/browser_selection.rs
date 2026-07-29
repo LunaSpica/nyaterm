@@ -168,15 +168,9 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        if self.cancel_transfer_browser_pending_rename_without_notify() {
+        if self.transfer.cancel_browser_pending_rename() {
             cx.notify();
         }
-    }
-
-    pub(in crate::features) fn cancel_transfer_browser_pending_rename_without_notify(
-        &mut self,
-    ) -> bool {
-        self.transfer.cancel_browser_pending_rename()
     }
 
     pub(in crate::features::pages::transfers) fn handle_transfer_browser_entry_mouse_move(

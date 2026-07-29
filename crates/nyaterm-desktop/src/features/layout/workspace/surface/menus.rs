@@ -172,8 +172,8 @@ impl NyaTermApp {
                 let has_unread = leaf_ids
                     .iter()
                     .any(|id| self.terminal.session_has_unread(id));
-                let is_disconnected = leaf_ids.iter().any(|id| self.is_session_disconnected(id));
-                let title = self.session_display_name_by_info(&session);
+                let is_disconnected = leaf_ids.iter().any(|id| self.session.is_disconnected(id));
+                let title = self.session.display_name_by_info(&session);
                 let kind_icon = session_kind_icon_path(session.kind);
                 menu = menu.child(
                     div()

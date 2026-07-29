@@ -190,7 +190,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.has_pending_session_start() {
+        if self.session.start_has_pending() {
             self.shell
                 .set_status("wait for the pending session to finish connecting".to_string());
             cx.notify();
@@ -449,6 +449,7 @@ impl NyaTermApp {
         // Prefer serializing a global layout when a single split covers every tab-root leaf.
         // Otherwise store the active tab's split against ordered_sessions indexes (legacy key).
         let ordered = self
+            .session
             .ordered_sessions()
             .into_iter()
             .map(|session| session.id)
@@ -498,6 +499,7 @@ impl NyaTermApp {
             return;
         }
         let ordered = self
+            .session
             .ordered_sessions()
             .into_iter()
             .map(|session| session.id)

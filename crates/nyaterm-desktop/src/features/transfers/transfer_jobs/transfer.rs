@@ -57,7 +57,7 @@ impl NyaTermApp {
         transfer_options: SftpTransferOptions,
         cx: &mut Context<Self>,
     ) {
-        let id = self.next_transfer_id("sftp-download");
+        let id = self.transfer.next_transfer_job_id("sftp-download");
         let control = SftpTransferControl::new();
         self.transfer.enqueue_transfer_job(TransferJobState {
             id: id.clone(),
@@ -112,7 +112,7 @@ impl NyaTermApp {
         transfer_options: SftpTransferOptions,
         cx: &mut Context<Self>,
     ) {
-        let id = self.next_transfer_id("sftp-upload");
+        let id = self.transfer.next_transfer_job_id("sftp-upload");
         let control = SftpTransferControl::new();
         self.transfer.enqueue_transfer_job(TransferJobState {
             id: id.clone(),

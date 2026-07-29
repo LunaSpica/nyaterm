@@ -14,7 +14,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.has_pending_session_start() {
+        if self.session.start_has_pending() {
             self.shell
                 .set_status("wait for the pending session to finish connecting".to_string());
             cx.notify();
@@ -48,7 +48,7 @@ impl NyaTermApp {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.has_pending_session_start() {
+        if self.session.start_has_pending() {
             self.session
                 .dialogs
                 .reject_temporary_ssh_link("temporarySsh.connecting");

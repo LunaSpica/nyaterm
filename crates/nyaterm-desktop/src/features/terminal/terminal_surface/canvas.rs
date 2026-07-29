@@ -45,7 +45,7 @@ impl NyaTermApp {
         self.ensure_paint_theme_caches();
         let palette = self.terminal_theme_palette();
         let is_active = self.session.active_id() == Some(session_id.as_str());
-        let is_disconnected = !session_id.is_empty() && self.is_session_disconnected(&session_id);
+        let is_disconnected = !session_id.is_empty() && self.session.is_disconnected(&session_id);
         let terminal_mouse_reporting = !session_id.is_empty()
             && self
                 .terminal_protocol_state_for_session(&session_id)
@@ -499,9 +499,11 @@ impl NyaTermApp {
                 .flex_row()
                 .child(div().flex_1().min_h_0().child(grid.with_fill_height(true)))
         };
-        let active_sync_group = self.active_sync_group_for_session(&session_id);
+        let active_sync_group = self.sync_input.active_group_for_session(&session_id);
         let show_sync_action_overlay = active_sync_group.is_some() && !session_id.is_empty();
-        let sync_is_paused = self.is_session_paused_in_active_sync_group(&session_id);
+        let sync_is_paused = self
+            .sync_input
+            .session_is_paused_in_active_group(&session_id);
         let sync_group_color = active_sync_group
             .map(|group| group.color)
             .unwrap_or(palette.link);
@@ -651,7 +653,7 @@ impl NyaTermApp {
                         }
                         // Disconnected tab: Enter reconnects; other keys show status (Tauri).
                         if let Some(session_id) = this.session.active_id_owned() {
-                            if this.is_session_disconnected(&session_id) {
+                            if this.session.is_disconnected(&session_id) {
                                 cx.stop_propagation();
                                 let keystroke = &event.keystroke;
                                 if !keystroke.modifiers.control

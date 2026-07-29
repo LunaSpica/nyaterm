@@ -680,7 +680,7 @@ impl NyaTermApp {
                                         reload_label,
                                         cx.listener(|this, _, window, cx| {
                                             if let Some(state) =
-                                                this.active_transfer_editor_tab_mut()
+                                                this.transfer.active_editor_tab_mut()
                                             {
                                                 if state.dirty && !state.reload_confirm {
                                                     state.reload_confirm = true;
@@ -793,7 +793,7 @@ impl NyaTermApp {
                                         .cursor_pointer()
                                         .on_click(cx.listener(|this, _, window, cx| {
                                             if let Some(state) =
-                                                this.active_transfer_editor_tab_mut()
+                                                this.transfer.active_editor_tab_mut()
                                             {
                                                 state.focused_field = TransferEditorField::Search;
                                             }
@@ -839,7 +839,7 @@ impl NyaTermApp {
                                     "transfer-editor-clear-search",
                                     clear_search_label,
                                     cx.listener(|this, _, _, cx| {
-                                        if let Some(state) = this.active_transfer_editor_tab_mut() {
+                                        if let Some(state) = this.transfer.active_editor_tab_mut() {
                                             state.search_query.clear();
                                             state.active_match = 0;
                                         }
@@ -952,7 +952,7 @@ impl NyaTermApp {
                                     "transfer-editor-conflict-reload",
                                     reload_label,
                                     cx.listener(|this, _, window, cx| {
-                                        let Some(state) = this.active_transfer_editor_tab_mut()
+                                        let Some(state) = this.transfer.active_editor_tab_mut()
                                         else {
                                             return;
                                         };
@@ -1053,7 +1053,7 @@ impl NyaTermApp {
                                         true,
                                         cx.listener(|this, _, window, cx| {
                                             let Some(state) =
-                                                this.active_transfer_editor_tab_mut()
+                                                this.transfer.active_editor_tab_mut()
                                             else {
                                                 return;
                                             };

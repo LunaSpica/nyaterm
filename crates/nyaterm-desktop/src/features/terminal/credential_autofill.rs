@@ -389,7 +389,7 @@ impl NyaTermApp {
         if session_id.is_empty() {
             return;
         }
-        if self.is_session_disconnected(session_id) {
+        if self.session.is_disconnected(session_id) {
             self.shell.set_status(
                 "session disconnected - reconnect before filling credentials".to_string(),
             );

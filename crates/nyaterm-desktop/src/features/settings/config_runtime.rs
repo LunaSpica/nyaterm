@@ -68,7 +68,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        if self.session.active_id().is_some() || self.has_pending_session_start() {
+        if self.session.active_id().is_some() || self.session.start_has_pending() {
             self.shell
                 .set_status("close active session before importing config".to_string());
             cx.notify();

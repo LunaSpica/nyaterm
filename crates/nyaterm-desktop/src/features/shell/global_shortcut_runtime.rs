@@ -106,7 +106,7 @@ impl NyaTermApp {
                 .unwrap_or(event.keystroke.key.as_str());
             if let Ok(tab_number) = key.parse::<usize>() {
                 if tab_number == 9 {
-                    let last_index = self.ordered_sessions().len().saturating_sub(1);
+                    let last_index = self.session.ordered_sessions().len().saturating_sub(1);
                     self.select_session_index(last_index, cx);
                 } else {
                     self.select_session_index(tab_number.saturating_sub(1), cx);

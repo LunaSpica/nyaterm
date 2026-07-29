@@ -50,7 +50,8 @@ impl NyaTermApp {
                             .is_some_and(|id| self.tab_root_for_session(id) == *tab_id);
                     let tab_number = global_index.get(tab_id).copied().unwrap_or(0);
                     let title = self
-                        .session_display_name(tab_id)
+                        .session
+                        .display_name(tab_id)
                         .unwrap_or_else(|| short_id(tab_id).to_string());
                     let leaf_id = id.clone();
                     let select_id = tab_id.clone();
@@ -58,6 +59,7 @@ impl NyaTermApp {
                     let actions_id = tab_id.clone();
                     let drop_before_id = tab_id.clone();
                     let (kind_label, kind_icon) = self
+                        .session
                         .ordered_sessions()
                         .into_iter()
                         .find(|session| session.id == *tab_id)
@@ -75,12 +77,12 @@ impl NyaTermApp {
                         .map(|root| root.session_ids())
                         .unwrap_or_else(|| vec![tab_id.clone()]);
                     let is_disconnected =
-                        leaf_ids.iter().any(|id| self.is_session_disconnected(id));
+                        leaf_ids.iter().any(|id| self.session.is_disconnected(id));
                     let has_unread = leaf_ids
                         .iter()
                         .any(|id| self.terminal.session_has_unread(id));
-                    let sync_group = self.active_sync_group_for_session(tab_id);
-                    let sync_paused = self.is_session_paused_in_active_sync_group(tab_id);
+                    let sync_group = self.sync_input.active_group_for_session(tab_id);
+                    let sync_paused = self.sync_input.session_is_paused_in_active_group(tab_id);
                     let show_sync_indicator =
                         self.sync_input.broadcast_to_all() || sync_group.is_some();
                     let sync_indicator_color =
@@ -110,7 +112,7 @@ impl NyaTermApp {
                     };
                     let tab_title = truncate_preview(&title, 18);
                     let tooltip_title = title.clone();
-                    let tooltip_lines = self.session_tab_tooltip_lines(tab_id);
+                    let tooltip_lines = self.session.tab_tooltip_lines(tab_id);
                     strip = strip.child(
                         div()
                             .id(SharedString::from(format!("tw-tab-{leaf_id}-{select_id}")))

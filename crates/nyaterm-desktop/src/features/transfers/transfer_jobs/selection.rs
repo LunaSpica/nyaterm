@@ -146,8 +146,4 @@ impl NyaTermApp {
         self.transfer
             .transfer_job_can_be_deleted(job_id, active_session_id)
     }
-
-    pub(in crate::features) fn next_transfer_id(&mut self, prefix: &str) -> String {
-        self.transfer.next_transfer_job_id(prefix)
-    }
 }

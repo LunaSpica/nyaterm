@@ -13,7 +13,7 @@ use super::super::view_helpers::session_action_svg_button;
 
 impl NyaTermApp {
     pub(in crate::features) fn sorted_active_sessions(&self) -> Vec<SessionInfo> {
-        let mut sessions = self.ordered_sessions();
+        let mut sessions = self.session.ordered_sessions();
         sessions.sort_by(|left, right| {
             left.name
                 .to_lowercase()
@@ -27,7 +27,7 @@ impl NyaTermApp {
         query.is_empty()
             || format!(
                 "{} {} {} {}",
-                self.session_display_name_by_info(session),
+                self.session.display_name_by_info(session),
                 session.name,
                 session_kind_label(session.kind),
                 session.id
@@ -81,7 +81,7 @@ impl NyaTermApp {
             );
         } else {
             for session in sessions {
-                let display_name = self.session_display_name_by_info(&session);
+                let display_name = self.session.display_name_by_info(&session);
                 if !self.active_session_matches_query(&session, &query) {
                     continue;
                 }
@@ -154,7 +154,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let sessions = self.ordered_sessions();
+        let sessions = self.session.ordered_sessions();
         let session_count = sessions.len();
         let query = self
             .session
@@ -180,7 +180,7 @@ impl NyaTermApp {
             ));
         } else {
             for session in sessions {
-                let display_name = self.session_display_name_by_info(&session);
+                let display_name = self.session.display_name_by_info(&session);
                 let haystack = format!(
                     "{} {} {} {}",
                     display_name,
@@ -405,7 +405,7 @@ impl NyaTermApp {
         let menu_session_id = session.id.clone();
         let custom_color = self.session.tab_color(&session.id);
         let is_active = self.session.active_id() == Some(session.id.as_str());
-        let is_disconnected = self.is_session_disconnected(&session.id);
+        let is_disconnected = self.session.is_disconnected(&session.id);
         let has_unread = self.terminal.session_has_unread(&session.id);
         let busy_action = self.session.busy_action(&session.id).map(str::to_string);
         let is_busy = busy_action.is_some();

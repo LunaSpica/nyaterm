@@ -44,25 +44,6 @@ impl NyaTermApp {
         self.ai.find_command_card(card_id)
     }
 
-    pub(in crate::features) fn active_session_history_commands(&self) -> Vec<String> {
-        self.session
-            .active_id()
-            .and_then(|session_id| self.session.command_history_for(session_id))
-            .map(<[String]>::to_vec)
-            .unwrap_or_default()
-    }
-
-    pub(in crate::features) fn active_session_history_command(
-        &self,
-        index: usize,
-    ) -> Option<String> {
-        let session_id = self.session.active_id()?;
-        self.session
-            .command_history_for(session_id)?
-            .get(index)
-            .cloned()
-    }
-
     pub(in crate::features) fn run_history_command(
         &mut self,
         index: usize,
@@ -83,7 +64,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        let Some(command_text) = self.active_session_history_command(index) else {
+        let Some(command_text) = self.session.active_command_history_entry(index) else {
             self.shell
                 .set_status("history command is no longer available".to_string());
             cx.notify();
@@ -266,7 +247,7 @@ impl NyaTermApp {
         }
         for session_id in session_ids {
             for command in &submitted {
-                self.record_session_command_history(session_id, command);
+                self.session.record_command_history(session_id, command);
             }
         }
         if !self.commands.queue_command_history(submitted) {
@@ -303,13 +284,5 @@ impl NyaTermApp {
             }
         }
         dirty
-    }
-
-    pub(in crate::features) fn record_session_command_history(
-        &mut self,
-        session_id: &str,
-        command: &str,
-    ) {
-        self.session.record_command_history(session_id, command);
     }
 }

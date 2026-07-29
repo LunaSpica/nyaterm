@@ -221,6 +221,26 @@ impl SessionFeatureState {
         self.start.has_pending()
     }
 
+    pub(in crate::features) fn start_has_failed(&self) -> bool {
+        self.start.has_failed()
+    }
+
+    pub(in crate::features) fn start_pending_display_name(&self) -> Option<String> {
+        self.start.pending_display_name()
+    }
+
+    pub(in crate::features) fn start_active_failed(&self) -> Option<&FailedSessionStart> {
+        self.start.active_failed()
+    }
+
+    pub(in crate::features) fn start_failed_display_name(&self) -> Option<String> {
+        self.start.failed_display_name()
+    }
+
+    pub(in crate::features) fn start_pending_status_source(&self) -> Option<(String, Instant)> {
+        self.start.pending_status_source()
+    }
+
     pub(in crate::features) fn start_pending_count(&self) -> usize {
         self.start.pending_count()
     }
@@ -273,6 +293,21 @@ impl SessionFeatureState {
 
     pub(in crate::features) fn start_has_queued_saved_connections(&self) -> bool {
         self.start.has_queued_saved_connections()
+    }
+
+    pub(in crate::features) fn start_saved_connection_is_pending(
+        &self,
+        connection: &SavedConnection,
+    ) -> bool {
+        self.start.source_connection_is_pending(&connection.id)
+    }
+
+    pub(in crate::features) fn start_saved_connection_is_pending_or_queued(
+        &self,
+        connection: &SavedConnection,
+    ) -> bool {
+        self.start_saved_connection_is_pending(connection)
+            || self.start.saved_connection_is_queued(&connection.id)
     }
 
     pub(in crate::features) fn start_reconnect_is_pending(&self, session_id: &str) -> bool {
@@ -577,6 +612,18 @@ impl SessionFeatureState {
 
     pub(in crate::features) fn command_history_for(&self, session_id: &str) -> Option<&[String]> {
         self.command_history.get(session_id).map(Vec::as_slice)
+    }
+
+    pub(in crate::features) fn active_command_history_snapshot(&self) -> Vec<String> {
+        self.active_id()
+            .and_then(|session_id| self.command_history_for(session_id))
+            .map(<[String]>::to_vec)
+            .unwrap_or_default()
+    }
+
+    pub(in crate::features) fn active_command_history_entry(&self, index: usize) -> Option<String> {
+        let session_id = self.active_id()?;
+        self.command_history_for(session_id)?.get(index).cloned()
     }
 
     pub(in crate::features) fn record_command_history(&mut self, session_id: &str, command: &str) {
@@ -959,6 +1006,109 @@ impl SessionFeatureState {
         self.metadata
             .get(session_id)
             .map(|metadata| session_info_from_metadata(session_id, metadata))
+    }
+
+    pub(in crate::features) fn display_name_by_info(&self, session: &SessionInfo) -> String {
+        self.custom_name(&session.id)
+            .filter(|name| !name.trim().is_empty())
+            .or_else(|| {
+                self.dynamic_title(&session.id)
+                    .filter(|name| !name.trim().is_empty())
+            })
+            .unwrap_or(&session.name)
+            .to_string()
+    }
+
+    pub(in crate::features) fn display_name(&self, session_id: &str) -> Option<String> {
+        self.custom_name(session_id)
+            .filter(|name| !name.trim().is_empty())
+            .or_else(|| {
+                self.dynamic_title(session_id)
+                    .filter(|name| !name.trim().is_empty())
+            })
+            .map(ToOwned::to_owned)
+            .or_else(|| self.session_info(session_id).map(|session| session.name))
+    }
+
+    pub(in crate::features) fn endpoint(&self, session_id: &str) -> Option<String> {
+        let metadata = self.metadata(session_id)?;
+        match &metadata.launch_config {
+            SessionLaunchConfig::Local(config) => {
+                let shell = config
+                    .shell_path
+                    .as_deref()
+                    .filter(|value| !value.trim().is_empty())
+                    .unwrap_or("system shell");
+                Some(match &config.working_dir {
+                    Some(dir) => format!("{shell} in {}", dir.display()),
+                    None => shell.to_string(),
+                })
+            }
+            SessionLaunchConfig::Ssh(config) => Some(format!(
+                "{}@{}:{}",
+                config.username, config.host, config.port
+            )),
+            SessionLaunchConfig::Telnet(config) => Some(format!("{}:{}", config.host, config.port)),
+            SessionLaunchConfig::Serial(config) => Some(format!(
+                "{} @ {} {}{}{}",
+                config.port_name,
+                config.baud_rate,
+                config.data_bits,
+                config.parity,
+                config.stop_bits
+            )),
+        }
+    }
+
+    pub(in crate::features) fn ssh_host(&self, session_id: &str) -> Option<String> {
+        let metadata = self.metadata(session_id)?;
+        match &metadata.launch_config {
+            SessionLaunchConfig::Ssh(config) if !config.host.trim().is_empty() => {
+                Some(config.host.clone())
+            }
+            _ => None,
+        }
+    }
+
+    pub(in crate::features) fn ssh_address(&self, session_id: &str) -> Option<String> {
+        let metadata = self.metadata(session_id)?;
+        match &metadata.launch_config {
+            SessionLaunchConfig::Ssh(config)
+                if !config.username.trim().is_empty() && !config.host.trim().is_empty() =>
+            {
+                Some(format!(
+                    "ssh -p {} {}@{}",
+                    config.port, config.username, config.host
+                ))
+            }
+            _ => None,
+        }
+    }
+
+    pub(in crate::features) fn is_disconnected(&self, session_id: &str) -> bool {
+        self.metadata(session_id)
+            .is_some_and(|metadata| metadata.disconnected)
+    }
+
+    pub(in crate::features) fn tab_tooltip_lines(&self, session_id: &str) -> Vec<String> {
+        let mut lines = Vec::new();
+        if let Some(endpoint) = self.endpoint(session_id) {
+            lines.push(endpoint);
+        }
+        if let Some(address) = self.ssh_address(session_id)
+            && lines.first().map(String::as_str) != Some(address.as_str())
+        {
+            lines.push(address);
+        }
+        if self.is_disconnected(session_id) {
+            lines.push("Disconnected — press Enter to reconnect".to_string());
+        }
+        if let Some(cwd) = self.cwd(session_id)
+            && !cwd.trim().is_empty()
+        {
+            lines.push(format!("cwd {cwd}"));
+        }
+        lines
     }
 
     pub(in crate::features) fn live_session_count(&self) -> usize {
@@ -2649,6 +2799,72 @@ mod tests {
             ["session-c", "session-b", "session-a"]
         );
         assert!(!sessions.move_session_after("missing", "session-a"));
+    }
+
+    #[test]
+    fn session_catalog_owns_presentation_and_active_history_queries() {
+        let cx = TestAppContext::single();
+        let mut sessions = session_state(&cx);
+        let mut metadata = session_metadata("fallback", None);
+        let mut ssh = SshSessionConfig::default();
+        ssh.name = "catalog name".to_string();
+        ssh.username = "nya".to_string();
+        ssh.host = "example.test".to_string();
+        ssh.port = 2222;
+        metadata.launch_config = SessionLaunchConfig::Ssh(ssh);
+        metadata.disconnected = true;
+        sessions.register_session_metadata("session-a", metadata);
+
+        let info = sessions
+            .session_info("session-a")
+            .expect("registered metadata should produce session info");
+        assert_eq!(sessions.display_name_by_info(&info), "catalog name");
+        sessions.set_dynamic_title("session-a", Some("dynamic title".to_string()));
+        assert_eq!(
+            sessions.display_name("session-a").as_deref(),
+            Some("dynamic title")
+        );
+        sessions.set_custom_name("session-a".to_string(), "custom name".to_string());
+        assert_eq!(
+            sessions.display_name("session-a").as_deref(),
+            Some("custom name")
+        );
+        assert_eq!(
+            sessions.endpoint("session-a").as_deref(),
+            Some("nya@example.test:2222")
+        );
+        assert_eq!(
+            sessions.ssh_host("session-a").as_deref(),
+            Some("example.test")
+        );
+        assert_eq!(
+            sessions.ssh_address("session-a").as_deref(),
+            Some("ssh -p 2222 nya@example.test")
+        );
+        assert!(sessions.is_disconnected("session-a"));
+
+        sessions.update_cwd("session-a", "/srv/app".to_string());
+        assert_eq!(
+            sessions.tab_tooltip_lines("session-a"),
+            [
+                "nya@example.test:2222",
+                "ssh -p 2222 nya@example.test",
+                "Disconnected — press Enter to reconnect",
+                "cwd /srv/app",
+            ]
+        );
+
+        sessions.select_active_session("session-a");
+        sessions.record_command_history("session-a", "git status");
+        sessions.record_command_history("session-a", "cargo check");
+        assert_eq!(
+            sessions.active_command_history_snapshot(),
+            ["cargo check", "git status"]
+        );
+        assert_eq!(
+            sessions.active_command_history_entry(1).as_deref(),
+            Some("git status")
+        );
     }
 
     #[test]

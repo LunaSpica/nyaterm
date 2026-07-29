@@ -65,10 +65,10 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn quick_switch_items(&self) -> Vec<QuickSwitchItem> {
-        let sessions = self.ordered_sessions();
+        let sessions = self.session.ordered_sessions();
         let mut session_items = Vec::new();
         for session in &sessions {
-            let title = self.session_display_name_by_info(&session);
+            let title = self.session.display_name_by_info(&session);
             let active = self.session.active_id() == Some(session.id.as_str());
             let mut subtitle = format!(
                 "{} - {}",

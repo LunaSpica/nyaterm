@@ -66,7 +66,7 @@ impl NyaTermApp {
             vec![session_id.clone()]
         };
         for close_id in &close_ids {
-            let disconnected = self.is_session_disconnected(close_id);
+            let disconnected = self.session.is_disconnected(close_id);
             match self.session.manager().close(close_id) {
                 Ok(()) => {}
                 Err(_) if disconnected => {}
@@ -84,7 +84,7 @@ impl NyaTermApp {
         if was_active {
             self.ai.reset_agent_runtime();
             self.sync_session_event_bridge_policy();
-            if let Some(next_session_id) = self.next_session_after(&session_id) {
+            if let Some(next_session_id) = self.session.next_session_after(&session_id) {
                 self.activate_session_id(&next_session_id);
                 self.shell.set_status(format!(
                     "session closed; active {}",
@@ -201,7 +201,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let open_sessions = self.ordered_sessions().len();
+        let open_sessions = self.session.ordered_sessions().len();
         if self.settings.summary().confirm_on_close && open_sessions > 0 {
             // Reuse close-all confirmation as quit-with-sessions gate (Tauri confirm_on_close).
             self.session.dialog_request_quit_after_close_all();
@@ -224,7 +224,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.ordered_sessions().is_empty() {
+        if self.session.ordered_sessions().is_empty() {
             self.shell.set_status("no sessions to close".to_string());
             cx.notify();
             return;
@@ -281,6 +281,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let ids = self
+            .session
             .ordered_sessions()
             .into_iter()
             .filter_map(|session| (session.id != keep_session_id).then_some(session.id))
@@ -295,7 +296,7 @@ impl NyaTermApp {
         anchor_session_id: String,
         cx: &mut Context<Self>,
     ) {
-        let sessions = self.ordered_sessions();
+        let sessions = self.session.ordered_sessions();
         let Some(anchor_index) = sessions
             .iter()
             .position(|session| session.id == anchor_session_id)

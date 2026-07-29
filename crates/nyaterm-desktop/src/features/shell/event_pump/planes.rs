@@ -25,7 +25,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        let pending_session_start = self.has_pending_session_start();
+        let pending_session_start = self.session.start_has_pending();
         let should_pump = !self.session.restore_is_complete()
             && self
                 .stores
@@ -665,7 +665,7 @@ impl NyaTermApp {
         }
         let render_work_pressure = terminal_render_work_pressure_active(
             output_pressure,
-            self.has_pending_session_start(),
+            self.session.start_has_pending(),
             self.session.start_has_queued_saved_connections(),
         );
         // Large-output protection recovery accounting.

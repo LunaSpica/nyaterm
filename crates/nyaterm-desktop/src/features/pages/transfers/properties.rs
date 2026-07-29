@@ -183,7 +183,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        let id = self.next_transfer_id("sftp-properties");
+        let id = self.transfer.next_transfer_job_id("sftp-properties");
         self.transfer.enqueue_transfer_job(TransferJobState {
             id: id.clone(),
             session_id: self.session.active_id_owned(),
@@ -292,7 +292,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        let id = self.next_transfer_id("sftp-update-properties");
+        let id = self.transfer.next_transfer_job_id("sftp-update-properties");
         self.transfer.enqueue_transfer_job(TransferJobState {
             id: id.clone(),
             session_id: self.session.active_id_owned(),

@@ -6,23 +6,13 @@ use crate::features::{
     TransferEditorDiscardOutcome,
 };
 use crate::models::{
-    TransferEditorState, TransferJobEvent, TransferJobKind, TransferJobOutput, TransferJobResult,
-    TransferJobState, TransferJobStatus,
+    TransferJobEvent, TransferJobKind, TransferJobOutput, TransferJobResult, TransferJobState,
+    TransferJobStatus,
 };
 
 use super::super::NATIVE_EDITOR_MAX_BYTES;
 
 impl NyaTermApp {
-    pub(in crate::features) fn active_transfer_editor_tab(&self) -> Option<&TransferEditorState> {
-        self.transfer.active_editor_tab()
-    }
-
-    pub(in crate::features) fn active_transfer_editor_tab_mut(
-        &mut self,
-    ) -> Option<&mut TransferEditorState> {
-        self.transfer.active_editor_tab_mut()
-    }
-
     pub(in crate::features) fn transfer_editor_ssh_config(
         &self,
         session_id: Option<&str>,
@@ -145,7 +135,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        let id = self.next_transfer_id("sftp-open-text");
+        let id = self.transfer.next_transfer_job_id("sftp-open-text");
         self.transfer.enqueue_transfer_job(TransferJobState {
             id: id.clone(),
             session_id,
@@ -274,7 +264,7 @@ impl NyaTermApp {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let id = self.next_transfer_id("sftp-save-text");
+        let id = self.transfer.next_transfer_job_id("sftp-save-text");
         self.transfer.enqueue_transfer_job(TransferJobState {
             id: id.clone(),
             session_id,

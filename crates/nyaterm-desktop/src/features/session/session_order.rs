@@ -22,32 +22,6 @@ impl NyaTermApp {
         }
     }
 
-    pub(in crate::features) fn move_session_after(
-        &mut self,
-        session_id: &str,
-        after_session_id: &str,
-    ) {
-        self.session
-            .move_session_after(session_id, after_session_id);
-    }
-
-    pub(in crate::features) fn move_session_to_index(&mut self, session_id: &str, index: usize) {
-        self.session.move_session_to_index(session_id, index);
-    }
-
-    /// UI-facing session list built from local metadata only.
-    ///
-    /// Avoids `SessionManager::list_sessions()` (transport map lock + sort) so
-    /// tab strip / sidebar / status bar paints never contend with the I/O thread.
-    pub(in crate::features) fn ordered_sessions(&self) -> Vec<SessionInfo> {
-        self.session.ordered_sessions()
-    }
-
-    /// SessionInfo for a single id from local metadata (no transport lock).
-    pub(in crate::features) fn session_info(&self, session_id: &str) -> Option<SessionInfo> {
-        self.session.session_info(session_id)
-    }
-
     /// Tab-root count for chrome (status bar) without allocating SessionInfo.
     pub(in crate::features) fn ordered_tab_session_count(&self) -> usize {
         self.session
@@ -55,11 +29,6 @@ impl NyaTermApp {
             .iter()
             .filter(|session_id| !self.is_secondary_pane_session(session_id))
             .count()
-    }
-
-    /// Live (non-disconnected) session count from local metadata only.
-    pub(in crate::features) fn live_session_count(&self) -> usize {
-        self.session.live_session_count()
     }
 
     /// True when this session is a secondary leaf inside another tab's pane tree
@@ -121,11 +90,5 @@ impl NyaTermApp {
             }
         }
         tab_root.to_string()
-    }
-
-    pub(in crate::features) fn is_session_disconnected(&self, session_id: &str) -> bool {
-        self.session
-            .metadata(session_id)
-            .is_some_and(|metadata| metadata.disconnected)
     }
 }

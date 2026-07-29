@@ -1,134 +1,17 @@
 use gpui::{ClipboardItem, Context, Window};
-use nyaterm_transport::SessionInfo;
 
 use crate::features::NyaTermApp;
 use crate::features::formatting::{session_kind_label, short_id};
 use crate::models::{NavItem, SessionLaunchConfig};
 
 impl NyaTermApp {
-    pub(in crate::features) fn session_display_name_by_info(
-        &self,
-        session: &SessionInfo,
-    ) -> String {
-        if let Some(name) = self
-            .session
-            .custom_name(&session.id)
-            .filter(|name| !name.trim().is_empty())
-        {
-            return name.to_string();
-        }
-        if let Some(name) = self
-            .session
-            .dynamic_title(&session.id)
-            .filter(|name| !name.trim().is_empty())
-        {
-            return name.to_string();
-        }
-        session.name.clone()
-    }
-
-    pub(in crate::features) fn session_display_name(&self, session_id: &str) -> Option<String> {
-        if let Some(name) = self
-            .session
-            .custom_name(session_id)
-            .filter(|name| !name.trim().is_empty())
-        {
-            return Some(name.to_string());
-        }
-        if let Some(name) = self
-            .session
-            .dynamic_title(session_id)
-            .filter(|name| !name.trim().is_empty())
-        {
-            return Some(name.to_string());
-        }
-        // Prefer local metadata — never take the transport session map lock for chrome.
-        self.session_info(session_id).map(|session| session.name)
-    }
-
-    pub(in crate::features) fn session_endpoint(&self, session_id: &str) -> Option<String> {
-        let metadata = self.session.metadata(session_id)?;
-        match &metadata.launch_config {
-            SessionLaunchConfig::Local(config) => {
-                let shell = config
-                    .shell_path
-                    .as_deref()
-                    .filter(|value| !value.trim().is_empty())
-                    .unwrap_or("system shell");
-                Some(match &config.working_dir {
-                    Some(dir) => format!("{shell} in {}", dir.display()),
-                    None => shell.to_string(),
-                })
-            }
-            SessionLaunchConfig::Ssh(config) => Some(format!(
-                "{}@{}:{}",
-                config.username, config.host, config.port
-            )),
-            SessionLaunchConfig::Telnet(config) => Some(format!("{}:{}", config.host, config.port)),
-            SessionLaunchConfig::Serial(config) => Some(format!(
-                "{} @ {} {}{}{}",
-                config.port_name,
-                config.baud_rate,
-                config.data_bits,
-                config.parity,
-                config.stop_bits
-            )),
-        }
-    }
-
-    pub(in crate::features) fn session_ssh_host(&self, session_id: &str) -> Option<String> {
-        let metadata = self.session.metadata(session_id)?;
-        match &metadata.launch_config {
-            SessionLaunchConfig::Ssh(config) if !config.host.trim().is_empty() => {
-                Some(config.host.clone())
-            }
-            _ => None,
-        }
-    }
-
-    pub(in crate::features) fn session_ssh_address(&self, session_id: &str) -> Option<String> {
-        let metadata = self.session.metadata(session_id)?;
-        match &metadata.launch_config {
-            SessionLaunchConfig::Ssh(config)
-                if !config.username.trim().is_empty() && !config.host.trim().is_empty() =>
-            {
-                Some(format!(
-                    "ssh -p {} {}@{}",
-                    config.port, config.username, config.host
-                ))
-            }
-            _ => None,
-        }
-    }
-
-    /// Lines for tab hover tooltip (endpoint + SSH address when available).
-    pub(in crate::features) fn session_tab_tooltip_lines(&self, session_id: &str) -> Vec<String> {
-        let mut lines = Vec::new();
-        if let Some(endpoint) = self.session_endpoint(session_id) {
-            lines.push(endpoint);
-        }
-        if let Some(address) = self.session_ssh_address(session_id) {
-            if lines.first().map(String::as_str) != Some(address.as_str()) {
-                lines.push(address);
-            }
-        }
-        if self.is_session_disconnected(session_id) {
-            lines.push("Disconnected — press Enter to reconnect".to_string());
-        }
-        if let Some(cwd) = self.session.cwd(session_id) {
-            if !cwd.trim().is_empty() {
-                lines.push(format!("cwd {cwd}"));
-            }
-        }
-        lines
-    }
-
     fn active_session_info_line(&self) -> Option<String> {
         let session_id = self.session.active_id()?;
-        let name = self.session_display_name(session_id)?;
-        let session = self.session_info(session_id)?;
+        let name = self.session.display_name(session_id)?;
+        let session = self.session.session_info(session_id)?;
         let endpoint = self
-            .session_endpoint(session_id)
+            .session
+            .endpoint(session_id)
             .unwrap_or_else(|| "unknown endpoint".to_string());
         Some(format!(
             "{} · {} · {} · {}x{} · {}",
@@ -145,11 +28,12 @@ impl NyaTermApp {
         &self,
     ) -> Option<Vec<(&'static str, String)>> {
         let session_id = self.session.active_id()?;
-        let name = self.session_display_name(session_id)?;
-        let session = self.session_info(session_id)?;
+        let name = self.session.display_name(session_id)?;
+        let session = self.session.session_info(session_id)?;
         let metadata = self.session.metadata(session_id)?;
         let endpoint = self
-            .session_endpoint(session_id)
+            .session
+            .endpoint(session_id)
             .unwrap_or_else(|| "unknown endpoint".to_string());
 
         let mut details = vec![
@@ -198,7 +82,7 @@ impl NyaTermApp {
                 details.push((self.tr("sessionInfo.host"), config.host.clone()));
                 details.push((self.tr("sessionInfo.port"), config.port.to_string()));
                 details.push((self.tr("sessionInfo.username"), config.username.clone()));
-                if let Some(address) = self.session_ssh_address(session_id) {
+                if let Some(address) = self.session.ssh_address(session_id) {
                     details.push((self.tr("sessionInfo.sshAddress"), address));
                 }
                 if let Some(proxy_jump) = config.proxy_jump.as_ref() {
@@ -335,7 +219,7 @@ impl NyaTermApp {
     ) {
         // Local metadata is authoritative for tab existence; transport lock not needed.
         let known = self.session.has_session(&session_id);
-        let disconnected = self.is_session_disconnected(&session_id);
+        let disconnected = self.session.is_disconnected(&session_id);
         if !known && !disconnected {
             self.shell
                 .set_status("session no longer exists".to_string());
@@ -349,7 +233,7 @@ impl NyaTermApp {
         } else {
             session_id.clone()
         };
-        let disconnected = self.is_session_disconnected(&focus_id) || disconnected;
+        let disconnected = self.session.is_disconnected(&focus_id) || disconnected;
         self.activate_session_id_with_surface_sync(&focus_id, cx);
         self.shell.set_status(if disconnected {
             format!("disconnected {}", short_id(&focus_id))
@@ -365,7 +249,7 @@ impl NyaTermApp {
         offset: isize,
         cx: &mut Context<Self>,
     ) {
-        let sessions = self.ordered_sessions();
+        let sessions = self.session.ordered_sessions();
         if sessions.is_empty() {
             self.shell.set_status("no sessions to switch".to_string());
             cx.notify();
@@ -395,7 +279,7 @@ impl NyaTermApp {
         index: usize,
         cx: &mut Context<Self>,
     ) {
-        let sessions = self.ordered_sessions();
+        let sessions = self.session.ordered_sessions();
         if sessions.is_empty() {
             self.shell.set_status("no sessions to switch".to_string());
             cx.notify();
@@ -462,7 +346,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        let Some(name) = self.session_display_name(session_id) else {
+        let Some(name) = self.session.display_name(session_id) else {
             self.shell
                 .set_status("active session name is unavailable".to_string());
             cx.notify();
@@ -480,7 +364,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        let Some(host) = self.session_ssh_host(session_id) else {
+        let Some(host) = self.session.ssh_host(session_id) else {
             self.shell
                 .set_status("active session is not SSH".to_string());
             cx.notify();

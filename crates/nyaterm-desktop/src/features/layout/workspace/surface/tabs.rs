@@ -409,14 +409,14 @@ impl NyaTermApp {
                 });
                 transient_cursor += 1;
             }
-            let display_name = self.session_display_name_by_info(&session);
+            let display_name = self.session.display_name_by_info(&session);
             let session_id = session.id.clone();
             let close_session_id = session.id.clone();
             let tab_group_name = SharedString::from(format!("session-tab-group-{session_id}"));
             let tab_number = tab_index + transient_cursor + 1;
             let kind_icon = session_kind_icon_path(session.kind);
             let tooltip_title = display_name.clone();
-            let tooltip_lines = self.session_tab_tooltip_lines(&session.id);
+            let tooltip_lines = self.session.tab_tooltip_lines(&session.id);
             let drag_payload = SessionTabDragPayload {
                 session_id: session.id.clone(),
                 display_name: display_name.clone(),
@@ -434,17 +434,17 @@ impl NyaTermApp {
                 .workspace_pane_root(&session.id)
                 .map(|root| root.session_ids())
                 .unwrap_or_else(|| vec![session.id.clone()]);
-            let is_disconnected = leaf_ids.iter().any(|id| self.is_session_disconnected(id));
+            let is_disconnected = leaf_ids.iter().any(|id| self.session.is_disconnected(id));
             let tab_title = truncate_preview(&display_name, 28);
             let has_unread = leaf_ids
                 .iter()
                 .any(|id| self.terminal.session_has_unread(id));
             let sync_group = leaf_ids
                 .iter()
-                .find_map(|id| self.active_sync_group_for_session(id));
+                .find_map(|id| self.sync_input.active_group_for_session(id));
             let sync_paused = leaf_ids
                 .iter()
-                .any(|id| self.is_session_paused_in_active_sync_group(id));
+                .any(|id| self.sync_input.session_is_paused_in_active_group(id));
             let show_sync_indicator = self.sync_input.broadcast_to_all() || sync_group.is_some();
             let sync_indicator_color = sync_group
                 .map(|group| group.color)

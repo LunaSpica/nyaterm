@@ -188,7 +188,10 @@ impl NyaTermApp {
         options: SavedConnectionStartOptions,
         cx: &mut Context<Self>,
     ) -> bool {
-        if self.saved_connection_start_is_pending_or_queued(&connection) {
+        if self
+            .session
+            .start_saved_connection_is_pending_or_queued(&connection)
+        {
             self.shell
                 .set_status(format!("{} is already queued", connection.name));
             self.shell.show_workspace();
@@ -225,22 +228,25 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        if !self.session.start_has_queued_saved_connections() || self.has_pending_session_start() {
+        if !self.session.start_has_queued_saved_connections() || self.session.start_has_pending() {
             return false;
         }
         let mut dirty = false;
-        while !self.has_pending_session_start() {
+        while !self.session.start_has_pending() {
             let Some(start) = self.session.start_pop_saved_connection() else {
                 return dirty;
             };
-            if self.saved_connection_start_is_pending(&start.connection) {
+            if self
+                .session
+                .start_saved_connection_is_pending(&start.connection)
+            {
                 dirty = true;
                 continue;
             }
             let before_pending_count = self.session.start_pending_count();
             self.start_saved_connection_with_options(start.connection, start.options, window, cx);
             dirty = true;
-            if self.has_pending_session_start()
+            if self.session.start_has_pending()
                 || self.session.start_pending_count() > before_pending_count
             {
                 return true;

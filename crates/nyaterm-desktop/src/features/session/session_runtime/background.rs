@@ -11,34 +11,14 @@ use super::super::state::{failed_session_start_display_name, pending_session_sta
 use super::PendingSessionStartRegistration;
 use crate::features::formatting::{session_kind_label, short_id, ssh_multiplex_key};
 use crate::features::{
-    FailedSessionStart, NyaTermApp, PendingSessionStart, SessionStartEventRequest,
-    SessionStartResult, SessionStartSuccess,
+    NyaTermApp, PendingSessionStart, SessionStartEventRequest, SessionStartResult,
+    SessionStartSuccess,
 };
 use crate::models::{NavItem, SessionLaunchConfig, SessionRuntimeMetadata, StartupCommandRequest};
 
 const SESSION_START_EVENT_DRAIN_LIMIT: usize = 8;
 
 impl NyaTermApp {
-    pub(in crate::features) fn has_pending_session_start(&self) -> bool {
-        self.session.start.has_pending()
-    }
-
-    pub(in crate::features) fn has_failed_session_start(&self) -> bool {
-        self.session.start.has_failed()
-    }
-
-    pub(in crate::features) fn pending_session_display_name(&self) -> Option<String> {
-        self.session.start.pending_display_name()
-    }
-
-    pub(in crate::features) fn active_failed_session(&self) -> Option<&FailedSessionStart> {
-        self.session.start.active_failed()
-    }
-
-    pub(in crate::features) fn failed_session_display_name(&self) -> Option<String> {
-        self.session.start.failed_display_name()
-    }
-
     pub(in crate::features) fn select_pending_session_start(
         &mut self,
         request_id: String,
@@ -98,10 +78,6 @@ impl NyaTermApp {
             failed_session_start_display_name(&failed)
         ));
         cx.notify();
-    }
-
-    pub(in crate::features) fn pending_session_status_source(&self) -> Option<(String, Instant)> {
-        self.session.start.pending_status_source()
     }
 
     pub(in crate::features) fn register_pending_session_start(
@@ -373,7 +349,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        if self.is_session_disconnected(&session_id) {
+        if self.session.is_disconnected(&session_id) {
             self.shell
                 .set_status("session disconnected — reconnect before probing".to_string());
             cx.notify();
@@ -551,12 +527,14 @@ impl NyaTermApp {
                         .as_ref()
                         .and_then(|pending| pending.after_session_id.clone())
                     {
-                        self.move_session_after(&session_id, &after_session_id);
+                        self.session
+                            .move_session_after(&session_id, &after_session_id);
                     }
                     if let Some(insert_index) =
                         pending.as_ref().and_then(|pending| pending.insert_index)
                     {
-                        self.move_session_to_index(&session_id, insert_index);
+                        self.session
+                            .move_session_to_index(&session_id, insert_index);
                     }
                     if let Some(stale_id) = reconnect_session_id {
                         if stale_id != session_id {
