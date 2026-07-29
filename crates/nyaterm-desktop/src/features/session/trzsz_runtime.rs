@@ -6,8 +6,9 @@ use gpui::{Context, PathPromptOptions, SharedString};
 use nyaterm_transport::{
     SftpTransferProgress, TrzszAction, TrzszDetector, TrzszDownloadEngine, TrzszDownloadEvent,
     TrzszMode, TrzszOutputEvent, TrzszProtocolFrame, TrzszProtocolStream, TrzszTransferEvent,
-    TrzszTransferState, TrzszUploadEngine, TrzszUploadEntry, TrzszUploadEvent, TrzszUploadPayload,
-    TrzszUploadSource, build_trzsz_action_frame, build_trzsz_string_frame, trzsz_fail_response,
+    TrzszTransferState, TrzszTrigger, TrzszUploadEngine, TrzszUploadEntry, TrzszUploadEvent,
+    TrzszUploadPayload, TrzszUploadSource, build_trzsz_action_frame, build_trzsz_string_frame,
+    trzsz_fail_response,
 };
 use std::{
     collections::{HashMap, HashSet},
@@ -19,11 +20,11 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-pub(in crate::features) struct TrzszSessionState {
-    pub(in crate::features) detector: TrzszDetector,
-    pub(in crate::features) transfer: TrzszTransferState,
-    pub(in crate::features) protocol: TrzszProtocolStream,
-    pub(in crate::features) protocol_active: bool,
+pub(super) struct TrzszSessionState {
+    detector: TrzszDetector,
+    transfer: TrzszTransferState,
+    protocol: TrzszProtocolStream,
+    protocol_active: bool,
     download: Option<TrzszDownloadRuntime>,
     download_worker: Option<TrzszDownloadWorker>,
     upload_prepare_worker: Option<TrzszUploadPrepareWorker>,
@@ -258,35 +259,125 @@ impl TrzszSessionState {
             worker.stop();
         }
     }
+
+    pub(super) fn stop_workers(&mut self) {
+        self.stop_download_worker();
+        self.upload_prepare_worker = None;
+        self.stop_upload_worker();
+    }
+
+    fn reset_after_discontinuity(&mut self) {
+        self.detector.reset();
+        self.transfer = TrzszTransferState::new();
+        self.protocol.reset();
+        self.protocol_active = false;
+        self.download = None;
+        self.upload = None;
+        self.stop_workers();
+    }
+
+    fn finish_download(&mut self) {
+        self.download = None;
+        self.stop_download_worker();
+        self.protocol_active = false;
+        self.protocol.reset();
+    }
+
+    fn finish_upload(&mut self) {
+        self.upload = None;
+        self.upload_prepare_worker = None;
+        self.stop_upload_worker();
+        self.protocol_active = false;
+        self.protocol.reset();
+    }
+
+    fn finish_transfer(&mut self) {
+        self.finish_download();
+        self.finish_upload();
+    }
+
+    fn begin_trigger(&mut self, trigger: &TrzszTrigger) {
+        self.finish_transfer();
+        self.transfer.observe_trigger(trigger);
+        self.protocol.reset();
+        self.protocol_active = true;
+    }
+
+    fn begin_download(&mut self, trigger: &TrzszTrigger, directory: PathBuf) {
+        self.begin_trigger(trigger);
+        self.download_worker = Some(TrzszDownloadWorker::spawn(
+            TrzszDownloadRuntime {
+                engine: TrzszDownloadEngine::new(trigger.remote_is_windows),
+                directory,
+                directory_roots: HashMap::new(),
+                pending_path: None,
+                current_file: None,
+            },
+            trigger.remote_is_windows,
+        ));
+    }
+
+    fn begin_upload_path_selection(&mut self, trigger: &TrzszTrigger) {
+        self.begin_trigger(trigger);
+    }
+
+    fn begin_upload_preparation(
+        &mut self,
+        paths: Vec<PathBuf>,
+        directory_mode: bool,
+        remote_is_windows: bool,
+    ) {
+        self.finish_download();
+        self.upload = None;
+        self.stop_upload_worker();
+        self.protocol_active = true;
+        self.upload_prepare_worker = Some(TrzszUploadPrepareWorker::spawn(
+            paths,
+            directory_mode,
+            remote_is_windows,
+        ));
+    }
+
+    fn install_prepared_upload(
+        &mut self,
+        remote_is_windows: bool,
+        directory_mode: bool,
+        entries: Vec<TrzszUploadEntry>,
+        files: HashMap<String, TrzszUploadFile>,
+    ) {
+        self.finish_download();
+        self.upload_prepare_worker = None;
+        self.stop_upload_worker();
+        self.protocol_active = true;
+        self.upload = Some(TrzszUploadRuntime {
+            engine: TrzszUploadEngine::new(remote_is_windows, entries),
+            files,
+            remote_names: HashMap::new(),
+            directory_mode,
+        });
+    }
+}
+
+impl Drop for TrzszSessionState {
+    fn drop(&mut self) {
+        self.stop_workers();
+    }
 }
 
 impl NyaTermApp {
     fn trzsz_state_mut(&mut self, session_id: &str) -> &mut TrzszSessionState {
-        self.session
-            .trzsz
-            .entry(session_id.to_string())
-            .or_default()
+        self.session.trzsz_state_mut_or_default(session_id)
     }
 
     pub(in crate::features) fn clear_trzsz_session(&mut self, session_id: &str) {
-        if let Some(mut state) = self.session.trzsz.remove(session_id) {
-            state.stop_download_worker();
-            state.stop_upload_worker();
+        if self.session.remove_trzsz_session_runtime(session_id) {
             self.sync_session_event_bridge_session_policy(session_id);
         }
     }
 
     pub(in crate::features) fn note_trzsz_output_discontinuity(&mut self, session_id: &str) {
-        if let Some(state) = self.session.trzsz.get_mut(session_id) {
-            state.detector.reset();
-            state.transfer = TrzszTransferState::new();
-            state.protocol.reset();
-            state.protocol_active = false;
-            state.download = None;
-            state.stop_download_worker();
-            state.upload_prepare_worker = None;
-            state.upload = None;
-            state.stop_upload_worker();
+        if let Some(state) = self.session.trzsz_state_mut(session_id) {
+            state.reset_after_discontinuity();
         }
     }
 
@@ -370,43 +461,16 @@ impl NyaTermApp {
                         let action = TrzszAction::local_default(trigger.remote_is_windows);
                         let action_frame =
                             build_trzsz_action_frame(&action, trigger.remote_is_windows);
-                        {
-                            let state = self.trzsz_state_mut(session_id);
-                            state.transfer.observe_trigger(&trigger);
-                            state.protocol.reset();
-                            state.protocol_active = true;
-                            state.download = None;
-                            state.download_worker = Some(TrzszDownloadWorker::spawn(
-                                TrzszDownloadRuntime {
-                                    engine: TrzszDownloadEngine::new(trigger.remote_is_windows),
-                                    directory: directory.clone(),
-                                    directory_roots: HashMap::new(),
-                                    pending_path: None,
-                                    current_file: None,
-                                },
-                                trigger.remote_is_windows,
-                            ));
-                            state.upload_prepare_worker = None;
-                            state.upload = None;
-                            state.stop_upload_worker();
-                        }
+                        self.trzsz_state_mut(session_id)
+                            .begin_download(&trigger, directory.clone());
                         protocol_responses.push(action_frame);
                         latest_trigger_status = Some(format!(
                             "trzsz download accepted (v{version}{server}) -> {}",
                             directory.display()
                         ));
                     } else if trigger.mode == TrzszMode::Receive {
-                        {
-                            let state = self.trzsz_state_mut(session_id);
-                            state.transfer.observe_trigger(&trigger);
-                            state.protocol.reset();
-                            state.protocol_active = true;
-                            state.download = None;
-                            state.stop_download_worker();
-                            state.upload_prepare_worker = None;
-                            state.upload = None;
-                            state.stop_upload_worker();
-                        }
+                        self.trzsz_state_mut(session_id)
+                            .begin_upload_path_selection(&trigger);
                         if self.prompt_trzsz_upload_paths(
                             session_id.to_string(),
                             trigger.remote_is_windows,
@@ -421,31 +485,16 @@ impl NyaTermApp {
                                 "trzsz upload file picker is not available",
                                 trigger.remote_is_windows,
                             ));
-                            if let Some(state) = self.session.trzsz.get_mut(session_id) {
-                                state.protocol_active = false;
-                                state.protocol.reset();
-                                state.download = None;
-                                state.stop_download_worker();
-                                state.upload_prepare_worker = None;
-                                state.upload = None;
-                                state.stop_upload_worker();
+                            if let Some(state) = self.session.trzsz_state_mut(session_id) {
+                                state.finish_transfer();
                             }
                             latest_trigger_status = Some(format!(
                                 "trzsz {action} trigger rejected (v{version}{server}) - file picker busy"
                             ));
                         }
                     } else {
-                        {
-                            let state = self.trzsz_state_mut(session_id);
-                            state.transfer.observe_trigger(&trigger);
-                            state.protocol.reset();
-                            state.protocol_active = true;
-                            state.download = None;
-                            state.stop_download_worker();
-                            state.upload_prepare_worker = None;
-                            state.upload = None;
-                            state.stop_upload_worker();
-                        }
+                        self.trzsz_state_mut(session_id)
+                            .begin_upload_path_selection(&trigger);
                         if self.prompt_trzsz_upload_paths(
                             session_id.to_string(),
                             trigger.remote_is_windows,
@@ -460,14 +509,8 @@ impl NyaTermApp {
                                 "trzsz upload file picker is not available",
                                 trigger.remote_is_windows,
                             ));
-                            if let Some(state) = self.session.trzsz.get_mut(session_id) {
-                                state.protocol_active = false;
-                                state.protocol.reset();
-                                state.download = None;
-                                state.stop_download_worker();
-                                state.upload_prepare_worker = None;
-                                state.upload = None;
-                                state.stop_upload_worker();
+                            if let Some(state) = self.session.trzsz_state_mut(session_id) {
+                                state.finish_transfer();
                             }
                             latest_trigger_status = Some(format!(
                                 "trzsz {action} trigger rejected (v{version}{server}) - file picker busy"
@@ -494,7 +537,7 @@ impl NyaTermApp {
     }
 
     fn queue_trzsz_download_worker_output(&mut self, session_id: &str, data: &[u8]) -> bool {
-        let Some(state) = self.session.trzsz.get_mut(session_id) else {
+        let Some(state) = self.session.trzsz_state_mut(session_id) else {
             return false;
         };
         let Some(worker) = state.download_worker.as_ref() else {
@@ -511,7 +554,7 @@ impl NyaTermApp {
         session_id: &str,
         frame: TrzszProtocolFrame,
     ) -> bool {
-        let Some(state) = self.session.trzsz.get_mut(session_id) else {
+        let Some(state) = self.session.trzsz_state_mut(session_id) else {
             return false;
         };
         let Some(worker) = state.upload_worker.as_ref() else {
@@ -525,11 +568,11 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> bool {
-        if self.session.trzsz.is_empty() {
+        if !self.session.has_trzsz_runtime_sessions() {
             return false;
         }
         let mut events = Vec::new();
-        for (session_id, state) in &mut self.session.trzsz {
+        for (session_id, state) in self.session.trzsz_states_mut() {
             let Some(worker) = state.download_worker.as_ref() else {
                 continue;
             };
@@ -577,21 +620,15 @@ impl NyaTermApp {
         }
         if let Some(reason) = event.failed {
             self.finish_trzsz_download_jobs(session_id, false, Some(&reason), cx);
-            if let Some(state) = self.session.trzsz.get_mut(session_id) {
-                state.download = None;
-                state.stop_download_worker();
-                state.protocol_active = false;
-                state.protocol.reset();
+            if let Some(state) = self.session.trzsz_state_mut(session_id) {
+                state.finish_download();
             }
             self.terminal.view.status = format!("trzsz download failed: {reason}");
             dirty = true;
         } else if let Some(message) = event.completed {
             self.finish_trzsz_download_jobs(session_id, true, None, cx);
-            if let Some(state) = self.session.trzsz.get_mut(session_id) {
-                state.download = None;
-                state.stop_download_worker();
-                state.protocol_active = false;
-                state.protocol.reset();
+            if let Some(state) = self.session.trzsz_state_mut(session_id) {
+                state.finish_download();
             }
             self.terminal.view.status = message;
             dirty = true;
@@ -609,11 +646,11 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> bool {
-        if self.session.trzsz.is_empty() {
+        if !self.session.has_trzsz_runtime_sessions() {
             return false;
         }
         let mut events = Vec::new();
-        for (session_id, state) in &mut self.session.trzsz {
+        for (session_id, state) in self.session.trzsz_states_mut() {
             let Some(worker) = state.upload_worker.as_ref() else {
                 continue;
             };
@@ -657,23 +694,15 @@ impl NyaTermApp {
         }
         if let Some(reason) = event.failed {
             self.finish_trzsz_upload_jobs(session_id, false, Some(&reason), cx);
-            if let Some(state) = self.session.trzsz.get_mut(session_id) {
-                state.upload = None;
-                state.upload_prepare_worker = None;
-                state.stop_upload_worker();
-                state.protocol_active = false;
-                state.protocol.reset();
+            if let Some(state) = self.session.trzsz_state_mut(session_id) {
+                state.finish_upload();
             }
             self.terminal.view.status = format!("trzsz upload failed: {reason}");
             dirty = true;
         } else if let Some(message) = event.completed {
             self.finish_trzsz_upload_jobs(session_id, true, None, cx);
-            if let Some(state) = self.session.trzsz.get_mut(session_id) {
-                state.upload = None;
-                state.upload_prepare_worker = None;
-                state.stop_upload_worker();
-                state.protocol_active = false;
-                state.protocol.reset();
+            if let Some(state) = self.session.trzsz_state_mut(session_id) {
+                state.finish_upload();
             }
             self.terminal.view.status = message;
             dirty = true;
@@ -692,7 +721,7 @@ impl NyaTermApp {
         session_id: &str,
         data: &[u8],
     ) -> bool {
-        let state_is_idle = self.session.trzsz.get(session_id).is_none_or(|state| {
+        let state_is_idle = self.session.trzsz_state(session_id).is_none_or(|state| {
             !state.protocol_active
                 && state.download.is_none()
                 && state.download_worker.is_none()
@@ -843,17 +872,11 @@ impl NyaTermApp {
         paths: Vec<PathBuf>,
         cx: &mut Context<Self>,
     ) {
-        let state = self.trzsz_state_mut(session_id);
-        state.protocol_active = true;
-        state.download = None;
-        state.stop_download_worker();
-        state.upload = None;
-        state.stop_upload_worker();
-        state.upload_prepare_worker = Some(TrzszUploadPrepareWorker::spawn(
+        self.trzsz_state_mut(session_id).begin_upload_preparation(
             paths,
             directory_mode,
             remote_is_windows,
-        ));
+        );
         self.terminal.view.status = "preparing trzsz upload".to_string();
         cx.notify();
     }
@@ -868,20 +891,12 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let file_count = entries.len();
-        {
-            let state = self.trzsz_state_mut(session_id);
-            state.protocol_active = true;
-            state.download = None;
-            state.stop_download_worker();
-            state.upload_prepare_worker = None;
-            state.stop_upload_worker();
-            state.upload = Some(TrzszUploadRuntime {
-                engine: TrzszUploadEngine::new(remote_is_windows, entries),
-                files,
-                remote_names: HashMap::new(),
-                directory_mode,
-            });
-        }
+        self.trzsz_state_mut(session_id).install_prepared_upload(
+            remote_is_windows,
+            directory_mode,
+            entries,
+            files,
+        );
 
         let action = TrzszAction::local_default(remote_is_windows);
         let action_frame = build_trzsz_action_frame(&action, remote_is_windows);
@@ -891,12 +906,8 @@ impl NyaTermApp {
                     format!("trzsz upload accepted ({file_count} file(s)) [{session_id}]");
             }
             Err(error) => {
-                if let Some(state) = self.session.trzsz.get_mut(session_id) {
-                    state.upload = None;
-                    state.upload_prepare_worker = None;
-                    state.stop_upload_worker();
-                    state.protocol_active = false;
-                    state.protocol.reset();
+                if let Some(state) = self.session.trzsz_state_mut(session_id) {
+                    state.finish_upload();
                 }
                 self.terminal.view.status = format!("trzsz upload ACT failed: {error}");
             }
@@ -917,12 +928,8 @@ impl NyaTermApp {
         } else {
             self.terminal.view.status = reason.to_string();
         }
-        if let Some(state) = self.session.trzsz.get_mut(session_id) {
-            state.upload = None;
-            state.upload_prepare_worker = None;
-            state.stop_upload_worker();
-            state.protocol_active = false;
-            state.protocol.reset();
+        if let Some(state) = self.session.trzsz_state_mut(session_id) {
+            state.finish_upload();
         }
         cx.notify();
     }
@@ -931,11 +938,11 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> bool {
-        if self.session.trzsz.is_empty() {
+        if !self.session.has_trzsz_runtime_sessions() {
             return false;
         }
         let mut events = Vec::new();
-        for (session_id, state) in &mut self.session.trzsz {
+        for (session_id, state) in self.session.trzsz_states_mut() {
             let Some(worker) = state.upload_prepare_worker.as_ref() else {
                 continue;
             };
@@ -983,8 +990,7 @@ impl NyaTermApp {
             TrzszTransferEvent::Config { config } => {
                 if let Some(download) = self
                     .session
-                    .trzsz
-                    .get_mut(session_id)
+                    .trzsz_state_mut(session_id)
                     .and_then(|state| state.download.as_mut())
                 {
                     download.engine.set_directory_mode(config.directory);
@@ -994,14 +1000,12 @@ impl NyaTermApp {
                 }
                 if self
                     .session
-                    .trzsz
-                    .get(session_id)
+                    .trzsz_state(session_id)
                     .is_some_and(|state| state.upload.is_some())
                 {
                     let expected_directory = self
                         .session
-                        .trzsz
-                        .get(session_id)
+                        .trzsz_state(session_id)
                         .and_then(|state| state.upload.as_ref())
                         .is_some_and(|upload| upload.directory_mode);
                     if config.directory != expected_directory {
@@ -1020,13 +1024,8 @@ impl NyaTermApp {
             TrzszTransferEvent::Failure { message } | TrzszTransferEvent::Exit { message } => {
                 self.finish_trzsz_download_jobs(session_id, false, Some(&message), cx);
                 self.finish_trzsz_upload_jobs(session_id, false, Some(&message), cx);
-                if let Some(state) = self.session.trzsz.get_mut(session_id) {
-                    state.download = None;
-                    state.upload_prepare_worker = None;
-                    state.upload = None;
-                    state.stop_upload_worker();
-                    state.protocol_active = false;
-                    state.protocol.reset();
+                if let Some(state) = self.session.trzsz_state_mut(session_id) {
+                    state.finish_transfer();
                 }
                 *status = Some(format!("trzsz transfer stopped: {message}"));
                 return;
@@ -1036,8 +1035,7 @@ impl NyaTermApp {
 
         if self
             .session
-            .trzsz
-            .get(session_id)
+            .trzsz_state(session_id)
             .is_some_and(|state| state.upload.is_some() || state.upload_worker.is_some())
         {
             self.handle_trzsz_upload_frame(session_id, frame, responses, status, cx);
@@ -1095,8 +1093,7 @@ impl NyaTermApp {
             };
             let newline = if self
                 .session
-                .trzsz
-                .get(session_id)
+                .trzsz_state(session_id)
                 .is_some_and(|state| state.transfer.remote_is_windows)
             {
                 "!\n"
@@ -1109,10 +1106,8 @@ impl NyaTermApp {
                 newline,
             ));
             self.finish_trzsz_download_jobs(session_id, true, None, cx);
-            if let Some(state) = self.session.trzsz.get_mut(session_id) {
-                state.download = None;
-                state.protocol_active = false;
-                state.protocol.reset();
+            if let Some(state) = self.session.trzsz_state_mut(session_id) {
+                state.finish_download();
             }
             *status = Some(message);
         }
@@ -1128,16 +1123,13 @@ impl NyaTermApp {
     ) {
         let remote_is_windows = self
             .session
-            .trzsz
-            .get(session_id)
+            .trzsz_state(session_id)
             .map(|state| state.transfer.remote_is_windows)
             .unwrap_or(false);
         responses.push(trzsz_fail_response(reason, remote_is_windows));
         self.finish_trzsz_download_jobs(session_id, false, Some(reason), cx);
-        if let Some(state) = self.session.trzsz.get_mut(session_id) {
-            state.download = None;
-            state.protocol_active = false;
-            state.protocol.reset();
+        if let Some(state) = self.session.trzsz_state_mut(session_id) {
+            state.finish_download();
         }
         *status = Some(format!("trzsz download failed: {reason}"));
     }
@@ -1150,21 +1142,19 @@ impl NyaTermApp {
     ) {
         let remote_is_windows = self
             .session
-            .trzsz
-            .get(session_id)
+            .trzsz_state(session_id)
             .map(|state| state.transfer.remote_is_windows)
             .unwrap_or(false);
         let Some(upload) = self
             .session
-            .trzsz
-            .get_mut(session_id)
+            .trzsz_state_mut(session_id)
             .and_then(|state| state.upload.take())
         else {
             return;
         };
         let worker = TrzszUploadWorker::spawn(upload, remote_is_windows);
         worker.begin();
-        if let Some(state) = self.session.trzsz.get_mut(session_id) {
+        if let Some(state) = self.session.trzsz_state_mut(session_id) {
             state.upload_worker = Some(worker);
         }
         *status = Some("trzsz upload starting".to_string());
@@ -1198,18 +1188,13 @@ impl NyaTermApp {
     ) {
         let remote_is_windows = self
             .session
-            .trzsz
-            .get(session_id)
+            .trzsz_state(session_id)
             .map(|state| state.transfer.remote_is_windows)
             .unwrap_or(false);
         responses.push(trzsz_fail_response(reason, remote_is_windows));
         self.finish_trzsz_upload_jobs(session_id, false, Some(reason), cx);
-        if let Some(state) = self.session.trzsz.get_mut(session_id) {
-            state.upload = None;
-            state.upload_prepare_worker = None;
-            state.stop_upload_worker();
-            state.protocol_active = false;
-            state.protocol.reset();
+        if let Some(state) = self.session.trzsz_state_mut(session_id) {
+            state.finish_upload();
         }
         *status = Some(format!("trzsz upload failed: {reason}"));
     }

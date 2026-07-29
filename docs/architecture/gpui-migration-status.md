@@ -335,6 +335,17 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   replacement and removal cannot leave stale active-session configuration
   behind. Selecting an unknown id and clearing selection retain the existing
   `None`/`SendOnly` fallback behavior.
+  The protocol-resource ownership pass then grouped the per-session ZMODEM and
+  trzsz runtimes with SSH multiplex handles in a private
+  `SessionProtocolRuntimeState`. Protocol adapters can create/query/drain only
+  through focused `SessionFeatureState` methods; catalog removal now stops and
+  removes both transfer runtimes in the same owner transition. ZMODEM/trzsz
+  states explicitly stop their workers on drop, including whole-owner
+  teardown. Multiplex reuse discards closed handles, and unreferenced handles
+  are removed by the owner before a named background worker disconnects them;
+  GPUI update callbacks no longer call the blocking multiplex `disconnect()`.
+  Protocol parsing, frames, file-transfer behavior and transport types remain
+  in their existing modules.
 - Transfer state is grouped into `TransferFeatureState`. Seventy-eight fields
   turned out to be five separate things sharing one panel: the job `queue`, the
   SFTP `browser`, the file operation dialogs (`file_ops`), the built-in remote
@@ -1404,6 +1415,7 @@ Current ownership map:
 | Session command history/search/menu/busy state | Private state in `NyaTermApp.session` | Transient per-session interaction state | History append/migration/deletion and active-menu/busy transitions are owner operations; beginning reconnect/disconnect closes the menu in the same transition. |
 | Session catalog and presentation | Private state in `NyaTermApp.session` | Runtime catalog plus transient presentation | Order/metadata registration, tab movement, disconnect marking, reconnect migration and removal are owner transitions; custom names, OSC titles/CWDs and tab colors are exposed through read-only queries and semantic updates. |
 | Active session selection and derived config | Private state in `NyaTermApp.session` | Transient selection over the runtime catalog | The active child stores only the session id; SSH config and AI execution profile are queried from private runtime metadata, and select/clear/remove transitions preserve the `None`/`SendOnly` fallback. |
+| Session protocol resources | Private child in `NyaTermApp.session` | Per-session runtime resources | ZMODEM/trzsz maps and SSH multiplex handles are private; session removal stops protocol workers atomically, state drops stop remaining workers, and multiplex disconnect runs off the GPUI update path after owner reference checks. |
 | Serial ports | Private catalog in `NyaTermApp.connection_catalog` | Runtime/discovered state | Replaced through the catalog after session-manager discovery and never persisted. |
 | Tunnel/proxy configs | Private catalog in `NyaTermApp.tunnel_state` | Persisted network config | Views use read-only slices; pure move/upsert/delete candidates and successful commits stay on `TunnelFeatureState`. The Network page UI remains separate transient state. |
 | Queued saved-connection starts | `NyaTermApp.session.start` private queue | Transient session-start state | Admission, duplicate detection, draining and runtime cadence reads go through `SessionStartFeatureState` methods. |
@@ -1637,7 +1649,11 @@ honest remaining list.
    `SessionFeatureState`. The active-session selection batch then made the
    remaining selection field private, routed roughly seventy-five desktop
    modules through owner queries/transitions, and removed the duplicate active
-   SSH/AI caches: both values now derive from the private metadata catalog.
+   SSH/AI caches: both values now derive from the private metadata catalog. The
+   following protocol-resource batch made ZMODEM, trzsz and SSH multiplex maps
+   a private child, coupled session removal with worker cleanup, added drop-time
+   worker termination, and moved blocking multiplex disconnects onto named
+   background workers after owner-controlled reference checks.
    What remains at the
    composition root is stores, runtime and focused feature owners.
    Group by cohesion where a cluster exists; do not force the count down for

@@ -109,8 +109,7 @@ impl NyaTermApp {
         // do not touch the session event pipeline at all.
         if self.session.pending_events_are_empty()
             && !self.session.event_bridge_has_pending_ui_work()
-            && (!drain_sideband_workers
-                || (self.session.zmodem.is_empty() && self.session.trzsz.is_empty()))
+            && (!drain_sideband_workers || !self.session.has_protocol_runtime_sessions())
         {
             if self.terminal.view.runtime.session_event_queued_events != 0
                 || self.terminal.view.runtime.session_event_queued_output_bytes != 0

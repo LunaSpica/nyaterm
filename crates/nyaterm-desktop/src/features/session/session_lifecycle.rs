@@ -1,6 +1,5 @@
 use gpui::{Context, Window};
 use nyaterm_core::TerminalInputState;
-use nyaterm_transport::SshMultiplexHandle;
 
 use crate::features::NyaTermApp;
 use crate::features::formatting::{short_id, ssh_multiplex_key};
@@ -149,15 +148,7 @@ impl NyaTermApp {
             return;
         };
         let multiplex_key = ssh_multiplex_key(&config);
-        if self
-            .session
-            .multiplex_handles
-            .get(&multiplex_key)
-            .is_some_and(SshMultiplexHandle::is_closed)
-        {
-            self.session.multiplex_handles.remove(&multiplex_key);
-        }
-        let existing_multiplex = self.session.multiplex_handles.get(&multiplex_key).cloned();
+        let existing_multiplex = self.session.reusable_multiplex_handle(&multiplex_key);
         let custom_name = self
             .session
             .custom_name(&source_session_id)
@@ -239,13 +230,11 @@ impl NyaTermApp {
         }
         // Drop multiplex handle association for this session key if unused.
         if let Some(multiplex_key) = update.multiplex_key {
-            let still_in_use = self
+            if let Some(handle) = self
                 .session
-                .other_live_session_uses_multiplex_key(session_id, &multiplex_key);
-            if !still_in_use {
-                if let Some(handle) = self.session.multiplex_handles.remove(&multiplex_key) {
-                    let _ = handle.disconnect();
-                }
+                .take_multiplex_handle_if_no_other_live_reference(session_id, &multiplex_key)
+            {
+                super::disconnect_multiplex_handle(handle);
             }
         }
 

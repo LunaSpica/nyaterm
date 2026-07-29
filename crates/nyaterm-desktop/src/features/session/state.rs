@@ -16,6 +16,7 @@ use crate::models::{
     TabActionsSubmenu, WorkspaceSplitDirection,
 };
 
+use super::SessionProtocolRuntimeState;
 use super::auth_runtime::{
     CredentialPromptBroker, CredentialPromptRequest, CredentialPromptState, HostKeyPromptBroker,
     HostKeyPromptRequest, KeyboardInteractivePromptState, NativeOtpCodePreview, NativeOtpProvider,
@@ -45,12 +46,8 @@ pub(in crate::features) struct SessionFeatureState {
     dynamic_titles: HashMap<String, String>,
     /// Latest OSC 7 working directories per session.
     cwds: HashMap<String, String>,
-    /// Per-session ZMODEM detector / transfer state (UI-layer interception).
-    pub zmodem: HashMap<String, ZmodemSessionState>,
-    /// Per-session trzsz trigger detector state (pre-parser protocol slot).
-    pub trzsz: HashMap<String, TrzszSessionState>,
     tab_colors: HashMap<String, u32>,
-    pub multiplex_handles: HashMap<String, SshMultiplexHandle>,
+    protocols: SessionProtocolRuntimeState,
 }
 
 #[derive(Default)]
@@ -205,10 +202,8 @@ impl SessionFeatureState {
             custom_names: HashMap::new(),
             dynamic_titles: HashMap::new(),
             cwds: HashMap::new(),
-            zmodem: HashMap::new(),
-            trzsz: HashMap::new(),
             tab_colors: HashMap::new(),
-            multiplex_handles: HashMap::new(),
+            protocols: SessionProtocolRuntimeState::default(),
         }
     }
 
@@ -435,6 +430,137 @@ impl SessionFeatureState {
             .unwrap_or(AiExecutionProfile::SendOnly)
     }
 
+    pub(in crate::features) fn has_protocol_runtime_sessions(&self) -> bool {
+        !self.protocols.zmodem.is_empty() || !self.protocols.trzsz.is_empty()
+    }
+
+    pub(super) fn has_zmodem_runtime_sessions(&self) -> bool {
+        !self.protocols.zmodem.is_empty()
+    }
+
+    pub(super) fn has_trzsz_runtime_sessions(&self) -> bool {
+        !self.protocols.trzsz.is_empty()
+    }
+
+    #[cfg(test)]
+    fn protocol_runtime_counts(&self) -> (usize, usize, usize) {
+        (
+            self.protocols.zmodem.len(),
+            self.protocols.trzsz.len(),
+            self.protocols.multiplex_handles.len(),
+        )
+    }
+
+    pub(super) fn zmodem_state(&self, session_id: &str) -> Option<&ZmodemSessionState> {
+        self.protocols.zmodem.get(session_id)
+    }
+
+    pub(super) fn zmodem_state_mut(&mut self, session_id: &str) -> Option<&mut ZmodemSessionState> {
+        self.protocols.zmodem.get_mut(session_id)
+    }
+
+    pub(super) fn zmodem_state_mut_or_default(
+        &mut self,
+        session_id: &str,
+    ) -> &mut ZmodemSessionState {
+        self.protocols
+            .zmodem
+            .entry(session_id.to_string())
+            .or_default()
+    }
+
+    pub(super) fn zmodem_states_mut(
+        &mut self,
+    ) -> impl Iterator<Item = (&String, &mut ZmodemSessionState)> {
+        self.protocols.zmodem.iter_mut()
+    }
+
+    pub(super) fn remove_zmodem_session_runtime(&mut self, session_id: &str) -> bool {
+        let Some(mut state) = self.protocols.zmodem.remove(session_id) else {
+            return false;
+        };
+        state.stop_worker();
+        true
+    }
+
+    pub(super) fn trzsz_state(&self, session_id: &str) -> Option<&TrzszSessionState> {
+        self.protocols.trzsz.get(session_id)
+    }
+
+    pub(super) fn trzsz_state_mut(&mut self, session_id: &str) -> Option<&mut TrzszSessionState> {
+        self.protocols.trzsz.get_mut(session_id)
+    }
+
+    pub(super) fn trzsz_state_mut_or_default(
+        &mut self,
+        session_id: &str,
+    ) -> &mut TrzszSessionState {
+        self.protocols
+            .trzsz
+            .entry(session_id.to_string())
+            .or_default()
+    }
+
+    pub(super) fn trzsz_states_mut(
+        &mut self,
+    ) -> impl Iterator<Item = (&String, &mut TrzszSessionState)> {
+        self.protocols.trzsz.iter_mut()
+    }
+
+    pub(super) fn remove_trzsz_session_runtime(&mut self, session_id: &str) -> bool {
+        let Some(mut state) = self.protocols.trzsz.remove(session_id) else {
+            return false;
+        };
+        state.stop_workers();
+        true
+    }
+
+    pub(in crate::features) fn register_multiplex_handle(
+        &mut self,
+        multiplex_key: String,
+        handle: SshMultiplexHandle,
+    ) {
+        self.protocols
+            .multiplex_handles
+            .insert(multiplex_key, handle);
+    }
+
+    pub(in crate::features) fn reusable_multiplex_handle(
+        &mut self,
+        multiplex_key: &str,
+    ) -> Option<SshMultiplexHandle> {
+        if self
+            .protocols
+            .multiplex_handles
+            .get(multiplex_key)
+            .is_some_and(SshMultiplexHandle::is_closed)
+        {
+            self.protocols.multiplex_handles.remove(multiplex_key);
+        }
+        self.protocols.multiplex_handles.get(multiplex_key).cloned()
+    }
+
+    pub(in crate::features) fn take_multiplex_handle_if_unreferenced(
+        &mut self,
+        multiplex_key: &str,
+    ) -> Option<SshMultiplexHandle> {
+        if self.multiplex_key_is_referenced(multiplex_key) {
+            return None;
+        }
+        self.protocols.multiplex_handles.remove(multiplex_key)
+    }
+
+    pub(in crate::features) fn take_multiplex_handle_if_no_other_live_reference(
+        &mut self,
+        session_id: &str,
+        multiplex_key: &str,
+    ) -> Option<SshMultiplexHandle> {
+        if self.other_live_session_uses_multiplex_key(session_id, multiplex_key) {
+            return None;
+        }
+        self.protocols.multiplex_handles.remove(multiplex_key)
+    }
+
     pub(in crate::features) fn select_active_session(
         &mut self,
         session_id: impl Into<String>,
@@ -602,11 +728,7 @@ impl SessionFeatureState {
         })
     }
 
-    pub(in crate::features) fn other_live_session_uses_multiplex_key(
-        &self,
-        session_id: &str,
-        multiplex_key: &str,
-    ) -> bool {
+    fn other_live_session_uses_multiplex_key(&self, session_id: &str, multiplex_key: &str) -> bool {
         self.metadata.iter().any(|(id, metadata)| {
             id != session_id
                 && !metadata.disconnected
@@ -614,7 +736,7 @@ impl SessionFeatureState {
         })
     }
 
-    pub(in crate::features) fn multiplex_key_is_referenced(&self, multiplex_key: &str) -> bool {
+    fn multiplex_key_is_referenced(&self, multiplex_key: &str) -> bool {
         self.metadata
             .values()
             .any(|metadata| metadata.ssh_multiplex_key.as_deref() == Some(multiplex_key))
@@ -690,6 +812,8 @@ impl SessionFeatureState {
         &mut self,
         session_id: &str,
     ) -> Option<String> {
+        self.remove_zmodem_session_runtime(session_id);
+        self.remove_trzsz_session_runtime(session_id);
         self.order.retain(|id| id != session_id);
         let multiplex_key = self
             .metadata
@@ -2087,9 +2211,7 @@ mod tests {
         );
         assert!(sessions.order.is_empty());
         assert!(sessions.metadata.is_empty());
-        assert!(sessions.zmodem.is_empty());
-        assert!(sessions.trzsz.is_empty());
-        assert!(sessions.multiplex_handles.is_empty());
+        assert_eq!(sessions.protocol_runtime_counts(), (0, 0, 0));
         assert!(Arc::ptr_eq(&sessions.prompts.otp_provider(), &otp_provider));
         assert!(sessions.prompts.active_credential().is_none());
         assert!(sessions.prompts.active_keyboard_interactive().is_none());
@@ -2314,6 +2436,11 @@ mod tests {
         assert!(sessions.mark_session_disconnected("missing").is_none());
         sessions
             .register_session_metadata("session-a", session_metadata("first", Some("multiplex-a")));
+        sessions.register_session_metadata(
+            "session-b",
+            session_metadata("second", Some("multiplex-a")),
+        );
+        assert!(sessions.other_live_session_uses_multiplex_key("session-a", "multiplex-a"));
 
         let changed = sessions
             .mark_session_disconnected("session-a")
@@ -2321,12 +2448,18 @@ mod tests {
         assert!(!changed.already_disconnected);
         assert_eq!(changed.multiplex_key.as_deref(), Some("multiplex-a"));
         assert!(sessions.metadata("session-a").unwrap().disconnected);
+        assert!(sessions.other_live_session_uses_multiplex_key("session-a", "multiplex-a"));
 
         let unchanged = sessions
             .mark_session_disconnected("session-a")
             .expect("disconnected session should remain registered");
         assert!(unchanged.already_disconnected);
         assert_eq!(unchanged.multiplex_key.as_deref(), Some("multiplex-a"));
+
+        sessions
+            .mark_session_disconnected("session-b")
+            .expect("shared session should transition");
+        assert!(!sessions.other_live_session_uses_multiplex_key("session-a", "multiplex-a"));
     }
 
     #[test]
@@ -2375,6 +2508,9 @@ mod tests {
         sessions.set_tab_color("session-a", Some(0x112233));
         sessions.record_command_history("session-a", "pwd");
         assert!(sessions.begin_reconnect_action("session-a".to_string()));
+        sessions.zmodem_state_mut_or_default("session-a");
+        sessions.trzsz_state_mut_or_default("session-a");
+        assert_eq!(sessions.protocol_runtime_counts(), (1, 1, 0));
         sessions.select_active_session("session-a");
         assert!(sessions.active_ssh_config().is_some());
         assert_eq!(
@@ -2406,6 +2542,7 @@ mod tests {
             sessions.active_ai_execution_profile(),
             AiExecutionProfile::SendOnly
         );
+        assert_eq!(sessions.protocol_runtime_counts(), (0, 0, 0));
     }
 
     #[test]

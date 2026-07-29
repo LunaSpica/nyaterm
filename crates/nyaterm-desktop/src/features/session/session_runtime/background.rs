@@ -494,7 +494,7 @@ impl NyaTermApp {
                     if let (Some(key), Some(handle)) =
                         (ssh_multiplex_key.clone(), success.multiplex_handle)
                     {
-                        self.session.multiplex_handles.insert(key, handle);
+                        self.session.register_multiplex_handle(key, handle);
                     }
                     let source_connection_id = pending
                         .as_ref()

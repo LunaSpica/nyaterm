@@ -1,5 +1,9 @@
 //! Session lifecycle, prompts, recording and file-transfer session runtimes.
 
+use std::collections::HashMap;
+
+use nyaterm_transport::SshMultiplexHandle;
+
 mod auth_runtime;
 mod credential_autofill_runtime;
 mod prompt_runtime;
@@ -14,6 +18,34 @@ mod state;
 mod temporary_ssh_link;
 mod trzsz_runtime;
 mod zmodem_runtime;
+
+#[derive(Default)]
+struct SessionProtocolRuntimeState {
+    zmodem: HashMap<String, zmodem_runtime::ZmodemSessionState>,
+    trzsz: HashMap<String, trzsz_runtime::TrzszSessionState>,
+    multiplex_handles: HashMap<String, SshMultiplexHandle>,
+}
+
+impl Drop for SessionProtocolRuntimeState {
+    fn drop(&mut self) {
+        for (_, handle) in std::mem::take(&mut self.multiplex_handles) {
+            disconnect_multiplex_handle(handle);
+        }
+    }
+}
+
+fn disconnect_multiplex_handle(handle: SshMultiplexHandle) {
+    if let Err(error) = std::thread::Builder::new()
+        .name("nyaterm-ssh-multiplex-disconnect".to_string())
+        .spawn(move || {
+            if let Err(error) = handle.disconnect() {
+                tracing::warn!(error = %error, "failed to disconnect SSH multiplex handle");
+            }
+        })
+    {
+        tracing::warn!(error = %error, "failed to spawn SSH multiplex disconnect worker");
+    }
+}
 
 pub(in crate::features) use auth_runtime::{
     CredentialPromptBroker, CredentialPromptRequest, CredentialPromptState, HostKeyPromptBroker,

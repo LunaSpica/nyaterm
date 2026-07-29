@@ -389,6 +389,30 @@ check_no_multiline_matches \
   "ActiveSessionState must contain only the authoritative session id" \
   'struct[[:space:]]+ActiveSessionState[[:space:]]*\{[^}]*[[:space:]]+(ssh_config|ai_execution_profile)[[:space:]]*:' \
   crates/nyaterm-desktop/src/features/session/state.rs
+check_no_multiline_matches \
+  "SessionFeatureState protocol runtime must remain private" \
+  'struct[[:space:]]+SessionFeatureState[[:space:]]*\{[^}]*pub([[:space:]]|\([^)]*\))[[:space:]]+(protocols|zmodem|trzsz|multiplex_handles)[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/session/state.rs
+check_no_multiline_matches \
+  "session protocol runtime access must use SessionFeatureState methods" \
+  '(self|this|app)[[:space:]]*\.[[:space:]]*session[[:space:]]*\.[[:space:]]*(protocols|zmodem|trzsz|multiplex_handles)([[:space:]]*\.|[[:space:]]*=)' \
+  crates/nyaterm-desktop/src/features
+check_no_multiline_matches \
+  "SessionProtocolRuntimeState fields must remain private" \
+  'struct[[:space:]]+SessionProtocolRuntimeState[[:space:]]*\{[^}]*pub([[:space:]]|\([^)]*\))[[:space:]]+(zmodem|trzsz|multiplex_handles)[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/session/mod.rs
+check_no_multiline_matches \
+  "per-session protocol runtime fields must remain private" \
+  'struct[[:space:]]+(ZmodemSessionState|TrzszSessionState)[[:space:]]*\{[^}]*pub([[:space:]]|\([^)]*\))[[:space:]]+[[:alnum:]_]+[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/session
+check_no_matches \
+  "SSH multiplex disconnect must not block GPUI session adapters" \
+  'handle\.disconnect\(' \
+  crates/nyaterm-desktop/src/features/session/session_lifecycle.rs
+check_no_matches \
+  "SSH multiplex cleanup must not block GPUI session removal" \
+  'handle\.disconnect\(' \
+  crates/nyaterm-desktop/src/features/session/session_dialog_runtime.rs
 
 check_no_matches \
   "session prompt runtime must stay grouped under SessionPromptState" \
