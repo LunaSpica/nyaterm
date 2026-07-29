@@ -29,7 +29,7 @@ impl NyaTermApp {
         } else {
             self.tr("tabCtx.disconnect").to_string()
         };
-        let (viewport_w, viewport_h) = self.shell.viewport.size;
+        let (viewport_w, viewport_h) = self.shell.viewport_size();
         let (menu_x, menu_y) = active_session_clamped_menu_position(
             f32::from(menu.x) - 132.,
             f32::from(menu.y) + 8.,

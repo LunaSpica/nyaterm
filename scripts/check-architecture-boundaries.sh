@@ -166,6 +166,20 @@ check_no_matches \
   'PanelStackResizeState' \
   crates/nyaterm-desktop/src/features/shell/panel_stack_runtime.rs
 
+check_no_multiline_matches \
+  "shell feature children must not be visible outside the shell module" \
+  'struct[[:space:]]+ShellFeatureState[[:space:]]*\{[^}]*pub([[:space:]]|\(in crate::features\)|\(crate\))[[:space:]]+(bottom_panel|viewport|navigation|panels|chrome|workspace|diagnostics)[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/shell/state.rs
+check_no_matches \
+  "shell child implementation types must not be visible outside the shell module" \
+  'pub([[:space:]]|\(in crate::features\)|\(crate\))[[:space:]]+struct[[:space:]]+Shell(BottomPanel|Viewport|Navigation|SettingsNavigation|Panel|Chrome|Workspace|Diagnostic)State' \
+  crates/nyaterm-desktop/src/features/shell/state.rs
+check_no_multiline_matches_excluding \
+  "shell child state must be accessed through ShellFeatureState outside the shell module" \
+  '(self|this|app)\.shell[[:space:]]*\.(bottom_panel|viewport|navigation|panels|chrome|workspace|diagnostics)(\.|[[:space:]]*=)' \
+  crates/nyaterm-desktop/src/features \
+  'crates/nyaterm-desktop/src/features/shell/**'
+
 check_no_matches \
   "screen lock fields must stay grouped under SecurityFeatureState" \
   '^[[:space:]]*pub\(in crate::features\)[[:space:]]+(lock_focus|lock_password_draft|lock_status|is_locked|last_user_activity_at)[[:space:]]*:' \

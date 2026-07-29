@@ -77,9 +77,7 @@ impl NyaTermApp {
                     let custom_color = self.session.tab_color(tab_id);
                     let leaf_ids = self
                         .shell
-                        .workspace
-                        .pane_roots
-                        .get(tab_id)
+                        .workspace_pane_root(tab_id)
                         .map(|root| root.session_ids())
                         .unwrap_or_else(|| vec![tab_id.clone()]);
                     let is_disconnected =
@@ -328,8 +326,7 @@ impl NyaTermApp {
                         .on_click(cx.listener({
                             let leaf_id = id.clone();
                             move |this, _, window, cx| {
-                                this.shell.workspace.focused_terminal_leaf_id =
-                                    Some(leaf_id.clone());
+                                this.shell.set_focused_terminal_leaf(Some(leaf_id.clone()));
                                 this.start_local_session(window, cx);
                             }
                         })),
@@ -398,8 +395,7 @@ impl NyaTermApp {
                         cx.listener({
                             let leaf_id = id.clone();
                             move |this, _, _, cx| {
-                                this.shell.workspace.focused_terminal_leaf_id =
-                                    Some(leaf_id.clone());
+                                this.shell.set_focused_terminal_leaf(Some(leaf_id.clone()));
                                 cx.notify();
                             }
                         }),

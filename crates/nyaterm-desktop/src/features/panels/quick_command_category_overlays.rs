@@ -35,7 +35,7 @@ impl NyaTermApp {
             .child(
                 div()
                     .id(SharedString::from("quick-command-category-delete-dialog"))
-                    .w(px((self.shell.viewport.size.0 - 32.).clamp(280., 384.)))
+                    .w(px((self.shell.viewport_size().0 - 32.).clamp(280., 384.)))
                     .rounded_md()
                     .border_1()
                     .border_color(rgb(0x7f1d1d))
@@ -130,7 +130,7 @@ impl NyaTermApp {
             .child(
                 div()
                     .id(SharedString::from("quick-command-category-rename-dialog"))
-                    .w(px((self.shell.viewport.size.0 - 32.).clamp(280., 384.)))
+                    .w(px((self.shell.viewport_size().0 - 32.).clamp(280., 384.)))
                     .rounded_md()
                     .border_1()
                     .border_color(rgb(palette.border))

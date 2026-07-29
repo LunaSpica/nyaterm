@@ -17,7 +17,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        self.quick_command_editor_surface(self.shell.viewport.size.0, false, cx)
+        self.quick_command_editor_surface(self.shell.viewport_size().0, false, cx)
     }
 
     pub(in crate::features) fn quick_command_editor_window_view(

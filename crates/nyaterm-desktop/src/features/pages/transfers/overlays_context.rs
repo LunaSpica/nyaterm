@@ -46,7 +46,7 @@ impl NyaTermApp {
             .map(|entry| self.enabled_transfer_file_ai_actions_for_entry(entry))
             .unwrap_or_default();
         let has_ai_actions = !selected_file_ai_actions.is_empty();
-        let (viewport_w, viewport_h) = self.shell.viewport.size;
+        let (viewport_w, viewport_h) = self.shell.viewport_size();
         let preferred_height = if state.is_current_directory {
             380.
         } else if state.is_parent {

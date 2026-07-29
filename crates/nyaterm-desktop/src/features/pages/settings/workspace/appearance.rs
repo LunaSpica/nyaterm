@@ -57,7 +57,7 @@ impl NyaTermApp {
                         settings_switch(
                             palette,
                             "appearance-panel-multi-open",
-                            self.shell.panels.multi_open,
+                            self.shell.panel_multi_open(),
                             cx.listener(|this, _, _, cx| {
                                 this.toggle_panel_multi_open(cx);
                             }),

@@ -54,7 +54,7 @@ impl NyaTermApp {
         // Tauri: closing a strip tab closes the whole tab tree; closing a secondary leaf
         // only removes that pane. Strip close uses the tab-root id.
         let close_ids = if !self.is_secondary_pane_session(&session_id) {
-            if let Some(root) = self.shell.workspace.pane_roots.get(&session_id) {
+            if let Some(root) = self.shell.workspace_pane_root(&session_id) {
                 root.session_ids()
             } else {
                 vec![session_id.clone()]

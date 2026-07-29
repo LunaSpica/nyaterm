@@ -6,9 +6,7 @@ use nyaterm_core::{
 use nyaterm_transport::{LocalSessionConfig, SessionInfo};
 
 use crate::features::{NyaTermApp, SavedConnectionStartOptions};
-use crate::models::{
-    MainMode, NavItem, SessionLaunchConfig, WorkspacePaneNode, WorkspaceSplitDirection,
-};
+use crate::models::{SessionLaunchConfig, WorkspacePaneNode, WorkspaceSplitDirection};
 
 impl NyaTermApp {
     fn mark_startup_restore_complete(&mut self) {
@@ -195,7 +193,7 @@ impl NyaTermApp {
             .into_iter()
             .map(|session| {
                 let mut tab = self.serialize_open_tab_for_session(&session);
-                if let Some(root) = self.shell.workspace.pane_roots.get(&session.id) {
+                if let Some(root) = self.shell.workspace_pane_root(&session.id) {
                     if root.is_split() {
                         if let Some(pane_root) = self.workspace_pane_to_restorable_pane(root) {
                             tab.root = Some(pane_root);
@@ -237,16 +235,15 @@ impl NyaTermApp {
     /// entry whose `root` is a Tauri RestorablePaneNode tree (for interop).
     fn serialize_open_tabs_as_single_pane_tab(&self) -> Option<Vec<RestorableOpenTab>> {
         // Only collapse to one open_tabs entry when exactly one split tree covers every session.
-        if self.shell.workspace.pane_roots.len() > 1 {
+        if self.shell.workspace_pane_roots().len() > 1 {
             return None;
         }
         let root = self
             .shell
-            .workspace
-            .pane_roots
+            .workspace_pane_roots()
             .values()
             .find(|root| root.is_split())
-            .or(self.shell.workspace.split.as_ref())?;
+            .or(self.shell.workspace_split())?;
         if !root.is_split() {
             return None;
         }
@@ -454,7 +451,7 @@ impl NyaTermApp {
         self.mark_startup_restore_complete();
         // After all tabs reconnect, attempt multi-leaf then global pane layout restore.
         self.terminal.windows.restored = false;
-        self.shell.workspace.pane_layout_restored = false;
+        self.shell.set_workspace_pane_layout_restored(false);
         self.try_restore_terminal_window_layout();
         // Prefer stored ui.workspace_pane_layout only when no open_tabs per-tab roots exist.
         // open_tabs[].root maps to per-tab session_pane_roots (Tauri Tab.root).
@@ -469,7 +466,7 @@ impl NyaTermApp {
         if pending_layouts.is_empty() {
             self.try_restore_workspace_pane_layout();
         } else {
-            self.shell.workspace.pane_layout_restored = true;
+            self.shell.set_workspace_pane_layout_restored(true);
             for layout in pending_layouts {
                 self.apply_restorable_workspace_pane_layout(layout);
             }
@@ -488,12 +485,10 @@ impl NyaTermApp {
         }
         if self.terminal_windows_is_multi_leaf() {
             self.terminal.view.status = "restored workspace tabs and window layout".to_string();
-        } else if !self.shell.workspace.pane_roots.is_empty()
+        } else if !self.shell.workspace_pane_roots().is_empty()
             || self
                 .shell
-                .workspace
-                .split
-                .as_ref()
+                .workspace_split()
                 .is_some_and(|root| root.is_split())
         {
             self.terminal.view.status = "restored workspace tabs and pane layout".to_string();
@@ -593,21 +588,17 @@ impl NyaTermApp {
             return;
         };
         // Avoid clobbering an existing distinct per-tab tree for the same root.
-        if let Some(existing) = self.shell.workspace.pane_roots.get(&first) {
+        if let Some(existing) = self.shell.workspace_pane_root(&first) {
             if existing != &restored {
                 // Prefer the newly restored tree from open_tabs for this root.
             }
         }
         self.shell
-            .workspace
-            .pane_roots
-            .insert(first.clone(), restored);
-        self.rebuild_session_tab_owners();
+            .insert_workspace_pane_root(first.clone(), restored);
         self.session.select_active_session_if_none(first);
         self.sync_workspace_split_from_active_tab();
-        self.shell.workspace.pane_layout_restored = true;
-        self.shell.navigation.selected_nav = NavItem::Workspace;
-        self.shell.navigation.main_mode = MainMode::Workspace;
+        self.shell.set_workspace_pane_layout_restored(true);
+        self.shell.show_workspace();
         self.terminal.view.status = "restored pane layout from open_tabs root".to_string();
     }
 }

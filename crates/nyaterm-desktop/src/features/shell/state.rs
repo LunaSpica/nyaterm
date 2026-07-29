@@ -19,17 +19,17 @@ use crate::models::{
 };
 
 pub(in crate::features) struct ShellFeatureState {
-    pub bottom_panel: ShellBottomPanelState,
-    pub viewport: ShellViewportState,
-    pub navigation: ShellNavigationState,
-    pub panels: ShellPanelState,
-    pub chrome: ShellChromeState,
-    pub workspace: ShellWorkspaceState,
-    pub diagnostics: ShellDiagnosticState,
+    pub(super) bottom_panel: ShellBottomPanelState,
+    pub(super) viewport: ShellViewportState,
+    pub(super) navigation: ShellNavigationState,
+    pub(super) panels: ShellPanelState,
+    pub(super) chrome: ShellChromeState,
+    pub(super) workspace: ShellWorkspaceState,
+    pub(super) diagnostics: ShellDiagnosticState,
 }
 
 #[derive(Default)]
-pub(in crate::features) struct ShellDiagnosticState {
+pub(super) struct ShellDiagnosticState {
     last_log_at: HashMap<&'static str, Instant>,
 }
 
@@ -50,83 +50,83 @@ pub(in crate::features) struct ShellFeatureInit {
     pub activity_bar_layout: ActivityBarLayoutState,
 }
 
-pub(in crate::features) struct ShellBottomPanelState {
-    pub mode: BottomPanelMode,
-    pub quick_commands_height: f32,
-    pub command_send_height: f32,
-    pub resize: Option<BottomPanelResizeState>,
+pub(super) struct ShellBottomPanelState {
+    pub(super) mode: BottomPanelMode,
+    pub(super) quick_commands_height: f32,
+    pub(super) command_send_height: f32,
+    pub(super) resize: Option<BottomPanelResizeState>,
 }
 
 /// Window geometry and viewport-derived caches.
-pub(in crate::features) struct ShellViewportState {
-    pub size: (f32, f32),
-    pub wallpaper_tile_dimensions: Option<(String, u32, u32)>,
-    pub last_change_at: Option<Instant>,
-    pub title_drag_active_until: Option<Instant>,
+pub(super) struct ShellViewportState {
+    pub(super) size: (f32, f32),
+    pub(super) wallpaper_tile_dimensions: Option<(String, u32, u32)>,
+    pub(super) last_change_at: Option<Instant>,
+    pub(super) title_drag_active_until: Option<Instant>,
 }
 
 /// Top-level page navigation and the settings-page/window lifecycle.
-pub(in crate::features) struct ShellNavigationState {
-    pub selected_nav: NavItem,
-    pub main_mode: MainMode,
-    pub settings: ShellSettingsNavigationState,
+pub(super) struct ShellNavigationState {
+    pub(super) selected_nav: NavItem,
+    pub(super) main_mode: MainMode,
+    pub(super) settings: ShellSettingsNavigationState,
 }
 
-pub(in crate::features) struct ShellSettingsNavigationState {
-    pub active_tab: SettingsTab,
-    pub expanded_groups: HashSet<String>,
-    pub draft_snapshot: Option<SettingsDraftSnapshot>,
-    pub window: Option<WindowHandle<SettingsWindow>>,
-    pub window_open_pending: bool,
-    pub previous_left_collapsed: Option<bool>,
-    pub previous_right_collapsed: Option<bool>,
+pub(super) struct ShellSettingsNavigationState {
+    pub(super) active_tab: SettingsTab,
+    pub(super) expanded_groups: HashSet<String>,
+    pub(super) draft_snapshot: Option<SettingsDraftSnapshot>,
+    pub(super) window: Option<WindowHandle<SettingsWindow>>,
+    pub(super) window_open_pending: bool,
+    pub(super) previous_left_collapsed: Option<bool>,
+    pub(super) previous_right_collapsed: Option<bool>,
 }
 
 /// Side-panel selection, stack layout and resize interaction state.
-pub(in crate::features) struct ShellPanelState {
-    pub active_left: Option<NavItem>,
-    pub active_right: Option<NavItem>,
-    pub left_open: Vec<String>,
-    pub right_open: Vec<String>,
-    pub stack_sizes: HashMap<String, f32>,
-    pub multi_open: bool,
-    pub right_focus: RightFocus,
-    pub left_collapsed: bool,
-    pub right_collapsed: bool,
-    pub mobile_left_open: bool,
-    pub mobile_right_open: bool,
-    pub left_width: f32,
-    pub right_width: f32,
-    pub resize: Option<PanelResizeState>,
-    pub stack_resize: Option<PanelStackResizeState>,
+pub(super) struct ShellPanelState {
+    pub(super) active_left: Option<NavItem>,
+    pub(super) active_right: Option<NavItem>,
+    pub(super) left_open: Vec<String>,
+    pub(super) right_open: Vec<String>,
+    pub(super) stack_sizes: HashMap<String, f32>,
+    pub(super) multi_open: bool,
+    pub(super) right_focus: RightFocus,
+    pub(super) left_collapsed: bool,
+    pub(super) right_collapsed: bool,
+    pub(super) mobile_left_open: bool,
+    pub(super) mobile_right_open: bool,
+    pub(super) left_width: f32,
+    pub(super) right_width: f32,
+    pub(super) resize: Option<PanelResizeState>,
+    pub(super) stack_resize: Option<PanelStackResizeState>,
 }
 
 /// Activity bar, title menus, tab-strip menus and connection-failure chrome.
-pub(in crate::features) struct ShellChromeState {
-    pub about_open: bool,
-    pub activity_bar_layout: ActivityBarLayoutState,
-    pub activity_bar_context_menu: Option<ActivityBarContextMenuState>,
-    pub title_menu_open: Option<TitleMenu>,
-    pub title_menu_submenu: Option<TitleMenuSubmenu>,
-    pub header_status: HeaderStatusState,
-    pub open_tabs_menu_open: bool,
-    pub new_session_menu_open: bool,
-    pub new_session_all_sessions_open: bool,
-    pub new_session_group_menu_path: Vec<String>,
-    pub session_tab_strip_scroll: ScrollHandle,
-    pub session_tab_scroll_into_view_pending: bool,
-    pub last_connect_failure_name: Option<String>,
-    pub last_connect_failure_error: Option<String>,
+pub(super) struct ShellChromeState {
+    pub(super) about_open: bool,
+    pub(super) activity_bar_layout: ActivityBarLayoutState,
+    pub(super) activity_bar_context_menu: Option<ActivityBarContextMenuState>,
+    pub(super) title_menu_open: Option<TitleMenu>,
+    pub(super) title_menu_submenu: Option<TitleMenuSubmenu>,
+    pub(super) header_status: HeaderStatusState,
+    pub(super) open_tabs_menu_open: bool,
+    pub(super) new_session_menu_open: bool,
+    pub(super) new_session_all_sessions_open: bool,
+    pub(super) new_session_group_menu_path: Vec<String>,
+    pub(super) session_tab_strip_scroll: ScrollHandle,
+    pub(super) session_tab_scroll_into_view_pending: bool,
+    pub(super) last_connect_failure_name: Option<String>,
+    pub(super) last_connect_failure_error: Option<String>,
 }
 
 /// Global and per-tab pane trees for the workspace surface.
-pub(in crate::features) struct ShellWorkspaceState {
-    pub split: Option<WorkspaceSplitState>,
-    pub split_resize: Option<WorkspaceSplitResizeState>,
-    pub pane_roots: HashMap<String, WorkspacePaneNode>,
-    pub tab_owner: HashMap<String, String>,
-    pub focused_terminal_leaf_id: Option<String>,
-    pub pane_layout_restored: bool,
+pub(super) struct ShellWorkspaceState {
+    pub(super) split: Option<WorkspaceSplitState>,
+    pub(super) split_resize: Option<WorkspaceSplitResizeState>,
+    pub(super) pane_roots: HashMap<String, WorkspacePaneNode>,
+    pub(super) tab_owner: HashMap<String, String>,
+    pub(super) focused_terminal_leaf_id: Option<String>,
+    pub(super) pane_layout_restored: bool,
 }
 
 impl ShellFeatureState {
@@ -200,6 +200,505 @@ impl ShellFeatureState {
             },
             diagnostics: ShellDiagnosticState::default(),
         }
+    }
+
+    pub(in crate::features) fn bottom_panel_mode(&self) -> BottomPanelMode {
+        self.bottom_panel.mode
+    }
+
+    pub(in crate::features) fn quick_commands_height(&self) -> f32 {
+        self.bottom_panel.quick_commands_height
+    }
+
+    pub(in crate::features) fn command_send_height(&self) -> f32 {
+        self.bottom_panel.command_send_height
+    }
+
+    pub(in crate::features) fn viewport_size(&self) -> (f32, f32) {
+        self.viewport.size
+    }
+
+    pub(in crate::features) fn wallpaper_tile_dimensions(&self) -> Option<&(String, u32, u32)> {
+        self.viewport.wallpaper_tile_dimensions.as_ref()
+    }
+
+    pub(in crate::features) fn cache_wallpaper_tile_dimensions(
+        &mut self,
+        path: String,
+        width: u32,
+        height: u32,
+    ) {
+        self.viewport.wallpaper_tile_dimensions = Some((path, width, height));
+    }
+
+    pub(in crate::features) fn selected_nav(&self) -> NavItem {
+        self.navigation.selected_nav
+    }
+
+    pub(in crate::features) fn main_mode(&self) -> MainMode {
+        self.navigation.main_mode
+    }
+
+    pub(in crate::features) fn select_nav(&mut self, nav: NavItem) {
+        self.navigation.selected_nav = nav;
+    }
+
+    pub(in crate::features) fn show_workspace(&mut self) {
+        self.navigation.selected_nav = NavItem::Workspace;
+        self.navigation.main_mode = MainMode::Workspace;
+    }
+
+    pub(in crate::features) fn show_page(&mut self, nav: NavItem) {
+        self.navigation.selected_nav = nav;
+        self.navigation.main_mode = MainMode::Page;
+    }
+
+    pub(in crate::features) fn is_settings_page(&self) -> bool {
+        self.navigation.main_mode == MainMode::Page
+            && self.navigation.selected_nav == NavItem::Settings
+    }
+
+    pub(in crate::features) fn settings_active_tab(&self) -> SettingsTab {
+        self.navigation.settings.active_tab
+    }
+
+    pub(in crate::features) fn set_settings_active_tab(&mut self, tab: SettingsTab) {
+        self.navigation.settings.active_tab = tab;
+    }
+
+    pub(in crate::features) fn settings_group_is_expanded(&self, group: &str) -> bool {
+        self.navigation.settings.expanded_groups.contains(group)
+    }
+
+    pub(in crate::features) fn toggle_settings_group(&mut self, group: String) -> bool {
+        if !self
+            .navigation
+            .settings
+            .expanded_groups
+            .insert(group.clone())
+        {
+            self.navigation.settings.expanded_groups.remove(&group);
+            false
+        } else {
+            true
+        }
+    }
+
+    pub(in crate::features) fn settings_draft_snapshot(&self) -> Option<&SettingsDraftSnapshot> {
+        self.navigation.settings.draft_snapshot.as_ref()
+    }
+
+    pub(in crate::features) fn has_settings_draft(&self) -> bool {
+        self.navigation.settings.draft_snapshot.is_some()
+    }
+
+    pub(in crate::features) fn set_settings_draft_snapshot(
+        &mut self,
+        snapshot: SettingsDraftSnapshot,
+    ) {
+        self.navigation.settings.draft_snapshot = Some(snapshot);
+    }
+
+    pub(in crate::features) fn take_settings_draft_snapshot(
+        &mut self,
+    ) -> Option<SettingsDraftSnapshot> {
+        self.navigation.settings.draft_snapshot.take()
+    }
+
+    pub(in crate::features) fn clear_settings_draft_snapshot(&mut self) -> bool {
+        self.navigation.settings.draft_snapshot.take().is_some()
+    }
+
+    pub(in crate::features) fn settings_window(&self) -> Option<WindowHandle<SettingsWindow>> {
+        self.navigation.settings.window
+    }
+
+    pub(in crate::features) fn settings_window_open_pending(&self) -> bool {
+        self.navigation.settings.window_open_pending
+    }
+
+    pub(in crate::features) fn begin_settings_window_open(&mut self) -> bool {
+        if self.navigation.settings.window.is_some() || self.navigation.settings.window_open_pending
+        {
+            return false;
+        }
+        self.navigation.settings.window_open_pending = true;
+        true
+    }
+
+    pub(in crate::features) fn complete_settings_window_open(
+        &mut self,
+        handle: WindowHandle<SettingsWindow>,
+    ) {
+        self.navigation.settings.window = Some(handle);
+        self.navigation.settings.window_open_pending = false;
+        self.navigation.settings.previous_left_collapsed = None;
+        self.navigation.settings.previous_right_collapsed = None;
+    }
+
+    pub(in crate::features) fn clear_settings_window(&mut self) {
+        self.navigation.settings.window = None;
+        self.navigation.settings.window_open_pending = false;
+    }
+
+    pub(in crate::features) fn clear_settings_window_if(
+        &mut self,
+        handle: WindowHandle<SettingsWindow>,
+    ) -> bool {
+        if self.navigation.settings.window != Some(handle) {
+            return false;
+        }
+        self.navigation.settings.window = None;
+        true
+    }
+
+    pub(in crate::features) fn cancel_settings_window_open(&mut self) {
+        self.navigation.settings.window_open_pending = false;
+    }
+
+    pub(in crate::features) fn fail_settings_window_open(&mut self) {
+        self.clear_settings_window();
+        self.show_page(NavItem::Settings);
+        self.panels.left_collapsed = true;
+        self.panels.right_collapsed = true;
+    }
+
+    /// Clears settings-window ownership and restores the embedded-page panel state.
+    pub(in crate::features) fn finish_settings_navigation(&mut self) -> bool {
+        self.clear_settings_window();
+        if self.is_settings_page() {
+            self.navigation.main_mode = MainMode::Workspace;
+            self.panels.left_collapsed = self
+                .navigation
+                .settings
+                .previous_left_collapsed
+                .take()
+                .unwrap_or_else(|| self.panels.active_left.is_none());
+            self.panels.right_collapsed = self
+                .navigation
+                .settings
+                .previous_right_collapsed
+                .take()
+                .unwrap_or_else(|| self.panels.active_right.is_none());
+            true
+        } else {
+            self.navigation.settings.previous_left_collapsed = None;
+            self.navigation.settings.previous_right_collapsed = None;
+            false
+        }
+    }
+
+    pub(in crate::features) fn active_left_panel(&self) -> Option<NavItem> {
+        self.panels.active_left
+    }
+
+    pub(in crate::features) fn active_right_panel(&self) -> Option<NavItem> {
+        self.panels.active_right
+    }
+
+    pub(in crate::features) fn left_panel_width(&self) -> f32 {
+        self.panels.left_width
+    }
+
+    pub(in crate::features) fn right_panel_width(&self) -> f32 {
+        self.panels.right_width
+    }
+
+    pub(in crate::features) fn panel_multi_open(&self) -> bool {
+        self.panels.multi_open
+    }
+
+    pub(in crate::features) fn left_panel_collapsed(&self) -> bool {
+        self.panels.left_collapsed
+    }
+
+    pub(in crate::features) fn right_panel_collapsed(&self) -> bool {
+        self.panels.right_collapsed
+    }
+
+    pub(in crate::features) fn mobile_left_panel_open(&self) -> bool {
+        self.panels.mobile_left_open
+    }
+
+    pub(in crate::features) fn mobile_right_panel_open(&self) -> bool {
+        self.panels.mobile_right_open
+    }
+
+    pub(in crate::features) fn close_mobile_panels(&mut self) -> bool {
+        let changed = self.panels.mobile_left_open || self.panels.mobile_right_open;
+        self.panels.mobile_left_open = false;
+        self.panels.mobile_right_open = false;
+        changed
+    }
+
+    pub(in crate::features) fn close_mobile_panel(&mut self, side: PanelSide) -> bool {
+        match side {
+            PanelSide::Left => std::mem::take(&mut self.panels.mobile_left_open),
+            PanelSide::Right => std::mem::take(&mut self.panels.mobile_right_open),
+        }
+    }
+
+    pub(in crate::features) fn set_right_focus(&mut self, focus: RightFocus) {
+        self.panels.right_focus = focus;
+    }
+
+    pub(in crate::features) fn about_is_open(&self) -> bool {
+        self.chrome.about_open
+    }
+
+    pub(in crate::features) fn set_about_open(&mut self, open: bool) {
+        self.chrome.about_open = open;
+    }
+
+    pub(in crate::features) fn activity_bar_layout(&self) -> &ActivityBarLayoutState {
+        &self.chrome.activity_bar_layout
+    }
+
+    pub(in crate::features) fn activity_bar_context_menu(
+        &self,
+    ) -> Option<&ActivityBarContextMenuState> {
+        self.chrome.activity_bar_context_menu.as_ref()
+    }
+
+    pub(in crate::features) fn title_menu(&self) -> Option<TitleMenu> {
+        self.chrome.title_menu_open
+    }
+
+    pub(in crate::features) fn title_submenu(&self) -> Option<TitleMenuSubmenu> {
+        self.chrome.title_menu_submenu
+    }
+
+    pub(in crate::features) fn toggle_title_menu(&mut self, menu: TitleMenu) {
+        self.chrome.title_menu_open = if self.chrome.title_menu_open == Some(menu) {
+            None
+        } else {
+            Some(menu)
+        };
+        self.chrome.title_menu_submenu = None;
+        if self.chrome.title_menu_open.is_some() {
+            self.chrome.header_status.menu_open = false;
+            self.chrome.open_tabs_menu_open = false;
+            self.chrome.close_new_session_menu();
+        }
+    }
+
+    pub(in crate::features) fn close_title_menu(&mut self) -> bool {
+        self.chrome.title_menu_submenu = None;
+        self.chrome.title_menu_open.take().is_some()
+    }
+
+    pub(in crate::features) fn open_title_submenu(&mut self, submenu: TitleMenuSubmenu) -> bool {
+        if self.chrome.title_menu_submenu == Some(submenu) {
+            return false;
+        }
+        self.chrome.title_menu_submenu = Some(submenu);
+        true
+    }
+
+    pub(in crate::features) fn toggle_title_submenu(&mut self, submenu: TitleMenuSubmenu) {
+        self.chrome.title_menu_submenu = if self.chrome.title_menu_submenu == Some(submenu) {
+            None
+        } else {
+            Some(submenu)
+        };
+    }
+
+    pub(in crate::features) fn close_title_menus(&mut self) -> bool {
+        let changed = self.chrome.title_menu_open.take().is_some()
+            | self.chrome.title_menu_submenu.take().is_some();
+        changed
+    }
+
+    pub(in crate::features) fn close_root_menus(&mut self) -> bool {
+        let mut changed = self.close_title_menus();
+        changed |= std::mem::take(&mut self.chrome.header_status.menu_open);
+        changed |= self.chrome.close_open_tabs_menu();
+        changed |= self.chrome.close_new_session_menu();
+        changed
+    }
+
+    pub(in crate::features) fn header_status_menu_is_open(&self) -> bool {
+        self.chrome.header_status.menu_open
+    }
+
+    pub(in crate::features) fn header_status_rendered_minute(&self) -> i64 {
+        self.chrome.header_status.rendered_minute
+    }
+
+    pub(in crate::features) fn toggle_header_status_menu(&mut self) {
+        self.chrome.header_status.menu_open = !self.chrome.header_status.menu_open;
+        if self.chrome.header_status.menu_open {
+            self.chrome.title_menu_open = None;
+            self.chrome.title_menu_submenu = None;
+            self.chrome.open_tabs_menu_open = false;
+            self.chrome.close_new_session_menu();
+        }
+    }
+
+    pub(in crate::features) fn close_header_status_menu(&mut self) {
+        self.chrome.header_status.menu_open = false;
+    }
+
+    pub(in crate::features) fn set_header_status_rendered_minute(&mut self, minute: i64) {
+        self.chrome.header_status.rendered_minute = minute;
+    }
+
+    pub(in crate::features) fn open_tabs_menu_is_open(&self) -> bool {
+        self.chrome.open_tabs_menu_open
+    }
+
+    pub(in crate::features) fn prepare_session_switch(&mut self) {
+        self.chrome.prepare_session_switch();
+    }
+
+    pub(in crate::features) fn toggle_open_tabs_menu(&mut self) {
+        self.chrome.toggle_open_tabs_menu();
+    }
+
+    pub(in crate::features) fn close_open_tabs_menu(&mut self) -> bool {
+        self.chrome.close_open_tabs_menu()
+    }
+
+    pub(in crate::features) fn new_session_menu_is_open(&self) -> bool {
+        self.chrome.new_session_menu_open
+    }
+
+    pub(in crate::features) fn toggle_new_session_menu(&mut self) {
+        self.chrome.toggle_new_session_menu();
+    }
+
+    pub(in crate::features) fn close_new_session_menu(&mut self) -> bool {
+        self.chrome.close_new_session_menu()
+    }
+
+    pub(in crate::features) fn new_session_all_sessions_is_open(&self) -> bool {
+        self.chrome.new_session_all_sessions_open
+    }
+
+    pub(in crate::features) fn new_session_group_menu_path(&self) -> &[String] {
+        &self.chrome.new_session_group_menu_path
+    }
+
+    pub(in crate::features) fn open_new_session_all_sessions(&mut self) -> bool {
+        if self.chrome.new_session_all_sessions_open {
+            return false;
+        }
+        self.chrome.new_session_all_sessions_open = true;
+        self.chrome.new_session_group_menu_path.clear();
+        true
+    }
+
+    pub(in crate::features) fn toggle_new_session_all_sessions(&mut self) {
+        self.chrome.new_session_all_sessions_open = !self.chrome.new_session_all_sessions_open;
+        self.chrome.new_session_group_menu_path.clear();
+    }
+
+    pub(in crate::features) fn close_new_session_all_sessions(&mut self) -> bool {
+        let changed = self.chrome.new_session_all_sessions_open
+            || !self.chrome.new_session_group_menu_path.is_empty();
+        self.chrome.new_session_all_sessions_open = false;
+        self.chrome.new_session_group_menu_path.clear();
+        changed
+    }
+
+    pub(in crate::features) fn open_new_session_group(
+        &mut self,
+        group_id: String,
+        depth: usize,
+    ) -> bool {
+        let unchanged = self.chrome.new_session_all_sessions_open
+            && self.chrome.new_session_group_menu_path.get(depth) == Some(&group_id)
+            && self.chrome.new_session_group_menu_path.len() == depth + 1;
+        if unchanged {
+            return false;
+        }
+        self.chrome.new_session_all_sessions_open = true;
+        self.chrome.new_session_group_menu_path.truncate(depth);
+        self.chrome.new_session_group_menu_path.push(group_id);
+        true
+    }
+
+    pub(in crate::features) fn truncate_new_session_group_path(&mut self, depth: usize) -> bool {
+        if self.chrome.new_session_group_menu_path.len() <= depth {
+            return false;
+        }
+        self.chrome.new_session_group_menu_path.truncate(depth);
+        true
+    }
+
+    pub(in crate::features) fn session_tab_scroll_into_view_pending(&self) -> bool {
+        self.chrome.session_tab_scroll_into_view_pending
+    }
+
+    pub(in crate::features) fn consume_session_tab_scroll_into_view(&mut self) -> bool {
+        std::mem::take(&mut self.chrome.session_tab_scroll_into_view_pending)
+    }
+
+    pub(in crate::features) fn session_tab_strip_scroll(&self) -> &ScrollHandle {
+        &self.chrome.session_tab_strip_scroll
+    }
+
+    pub(in crate::features) fn last_connect_failure_name(&self) -> Option<&str> {
+        self.chrome.last_connect_failure_name.as_deref()
+    }
+
+    pub(in crate::features) fn last_connect_failure_error(&self) -> Option<&str> {
+        self.chrome.last_connect_failure_error.as_deref()
+    }
+
+    pub(in crate::features) fn set_last_connect_failure(&mut self, name: String, error: String) {
+        self.chrome.last_connect_failure_name = Some(name);
+        self.chrome.last_connect_failure_error = Some(error);
+    }
+
+    pub(in crate::features) fn clear_last_connect_failure(&mut self) -> bool {
+        let changed = self.chrome.last_connect_failure_name.take().is_some()
+            | self.chrome.last_connect_failure_error.take().is_some();
+        changed
+    }
+
+    pub(in crate::features) fn workspace_split(&self) -> Option<&WorkspaceSplitState> {
+        self.workspace.split.as_ref()
+    }
+
+    pub(in crate::features) fn workspace_pane_root(
+        &self,
+        tab_root: &str,
+    ) -> Option<&WorkspacePaneNode> {
+        self.workspace.pane_roots.get(tab_root)
+    }
+
+    pub(in crate::features) fn workspace_pane_roots(&self) -> &HashMap<String, WorkspacePaneNode> {
+        &self.workspace.pane_roots
+    }
+
+    pub(in crate::features) fn insert_workspace_pane_root(
+        &mut self,
+        tab_root: String,
+        root: WorkspacePaneNode,
+    ) {
+        self.workspace.pane_roots.insert(tab_root, root);
+        self.workspace.rebuild_tab_owners();
+    }
+
+    pub(in crate::features) fn workspace_tab_owner(&self, session_id: &str) -> Option<&str> {
+        self.workspace.tab_owner.get(session_id).map(String::as_str)
+    }
+
+    pub(in crate::features) fn set_focused_terminal_leaf(&mut self, leaf_id: Option<String>) {
+        self.workspace.focused_terminal_leaf_id = leaf_id;
+    }
+
+    pub(in crate::features) fn set_workspace_pane_layout_restored(&mut self, restored: bool) {
+        self.workspace.pane_layout_restored = restored;
+    }
+
+    pub(in crate::features) fn replace_workspace_session_id(&mut self, old_id: &str, new_id: &str) {
+        self.workspace.replace_session_id(old_id, new_id);
+    }
+
+    pub(in crate::features) fn remove_workspace_session(&mut self, session_id: &str) {
+        self.workspace.remove_session(session_id);
     }
 }
 
@@ -455,8 +954,8 @@ mod tests {
 
     use super::{ShellFeatureInit, ShellFeatureState};
     use crate::models::{
-        ActivityBarLayoutState, BottomPanelMode, PanelResizeSide, PanelSide, WorkspacePaneNode,
-        WorkspaceSplitDirection,
+        ActivityBarLayoutState, BottomPanelMode, MainMode, NavItem, PanelResizeSide, PanelSide,
+        TitleMenu, TitleMenuSubmenu, WorkspacePaneNode, WorkspaceSplitDirection,
     };
 
     fn shell(mode: BottomPanelMode) -> ShellFeatureState {
@@ -556,6 +1055,59 @@ mod tests {
         shell.chrome.toggle_new_session_menu();
         assert!(!shell.chrome.open_tabs_menu_open);
         assert!(shell.chrome.new_session_menu_open);
+    }
+
+    #[test]
+    fn root_menu_close_clears_every_owned_menu_branch() {
+        let mut shell = shell(BottomPanelMode::Hidden);
+        shell.chrome.title_menu_open = Some(TitleMenu::View);
+        shell.chrome.title_menu_submenu = Some(TitleMenuSubmenu::Theme);
+        shell.chrome.header_status.menu_open = true;
+        shell.chrome.open_tabs_menu_open = true;
+        shell.chrome.new_session_menu_open = true;
+        shell.chrome.new_session_all_sessions_open = true;
+        shell
+            .chrome
+            .new_session_group_menu_path
+            .push("group".to_string());
+
+        assert!(shell.close_root_menus());
+        assert_eq!(shell.title_menu(), None);
+        assert_eq!(shell.title_submenu(), None);
+        assert!(!shell.header_status_menu_is_open());
+        assert!(!shell.open_tabs_menu_is_open());
+        assert!(!shell.new_session_menu_is_open());
+        assert!(!shell.new_session_all_sessions_is_open());
+        assert!(shell.new_session_group_menu_path().is_empty());
+        assert!(!shell.close_root_menus());
+    }
+
+    #[test]
+    fn connection_failure_cleanup_always_clears_name_and_error() {
+        let mut shell = shell(BottomPanelMode::Hidden);
+        shell.set_last_connect_failure("host".to_string(), "denied".to_string());
+
+        assert!(shell.clear_last_connect_failure());
+        assert_eq!(shell.last_connect_failure_name(), None);
+        assert_eq!(shell.last_connect_failure_error(), None);
+        assert!(!shell.clear_last_connect_failure());
+    }
+
+    #[test]
+    fn finishing_embedded_settings_restores_navigation_and_panel_state() {
+        let mut shell = shell(BottomPanelMode::Hidden);
+        shell.show_page(NavItem::Settings);
+        shell.navigation.settings.previous_left_collapsed = Some(false);
+        shell.navigation.settings.previous_right_collapsed = Some(true);
+        shell.panels.left_collapsed = true;
+        shell.panels.right_collapsed = false;
+
+        assert!(shell.finish_settings_navigation());
+        assert_eq!(shell.main_mode(), MainMode::Workspace);
+        assert!(!shell.left_panel_collapsed());
+        assert!(shell.right_panel_collapsed());
+        assert_eq!(shell.navigation.settings.previous_left_collapsed, None);
+        assert_eq!(shell.navigation.settings.previous_right_collapsed, None);
     }
 
     #[test]

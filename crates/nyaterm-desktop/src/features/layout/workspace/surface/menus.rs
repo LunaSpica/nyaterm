@@ -166,9 +166,7 @@ impl NyaTermApp {
                     .is_some_and(|id| self.tab_root_for_session(id) == session_id);
                 let leaf_ids = self
                     .shell
-                    .workspace
-                    .pane_roots
-                    .get(&session_id)
+                    .workspace_pane_root(&session_id)
                     .map(|root| root.session_ids())
                     .unwrap_or_else(|| vec![session_id.clone()]);
                 let has_unread = leaf_ids.iter().any(|id| {
@@ -284,7 +282,7 @@ impl NyaTermApp {
         let no_shell_sessions_label = self.tr("terminal.noShellSessions");
         let recent_sessions_label = self.tr("terminal.recentSessions");
         let no_recent_sessions_label = self.tr("terminal.noRecentSessions");
-        let all_sessions_open = self.shell.chrome.new_session_all_sessions_open;
+        let all_sessions_open = self.shell.new_session_all_sessions_is_open();
         // Tauri TabBar new-session: shell sessions + recent by last_used.
         let mut shell: Vec<_> = self
             .connection_catalog
@@ -483,7 +481,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let path = self.shell.chrome.new_session_group_menu_path.clone();
+        let path = self.shell.new_session_group_menu_path().to_vec();
         let visible_group_ids = new_session_visible_group_ids(
             self.connection_catalog.connections(),
             self.connection_catalog.groups(),
@@ -723,26 +721,18 @@ impl NyaTermApp {
     }
 
     fn open_new_session_all_sessions_menu(&mut self, cx: &mut Context<Self>) {
-        if !self.shell.chrome.new_session_all_sessions_open {
-            self.shell.chrome.new_session_all_sessions_open = true;
-            self.shell.chrome.new_session_group_menu_path.clear();
+        if self.shell.open_new_session_all_sessions() {
             cx.notify();
         }
     }
 
     fn toggle_new_session_all_sessions_menu(&mut self, cx: &mut Context<Self>) {
-        self.shell.chrome.new_session_all_sessions_open =
-            !self.shell.chrome.new_session_all_sessions_open;
-        self.shell.chrome.new_session_group_menu_path.clear();
+        self.shell.toggle_new_session_all_sessions();
         cx.notify();
     }
 
     fn close_new_session_all_sessions_menu(&mut self, cx: &mut Context<Self>) {
-        if self.shell.chrome.new_session_all_sessions_open
-            || !self.shell.chrome.new_session_group_menu_path.is_empty()
-        {
-            self.shell.chrome.new_session_all_sessions_open = false;
-            self.shell.chrome.new_session_group_menu_path.clear();
+        if self.shell.close_new_session_all_sessions() {
             cx.notify();
         }
     }
@@ -753,27 +743,13 @@ impl NyaTermApp {
         depth: usize,
         cx: &mut Context<Self>,
     ) {
-        let unchanged = self.shell.chrome.new_session_all_sessions_open
-            && self.shell.chrome.new_session_group_menu_path.get(depth) == Some(&group_id)
-            && self.shell.chrome.new_session_group_menu_path.len() == depth + 1;
-        if unchanged {
-            return;
+        if self.shell.open_new_session_group(group_id, depth) {
+            cx.notify();
         }
-        self.shell.chrome.new_session_all_sessions_open = true;
-        self.shell
-            .chrome
-            .new_session_group_menu_path
-            .truncate(depth);
-        self.shell.chrome.new_session_group_menu_path.push(group_id);
-        cx.notify();
     }
 
     fn truncate_new_session_group_menu(&mut self, depth: usize, cx: &mut Context<Self>) {
-        if self.shell.chrome.new_session_group_menu_path.len() > depth {
-            self.shell
-                .chrome
-                .new_session_group_menu_path
-                .truncate(depth);
+        if self.shell.truncate_new_session_group_path(depth) {
             cx.notify();
         }
     }

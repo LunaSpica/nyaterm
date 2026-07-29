@@ -48,7 +48,7 @@ impl NyaTermApp {
                 x: px(24.),
                 y: px(24.),
             });
-        let (viewport_w, viewport_h) = self.shell.viewport.size;
+        let (viewport_w, viewport_h) = self.shell.viewport_size();
         let (menu_x, menu_y, menu_max_height) = transfer_menu_position(
             f32::from(state.x),
             f32::from(state.y),

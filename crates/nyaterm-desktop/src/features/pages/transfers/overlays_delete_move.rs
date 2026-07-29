@@ -41,7 +41,7 @@ impl NyaTermApp {
             .map(|path| remote_file_name(path))
             .collect::<Vec<_>>();
         let remaining_items = delete_count.saturating_sub(preview_items.len());
-        let dialog_width = transfer_dialog_width(self.shell.viewport.size.0, 320.);
+        let dialog_width = transfer_dialog_width(self.shell.viewport_size().0, 320.);
 
         div()
             .id(SharedString::from("transfer-delete-overlay"))
@@ -168,7 +168,7 @@ impl NyaTermApp {
                 cx,
             )
             .into_any_element();
-        let dialog_width = transfer_dialog_width(self.shell.viewport.size.0, 384.);
+        let dialog_width = transfer_dialog_width(self.shell.viewport_size().0, 384.);
 
         div()
             .id(SharedString::from("transfer-move-overlay"))

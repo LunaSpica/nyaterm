@@ -17,8 +17,8 @@ impl NyaTermApp {
         // register/close/idle already keep terminal_windows coherent.
         let multi_leaf = self.terminal_windows_is_multi_leaf();
         let has_connect_failure = self.has_failed_session_start()
-            || (self.shell.chrome.last_connect_failure_name.is_some()
-                && self.shell.chrome.last_connect_failure_error.is_some());
+            || (self.shell.last_connect_failure_name().is_some()
+                && self.shell.last_connect_failure_error().is_some());
         let show_tab_strip = !multi_leaf
             && (self.ordered_tab_session_count() > 0
                 || self.has_pending_session_start()
@@ -52,8 +52,8 @@ impl NyaTermApp {
                 return self.pending_workspace_state().into_any_element();
             }
             if self.has_failed_session_start()
-                || (self.shell.chrome.last_connect_failure_name.is_some()
-                    && self.shell.chrome.last_connect_failure_error.is_some())
+                || (self.shell.last_connect_failure_name().is_some()
+                    && self.shell.last_connect_failure_error().is_some())
             {
                 return self.failed_workspace_state().into_any_element();
             }
@@ -73,7 +73,7 @@ impl NyaTermApp {
             }
         }
         let root =
-            self.shell.workspace.split.clone().unwrap_or_else(|| {
+            self.shell.workspace_split().cloned().unwrap_or_else(|| {
                 WorkspacePaneNode::leaf(self.session.active_id_owned().unwrap())
             });
 

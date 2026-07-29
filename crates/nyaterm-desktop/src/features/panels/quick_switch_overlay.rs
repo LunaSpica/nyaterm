@@ -14,7 +14,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let (viewport_w, viewport_h) = self.shell.viewport.size;
+        let (viewport_w, viewport_h) = self.shell.viewport_size();
         let items = self.filtered_quick_switch_items(cx);
         self.update_quick_switch_state(cx, |store| {
             store.clamp_quick_switch_selected_index(items.len())
@@ -28,7 +28,7 @@ impl NyaTermApp {
             cx,
         );
         let query_focus = query_input.read(cx).focus_handle();
-        let list_max_height = (self.shell.viewport.size.1 * 0.55).clamp(160., 384.);
+        let list_max_height = (self.shell.viewport_size().1 * 0.55).clamp(160., 384.);
         let selected_row_bg = rgba((palette.primary << 8) | 0x26);
         let hover_row_bg = self.shell_surface_color(palette.hover);
         let mut rows = div()

@@ -490,12 +490,16 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   children contain geometry bookkeeping, settings navigation/window state,
   side-panel stacks and resize lifecycles, title/tab menus and per-tab pane
   ownership respectively; the existing `bottom_panel` child still owns its
-  mode, heights and drag state. Forty-seven top-level app fields became these
-  five focused children, so `NyaTermApp` dropped from 102 fields to 55 without
-  creating a writable mirror. Pure viewport, panel resize/stack resize, chrome
-  menu and workspace ownership transitions execute on the child states.
-  Render helpers remain on views, while `NyaTermApp` retains settings
-  persistence, GPUI notification, terminal coordination and event routing.
+  mode, heights and drag state. All seven children, including diagnostics, are
+  now visible only inside `features::shell`; other desktop modules use owner
+  queries and semantic transitions. Settings-window admission/cleanup and
+  embedded-page panel restoration, root-menu exclusion, connection-failure
+  cleanup, mobile-panel closure, new-session submenu paths and pane-owner
+  rebuilding now update related fields atomically. Forty-seven top-level app
+  fields became these focused children, so `NyaTermApp` dropped from 102 fields
+  to 55 without creating a writable mirror. Render helpers remain on views,
+  while `NyaTermApp` retains settings persistence, GPUI notification, terminal
+  coordination and event routing.
 - The remaining transient coordination tail was moved as one cohesive batch.
   `SessionFeatureState` now owns the pending transport-event queue and startup
   restore completion lifecycle; `StartupRestoreStore` owns only its queue,
@@ -1473,6 +1477,7 @@ Current ownership map:
 | Send-command composer/options/progress | Private children in `NyaTermApp.send_command` | Transient editor and send lifecycle | Views receive immutable presentation data; control edits, mutually-exclusive menus, data/mode defaults, progress counters and cancellation enter through `SendCommandFeatureState`. Session selection, terminal writes, GPUI/text-input routing and status remain in adapters. |
 | Settings interaction and prompts | Private children in `NyaTermApp.settings` | Transient settings UI and prompt lifecycle | Search-engine rows, keyword-highlight editing, appearance menus, keybinding recording/search and config/diagnostics/import/password prompt admission enter through `SettingsFeatureState`; views use immutable presentation values and read-only focus/font access. Persistence, native filesystem prompts, text inputs and GPUI notification remain in adapters. |
 | AI settings/chat/history/discovery/agent/panel | AI-module-private children in `NyaTermApp.ai` | Persisted settings plus transient UI and background lifecycle | Desktop consumers use read-only slices/queries and semantic transitions; settings draft groups, menu exclusion, confirmations, request/focus preparation, detected-error throttling, picker clamping and Agent capture/reset enter through `AiFeatureState`. Persistence, terminal-context collection, GPUI focus/rendering and notification remain in adapters. |
+| Shell viewport/navigation/panels/chrome/workspace | Shell-module-private children in `NyaTermApp.shell` | Transient GPUI composition and interaction state | Other desktop modules use read-only geometry/navigation/pane queries and semantic transitions; menu exclusion, settings-window lifecycle, mobile panels, failure chrome, submenu paths and pane ownership update through `ShellFeatureState`. Persistence, rendering, GPUI windows/notification and terminal coordination remain in adapters. |
 | Remote Docker/process/stats panes | Private children in `NyaTermApp.remote_ops` | Transient UI state plus typed background-event lifecycle | Views use immutable presentation values; menu exclusion, list-offset clamping, Docker details/Compose/confirmation cleanup, process PID-scoped cleanup, Stats expansion/data and job identity/failure timing enter through `RemoteOpsFeatureState`. SSH service launch, active-session policy, terminal status mirroring and GPUI notification remain in adapters. |
 | Live session manager/event bridge | Private services in `NyaTermApp.session` | Runtime services | Callers receive a shared manager reference/handle and use bridge routing, drain and metrics methods; neither service field is writable outside `SessionFeatureState`. |
 | Session restore/event queue | Private state in `NyaTermApp.session` | Transient runtime coordination | Restore completion is idempotent and pending transport events are counted, extended and popped only through owner methods; event interpretation stays in the event-pump adapter. |
@@ -1774,8 +1779,12 @@ honest remaining list.
    migrated roughly three hundred cross-feature reads and writes to owner APIs,
    and coupled settings snapshot/restore, overlay exclusion, confirmations,
    external request/focus preparation, detected-error throttling and Agent
-   capture/reset transitions. GPUI, persistence and terminal-context work stay
-   in adapters. Cloud sync
+   capture/reset transitions. The following Shell pass then restricted its
+   seven children to `features::shell`, migrated roughly three hundred external
+   reads and writes, and coupled settings-window cleanup, root menus,
+   connection-failure chrome, new-session paths and pane-owner rebuilding on
+   `ShellFeatureState`. GPUI windows/rendering, persistence, notification and
+   terminal coordination remain adapters. Cloud sync
    made secret-field routing inaccessible outside
    its owner, and
    recording cleanup can no longer leave its manager, busy map and pipeline out

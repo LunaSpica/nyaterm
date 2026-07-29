@@ -14,7 +14,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let (viewport_w, viewport_h) = self.shell.viewport.size;
+        let (viewport_w, viewport_h) = self.shell.viewport_size();
         let draft = self
             .terminal
             .paste

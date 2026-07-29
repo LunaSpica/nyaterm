@@ -21,8 +21,8 @@ impl NyaTermApp {
         let available =
             !checking && !failed && update_info.as_ref().is_some_and(|info| info.available);
         let portable = self.runtime.mode() == RuntimeMode::Portable;
-        let (_, viewport_h) = self.shell.viewport.size;
-        let dialog_width = (self.shell.viewport.size.0 - 32.).clamp(320., 560.);
+        let (_, viewport_h) = self.shell.viewport_size();
+        let dialog_width = (self.shell.viewport_size().0 - 32.).clamp(320., 560.);
         let release_url = update_info
             .as_ref()
             .and_then(|info| info.html_url.clone())

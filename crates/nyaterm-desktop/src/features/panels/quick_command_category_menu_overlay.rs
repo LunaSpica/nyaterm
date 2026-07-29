@@ -14,7 +14,7 @@ impl NyaTermApp {
         let category_id = menu.category_id.clone();
         let rename_id = category_id.clone();
         let delete_id = category_id.clone();
-        let (viewport_w, viewport_h) = self.shell.viewport.size;
+        let (viewport_w, viewport_h) = self.shell.viewport_size();
         let (menu_x, menu_y) = quick_command_category_clamped_menu_position(
             f32::from(menu.x),
             f32::from(menu.y),

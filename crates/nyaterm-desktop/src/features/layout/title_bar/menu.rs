@@ -43,10 +43,8 @@ impl NyaTermApp {
                         Some(shortcut("tab.newSession", "Ctrl+Shift+N")),
                         cx.listener(|this, _, window, cx| {
                             this.close_title_menu(cx);
-                            this.shell.chrome.open_tabs_menu_open = false;
-                            this.shell.chrome.new_session_menu_open = false;
-                            this.shell.chrome.new_session_all_sessions_open = false;
-                            this.shell.chrome.new_session_group_menu_path.clear();
+                            this.shell.close_open_tabs_menu();
+                            this.shell.close_new_session_menu();
                             this.open_connection_editor(None, None, false, window, cx);
                         }),
                     ))
@@ -266,7 +264,7 @@ impl NyaTermApp {
             }
         }
 
-        items.when_some(self.shell.chrome.title_menu_submenu, |this, submenu| {
+        items.when_some(self.shell.title_submenu(), |this, submenu| {
             this.child(self.title_menu_submenu(submenu, cx))
         })
     }
@@ -280,7 +278,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let open = self.shell.chrome.title_menu_submenu == Some(submenu);
+        let open = self.shell.title_submenu() == Some(submenu);
         title_menu_submenu_trigger(
             palette,
             id,
@@ -293,11 +291,7 @@ impl NyaTermApp {
                 }
             }),
             cx.listener(move |this, _, _, cx| {
-                if this.shell.chrome.title_menu_submenu == Some(submenu) {
-                    this.shell.chrome.title_menu_submenu = None;
-                } else {
-                    this.shell.chrome.title_menu_submenu = Some(submenu);
-                }
+                this.shell.toggle_title_submenu(submenu);
                 cx.notify();
             }),
         )

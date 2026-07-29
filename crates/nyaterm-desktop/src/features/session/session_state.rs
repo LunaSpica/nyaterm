@@ -3,7 +3,7 @@ use nyaterm_transport::SessionInfo;
 
 use crate::features::NyaTermApp;
 use crate::features::formatting::{session_kind_label, short_id};
-use crate::models::{MainMode, NavItem, SessionLaunchConfig};
+use crate::models::{NavItem, SessionLaunchConfig};
 
 impl NyaTermApp {
     pub(in crate::features) fn session_display_name_by_info(
@@ -238,7 +238,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn activate_session_id(&mut self, session_id: &str) -> Option<String> {
         self.session.start.clear_active_selection();
-        self.shell.chrome.prepare_session_switch();
+        self.shell.prepare_session_switch();
         // Session switch resets terminal-output credential autofill (Tauri XTerminal remount).
         self.terminal.assist.reset_for_session_switch();
         let previous_session_id = self.session.active_id_owned();
@@ -260,9 +260,9 @@ impl NyaTermApp {
         // Transfer browser state is only needed when the transfers panel is open
         // or we already have cached browser state for this session. Skipping the
         // full reset on every activate keeps connect/switch chrome responsive.
-        let transfers_panel_visible = self.shell.panels.active_left == Some(NavItem::Transfers)
-            || self.shell.panels.active_right == Some(NavItem::Transfers)
-            || self.shell.navigation.selected_nav == NavItem::Transfers;
+        let transfers_panel_visible = self.shell.active_left_panel() == Some(NavItem::Transfers)
+            || self.shell.active_right_panel() == Some(NavItem::Transfers)
+            || self.shell.selected_nav() == NavItem::Transfers;
         if transfers_panel_visible
             || self.transfer.browser.session_cache.contains_key(session_id)
             || !self.transfer.browser.entries.is_empty()
@@ -385,7 +385,7 @@ impl NyaTermApp {
         } else {
             format!("active {}", short_id(&focus_id))
         };
-        self.shell.navigation.selected_nav = NavItem::Workspace;
+        self.shell.select_nav(NavItem::Workspace);
         cx.notify();
     }
 
@@ -413,8 +413,7 @@ impl NyaTermApp {
         let next_index = (active_index as isize + offset).rem_euclid(len) as usize;
         let session_id = sessions[next_index].id.clone();
         self.activate_session_id_with_surface_sync(&session_id, cx);
-        self.shell.navigation.selected_nav = NavItem::Workspace;
-        self.shell.navigation.main_mode = MainMode::Workspace;
+        self.shell.show_workspace();
         self.terminal.view.status = format!("active {}", short_id(&session_id));
         cx.notify();
     }
@@ -433,30 +432,29 @@ impl NyaTermApp {
         let index = index.min(sessions.len().saturating_sub(1));
         let session_id = sessions[index].id.clone();
         self.activate_session_id_with_surface_sync(&session_id, cx);
-        self.shell.navigation.selected_nav = NavItem::Workspace;
-        self.shell.navigation.main_mode = MainMode::Workspace;
+        self.shell.show_workspace();
         self.terminal.view.status = format!("active {}", short_id(&session_id));
         cx.notify();
     }
 
     pub(in crate::features) fn toggle_open_tabs_menu(&mut self, cx: &mut Context<Self>) {
-        self.shell.chrome.toggle_open_tabs_menu();
+        self.shell.toggle_open_tabs_menu();
         cx.notify();
     }
 
     pub(in crate::features) fn close_open_tabs_menu(&mut self, cx: &mut Context<Self>) {
-        if self.shell.chrome.close_open_tabs_menu() {
+        if self.shell.close_open_tabs_menu() {
             cx.notify();
         }
     }
 
     pub(in crate::features) fn toggle_new_session_menu(&mut self, cx: &mut Context<Self>) {
-        self.shell.chrome.toggle_new_session_menu();
+        self.shell.toggle_new_session_menu();
         cx.notify();
     }
 
     pub(in crate::features) fn close_new_session_menu(&mut self, cx: &mut Context<Self>) {
-        if self.shell.chrome.close_new_session_menu() {
+        if self.shell.close_new_session_menu() {
             cx.notify();
         }
     }

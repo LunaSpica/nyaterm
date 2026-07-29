@@ -3,9 +3,7 @@ use nyaterm_core::TerminalInputState;
 
 use crate::features::NyaTermApp;
 use crate::features::formatting::{short_id, ssh_multiplex_key};
-use crate::models::{
-    MainMode, NavItem, SessionLaunchConfig, StartupCommandRequest, TerminalViewState,
-};
+use crate::models::{SessionLaunchConfig, StartupCommandRequest, TerminalViewState};
 
 impl NyaTermApp {
     pub(in crate::features) fn duplicate_active_session(
@@ -107,8 +105,7 @@ impl NyaTermApp {
                 );
             }
         }
-        self.shell.navigation.selected_nav = NavItem::Workspace;
-        self.shell.navigation.main_mode = MainMode::Workspace;
+        self.shell.show_workspace();
         cx.notify();
     }
 
@@ -166,8 +163,7 @@ impl NyaTermApp {
             existing_multiplex,
             cx,
         );
-        self.shell.navigation.selected_nav = NavItem::Workspace;
-        self.shell.navigation.main_mode = MainMode::Workspace;
+        self.shell.show_workspace();
         cx.notify();
     }
 
@@ -400,8 +396,7 @@ impl NyaTermApp {
         // Tauri clears busy when reconnect action returns (even if SSH still connecting).
         self.session.finish_busy_action(&old_id);
         self.session.retain_busy_actions_for_live_sessions();
-        self.shell.navigation.selected_nav = NavItem::Workspace;
-        self.shell.navigation.main_mode = MainMode::Workspace;
+        self.shell.show_workspace();
         cx.notify();
     }
 
@@ -419,7 +414,7 @@ impl NyaTermApp {
         }
         self.session.migrate_session_presentation(old_id, new_id);
 
-        self.shell.workspace.replace_session_id(old_id, new_id);
+        self.shell.replace_workspace_session_id(old_id, new_id);
         if let Some(root) = self.terminal.windows.tree.as_mut() {
             root.replace_tab_id(old_id, new_id);
         }

@@ -67,7 +67,7 @@ impl NyaTermApp {
             .child(
                 div()
                     .id("duplicate-prompt-dialog")
-                    .w(px((self.shell.viewport.size.0 - 32.).min(448.).max(280.)))
+                    .w(px((self.shell.viewport_size().0 - 32.).min(448.).max(280.)))
                     .rounded_md()
                     .border_1()
                     .border_color(rgb(palette.border))
@@ -610,7 +610,7 @@ impl NyaTermApp {
                 prompt.id
             )))
             .w_full()
-            .max_h(px((self.shell.viewport.size.1 - 32.).max(240.)))
+            .max_h(px((self.shell.viewport_size().1 - 32.).max(240.)))
             .overflow_y_scroll()
             .rounded_md()
             .border_1()

@@ -18,7 +18,7 @@ use crate::features::{
     CredentialPromptBroker, HostKeyPromptBroker, NativeOtpProvider, NyaTermApp,
     SavedConnectionStartOptions, SessionStartResult, SessionStartSuccess,
 };
-use crate::models::{MainMode, NavItem, SessionLaunchConfig, StartupCommandRequest};
+use crate::models::{SessionLaunchConfig, StartupCommandRequest};
 
 #[derive(Clone)]
 pub(in crate::features) struct SshSessionConfigBuildContext {
@@ -80,8 +80,7 @@ impl NyaTermApp {
         if self.saved_connection_start_is_pending_or_queued(&connection) {
             self.terminal.view.status =
                 format!("{} is already connecting or queued", connection.name);
-            self.shell.navigation.selected_nav = NavItem::Workspace;
-            self.shell.navigation.main_mode = MainMode::Workspace;
+            self.shell.show_workspace();
             cx.notify();
             return;
         }

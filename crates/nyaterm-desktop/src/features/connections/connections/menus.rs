@@ -2,7 +2,7 @@ use gpui::{Context, MouseDownEvent, Window};
 use nyaterm_core::SavedConnection;
 
 use crate::features::{NyaTermApp, SavedConnectionStartOptions};
-use crate::models::{ConnectionGroupOpenConfirmState, MainMode, NavItem};
+use crate::models::ConnectionGroupOpenConfirmState;
 
 impl NyaTermApp {
     pub(in crate::features) fn open_connection_context_menu(
@@ -191,8 +191,7 @@ impl NyaTermApp {
     ) -> bool {
         if self.saved_connection_start_is_pending_or_queued(&connection) {
             self.terminal.view.status = format!("{} is already queued", connection.name);
-            self.shell.navigation.selected_nav = NavItem::Workspace;
-            self.shell.navigation.main_mode = MainMode::Workspace;
+            self.shell.show_workspace();
             cx.notify();
             return false;
         }
@@ -202,8 +201,7 @@ impl NyaTermApp {
             .start
             .queue_saved_connection(connection, options);
         self.terminal.view.status = format!("queued {name} ({} pending)", pending_count);
-        self.shell.navigation.selected_nav = NavItem::Workspace;
-        self.shell.navigation.main_mode = MainMode::Workspace;
+        self.shell.show_workspace();
         cx.notify();
         true
     }

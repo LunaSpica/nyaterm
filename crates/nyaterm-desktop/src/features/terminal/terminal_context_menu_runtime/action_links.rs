@@ -14,7 +14,7 @@ impl NyaTermApp {
         let Some(menu) = self.terminal.menus.action_link_menu.clone() else {
             return div().into_any_element();
         };
-        let (viewport_w, viewport_h) = self.shell.viewport.size;
+        let (viewport_w, viewport_h) = self.shell.viewport_size();
         let (menu_x, menu_y) = clamp_menu_position(
             f32::from(menu.x),
             f32::from(menu.y),

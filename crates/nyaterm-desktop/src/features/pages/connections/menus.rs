@@ -59,7 +59,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let palette = self.theme_palette();
-        let (viewport_width, viewport_height) = self.shell.viewport.size;
+        let (viewport_width, viewport_height) = self.shell.viewport_size();
         let max_height = connection_menu_max_height(viewport_height);
         let submenu_offset = connection_submenu_offset(f32::from(x), viewport_width);
         deferred(
@@ -130,7 +130,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let palette = self.theme_palette();
-        let max_height = connection_menu_max_height(self.shell.viewport.size.1);
+        let max_height = connection_menu_max_height(self.shell.viewport_size().1);
         let ungrouped_ids = move_ids.clone();
         let mut panel = div()
             .id(SharedString::from(id))

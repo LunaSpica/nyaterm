@@ -31,7 +31,7 @@ impl NyaTermApp {
         let description = self
             .tr("fileTransfer.deleteConfirmDesc")
             .replace("{{name}}", &state.title);
-        let dialog_width = transfer_dialog_width(self.shell.viewport.size.0, 320.);
+        let dialog_width = transfer_dialog_width(self.shell.viewport_size().0, 320.);
 
         div()
             .id(SharedString::from("transfer-job-delete-overlay"))
@@ -144,7 +144,7 @@ impl NyaTermApp {
         let retry_id = state.job_id.clone();
         let open_id = state.job_id.clone();
         let delete_id = state.job_id.clone();
-        let (viewport_w, viewport_h) = self.shell.viewport.size;
+        let (viewport_w, viewport_h) = self.shell.viewport_size();
         let (menu_x, menu_y, menu_max_height) = transfer_menu_position(
             f32::from(state.x),
             f32::from(state.y),

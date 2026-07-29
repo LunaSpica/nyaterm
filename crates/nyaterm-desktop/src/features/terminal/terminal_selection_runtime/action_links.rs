@@ -278,9 +278,7 @@ impl NyaTermApp {
             return window_root.active_tabs();
         }
         self.shell
-            .workspace
-            .split
-            .as_ref()
+            .workspace_split()
             .map(|root| root.session_ids())
             .or_else(|| self.session.active_id_owned().map(|id| vec![id]))
             .unwrap_or_default()

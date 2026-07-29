@@ -66,7 +66,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.security.close_master_required_prompt();
-        self.shell.navigation.settings.active_tab = SettingsTab::Security;
+        self.shell.set_settings_active_tab(SettingsTab::Security);
         self.open_page(NavItem::Settings, cx);
     }
 

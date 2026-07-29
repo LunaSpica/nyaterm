@@ -208,7 +208,7 @@ impl NyaTermApp {
         self.clear_terminal_mouse_report_for_session(session_id);
         self.session.start.clear_reconnect_failure(session_id);
         // If this leaf was a tab root, drop its pane tree (prune will rekey survivors).
-        self.shell.workspace.remove_session(session_id);
+        self.shell.remove_workspace_session(session_id);
         let multiplex_key = self.session.remove_session_catalog(session_id);
         self.session.clear_event_bridge_session(session_id);
         self.terminal.view.views.remove(session_id);

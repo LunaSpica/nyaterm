@@ -896,7 +896,7 @@ impl NyaTermApp {
     }
 
     fn terminal_session_has_visible_surface(&self, session_id: &str) -> bool {
-        if session_id.is_empty() || self.shell.navigation.main_mode != MainMode::Workspace {
+        if session_id.is_empty() || self.shell.main_mode() != MainMode::Workspace {
             return false;
         }
         self.visible_terminal_session_ids()
@@ -905,7 +905,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn visible_terminal_session_ids(&self) -> Vec<&str> {
-        if self.shell.navigation.main_mode != MainMode::Workspace {
+        if self.shell.main_mode() != MainMode::Workspace {
             return Vec::new();
         }
         if let Some(root) = self.terminal.windows.tree.as_ref()
@@ -913,7 +913,7 @@ impl NyaTermApp {
         {
             return terminal_window_node_visible_tab_ids(root);
         }
-        if let Some(root) = self.shell.workspace.split.as_ref() {
+        if let Some(root) = self.shell.workspace_split() {
             return workspace_pane_node_visible_session_ids(root);
         }
         self.session.active_id().into_iter().collect()

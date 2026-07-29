@@ -79,8 +79,8 @@ impl NyaTermApp {
         let property_mode = parse_transfer_mode(&state.mode_value)
             .or(entry.permissions)
             .unwrap_or(0o644);
-        let dialog_width = (self.shell.viewport.size.0 - 32.).min(460.).max(280.);
-        let dialog_max_height = (self.shell.viewport.size.1 * 0.75).clamp(320., 720.);
+        let dialog_width = (self.shell.viewport_size().0 - 32.).min(460.).max(280.);
+        let dialog_max_height = (self.shell.viewport_size().1 * 0.75).clamp(320., 720.);
         let owner_input = self
             .text_input_box(
                 "transfer.properties.owner",

@@ -24,7 +24,7 @@ impl NyaTermApp {
             )
             .into_any_element();
         let can_save = !self.session.dialogs.rename_draft().trim().is_empty();
-        let dialog_width = (self.shell.viewport.size.0 - 32.).clamp(280., 320.);
+        let dialog_width = (self.shell.viewport_size().0 - 32.).clamp(280., 320.);
 
         div()
             .id(SharedString::from("rename-tab-overlay"))
@@ -355,7 +355,7 @@ impl NyaTermApp {
             .trim()
             .is_empty();
         let delay_label = format!("{} ms", self.session.dialogs.startup_command_delay_ms());
-        let dialog_width = (self.shell.viewport.size.0 - 32.).clamp(280., 448.);
+        let dialog_width = (self.shell.viewport_size().0 - 32.).clamp(280., 448.);
 
         div()
             .id(SharedString::from("startup-command-overlay"))

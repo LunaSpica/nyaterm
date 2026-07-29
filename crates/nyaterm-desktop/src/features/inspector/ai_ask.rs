@@ -675,8 +675,7 @@ impl NyaTermApp {
                                                                     |this, _, _, cx| {
                                                                         this.ai
                                                                             .close_discovery_menu();
-                                                                        this.shell.navigation.settings.active_tab =
-                                                                            SettingsTab::AiModels;
+                                                                        this.shell.set_settings_active_tab(SettingsTab::AiModels);
                                                                         this.open_page(
                                                                             NavItem::Settings,
                                                                             cx,

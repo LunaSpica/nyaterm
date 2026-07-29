@@ -25,8 +25,7 @@ impl NyaTermApp {
         self.settings.summary.startup_restore_window_layout =
             !self.settings.summary.startup_restore_window_layout;
         self.save_general_settings(cx);
-        if !self.settings.summary.startup_restore_window_layout
-            && self.shell.navigation.settings.draft_snapshot.is_none()
+        if !self.settings.summary.startup_restore_window_layout && !self.shell.has_settings_draft()
         {
             // Clear stored layouts when the user disables restore.
             let _ = ConnectionStore::open_with_portable_key_path(
@@ -163,7 +162,7 @@ impl NyaTermApp {
             .settings
             .summary
             .interaction_command_suggestions_enabled
-            && self.shell.navigation.settings.draft_snapshot.is_none()
+            && !self.shell.has_settings_draft()
         {
             self.terminal.assist.clear_command_tracking();
         }

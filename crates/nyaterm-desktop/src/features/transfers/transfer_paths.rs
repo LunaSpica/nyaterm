@@ -178,7 +178,7 @@ impl NyaTermApp {
         }
         let Some(config) = self.session.active_ssh_config_owned() else {
             self.terminal.view.status = "start an SSH session first".to_string();
-            self.shell.navigation.selected_nav = NavItem::Transfers;
+            self.shell.select_nav(NavItem::Transfers);
             cx.notify();
             return;
         };
