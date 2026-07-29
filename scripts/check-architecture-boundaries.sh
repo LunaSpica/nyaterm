@@ -377,6 +377,18 @@ check_no_multiline_matches \
   "session catalog and presentation access must use SessionFeatureState methods" \
   '(self|this|app)[[:space:]]*\.[[:space:]]*session[[:space:]]*\.[[:space:]]*(order|metadata|custom_names|dynamic_titles|cwds|tab_colors)([[:space:]]*\.|[[:space:]]*=)' \
   crates/nyaterm-desktop/src/features
+check_no_multiline_matches \
+  "SessionFeatureState active selection must remain private" \
+  'struct[[:space:]]+SessionFeatureState[[:space:]]*\{[^}]*pub([[:space:]]|\([^)]*\))[[:space:]]+(active|active_id|active_ssh_config|active_ai_execution_profile)[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/session/state.rs
+check_no_multiline_matches \
+  "active session selection and derived config access must use SessionFeatureState methods" \
+  '(self|this|app)[[:space:]]*\.[[:space:]]*session[[:space:]]*\.[[:space:]]*(active|active_id|active_ssh_config|active_ai_execution_profile)([[:space:]]*\.|[[:space:]]*=)' \
+  crates/nyaterm-desktop/src/features
+check_no_multiline_matches \
+  "ActiveSessionState must contain only the authoritative session id" \
+  'struct[[:space:]]+ActiveSessionState[[:space:]]*\{[^}]*[[:space:]]+(ssh_config|ai_execution_profile)[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/session/state.rs
 
 check_no_matches \
   "session prompt runtime must stay grouped under SessionPromptState" \

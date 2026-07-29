@@ -516,8 +516,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn active_terminal_buffer_text(&self) -> String {
         self.session
-            .active_id
-            .as_deref()
+            .active_id()
             .map(|session_id| self.terminal_buffer_text_for_session(session_id))
             .unwrap_or_else(|| self.terminal.view.output.clone())
     }
@@ -533,8 +532,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn active_terminal_buffer_tail(&self) -> &str {
         self.session
-            .active_id
-            .as_deref()
+            .active_id()
             .and_then(|session_id| self.terminal.view.views.get(session_id))
             .map(|view| view.output.as_str())
             .unwrap_or(self.terminal.view.output.as_str())
@@ -590,7 +588,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn active_terminal_snapshot(&self) -> std::sync::Arc<TerminalSnapshot> {
         self.terminal_snapshot_for_session(
-            self.session.active_id.as_deref(),
+            self.session.active_id(),
             self.active_terminal_display_offset(),
         )
     }
@@ -648,7 +646,7 @@ impl NyaTermApp {
         if self.terminal.selection.dragging {
             self.terminal.selection.dragging = false;
         }
-        let Some(session_id) = self.session.active_id.clone() else {
+        let Some(session_id) = self.session.active_id_owned() else {
             if self.set_terminal_status_if_changed("start a session before typing") {
                 cx.notify();
             }
@@ -770,7 +768,7 @@ impl NyaTermApp {
         if self.terminal.selection.dragging {
             self.terminal.selection.dragging = false;
         }
-        let Some(session_id) = self.session.active_id.clone() else {
+        let Some(session_id) = self.session.active_id_owned() else {
             if self.set_terminal_status_if_changed("start a session before typing") {
                 cx.notify();
             }
@@ -900,7 +898,7 @@ impl NyaTermApp {
         event: &KeyUpEvent,
         cx: &mut Context<Self>,
     ) -> bool {
-        let Some(session_id) = self.session.active_id.clone() else {
+        let Some(session_id) = self.session.active_id_owned() else {
             return false;
         };
         if self.is_session_disconnected(&session_id) {
@@ -1088,7 +1086,7 @@ impl NyaTermApp {
             return false;
         };
         let session_id = session_id
-            .or_else(|| self.session.active_id.clone())
+            .or_else(|| self.session.active_id_owned())
             .unwrap_or_default();
         if session_id.is_empty() {
             return false;
@@ -1197,7 +1195,7 @@ impl NyaTermApp {
             .selection
             .mouse_report_session_id
             .clone()
-            .or_else(|| self.session.active_id.clone())
+            .or_else(|| self.session.active_id_owned())
         else {
             self.clear_terminal_mouse_report_capture();
             return false;
@@ -1430,7 +1428,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.terminal.input.focus_active = focused;
-        let Some(session_id) = self.session.active_id.clone() else {
+        let Some(session_id) = self.session.active_id_owned() else {
             return;
         };
         if self.write_terminal_focus_report_to_session(&session_id, focused) {
@@ -1801,7 +1799,7 @@ impl NyaTermApp {
             .layout
             .cell_metrics
             .unwrap_or(((font_size * 0.6).max(6.0), (font_size * 1.35).max(12.0)));
-        let is_active = self.session.active_id.as_deref() == Some(session_id);
+        let is_active = self.session.active_id() == Some(session_id);
         let visual_bell = is_active && self.terminal.view.runtime.visual_bell_ticks > 0;
         let layout_cache = view.render_cache.layout_cache.clone();
         let render_degraded =
@@ -1938,7 +1936,7 @@ impl NyaTermApp {
         let paint_started_at = Instant::now();
         self.ensure_paint_theme_caches();
         let surface = self.ensure_terminal_surface(session_id, cx);
-        let is_active = self.session.active_id.as_deref() == Some(session_id);
+        let is_active = self.session.active_id() == Some(session_id);
         let is_disconnected = self.is_session_disconnected(session_id);
         let render_output_pressure = self.runtime_output_pressure_active();
         let view = self.terminal.view.views.get(session_id);
@@ -2655,7 +2653,7 @@ impl NyaTermApp {
 
     /// Notify surface only (no full shell). Used for cursor blink / visual bell.
     pub(in crate::features) fn notify_active_terminal_surface(&mut self, cx: &mut Context<Self>) {
-        let Some(session_id) = self.session.active_id.clone() else {
+        let Some(session_id) = self.session.active_id_owned() else {
             return;
         };
         self.sync_terminal_surface_paint(&session_id, cx);
@@ -2669,7 +2667,7 @@ impl NyaTermApp {
     ) {
         let session_id = session_id
             .map(str::to_string)
-            .or_else(|| self.session.active_id.clone());
+            .or_else(|| self.session.active_id_owned());
         let Some(session_id) = session_id else {
             return;
         };

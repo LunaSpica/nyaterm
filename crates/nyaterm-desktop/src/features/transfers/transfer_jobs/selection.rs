@@ -76,7 +76,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        let active_session_id = self.session.active_id.as_deref();
+        let active_session_id = self.session.active_id();
         let job_id =
             self.transfer
                 .queue
@@ -169,7 +169,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn can_delete_transfer_job(&self, job_id: &str) -> bool {
-        let active_session_id = self.session.active_id.as_deref();
+        let active_session_id = self.session.active_id();
         self.transfer
             .queue
             .jobs

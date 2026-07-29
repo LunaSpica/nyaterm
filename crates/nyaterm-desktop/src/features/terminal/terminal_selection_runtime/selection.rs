@@ -26,7 +26,7 @@ impl NyaTermApp {
             .selection
             .session_id
             .as_deref()
-            .or(self.session.active_id.as_deref());
+            .or(self.session.active_id());
         if selection_session_id != Some(session_id) {
             return;
         }
@@ -41,7 +41,7 @@ impl NyaTermApp {
             .selection
             .session_id
             .as_deref()
-            .or(self.session.active_id.as_deref())
+            .or(self.session.active_id())
             .map(str::to_string);
         self.notify_terminal_surface_only(session_id.as_deref(), cx);
     }
@@ -65,7 +65,7 @@ impl NyaTermApp {
             return;
         }
         self.terminal.selection.selection = Some(TerminalSelection::all_buffer(cols));
-        self.terminal.selection.session_id = self.session.active_id.clone();
+        self.terminal.selection.session_id = self.session.active_id_owned();
         self.terminal.selection.dragging = false;
         self.terminal.view.status = "selected all terminal text".to_string();
         self.notify_terminal_selection_owner_surface(cx);
@@ -79,7 +79,7 @@ impl NyaTermApp {
             .selection
             .session_id
             .as_deref()
-            .or(self.session.active_id.as_deref());
+            .or(self.session.active_id());
         if selection.is_empty() {
             return None;
         }
@@ -89,7 +89,7 @@ impl NyaTermApp {
                 .selection
                 .session_id
                 .as_deref()
-                .or(self.session.active_id.as_deref())
+                .or(self.session.active_id())
                 .and_then(|session_id| self.terminal.view.views.get(session_id))
                 .map(|view| view.screen.all_lines())
                 .unwrap_or_else(|| self.terminal.view.screen.all_lines());
@@ -154,8 +154,7 @@ impl NyaTermApp {
             .map(str::to_string)
             .or_else(|| {
                 self.session
-                    .active_id
-                    .clone()
+                    .active_id_owned()
                     .filter(|session_id| !session_id.is_empty())
             });
         let Some(geometry) =
@@ -251,7 +250,7 @@ impl NyaTermApp {
                 .selection
                 .mouse_report_session_id
                 .clone()
-                .or_else(|| self.session.active_id.clone());
+                .or_else(|| self.session.active_id_owned());
             if let Some(session_id) = captured_session_id
                 && let Some(cell) = self.point_to_terminal_cell_for_session(
                     Some(session_id.as_str()),
@@ -280,7 +279,7 @@ impl NyaTermApp {
             .selection
             .session_id
             .as_deref()
-            .or(self.session.active_id.as_deref())
+            .or(self.session.active_id())
             .filter(|session_id| !session_id.is_empty());
         let Some(geometry) = self.terminal_hit_test_geometry_for_session(selection_session_id, cx)
         else {
@@ -323,7 +322,7 @@ impl NyaTermApp {
             .selection
             .session_id
             .as_deref()
-            .or(self.session.active_id.as_deref())
+            .or(self.session.active_id())
             .filter(|session_id| !session_id.is_empty());
         if let Some(geometry) =
             self.terminal_hit_test_geometry_for_session(selection_session_id, cx)
@@ -374,7 +373,7 @@ impl NyaTermApp {
             .selection
             .session_id
             .clone()
-            .or_else(|| self.session.active_id.clone())
+            .or_else(|| self.session.active_id_owned())
         else {
             return;
         };

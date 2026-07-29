@@ -108,8 +108,7 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         let active_color = self
             .session
-            .active_id
-            .as_deref()
+            .active_id()
             .and_then(|session_id| self.session.tab_color(session_id));
         let mut swatches = div().mt_3().grid().grid_cols(6).gap_2();
         for (name, color) in TAB_PRESET_COLORS {

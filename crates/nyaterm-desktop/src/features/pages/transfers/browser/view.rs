@@ -210,7 +210,7 @@ impl NyaTermApp {
                         div()
                             .text_size(px(12.))
                             .text_color(rgb(palette.text_muted))
-                            .child(if self.session.active_id.is_some() {
+                            .child(if self.session.active_id().is_some() {
                                 self.tr("fileExplorer.unsupportedSession")
                             } else {
                                 self.tr("fileExplorer.connectToSession")
@@ -220,7 +220,7 @@ impl NyaTermApp {
                         div()
                             .text_size(px(11.))
                             .text_color(rgb(palette.text_dimmed))
-                            .child(if self.session.active_id.is_some() {
+                            .child(if self.session.active_id().is_some() {
                                 self.tr("fileExplorer.unsupportedSessionDesc")
                             } else {
                                 self.tr("fileExplorer.connectToSession")

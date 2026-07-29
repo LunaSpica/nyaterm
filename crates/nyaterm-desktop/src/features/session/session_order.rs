@@ -119,7 +119,7 @@ impl NyaTermApp {
 
     /// Prefer the currently focused leaf when it belongs to `tab_root`, else the tab root.
     pub(in crate::features) fn active_pane_for_tab_root(&self, tab_root: &str) -> String {
-        if let Some(active) = self.session.active_id.as_deref() {
+        if let Some(active) = self.session.active_id() {
             if self.tab_root_for_session(active) == tab_root {
                 return active.to_string();
             }

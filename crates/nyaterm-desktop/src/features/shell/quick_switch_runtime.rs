@@ -69,7 +69,7 @@ impl NyaTermApp {
         let mut session_items = Vec::new();
         for session in &sessions {
             let title = self.session_display_name_by_info(&session);
-            let active = self.session.active_id.as_deref() == Some(session.id.as_str());
+            let active = self.session.active_id() == Some(session.id.as_str());
             let mut subtitle = format!(
                 "{} - {}",
                 session_kind_label(session.kind),

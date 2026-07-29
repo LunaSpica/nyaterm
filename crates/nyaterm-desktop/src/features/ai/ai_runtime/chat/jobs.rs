@@ -243,7 +243,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn ai_terminal_context(&self) -> AiContext {
-        self.ai_terminal_context_for_session(self.session.active_id.as_deref())
+        self.ai_terminal_context_for_session(self.session.active_id())
     }
 
     pub(in crate::features) fn ai_selected_model_id(&self) -> Option<String> {
@@ -413,11 +413,11 @@ impl NyaTermApp {
             }
         }
         if session_ids.is_empty()
-            && let Some(active_session_id) = self.session.active_id.as_ref()
+            && let Some(active_session_id) = self.session.active_id()
             && self.session_info(active_session_id).is_some()
             && !self.is_session_disconnected(active_session_id)
         {
-            session_ids.push(active_session_id.clone());
+            session_ids.push(active_session_id.to_string());
         }
         session_ids
     }
@@ -600,9 +600,7 @@ impl NyaTermApp {
         let metadata = session_id.and_then(|session_id| self.session.metadata(session_id));
         let ssh = match metadata.map(|metadata| &metadata.launch_config) {
             Some(SessionLaunchConfig::Ssh(config)) => Some(config),
-            _ if session_id == self.session.active_id.as_deref() => {
-                self.session.active_ssh_config.as_ref()
-            }
+            _ if session_id == self.session.active_id() => self.session.active_ssh_config(),
             _ => None,
         };
         let session = session_id.and_then(|session_id| self.session_info(session_id));
@@ -619,12 +617,11 @@ impl NyaTermApp {
         let recent_output = session_id
             .map(|session_id| self.terminal_buffer_text_for_session(session_id))
             .unwrap_or_else(|| self.active_terminal_buffer_text());
-        let selected_text =
-            if session_id.is_none() || session_id == self.session.active_id.as_deref() {
-                self.selected_terminal_text().unwrap_or_default()
-            } else {
-                String::new()
-            };
+        let selected_text = if session_id.is_none() || session_id == self.session.active_id() {
+            self.selected_terminal_text().unwrap_or_default()
+        } else {
+            String::new()
+        };
         AiContext {
             connection_name: ssh
                 .map(|config| config.name.clone())

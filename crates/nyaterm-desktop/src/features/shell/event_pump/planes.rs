@@ -172,7 +172,7 @@ impl NyaTermApp {
         // Ultra-light idle: focus + optional blink only. Used for pure window drag
         // (viewport often unchanged) and quiet connected sessions with no sideband.
         // Remote auto-refresh also feeds the title bar's resource and host modes.
-        let remote_panels_need_poll = (self.session.active_ssh_config.is_some()
+        let remote_panels_need_poll = (self.session.active_ssh_config().is_some()
             && (matches!(
                 self.current_right_panel(),
                 Some(NavItem::Stats | NavItem::Processes | NavItem::Docker)
@@ -358,7 +358,7 @@ impl NyaTermApp {
                 .saturating_sub(self.terminal.view.runtime.last_perf_layout_cache_hits);
             let layout_cache_miss_delta = layout_cache_misses
                 .saturating_sub(self.terminal.view.runtime.last_perf_layout_cache_misses);
-            let active_session_id = self.session.active_id.as_deref().unwrap_or("");
+            let active_session_id = self.session.active_id().unwrap_or("");
             let active_scroll_offset = self.active_terminal_scroll_offset();
             let active_display_offset = self.active_terminal_display_offset();
             let visible_session_count = self.visible_terminal_session_ids().len();

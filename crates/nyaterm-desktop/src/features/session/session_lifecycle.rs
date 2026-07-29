@@ -29,7 +29,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        let Some(source_session_id) = self.session.active_id.clone() else {
+        let Some(source_session_id) = self.session.active_id_owned() else {
             self.terminal.view.status = "no active session to duplicate".to_string();
             cx.notify();
             return;
@@ -133,7 +133,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        let Some(source_session_id) = self.session.active_id.clone() else {
+        let Some(source_session_id) = self.session.active_id_owned() else {
             self.terminal.view.status = "no active SSH session to multiplex".to_string();
             cx.notify();
             return;
@@ -185,7 +185,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(source_session_id) = self.session.active_id.clone() else {
+        let Some(source_session_id) = self.session.active_id_owned() else {
             self.terminal.view.status = "no active session to reconnect".to_string();
             cx.notify();
             return;
@@ -262,7 +262,7 @@ impl NyaTermApp {
                 .insert(session_id.to_string(), view);
         }
 
-        if self.session.active_id.as_deref() == Some(session_id) {
+        if self.session.active_id() == Some(session_id) {
             self.terminal.assist.command_input_tracker = TerminalInputState::new();
             self.terminal.assist.command_suggestions = None;
             self.terminal.assist.credential_suggestions = None;
@@ -435,7 +435,7 @@ impl NyaTermApp {
             root.replace_tab_id(old_id, new_id);
         }
         self.sync_input.replace_session_id(old_id, new_id);
-        if self.session.active_id.as_deref() == Some(old_id) {
+        if self.session.active_id() == Some(old_id) {
             self.activate_session_id(new_id);
         }
         self.sync_workspace_split_from_active_tab();

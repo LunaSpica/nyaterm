@@ -376,7 +376,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn send_probe_command(&mut self, cx: &mut Context<Self>) {
-        let Some(session_id) = self.session.active_id.clone() else {
+        let Some(session_id) = self.session.active_id_owned() else {
             self.terminal.view.status = "start a session first".to_string();
             cx.notify();
             return;
@@ -582,7 +582,7 @@ impl NyaTermApp {
                             .as_ref()
                             .is_some_and(|pending| pending.reconnect_session_id.is_some()),
                         was_active_pending,
-                        self.session.active_id.is_none(),
+                        self.session.active_id().is_none(),
                     );
                     if should_activate {
                         self.activate_session_id(&session_id);
@@ -668,7 +668,7 @@ impl NyaTermApp {
                     }
                     self.terminal.view.status =
                         format!("failed to start {connection_name}: {error}");
-                    if self.session.active_id.is_none() {
+                    if self.session.active_id().is_none() {
                         self.append_terminal_log(format!(
                             "\n# failed to start {}: {error}\n",
                             connection_name

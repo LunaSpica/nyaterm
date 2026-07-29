@@ -747,7 +747,7 @@ impl NyaTermApp {
             process_duration,
         } = frame;
         let has_snapshot = snapshot.is_some();
-        let is_active = self.session.active_id.as_deref() == Some(session_id.as_str());
+        let is_active = self.session.active_id() == Some(session_id.as_str());
         let is_visible = self.terminal_session_has_visible_surface(&session_id);
         if is_visible
             && accepted_bytes > 0
@@ -916,7 +916,7 @@ impl NyaTermApp {
         if let Some(root) = self.shell.workspace.split.as_ref() {
             return workspace_pane_node_visible_session_ids(root);
         }
-        self.session.active_id.iter().map(String::as_str).collect()
+        self.session.active_id().into_iter().collect()
     }
 
     fn apply_terminal_snapshot_frame(
@@ -1107,7 +1107,7 @@ impl NyaTermApp {
             session_id,
             true,
             is_visible,
-            self.session.active_id.as_deref(),
+            self.session.active_id(),
             self.terminal.search.open,
             self.terminal.search.mode,
             current_search_key.as_ref(),
@@ -1212,7 +1212,7 @@ impl NyaTermApp {
         let mut clipboard_loads;
 
         if let Some(session_id) = session_id {
-            let is_active = self.session.active_id.as_deref() == Some(session_id);
+            let is_active = self.session.active_id() == Some(session_id);
             let encoding = self.settings.summary.interaction_default_encoding.clone();
             let view = self
                 .terminal

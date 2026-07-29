@@ -187,13 +187,13 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        let Some(config) = self.session.active_ssh_config.clone() else {
+        let Some(config) = self.session.active_ssh_config_owned() else {
             self.terminal.view.status = "start an SSH session first".to_string();
             self.shell.navigation.selected_nav = NavItem::Transfers;
             cx.notify();
             return;
         };
-        let session_id = self.session.active_id.clone();
+        let session_id = self.session.active_id_owned();
 
         let duplicate_policy = self.transfer.paths.duplicate_policy;
         let duplicate_resolver = (duplicate_policy == SftpDuplicatePolicy::Ask)
@@ -257,12 +257,12 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        let Some(config) = self.session.active_ssh_config.clone() else {
+        let Some(config) = self.session.active_ssh_config_owned() else {
             self.terminal.view.status = "start an SSH session first".to_string();
             cx.notify();
             return;
         };
-        let session_id = self.session.active_id.clone();
+        let session_id = self.session.active_id_owned();
         let duplicate_policy = self.transfer.paths.duplicate_policy;
         let duplicate_resolver = (duplicate_policy == SftpDuplicatePolicy::Ask)
             .then(|| self.session.prompts.duplicate_broker() as Arc<dyn SftpDuplicateResolver>);

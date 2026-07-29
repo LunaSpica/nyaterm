@@ -294,8 +294,8 @@ impl NyaTermApp {
                         _ => None,
                     })
                     .or_else(|| {
-                        (self.session.active_id.as_deref() == Some(terminal_session_id.as_str()))
-                            .then(|| self.session.active_ssh_config.clone())
+                        (self.session.active_id() == Some(terminal_session_id.as_str()))
+                            .then(|| self.session.active_ssh_config_owned())
                             .flatten()
                     })
                     .ok_or_else(|| "Target SSH session is missing its exec config".to_string())?;
@@ -592,10 +592,10 @@ impl NyaTermApp {
     }
 
     fn active_ai_execution_profile(&self) -> AiExecutionProfile {
-        if self.session.active_ai_execution_profile != AiExecutionProfile::Auto {
-            return self.session.active_ai_execution_profile;
+        if self.session.active_ai_execution_profile() != AiExecutionProfile::Auto {
+            return self.session.active_ai_execution_profile();
         }
-        let Some(session_id) = self.session.active_id.as_deref() else {
+        let Some(session_id) = self.session.active_id() else {
             return AiExecutionProfile::SendOnly;
         };
         self.session_info(session_id)

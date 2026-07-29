@@ -42,7 +42,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let active_session_id = self.session.active_id.clone();
+        let active_session_id = self.session.active_id_owned();
         let sessions = self.sorted_active_sessions();
         let query = self.recording_session_filter_query();
         let no_sessions_label = self.tr("panel.noActiveSessions").to_string();

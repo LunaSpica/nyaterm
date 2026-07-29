@@ -106,7 +106,7 @@ impl NyaTermApp {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(config) = self.session.active_ssh_config.clone() else {
+        let Some(config) = self.session.active_ssh_config_owned() else {
             self.terminal.view.status = "start an SSH session first".to_string();
             self.ensure_panel_open(crate::models::NavItem::Transfers);
             cx.notify();
@@ -116,7 +116,7 @@ impl NyaTermApp {
         let id = self.next_transfer_id("sftp-move");
         self.transfer.queue.jobs.push(TransferJobState {
             id: id.clone(),
-            session_id: self.session.active_id.clone(),
+            session_id: self.session.active_id_owned(),
             kind: TransferJobKind::Move {
                 old_path: old_path.clone(),
                 new_path: new_path.clone(),
@@ -235,7 +235,7 @@ impl NyaTermApp {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(config) = self.session.active_ssh_config.clone() else {
+        let Some(config) = self.session.active_ssh_config_owned() else {
             self.terminal.view.status = "start an SSH session first".to_string();
             self.ensure_panel_open(crate::models::NavItem::Transfers);
             cx.notify();
@@ -245,7 +245,7 @@ impl NyaTermApp {
         let id = self.next_transfer_id("sftp-delete");
         self.transfer.queue.jobs.push(TransferJobState {
             id: id.clone(),
-            session_id: self.session.active_id.clone(),
+            session_id: self.session.active_id_owned(),
             kind: TransferJobKind::Delete {
                 remote_path: remote_path.clone(),
                 parent_path: parent_path.clone(),

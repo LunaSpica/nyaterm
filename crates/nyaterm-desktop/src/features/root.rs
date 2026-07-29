@@ -488,7 +488,7 @@ impl NyaTermApp {
             .file_ops
             .properties
             .as_ref()
-            .is_some_and(|state| state.session_id.as_deref() == self.session.active_id.as_deref());
+            .is_some_and(|state| state.session_id.as_deref() == self.session.active_id());
         let transfer_editor_open = self.transfer.editor.workspace.is_some()
             && self.transfer.editor.window.is_none()
             && !self.transfer.editor.window_open_pending;
@@ -825,7 +825,7 @@ impl Render for NyaTermApp {
                 total_ms = render_duration.as_millis(),
                 root_chrome_ms = root_duration.as_millis(),
                 overlay_host_ms = overlay_duration.as_millis(),
-                active_session_id = self.session.active_id.as_deref().unwrap_or(""),
+                active_session_id = self.session.active_id().unwrap_or(""),
                 visible_session_count = self.visible_terminal_session_ids().len(),
                 connect_settle_active = self
                     .terminal

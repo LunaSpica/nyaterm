@@ -1,5 +1,4 @@
 use gpui::{ClipboardItem, Context, Window};
-use nyaterm_core::AiExecutionProfile;
 use nyaterm_transport::SessionInfo;
 
 use crate::features::NyaTermApp;
@@ -125,7 +124,7 @@ impl NyaTermApp {
     }
 
     fn active_session_info_line(&self) -> Option<String> {
-        let session_id = self.session.active_id.as_deref()?;
+        let session_id = self.session.active_id()?;
         let name = self.session_display_name(session_id)?;
         let session = self.session_info(session_id)?;
         let endpoint = self
@@ -145,7 +144,7 @@ impl NyaTermApp {
     pub(in crate::features) fn active_session_info_details(
         &self,
     ) -> Option<Vec<(&'static str, String)>> {
-        let session_id = self.session.active_id.as_deref()?;
+        let session_id = self.session.active_id()?;
         let name = self.session_display_name(session_id)?;
         let session = self.session_info(session_id)?;
         let metadata = self.session.metadata(session_id)?;
@@ -242,7 +241,7 @@ impl NyaTermApp {
         self.shell.chrome.prepare_session_switch();
         // Session switch resets terminal-output credential autofill (Tauri XTerminal remount).
         self.terminal.assist.reset_for_session_switch();
-        let previous_session_id = self.session.active_id.clone();
+        let previous_session_id = self.session.active_id_owned();
         let switching_sessions = previous_session_id.as_deref() != Some(session_id);
         if previous_session_id.as_deref() != Some(session_id)
             && let Some(previous_session_id) = previous_session_id.as_deref()
@@ -250,7 +249,7 @@ impl NyaTermApp {
             self.cache_transfer_browser_session(previous_session_id);
         }
 
-        self.session.active_id = Some(session_id.to_string());
+        self.session.select_active_session(session_id);
         if switching_sessions {
             self.transfer.queue.selected_job_id = None;
             self.transfer.queue.job_menu = None;
@@ -260,13 +259,6 @@ impl NyaTermApp {
         // Keep workspace_split mirrored to the active tab's per-tab pane root.
         self.sync_workspace_split_from_active_tab();
         self.transfer.browser.auto_sync_cwd_last_at = None;
-        if let Some(metadata) = self.session.metadata(session_id).cloned() {
-            self.session.active_ssh_config = metadata.ssh_config;
-            self.session.active_ai_execution_profile = metadata.ai_execution_profile;
-        } else {
-            self.session.active_ssh_config = None;
-            self.session.active_ai_execution_profile = AiExecutionProfile::SendOnly;
-        }
         // Transfer browser state is only needed when the transfers panel is open
         // or we already have cached browser state for this session. Skipping the
         // full reset on every activate keeps connect/switch chrome responsive.
@@ -412,8 +404,7 @@ impl NyaTermApp {
         }
         let active_index = self
             .session
-            .active_id
-            .as_deref()
+            .active_id()
             .and_then(|active_id| {
                 sessions
                     .iter()
@@ -480,7 +471,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.select_session(session_id.clone(), cx);
-        if self.session.active_id.as_deref() != Some(session_id.as_str()) {
+        if self.session.active_id() != Some(session_id.as_str()) {
             return;
         }
         self.session.dialogs.open_tab_actions(session_id, anchor);
@@ -496,7 +487,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn copy_active_session_name(&mut self, cx: &mut Context<Self>) {
-        let Some(session_id) = self.session.active_id.as_deref() else {
+        let Some(session_id) = self.session.active_id() else {
             self.terminal.view.status = "no active session name to copy".to_string();
             cx.notify();
             return;
@@ -512,7 +503,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn copy_active_session_ssh_host(&mut self, cx: &mut Context<Self>) {
-        let Some(session_id) = self.session.active_id.as_deref() else {
+        let Some(session_id) = self.session.active_id() else {
             self.terminal.view.status = "no active SSH host to copy".to_string();
             cx.notify();
             return;
@@ -532,7 +523,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.session.active_id.is_none() {
+        if self.session.active_id().is_none() {
             self.terminal.view.status = "no active session info".to_string();
             cx.notify();
             return;
@@ -578,7 +569,7 @@ impl NyaTermApp {
         color: Option<u32>,
         cx: &mut Context<Self>,
     ) {
-        let Some(session_id) = self.session.active_id.clone() else {
+        let Some(session_id) = self.session.active_id_owned() else {
             self.terminal.view.status = "no active session color to set".to_string();
             cx.notify();
             return;

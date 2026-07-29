@@ -91,7 +91,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.session.active_id.is_none() {
+        if self.session.active_id().is_none() {
             self.terminal.view.status = match action {
                 StartupCommandAction::Duplicate => {
                     "select a session before duplicating with a command"
@@ -107,8 +107,7 @@ impl NyaTermApp {
         if action == StartupCommandAction::Multiplex
             && self
                 .session
-                .active_id
-                .as_deref()
+                .active_id()
                 .and_then(|session_id| self.session.metadata(session_id))
                 .is_none_or(|metadata| {
                     !matches!(metadata.launch_config, SessionLaunchConfig::Ssh(_))

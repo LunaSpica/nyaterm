@@ -55,11 +55,10 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let can_transfer = self.session.active_ssh_config.is_some()
+        let can_transfer = self.session.active_ssh_config().is_some()
             && self
                 .session
-                .active_id
-                .as_deref()
+                .active_id()
                 .is_some_and(|session_id| !self.is_session_disconnected(session_id));
         let transfer_height = self.transfer.panel.height.clamp(60., 600.);
         let duplicate_prompt = self.session.prompts.active_duplicate().cloned();

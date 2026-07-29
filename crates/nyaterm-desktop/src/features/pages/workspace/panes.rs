@@ -156,7 +156,7 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         match node {
             WorkspacePaneNode::Leaf { session_id } => {
-                let is_active = self.session.active_id.as_deref() == Some(session_id.as_str());
+                let is_active = self.session.active_id() == Some(session_id.as_str());
                 let content = self.workspace_session_content(session_id.clone(), cx);
                 let focus_id = session_id.clone();
                 let mut pane = div()

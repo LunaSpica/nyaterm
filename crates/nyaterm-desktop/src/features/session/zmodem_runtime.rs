@@ -180,7 +180,7 @@ impl NyaTermApp {
             .session
             .metadata(&session_id)
             .and_then(|meta| meta.ssh_config.clone())
-            .or_else(|| self.session.active_ssh_config.clone());
+            .or_else(|| self.session.active_ssh_config_owned());
 
         let Some(config) = ssh_config else {
             // Non-SSH sessions cannot probe; start rz immediately.

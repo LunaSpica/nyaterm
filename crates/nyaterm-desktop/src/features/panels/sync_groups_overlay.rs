@@ -195,7 +195,7 @@ impl NyaTermApp {
             let session_id = session.id.clone();
             let in_group = selected_members.contains(&session_id);
             let paused = selected_paused.contains(&session_id);
-            let active = self.session.active_id.as_deref() == Some(session_id.as_str());
+            let active = self.session.active_id() == Some(session_id.as_str());
             let title = self.session_display_name_by_info(&session);
             session_rows = session_rows.child(
                 div()

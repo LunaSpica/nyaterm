@@ -16,7 +16,7 @@ impl NyaTermApp {
         remote_path: String,
         cx: &mut Context<Self>,
     ) {
-        let Some(config) = self.session.active_ssh_config.clone() else {
+        let Some(config) = self.session.active_ssh_config_owned() else {
             if let Some(TransferBrowserPathMenuState {
                 kind: TransferBrowserPathMenuKind::Children { status, .. },
                 ..
@@ -51,7 +51,7 @@ impl NyaTermApp {
         }
         self.transfer.queue.jobs.push(TransferJobState {
             id: id.clone(),
-            session_id: self.session.active_id.clone(),
+            session_id: self.session.active_id_owned(),
             kind: TransferJobKind::ListChildren {
                 remote_path: remote_path.clone(),
             },
@@ -86,7 +86,7 @@ impl NyaTermApp {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(config) = self.session.active_ssh_config.clone() else {
+        let Some(config) = self.session.active_ssh_config_owned() else {
             self.restore_transfer_browser_navigation(rollback);
             self.terminal.view.status = "start an SSH session first".to_string();
             self.ensure_panel_open(NavItem::Transfers);
@@ -101,7 +101,7 @@ impl NyaTermApp {
         self.transfer.browser.selected_remote_path = None;
         self.transfer.browser.selected_remote_paths.clear();
         let id = self.next_transfer_id("sftp-list");
-        let job_session_id = self.session.active_id.clone();
+        let job_session_id = self.session.active_id_owned();
         self.transfer
             .browser
             .navigation_jobs
@@ -149,7 +149,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        let Some(config) = self.session.active_ssh_config.clone() else {
+        let Some(config) = self.session.active_ssh_config_owned() else {
             self.terminal.view.status = "start an SSH session first".to_string();
             self.ensure_panel_open(NavItem::Transfers);
             cx.notify();
@@ -157,7 +157,7 @@ impl NyaTermApp {
         };
         self.transfer.browser.auto_sync_cwd_last_at = Some(Instant::now());
         let id = self.next_transfer_id("sftp-sync-cwd");
-        let job_session_id = self.session.active_id.clone();
+        let job_session_id = self.session.active_id_owned();
         self.transfer
             .browser
             .navigation_jobs
@@ -235,7 +235,7 @@ impl NyaTermApp {
         if self.transfer.browser.home_dir_pending || !self.transfer.browser.home_dir.is_empty() {
             return;
         }
-        let Some(config) = self.session.active_ssh_config.clone() else {
+        let Some(config) = self.session.active_ssh_config_owned() else {
             self.transfer.browser.status = "remote home requires an SSH session".to_string();
             cx.notify();
             return;
@@ -244,7 +244,7 @@ impl NyaTermApp {
         let id = self.next_transfer_id("sftp-home");
         self.transfer.queue.jobs.push(TransferJobState {
             id: id.clone(),
-            session_id: self.session.active_id.clone(),
+            session_id: self.session.active_id_owned(),
             kind: TransferJobKind::ResolveHome,
             status: TransferJobStatus::Running,
             detail: "Resolving remote home".to_string(),

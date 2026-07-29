@@ -20,14 +20,14 @@ impl NyaTermApp {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(config) = self.session.active_ssh_config.clone() else {
+        let Some(config) = self.session.active_ssh_config_owned() else {
             self.remote_ops.docker.status =
                 "start an SSH session before inspecting Docker".to_string();
             self.terminal.view.status = self.remote_ops.docker.status.clone();
             cx.notify();
             return;
         };
-        let Some(job_session_id) = self.session.active_id.clone() else {
+        let Some(job_session_id) = self.session.active_id_owned() else {
             self.remote_ops.docker.status =
                 "start an SSH session before inspecting Docker".to_string();
             cx.notify();
@@ -63,14 +63,14 @@ impl NyaTermApp {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(config) = self.session.active_ssh_config.clone() else {
+        let Some(config) = self.session.active_ssh_config_owned() else {
             self.remote_ops.docker.status =
                 "start an SSH session before changing containers".to_string();
             self.terminal.view.status = self.remote_ops.docker.status.clone();
             cx.notify();
             return;
         };
-        let Some(job_session_id) = self.session.active_id.clone() else {
+        let Some(job_session_id) = self.session.active_id_owned() else {
             self.remote_ops.docker.status =
                 "start an SSH session before changing containers".to_string();
             cx.notify();
@@ -112,14 +112,14 @@ impl NyaTermApp {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(config) = self.session.active_ssh_config.clone() else {
+        let Some(config) = self.session.active_ssh_config_owned() else {
             self.remote_ops.docker.status =
                 "start an SSH session before reading Docker details".to_string();
             self.terminal.view.status = self.remote_ops.docker.status.clone();
             cx.notify();
             return;
         };
-        let Some(job_session_id) = self.session.active_id.clone() else {
+        let Some(job_session_id) = self.session.active_id_owned() else {
             self.remote_ops.docker.status =
                 "start an SSH session before reading Docker details".to_string();
             cx.notify();
@@ -211,7 +211,7 @@ impl NyaTermApp {
         status: String,
         cx: &mut Context<Self>,
     ) {
-        if self.session.active_id.is_none() {
+        if self.session.active_id().is_none() {
             self.remote_ops.docker.status =
                 "start a terminal session before sending Docker commands".to_string();
             self.terminal.view.status = self.remote_ops.docker.status.clone();
@@ -267,14 +267,14 @@ impl NyaTermApp {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(config) = self.session.active_ssh_config.clone() else {
+        let Some(config) = self.session.active_ssh_config_owned() else {
             self.remote_ops.docker.status =
                 "start an SSH session before reading compose services".to_string();
             self.terminal.view.status = self.remote_ops.docker.status.clone();
             cx.notify();
             return;
         };
-        let Some(job_session_id) = self.session.active_id.clone() else {
+        let Some(job_session_id) = self.session.active_id_owned() else {
             self.remote_ops.docker.status =
                 "start an SSH session before reading compose services".to_string();
             cx.notify();
@@ -317,14 +317,14 @@ impl NyaTermApp {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(config) = self.session.active_ssh_config.clone() else {
+        let Some(config) = self.session.active_ssh_config_owned() else {
             self.remote_ops.docker.status =
                 "start an SSH session before changing compose services".to_string();
             self.terminal.view.status = self.remote_ops.docker.status.clone();
             cx.notify();
             return;
         };
-        let Some(job_session_id) = self.session.active_id.clone() else {
+        let Some(job_session_id) = self.session.active_id_owned() else {
             self.remote_ops.docker.status =
                 "start an SSH session before changing compose services".to_string();
             cx.notify();
@@ -376,14 +376,14 @@ impl NyaTermApp {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(config) = self.session.active_ssh_config.clone() else {
+        let Some(config) = self.session.active_ssh_config_owned() else {
             self.remote_ops.docker.status =
                 "start an SSH session before changing compose projects".to_string();
             self.terminal.view.status = self.remote_ops.docker.status.clone();
             cx.notify();
             return;
         };
-        let Some(job_session_id) = self.session.active_id.clone() else {
+        let Some(job_session_id) = self.session.active_id_owned() else {
             self.remote_ops.docker.status =
                 "start an SSH session before changing compose projects".to_string();
             cx.notify();
@@ -451,14 +451,14 @@ impl NyaTermApp {
         let Some(confirm) = self.remote_ops.docker.confirm.clone() else {
             return;
         };
-        let Some(config) = self.session.active_ssh_config.clone() else {
+        let Some(config) = self.session.active_ssh_config_owned() else {
             self.remote_ops.docker.status =
                 "start an SSH session before changing Docker resources".to_string();
             self.terminal.view.status = self.remote_ops.docker.status.clone();
             cx.notify();
             return;
         };
-        let Some(job_session_id) = self.session.active_id.clone() else {
+        let Some(job_session_id) = self.session.active_id_owned() else {
             self.remote_ops.docker.status =
                 "start an SSH session before changing Docker resources".to_string();
             cx.notify();
@@ -558,7 +558,7 @@ impl NyaTermApp {
                 continue;
             }
             dirty = true;
-            if self.session.active_id.as_deref() != Some(event.session_id.as_str()) {
+            if self.session.active_id() != Some(event.session_id.as_str()) {
                 continue;
             }
             let was_overview_refresh = self.remote_ops.docker.status == "loading Docker overview";

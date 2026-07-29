@@ -113,7 +113,7 @@ impl NyaTermApp {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(config) = self.session.active_ssh_config.clone() else {
+        let Some(config) = self.session.active_ssh_config_owned() else {
             self.terminal.view.status = "start an SSH session first".to_string();
             self.ensure_panel_open(crate::models::NavItem::Transfers);
             cx.notify();
@@ -122,7 +122,7 @@ impl NyaTermApp {
         let id = self.next_transfer_id("sftp-mkdir");
         self.transfer.queue.jobs.push(TransferJobState {
             id: id.clone(),
-            session_id: self.session.active_id.clone(),
+            session_id: self.session.active_id_owned(),
             kind: TransferJobKind::Mkdir {
                 remote_path: remote_path.clone(),
                 parent_path: parent_path.clone(),
@@ -259,7 +259,7 @@ impl NyaTermApp {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(config) = self.session.active_ssh_config.clone() else {
+        let Some(config) = self.session.active_ssh_config_owned() else {
             self.terminal.view.status = "start an SSH session first".to_string();
             self.ensure_panel_open(crate::models::NavItem::Transfers);
             cx.notify();
@@ -268,7 +268,7 @@ impl NyaTermApp {
         let id = self.next_transfer_id("sftp-create-file");
         self.transfer.queue.jobs.push(TransferJobState {
             id: id.clone(),
-            session_id: self.session.active_id.clone(),
+            session_id: self.session.active_id_owned(),
             kind: TransferJobKind::CreateFile {
                 remote_path: remote_path.clone(),
                 parent_path: parent_path.clone(),

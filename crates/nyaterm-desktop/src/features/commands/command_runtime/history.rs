@@ -60,8 +60,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn active_session_history_commands(&self) -> Vec<String> {
         self.session
-            .active_id
-            .as_deref()
+            .active_id()
             .and_then(|session_id| self.session.command_history_for(session_id))
             .map(<[String]>::to_vec)
             .unwrap_or_default()
@@ -71,7 +70,7 @@ impl NyaTermApp {
         &self,
         index: usize,
     ) -> Option<String> {
-        let session_id = self.session.active_id.as_deref()?;
+        let session_id = self.session.active_id()?;
         self.session
             .command_history_for(session_id)?
             .get(index)
@@ -92,7 +91,7 @@ impl NyaTermApp {
         execute: bool,
         cx: &mut Context<Self>,
     ) {
-        if self.session.active_id.is_none() {
+        if self.session.active_id().is_none() {
             self.terminal.view.status = "start a terminal session before using history".to_string();
             cx.notify();
             return;

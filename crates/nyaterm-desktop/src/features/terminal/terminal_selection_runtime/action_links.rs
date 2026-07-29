@@ -266,7 +266,7 @@ impl NyaTermApp {
         }
         let bounds = self.terminal.layout.surface_bounds?;
         if terminal_bounds_contains(bounds, position) {
-            return Some(self.session.active_id.clone());
+            return Some(self.session.active_id_owned());
         }
         None
     }
@@ -282,7 +282,7 @@ impl NyaTermApp {
             .split
             .as_ref()
             .map(|root| root.session_ids())
-            .or_else(|| self.session.active_id.clone().map(|id| vec![id]))
+            .or_else(|| self.session.active_id_owned().map(|id| vec![id]))
             .unwrap_or_default()
     }
 
@@ -352,7 +352,7 @@ impl NyaTermApp {
         event: &ClickEvent,
         cx: &mut Context<Self>,
     ) -> bool {
-        if !self.session.active_id.as_deref().is_some_and(|session_id| {
+        if !self.session.active_id().is_some_and(|session_id| {
             self.terminal_expensive_interactions_enabled_for_session(Some(session_id))
         }) {
             return false;
@@ -360,7 +360,7 @@ impl NyaTermApp {
         let Some(pos) = self.point_to_terminal_cell(event.position(), cx) else {
             return false;
         };
-        let session_id = self.session.active_id.clone().unwrap_or_default();
+        let session_id = self.session.active_id_owned().unwrap_or_default();
         let display_offset = self.active_terminal_display_offset();
         let snapshot =
             self.terminal_snapshot_for_session(Some(session_id.as_str()), display_offset);
@@ -445,7 +445,7 @@ impl NyaTermApp {
         let Some(session_id) = session_id.filter(|id| !id.is_empty()) else {
             return false;
         };
-        let is_active = self.session.active_id.as_deref() == Some(session_id);
+        let is_active = self.session.active_id() == Some(session_id);
         let Some(view) = self.terminal.view.views.get(session_id) else {
             return false;
         };

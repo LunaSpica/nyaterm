@@ -65,8 +65,7 @@ impl NyaTermApp {
             .is_some_and(|index| index + 1 < sessions.len());
         let can_unsplit = self
             .session
-            .active_id
-            .as_deref()
+            .active_id()
             .map(|id| self.tab_root_for_session(id))
             .and_then(|root| self.shell.workspace.pane_roots.get(&root))
             .is_some_and(|root| root.is_split())

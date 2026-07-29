@@ -316,8 +316,7 @@ impl NyaTermApp {
             if matches!(self.send_command.options.target, SendCommandTarget::Current)
                 && self
                     .session
-                    .active_id
-                    .as_deref()
+                    .active_id()
                     .is_some_and(|session_id| self.is_session_disconnected(session_id))
             {
                 self.terminal.view.status =
@@ -492,10 +491,9 @@ impl NyaTermApp {
         match &self.send_command.options.target {
             SendCommandTarget::Current => self
                 .session
-                .active_id
-                .as_ref()
-                .filter(|session_id| live_session_ids.contains(session_id.as_str()))
-                .cloned()
+                .active_id()
+                .filter(|session_id| live_session_ids.contains(*session_id))
+                .map(ToOwned::to_owned)
                 .into_iter()
                 .collect(),
             SendCommandTarget::AllCompatible => {
@@ -632,7 +630,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn active_session_kind(&self) -> Option<SessionKind> {
-        let active_id = self.session.active_id.as_deref()?;
+        let active_id = self.session.active_id()?;
         if self.is_session_disconnected(active_id) {
             return None;
         }

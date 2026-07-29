@@ -37,9 +37,7 @@ pub(in crate::features) struct SessionFeatureState {
     active_menu: Option<ActiveSessionMenuState>,
     /// Per-session reconnect/disconnect busy state ("reconnect" | "disconnect").
     busy_actions: HashMap<String, String>,
-    pub active_id: Option<String>,
-    pub active_ssh_config: Option<SshSessionConfig>,
-    pub active_ai_execution_profile: AiExecutionProfile,
+    active: ActiveSessionState,
     order: Vec<String>,
     metadata: HashMap<String, SessionRuntimeMetadata>,
     custom_names: HashMap<String, String>,
@@ -63,6 +61,11 @@ struct SessionRestoreState {
 #[derive(Default)]
 struct SessionEventQueueState {
     pending: VecDeque<SessionEvent>,
+}
+
+#[derive(Default)]
+struct ActiveSessionState {
+    id: Option<String>,
 }
 
 pub(in crate::features) struct SessionFeatureFocus {
@@ -196,9 +199,7 @@ impl SessionFeatureState {
             active_search_draft: String::new(),
             active_menu: None,
             busy_actions: HashMap::new(),
-            active_id: None,
-            active_ssh_config: None,
-            active_ai_execution_profile: AiExecutionProfile::SendOnly,
+            active: ActiveSessionState::default(),
             order: Vec::new(),
             metadata: HashMap::new(),
             custom_names: HashMap::new(),
@@ -403,6 +404,58 @@ impl SessionFeatureState {
     pub(in crate::features) fn retain_busy_actions_for_live_sessions(&mut self) {
         self.busy_actions
             .retain(|id, _| self.metadata.contains_key(id));
+    }
+
+    pub(in crate::features) fn active_id(&self) -> Option<&str> {
+        self.active.id.as_deref()
+    }
+
+    pub(in crate::features) fn active_id_owned(&self) -> Option<String> {
+        self.active.id.clone()
+    }
+
+    pub(in crate::features) fn active_ssh_config(&self) -> Option<&SshSessionConfig> {
+        self.active
+            .id
+            .as_deref()
+            .and_then(|session_id| self.metadata.get(session_id))
+            .and_then(|metadata| metadata.ssh_config.as_ref())
+    }
+
+    pub(in crate::features) fn active_ssh_config_owned(&self) -> Option<SshSessionConfig> {
+        self.active_ssh_config().cloned()
+    }
+
+    pub(in crate::features) fn active_ai_execution_profile(&self) -> AiExecutionProfile {
+        self.active
+            .id
+            .as_deref()
+            .and_then(|session_id| self.metadata.get(session_id))
+            .map(|metadata| metadata.ai_execution_profile)
+            .unwrap_or(AiExecutionProfile::SendOnly)
+    }
+
+    pub(in crate::features) fn select_active_session(
+        &mut self,
+        session_id: impl Into<String>,
+    ) -> Option<String> {
+        let session_id = session_id.into();
+        self.active.id.replace(session_id)
+    }
+
+    pub(in crate::features) fn select_active_session_if_none(
+        &mut self,
+        session_id: impl Into<String>,
+    ) -> bool {
+        if self.active.id.is_some() {
+            return false;
+        }
+        self.select_active_session(session_id);
+        true
+    }
+
+    pub(in crate::features) fn clear_active_session(&mut self) -> Option<String> {
+        self.active.id.take()
     }
 
     pub(in crate::features) fn session_order(&self) -> &[String] {
@@ -648,6 +701,9 @@ impl SessionFeatureState {
         self.tab_colors.remove(session_id);
         self.command_history.remove(session_id);
         self.busy_actions.remove(session_id);
+        if self.active_id() == Some(session_id) {
+            self.clear_active_session();
+        }
         if self
             .active_menu
             .as_ref()
@@ -1735,7 +1791,7 @@ mod tests {
     use nyaterm_transport::{
         LocalSessionConfig, SessionEvent, SessionKind, SessionManager, SshCredentialPrompt,
         SshCredentialPromptKind, SshCredentialPromptReason, SshHostKey,
-        SshKeyboardInteractivePrompt, SshKeyboardInteractiveRequest,
+        SshKeyboardInteractivePrompt, SshKeyboardInteractiveRequest, SshSessionConfig,
     };
 
     use crate::features::runtime_jobs::SessionStartResult;
@@ -2023,10 +2079,10 @@ mod tests {
         assert!(!sessions.start.has_pending());
         assert!(!sessions.start.has_failed());
         assert!(sessions.command_history_for("missing").is_none());
-        assert!(sessions.active_id.is_none());
-        assert!(sessions.active_ssh_config.is_none());
+        assert!(sessions.active_id().is_none());
+        assert!(sessions.active_ssh_config().is_none());
         assert_eq!(
-            sessions.active_ai_execution_profile,
+            sessions.active_ai_execution_profile(),
             AiExecutionProfile::SendOnly
         );
         assert!(sessions.order.is_empty());
@@ -2205,6 +2261,52 @@ mod tests {
     }
 
     #[test]
+    fn active_session_selection_derives_configuration_from_the_catalog() {
+        let cx = TestAppContext::single();
+        let mut sessions = session_state(&cx);
+        let mut metadata = session_metadata("first", None);
+        metadata.ssh_config = Some(SshSessionConfig::default());
+        metadata.ai_execution_profile = AiExecutionProfile::Auto;
+        sessions.register_session_metadata("session-a", metadata);
+
+        assert!(sessions.select_active_session_if_none("session-a"));
+        assert_eq!(sessions.active_id(), Some("session-a"));
+        assert!(sessions.active_ssh_config().is_some());
+        assert_eq!(
+            sessions.active_ai_execution_profile(),
+            AiExecutionProfile::Auto
+        );
+        assert!(!sessions.select_active_session_if_none("session-b"));
+
+        sessions.register_session_metadata("session-a", session_metadata("updated", None));
+        assert_eq!(sessions.active_id(), Some("session-a"));
+        assert!(sessions.active_ssh_config().is_none());
+        assert_eq!(
+            sessions.active_ai_execution_profile(),
+            AiExecutionProfile::Posix
+        );
+
+        assert_eq!(
+            sessions.select_active_session("missing").as_deref(),
+            Some("session-a")
+        );
+        assert_eq!(sessions.active_id(), Some("missing"));
+        assert!(sessions.active_ssh_config().is_none());
+        assert_eq!(
+            sessions.active_ai_execution_profile(),
+            AiExecutionProfile::SendOnly
+        );
+
+        assert_eq!(sessions.clear_active_session().as_deref(), Some("missing"));
+        assert!(sessions.active_id().is_none());
+        assert!(sessions.active_ssh_config().is_none());
+        assert_eq!(
+            sessions.active_ai_execution_profile(),
+            AiExecutionProfile::SendOnly
+        );
+    }
+
+    #[test]
     fn session_disconnect_transition_is_idempotent_and_reports_multiplex_owner() {
         let cx = TestAppContext::single();
         let mut sessions = session_state(&cx);
@@ -2263,14 +2365,22 @@ mod tests {
         let cx = TestAppContext::single();
         let mut sessions = session_state(&cx);
 
-        sessions
-            .register_session_metadata("session-a", session_metadata("first", Some("multiplex-a")));
+        let mut metadata = session_metadata("first", Some("multiplex-a"));
+        metadata.ssh_config = Some(SshSessionConfig::default());
+        metadata.ai_execution_profile = AiExecutionProfile::Auto;
+        sessions.register_session_metadata("session-a", metadata);
         sessions.set_custom_name("session-a".to_string(), "custom".to_string());
         sessions.set_dynamic_title("session-a", Some("dynamic".to_string()));
         sessions.update_cwd("session-a", "/workspace".to_string());
         sessions.set_tab_color("session-a", Some(0x112233));
         sessions.record_command_history("session-a", "pwd");
         assert!(sessions.begin_reconnect_action("session-a".to_string()));
+        sessions.select_active_session("session-a");
+        assert!(sessions.active_ssh_config().is_some());
+        assert_eq!(
+            sessions.active_ai_execution_profile(),
+            AiExecutionProfile::Auto
+        );
         sessions.set_active_menu(ActiveSessionMenuState {
             session_id: "session-a".to_string(),
             x: px(10.),
@@ -2290,6 +2400,12 @@ mod tests {
         assert!(sessions.command_history_for("session-a").is_none());
         assert!(!sessions.session_is_busy("session-a"));
         assert!(sessions.active_menu().is_none());
+        assert!(sessions.active_id().is_none());
+        assert!(sessions.active_ssh_config().is_none());
+        assert_eq!(
+            sessions.active_ai_execution_profile(),
+            AiExecutionProfile::SendOnly
+        );
     }
 
     #[test]

@@ -166,8 +166,7 @@ impl NyaTermApp {
         self.terminal.view.runtime.last_terminal_input_at = Some(Instant::now());
         if let Some(session_id) = self
             .session
-            .active_id
-            .as_deref()
+            .active_id()
             .filter(|session_id| !session_id.is_empty())
         {
             self.terminal
@@ -425,7 +424,7 @@ impl NyaTermApp {
         if !self.terminal.search.open || self.terminal.search.mode != TerminalSearchMode::Buffer {
             return false;
         }
-        let Some(session_id) = self.session.active_id.as_deref() else {
+        let Some(session_id) = self.session.active_id() else {
             return false;
         };
         let Some(key) = self.terminal_search_key() else {
@@ -492,7 +491,7 @@ impl NyaTermApp {
             && !self.ai.chat.focus_pending
             && !self.transfer.file_ops.rename_focus_pending
             && !self.session.prompts.credential_focus_is_pending()
-            && !((self.session.active_ssh_config.is_some()
+            && !((self.session.active_ssh_config().is_some()
                 && matches!(
                     self.current_right_panel(),
                     Some(NavItem::Stats | NavItem::Processes | NavItem::Docker)
@@ -535,7 +534,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        if self.session.active_ssh_config.is_none() {
+        if self.session.active_ssh_config().is_none() {
             return false;
         }
 

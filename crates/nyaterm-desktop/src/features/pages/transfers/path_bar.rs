@@ -227,7 +227,7 @@ impl NyaTermApp {
         self.transfer.browser.favorites_menu = None;
         self.transfer.browser.upload_menu = None;
         self.transfer.browser.path_menu = Some(TransferBrowserPathMenuState {
-            session_id: self.session.active_id.clone(),
+            session_id: self.session.active_id_owned(),
             x: event.position.x,
             y: event.position.y,
             kind: TransferBrowserPathMenuKind::Overflow { segments },
@@ -256,7 +256,7 @@ impl NyaTermApp {
         self.transfer.browser.favorites_menu = None;
         self.transfer.browser.upload_menu = None;
         self.transfer.browser.path_menu = Some(TransferBrowserPathMenuState {
-            session_id: self.session.active_id.clone(),
+            session_id: self.session.active_id_owned(),
             x: event.position.x,
             y: event.position.y,
             kind: TransferBrowserPathMenuKind::Children {
@@ -439,7 +439,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        if self.session.active_id.is_none() {
+        if self.session.active_id().is_none() {
             self.terminal.view.status = "start a session before sending remote path".to_string();
             cx.notify();
             return;

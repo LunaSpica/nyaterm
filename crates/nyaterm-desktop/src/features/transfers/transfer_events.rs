@@ -153,13 +153,13 @@ impl NyaTermApp {
                 continue;
             }
             dirty |= transfer_event_needs_ui_refresh(
-                self.session.active_id.as_deref(),
+                self.session.active_id(),
                 job_session_id.as_deref(),
                 &event.event,
             );
             let inactive_browser_snapshot = job_session_id
                 .as_deref()
-                .filter(|session_id| self.session.active_id.as_deref() != Some(*session_id))
+                .filter(|session_id| self.session.active_id() != Some(*session_id))
                 .filter(|_| {
                     transfer_event_needs_browser_context(
                         &self.transfer.queue.jobs[job_index].kind,
@@ -297,7 +297,7 @@ impl NyaTermApp {
                     job.progress = None;
                     job.control = None;
 
-                    if job_session_id == self.session.active_id
+                    if job_session_id.as_deref() == self.session.active_id()
                         && let Some(TransferBrowserPathMenuState {
                             session_id,
                             kind:
@@ -488,7 +488,7 @@ impl NyaTermApp {
                     self.transfer.paths.remote = remote_path.clone();
                     self.terminal.view.status =
                         format!("SFTP file created in {parent_path}: {remote_path}");
-                    if should_open && job_session_id == self.session.active_id {
+                    if should_open && job_session_id.as_deref() == self.session.active_id() {
                         open_after_create = Some(
                             entries
                                 .iter()
@@ -687,7 +687,7 @@ impl NyaTermApp {
                     job.progress = None;
                     job.control = None;
 
-                    if job_session_id.as_deref() == self.session.active_id.as_deref() {
+                    if job_session_id.as_deref() == self.session.active_id() {
                         let mut context = self.ai_terminal_context();
                         context.selected_text = file.content;
                         context.cwd = Some(transfer_event_remote_parent_path(&remote_path));
@@ -924,7 +924,7 @@ impl NyaTermApp {
                         _ => None,
                     };
                     if let TransferJobKind::ListChildren { remote_path } = &job.kind
-                        && job_session_id == self.session.active_id
+                        && job_session_id.as_deref() == self.session.active_id()
                         && let Some(TransferBrowserPathMenuState {
                             session_id,
                             kind:
@@ -1005,7 +1005,7 @@ impl NyaTermApp {
             }
             if let Some(entry) = open_after_create
                 && inactive_browser_snapshot.is_none()
-                && self.session.active_id == job_session_id
+                && self.session.active_id() == job_session_id.as_deref()
             {
                 self.open_transfer_default(entry, window, cx);
             }

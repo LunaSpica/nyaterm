@@ -44,7 +44,7 @@ impl NyaTermApp {
         let render_started_at = Instant::now();
         self.ensure_paint_theme_caches();
         let palette = self.terminal_theme_palette();
-        let is_active = self.session.active_id.as_deref() == Some(session_id.as_str());
+        let is_active = self.session.active_id() == Some(session_id.as_str());
         let is_disconnected = !session_id.is_empty() && self.is_session_disconnected(&session_id);
         let terminal_mouse_reporting = !session_id.is_empty()
             && self
@@ -653,7 +653,7 @@ impl NyaTermApp {
                             return;
                         }
                         // Disconnected tab: Enter reconnects; other keys show status (Tauri).
-                        if let Some(session_id) = this.session.active_id.clone() {
+                        if let Some(session_id) = this.session.active_id_owned() {
                             if this.is_session_disconnected(&session_id) {
                                 cx.stop_propagation();
                                 let keystroke = &event.keystroke;

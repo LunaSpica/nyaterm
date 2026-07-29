@@ -12,7 +12,7 @@ use super::process::usage_color;
 impl NyaTermApp {
     pub(in crate::features) fn stats_view(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = self.theme_palette();
-        if self.session.active_ssh_config.is_none() {
+        if self.session.active_ssh_config().is_none() {
             return div()
                 .size_full()
                 .bg(self.shell_transparent_color(palette.surface))

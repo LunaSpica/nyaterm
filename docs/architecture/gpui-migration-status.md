@@ -328,6 +328,13 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   iterators or focused queries, while terminal effects use semantic title/CWD/
   color updates. Session persistence formats, terminal parsing and transport
   protocol behavior are unchanged.
+  The active-session ownership pass then made selection private and migrated
+  all readers and activation/clearing paths to focused owner methods. The
+  active child stores only the authoritative session id; its SSH configuration
+  and AI execution profile are derived from runtime metadata, so registration,
+  replacement and removal cannot leave stale active-session configuration
+  behind. Selecting an unknown id and clearing selection retain the existing
+  `None`/`SendOnly` fallback behavior.
 - Transfer state is grouped into `TransferFeatureState`. Seventy-eight fields
   turned out to be five separate things sharing one panel: the job `queue`, the
   SFTP `browser`, the file operation dialogs (`file_ops`), the built-in remote
@@ -1396,6 +1403,7 @@ Current ownership map:
 | Session restore/event queue | Private state in `NyaTermApp.session` | Transient runtime coordination | Restore completion is idempotent and pending transport events are counted, extended and popped only through owner methods; event interpretation stays in the event-pump adapter. |
 | Session command history/search/menu/busy state | Private state in `NyaTermApp.session` | Transient per-session interaction state | History append/migration/deletion and active-menu/busy transitions are owner operations; beginning reconnect/disconnect closes the menu in the same transition. |
 | Session catalog and presentation | Private state in `NyaTermApp.session` | Runtime catalog plus transient presentation | Order/metadata registration, tab movement, disconnect marking, reconnect migration and removal are owner transitions; custom names, OSC titles/CWDs and tab colors are exposed through read-only queries and semantic updates. |
+| Active session selection and derived config | Private state in `NyaTermApp.session` | Transient selection over the runtime catalog | The active child stores only the session id; SSH config and AI execution profile are queried from private runtime metadata, and select/clear/remove transitions preserve the `None`/`SendOnly` fallback. |
 | Serial ports | Private catalog in `NyaTermApp.connection_catalog` | Runtime/discovered state | Replaced through the catalog after session-manager discovery and never persisted. |
 | Tunnel/proxy configs | Private catalog in `NyaTermApp.tunnel_state` | Persisted network config | Views use read-only slices; pure move/upsert/delete candidates and successful commits stay on `TunnelFeatureState`. The Network page UI remains separate transient state. |
 | Queued saved-connection starts | `NyaTermApp.session.start` private queue | Transient session-start state | Admission, duplicate detection, draining and runtime cadence reads go through `SessionStartFeatureState` methods. |
@@ -1626,7 +1634,10 @@ honest remaining list.
    behind. The next session catalog/presentation batch then made six more
    fields private and moved registration/order synchronization, disconnect
    marking, reconnect presentation migration and atomic catalog removal onto
-   `SessionFeatureState`.
+   `SessionFeatureState`. The active-session selection batch then made the
+   remaining selection field private, routed roughly seventy-five desktop
+   modules through owner queries/transitions, and removed the duplicate active
+   SSH/AI caches: both values now derive from the private metadata catalog.
    What remains at the
    composition root is stores, runtime and focused feature owners.
    Group by cohesion where a cluster exists; do not force the count down for

@@ -211,7 +211,7 @@ impl NyaTermApp {
             self.clear_command_suggestion_draft(cx);
             return;
         }
-        if self.session.active_id.is_none() {
+        if self.session.active_id().is_none() {
             self.clear_command_suggestion_draft(cx);
             return;
         }
@@ -472,8 +472,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn read_active_terminal_input_line(&self) -> Option<String> {
         let offset = self.active_terminal_display_offset();
-        let snapshot =
-            self.terminal_snapshot_for_session(self.session.active_id.as_deref(), offset);
+        let snapshot = self.terminal_snapshot_for_session(self.session.active_id(), offset);
         if snapshot.cursor.row == usize::MAX {
             return None;
         }
@@ -509,8 +508,7 @@ impl NyaTermApp {
 
         let Some(session_id) = self
             .session
-            .active_id
-            .as_deref()
+            .active_id()
             .filter(|session_id| !session_id.is_empty())
             .map(ToOwned::to_owned)
         else {
@@ -595,7 +593,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if self.terminal.assist.command_suggestion_search_gen != request.request_id
-            || self.session.active_id.as_deref() != Some(request.session_id.as_str())
+            || self.session.active_id() != Some(request.session_id.as_str())
             || self.terminal.assist.credential_suggestions.is_some()
             || self.is_credential_prompt_input_mode()
             || self.terminal.assist.command_suggestions_suppressed
@@ -788,8 +786,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn active_terminal_cursor_cell(&self) -> (usize, usize) {
         let offset = self.active_terminal_display_offset();
-        let snapshot =
-            self.terminal_snapshot_for_session(self.session.active_id.as_deref(), offset);
+        let snapshot = self.terminal_snapshot_for_session(self.session.active_id(), offset);
         let row = if snapshot.cursor.row == usize::MAX {
             snapshot.row_count().saturating_sub(1)
         } else {
@@ -812,7 +809,7 @@ impl NyaTermApp {
             return false;
         }
         let session_id = state.session_id.clone();
-        if self.session.active_id.as_deref() != Some(session_id.as_str())
+        if self.session.active_id() != Some(session_id.as_str())
             || self
                 .terminal_surface_bounds_for_session(Some(&session_id))
                 .is_none()
@@ -957,7 +954,7 @@ impl NyaTermApp {
         if state.items.is_empty() {
             return div().into_any_element();
         }
-        if self.session.active_id.as_deref() != Some(state.session_id.as_str()) {
+        if self.session.active_id() != Some(state.session_id.as_str()) {
             return div().into_any_element();
         }
         let menu_w = 380.0_f32;

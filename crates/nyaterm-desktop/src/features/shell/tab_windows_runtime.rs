@@ -47,7 +47,7 @@ impl NyaTermApp {
             for tab_id in &live_ids {
                 root.ensure_tab(tab_id, preferred.as_deref());
             }
-            if let Some(active) = self.session.active_id.clone() {
+            if let Some(active) = self.session.active_id_owned() {
                 let _ = root.set_active_tab(&active);
             }
             if self
@@ -74,7 +74,7 @@ impl NyaTermApp {
         if tab_ids.is_empty() {
             return;
         }
-        let active = self.session.active_id.clone();
+        let active = self.session.active_id_owned();
         let root = TerminalWindowNode::leaf(tab_ids, active);
         self.shell.workspace.focused_terminal_leaf_id = root.first_leaf_id();
         self.terminal.windows.tree = Some(root);
@@ -227,7 +227,7 @@ impl NyaTermApp {
         // Clear global pane splits so multi-leaf rendering takes precedence cleanly.
         self.shell.workspace.split = None;
         self.shell.workspace.split_resize = None;
-        if let Some(active) = self.session.active_id.clone() {
+        if let Some(active) = self.session.active_id_owned() {
             let mut root = layout;
             let _ = root.set_active_tab(&active);
             self.shell.workspace.focused_terminal_leaf_id =
@@ -302,7 +302,7 @@ impl NyaTermApp {
             return;
         }
         self.shell.workspace.focused_terminal_leaf_id = restored.first_leaf_id();
-        if let Some(active) = self.session.active_id.clone() {
+        if let Some(active) = self.session.active_id_owned() {
             let mut root = restored;
             let _ = root.set_active_tab(&active);
             self.shell.workspace.focused_terminal_leaf_id =

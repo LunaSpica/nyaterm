@@ -86,7 +86,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn terminal_gutter_width_px(&self) -> f32 {
-        self.terminal_gutter_width_px_for_session(self.session.active_id.as_deref())
+        self.terminal_gutter_width_px_for_session(self.session.active_id())
     }
 
     pub(in crate::features) fn terminal_gutter_width_px_for_session(
@@ -107,7 +107,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn active_terminal_grid_size(&self) -> (usize, usize) {
-        self.terminal_grid_size_for_session(self.session.active_id.as_deref())
+        self.terminal_grid_size_for_session(self.session.active_id())
     }
 
     pub(in crate::features) fn terminal_grid_size_for_session(
@@ -196,7 +196,7 @@ impl NyaTermApp {
         position: Point<Pixels>,
         cx: &App,
     ) -> Option<TerminalCellPos> {
-        self.point_to_terminal_cell_for_session(self.session.active_id.as_deref(), position, cx)
+        self.point_to_terminal_cell_for_session(self.session.active_id(), position, cx)
     }
 
     pub(in crate::features) fn point_to_terminal_cell_for_session(
@@ -297,7 +297,7 @@ impl NyaTermApp {
         bounds: Bounds<Pixels>,
     ) -> bool {
         let session_id = session_id.filter(|id| !id.is_empty());
-        if session_id.is_none() || session_id == self.session.active_id.as_deref() {
+        if session_id.is_none() || session_id == self.session.active_id() {
             self.remember_terminal_surface_bounds(bounds);
         }
         if let Some(session_id) = session_id {

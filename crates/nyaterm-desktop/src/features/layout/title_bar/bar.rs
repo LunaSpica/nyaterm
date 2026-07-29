@@ -351,7 +351,8 @@ impl NyaTermApp {
     }
 
     fn remote_stats_header_label(&self, mode: HeaderStatusMode) -> Option<String> {
-        if self.session.active_ssh_config.is_none() || !self.settings.summary.ui_show_remote_stats {
+        if self.session.active_ssh_config().is_none() || !self.settings.summary.ui_show_remote_stats
+        {
             return None;
         }
         let stats = self.remote_ops.stats.data.as_ref()?;
@@ -392,7 +393,7 @@ impl NyaTermApp {
     }
 
     fn remote_stats_header_fallback(&self) -> String {
-        if self.session.active_ssh_config.is_none() {
+        if self.session.active_ssh_config().is_none() {
             self.tr("panel.resourceMonitorNoSession").to_string()
         } else if !self.settings.summary.ui_show_remote_stats {
             self.tr("panel.resourceMonitorDisabled").to_string()
@@ -483,7 +484,7 @@ impl NyaTermApp {
         {
             return failed;
         }
-        if let Some(session_id) = self.session.active_id.as_deref() {
+        if let Some(session_id) = self.session.active_id() {
             let tab_root = self.tab_root_for_session(session_id);
             let name = self
                 .session_display_name(&tab_root)
@@ -521,7 +522,7 @@ impl NyaTermApp {
         if self.session.start.has_active_failed() {
             return Some("icons/session/disconnect.svg");
         }
-        if let Some(session_id) = self.session.active_id.as_deref() {
+        if let Some(session_id) = self.session.active_id() {
             return self
                 .session_info(session_id)
                 .map(|session| session_kind_icon_path(session.kind));

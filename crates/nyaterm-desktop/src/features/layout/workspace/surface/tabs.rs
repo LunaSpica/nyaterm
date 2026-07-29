@@ -367,7 +367,7 @@ impl NyaTermApp {
                 .then_with(|| left.3.cmp(&right.3))
         });
         if self.shell.chrome.session_tab_scroll_into_view_pending {
-            if let Some(active_id) = self.session.active_id.as_deref() {
+            if let Some(active_id) = self.session.active_id() {
                 if let Some(index) = sessions.iter().position(|session| session.id == active_id) {
                     let pending_count = transient_tabs
                         .iter()
@@ -430,8 +430,7 @@ impl NyaTermApp {
             // Active when any leaf under this tab root is focused.
             let is_active = self
                 .session
-                .active_id
-                .as_deref()
+                .active_id()
                 .is_some_and(|id| self.tab_root_for_session(id) == session.id);
             let leaf_ids = self
                 .shell

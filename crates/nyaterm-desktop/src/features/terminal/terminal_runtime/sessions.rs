@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use std::time::Duration;
 
 use gpui::{Context, Timer, Window};
-use nyaterm_core::{AgentOutputCaptureProcessor, AiExecutionProfile};
+use nyaterm_core::AgentOutputCaptureProcessor;
 
 use crate::features::formatting::{normalize_startup_command, short_id};
 use crate::features::{INITIAL_TERMINAL_BANNER, NyaTermApp};
@@ -38,7 +38,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn close_active_session(&mut self, cx: &mut Context<Self>) {
-        let Some(session_id) = self.session.active_id.clone() else {
+        let Some(session_id) = self.session.active_id_owned() else {
             self.terminal.view.status = "no active session".to_string();
             cx.notify();
             return;
@@ -51,7 +51,7 @@ impl NyaTermApp {
         session_id: String,
         cx: &mut Context<Self>,
     ) {
-        let was_active = self.session.active_id.as_deref() == Some(session_id.as_str());
+        let was_active = self.session.active_id() == Some(session_id.as_str());
         // Tauri: closing a strip tab closes the whole tab tree; closing a secondary leaf
         // only removes that pane. Strip close uses the tab-root id.
         let close_ids = if !self.is_secondary_pane_session(&session_id) {
@@ -88,9 +88,7 @@ impl NyaTermApp {
                 self.terminal.view.status =
                     format!("session closed; active {}", short_id(&next_session_id));
             } else {
-                self.session.active_id = None;
-                self.session.active_ssh_config = None;
-                self.session.active_ai_execution_profile = AiExecutionProfile::SendOnly;
+                self.session.clear_active_session();
                 self.terminal.view.output = String::from(INITIAL_TERMINAL_BANNER);
                 self.terminal.view.output_decoder.reset_decoder();
                 self.terminal.view.screen = initial_terminal_screen();
@@ -116,7 +114,7 @@ impl NyaTermApp {
             return;
         }
 
-        let active_before = self.session.active_id.clone();
+        let active_before = self.session.active_id_owned();
         let mut closed = 0usize;
         let mut failed = 0usize;
         for session_id in session_ids {
@@ -158,9 +156,7 @@ impl NyaTermApp {
             {
                 self.activate_session_id(&next_session_id);
             } else {
-                self.session.active_id = None;
-                self.session.active_ssh_config = None;
-                self.session.active_ai_execution_profile = AiExecutionProfile::SendOnly;
+                self.session.clear_active_session();
                 self.terminal.view.output = String::from(INITIAL_TERMINAL_BANNER);
                 self.terminal.view.output_decoder.reset_decoder();
                 self.terminal.view.screen = initial_terminal_screen();
@@ -311,7 +307,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn clear_terminal(&mut self, cx: &mut Context<Self>) {
         self.clear_terminal_selection(cx);
-        if let Some(session_id) = self.session.active_id.as_deref()
+        if let Some(session_id) = self.session.active_id()
             && let Some(view) = self.terminal.view.views.get_mut(session_id)
         {
             view.clear();
@@ -324,7 +320,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn append_terminal_log(&mut self, text: impl AsRef<str>) {
-        let session_id = self.session.active_id.clone();
+        let session_id = self.session.active_id_owned();
         self.append_terminal_log_for_session(session_id.as_deref(), text.as_ref(), false);
     }
 }

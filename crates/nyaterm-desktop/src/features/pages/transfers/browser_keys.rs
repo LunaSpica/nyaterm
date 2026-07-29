@@ -78,7 +78,7 @@ impl NyaTermApp {
             "fileExplorer.rename",
             &self.settings.summary.keybindings,
         ) && self.selected_transfer_entries().len() == 1
-            && self.session.active_ssh_config.is_some()
+            && self.session.active_ssh_config().is_some()
             && self.transfer.file_ops.rename.is_none()
         {
             cx.stop_propagation();

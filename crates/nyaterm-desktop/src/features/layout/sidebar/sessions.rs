@@ -404,7 +404,7 @@ impl NyaTermApp {
         let rename_session_id = session.id.clone();
         let menu_session_id = session.id.clone();
         let custom_color = self.session.tab_color(&session.id);
-        let is_active = self.session.active_id.as_deref() == Some(session.id.as_str());
+        let is_active = self.session.active_id() == Some(session.id.as_str());
         let is_disconnected = self.is_session_disconnected(&session.id);
         let has_unread = self
             .terminal

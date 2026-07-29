@@ -14,7 +14,7 @@ impl NyaTermApp {
             .session_ids()
             .map(ToOwned::to_owned)
             .collect::<Vec<_>>();
-        if let Some(active_session_id) = self.session.active_id.clone()
+        if let Some(active_session_id) = self.session.active_id_owned()
             && !session_ids.contains(&active_session_id)
         {
             session_ids.push(active_session_id);

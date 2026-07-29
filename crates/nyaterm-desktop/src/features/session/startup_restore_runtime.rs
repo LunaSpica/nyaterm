@@ -275,7 +275,7 @@ impl NyaTermApp {
         let mut tab = self.serialize_open_tab_for_session(first);
         // Title/type from first leaf; root carries the full tree.
         tab.root = Some(pane_root);
-        tab.active_pane_id = self.session.active_id.clone();
+        tab.active_pane_id = self.session.active_id_owned();
         Some(vec![tab])
     }
 
@@ -603,9 +603,7 @@ impl NyaTermApp {
             .pane_roots
             .insert(first.clone(), restored);
         self.rebuild_session_tab_owners();
-        if self.session.active_id.is_none() {
-            self.session.active_id = Some(first);
-        }
+        self.session.select_active_session_if_none(first);
         self.sync_workspace_split_from_active_tab();
         self.shell.workspace.pane_layout_restored = true;
         self.shell.navigation.selected_nav = NavItem::Workspace;

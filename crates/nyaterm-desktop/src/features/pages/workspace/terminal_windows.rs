@@ -52,8 +52,7 @@ impl NyaTermApp {
                     let is_active_tab = active.as_str() == tab_id.as_str()
                         || self
                             .session
-                            .active_id
-                            .as_deref()
+                            .active_id()
                             .is_some_and(|id| self.tab_root_for_session(id) == *tab_id);
                     let tab_number = global_index.get(tab_id).copied().unwrap_or(0);
                     let title = self

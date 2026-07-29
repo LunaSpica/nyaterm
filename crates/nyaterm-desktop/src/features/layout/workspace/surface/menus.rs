@@ -121,7 +121,7 @@ impl NyaTermApp {
             .collect();
         let mut sessions = ordered;
         sessions.reverse();
-        let active_id = self.session.active_id.clone();
+        let active_id = self.session.active_id_owned();
         let mut menu = div()
             .id("workspace-open-tabs-dropdown")
             .absolute()

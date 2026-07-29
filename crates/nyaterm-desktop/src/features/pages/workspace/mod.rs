@@ -47,7 +47,7 @@ impl NyaTermApp {
         if self.session.start.has_active_failed() {
             return self.failed_workspace_state().into_any_element();
         }
-        if self.session.active_id.is_none() {
+        if self.session.active_id().is_none() {
             if self.has_pending_session_start() {
                 return self.pending_workspace_state().into_any_element();
             }
@@ -74,7 +74,7 @@ impl NyaTermApp {
         }
         let root =
             self.shell.workspace.split.clone().unwrap_or_else(|| {
-                WorkspacePaneNode::leaf(self.session.active_id.clone().unwrap())
+                WorkspacePaneNode::leaf(self.session.active_id_owned().unwrap())
             });
 
         let show_chrome = root.is_split();

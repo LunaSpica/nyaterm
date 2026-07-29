@@ -51,7 +51,7 @@ impl NyaTermApp {
         self.forget_text_inputs("transfer.properties.");
         self.transfer.file_ops.properties = Some(transfer_properties_state_from_entry(
             entry.clone(),
-            self.session.active_id.clone(),
+            self.session.active_id_owned(),
         ));
         self.terminal.view.status = "remote properties opened".to_string();
         window.focus(&self.transfer.file_ops.properties_focus);
@@ -70,7 +70,7 @@ impl NyaTermApp {
         self.forget_text_inputs("transfer.properties.");
         self.transfer.file_ops.properties = Some(transfer_properties_state_from_entry(
             entry.clone(),
-            self.session.active_id.clone(),
+            self.session.active_id_owned(),
         ));
         self.terminal.view.status = "remote properties opened".to_string();
         window.focus(&self.transfer.file_ops.properties_focus);
@@ -193,7 +193,7 @@ impl NyaTermApp {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(config) = self.session.active_ssh_config.clone() else {
+        let Some(config) = self.session.active_ssh_config_owned() else {
             self.terminal.view.status = "start an SSH session first".to_string();
             cx.notify();
             return;
@@ -201,7 +201,7 @@ impl NyaTermApp {
         let id = self.next_transfer_id("sftp-properties");
         self.transfer.queue.jobs.push(TransferJobState {
             id: id.clone(),
-            session_id: self.session.active_id.clone(),
+            session_id: self.session.active_id_owned(),
             kind: TransferJobKind::LoadProperties {
                 remote_path: remote_path.clone(),
             },
@@ -303,7 +303,7 @@ impl NyaTermApp {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(config) = self.session.active_ssh_config.clone() else {
+        let Some(config) = self.session.active_ssh_config_owned() else {
             self.terminal.view.status = "start an SSH session first".to_string();
             cx.notify();
             return;
@@ -311,7 +311,7 @@ impl NyaTermApp {
         let id = self.next_transfer_id("sftp-update-properties");
         self.transfer.queue.jobs.push(TransferJobState {
             id: id.clone(),
-            session_id: self.session.active_id.clone(),
+            session_id: self.session.active_id_owned(),
             kind: TransferJobKind::UpdateProperties {
                 remote_path: remote_path.clone(),
                 parent_path: parent_path.clone(),

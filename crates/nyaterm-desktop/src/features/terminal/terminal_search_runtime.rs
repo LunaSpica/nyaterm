@@ -78,7 +78,7 @@ impl NyaTermApp {
         if !self.terminal.search.open || self.terminal.search.mode != TerminalSearchMode::Buffer {
             return false;
         }
-        let Some(session_id) = self.session.active_id.clone() else {
+        let Some(session_id) = self.session.active_id_owned() else {
             return false;
         };
         let Some(key) = self.terminal_search_key() else {
@@ -100,8 +100,7 @@ impl NyaTermApp {
         };
         let Some(view) = self
             .session
-            .active_id
-            .as_deref()
+            .active_id()
             .and_then(|session_id| self.terminal.view.views.get(session_id))
         else {
             return Ok(Vec::new());
@@ -121,7 +120,7 @@ impl NyaTermApp {
         abs_line: usize,
         cx: &mut Context<Self>,
     ) {
-        if let Some(session_id) = self.session.active_id.clone() {
+        if let Some(session_id) = self.session.active_id_owned() {
             if let Some(view) = self.terminal.view.views.get_mut(&session_id) {
                 let total = view.total_rows_for_ui();
                 let rows = view.viewport_rows_for_ui();
@@ -151,7 +150,7 @@ impl NyaTermApp {
     pub(in crate::features) fn terminal_history_search_key(
         &self,
     ) -> Option<RecordingHistorySearchKey> {
-        let session_id = self.session.active_id.clone()?;
+        let session_id = self.session.active_id_owned()?;
         let query = self.terminal.search.query.trim();
         if query.is_empty() {
             return None;
