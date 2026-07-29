@@ -533,34 +533,34 @@ impl NyaTermApp {
                     job.summary = None;
                     job.progress = None;
                     job.control = None;
-                    if let Some(state) = self.transfer.file_ops.properties.as_mut()
-                        && state.session_id.as_deref() == job_session_id.as_deref()
-                        && state.entry.path == remote_path
-                    {
-                        state.mode_value = properties
-                            .permissions
-                            .map(format_permissions_octal)
-                            .unwrap_or_else(|| "0644".to_string());
-                        state.owner_value = if properties.owner.is_empty() {
-                            properties
-                                .uid
-                                .map(|uid| uid.to_string())
-                                .unwrap_or_default()
-                        } else {
-                            properties.owner.clone()
-                        };
-                        state.group_value = if properties.group.is_empty() {
-                            properties
-                                .gid
-                                .map(|gid| gid.to_string())
-                                .unwrap_or_default()
-                        } else {
-                            properties.group.clone()
-                        };
-                        state.properties = Some(properties);
-                        state.error = None;
-                        sync_properties_inputs = true;
-                    }
+                    let mode_value = properties
+                        .permissions
+                        .map(format_permissions_octal)
+                        .unwrap_or_else(|| "0644".to_string());
+                    let owner_value = if properties.owner.is_empty() {
+                        properties
+                            .uid
+                            .map(|uid| uid.to_string())
+                            .unwrap_or_default()
+                    } else {
+                        properties.owner.clone()
+                    };
+                    let group_value = if properties.group.is_empty() {
+                        properties
+                            .gid
+                            .map(|gid| gid.to_string())
+                            .unwrap_or_default()
+                    } else {
+                        properties.group.clone()
+                    };
+                    sync_properties_inputs = self.transfer.complete_properties_load(
+                        job_session_id.as_deref(),
+                        &remote_path,
+                        properties,
+                        mode_value,
+                        owner_value,
+                        group_value,
+                    );
                     self.transfer.browser.status = format!("properties loaded for {remote_path}");
                     self.terminal.view.status = format!("SFTP properties loaded: {remote_path}");
                 }
@@ -586,45 +586,11 @@ impl NyaTermApp {
                         .selected_remote_paths
                         .insert(remote_path.clone());
                     self.transfer.set_remote_path(remote_path.clone());
-                    if let Some(state) = self.transfer.file_ops.properties.as_mut()
-                        && state.session_id.as_deref() == job_session_id.as_deref()
-                        && state.entry.path == remote_path
-                    {
-                        state.mode_value = properties
-                            .permissions
-                            .map(format_permissions_octal)
-                            .unwrap_or_else(|| state.mode_value.clone());
-                        state.owner_value = if properties.owner.is_empty() {
-                            properties
-                                .uid
-                                .map(|uid| uid.to_string())
-                                .unwrap_or_default()
-                        } else {
-                            properties.owner.clone()
-                        };
-                        state.group_value = if properties.group.is_empty() {
-                            properties
-                                .gid
-                                .map(|gid| gid.to_string())
-                                .unwrap_or_default()
-                        } else {
-                            properties.group.clone()
-                        };
-                        state.properties = Some(properties);
-                        state.saving = false;
-                        state.error = None;
-                    }
-                    if self
-                        .transfer
-                        .file_ops
-                        .properties
-                        .as_ref()
-                        .is_some_and(|state| {
-                            state.session_id.as_deref() == job_session_id.as_deref()
-                                && state.entry.path == remote_path
-                        })
-                    {
-                        self.transfer.file_ops.properties = None;
+                    if self.transfer.complete_properties_update(
+                        job_session_id.as_deref(),
+                        &remote_path,
+                        properties,
+                    ) {
                         forget_properties_inputs = true;
                     }
                     self.terminal.view.status =
@@ -949,13 +915,12 @@ impl NyaTermApp {
                             .is_empty()
                             .then_some(error.clone());
                     }
-                    if let Some(remote_path) = property_remote_path.as_ref()
-                        && let Some(state) = self.transfer.file_ops.properties.as_mut()
-                        && state.session_id.as_deref() == job_session_id.as_deref()
-                        && state.entry.path == *remote_path
-                    {
-                        state.saving = false;
-                        state.error = Some(error.clone());
+                    if let Some(remote_path) = property_remote_path.as_ref() {
+                        self.transfer.fail_properties_operation(
+                            job_session_id.as_deref(),
+                            remote_path,
+                            error.clone(),
+                        );
                     }
                     if let Some(remote_path) = property_remote_path.as_ref()
                         && let Some(workspace) = self.transfer.editor.workspace.as_mut()

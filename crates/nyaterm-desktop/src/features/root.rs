@@ -485,10 +485,7 @@ impl NyaTermApp {
         let quick_switch_open = self.quick_switch_open(cx);
         let transfer_properties_open = self
             .transfer
-            .file_ops
-            .properties
-            .as_ref()
-            .is_some_and(|state| state.session_id.as_deref() == self.session.active_id());
+            .properties_dialog_is_open_for_session(self.session.active_id());
         let transfer_editor_open = self.transfer.editor.workspace.is_some()
             && self.transfer.editor.window.is_none()
             && !self.transfer.editor.window_open_pending;
@@ -514,10 +511,10 @@ impl NyaTermApp {
             .when(overlay.temporary_ssh_link_open, |this| {
                 this.child(self.temporary_ssh_link_overlay(cx))
             })
-            .when(self.transfer.file_ops.move_to.is_some(), |this| {
+            .when(self.transfer.move_dialog().is_some(), |this| {
                 this.child(self.transfer_move_overlay(cx))
             })
-            .when(self.transfer.file_ops.delete.is_some(), |this| {
+            .when(self.transfer.delete_dialog().is_some(), |this| {
                 this.child(self.transfer_delete_overlay(cx))
             })
             .when(self.transfer.transfer_job_delete().is_some(), |this| {
@@ -526,13 +523,13 @@ impl NyaTermApp {
             .when(self.transfer.transfer_job_menu().is_some(), |this| {
                 this.child(self.transfer_job_menu_overlay(cx))
             })
-            .when(self.transfer.file_ops.new_folder.is_some(), |this| {
+            .when(self.transfer.new_folder_dialog().is_some(), |this| {
                 this.child(self.transfer_new_folder_overlay(cx))
             })
-            .when(self.transfer.file_ops.new_file.is_some(), |this| {
+            .when(self.transfer.new_file_dialog().is_some(), |this| {
                 this.child(self.transfer_new_file_overlay(cx))
             })
-            .when(self.transfer.file_ops.new_symlink.is_some(), |this| {
+            .when(self.transfer.new_symlink_dialog().is_some(), |this| {
                 this.child(self.transfer_new_symlink_overlay(cx))
             })
             .when(transfer_properties_open, |this| {
@@ -541,7 +538,7 @@ impl NyaTermApp {
             .when(transfer_editor_open, |this| {
                 this.child(self.transfer_editor_overlay(cx))
             })
-            .when(self.transfer.file_ops.unknown_file.is_some(), |this| {
+            .when(self.transfer.unknown_file_dialog().is_some(), |this| {
                 this.child(self.transfer_unknown_file_overlay(cx))
             })
             .when(transfer_external_sync_open, |this| {

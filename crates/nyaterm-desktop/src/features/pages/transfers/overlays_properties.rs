@@ -23,9 +23,8 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         let state = self
             .transfer
-            .file_ops
-            .properties
-            .clone()
+            .properties_dialog()
+            .cloned()
             .unwrap_or_else(|| TransferPropertiesState {
                 session_id: None,
                 entry: SftpFileEntry {
@@ -118,7 +117,7 @@ impl NyaTermApp {
             .flex()
             .items_center()
             .justify_center()
-            .track_focus(&self.transfer.file_ops.properties_focus)
+            .track_focus(self.transfer.properties_focus())
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 cx.stop_propagation();
                 this.handle_transfer_properties_key_down(event, window, cx);
@@ -309,14 +308,8 @@ impl NyaTermApp {
                                                             self.tr("fileExplorer.off")
                                                         },
                                                         cx.listener(|this, _, _, cx| {
-                                                            if let Some(state) = this
-                                                                .transfer
-                                                                .file_ops
-                                                                .properties
-                                                                .as_mut()
-                                                            {
-                                                                state.recursive = !state.recursive;
-                                                            }
+                                                            this.transfer
+                                                                .toggle_properties_recursive();
                                                             cx.notify();
                                                         }),
                                                     )),

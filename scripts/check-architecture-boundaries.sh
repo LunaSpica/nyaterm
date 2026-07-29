@@ -316,6 +316,22 @@ check_no_matches \
   "transfer queue state access must use TransferFeatureState methods" \
   '(self|this|app)\.transfer\.queue(\.|[[:space:]]*=)' \
   crates/nyaterm-desktop/src/features
+check_no_multiline_matches \
+  "TransferFeatureState file_ops child must remain private" \
+  'struct[[:space:]]+TransferFeatureState[[:space:]]*\{[^}]*pub([[:space:]]|\([^)]*\))[[:space:]]+file_ops[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/transfers/state.rs
+check_no_matches \
+  "TransferFileOpsState must remain private" \
+  'pub([[:space:]]|\([^)]*\))[[:space:]]+struct[[:space:]]+TransferFileOpsState' \
+  crates/nyaterm-desktop/src/features/transfers/state.rs
+check_no_multiline_matches \
+  "TransferFileOpsState fields must remain private" \
+  'struct[[:space:]]+TransferFileOpsState[[:space:]]*\{[^}]*pub([[:space:]]|\([^)]*\))[[:space:]]+(rename|rename_focus_pending|rename_focus|move_to|move_focus|delete|delete_focus|new_folder|new_folder_focus|new_file|new_file_focus|new_symlink|new_symlink_focus|properties|properties_focus|unknown_file|unknown_file_focus)[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/transfers/state.rs
+check_no_multiline_matches \
+  "transfer file-operation state access must use TransferFeatureState methods" \
+  '(self|this|app)\.transfer[[:space:]]*\.file_ops(\.|[[:space:]]*=)' \
+  crates/nyaterm-desktop/src/features
 
 check_no_matches \
   "SyncInputFeatureState must expose methods, not writable fields" \

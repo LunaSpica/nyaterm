@@ -10,7 +10,7 @@ use std::sync::mpsc;
 use std::time::Instant;
 
 use gpui::{FocusHandle, Pixels, WindowHandle};
-use nyaterm_transport::{SftpDuplicatePolicy, SftpFileEntry};
+use nyaterm_transport::{SftpDuplicatePolicy, SftpFileEntry, SftpFileProperties};
 
 use crate::features::TransferExternalSyncWindow;
 use crate::models::{
@@ -32,7 +32,7 @@ pub(in crate::features) struct TransferFeatureState {
     queue: TransferQueueState,
     paths: TransferPathState,
     pub browser: TransferBrowserState,
-    pub file_ops: TransferFileOpsState,
+    file_ops: TransferFileOpsState,
     pub editor: TransferEditorState,
     pub external_sync: TransferExternalSyncState,
     panel: TransferPanelState,
@@ -120,24 +120,24 @@ pub(in crate::features) struct TransferBrowserState {
 }
 
 /// Rename/move/delete/create/properties dialogs over browser entries.
-pub(in crate::features) struct TransferFileOpsState {
-    pub rename: Option<TransferRenameState>,
-    pub rename_focus_pending: bool,
-    pub rename_focus: FocusHandle,
-    pub move_to: Option<TransferMoveState>,
-    pub move_focus: FocusHandle,
-    pub delete: Option<TransferDeleteState>,
-    pub delete_focus: FocusHandle,
-    pub new_folder: Option<TransferNewFolderState>,
-    pub new_folder_focus: FocusHandle,
-    pub new_file: Option<TransferNewFileState>,
-    pub new_file_focus: FocusHandle,
-    pub new_symlink: Option<TransferNewSymlinkState>,
-    pub new_symlink_focus: FocusHandle,
-    pub properties: Option<TransferPropertiesState>,
-    pub properties_focus: FocusHandle,
-    pub unknown_file: Option<TransferUnknownFileState>,
-    pub unknown_file_focus: FocusHandle,
+struct TransferFileOpsState {
+    rename: Option<TransferRenameState>,
+    rename_focus_pending: bool,
+    rename_focus: FocusHandle,
+    move_to: Option<TransferMoveState>,
+    move_focus: FocusHandle,
+    delete: Option<TransferDeleteState>,
+    delete_focus: FocusHandle,
+    new_folder: Option<TransferNewFolderState>,
+    new_folder_focus: FocusHandle,
+    new_file: Option<TransferNewFileState>,
+    new_file_focus: FocusHandle,
+    new_symlink: Option<TransferNewSymlinkState>,
+    new_symlink_focus: FocusHandle,
+    properties: Option<TransferPropertiesState>,
+    properties_focus: FocusHandle,
+    unknown_file: Option<TransferUnknownFileState>,
+    unknown_file_focus: FocusHandle,
 }
 
 /// Built-in remote file editor workspace.
@@ -175,6 +175,7 @@ impl TransferFeatureState {
     ) -> Self {
         let (tx, rx) = mpsc::channel();
         Self {
+            file_ops: TransferFileOpsState::new(&focus),
             queue: TransferQueueState::new(tx, rx, focus.queue, focus.job_delete),
             paths: TransferPathState::new(remote_path, local_path, duplicate_policy),
             browser: TransferBrowserState {
@@ -213,25 +214,6 @@ impl TransferFeatureState {
                 path_menu: None,
                 upload_menu: None,
                 focus: focus.browser,
-            },
-            file_ops: TransferFileOpsState {
-                rename: None,
-                rename_focus_pending: false,
-                rename_focus: focus.rename,
-                move_to: None,
-                move_focus: focus.move_to,
-                delete: None,
-                delete_focus: focus.delete,
-                new_folder: None,
-                new_folder_focus: focus.new_folder,
-                new_file: None,
-                new_file_focus: focus.new_file,
-                new_symlink: None,
-                new_symlink_focus: focus.new_symlink,
-                properties: None,
-                properties_focus: focus.properties,
-                unknown_file: None,
-                unknown_file_focus: focus.unknown_file,
             },
             editor: TransferEditorState {
                 workspace: None,
@@ -424,6 +406,410 @@ impl TransferFeatureState {
         self.queue.clear_stopped_jobs(session_id)
     }
 
+    pub(in crate::features) fn rename_dialog(&self) -> Option<&TransferRenameState> {
+        self.file_ops.rename()
+    }
+
+    pub(in crate::features) fn rename_dialog_is_open(&self) -> bool {
+        self.file_ops.rename().is_some()
+    }
+
+    pub(in crate::features) fn open_rename_dialog(&mut self, state: TransferRenameState) {
+        self.file_ops.open_rename(state);
+    }
+
+    pub(in crate::features) fn close_rename_dialog(&mut self) {
+        self.file_ops.close_rename();
+    }
+
+    pub(in crate::features) fn set_rename_value(&mut self, value: String) -> bool {
+        self.file_ops.set_rename_value(value)
+    }
+
+    pub(in crate::features) fn rename_focus(&self) -> &FocusHandle {
+        &self.file_ops.rename_focus
+    }
+
+    pub(in crate::features) fn schedule_rename_focus(&mut self) {
+        self.file_ops.schedule_rename_focus();
+    }
+
+    pub(in crate::features) fn rename_focus_is_pending(&self) -> bool {
+        self.file_ops.rename_focus_pending
+    }
+
+    pub(in crate::features) fn take_pending_rename_focus(&mut self) -> Option<FocusHandle> {
+        self.file_ops.take_pending_rename_focus()
+    }
+
+    pub(in crate::features) fn move_dialog(&self) -> Option<&TransferMoveState> {
+        self.file_ops.move_to.as_ref()
+    }
+
+    pub(in crate::features) fn open_move_dialog(&mut self, state: TransferMoveState) {
+        self.file_ops.move_to = Some(state);
+    }
+
+    pub(in crate::features) fn close_move_dialog(&mut self) {
+        self.file_ops.move_to = None;
+    }
+
+    pub(in crate::features) fn set_move_value(&mut self, value: String) -> bool {
+        let Some(state) = self.file_ops.move_to.as_mut() else {
+            return false;
+        };
+        state.value = value;
+        true
+    }
+
+    pub(in crate::features) fn move_focus(&self) -> &FocusHandle {
+        &self.file_ops.move_focus
+    }
+
+    pub(in crate::features) fn delete_dialog(&self) -> Option<&TransferDeleteState> {
+        self.file_ops.delete.as_ref()
+    }
+
+    pub(in crate::features) fn open_delete_dialog(&mut self, state: TransferDeleteState) {
+        self.file_ops.delete = Some(state);
+    }
+
+    pub(in crate::features) fn close_delete_dialog(&mut self) {
+        self.file_ops.delete = None;
+    }
+
+    pub(in crate::features) fn take_delete_dialog(&mut self) -> Option<TransferDeleteState> {
+        self.file_ops.delete.take()
+    }
+
+    pub(in crate::features) fn delete_focus(&self) -> &FocusHandle {
+        &self.file_ops.delete_focus
+    }
+
+    pub(in crate::features) fn new_folder_dialog(&self) -> Option<&TransferNewFolderState> {
+        self.file_ops.new_folder.as_ref()
+    }
+
+    pub(in crate::features) fn open_new_folder_dialog(&mut self, state: TransferNewFolderState) {
+        self.file_ops.new_folder = Some(state);
+    }
+
+    pub(in crate::features) fn close_new_folder_dialog(&mut self) {
+        self.file_ops.new_folder = None;
+    }
+
+    pub(in crate::features) fn set_new_folder_name(&mut self, value: String) -> bool {
+        let Some(state) = self.file_ops.new_folder.as_mut() else {
+            return false;
+        };
+        state.value = value;
+        true
+    }
+
+    pub(in crate::features) fn toggle_new_folder_open_after_create(&mut self) -> bool {
+        let Some(state) = self.file_ops.new_folder.as_mut() else {
+            return false;
+        };
+        state.open_after_create = !state.open_after_create;
+        true
+    }
+
+    pub(in crate::features) fn toggle_new_folder_mode_bit(&mut self, bit: u32) -> bool {
+        let Some(state) = self.file_ops.new_folder.as_mut() else {
+            return false;
+        };
+        state.mode ^= bit;
+        true
+    }
+
+    pub(in crate::features) fn new_folder_focus(&self) -> &FocusHandle {
+        &self.file_ops.new_folder_focus
+    }
+
+    pub(in crate::features) fn new_file_dialog(&self) -> Option<&TransferNewFileState> {
+        self.file_ops.new_file.as_ref()
+    }
+
+    pub(in crate::features) fn open_new_file_dialog(&mut self, state: TransferNewFileState) {
+        self.file_ops.new_file = Some(state);
+    }
+
+    pub(in crate::features) fn close_new_file_dialog(&mut self) {
+        self.file_ops.new_file = None;
+    }
+
+    pub(in crate::features) fn set_new_file_name(&mut self, value: String) -> bool {
+        let Some(state) = self.file_ops.new_file.as_mut() else {
+            return false;
+        };
+        state.value = value;
+        true
+    }
+
+    pub(in crate::features) fn toggle_new_file_open_after_create(&mut self) -> bool {
+        let Some(state) = self.file_ops.new_file.as_mut() else {
+            return false;
+        };
+        state.open_after_create = !state.open_after_create;
+        true
+    }
+
+    pub(in crate::features) fn toggle_new_file_mode_bit(&mut self, bit: u32) -> bool {
+        let Some(state) = self.file_ops.new_file.as_mut() else {
+            return false;
+        };
+        state.mode ^= bit;
+        true
+    }
+
+    pub(in crate::features) fn new_file_focus(&self) -> &FocusHandle {
+        &self.file_ops.new_file_focus
+    }
+
+    pub(in crate::features) fn new_symlink_dialog(&self) -> Option<&TransferNewSymlinkState> {
+        self.file_ops.new_symlink.as_ref()
+    }
+
+    pub(in crate::features) fn open_new_symlink_dialog(&mut self, state: TransferNewSymlinkState) {
+        self.file_ops.new_symlink = Some(state);
+    }
+
+    pub(in crate::features) fn close_new_symlink_dialog(&mut self) {
+        self.file_ops.new_symlink = None;
+    }
+
+    pub(in crate::features) fn set_new_symlink_input(
+        &mut self,
+        field: crate::models::TransferSymlinkField,
+        value: String,
+    ) -> bool {
+        let Some(state) = self.file_ops.new_symlink.as_mut() else {
+            return false;
+        };
+        state.focused_field = field;
+        match field {
+            crate::models::TransferSymlinkField::Name => state.name = value,
+            crate::models::TransferSymlinkField::Target => state.target = value,
+        }
+        true
+    }
+
+    pub(in crate::features) fn new_symlink_focus(&self) -> &FocusHandle {
+        &self.file_ops.new_symlink_focus
+    }
+
+    pub(in crate::features) fn properties_dialog(&self) -> Option<&TransferPropertiesState> {
+        self.file_ops.properties.as_ref()
+    }
+
+    pub(in crate::features) fn properties_dialog_is_open_for_session(
+        &self,
+        session_id: Option<&str>,
+    ) -> bool {
+        self.file_ops.properties_matches(session_id, None)
+    }
+
+    pub(in crate::features) fn open_properties_dialog(&mut self, state: TransferPropertiesState) {
+        self.file_ops.properties = Some(state);
+    }
+
+    pub(in crate::features) fn close_properties_dialog(&mut self) {
+        self.file_ops.properties = None;
+    }
+
+    pub(in crate::features) fn close_properties_dialog_for_session(
+        &mut self,
+        session_id: &str,
+    ) -> bool {
+        if !self.file_ops.properties_matches(Some(session_id), None) {
+            return false;
+        }
+        self.file_ops.properties = None;
+        true
+    }
+
+    pub(in crate::features) fn set_properties_focused_field(
+        &mut self,
+        field: crate::models::TransferPropertiesField,
+    ) -> Option<String> {
+        let state = self.file_ops.properties.as_mut()?;
+        state.focused_field = field;
+        Some(match field {
+            crate::models::TransferPropertiesField::Mode => state.mode_value.clone(),
+            crate::models::TransferPropertiesField::Owner => state.owner_value.clone(),
+            crate::models::TransferPropertiesField::Group => state.group_value.clone(),
+        })
+    }
+
+    pub(in crate::features) fn next_properties_field(
+        &self,
+    ) -> Option<crate::models::TransferPropertiesField> {
+        self.file_ops
+            .properties
+            .as_ref()
+            .map(|state| match state.focused_field {
+                crate::models::TransferPropertiesField::Mode => {
+                    crate::models::TransferPropertiesField::Owner
+                }
+                crate::models::TransferPropertiesField::Owner => {
+                    crate::models::TransferPropertiesField::Group
+                }
+                crate::models::TransferPropertiesField::Group => {
+                    crate::models::TransferPropertiesField::Mode
+                }
+            })
+    }
+
+    pub(in crate::features) fn set_properties_input(
+        &mut self,
+        field: crate::models::TransferPropertiesField,
+        value: String,
+    ) -> bool {
+        let Some(state) = self.file_ops.properties.as_mut() else {
+            return false;
+        };
+        match field {
+            crate::models::TransferPropertiesField::Mode => state.mode_value = value,
+            crate::models::TransferPropertiesField::Owner => state.owner_value = value,
+            crate::models::TransferPropertiesField::Group => state.group_value = value,
+        }
+        state.focused_field = field;
+        state.error = None;
+        true
+    }
+
+    pub(in crate::features) fn properties_input_values(&self) -> Option<(String, String, String)> {
+        self.file_ops.properties.as_ref().map(|state| {
+            (
+                state.mode_value.clone(),
+                state.owner_value.clone(),
+                state.group_value.clone(),
+            )
+        })
+    }
+
+    pub(in crate::features) fn set_properties_mode_value(&mut self, value: String) -> bool {
+        let Some(state) = self.file_ops.properties.as_mut() else {
+            return false;
+        };
+        state.mode_value = value;
+        true
+    }
+
+    pub(in crate::features) fn toggle_properties_recursive(&mut self) -> bool {
+        let Some(state) = self.file_ops.properties.as_mut() else {
+            return false;
+        };
+        state.recursive = !state.recursive;
+        true
+    }
+
+    pub(in crate::features) fn set_properties_error(&mut self, error: String) -> bool {
+        let Some(state) = self.file_ops.properties.as_mut() else {
+            return false;
+        };
+        state.saving = false;
+        state.error = Some(error);
+        true
+    }
+
+    pub(in crate::features) fn begin_properties_save(&mut self) -> bool {
+        let Some(state) = self.file_ops.properties.as_mut() else {
+            return false;
+        };
+        state.saving = true;
+        state.error = None;
+        true
+    }
+
+    pub(in crate::features) fn complete_properties_load(
+        &mut self,
+        session_id: Option<&str>,
+        remote_path: &str,
+        properties: SftpFileProperties,
+        mode_value: String,
+        owner_value: String,
+        group_value: String,
+    ) -> bool {
+        let Some(state) = self
+            .file_ops
+            .matching_properties_mut(session_id, remote_path)
+        else {
+            return false;
+        };
+        state.mode_value = mode_value;
+        state.owner_value = owner_value;
+        state.group_value = group_value;
+        state.properties = Some(properties);
+        state.error = None;
+        true
+    }
+
+    pub(in crate::features) fn complete_properties_update(
+        &mut self,
+        session_id: Option<&str>,
+        remote_path: &str,
+        properties: SftpFileProperties,
+    ) -> bool {
+        let Some(state) = self
+            .file_ops
+            .matching_properties_mut(session_id, remote_path)
+        else {
+            return false;
+        };
+        state.properties = Some(properties);
+        state.saving = false;
+        state.error = None;
+        self.file_ops.properties = None;
+        true
+    }
+
+    pub(in crate::features) fn fail_properties_operation(
+        &mut self,
+        session_id: Option<&str>,
+        remote_path: &str,
+        error: String,
+    ) -> bool {
+        let Some(state) = self
+            .file_ops
+            .matching_properties_mut(session_id, remote_path)
+        else {
+            return false;
+        };
+        state.saving = false;
+        state.error = Some(error);
+        true
+    }
+
+    pub(in crate::features) fn properties_focus(&self) -> &FocusHandle {
+        &self.file_ops.properties_focus
+    }
+
+    pub(in crate::features) fn unknown_file_dialog(&self) -> Option<&TransferUnknownFileState> {
+        self.file_ops.unknown_file.as_ref()
+    }
+
+    pub(in crate::features) fn open_unknown_file_dialog(
+        &mut self,
+        state: TransferUnknownFileState,
+    ) {
+        self.file_ops.unknown_file = Some(state);
+    }
+
+    pub(in crate::features) fn close_unknown_file_dialog(&mut self) {
+        self.file_ops.unknown_file = None;
+    }
+
+    pub(in crate::features) fn take_unknown_file_dialog(
+        &mut self,
+    ) -> Option<TransferUnknownFileState> {
+        self.file_ops.unknown_file.take()
+    }
+
+    pub(in crate::features) fn unknown_file_focus(&self) -> &FocusHandle {
+        &self.file_ops.unknown_file_focus
+    }
+
     pub(in crate::features) fn remote_path(&self) -> &str {
         self.paths.remote_path()
     }
@@ -485,6 +871,82 @@ impl TransferFeatureState {
 
     pub(in crate::features) fn finish_panel_height_resize(&mut self) -> bool {
         self.panel.finish_height_resize()
+    }
+}
+
+impl TransferFileOpsState {
+    fn new(focus: &TransferFeatureFocus) -> Self {
+        Self {
+            rename: None,
+            rename_focus_pending: false,
+            rename_focus: focus.rename.clone(),
+            move_to: None,
+            move_focus: focus.move_to.clone(),
+            delete: None,
+            delete_focus: focus.delete.clone(),
+            new_folder: None,
+            new_folder_focus: focus.new_folder.clone(),
+            new_file: None,
+            new_file_focus: focus.new_file.clone(),
+            new_symlink: None,
+            new_symlink_focus: focus.new_symlink.clone(),
+            properties: None,
+            properties_focus: focus.properties.clone(),
+            unknown_file: None,
+            unknown_file_focus: focus.unknown_file.clone(),
+        }
+    }
+
+    fn rename(&self) -> Option<&TransferRenameState> {
+        self.rename.as_ref()
+    }
+
+    fn open_rename(&mut self, state: TransferRenameState) {
+        self.rename = Some(state);
+        self.rename_focus_pending = false;
+    }
+
+    fn close_rename(&mut self) {
+        self.rename = None;
+        self.rename_focus_pending = false;
+    }
+
+    fn set_rename_value(&mut self, value: String) -> bool {
+        let Some(state) = self.rename.as_mut() else {
+            return false;
+        };
+        state.value = value;
+        true
+    }
+
+    fn schedule_rename_focus(&mut self) {
+        self.rename_focus_pending = self.rename.is_some();
+    }
+
+    fn take_pending_rename_focus(&mut self) -> Option<FocusHandle> {
+        if !self.rename_focus_pending || self.rename.is_none() {
+            self.rename_focus_pending = false;
+            return None;
+        }
+        self.rename_focus_pending = false;
+        Some(self.rename_focus.clone())
+    }
+
+    fn properties_matches(&self, session_id: Option<&str>, remote_path: Option<&str>) -> bool {
+        self.properties.as_ref().is_some_and(|state| {
+            state.session_id.as_deref() == session_id
+                && remote_path.is_none_or(|path| state.entry.path == path)
+        })
+    }
+
+    fn matching_properties_mut(
+        &mut self,
+        session_id: Option<&str>,
+        remote_path: &str,
+    ) -> Option<&mut TransferPropertiesState> {
+        self.properties.as_mut().filter(|state| {
+            state.session_id.as_deref() == session_id && state.entry.path == remote_path
+        })
     }
 }
 
@@ -925,14 +1387,81 @@ mod tests {
     use std::sync::mpsc;
 
     use gpui::{TestAppContext, px};
-    use nyaterm_transport::{SftpDuplicatePolicy, SftpTransferControl};
+    use nyaterm_transport::{
+        SftpDuplicatePolicy, SftpFileEntry, SftpFileProperties, SftpFileType, SftpTransferControl,
+    };
 
     use crate::models::{
         TransferJobEvent, TransferJobKind, TransferJobResult, TransferJobState, TransferJobStatus,
-        TransferPathPromptKind,
+        TransferNewFolderState, TransferPathPromptKind, TransferPropertiesField,
+        TransferPropertiesState, TransferRenameState,
     };
 
-    use super::{TransferPanelState, TransferPathState, TransferQueueState};
+    use super::{
+        TransferFeatureFocus, TransferFeatureState, TransferPanelState, TransferPathState,
+        TransferQueueState,
+    };
+
+    fn transfer_focus(cx: &TestAppContext) -> TransferFeatureFocus {
+        cx.update(|cx| TransferFeatureFocus {
+            panel: cx.focus_handle(),
+            queue: cx.focus_handle(),
+            job_delete: cx.focus_handle(),
+            download_path: cx.focus_handle(),
+            browser: cx.focus_handle(),
+            rename: cx.focus_handle(),
+            move_to: cx.focus_handle(),
+            delete: cx.focus_handle(),
+            new_folder: cx.focus_handle(),
+            new_file: cx.focus_handle(),
+            new_symlink: cx.focus_handle(),
+            properties: cx.focus_handle(),
+            unknown_file: cx.focus_handle(),
+            editor: cx.focus_handle(),
+            default_editor: cx.focus_handle(),
+            external_sync: cx.focus_handle(),
+        })
+    }
+
+    fn transfer_state(cx: &TestAppContext) -> TransferFeatureState {
+        TransferFeatureState::new(
+            ".".to_string(),
+            String::new(),
+            SftpDuplicatePolicy::Ask,
+            180.,
+            transfer_focus(cx),
+        )
+    }
+
+    fn file_entry(path: &str) -> SftpFileEntry {
+        SftpFileEntry {
+            name: path.rsplit('/').next().unwrap_or(path).to_string(),
+            path: path.to_string(),
+            file_type: SftpFileType::File,
+            size: Some(12),
+            permissions: Some(0o640),
+            owner: "owner".to_string(),
+            group: "group".to_string(),
+            modified_at: Some(1),
+        }
+    }
+
+    fn file_properties(path: &str) -> SftpFileProperties {
+        SftpFileProperties {
+            name: path.rsplit('/').next().unwrap_or(path).to_string(),
+            path: path.to_string(),
+            file_type: SftpFileType::File,
+            size: Some(12),
+            permissions: Some(0o600),
+            permissions_symbolic: "rw-------".to_string(),
+            owner: "updated-owner".to_string(),
+            group: "updated-group".to_string(),
+            uid: Some(1000),
+            gid: Some(1000),
+            modified_at: Some(2),
+            accessed_at: Some(3),
+        }
+    }
 
     fn transfer_queue(cx: &TestAppContext) -> TransferQueueState {
         let (tx, rx) = mpsc::channel();
@@ -1009,6 +1538,138 @@ mod tests {
         panel.start_height_resize(px(400.));
         assert_eq!(panel.update_height_resize(px(-200.)), Some(600.));
         assert!(panel.finish_height_resize());
+    }
+
+    #[test]
+    fn transfer_file_ops_own_rename_focus_and_creation_options() {
+        let cx = TestAppContext::single();
+        let mut transfer = transfer_state(&cx);
+
+        transfer.schedule_rename_focus();
+        assert!(!transfer.rename_focus_is_pending());
+        transfer.open_rename_dialog(TransferRenameState {
+            old_path: "/srv/old".to_string(),
+            initial_name: "old".to_string(),
+            value: "old".to_string(),
+        });
+        transfer.schedule_rename_focus();
+        assert!(transfer.rename_focus_is_pending());
+        assert!(transfer.take_pending_rename_focus().is_some());
+        assert!(!transfer.rename_focus_is_pending());
+        transfer.schedule_rename_focus();
+        transfer.close_rename_dialog();
+        assert!(transfer.take_pending_rename_focus().is_none());
+
+        transfer.open_new_folder_dialog(TransferNewFolderState {
+            parent_path: "/srv".to_string(),
+            value: String::new(),
+            mode: 0o755,
+            open_after_create: false,
+        });
+        assert!(transfer.set_new_folder_name("logs".to_string()));
+        assert!(transfer.toggle_new_folder_open_after_create());
+        assert!(transfer.toggle_new_folder_mode_bit(0o020));
+        let folder = transfer
+            .new_folder_dialog()
+            .expect("new folder dialog should remain open");
+        assert_eq!(folder.value, "logs");
+        assert!(folder.open_after_create);
+        assert_eq!(folder.mode, 0o775);
+    }
+
+    #[test]
+    fn transfer_properties_ignore_stale_results_and_close_for_the_owner_session() {
+        let cx = TestAppContext::single();
+        let mut transfer = transfer_state(&cx);
+        transfer.open_properties_dialog(TransferPropertiesState {
+            session_id: Some("session-a".to_string()),
+            entry: file_entry("/srv/file.txt"),
+            properties: None,
+            mode_value: "0640".to_string(),
+            owner_value: String::new(),
+            group_value: String::new(),
+            recursive: false,
+            saving: false,
+            error: None,
+            focused_field: TransferPropertiesField::Mode,
+        });
+
+        assert!(!transfer.complete_properties_load(
+            Some("session-b"),
+            "/srv/file.txt",
+            file_properties("/srv/file.txt"),
+            "0600".to_string(),
+            "updated-owner".to_string(),
+            "updated-group".to_string(),
+        ));
+        assert!(
+            transfer
+                .properties_dialog()
+                .is_some_and(|state| state.properties.is_none())
+        );
+
+        assert!(transfer.complete_properties_load(
+            Some("session-a"),
+            "/srv/file.txt",
+            file_properties("/srv/file.txt"),
+            "0600".to_string(),
+            "updated-owner".to_string(),
+            "updated-group".to_string(),
+        ));
+        assert_eq!(
+            transfer
+                .properties_dialog()
+                .map(|state| state.owner_value.as_str()),
+            Some("updated-owner")
+        );
+        assert!(transfer.begin_properties_save());
+        assert!(!transfer.fail_properties_operation(
+            Some("session-b"),
+            "/srv/file.txt",
+            "stale".to_string(),
+        ));
+        assert!(
+            transfer
+                .properties_dialog()
+                .is_some_and(|state| state.saving && state.error.is_none())
+        );
+        assert!(transfer.fail_properties_operation(
+            Some("session-a"),
+            "/srv/file.txt",
+            "denied".to_string(),
+        ));
+        assert!(
+            transfer
+                .properties_dialog()
+                .is_some_and(|state| { !state.saving && state.error.as_deref() == Some("denied") })
+        );
+        assert!(!transfer.close_properties_dialog_for_session("session-b"));
+        assert!(transfer.close_properties_dialog_for_session("session-a"));
+        assert!(transfer.properties_dialog().is_none());
+
+        transfer.open_properties_dialog(TransferPropertiesState {
+            session_id: Some("session-a".to_string()),
+            entry: file_entry("/srv/file.txt"),
+            properties: Some(file_properties("/srv/file.txt")),
+            mode_value: "0600".to_string(),
+            owner_value: "updated-owner".to_string(),
+            group_value: "updated-group".to_string(),
+            recursive: false,
+            saving: true,
+            error: None,
+            focused_field: TransferPropertiesField::Mode,
+        });
+        assert!(!transfer.complete_properties_update(
+            Some("session-a"),
+            "/srv/other.txt",
+            file_properties("/srv/other.txt"),
+        ));
+        assert!(transfer.complete_properties_update(
+            Some("session-a"),
+            "/srv/file.txt",
+            file_properties("/srv/file.txt"),
+        ));
+        assert!(transfer.properties_dialog().is_none());
     }
 
     #[test]

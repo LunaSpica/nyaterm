@@ -234,15 +234,8 @@ impl NyaTermApp {
             .external_sync
             .window_open_pending
             .retain(|prompt_id| self.transfer.external_sync.prompts.contains_key(prompt_id));
-        if self
-            .transfer
-            .file_ops
-            .properties
-            .as_ref()
-            .is_some_and(|state| state.session_id.as_deref() == Some(session_id))
-        {
-            self.transfer.file_ops.properties = None;
-        }
+        self.transfer
+            .close_properties_dialog_for_session(session_id);
         if let Some(workspace) = self.transfer.editor.workspace.as_mut() {
             let active_removed = workspace
                 .active_tab()

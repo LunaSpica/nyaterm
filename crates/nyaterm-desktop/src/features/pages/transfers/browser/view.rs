@@ -306,7 +306,7 @@ impl NyaTermApp {
             let window_end = (window_start + window_capacity).min(total_entries);
             // Only one row renames at a time, so its box is built once here: the
             // loop below borrows `self` and cannot create one.
-            let renaming = self.transfer.file_ops.rename.clone();
+            let renaming = self.transfer.rename_dialog().cloned();
             let mut rename_input = renaming.as_ref().map(|state| {
                 self.text_input_box(
                     format!("transfer.rename.{}", state.old_path),

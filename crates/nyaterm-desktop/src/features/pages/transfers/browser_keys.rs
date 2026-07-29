@@ -23,7 +23,7 @@ impl NyaTermApp {
             return;
         }
 
-        if self.transfer.file_ops.rename.is_none()
+        if !self.transfer.rename_dialog_is_open()
             && let Some(text) = transfer_browser_search_text_for_key(event)
         {
             cx.stop_propagation();
@@ -79,7 +79,7 @@ impl NyaTermApp {
             &self.settings.summary.keybindings,
         ) && self.selected_transfer_entries().len() == 1
             && self.session.active_ssh_config().is_some()
-            && self.transfer.file_ops.rename.is_none()
+            && !self.transfer.rename_dialog_is_open()
         {
             cx.stop_propagation();
             self.open_transfer_rename_dialog(window, cx);
@@ -89,7 +89,7 @@ impl NyaTermApp {
         if keystroke.key == "delete"
             && unmodified
             && !self.selected_transfer_entries().is_empty()
-            && self.transfer.file_ops.delete.is_none()
+            && self.transfer.delete_dialog().is_none()
         {
             cx.stop_propagation();
             self.open_selected_transfer_delete_dialog(window, cx);

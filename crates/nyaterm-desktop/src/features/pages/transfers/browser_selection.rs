@@ -142,7 +142,7 @@ impl NyaTermApp {
         if !was_single_selected_on_mouse_down
             || event.click_count() != 1
             || modifiers.modified()
-            || self.transfer.file_ops.rename.is_some()
+            || self.transfer.rename_dialog_is_open()
         {
             if event.click_count() >= 2 || modifiers.modified() {
                 self.cancel_transfer_browser_pending_rename(cx);
@@ -176,7 +176,7 @@ impl NyaTermApp {
                     && this.transfer.browser.selected_remote_path.as_deref() == Some(path.as_str())
                     && this.transfer.browser.selected_remote_paths.len() == 1
                     && this.transfer.browser.selected_remote_paths.contains(&path)
-                    && this.transfer.file_ops.rename.is_none();
+                    && !this.transfer.rename_dialog_is_open();
 
                 this.transfer.browser.pending_rename = None;
                 if should_rename {

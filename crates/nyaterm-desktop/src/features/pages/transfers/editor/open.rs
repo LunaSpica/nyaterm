@@ -206,9 +206,10 @@ impl NyaTermApp {
                 self.open_transfer_external(entry, window, cx);
             }
             RemoteFileTextKind::Unknown => {
-                self.transfer.file_ops.unknown_file = Some(TransferUnknownFileState { entry });
+                self.transfer
+                    .open_unknown_file_dialog(TransferUnknownFileState { entry });
                 self.terminal.view.status = "confirm how to open unknown remote file".to_string();
-                window.focus(&self.transfer.file_ops.unknown_file_focus);
+                window.focus(self.transfer.unknown_file_focus());
                 cx.notify();
             }
         }
@@ -285,7 +286,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn cancel_transfer_unknown_file(&mut self, cx: &mut Context<Self>) {
-        self.transfer.file_ops.unknown_file = None;
+        self.transfer.close_unknown_file_dialog();
         self.terminal.view.status = "unknown file open cancelled".to_string();
         cx.notify();
     }
@@ -295,7 +296,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.transfer.file_ops.unknown_file.take() else {
+        let Some(state) = self.transfer.take_unknown_file_dialog() else {
             cx.notify();
             return;
         };
@@ -307,7 +308,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.transfer.file_ops.unknown_file.take() else {
+        let Some(state) = self.transfer.take_unknown_file_dialog() else {
             cx.notify();
             return;
         };

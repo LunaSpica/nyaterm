@@ -18,9 +18,8 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         let state =
             self.transfer
-                .file_ops
-                .unknown_file
-                .clone()
+                .unknown_file_dialog()
+                .cloned()
                 .unwrap_or(TransferUnknownFileState {
                     entry: SftpFileEntry {
                         name: String::new(),
@@ -54,9 +53,9 @@ impl NyaTermApp {
             .flex()
             .items_center()
             .justify_center()
-            .track_focus(&self.transfer.file_ops.unknown_file_focus)
+            .track_focus(self.transfer.unknown_file_focus())
             .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(&this.transfer.file_ops.unknown_file_focus);
+                window.focus(this.transfer.unknown_file_focus());
                 cx.notify();
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {

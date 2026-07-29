@@ -23,15 +23,16 @@ impl NyaTermApp {
         } else {
             self.transfer.browser.path.clone()
         };
-        self.transfer.file_ops.new_symlink = Some(TransferNewSymlinkState {
-            parent_path,
-            name: "new-link".to_string(),
-            target: String::new(),
-            focused_field: TransferSymlinkField::Name,
-        });
+        self.transfer
+            .open_new_symlink_dialog(TransferNewSymlinkState {
+                parent_path,
+                name: "new-link".to_string(),
+                target: String::new(),
+                focused_field: TransferSymlinkField::Name,
+            });
         self.forget_text_inputs("transfer.new-symlink.");
         self.terminal.view.status = "SFTP new symlink opened".to_string();
-        window.focus(&self.transfer.file_ops.new_symlink_focus);
+        window.focus(self.transfer.new_symlink_focus());
         cx.notify();
     }
 
@@ -39,7 +40,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        self.transfer.file_ops.new_symlink = None;
+        self.transfer.close_new_symlink_dialog();
         self.forget_text_inputs("transfer.new-symlink.");
         self.terminal.view.status = "SFTP new symlink cancelled".to_string();
         cx.notify();
@@ -50,7 +51,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.transfer.file_ops.new_symlink.clone() else {
+        let Some(state) = self.transfer.new_symlink_dialog().cloned() else {
             self.terminal.view.status = "no SFTP new symlink is active".to_string();
             cx.notify();
             return;
@@ -67,7 +68,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        self.transfer.file_ops.new_symlink = None;
+        self.transfer.close_new_symlink_dialog();
         let link_path = remote_child_path(&state.parent_path, &name);
         self.start_sftp_symlink_job(link_path, target_path, state.parent_path, window, cx);
     }
@@ -102,15 +103,13 @@ impl NyaTermApp {
         text: String,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.transfer.file_ops.new_symlink.as_mut() else {
-            return;
+        let value = match field {
+            TransferSymlinkField::Name => text.chars().take(255).collect(),
+            TransferSymlinkField::Target => text.chars().take(1024).collect(),
         };
-        state.focused_field = field;
-        match field {
-            TransferSymlinkField::Name => state.name = text.chars().take(255).collect(),
-            TransferSymlinkField::Target => state.target = text.chars().take(1024).collect(),
+        if self.transfer.set_new_symlink_input(field, value) {
+            cx.notify();
         }
-        cx.notify();
     }
 
     pub(in crate::features) fn start_sftp_symlink_job(
@@ -180,7 +179,7 @@ impl NyaTermApp {
         if !self.open_transfer_rename_for_path(old_path, cx) {
             return;
         }
-        window.focus(&self.transfer.file_ops.rename_focus);
+        window.focus(self.transfer.rename_focus());
         cx.notify();
     }
 
@@ -190,7 +189,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if self.open_transfer_rename_for_path(old_path, cx) {
-            self.transfer.file_ops.rename_focus_pending = true;
+            self.transfer.schedule_rename_focus();
             cx.notify();
         }
     }
@@ -207,7 +206,7 @@ impl NyaTermApp {
             cx.notify();
             return false;
         }
-        self.transfer.file_ops.rename = Some(TransferRenameState {
+        self.transfer.open_rename_dialog(TransferRenameState {
             old_path,
             value: initial_name.clone(),
             initial_name,
@@ -218,8 +217,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn close_transfer_rename_dialog(&mut self, cx: &mut Context<Self>) {
         self.forget_text_inputs("transfer.rename.");
-        self.transfer.file_ops.rename = None;
-        self.transfer.file_ops.rename_focus_pending = false;
+        self.transfer.close_rename_dialog();
         self.terminal.view.status = "SFTP rename cancelled".to_string();
         cx.notify();
     }
@@ -229,7 +227,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.transfer.file_ops.rename.clone() else {
+        let Some(state) = self.transfer.rename_dialog().cloned() else {
             self.terminal.view.status = "no SFTP rename is active".to_string();
             cx.notify();
             return;
@@ -247,13 +245,13 @@ impl NyaTermApp {
             return;
         }
         if new_name == state.initial_name {
-            self.transfer.file_ops.rename = None;
+            self.transfer.close_rename_dialog();
             self.terminal.view.status = "SFTP rename unchanged".to_string();
             cx.notify();
             return;
         }
         let new_path = remote_sibling_path(&state.old_path, &new_name);
-        self.transfer.file_ops.rename = None;
+        self.transfer.close_rename_dialog();
         self.start_sftp_rename_job(state.old_path, new_path, window, cx);
     }
 
@@ -289,11 +287,12 @@ impl NyaTermApp {
         text: String,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.transfer.file_ops.rename.as_mut() else {
-            return;
-        };
-        state.value = text.chars().take(255).collect();
-        cx.notify();
+        if self
+            .transfer
+            .set_rename_value(text.chars().take(255).collect())
+        {
+            cx.notify();
+        }
     }
 
     pub(in crate::features) fn start_sftp_rename_job(

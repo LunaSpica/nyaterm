@@ -26,9 +26,8 @@ impl NyaTermApp {
         let dialog_width = transfer_dialog_width(self.shell.viewport.size.0, 500.);
         let state = self
             .transfer
-            .file_ops
-            .new_folder
-            .clone()
+            .new_folder_dialog()
+            .cloned()
             .unwrap_or(TransferNewFolderState {
                 parent_path: String::new(),
                 value: String::new(),
@@ -57,7 +56,7 @@ impl NyaTermApp {
             .flex()
             .items_center()
             .justify_center()
-            .track_focus(&self.transfer.file_ops.new_folder_focus)
+            .track_focus(self.transfer.new_folder_focus())
             // No blanket focus grab: click follows mouse-down, so it would take
             // focus straight back off the box the pointer landed on.
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
@@ -153,11 +152,7 @@ impl NyaTermApp {
                                     .gap_2()
                                     .cursor_pointer()
                                     .on_click(cx.listener(|this, _, _, cx| {
-                                        if let Some(state) =
-                                            this.transfer.file_ops.new_folder.as_mut()
-                                        {
-                                            state.open_after_create = !state.open_after_create;
-                                        }
+                                        this.transfer.toggle_new_folder_open_after_create();
                                         cx.notify();
                                     }))
                                     .child(
@@ -231,9 +226,8 @@ impl NyaTermApp {
         let dialog_width = transfer_dialog_width(self.shell.viewport.size.0, 500.);
         let state = self
             .transfer
-            .file_ops
-            .new_file
-            .clone()
+            .new_file_dialog()
+            .cloned()
             .unwrap_or(TransferNewFileState {
                 parent_path: String::new(),
                 value: String::new(),
@@ -262,7 +256,7 @@ impl NyaTermApp {
             .flex()
             .items_center()
             .justify_center()
-            .track_focus(&self.transfer.file_ops.new_file_focus)
+            .track_focus(self.transfer.new_file_focus())
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 cx.stop_propagation();
                 this.handle_transfer_new_file_key_down(event, window, cx);
@@ -356,11 +350,7 @@ impl NyaTermApp {
                                     .gap_2()
                                     .cursor_pointer()
                                     .on_click(cx.listener(|this, _, _, cx| {
-                                        if let Some(state) =
-                                            this.transfer.file_ops.new_file.as_mut()
-                                        {
-                                            state.open_after_create = !state.open_after_create;
-                                        }
+                                        this.transfer.toggle_new_file_open_after_create();
                                         cx.notify();
                                     }))
                                     .child(
@@ -432,17 +422,16 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         let dialog_width = transfer_dialog_width(self.shell.viewport.size.0, 480.);
-        let state = self
-            .transfer
-            .file_ops
-            .new_symlink
-            .clone()
-            .unwrap_or(TransferNewSymlinkState {
-                parent_path: String::new(),
-                name: String::new(),
-                target: String::new(),
-                focused_field: TransferSymlinkField::Name,
-            });
+        let state =
+            self.transfer
+                .new_symlink_dialog()
+                .cloned()
+                .unwrap_or(TransferNewSymlinkState {
+                    parent_path: String::new(),
+                    name: String::new(),
+                    target: String::new(),
+                    focused_field: TransferSymlinkField::Name,
+                });
         let name = state.name.trim();
         let target = state.target.trim();
         let name_invalid = !name.is_empty() && !valid_remote_child_name(name);
@@ -475,7 +464,7 @@ impl NyaTermApp {
             .flex()
             .items_center()
             .justify_center()
-            .track_focus(&self.transfer.file_ops.new_symlink_focus)
+            .track_focus(self.transfer.new_symlink_focus())
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 cx.stop_propagation();
                 this.handle_transfer_new_symlink_key_down(event, window, cx);
@@ -684,21 +673,18 @@ impl NyaTermApp {
     ) {
         match target {
             TransferPermissionTarget::NewFolder => {
-                if let Some(state) = self.transfer.file_ops.new_folder.as_mut() {
-                    state.mode ^= bit;
-                }
+                self.transfer.toggle_new_folder_mode_bit(bit);
             }
             TransferPermissionTarget::NewFile => {
-                if let Some(state) = self.transfer.file_ops.new_file.as_mut() {
-                    state.mode ^= bit;
-                }
+                self.transfer.toggle_new_file_mode_bit(bit);
             }
             TransferPermissionTarget::Properties => {
-                if let Some(state) = self.transfer.file_ops.properties.as_mut() {
+                if let Some(state) = self.transfer.properties_dialog() {
                     let current = parse_transfer_mode(&state.mode_value)
                         .or(state.entry.permissions)
                         .unwrap_or(0o644);
-                    state.mode_value = format_permissions_octal(current ^ bit);
+                    self.transfer
+                        .set_properties_mode_value(format_permissions_octal(current ^ bit));
                 }
                 self.sync_transfer_properties_inputs(cx);
             }

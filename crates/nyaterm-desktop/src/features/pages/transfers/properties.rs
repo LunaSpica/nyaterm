@@ -49,12 +49,13 @@ impl NyaTermApp {
             return;
         };
         self.forget_text_inputs("transfer.properties.");
-        self.transfer.file_ops.properties = Some(transfer_properties_state_from_entry(
-            entry.clone(),
-            self.session.active_id_owned(),
-        ));
+        self.transfer
+            .open_properties_dialog(transfer_properties_state_from_entry(
+                entry.clone(),
+                self.session.active_id_owned(),
+            ));
         self.terminal.view.status = "remote properties opened".to_string();
-        window.focus(&self.transfer.file_ops.properties_focus);
+        window.focus(self.transfer.properties_focus());
         self.start_sftp_properties_load_job(entry.path, window, cx);
         cx.notify();
     }
@@ -68,18 +69,19 @@ impl NyaTermApp {
         self.transfer.browser.selected_remote_path = Some(entry.path.clone());
         self.transfer.set_remote_path(entry.path.clone());
         self.forget_text_inputs("transfer.properties.");
-        self.transfer.file_ops.properties = Some(transfer_properties_state_from_entry(
-            entry.clone(),
-            self.session.active_id_owned(),
-        ));
+        self.transfer
+            .open_properties_dialog(transfer_properties_state_from_entry(
+                entry.clone(),
+                self.session.active_id_owned(),
+            ));
         self.terminal.view.status = "remote properties opened".to_string();
-        window.focus(&self.transfer.file_ops.properties_focus);
+        window.focus(self.transfer.properties_focus());
         self.start_sftp_properties_load_job(entry.path, window, cx);
         cx.notify();
     }
 
     pub(super) fn close_transfer_properties(&mut self, cx: &mut Context<Self>) {
-        self.transfer.file_ops.properties = None;
+        self.transfer.close_properties_dialog();
         self.forget_text_inputs("transfer.properties.");
         self.terminal.view.status = "remote properties closed".to_string();
         cx.notify();
@@ -100,13 +102,7 @@ impl NyaTermApp {
             "escape" => self.close_transfer_properties(cx),
             "enter" => self.submit_transfer_properties(window, cx),
             "tab" => {
-                if let Some(field) = self.transfer.file_ops.properties.as_ref().map(|state| {
-                    match state.focused_field {
-                        TransferPropertiesField::Mode => TransferPropertiesField::Owner,
-                        TransferPropertiesField::Owner => TransferPropertiesField::Group,
-                        TransferPropertiesField::Group => TransferPropertiesField::Mode,
-                    }
-                }) {
+                if let Some(field) = self.transfer.next_properties_field() {
                     self.focus_transfer_properties_field(field, window, cx);
                 }
             }
@@ -120,24 +116,17 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.transfer.file_ops.properties.as_mut() else {
+        let Some(value) = self.transfer.set_properties_focused_field(field) else {
             return;
         };
-        state.focused_field = field;
-        let (id, value, placeholder) = match field {
-            TransferPropertiesField::Mode => {
-                ("transfer.properties.mode", state.mode_value.clone(), "0644")
+        let (id, placeholder) = match field {
+            TransferPropertiesField::Mode => ("transfer.properties.mode", "0644"),
+            TransferPropertiesField::Owner => {
+                ("transfer.properties.owner", self.tr("fileExplorer.owner"))
             }
-            TransferPropertiesField::Owner => (
-                "transfer.properties.owner",
-                state.owner_value.clone(),
-                self.tr("fileExplorer.owner"),
-            ),
-            TransferPropertiesField::Group => (
-                "transfer.properties.group",
-                state.group_value.clone(),
-                self.tr("fileExplorer.group"),
-            ),
+            TransferPropertiesField::Group => {
+                ("transfer.properties.group", self.tr("fileExplorer.group"))
+            }
         };
         let input = self.text_input(id, &value, TextInputSetup::placeholder(placeholder), cx);
         window.focus(&input.read(cx).focus_handle());
@@ -159,16 +148,9 @@ impl NyaTermApp {
             return;
         };
         let filtered = normalize_transfer_properties_input(field, &text);
-        let Some(state) = self.transfer.file_ops.properties.as_mut() else {
+        if !self.transfer.set_properties_input(field, filtered.clone()) {
             return;
-        };
-        match field {
-            TransferPropertiesField::Mode => state.mode_value = filtered.clone(),
-            TransferPropertiesField::Owner => state.owner_value = filtered.clone(),
-            TransferPropertiesField::Group => state.group_value = filtered.clone(),
         }
-        state.focused_field = field;
-        state.error = None;
         if filtered != text {
             self.reset_text_input(&format!("transfer.properties.{field_id}"), &filtered, cx);
         }
@@ -176,12 +158,9 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn sync_transfer_properties_inputs(&mut self, cx: &mut Context<Self>) {
-        let Some(state) = self.transfer.file_ops.properties.as_ref() else {
+        let Some((mode, owner, group)) = self.transfer.properties_input_values() else {
             return;
         };
-        let mode = state.mode_value.clone();
-        let owner = state.owner_value.clone();
-        let group = state.group_value.clone();
         self.reset_text_input("transfer.properties.mode", &mode, cx);
         self.reset_text_input("transfer.properties.owner", &owner, cx);
         self.reset_text_input("transfer.properties.group", &group, cx);
@@ -235,7 +214,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.transfer.file_ops.properties.clone() else {
+        let Some(state) = self.transfer.properties_dialog().cloned() else {
             self.terminal.view.status = "no remote properties dialog is active".to_string();
             cx.notify();
             return;
@@ -248,9 +227,8 @@ impl NyaTermApp {
         let mode = match parse_transfer_mode(&state.mode_value) {
             Some(mode) => mode,
             None => {
-                if let Some(state) = self.transfer.file_ops.properties.as_mut() {
-                    state.error = Some("Mode must be a 3 or 4 digit octal value.".to_string());
-                }
+                self.transfer
+                    .set_properties_error("Mode must be a 3 or 4 digit octal value.".to_string());
                 cx.notify();
                 return;
             }
@@ -258,9 +236,8 @@ impl NyaTermApp {
         let owner = state.owner_value.trim().to_string();
         let group = state.group_value.trim().to_string();
         if owner.is_empty() || group.is_empty() {
-            if let Some(state) = self.transfer.file_ops.properties.as_mut() {
-                state.error = Some("Owner and group are required.".to_string());
-            }
+            self.transfer
+                .set_properties_error("Owner and group are required.".to_string());
             cx.notify();
             return;
         }
@@ -282,10 +259,7 @@ impl NyaTermApp {
             self.close_transfer_properties(cx);
             return;
         }
-        if let Some(state) = self.transfer.file_ops.properties.as_mut() {
-            state.saving = true;
-            state.error = None;
-        }
+        self.transfer.begin_properties_save();
         self.start_sftp_properties_update_job(
             properties.path,
             remote_parent_path(&state.entry.path),

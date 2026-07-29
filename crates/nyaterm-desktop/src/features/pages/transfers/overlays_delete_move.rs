@@ -19,9 +19,8 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         let state = self
             .transfer
-            .file_ops
-            .delete
-            .clone()
+            .delete_dialog()
+            .cloned()
             .unwrap_or(TransferDeleteState {
                 remote_path: String::new(),
                 name: String::new(),
@@ -55,9 +54,9 @@ impl NyaTermApp {
             .flex()
             .items_center()
             .justify_center()
-            .track_focus(&self.transfer.file_ops.delete_focus)
+            .track_focus(self.transfer.delete_focus())
             .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(&this.transfer.file_ops.delete_focus);
+                window.focus(this.transfer.delete_focus());
                 cx.notify();
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
@@ -154,9 +153,8 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         let state = self
             .transfer
-            .file_ops
-            .move_to
-            .clone()
+            .move_dialog()
+            .cloned()
             .unwrap_or(TransferMoveState {
                 old_path: String::new(),
                 name: String::new(),
@@ -183,7 +181,7 @@ impl NyaTermApp {
             .flex()
             .items_center()
             .justify_center()
-            .track_focus(&self.transfer.file_ops.move_focus)
+            .track_focus(self.transfer.move_focus())
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 cx.stop_propagation();
                 this.handle_transfer_move_key_down(event, window, cx);

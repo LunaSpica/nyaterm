@@ -20,22 +20,23 @@ impl NyaTermApp {
         } else {
             self.transfer.browser.path.clone()
         };
-        self.transfer.file_ops.new_folder = Some(TransferNewFolderState {
-            parent_path,
-            value: String::new(),
-            mode: 0o755,
-            open_after_create: false,
-        });
+        self.transfer
+            .open_new_folder_dialog(TransferNewFolderState {
+                parent_path,
+                value: String::new(),
+                mode: 0o755,
+                open_after_create: false,
+            });
         // The box owns its text, so it has to be dropped for the next dialog to
         // open empty.
         self.forget_text_inputs("transfer.new-folder.");
         self.terminal.view.status = "SFTP new folder opened".to_string();
-        window.focus(&self.transfer.file_ops.new_folder_focus);
+        window.focus(self.transfer.new_folder_focus());
         cx.notify();
     }
 
     pub(in crate::features) fn close_transfer_new_folder_dialog(&mut self, cx: &mut Context<Self>) {
-        self.transfer.file_ops.new_folder = None;
+        self.transfer.close_new_folder_dialog();
         self.forget_text_inputs("transfer.new-folder.");
         self.terminal.view.status = "SFTP new folder cancelled".to_string();
         cx.notify();
@@ -46,7 +47,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.transfer.file_ops.new_folder.clone() else {
+        let Some(state) = self.transfer.new_folder_dialog().cloned() else {
             self.terminal.view.status = "no SFTP new folder is active".to_string();
             cx.notify();
             return;
@@ -57,7 +58,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        self.transfer.file_ops.new_folder = None;
+        self.transfer.close_new_folder_dialog();
         let remote_path = remote_child_path(&state.parent_path, &name);
         self.start_sftp_mkdir_job(
             remote_path,
@@ -96,12 +97,13 @@ impl NyaTermApp {
         text: String,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.transfer.file_ops.new_folder.as_mut() else {
-            return;
-        };
         // A remote name has a length limit, and the box will happily take more.
-        state.value = text.chars().take(255).collect();
-        cx.notify();
+        if self
+            .transfer
+            .set_new_folder_name(text.chars().take(255).collect())
+        {
+            cx.notify();
+        }
     }
 
     pub(in crate::features) fn start_sftp_mkdir_job(
@@ -171,7 +173,7 @@ impl NyaTermApp {
         } else {
             self.transfer.browser.path.clone()
         };
-        self.transfer.file_ops.new_file = Some(TransferNewFileState {
+        self.transfer.open_new_file_dialog(TransferNewFileState {
             parent_path,
             value: String::new(),
             mode: 0o644,
@@ -179,12 +181,12 @@ impl NyaTermApp {
         });
         self.forget_text_inputs("transfer.new-file.");
         self.terminal.view.status = "SFTP new file opened".to_string();
-        window.focus(&self.transfer.file_ops.new_file_focus);
+        window.focus(self.transfer.new_file_focus());
         cx.notify();
     }
 
     pub(in crate::features) fn close_transfer_new_file_dialog(&mut self, cx: &mut Context<Self>) {
-        self.transfer.file_ops.new_file = None;
+        self.transfer.close_new_file_dialog();
         self.forget_text_inputs("transfer.new-file.");
         self.terminal.view.status = "SFTP new file cancelled".to_string();
         cx.notify();
@@ -195,7 +197,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.transfer.file_ops.new_file.clone() else {
+        let Some(state) = self.transfer.new_file_dialog().cloned() else {
             self.terminal.view.status = "no SFTP new file is active".to_string();
             cx.notify();
             return;
@@ -206,7 +208,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        self.transfer.file_ops.new_file = None;
+        self.transfer.close_new_file_dialog();
         let remote_path = remote_child_path(&state.parent_path, &name);
         self.start_sftp_create_file_job(
             remote_path,
@@ -244,11 +246,12 @@ impl NyaTermApp {
         text: String,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.transfer.file_ops.new_file.as_mut() else {
-            return;
-        };
-        state.value = text.chars().take(255).collect();
-        cx.notify();
+        if self
+            .transfer
+            .set_new_file_name(text.chars().take(255).collect())
+        {
+            cx.notify();
+        }
     }
     pub(in crate::features) fn start_sftp_create_file_job(
         &mut self,

@@ -360,7 +360,7 @@ impl NyaTermApp {
             return true;
         }
         if self.ai.chat.focus_pending
-            || self.transfer.file_ops.rename_focus_pending
+            || self.transfer.rename_focus_is_pending()
             || self.session.prompts.credential_focus_is_pending()
         {
             return true;
@@ -488,7 +488,7 @@ impl NyaTermApp {
             && !self.translation.is_pending()
             && !self.update.is_pending()
             && !self.ai.chat.focus_pending
-            && !self.transfer.file_ops.rename_focus_pending
+            && !self.transfer.rename_focus_is_pending()
             && !self.session.prompts.credential_focus_is_pending()
             && !((self.session.active_ssh_config().is_some()
                 && matches!(

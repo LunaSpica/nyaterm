@@ -23,19 +23,19 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        self.transfer.file_ops.move_to = Some(TransferMoveState {
+        self.transfer.open_move_dialog(TransferMoveState {
             old_path: old_path.clone(),
             name,
             value: old_path,
         });
         self.terminal.view.status = "SFTP move opened".to_string();
-        window.focus(&self.transfer.file_ops.move_focus);
+        window.focus(self.transfer.move_focus());
         cx.notify();
     }
 
     pub(in crate::features) fn close_transfer_move_dialog(&mut self, cx: &mut Context<Self>) {
         self.forget_text_inputs("transfer.move.");
-        self.transfer.file_ops.move_to = None;
+        self.transfer.close_move_dialog();
         self.terminal.view.status = "SFTP move cancelled".to_string();
         cx.notify();
     }
@@ -45,7 +45,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.transfer.file_ops.move_to.clone() else {
+        let Some(state) = self.transfer.move_dialog().cloned() else {
             self.terminal.view.status = "no SFTP move is active".to_string();
             cx.notify();
             return;
@@ -57,12 +57,12 @@ impl NyaTermApp {
             return;
         }
         if new_path == state.old_path {
-            self.transfer.file_ops.move_to = None;
+            self.transfer.close_move_dialog();
             self.terminal.view.status = "SFTP move unchanged".to_string();
             cx.notify();
             return;
         }
-        self.transfer.file_ops.move_to = None;
+        self.transfer.close_move_dialog();
         self.start_sftp_move_job(state.old_path, new_path, window, cx);
     }
 
@@ -92,11 +92,9 @@ impl NyaTermApp {
         text: String,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.transfer.file_ops.move_to.as_mut() else {
-            return;
-        };
-        state.value = text;
-        cx.notify();
+        if self.transfer.set_move_value(text) {
+            cx.notify();
+        }
     }
 
     pub(in crate::features) fn start_sftp_move_job(
@@ -176,18 +174,18 @@ impl NyaTermApp {
         } else {
             format!("{} remote items", paths.len())
         };
-        self.transfer.file_ops.delete = Some(TransferDeleteState {
+        self.transfer.open_delete_dialog(TransferDeleteState {
             remote_path,
             name,
             paths,
         });
         self.terminal.view.status = "SFTP delete confirmation opened".to_string();
-        window.focus(&self.transfer.file_ops.delete_focus);
+        window.focus(self.transfer.delete_focus());
         cx.notify();
     }
 
     pub(in crate::features) fn close_transfer_delete_dialog(&mut self, cx: &mut Context<Self>) {
-        self.transfer.file_ops.delete = None;
+        self.transfer.close_delete_dialog();
         self.terminal.view.status = "SFTP delete cancelled".to_string();
         cx.notify();
     }
@@ -197,7 +195,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.transfer.file_ops.delete.take() else {
+        let Some(state) = self.transfer.take_delete_dialog() else {
             self.terminal.view.status = "no SFTP delete is active".to_string();
             cx.notify();
             return;
