@@ -40,7 +40,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        if !self.ai.settings.config.enabled {
+        if !self.ai.settings_enabled() {
             self.ai.reject_chat_start("AI assistant is disabled", false);
             cx.notify();
             return;
@@ -52,7 +52,7 @@ impl NyaTermApp {
             return;
         };
 
-        let settings = self.ai.settings.config.clone();
+        let settings = self.ai.settings_config_cloned();
         let mode = settings.default_mode.clone();
         let target_session_ids = self.ai_effective_target_session_ids();
         let target_session_id = target_session_ids.first().cloned();
@@ -122,19 +122,17 @@ impl NyaTermApp {
 
     pub(in crate::features) fn ai_selected_model_id(&self) -> Option<String> {
         self.ai
-            .settings
-            .config
+            .settings_config()
             .models
             .iter()
             .find(|model| {
                 model.enabled
-                    && self.ai.settings.config.default_model_id.as_deref()
+                    && self.ai.settings_config().default_model_id.as_deref()
                         == Some(model.id.as_str())
             })
             .or_else(|| {
                 self.ai
-                    .settings
-                    .config
+                    .settings_config()
                     .models
                     .iter()
                     .find(|model| model.enabled)
@@ -144,8 +142,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn ai_enabled_models(&self) -> Vec<nyaterm_core::AiModelConfigItem> {
         self.ai
-            .settings
-            .config
+            .settings_config()
             .models
             .iter()
             .filter(|model| model.enabled)
@@ -162,8 +159,7 @@ impl NyaTermApp {
             .as_ref()
             .and_then(|credential_id| {
                 self.ai
-                    .settings
-                    .config
+                    .settings_config()
                     .provider_credentials
                     .iter()
                     .find(|credential| &credential.id == credential_id)
@@ -294,7 +290,7 @@ impl NyaTermApp {
         }
 
         let per_session_line_limit =
-            (self.ai.settings.config.context_line_limit as usize / session_ids.len()).max(1);
+            (self.ai.settings_context_line_limit() / session_ids.len()).max(1);
         let mut contexts = Vec::with_capacity(session_ids.len());
         for session_id in session_ids {
             contexts.push((
@@ -410,7 +406,7 @@ impl NyaTermApp {
     ) -> AiContext {
         self.ai_terminal_context_for_session_with_line_limit(
             session_id,
-            self.ai.settings.config.context_line_limit as usize,
+            self.ai.settings_context_line_limit(),
         )
     }
 
@@ -466,7 +462,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.mark_user_activity();
-        if self.ai.chat_or_agent_is_running() || !self.ai.settings.config.enabled {
+        if self.ai.chat_or_agent_is_running() || !self.ai.settings_enabled() {
             self.ai.hide_chat_mention();
             cx.notify();
             return;
@@ -533,7 +529,7 @@ impl NyaTermApp {
 
     /// Apply an edit from the AI prompt box.
     pub(in crate::features) fn apply_ai_prompt(&mut self, text: String, cx: &mut Context<Self>) {
-        if self.ai.chat_or_agent_is_running() || !self.ai.settings.config.enabled {
+        if self.ai.chat_or_agent_is_running() || !self.ai.settings_enabled() {
             return;
         }
         self.ai.set_chat_prompt_draft(text);

@@ -1,7 +1,7 @@
 use gpui::Context;
 
 use crate::http::ai::discover_openai_compatible_models;
-use nyaterm_core::{AiModelDiscovery, AiProviderKind, merge_model_discoveries, now_rfc3339};
+use nyaterm_core::AiModelDiscovery;
 
 use crate::features::{AiDiscoveryJobResult, NyaTermApp};
 
@@ -16,22 +16,7 @@ impl NyaTermApp {
             return;
         }
 
-        let credentials: Vec<_> = self
-            .ai
-            .settings
-            .config
-            .provider_credentials
-            .iter()
-            .filter(|credential| {
-                credential.enabled
-                    && credential.provider_kind == AiProviderKind::OpenaiCompatible
-                    && credential
-                        .base_url
-                        .as_deref()
-                        .is_some_and(|value| !value.trim().is_empty())
-            })
-            .cloned()
-            .collect();
+        let (settings, credentials) = self.ai.discovery_settings();
         if credentials.is_empty() {
             self.ai.set_panel_status(
                 "AI model discovery requires an enabled custom provider".to_string(),
@@ -44,7 +29,6 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        let settings = self.ai.settings.config.clone();
         std::thread::spawn(move || {
             let mut discoveries = Vec::new();
             let mut errors = Vec::new();
@@ -105,40 +89,6 @@ impl NyaTermApp {
         _profile_id: &str,
         discoveries: Vec<AiModelDiscovery>,
     ) -> usize {
-        let discoveries = merge_model_discoveries(discoveries);
-        let last_seen_at = Some(now_rfc3339());
-
-        for discovery in &discoveries {
-            if let Some(model) = self
-                .ai
-                .settings
-                .config
-                .models
-                .iter_mut()
-                .find(|model| model.id == discovery.id)
-            {
-                model.name = discovery.name.clone();
-                model.provider_kind = discovery.provider_kind.clone();
-                model.credential_id = discovery.credential_id.clone();
-                model.source = discovery.source.clone();
-                model.last_seen_at = last_seen_at.clone();
-            } else {
-                self.ai
-                    .settings
-                    .config
-                    .models
-                    .push(nyaterm_core::AiModelConfigItem {
-                        id: discovery.id.clone(),
-                        name: discovery.name.clone(),
-                        provider_kind: discovery.provider_kind.clone(),
-                        credential_id: discovery.credential_id.clone(),
-                        enabled: false,
-                        source: discovery.source.clone(),
-                        last_seen_at: last_seen_at.clone(),
-                    });
-            }
-        }
-
-        discoveries.len()
+        self.ai.apply_settings_model_discoveries(discoveries)
     }
 }

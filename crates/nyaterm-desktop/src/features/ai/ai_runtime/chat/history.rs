@@ -7,10 +7,8 @@ use super::super::super::ai_jobs::{ai_active_profile_drafts, ai_usage_counts};
 
 impl NyaTermApp {
     pub(in crate::features) fn sync_ai_drafts_from_active_profile(&mut self) {
-        let (model, base_url) = ai_active_profile_drafts(&self.ai.settings.config);
-        self.ai.settings.model_draft = model;
-        self.ai.settings.base_url_draft = base_url;
-        self.ai.settings.secret_draft.clear();
+        let (model, base_url) = ai_active_profile_drafts(self.ai.settings_config());
+        self.ai.sync_settings_active_profile_drafts(model, base_url);
     }
 
     pub(in crate::features) fn refresh_ai_session_list(&mut self, cx: &mut Context<Self>) {

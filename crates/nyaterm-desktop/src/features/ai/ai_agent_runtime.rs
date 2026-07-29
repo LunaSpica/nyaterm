@@ -105,7 +105,7 @@ impl NyaTermApp {
         let Some(terminal_session_id) = self.ai_effective_target_session_id() else {
             return Ok(None);
         };
-        let max_steps = self.ai.settings.config.max_agent_steps.unwrap_or(10).max(1);
+        let max_steps = self.ai.settings_max_agent_steps();
         let (task_prompt, step_index) = match self.ai.begin_agent_step(max_steps) {
             Ok(step) => step,
             Err(error) => {
@@ -116,8 +116,7 @@ impl NyaTermApp {
         let now = Instant::now();
         let timeout = self
             .ai
-            .settings
-            .config
+            .settings_config()
             .agent_step_timeout_ms
             .map(Duration::from_millis)
             .unwrap_or(AI_AGENT_DEFAULT_STEP_TIMEOUT);
@@ -212,13 +211,12 @@ impl NyaTermApp {
                 ));
             }
         };
-        let max_steps = self.ai.settings.config.max_agent_steps.unwrap_or(10).max(1);
+        let max_steps = self.ai.settings_max_agent_steps();
         let (task_prompt, step_index) = self.ai.begin_agent_step(max_steps)?;
         let now = Instant::now();
         let timeout = self
             .ai
-            .settings
-            .config
+            .settings_config()
             .agent_step_timeout_ms
             .map(Duration::from_millis)
             .unwrap_or(AI_AGENT_DEFAULT_STEP_TIMEOUT);
@@ -460,7 +458,7 @@ impl NyaTermApp {
             &state.command,
             &self.settings.summary().language,
         );
-        let settings = self.ai.settings.config.clone();
+        let settings = self.ai.settings_config_cloned();
         let terminal_session_id = state.terminal_session_id.clone();
         let request = AiChatRequest {
             stream_id: None,
