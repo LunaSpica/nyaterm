@@ -51,7 +51,8 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if entry.file_type == SftpFileType::Directory {
-            self.transfer.browser.status = "AI file actions require a file".to_string();
+            self.transfer
+                .set_browser_status("AI file actions require a file");
             self.terminal.view.status = "directories cannot be sent to file AI actions".to_string();
             cx.notify();
             return;
@@ -60,13 +61,14 @@ impl NyaTermApp {
             .size
             .is_some_and(|size| size > self.ai.settings_config().max_ai_file_size_bytes)
         {
-            self.transfer.browser.status = "file exceeds AI file size limit".to_string();
+            self.transfer
+                .set_browser_status("file exceeds AI file size limit");
             self.terminal.view.status = format!("{} is too large for AI file actions", entry.path);
             cx.notify();
             return;
         }
         if !self.ai.settings_config().enabled {
-            self.transfer.browser.status = "AI assistant is disabled".to_string();
+            self.transfer.set_browser_status("AI assistant is disabled");
             self.terminal.view.status = "AI assistant is disabled".to_string();
             cx.notify();
             return;
@@ -77,7 +79,7 @@ impl NyaTermApp {
             return;
         };
 
-        self.transfer.browser.selected_remote_path = Some(entry.path.clone());
+        self.transfer.select_browser_path(entry.path.clone());
         self.transfer.set_remote_path(entry.path.clone());
 
         let remote_path = entry.path.clone();
@@ -101,7 +103,8 @@ impl NyaTermApp {
             progress: None,
             control: None,
         });
-        self.transfer.browser.status = format!("loading {remote_path} for AI");
+        self.transfer
+            .set_browser_status(format!("loading {remote_path} for AI"));
         self.terminal.view.status = format!("SFTP AI file action started: {remote_path}");
         let transfer_tx = self.transfer.transfer_event_sender();
         std::thread::spawn(move || {
@@ -201,7 +204,8 @@ impl NyaTermApp {
         match remote_file_text_kind(&entry.name) {
             RemoteFileTextKind::Text => self.open_transfer_editor_direct(entry, window, cx),
             RemoteFileTextKind::Binary => {
-                self.transfer.browser.status = "known binary file opened externally".to_string();
+                self.transfer
+                    .set_browser_status("known binary file opened externally");
                 self.open_transfer_external(entry, window, cx);
             }
             RemoteFileTextKind::Unknown => {
@@ -241,12 +245,12 @@ impl NyaTermApp {
             {
                 window.focus(self.transfer.editor_focus());
             }
-            self.transfer.browser.status = status.clone();
+            self.transfer.set_browser_status(status.clone());
             self.terminal.view.status = status;
             cx.notify();
             return;
         }
-        self.transfer.browser.selected_remote_path = Some(entry.path.clone());
+        self.transfer.select_browser_path(entry.path.clone());
         self.transfer.set_remote_path(entry.path.clone());
         let tab = TransferEditorState {
             id: tab_id.clone(),
@@ -366,7 +370,7 @@ impl NyaTermApp {
         config: SshSessionConfig,
         cx: &mut Context<Self>,
     ) {
-        self.transfer.browser.selected_remote_path = Some(entry.path.clone());
+        self.transfer.select_browser_path(entry.path.clone());
         self.transfer.set_remote_path(entry.path.clone());
         let remote_path = entry.path.clone();
         let local_path = self.transfer_external_open_path(&entry, session_id.as_deref());

@@ -399,6 +399,17 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   dedicated `RemoteTextEditor` continues to own selection, undo, IME and text
   commands through narrow active-tab access; GPUI window operations, SFTP jobs,
   rendering and status text remain in their adapters.
+  The browser-ownership pass completed the transfer feature boundary by making
+  the SFTP `browser` child and its implementation type visible only inside the
+  transfers module. Other desktop domains now receive a borrowed, immutable
+  presentation view and use named owner transitions for navigation/cache
+  rollback, session restore/reset, history/favorites, search/sort, path editing,
+  selection/rename, menus, resize state and auto-CWD timing. The borrowed view
+  does not copy the listing or create writable mirror state. Typed transfer
+  event reduction remains inside the owning transfers module, while GPUI
+  rendering, focus, persistence calls and SFTP job launch stay in their existing
+  adapters. Owner-level tests pin stable-navigation rollback, cache restoration
+  cleanup/history clamping and history branch behavior.
 - The SFTP browser parity pass covers the six Tauri file-manager areas: toolbar
   commands and state, editable path/history/breadcrumb navigation, resizable
   sortable columns, range/additive selection and context actions, transfer
@@ -1488,6 +1499,7 @@ Current ownership map:
 | Transfer panel interaction | Private child in `NyaTermApp.transfer` | Transient focus and resize state | Focus routing, height and resize state enter through `TransferFeatureState`; the write-only focused-endpoint marker was removed, and height-drag calculation and clamping are pure owner transitions while rendering and persistence stay in adapters. |
 | Transfer endpoints and path prompts | Private child in `NyaTermApp.transfer` | Transient endpoints, compatibility-derived policy and prompt admission | Remote/local paths, duplicate policy and the shared native prompt slot enter through `TransferFeatureState`; normalization, single-prompt admission and kind-matched completion are owner transitions while GPUI prompts, jobs and settings persistence stay in adapters. |
 | Transfer job queue | Private child in `NyaTermApp.transfer` | Typed background-event queue plus transient interaction state | Monotonic job-id allocation, admission/removal, result-channel access, selection/menu/delete lifecycles, session-switch reset and session-scoped batch actions enter through `TransferFeatureState`; cleanup also prunes stale interaction references. Renderers receive a read-only slice, protocol adapters can update individual jobs without receiving the backing collection, and the event reducer temporarily extracts only its matched job while it coordinates browser/editor side effects. |
+| Transfer SFTP browser | Transfers-module-private child in `NyaTermApp.transfer` | Listing, navigation/cache, history/favorites, selection, menus and viewport interaction | Other desktop domains receive a borrowed immutable presentation view; navigation rollback/session restore, history/favorites, search/sort, path editing, selection/rename, menu exclusion, resize and auto-CWD timing use named `TransferFeatureState` transitions. Typed transfer event reduction stays inside the owning transfers module; rendering, focus, persistence and SFTP launch stay in adapters. |
 | Transfer file-operation dialogs | Private child in `NyaTermApp.transfer` | Transient dialog drafts, focus and property-operation lifecycle | Rename/move/delete/create/properties/unknown-file state enters through `TransferFeatureState`; deferred rename focus is consumed atomically, creation options update semantically, and property results require matching session/path ownership. Renderers receive read-only dialog state while GPUI focus, text inputs, status and SFTP launch remain in adapters. |
 | Transfer external-editor sync | Private child in `NyaTermApp.transfer` | Transient prompts, child-window tracking and always-upload policy | Prompt admission/filtering/resolution, window admission/tracking and session cleanup enter through `TransferFeatureState`; consuming or dismissing a prompt reconciles its tracked window state. GPUI window operations, status updates and SFTP upload launch remain in adapters. |
 | Built-in transfer editor | Private child in `NyaTermApp.transfer` | Editor workspace, tab/confirmation state and detached-window lifecycle | Tab admission/activation/close/discard, save result reconciliation, session cleanup, menu state and window admission enter through `TransferFeatureState`. `RemoteTextEditor` keeps its dedicated selection/undo/IME path through narrow active-tab access; GPUI windows, SFTP work and rendering remain in adapters. |
@@ -1729,6 +1741,11 @@ honest remaining list.
    a private child, coupled session removal with worker cleanup, added drop-time
    worker termination, and moved blocking multiplex disconnects onto named
    background workers after owner-controlled reference checks.
+   The following transfer-browser batch completed the transfer feature's child
+   encapsulation: the browser implementation is transfers-module-private,
+   cross-domain consumers receive a borrowed immutable view, and navigation,
+   session cache, history/favorites, search/sort, path editing, selection/rename,
+   menu and resize transitions moved onto `TransferFeatureState`.
    What remains at the
    composition root is stores, runtime and focused feature owners.
    Group by cohesion where a cluster exists; do not force the count down for

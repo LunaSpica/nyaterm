@@ -8,10 +8,7 @@ use std::collections::HashSet;
 use std::time::Duration;
 
 use crate::features::NyaTermApp;
-use crate::models::{
-    TransferBrowserContextMenuState, TransferBrowserDragSelectionState,
-    TransferBrowserPendingRenameState,
-};
+use crate::models::{TransferBrowserContextMenuState, TransferBrowserDragSelectionState};
 
 use super::{
     TransferPathPart, normalized_transfer_browser_path, remote_file_name, remote_parent_path,
@@ -24,12 +21,7 @@ impl NyaTermApp {
         path: String,
         cx: &mut Context<Self>,
     ) {
-        self.transfer.browser.selected_remote_path = Some(path.clone());
-        self.transfer.browser.selected_remote_paths.clear();
-        self.transfer
-            .browser
-            .selected_remote_paths
-            .insert(path.clone());
+        self.transfer.select_browser_entry(path.clone());
         self.transfer.set_remote_path(path.clone());
         self.terminal.view.status = format!("selected remote {path}");
         cx.notify();
@@ -42,13 +34,13 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        window.focus(&self.transfer.browser.focus);
+        window.focus(self.transfer.browser_view().focus);
         let modifiers = event.modifiers();
         if event.click_count() >= 2 && !modifiers.modified() {
             self.cancel_transfer_browser_pending_rename(cx);
             let entry = self
                 .transfer
-                .browser
+                .browser_view()
                 .entries
                 .iter()
                 .find(|entry| entry.path == path)
@@ -72,10 +64,10 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        window.focus(&self.transfer.browser.focus);
+        window.focus(self.transfer.browser_view().focus);
         if self
             .transfer
-            .browser
+            .browser_view()
             .pending_rename
             .as_ref()
             .is_some_and(|pending| pending.path != path)
@@ -87,7 +79,7 @@ impl NyaTermApp {
         let range_anchor = event
             .modifiers
             .shift
-            .then(|| self.transfer.browser.selected_remote_path.clone())
+            .then(|| self.transfer.browser_view().selected_remote_path.clone())
             .flatten()
             .or_else(|| {
                 event
@@ -95,7 +87,7 @@ impl NyaTermApp {
                     .shift
                     .then(|| {
                         self.transfer
-                            .browser
+                            .browser_view()
                             .selected_remote_paths
                             .iter()
                             .next()
@@ -105,7 +97,7 @@ impl NyaTermApp {
             });
         let anchor_path = range_anchor.clone().unwrap_or_else(|| path.clone());
         let base_selection = if additive {
-            self.transfer.browser.selected_remote_paths.clone()
+            self.transfer.browser_view().selected_remote_paths.clone()
         } else {
             HashSet::new()
         };
@@ -124,11 +116,12 @@ impl NyaTermApp {
             self.select_transfer_browser_entry(path.clone(), cx);
         }
 
-        self.transfer.browser.drag_selection = Some(TransferBrowserDragSelectionState {
-            anchor_path,
-            base_selection,
-            additive,
-        });
+        self.transfer
+            .set_browser_drag_selection(TransferBrowserDragSelectionState {
+                anchor_path,
+                base_selection,
+                additive,
+            });
     }
 
     pub(in crate::features::pages::transfers) fn schedule_transfer_browser_name_rename(
@@ -150,35 +143,16 @@ impl NyaTermApp {
             return;
         }
 
-        if self.transfer.browser.selected_remote_path.as_deref() != Some(path.as_str())
-            || self.transfer.browser.selected_remote_paths.len() != 1
-            || !self.transfer.browser.selected_remote_paths.contains(&path)
-        {
+        let Some(token) = self.transfer.schedule_browser_pending_rename(&path) else {
             return;
-        }
-
-        self.transfer.browser.pending_rename_token =
-            self.transfer.browser.pending_rename_token.wrapping_add(1);
-        let token = self.transfer.browser.pending_rename_token;
-        self.transfer.browser.pending_rename = Some(TransferBrowserPendingRenameState {
-            path: path.clone(),
-            token,
-        });
+        };
         cx.spawn(async move |this, cx| {
             Timer::after(Duration::from_millis(220)).await;
             let _ = this.update(cx, |this, cx| {
-                let should_rename = this
-                    .transfer
-                    .browser
-                    .pending_rename
-                    .as_ref()
-                    .is_some_and(|pending| pending.path == path && pending.token == token)
-                    && this.transfer.browser.selected_remote_path.as_deref() == Some(path.as_str())
-                    && this.transfer.browser.selected_remote_paths.len() == 1
-                    && this.transfer.browser.selected_remote_paths.contains(&path)
-                    && !this.transfer.rename_dialog_is_open();
-
-                this.transfer.browser.pending_rename = None;
+                let rename_dialog_open = this.transfer.rename_dialog_is_open();
+                let should_rename =
+                    this.transfer
+                        .resolve_browser_pending_rename(&path, token, rename_dialog_open);
                 if should_rename {
                     this.open_transfer_rename_for_path_after_delay(path, cx);
                 } else {
@@ -202,12 +176,7 @@ impl NyaTermApp {
     pub(in crate::features) fn cancel_transfer_browser_pending_rename_without_notify(
         &mut self,
     ) -> bool {
-        let cancelled = self.transfer.browser.pending_rename.take().is_some();
-        if cancelled {
-            self.transfer.browser.pending_rename_token =
-                self.transfer.browser.pending_rename_token.wrapping_add(1);
-        }
-        cancelled
+        self.transfer.cancel_browser_pending_rename()
     }
 
     pub(in crate::features::pages::transfers) fn handle_transfer_browser_entry_mouse_move(
@@ -217,11 +186,11 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if !event.dragging() {
-            self.transfer.browser.drag_selection = None;
+            self.transfer.clear_browser_drag_selection();
             return;
         }
 
-        let Some(drag_selection) = self.transfer.browser.drag_selection.clone() else {
+        let Some(drag_selection) = self.transfer.browser_view().drag_selection.clone() else {
             return;
         };
 
@@ -239,7 +208,7 @@ impl NyaTermApp {
         _event: &MouseUpEvent,
         cx: &mut Context<Self>,
     ) {
-        if self.transfer.browser.drag_selection.take().is_some() {
+        if self.transfer.finish_browser_drag_selection() {
             cx.notify();
         }
     }
@@ -250,15 +219,10 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        window.focus(&self.transfer.browser.focus);
-        self.transfer.browser.drag_selection = None;
-        if self.transfer.browser.selected_remote_paths.contains(&path) {
-            self.transfer.browser.selected_remote_path = Some(path.clone());
+        window.focus(self.transfer.browser_view().focus);
+        if let Some(selected_count) = self.transfer.activate_marked_browser_path(&path) {
             self.transfer.set_remote_path(path);
-            self.terminal.view.status = format!(
-                "{} remote item(s) marked",
-                self.transfer.browser.selected_remote_paths.len()
-            );
+            self.terminal.view.status = format!("{} remote item(s) marked", selected_count);
             cx.notify();
             return;
         }
@@ -273,31 +237,33 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.transfer.browser.path_menu = None;
+        self.transfer.close_browser_path_menu();
         self.select_transfer_browser_entry_from_context(path.clone(), window, cx);
         let Some(entry) = self
             .transfer
-            .browser
+            .browser_view()
             .entries
             .iter()
             .find(|entry| entry.path == path)
             .cloned()
         else {
-            self.transfer.browser.context_menu = None;
+            self.transfer.close_browser_context_menu();
             cx.notify();
             return;
         };
 
-        self.transfer.browser.context_menu = Some(TransferBrowserContextMenuState {
-            path: entry.path,
-            name: entry.name,
-            is_parent: false,
-            is_current_directory: false,
-            is_directory: entry.file_type == SftpFileType::Directory,
-            x: event.position.x,
-            y: event.position.y,
-        });
-        self.transfer.browser.status = "file context menu opened".to_string();
+        self.transfer.open_browser_context_menu(
+            TransferBrowserContextMenuState {
+                path: entry.path,
+                name: entry.name,
+                is_parent: false,
+                is_current_directory: false,
+                is_directory: entry.file_type == SftpFileType::Directory,
+                x: event.position.x,
+                y: event.position.y,
+            },
+            "file context menu opened",
+        );
         cx.notify();
     }
 
@@ -308,21 +274,20 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.transfer.browser.path_menu = None;
-        window.focus(&self.transfer.browser.focus);
-        self.transfer.browser.drag_selection = None;
-        self.transfer.browser.selected_remote_path = None;
-        self.transfer.browser.selected_remote_paths.clear();
-        self.transfer.browser.context_menu = Some(TransferBrowserContextMenuState {
-            path: remote_parent_path(&current_path),
-            name: "..".to_string(),
-            is_parent: true,
-            is_current_directory: false,
-            is_directory: true,
-            x: event.position.x,
-            y: event.position.y,
-        });
-        self.transfer.browser.status = "parent directory context menu opened".to_string();
+        window.focus(self.transfer.browser_view().focus);
+        self.transfer.clear_browser_selection();
+        self.transfer.open_browser_context_menu(
+            TransferBrowserContextMenuState {
+                path: remote_parent_path(&current_path),
+                name: "..".to_string(),
+                is_parent: true,
+                is_current_directory: false,
+                is_directory: true,
+                x: event.position.x,
+                y: event.position.y,
+            },
+            "parent directory context menu opened",
+        );
         cx.notify();
     }
 
@@ -332,26 +297,25 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.transfer.browser.path_menu = None;
-        window.focus(&self.transfer.browser.focus);
-        self.transfer.browser.drag_selection = None;
-        self.transfer.browser.selected_remote_path = None;
-        self.transfer.browser.selected_remote_paths.clear();
-        let path = normalized_transfer_browser_path(&self.transfer.browser.path);
-        self.transfer.browser.context_menu = Some(TransferBrowserContextMenuState {
-            name: if path == "/" {
-                "/".to_string()
-            } else {
-                remote_file_name(&path)
+        window.focus(self.transfer.browser_view().focus);
+        self.transfer.clear_browser_selection();
+        let path = normalized_transfer_browser_path(&self.transfer.browser_view().path);
+        self.transfer.open_browser_context_menu(
+            TransferBrowserContextMenuState {
+                name: if path == "/" {
+                    "/".to_string()
+                } else {
+                    remote_file_name(&path)
+                },
+                path,
+                is_parent: false,
+                is_current_directory: true,
+                is_directory: true,
+                x: event.position.x,
+                y: event.position.y,
             },
-            path,
-            is_parent: false,
-            is_current_directory: true,
-            is_directory: true,
-            x: event.position.x,
-            y: event.position.y,
-        });
-        self.transfer.browser.status = "current directory context menu opened".to_string();
+            "current directory context menu opened",
+        );
         cx.notify();
     }
 
@@ -359,7 +323,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        self.transfer.browser.context_menu = None;
+        self.transfer.close_browser_context_menu();
         cx.notify();
     }
 
@@ -377,7 +341,9 @@ impl NyaTermApp {
 
         let (Some(anchor_index), Some(target_index)) = (anchor_index, target_index) else {
             if additive {
-                self.transfer.browser.selected_remote_paths = base_selection;
+                let active_path = self.transfer.browser_view().selected_remote_path.clone();
+                self.transfer
+                    .replace_browser_selection(base_selection, active_path);
                 cx.notify();
             } else {
                 self.select_transfer_browser_entry(target_path, cx);
@@ -396,13 +362,11 @@ impl NyaTermApp {
             next_selection.insert(entry.path.clone());
         }
 
-        self.transfer.browser.selected_remote_paths = next_selection;
-        self.transfer.browser.selected_remote_path = Some(target_path.clone());
+        let selected_count = self
+            .transfer
+            .replace_browser_selection(next_selection, Some(target_path.clone()));
         self.transfer.set_remote_path(target_path);
-        self.terminal.view.status = format!(
-            "{} remote item(s) marked",
-            self.transfer.browser.selected_remote_paths.len()
-        );
+        self.terminal.view.status = format!("{} remote item(s) marked", selected_count);
         cx.notify();
     }
 
@@ -411,20 +375,9 @@ impl NyaTermApp {
         path: String,
         cx: &mut Context<Self>,
     ) {
-        if self.transfer.browser.selected_remote_paths.contains(&path) {
-            self.transfer.browser.selected_remote_paths.remove(&path);
-        } else {
-            self.transfer
-                .browser
-                .selected_remote_paths
-                .insert(path.clone());
-        }
-        self.transfer.browser.selected_remote_path = Some(path.clone());
+        let selected_count = self.transfer.toggle_browser_path_mark(path.clone());
         self.transfer.set_remote_path(path.clone());
-        self.terminal.view.status = format!(
-            "{} remote item(s) marked",
-            self.transfer.browser.selected_remote_paths.len()
-        );
+        self.terminal.view.status = format!("{} remote item(s) marked", selected_count);
         cx.notify();
     }
 
@@ -433,16 +386,15 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let entries = self.visible_transfer_browser_entries();
-        self.transfer.browser.selected_remote_paths =
-            entries.iter().map(|entry| entry.path.clone()).collect();
-        if let Some(entry) = entries.first() {
-            self.transfer.browser.selected_remote_path = Some(entry.path.clone());
-            self.transfer.set_remote_path(entry.path.clone());
+        let active_path = entries.first().map(|entry| entry.path.clone());
+        let selected_paths = entries.iter().map(|entry| entry.path.clone()).collect();
+        let selected_count = self
+            .transfer
+            .replace_browser_selection(selected_paths, active_path.clone());
+        if let Some(path) = active_path {
+            self.transfer.set_remote_path(path);
         }
-        self.terminal.view.status = format!(
-            "{} remote item(s) marked",
-            self.transfer.browser.selected_remote_paths.len()
-        );
+        self.terminal.view.status = format!("{} remote item(s) marked", selected_count);
         cx.notify();
     }
 
@@ -450,7 +402,11 @@ impl NyaTermApp {
         &self,
         part: TransferPathPart,
     ) -> Option<String> {
-        let path = self.transfer.browser.selected_remote_path.as_deref()?;
+        let path = self
+            .transfer
+            .browser_view()
+            .selected_remote_path
+            .as_deref()?;
         Some(transfer_path_part_value(path, part))
     }
 
@@ -466,7 +422,8 @@ impl NyaTermApp {
         };
         cx.write_to_clipboard(ClipboardItem::new_string(value.clone()));
         self.terminal.view.status = format!("copied remote {}", part.label());
-        self.transfer.browser.status = truncate_preview(&value, 92);
+        self.transfer
+            .set_browser_status(truncate_preview(&value, 92));
         cx.notify();
     }
 
@@ -487,7 +444,8 @@ impl NyaTermApp {
         }
         if self.send_terminal_input(value.clone().into_bytes(), cx) {
             self.terminal.view.status = format!("sent remote {} to terminal", part.label());
-            self.transfer.browser.status = truncate_preview(&value, 92);
+            self.transfer
+                .set_browser_status(truncate_preview(&value, 92));
             cx.notify();
         }
     }
@@ -495,9 +453,13 @@ impl NyaTermApp {
     pub(in crate::features::pages::transfers) fn selected_transfer_entry(
         &self,
     ) -> Option<SftpFileEntry> {
-        let selected = self.transfer.browser.selected_remote_path.as_deref()?;
+        let selected = self
+            .transfer
+            .browser_view()
+            .selected_remote_path
+            .as_deref()?;
         self.transfer
-            .browser
+            .browser_view()
             .entries
             .iter()
             .find(|entry| entry.path == selected)
@@ -507,14 +469,19 @@ impl NyaTermApp {
     pub(in crate::features::pages::transfers) fn selected_transfer_entries(
         &self,
     ) -> Vec<SftpFileEntry> {
-        if self.transfer.browser.selected_remote_paths.is_empty() {
+        if self
+            .transfer
+            .browser_view()
+            .selected_remote_paths
+            .is_empty()
+        {
             return self.selected_transfer_entry().into_iter().collect();
         }
         self.visible_transfer_browser_entries()
             .into_iter()
             .filter(|entry| {
                 self.transfer
-                    .browser
+                    .browser_view()
                     .selected_remote_paths
                     .contains(&entry.path)
             })

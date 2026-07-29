@@ -527,16 +527,18 @@ impl NyaTermApp {
             .when(transfer_external_sync_open, |this| {
                 this.child(self.transfer_external_sync_prompt_overlay(cx))
             })
-            .when(self.transfer.browser.context_menu.is_some(), |this| {
-                this.child(self.transfer_browser_context_menu_overlay(cx))
-            })
-            .when(self.transfer.browser.favorites_menu.is_some(), |this| {
-                this.child(self.transfer_browser_favorites_menu_overlay(cx))
-            })
-            .when(self.transfer.browser.path_menu.is_some(), |this| {
+            .when(
+                self.transfer.browser_view().context_menu.is_some(),
+                |this| this.child(self.transfer_browser_context_menu_overlay(cx)),
+            )
+            .when(
+                self.transfer.browser_view().favorites_menu.is_some(),
+                |this| this.child(self.transfer_browser_favorites_menu_overlay(cx)),
+            )
+            .when(self.transfer.browser_view().path_menu.is_some(), |this| {
                 this.child(self.transfer_browser_path_menu_overlay(cx))
             })
-            .when(self.transfer.browser.upload_menu.is_some(), |this| {
+            .when(self.transfer.browser_view().upload_menu.is_some(), |this| {
                 this.child(self.transfer_browser_upload_menu_overlay(cx))
             })
             .when(overlay.multi_line_paste_open, |this| {

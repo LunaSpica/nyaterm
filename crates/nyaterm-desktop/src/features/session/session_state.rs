@@ -256,7 +256,7 @@ impl NyaTermApp {
         }
         // Keep workspace_split mirrored to the active tab's per-tab pane root.
         self.sync_workspace_split_from_active_tab();
-        self.transfer.browser.auto_sync_cwd_last_at = None;
+        self.transfer.reset_browser_auto_sync_cwd();
         // Transfer browser state is only needed when the transfers panel is open
         // or we already have cached browser state for this session. Skipping the
         // full reset on every activate keeps connect/switch chrome responsive.
@@ -264,8 +264,8 @@ impl NyaTermApp {
             || self.shell.active_right_panel() == Some(NavItem::Transfers)
             || self.shell.selected_nav() == NavItem::Transfers;
         if transfers_panel_visible
-            || self.transfer.browser.session_cache.contains_key(session_id)
-            || !self.transfer.browser.entries.is_empty()
+            || self.transfer.has_browser_session_cache(session_id)
+            || !self.transfer.browser_entries_are_empty()
         {
             self.sync_transfer_browser_favorites_for_active_session();
             if !self.restore_transfer_browser_session_cache(session_id) {

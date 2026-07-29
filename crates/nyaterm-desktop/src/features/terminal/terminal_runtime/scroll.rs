@@ -1133,14 +1133,10 @@ impl NyaTermApp {
             changed,
             self.session.active_id() == Some(session_id),
             self.transfer_browser_auto_sync_cwd_enabled(),
-            self.transfer.browser.path_editing,
+            self.transfer.browser_view().path_editing,
             &cwd,
         ) {
-            if self.transfer.browser.path != cwd {
-                self.transfer.browser.path = cwd.clone();
-                self.transfer.browser.path_draft = cwd.clone();
-                self.transfer.browser.status = format!("cwd synced: {cwd}");
-            }
+            self.transfer.apply_terminal_cwd_to_browser(cwd);
         }
     }
 

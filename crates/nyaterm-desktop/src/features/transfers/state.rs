@@ -33,7 +33,7 @@ use super::super::remote_editor_window::RemoteFileEditorWindow;
 pub(in crate::features) struct TransferFeatureState {
     queue: TransferQueueState,
     paths: TransferPathState,
-    pub browser: TransferBrowserState,
+    pub(super) browser: TransferBrowserState,
     file_ops: TransferFileOpsState,
     editor: TransferEditorFeatureState,
     external_sync: TransferExternalSyncState,
@@ -81,44 +81,80 @@ struct TransferPathState {
     prompt: Option<TransferPathPromptKind>,
 }
 
-/// SFTP browser: current listing, navigation history, selection and menus.
-pub(in crate::features) struct TransferBrowserState {
-    pub path: String,
-    pub home_dir: String,
+/// Borrowed presentation state for the SFTP browser.
+///
+/// Mutations stay on `TransferFeatureState`; renderers and app-level adapters
+/// can inspect browser state without receiving the authoritative child.
+pub(in crate::features) struct TransferBrowserView<'a> {
+    pub path: &'a String,
+    pub home_dir: &'a String,
     pub home_dir_pending: bool,
-    pub path_draft: String,
+    pub path_draft: &'a String,
     pub path_editing: bool,
-    pub entries: Vec<SftpFileEntry>,
+    pub entries: &'a Vec<SftpFileEntry>,
     pub loading: bool,
-    pub error: Option<String>,
-    pub status: String,
-    pub search: String,
+    pub error: &'a Option<String>,
+    pub search: &'a String,
     pub list_offset: usize,
     pub viewport_height: f32,
     pub search_expanded: bool,
-    pub history: VecDeque<String>,
+    pub history: &'a VecDeque<String>,
     pub history_index: usize,
-    pub visited_history: VecDeque<String>,
-    pub session_cache: HashMap<String, TransferBrowserSessionCacheState>,
-    /// Latest SFTP navigation job per session; older results must not rewind the browser.
-    pub navigation_jobs: HashMap<String, String>,
-    pub pending_navigations: HashMap<String, TransferBrowserNavigationSnapshot>,
-    pub auto_sync_cwd_last_at: Option<Instant>,
-    pub favorites: VecDeque<String>,
+    pub visited_history: &'a VecDeque<String>,
+    pub favorites: &'a VecDeque<String>,
     pub sort_column: TransferBrowserSortColumn,
     pub sort_direction: TransferBrowserSortDirection,
     pub column_widths: TransferBrowserColumnWidths,
-    pub column_resize: Option<TransferBrowserColumnResizeState>,
-    pub selected_remote_path: Option<String>,
-    pub selected_remote_paths: HashSet<String>,
-    pub drag_selection: Option<TransferBrowserDragSelectionState>,
-    pub pending_rename: Option<TransferBrowserPendingRenameState>,
-    pub pending_rename_token: u64,
-    pub context_menu: Option<TransferBrowserContextMenuState>,
-    pub favorites_menu: Option<TransferBrowserFavoritesMenuState>,
-    pub path_menu: Option<TransferBrowserPathMenuState>,
-    pub upload_menu: Option<TransferBrowserUploadMenuState>,
-    pub focus: FocusHandle,
+    pub column_resize: &'a Option<TransferBrowserColumnResizeState>,
+    pub selected_remote_path: &'a Option<String>,
+    pub selected_remote_paths: &'a HashSet<String>,
+    pub drag_selection: &'a Option<TransferBrowserDragSelectionState>,
+    pub pending_rename: &'a Option<TransferBrowserPendingRenameState>,
+    pub context_menu: &'a Option<TransferBrowserContextMenuState>,
+    pub favorites_menu: &'a Option<TransferBrowserFavoritesMenuState>,
+    pub path_menu: &'a Option<TransferBrowserPathMenuState>,
+    pub upload_menu: &'a Option<TransferBrowserUploadMenuState>,
+    pub focus: &'a FocusHandle,
+}
+
+/// SFTP browser: current listing, navigation history, selection and menus.
+pub(super) struct TransferBrowserState {
+    pub(super) path: String,
+    pub(super) home_dir: String,
+    pub(super) home_dir_pending: bool,
+    pub(super) path_draft: String,
+    pub(super) path_editing: bool,
+    pub(super) entries: Vec<SftpFileEntry>,
+    pub(super) loading: bool,
+    pub(super) error: Option<String>,
+    pub(super) status: String,
+    pub(super) search: String,
+    pub(super) list_offset: usize,
+    pub(super) viewport_height: f32,
+    pub(super) search_expanded: bool,
+    pub(super) history: VecDeque<String>,
+    pub(super) history_index: usize,
+    pub(super) visited_history: VecDeque<String>,
+    pub(super) session_cache: HashMap<String, TransferBrowserSessionCacheState>,
+    /// Latest SFTP navigation job per session; older results must not rewind the browser.
+    pub(super) navigation_jobs: HashMap<String, String>,
+    pub(super) pending_navigations: HashMap<String, TransferBrowserNavigationSnapshot>,
+    pub(super) auto_sync_cwd_last_at: Option<Instant>,
+    pub(super) favorites: VecDeque<String>,
+    pub(super) sort_column: TransferBrowserSortColumn,
+    pub(super) sort_direction: TransferBrowserSortDirection,
+    pub(super) column_widths: TransferBrowserColumnWidths,
+    pub(super) column_resize: Option<TransferBrowserColumnResizeState>,
+    pub(super) selected_remote_path: Option<String>,
+    pub(super) selected_remote_paths: HashSet<String>,
+    pub(super) drag_selection: Option<TransferBrowserDragSelectionState>,
+    pub(super) pending_rename: Option<TransferBrowserPendingRenameState>,
+    pub(super) pending_rename_token: u64,
+    pub(super) context_menu: Option<TransferBrowserContextMenuState>,
+    pub(super) favorites_menu: Option<TransferBrowserFavoritesMenuState>,
+    pub(super) path_menu: Option<TransferBrowserPathMenuState>,
+    pub(super) upload_menu: Option<TransferBrowserUploadMenuState>,
+    pub(super) focus: FocusHandle,
 }
 
 /// Rename/move/delete/create/properties dialogs over browser entries.
@@ -255,6 +291,509 @@ impl TransferFeatureState {
                 height_resize: None,
             },
         }
+    }
+
+    pub(in crate::features) fn browser_view(&self) -> TransferBrowserView<'_> {
+        TransferBrowserView {
+            path: &self.browser.path,
+            home_dir: &self.browser.home_dir,
+            home_dir_pending: self.browser.home_dir_pending,
+            path_draft: &self.browser.path_draft,
+            path_editing: self.browser.path_editing,
+            entries: &self.browser.entries,
+            loading: self.browser.loading,
+            error: &self.browser.error,
+            search: &self.browser.search,
+            list_offset: self.browser.list_offset,
+            viewport_height: self.browser.viewport_height,
+            search_expanded: self.browser.search_expanded,
+            history: &self.browser.history,
+            history_index: self.browser.history_index,
+            visited_history: &self.browser.visited_history,
+            favorites: &self.browser.favorites,
+            sort_column: self.browser.sort_column,
+            sort_direction: self.browser.sort_direction,
+            column_widths: self.browser.column_widths,
+            column_resize: &self.browser.column_resize,
+            selected_remote_path: &self.browser.selected_remote_path,
+            selected_remote_paths: &self.browser.selected_remote_paths,
+            drag_selection: &self.browser.drag_selection,
+            pending_rename: &self.browser.pending_rename,
+            context_menu: &self.browser.context_menu,
+            favorites_menu: &self.browser.favorites_menu,
+            path_menu: &self.browser.path_menu,
+            upload_menu: &self.browser.upload_menu,
+            focus: &self.browser.focus,
+        }
+    }
+
+    pub(in crate::features) fn set_browser_status(&mut self, status: impl Into<String>) {
+        self.browser.status = status.into();
+    }
+
+    pub(in crate::features) fn select_browser_path(&mut self, path: impl Into<String>) {
+        self.browser.selected_remote_path = Some(path.into());
+    }
+
+    pub(in crate::features) fn browser_entries_are_empty(&self) -> bool {
+        self.browser.entries.is_empty()
+    }
+
+    pub(in crate::features) fn apply_terminal_cwd_to_browser(&mut self, cwd: String) -> bool {
+        if self.browser.path_editing || self.browser.path == cwd {
+            return false;
+        }
+        self.browser.path = cwd.clone();
+        self.browser.path_draft = cwd.clone();
+        self.browser.status = format!("cwd synced: {cwd}");
+        true
+    }
+
+    pub(in crate::features) fn browser_auto_sync_cwd_last_at(&self) -> Option<Instant> {
+        self.browser.auto_sync_cwd_last_at
+    }
+
+    pub(in crate::features) fn mark_browser_auto_sync_cwd(&mut self, now: Instant) {
+        self.browser.auto_sync_cwd_last_at = Some(now);
+    }
+
+    pub(in crate::features) fn reset_browser_auto_sync_cwd(&mut self) {
+        self.browser.auto_sync_cwd_last_at = None;
+    }
+
+    pub(in crate::features) fn remove_browser_session_cache(&mut self, session_id: &str) {
+        self.browser.session_cache.remove(session_id);
+    }
+
+    pub(in crate::features) fn has_browser_session_cache(&self, session_id: &str) -> bool {
+        self.browser.session_cache.contains_key(session_id)
+    }
+
+    pub(in crate::features) fn set_browser_list_offset(&mut self, offset: usize) {
+        self.browser.list_offset = offset;
+    }
+
+    pub(in crate::features) fn set_browser_viewport_height(&mut self, height: f32) -> bool {
+        if (self.browser.viewport_height - height).abs() < 0.5 {
+            return false;
+        }
+        self.browser.viewport_height = height;
+        true
+    }
+
+    pub(in crate::features) fn start_browser_column_resize(
+        &mut self,
+        column: TransferBrowserSortColumn,
+        position_x: Pixels,
+    ) {
+        self.browser.start_column_resize(column, position_x);
+    }
+
+    pub(in crate::features) fn update_browser_column_resize(&mut self, position_x: Pixels) -> bool {
+        self.browser.update_column_resize(position_x)
+    }
+
+    pub(in crate::features) fn finish_browser_column_resize(&mut self) -> bool {
+        self.browser.finish_column_resize()
+    }
+
+    pub(in crate::features) fn cancel_browser_path_edit(&mut self) {
+        self.browser.cancel_path_edit();
+    }
+
+    pub(in crate::features) fn set_browser_search(&mut self, search: String) {
+        self.browser.search = search;
+        self.browser.list_offset = 0;
+    }
+
+    pub(in crate::features) fn expand_browser_search(&mut self) {
+        self.browser.search_expanded = true;
+    }
+
+    pub(in crate::features) fn close_browser_search(&mut self) {
+        self.browser.search_expanded = false;
+    }
+
+    pub(in crate::features) fn clear_browser_search(&mut self) {
+        self.browser.search.clear();
+        self.browser.list_offset = 0;
+    }
+
+    pub(in crate::features) fn toggle_browser_sort(
+        &mut self,
+        column: TransferBrowserSortColumn,
+    ) -> String {
+        if self.browser.sort_column == column {
+            self.browser.sort_direction = self.browser.sort_direction.toggled();
+        } else {
+            self.browser.sort_column = column;
+            self.browser.sort_direction = column.default_direction();
+        }
+        self.browser.list_offset = 0;
+        let status = format!(
+            "sorted by {} {}",
+            self.browser.sort_column.label().to_lowercase(),
+            self.browser.sort_direction.marker()
+        );
+        self.browser.status = status.clone();
+        status
+    }
+
+    pub(in crate::features) fn begin_browser_path_edit(&mut self, path: String) {
+        self.browser.path_draft = path;
+        self.browser.path_editing = true;
+        self.browser.status = "editing remote directory path".to_string();
+    }
+
+    pub(in crate::features) fn update_browser_path_draft(&mut self, path: String) {
+        self.browser.path_draft = path;
+        self.browser.status = "editing remote directory path".to_string();
+    }
+
+    pub(in crate::features) fn finish_browser_path_edit(&mut self) {
+        self.browser.path_draft.clear();
+        self.browser.path_editing = false;
+    }
+
+    pub(in crate::features) fn dismiss_browser_path_edit(&mut self) {
+        self.browser.path_editing = false;
+    }
+
+    pub(in crate::features) fn open_browser_context_menu(
+        &mut self,
+        menu: TransferBrowserContextMenuState,
+        status: impl Into<String>,
+    ) {
+        self.browser.path_menu = None;
+        self.browser.drag_selection = None;
+        self.browser.context_menu = Some(menu);
+        self.browser.status = status.into();
+    }
+
+    pub(in crate::features) fn close_browser_context_menu(&mut self) {
+        self.browser.context_menu = None;
+    }
+
+    pub(in crate::features) fn open_browser_favorites_menu(
+        &mut self,
+        menu: TransferBrowserFavoritesMenuState,
+        status: impl Into<String>,
+    ) {
+        self.browser.upload_menu = None;
+        self.browser.path_menu = None;
+        self.browser.context_menu = None;
+        self.browser.favorites_menu = Some(menu);
+        self.browser.status = status.into();
+    }
+
+    pub(in crate::features) fn close_browser_favorites_menu(&mut self) {
+        self.browser.favorites_menu = None;
+    }
+
+    pub(in crate::features) fn open_browser_upload_menu(
+        &mut self,
+        menu: TransferBrowserUploadMenuState,
+    ) {
+        self.browser.favorites_menu = None;
+        self.browser.path_menu = None;
+        self.browser.context_menu = None;
+        self.browser.upload_menu = Some(menu);
+        self.browser.status = "upload menu opened".to_string();
+    }
+
+    pub(in crate::features) fn close_browser_upload_menu(&mut self) {
+        self.browser.upload_menu = None;
+    }
+
+    pub(in crate::features) fn open_browser_path_menu(
+        &mut self,
+        menu: TransferBrowserPathMenuState,
+    ) {
+        self.browser.context_menu = None;
+        self.browser.favorites_menu = None;
+        self.browser.upload_menu = None;
+        self.browser.path_menu = Some(menu);
+    }
+
+    pub(in crate::features) fn close_browser_path_menu(&mut self) {
+        self.browser.path_menu = None;
+    }
+
+    pub(in crate::features) fn store_browser_session_cache(
+        &mut self,
+        session_id: String,
+        cache: TransferBrowserSessionCacheState,
+    ) {
+        self.browser.session_cache.insert(session_id, cache);
+    }
+
+    pub(in crate::features) fn restore_browser_session_cache(
+        &mut self,
+        session_id: &str,
+    ) -> Option<String> {
+        let cache = self.browser.session_cache.get(session_id)?.clone();
+        let remote_path = cache.current_path.clone();
+        self.browser.path = cache.current_path;
+        self.browser.home_dir = cache.home_dir;
+        self.browser.home_dir_pending = false;
+        self.browser.path_draft.clear();
+        self.browser.path_editing = false;
+        self.browser.entries = cache.entries;
+        self.browser.loading = false;
+        self.browser.error = None;
+        self.browser.status = format!(
+            "restored cached directory · {} item(s)",
+            self.browser.entries.len()
+        );
+        self.browser.history = cache.history;
+        self.browser.history_index = cache
+            .history_index
+            .min(self.browser.history.len().saturating_sub(1));
+        self.browser.visited_history = cache.visited_history;
+        self.browser.clear_interaction();
+        Some(remote_path)
+    }
+
+    pub(in crate::features) fn reset_browser_for_session(&mut self, ssh_active: bool) {
+        self.browser.path = ".".to_string();
+        self.browser.home_dir.clear();
+        self.browser.home_dir_pending = false;
+        self.browser.path_draft.clear();
+        self.browser.path_editing = false;
+        self.browser.entries.clear();
+        self.browser.loading = false;
+        self.browser.error = None;
+        self.browser.status = if ssh_active {
+            "List a remote directory to browse files.".to_string()
+        } else {
+            "Start an SSH session to browse remote files.".to_string()
+        };
+        self.browser.history.clear();
+        self.browser.history_index = 0;
+        self.browser.visited_history.clear();
+        self.browser.clear_interaction();
+    }
+
+    pub(in crate::features) fn begin_browser_directory_load(&mut self, path: String) {
+        self.browser.list_offset = 0;
+        self.browser.path = path;
+        self.browser.path_draft.clear();
+        self.browser.path_editing = false;
+        self.browser.path_menu = None;
+        self.browser.selected_remote_path = None;
+        self.browser.status = "Loading remote directory...".to_string();
+        self.browser.loading = true;
+        self.browser.error = None;
+    }
+
+    pub(in crate::features) fn begin_browser_parent_load(&mut self, path: String) {
+        self.browser.path = path;
+        self.browser.selected_remote_path = None;
+        self.browser.selected_remote_paths.clear();
+        self.browser.status = "Loading parent directory...".to_string();
+        self.browser.loading = true;
+        self.browser.error = None;
+    }
+
+    pub(in crate::features) fn browser_history_destination(
+        &mut self,
+        delta: isize,
+    ) -> Result<String, &'static str> {
+        if self.browser.history.is_empty() {
+            return Err("directory history is empty");
+        }
+        let next = self.browser.history_index as isize + delta;
+        if next < 0 || next as usize >= self.browser.history.len() {
+            return Err(if delta > 0 {
+                "no older directory history"
+            } else {
+                "no newer directory history"
+            });
+        }
+        self.browser.history_index = next as usize;
+        self.browser
+            .history
+            .get(self.browser.history_index)
+            .cloned()
+            .ok_or("directory history entry is unavailable")
+    }
+
+    pub(in crate::features) fn record_browser_history(&mut self, path: String) {
+        self.browser.record_history(path);
+    }
+
+    pub(in crate::features) fn record_browser_visited_history(&mut self, path: String) {
+        self.browser.record_visited_history(path);
+    }
+
+    pub(in crate::features) fn add_browser_favorite(&mut self, path: String) -> bool {
+        let existed = self
+            .browser
+            .favorites
+            .iter()
+            .any(|existing| existing == &path);
+        self.browser.favorites.retain(|existing| existing != &path);
+        self.browser.favorites.push_front(path);
+        self.browser.favorites.truncate(12);
+        existed
+    }
+
+    pub(in crate::features) fn remove_browser_favorite(&mut self, path: &str) -> bool {
+        let previous_len = self.browser.favorites.len();
+        self.browser.favorites.retain(|existing| existing != path);
+        self.browser.favorites.len() < previous_len
+    }
+
+    pub(in crate::features) fn replace_browser_favorites(&mut self, favorites: VecDeque<String>) {
+        self.browser.favorites = favorites;
+        self.browser.favorites.truncate(12);
+    }
+
+    pub(in crate::features) fn browser_favorites_owned(&self) -> Vec<String> {
+        self.browser.favorites.iter().cloned().collect()
+    }
+
+    pub(in crate::features) fn clear_browser_favorites(&mut self) {
+        self.browser.favorites.clear();
+    }
+
+    pub(in crate::features) fn retain_browser_selection(
+        &mut self,
+        mut retain: impl FnMut(&str) -> bool,
+    ) {
+        self.browser
+            .selected_remote_paths
+            .retain(|path| retain(path));
+        if self
+            .browser
+            .selected_remote_path
+            .as_deref()
+            .is_some_and(|path| !retain(path))
+        {
+            self.browser.selected_remote_path = None;
+        }
+    }
+
+    pub(in crate::features) fn select_browser_entry(&mut self, path: String) {
+        self.browser.selected_remote_path = Some(path.clone());
+        self.browser.selected_remote_paths.clear();
+        self.browser.selected_remote_paths.insert(path);
+    }
+
+    pub(in crate::features) fn replace_browser_selection(
+        &mut self,
+        paths: HashSet<String>,
+        active_path: Option<String>,
+    ) -> usize {
+        self.browser.selected_remote_paths = paths;
+        self.browser.selected_remote_path = active_path;
+        self.browser.selected_remote_paths.len()
+    }
+
+    pub(in crate::features) fn clear_browser_selection(&mut self) {
+        self.browser.selected_remote_path = None;
+        self.browser.selected_remote_paths.clear();
+    }
+
+    pub(in crate::features) fn activate_marked_browser_path(
+        &mut self,
+        path: &str,
+    ) -> Option<usize> {
+        self.browser.drag_selection = None;
+        if !self.browser.selected_remote_paths.contains(path) {
+            return None;
+        }
+        self.browser.selected_remote_path = Some(path.to_string());
+        Some(self.browser.selected_remote_paths.len())
+    }
+
+    pub(in crate::features) fn toggle_browser_path_mark(&mut self, path: String) -> usize {
+        if !self.browser.selected_remote_paths.remove(&path) {
+            self.browser.selected_remote_paths.insert(path.clone());
+        }
+        self.browser.selected_remote_path = Some(path);
+        self.browser.selected_remote_paths.len()
+    }
+
+    pub(in crate::features) fn set_browser_drag_selection(
+        &mut self,
+        selection: TransferBrowserDragSelectionState,
+    ) {
+        self.browser.drag_selection = Some(selection);
+    }
+
+    pub(in crate::features) fn clear_browser_drag_selection(&mut self) {
+        self.browser.drag_selection = None;
+    }
+
+    pub(in crate::features) fn finish_browser_drag_selection(&mut self) -> bool {
+        self.browser.drag_selection.take().is_some()
+    }
+
+    pub(in crate::features) fn schedule_browser_pending_rename(
+        &mut self,
+        path: &str,
+    ) -> Option<u64> {
+        if self.browser.selected_remote_path.as_deref() != Some(path)
+            || self.browser.selected_remote_paths.len() != 1
+            || !self.browser.selected_remote_paths.contains(path)
+        {
+            return None;
+        }
+        self.browser.pending_rename_token = self.browser.pending_rename_token.wrapping_add(1);
+        let token = self.browser.pending_rename_token;
+        self.browser.pending_rename = Some(TransferBrowserPendingRenameState {
+            path: path.to_string(),
+            token,
+        });
+        Some(token)
+    }
+
+    pub(in crate::features) fn resolve_browser_pending_rename(
+        &mut self,
+        path: &str,
+        token: u64,
+        rename_dialog_open: bool,
+    ) -> bool {
+        let should_rename = self
+            .browser
+            .pending_rename
+            .as_ref()
+            .is_some_and(|pending| pending.path == path && pending.token == token)
+            && self.browser.selected_remote_path.as_deref() == Some(path)
+            && self.browser.selected_remote_paths.len() == 1
+            && self.browser.selected_remote_paths.contains(path)
+            && !rename_dialog_open;
+        self.browser.pending_rename = None;
+        should_rename
+    }
+
+    pub(in crate::features) fn cancel_browser_pending_rename(&mut self) -> bool {
+        self.browser.cancel_pending_rename()
+    }
+
+    pub(in crate::features) fn prepare_browser_navigation(
+        &mut self,
+        session_key: &str,
+        remote_path: String,
+    ) -> TransferBrowserNavigationSnapshot {
+        let pending_job_id = self.browser.navigation_jobs.remove(session_key);
+        if let Some(snapshot) =
+            pending_job_id.and_then(|job_id| self.browser.pending_navigations.remove(&job_id))
+        {
+            self.browser.restore_navigation(snapshot.clone());
+            return snapshot;
+        }
+        self.browser.capture_navigation(remote_path)
+    }
+
+    pub(in crate::features) fn restore_browser_navigation(
+        &mut self,
+        snapshot: TransferBrowserNavigationSnapshot,
+    ) -> String {
+        let remote_path = snapshot.remote_path.clone();
+        self.browser.restore_navigation(snapshot);
+        remote_path
     }
 
     pub(in crate::features) fn panel_focus(&self) -> &FocusHandle {
@@ -1761,17 +2300,84 @@ impl TransferPanelState {
 /// Keeping it here rather than on `NyaTermApp` means a drag cannot reach any
 /// other app state; the page-level handlers are forwarders that own the redraw.
 impl TransferBrowserState {
-    pub(in crate::features) fn cancel_path_edit(&mut self) {
+    fn clear_interaction(&mut self) {
+        self.selected_remote_path = None;
+        self.selected_remote_paths.clear();
+        self.drag_selection = None;
+        self.cancel_pending_rename();
+        self.context_menu = None;
+        self.favorites_menu = None;
+        self.path_menu = None;
+        self.upload_menu = None;
+    }
+
+    fn record_history(&mut self, path: String) {
+        if self.history.get(self.history_index) == Some(&path) {
+            return;
+        }
+        if !self.history.is_empty() {
+            let current_index = self.history_index.min(self.history.len() - 1);
+            self.history.drain(..current_index);
+        }
+        self.history.push_front(path.clone());
+        self.history_index = 0;
+        self.record_visited_history(path);
+    }
+
+    fn record_visited_history(&mut self, path: String) {
+        self.visited_history.retain(|existing| existing != &path);
+        self.visited_history.push_front(path);
+        self.visited_history.truncate(30);
+    }
+
+    fn capture_navigation(&self, remote_path: String) -> TransferBrowserNavigationSnapshot {
+        TransferBrowserNavigationSnapshot {
+            remote_path,
+            browser_path: self.path.clone(),
+            entries: self.entries.clone(),
+            loading: self.loading,
+            error: self.error.clone(),
+            status: self.status.clone(),
+            history: self.history.clone(),
+            history_index: self.history_index,
+            visited_history: self.visited_history.clone(),
+            selected_path: self.selected_remote_path.clone(),
+            selected_paths: self.selected_remote_paths.clone(),
+            list_offset: self.list_offset,
+        }
+    }
+
+    fn restore_navigation(&mut self, snapshot: TransferBrowserNavigationSnapshot) {
+        self.path = snapshot.browser_path;
+        self.entries = snapshot.entries;
+        self.loading = snapshot.loading;
+        self.error = snapshot.error;
+        self.status = snapshot.status;
+        self.history = snapshot.history;
+        self.history_index = snapshot
+            .history_index
+            .min(self.history.len().saturating_sub(1));
+        self.visited_history = snapshot.visited_history;
+        self.selected_remote_path = snapshot.selected_path;
+        self.selected_remote_paths = snapshot.selected_paths;
+        self.list_offset = snapshot.list_offset;
+    }
+
+    fn cancel_pending_rename(&mut self) -> bool {
+        let cancelled = self.pending_rename.take().is_some();
+        if cancelled {
+            self.pending_rename_token = self.pending_rename_token.wrapping_add(1);
+        }
+        cancelled
+    }
+
+    fn cancel_path_edit(&mut self) {
         self.path_draft.clear();
         self.path_editing = false;
         self.status = "remote directory path edit cancelled".to_string();
     }
 
-    pub(in crate::features) fn start_column_resize(
-        &mut self,
-        column: TransferBrowserSortColumn,
-        position_x: Pixels,
-    ) {
+    fn start_column_resize(&mut self, column: TransferBrowserSortColumn, position_x: Pixels) {
         self.column_resize = Some(TransferBrowserColumnResizeState {
             column,
             start_x: position_x,
@@ -1781,7 +2387,7 @@ impl TransferBrowserState {
     }
 
     /// Returns false when no resize is in flight, so the caller can skip the redraw.
-    pub(in crate::features) fn update_column_resize(&mut self, position_x: Pixels) -> bool {
+    fn update_column_resize(&mut self, position_x: Pixels) -> bool {
         let Some(state) = self.column_resize else {
             return false;
         };
@@ -1793,7 +2399,7 @@ impl TransferBrowserState {
     }
 
     /// Returns false when no resize was in flight, so the caller can skip the redraw.
-    pub(in crate::features) fn finish_column_resize(&mut self) -> bool {
+    fn finish_column_resize(&mut self) -> bool {
         if self.column_resize.take().is_none() {
             return false;
         }
@@ -2105,6 +2711,7 @@ impl TransferQueueState {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::VecDeque;
     use std::path::PathBuf;
     use std::sync::mpsc;
 
@@ -2115,10 +2722,11 @@ mod tests {
     };
 
     use crate::models::{
-        TransferEditorField, TransferEditorState, TransferExternalSyncPromptState,
-        TransferJobEvent, TransferJobKind, TransferJobResult, TransferJobState, TransferJobStatus,
-        TransferNewFolderState, TransferPathPromptKind, TransferPropertiesField,
-        TransferPropertiesState, TransferRenameState,
+        TransferBrowserNavigationSnapshot, TransferBrowserSessionCacheState, TransferEditorField,
+        TransferEditorState, TransferExternalSyncPromptState, TransferJobEvent, TransferJobKind,
+        TransferJobResult, TransferJobState, TransferJobStatus, TransferNewFolderState,
+        TransferPathPromptKind, TransferPropertiesField, TransferPropertiesState,
+        TransferRenameState,
     };
 
     use super::{
@@ -2186,6 +2794,119 @@ mod tests {
             modified_at: Some(2),
             accessed_at: Some(3),
         }
+    }
+
+    #[test]
+    fn browser_history_discards_the_forward_branch_and_tracks_visits() {
+        let cx = TestAppContext::single();
+        let mut transfer = transfer_state(&cx);
+        transfer.browser.history =
+            VecDeque::from(["/three".to_string(), "/two".to_string(), "/one".to_string()]);
+        transfer.browser.history_index = 1;
+
+        transfer.record_browser_history("/four".to_string());
+
+        assert_eq!(
+            transfer.browser.history,
+            VecDeque::from(["/four".to_string(), "/two".to_string(), "/one".to_string(),])
+        );
+        assert_eq!(transfer.browser.history_index, 0);
+        assert_eq!(
+            transfer.browser.visited_history.front().map(String::as_str),
+            Some("/four")
+        );
+    }
+
+    #[test]
+    fn browser_session_restore_clamps_history_and_clears_interaction() {
+        let cx = TestAppContext::single();
+        let mut transfer = transfer_state(&cx);
+        transfer.select_browser_entry("/stale.txt".to_string());
+        assert!(
+            transfer
+                .schedule_browser_pending_rename("/stale.txt")
+                .is_some()
+        );
+        transfer.store_browser_session_cache(
+            "session-a".to_string(),
+            TransferBrowserSessionCacheState {
+                entries: vec![file_entry("/srv/current.txt")],
+                current_path: "/srv".to_string(),
+                home_dir: "/home/test".to_string(),
+                history: VecDeque::from(["/srv".to_string()]),
+                history_index: 99,
+                visited_history: VecDeque::from(["/srv".to_string()]),
+            },
+        );
+
+        assert_eq!(
+            transfer.restore_browser_session_cache("session-a"),
+            Some("/srv".to_string())
+        );
+        let browser = transfer.browser_view();
+        assert_eq!(browser.path.as_str(), "/srv");
+        assert_eq!(browser.history_index, 0);
+        assert!(browser.selected_remote_paths.is_empty());
+        assert!(browser.pending_rename.is_none());
+        assert_eq!(browser.entries.len(), 1);
+    }
+
+    #[test]
+    fn browser_navigation_restores_the_stable_pending_snapshot() {
+        let cx = TestAppContext::single();
+        let mut transfer = transfer_state(&cx);
+        transfer.browser.path = "/optimistic".to_string();
+        transfer
+            .browser
+            .navigation_jobs
+            .insert("session-a".to_string(), "list-1".to_string());
+        let stable = TransferBrowserNavigationSnapshot {
+            remote_path: "/stable".to_string(),
+            browser_path: "/stable".to_string(),
+            entries: vec![file_entry("/stable/file.txt")],
+            loading: false,
+            error: None,
+            status: "stable".to_string(),
+            history: VecDeque::from(["/stable".to_string()]),
+            history_index: 0,
+            visited_history: VecDeque::from(["/stable".to_string()]),
+            selected_path: None,
+            selected_paths: Default::default(),
+            list_offset: 3,
+        };
+        transfer
+            .browser
+            .pending_navigations
+            .insert("list-1".to_string(), stable.clone());
+
+        let rollback = transfer.prepare_browser_navigation("session-a", "/optimistic".to_string());
+
+        assert_eq!(rollback.browser_path, "/stable");
+        assert_eq!(transfer.browser.path, "/stable");
+        assert_eq!(transfer.browser.list_offset, 3);
+        assert!(!transfer.browser.navigation_jobs.contains_key("session-a"));
+        assert!(!transfer.browser.pending_navigations.contains_key("list-1"));
+    }
+
+    #[test]
+    fn browser_selection_replacement_preserves_the_explicit_active_path() {
+        let cx = TestAppContext::single();
+        let mut transfer = transfer_state(&cx);
+        transfer.select_browser_entry("/active".to_string());
+
+        let selected = ["/base".to_string()].into_iter().collect();
+        let selected_count =
+            transfer.replace_browser_selection(selected, Some("/active".to_string()));
+
+        assert_eq!(selected_count, 1);
+        assert_eq!(
+            transfer.browser.selected_remote_path.as_deref(),
+            Some("/active")
+        );
+        assert_eq!(
+            transfer.browser.selected_remote_paths,
+            ["/base".to_string()].into_iter().collect()
+        );
     }
 
     fn transfer_queue(cx: &TestAppContext) -> TransferQueueState {

@@ -15,10 +15,10 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let parent_path = if self.transfer.browser.path.trim().is_empty() {
+        let parent_path = if self.transfer.browser_view().path.trim().is_empty() {
             self.transfer.normalized_remote_path()
         } else {
-            self.transfer.browser.path.clone()
+            self.transfer.browser_view().path.clone()
         };
         self.transfer
             .open_new_folder_dialog(TransferNewFolderState {
@@ -168,10 +168,10 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let parent_path = if self.transfer.browser.path.trim().is_empty() {
+        let parent_path = if self.transfer.browser_view().path.trim().is_empty() {
             self.transfer.normalized_remote_path()
         } else {
-            self.transfer.browser.path.clone()
+            self.transfer.browser_view().path.clone()
         };
         self.transfer.open_new_file_dialog(TransferNewFileState {
             parent_path,

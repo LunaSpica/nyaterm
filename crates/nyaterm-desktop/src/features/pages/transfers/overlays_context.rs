@@ -19,20 +19,17 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let state =
-            self.transfer
-                .browser
-                .context_menu
-                .clone()
-                .unwrap_or(TransferBrowserContextMenuState {
-                    path: String::new(),
-                    name: String::new(),
-                    is_parent: false,
-                    is_current_directory: false,
-                    is_directory: false,
-                    x: px(24.),
-                    y: px(24.),
-                });
+        let state = self.transfer.browser_view().context_menu.clone().unwrap_or(
+            TransferBrowserContextMenuState {
+                path: String::new(),
+                name: String::new(),
+                is_parent: false,
+                is_current_directory: false,
+                is_directory: false,
+                x: px(24.),
+                y: px(24.),
+            },
+        );
         let selected_entry = self.selected_transfer_entry();
         let show_open_internal = selected_entry
             .as_ref()
@@ -73,7 +70,8 @@ impl NyaTermApp {
                 label,
                 cx.listener(move |this, _, window, cx| {
                     let Some(entry) = this.selected_transfer_entry() else {
-                        this.transfer.browser.status = "select a remote file first".to_string();
+                        this.transfer
+                            .set_browser_status("select a remote file first");
                         this.close_transfer_browser_context_menu(cx);
                         return;
                     };
@@ -363,8 +361,11 @@ impl NyaTermApp {
                                     "transfer-context-move",
                                     self.tr("fileExplorer.cmMove"),
                                     cx.listener(|this, _, window, cx| {
-                                        let Some(path) =
-                                            this.transfer.browser.selected_remote_path.clone()
+                                        let Some(path) = this
+                                            .transfer
+                                            .browser_view()
+                                            .selected_remote_path
+                                            .clone()
                                         else {
                                             this.close_transfer_browser_context_menu(cx);
                                             return;

@@ -11,8 +11,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.transfer
-            .browser
-            .start_column_resize(column, event.position.x);
+            .start_browser_column_resize(column, event.position.x);
         cx.notify();
     }
 
@@ -21,7 +20,7 @@ impl NyaTermApp {
         event: &MouseMoveEvent,
         cx: &mut Context<Self>,
     ) {
-        if self.transfer.browser.update_column_resize(event.position.x) {
+        if self.transfer.update_browser_column_resize(event.position.x) {
             cx.notify();
         }
     }
@@ -31,7 +30,7 @@ impl NyaTermApp {
         _event: &MouseUpEvent,
         cx: &mut Context<Self>,
     ) {
-        if self.transfer.browser.finish_column_resize() {
+        if self.transfer.finish_browser_column_resize() {
             cx.notify();
         }
     }

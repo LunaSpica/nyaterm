@@ -86,8 +86,7 @@ impl Element for TransferBrowserViewportElement {
         let height = f32::from(bounds.size.height).max(0.);
         let app = self.app.clone();
         let _ = app.update(cx, |this, cx| {
-            if (this.transfer.browser.viewport_height - height).abs() > 0.5 {
-                this.transfer.browser.viewport_height = height;
+            if this.transfer.set_browser_viewport_height(height) {
                 cx.notify();
             }
         });
@@ -119,37 +118,37 @@ impl NyaTermApp {
         let section_header = self.shell_transparent_color(palette.section_header);
         let _selected = self
             .transfer
-            .browser
+            .browser_view()
             .selected_remote_path
             .as_deref()
             .map(|path| truncate_preview(path, 56))
             .unwrap_or_else(|| "none".to_string());
         let visible_entries = self.visible_transfer_browser_entries();
-        let column_widths = self.transfer.browser.column_widths;
+        let column_widths = self.transfer.browser_view().column_widths;
         let table_width = transfer_browser_table_width(column_widths);
         let resizing_column = self
             .transfer
-            .browser
+            .browser_view()
             .column_resize
             .map(|state| state.column);
         let selected_entries = self.selected_transfer_entries();
         let selected_count = selected_entries.len();
-        let total_count = self.transfer.browser.entries.len();
+        let total_count = self.transfer.browser_view().entries.len();
         let files_total_size: u64 = self
             .transfer
-            .browser
+            .browser_view()
             .entries
             .iter()
             .filter(|entry| entry.file_type != SftpFileType::Directory)
             .map(|entry| entry.size.unwrap_or(0))
             .sum();
-        let search_active = !self.transfer.browser.search.trim().is_empty();
-        let search_expanded = self.transfer.browser.search_expanded || search_active;
+        let search_active = !self.transfer.browser_view().search.trim().is_empty();
+        let search_expanded = self.transfer.browser_view().search_expanded || search_active;
         let show_hidden_files = self.settings.summary.ui_file_explorer_show_hidden_files;
         let search_input = search_expanded.then(|| {
             let field = self.text_input(
                 "transfer.browser.search",
-                &self.transfer.browser.search.clone(),
+                &self.transfer.browser_view().search.clone(),
                 TextInputSetup::placeholder(self.tr("fileExplorer.searchPlaceholder")),
                 cx,
             );
@@ -183,7 +182,8 @@ impl NyaTermApp {
                 )
                 .into_any_element()
         });
-        let current_browser_path = normalized_transfer_browser_path(&self.transfer.browser.path);
+        let current_browser_path =
+            normalized_transfer_browser_path(&self.transfer.browser_view().path);
         let has_parent_entry =
             can_transfer && current_browser_path != "/" && current_browser_path != ".";
         let auto_sync_cwd = self.transfer_browser_auto_sync_cwd_enabled();
@@ -227,7 +227,7 @@ impl NyaTermApp {
                             }),
                     ),
             );
-        } else if self.transfer.browser.loading {
+        } else if self.transfer.browser_view().loading {
             rows = rows.child(
                 div()
                     .flex()
@@ -239,8 +239,8 @@ impl NyaTermApp {
                     .text_color(rgb(palette.text_dimmed))
                     .child(self.tr("fileExplorer.loading")),
             );
-        } else if self.transfer.browser.entries.is_empty() {
-            if has_parent_entry && self.transfer.browser.error.is_none() {
+        } else if self.transfer.browser_view().entries.is_empty() {
+            if has_parent_entry && self.transfer.browser_view().error.is_none() {
                 rows = rows.child(transfer_browser_parent_entry_row(
                     palette,
                     current_browser_path.clone(),
@@ -258,7 +258,7 @@ impl NyaTermApp {
                         .py_8()
                         .gap_1()
                         .child(
-                            if let Some(error) = self.transfer.browser.error.as_deref() {
+                            if let Some(error) = self.transfer.browser_view().error.as_deref() {
                                 div()
                                     .text_size(px(12.))
                                     .text_color(rgb(palette.danger))
@@ -289,16 +289,16 @@ impl NyaTermApp {
             let viewport_rows = transfer_browser_viewport_rows(
                 self.shell.viewport_size().1,
                 self.transfer.panel_height(),
-                self.transfer.browser.viewport_height,
+                self.transfer.browser_view().viewport_height,
             );
             let parent_count = usize::from(has_parent_entry);
             let total_entries = visible_entries.len() + parent_count;
             let window_capacity = viewport_rows + FILE_OVERSCAN * 2;
             let max_offset = total_entries.saturating_sub(viewport_rows.min(total_entries));
-            if self.transfer.browser.list_offset > max_offset {
-                self.transfer.browser.list_offset = max_offset;
+            if self.transfer.browser_view().list_offset > max_offset {
+                self.transfer.set_browser_list_offset(max_offset);
             }
-            let scroll_row = self.transfer.browser.list_offset.min(max_offset);
+            let scroll_row = self.transfer.browser_view().list_offset.min(max_offset);
             // This panel uses a manual wheel offset and clips vertically, so the
             // virtual window must be laid out at the top of the viewport. Spacer
             // padding would only work with a real scroll container.
@@ -329,8 +329,8 @@ impl NyaTermApp {
                     rows = rows.child(transfer_browser_entry_row(
                         palette,
                         entry.clone(),
-                        self.transfer.browser.selected_remote_path.clone(),
-                        &self.transfer.browser.selected_remote_paths,
+                        self.transfer.browser_view().selected_remote_path.clone(),
+                        &self.transfer.browser_view().selected_remote_paths,
                         column_widths,
                         renaming.clone(),
                         (renaming.as_ref().map(|state| state.old_path.as_str())
@@ -350,7 +350,7 @@ impl NyaTermApp {
             .flex_col()
             .overflow_hidden()
             .bg(transparent_surface)
-            .track_focus(&self.transfer.browser.focus)
+            .track_focus(&self.transfer.browser_view().focus)
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 this.handle_transfer_browser_key_down(event, window, cx);
             }))
@@ -523,13 +523,13 @@ impl NyaTermApp {
                     .scrollbar_width(px(8.))
                     .on_scroll_wheel(cx.listener(|this, event: &ScrollWheelEvent, _, cx| {
                         let current_path =
-                            normalized_transfer_browser_path(&this.transfer.browser.path);
+                            normalized_transfer_browser_path(&this.transfer.browser_view().path);
                         let parent_count = usize::from(current_path != "/" && current_path != ".");
                         let total = this.visible_transfer_browser_entries().len() + parent_count;
                         let viewport_rows = transfer_browser_viewport_rows(
                             this.shell.viewport_size().1,
                             this.transfer.panel_height(),
-                            this.transfer.browser.viewport_height,
+                            this.transfer.browser_view().viewport_height,
                         );
                         let max_offset = total.saturating_sub(viewport_rows.min(total));
                         if max_offset == 0 {
@@ -539,12 +539,12 @@ impl NyaTermApp {
                             ScrollDelta::Lines(delta) => delta.y,
                             ScrollDelta::Pixels(delta) => f32::from(delta.y) / FILE_ROW_PX,
                         };
-                        let next = (this.transfer.browser.list_offset as f32 - delta_rows)
+                        let next = (this.transfer.browser_view().list_offset as f32 - delta_rows)
                             .round()
                             .clamp(0., max_offset as f32)
                             as usize;
-                        if next != this.transfer.browser.list_offset {
-                            this.transfer.browser.list_offset = next;
+                        if next != this.transfer.browser_view().list_offset {
+                            this.transfer.set_browser_list_offset(next);
                             cx.stop_propagation();
                             cx.notify();
                         }
@@ -570,8 +570,8 @@ impl NyaTermApp {
                                         section_header,
                                         TransferBrowserSortColumn::Name,
                                         column_widths.name,
-                                        self.transfer.browser.sort_column,
-                                        self.transfer.browser.sort_direction,
+                                        self.transfer.browser_view().sort_column,
+                                        self.transfer.browser_view().sort_direction,
                                         resizing_column,
                                         cx,
                                     ))
@@ -580,8 +580,8 @@ impl NyaTermApp {
                                         section_header,
                                         TransferBrowserSortColumn::Modified,
                                         column_widths.modified,
-                                        self.transfer.browser.sort_column,
-                                        self.transfer.browser.sort_direction,
+                                        self.transfer.browser_view().sort_column,
+                                        self.transfer.browser_view().sort_direction,
                                         resizing_column,
                                         cx,
                                     ))
@@ -590,8 +590,8 @@ impl NyaTermApp {
                                         section_header,
                                         TransferBrowserSortColumn::Size,
                                         column_widths.size,
-                                        self.transfer.browser.sort_column,
-                                        self.transfer.browser.sort_direction,
+                                        self.transfer.browser_view().sort_column,
+                                        self.transfer.browser_view().sort_direction,
                                         resizing_column,
                                         cx,
                                     ))
@@ -600,8 +600,8 @@ impl NyaTermApp {
                                         section_header,
                                         TransferBrowserSortColumn::Permissions,
                                         column_widths.permissions,
-                                        self.transfer.browser.sort_column,
-                                        self.transfer.browser.sort_direction,
+                                        self.transfer.browser_view().sort_column,
+                                        self.transfer.browser_view().sort_direction,
                                         resizing_column,
                                         cx,
                                     ))
@@ -610,8 +610,8 @@ impl NyaTermApp {
                                         section_header,
                                         TransferBrowserSortColumn::Owner,
                                         column_widths.owner,
-                                        self.transfer.browser.sort_column,
-                                        self.transfer.browser.sort_direction,
+                                        self.transfer.browser_view().sort_column,
+                                        self.transfer.browser_view().sort_direction,
                                         resizing_column,
                                         cx,
                                     ))
@@ -620,8 +620,8 @@ impl NyaTermApp {
                                         section_header,
                                         TransferBrowserSortColumn::Group,
                                         column_widths.group,
-                                        self.transfer.browser.sort_column,
-                                        self.transfer.browser.sort_direction,
+                                        self.transfer.browser_view().sort_column,
+                                        self.transfer.browser_view().sort_direction,
                                         resizing_column,
                                         cx,
                                     )),
@@ -652,8 +652,8 @@ impl NyaTermApp {
                             .text_size(px(11.))
                             .text_color(rgb(palette.text_muted))
                             .when(
-                                !self.transfer.browser.loading
-                                    && self.transfer.browser.error.is_none()
+                                !self.transfer.browser_view().loading
+                                    && self.transfer.browser_view().error.is_none()
                                     && total_count > 0,
                                 |this| {
                                     this.child(

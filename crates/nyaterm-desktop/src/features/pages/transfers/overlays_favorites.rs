@@ -17,14 +17,13 @@ impl NyaTermApp {
         event: &MouseDownEvent,
         cx: &mut Context<Self>,
     ) {
-        self.transfer.browser.upload_menu = None;
-        self.transfer.browser.path_menu = None;
-        self.transfer.browser.context_menu = None;
-        self.transfer.browser.favorites_menu = Some(TransferBrowserFavoritesMenuState {
-            x: event.position.x,
-            y: event.position.y + px(18.),
-        });
-        self.transfer.browser.status = self.tr("fileExplorer.favorites").to_string();
+        self.transfer.open_browser_favorites_menu(
+            TransferBrowserFavoritesMenuState {
+                x: event.position.x,
+                y: event.position.y + px(18.),
+            },
+            self.tr("fileExplorer.favorites").to_string(),
+        );
         cx.notify();
     }
 
@@ -32,7 +31,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        self.transfer.browser.favorites_menu = None;
+        self.transfer.close_browser_favorites_menu();
         cx.notify();
     }
 
@@ -41,18 +40,16 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let state =
-            self.transfer
-                .browser
-                .favorites_menu
-                .unwrap_or(TransferBrowserFavoritesMenuState {
-                    x: px(24.),
-                    y: px(24.),
-                });
-        let current_path = normalized_transfer_browser_path(&self.transfer.browser.path);
+        let state = self.transfer.browser_view().favorites_menu.unwrap_or(
+            TransferBrowserFavoritesMenuState {
+                x: px(24.),
+                y: px(24.),
+            },
+        );
+        let current_path = normalized_transfer_browser_path(&self.transfer.browser_view().path);
         let favorite_paths = self
             .transfer
-            .browser
+            .browser_view()
             .favorites
             .iter()
             .cloned()
@@ -198,7 +195,7 @@ impl NyaTermApp {
                             .flex()
                             .flex_col()
                             .gap_1()
-                            .when(self.transfer.browser.favorites.is_empty(), |this| {
+                            .when(self.transfer.browser_view().favorites.is_empty(), |this| {
                                 this.child(
                                     div()
                                         .rounded_sm()
@@ -212,7 +209,7 @@ impl NyaTermApp {
                                         .child(self.tr("fileExplorer.noFavorites")),
                                 )
                             })
-                            .when(!self.transfer.browser.favorites.is_empty(), |this| {
+                            .when(!self.transfer.browser_view().favorites.is_empty(), |this| {
                                 this.child(list)
                             }),
                     ),

@@ -95,7 +95,7 @@ impl NyaTermApp {
                     palette,
                     job,
                     directory_progress,
-                    self.transfer.browser.selected_remote_path.clone(),
+                    self.transfer.browser_view().selected_remote_path.clone(),
                     self.transfer.selected_transfer_job_id().map(str::to_string),
                     cx,
                 ));

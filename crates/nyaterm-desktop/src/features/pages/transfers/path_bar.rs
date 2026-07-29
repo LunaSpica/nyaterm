@@ -22,27 +22,27 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let display_browser_path = display_transfer_browser_home_path(
             &current_browser_path,
-            &self.transfer.browser.home_dir,
+            &self.transfer.browser_view().home_dir,
         );
         let is_current_favorite = self
             .transfer
-            .browser
+            .browser_view()
             .favorites
             .iter()
             .any(|path| path == &current_browser_path);
         let history_paths = self
             .transfer
-            .browser
+            .browser_view()
             .visited_history
             .iter()
             .cloned()
             .take(5)
             .collect::<Vec<_>>();
         let palette = self.theme_palette();
-        let path_input = self.transfer.browser.path_editing.then(|| {
+        let path_input = self.transfer.browser_view().path_editing.then(|| {
             let field = self.text_input(
                 "transfer.browser.path",
-                &self.transfer.browser.path_draft.clone(),
+                &self.transfer.browser_view().path_draft.clone(),
                 TextInputSetup::placeholder(self.tr("fileExplorer.editPath")),
                 cx,
             );
@@ -72,7 +72,7 @@ impl NyaTermApp {
         });
         let breadcrumbs = build_transfer_browser_breadcrumbs(
             &current_browser_path,
-            &self.transfer.browser.home_dir,
+            &self.transfer.browser_view().home_dir,
         );
         let (visible_breadcrumbs, overflow_breadcrumbs) =
             collapse_transfer_browser_breadcrumbs(&breadcrumbs);
@@ -94,7 +94,7 @@ impl NyaTermApp {
                     .flex()
                     .items_center()
                     .gap_1()
-                    .when(self.transfer.browser.path_editing, |this| {
+                    .when(self.transfer.browser_view().path_editing, |this| {
                         this.child(
                             div()
                                 .id(SharedString::from("transfer-browser-path-input"))
@@ -124,7 +124,7 @@ impl NyaTermApp {
                                 .children(path_input),
                         )
                     })
-                    .when(!self.transfer.browser.path_editing, |this| {
+                    .when(!self.transfer.browser_view().path_editing, |this| {
                         this.child(transfer_browser_breadcrumb_row(
                             palette,
                             display_browser_path.clone(),
@@ -190,13 +190,13 @@ impl NyaTermApp {
                     ),
             )
             .when(
-                self.transfer.browser.path_editing && !history_paths.is_empty(),
+                self.transfer.browser_view().path_editing && !history_paths.is_empty(),
                 |this| {
                     this.child(transfer_browser_path_history_list(
                         palette,
                         self.shell_surface_color(palette.surface),
                         current_browser_path,
-                        self.transfer.browser.home_dir.clone(),
+                        self.transfer.browser_view().home_dir.clone(),
                         history_paths,
                         cx,
                     ))
@@ -205,15 +205,16 @@ impl NyaTermApp {
     }
 
     pub(super) fn copy_current_transfer_browser_path(&mut self, cx: &mut Context<Self>) {
-        let path = normalized_transfer_browser_path(&self.transfer.browser.path);
+        let path = normalized_transfer_browser_path(&self.transfer.browser_view().path);
         cx.write_to_clipboard(ClipboardItem::new_string(path.clone()));
         self.terminal.view.status = "copied current remote directory".to_string();
-        self.transfer.browser.status = truncate_preview(&path, 92);
+        self.transfer
+            .set_browser_status(truncate_preview(&path, 92));
         cx.notify();
     }
 
     pub(in crate::features) fn close_transfer_browser_path_menu(&mut self, cx: &mut Context<Self>) {
-        self.transfer.browser.path_menu = None;
+        self.transfer.close_browser_path_menu();
         cx.notify();
     }
 
@@ -223,15 +224,13 @@ impl NyaTermApp {
         event: &MouseDownEvent,
         cx: &mut Context<Self>,
     ) {
-        self.transfer.browser.context_menu = None;
-        self.transfer.browser.favorites_menu = None;
-        self.transfer.browser.upload_menu = None;
-        self.transfer.browser.path_menu = Some(TransferBrowserPathMenuState {
-            session_id: self.session.active_id_owned(),
-            x: event.position.x,
-            y: event.position.y,
-            kind: TransferBrowserPathMenuKind::Overflow { segments },
-        });
+        self.transfer
+            .open_browser_path_menu(TransferBrowserPathMenuState {
+                session_id: self.session.active_id_owned(),
+                x: event.position.x,
+                y: event.position.y,
+                kind: TransferBrowserPathMenuKind::Overflow { segments },
+            });
         cx.notify();
     }
 
@@ -243,29 +242,27 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let path = normalized_transfer_browser_path(&path);
-        let current_path = normalized_transfer_browser_path(&self.transfer.browser.path);
+        let current_path = normalized_transfer_browser_path(&self.transfer.browser_view().path);
         let status = if path == current_path {
             TransferBrowserChildrenMenuStatus::Ready(transfer_browser_child_directories(
-                &self.transfer.browser.entries,
+                &self.transfer.browser_view().entries,
                 self.settings.summary.ui_file_explorer_show_hidden_files,
             ))
         } else {
             TransferBrowserChildrenMenuStatus::Loading
         };
-        self.transfer.browser.context_menu = None;
-        self.transfer.browser.favorites_menu = None;
-        self.transfer.browser.upload_menu = None;
-        self.transfer.browser.path_menu = Some(TransferBrowserPathMenuState {
-            session_id: self.session.active_id_owned(),
-            x: event.position.x,
-            y: event.position.y,
-            kind: TransferBrowserPathMenuKind::Children {
-                path: path.clone(),
-                branch_child_path,
-                request_id: None,
-                status,
-            },
-        });
+        self.transfer
+            .open_browser_path_menu(TransferBrowserPathMenuState {
+                session_id: self.session.active_id_owned(),
+                x: event.position.x,
+                y: event.position.y,
+                kind: TransferBrowserPathMenuKind::Children {
+                    path: path.clone(),
+                    branch_child_path,
+                    request_id: None,
+                    status,
+                },
+            });
         if path != current_path {
             self.start_transfer_browser_children_job(path, cx);
         } else {
@@ -276,7 +273,7 @@ impl NyaTermApp {
     fn retry_transfer_browser_children_menu(&mut self, cx: &mut Context<Self>) {
         let path = self
             .transfer
-            .browser
+            .browser_view()
             .path_menu
             .as_ref()
             .and_then(|menu| match &menu.kind {
@@ -293,19 +290,16 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let menu =
-            self.transfer
-                .browser
-                .path_menu
-                .clone()
-                .unwrap_or(TransferBrowserPathMenuState {
-                    session_id: None,
-                    x: px(8.),
-                    y: px(8.),
-                    kind: TransferBrowserPathMenuKind::Overflow {
-                        segments: Vec::new(),
-                    },
-                });
+        let menu = self.transfer.browser_view().path_menu.clone().unwrap_or(
+            TransferBrowserPathMenuState {
+                session_id: None,
+                x: px(8.),
+                y: px(8.),
+                kind: TransferBrowserPathMenuKind::Overflow {
+                    segments: Vec::new(),
+                },
+            },
+        );
         let preferred_height = match &menu.kind {
             TransferBrowserPathMenuKind::Overflow { segments } => 16. + segments.len() as f32 * 28.,
             TransferBrowserPathMenuKind::Children { status, .. } => match status {
@@ -444,10 +438,11 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        let path = normalized_transfer_browser_path(&self.transfer.browser.path);
+        let path = normalized_transfer_browser_path(&self.transfer.browser_view().path);
         if self.send_terminal_input(path.clone().into_bytes(), cx) {
             self.terminal.view.status = "sent current remote directory to terminal".to_string();
-            self.transfer.browser.status = truncate_preview(&path, 92);
+            self.transfer
+                .set_browser_status(truncate_preview(&path, 92));
             cx.notify();
         }
     }
@@ -457,15 +452,13 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.transfer.browser.path_draft =
-            normalized_transfer_browser_path(&self.transfer.browser.path);
-        self.transfer.browser.path_editing = true;
+        let path = normalized_transfer_browser_path(self.transfer.browser_view().path);
+        self.transfer.begin_browser_path_edit(path);
         self.forget_text_inputs("transfer.browser.path");
-        self.transfer.browser.status = "editing remote directory path".to_string();
         self.start_transfer_browser_home_dir_job(cx);
         let field = self.text_input(
             "transfer.browser.path",
-            &self.transfer.browser.path_draft.clone(),
+            &self.transfer.browser_view().path_draft.clone(),
             TextInputSetup::placeholder(self.tr("fileExplorer.editPath")),
             cx,
         );
@@ -475,7 +468,7 @@ impl NyaTermApp {
     }
 
     pub(super) fn cancel_transfer_browser_path_edit(&mut self, cx: &mut Context<Self>) {
-        self.transfer.browser.cancel_path_edit();
+        self.transfer.cancel_browser_path_edit();
         self.forget_text_inputs("transfer.browser.path");
         cx.notify();
     }
@@ -485,12 +478,11 @@ impl NyaTermApp {
         text: String,
         cx: &mut Context<Self>,
     ) {
-        if !self.transfer.browser.path_editing {
+        if !self.transfer.browser_view().path_editing {
             return;
         }
         self.mark_user_activity();
-        self.transfer.browser.path_draft = text;
-        self.transfer.browser.status = "editing remote directory path".to_string();
+        self.transfer.update_browser_path_draft(text);
         cx.notify();
     }
 
@@ -500,25 +492,26 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let path = expand_transfer_browser_home_path(
-            &self.transfer.browser.path_draft,
-            &self.transfer.browser.home_dir,
+            &self.transfer.browser_view().path_draft,
+            &self.transfer.browser_view().home_dir,
         );
         if path.is_empty() {
-            self.transfer.browser.status = "enter a remote directory path".to_string();
+            self.transfer
+                .set_browser_status("enter a remote directory path");
             cx.notify();
             return;
         }
         if path == "~" || path.starts_with("~/") {
-            self.transfer.browser.status = if self.transfer.browser.home_dir_pending {
+            let status = if self.transfer.browser_view().home_dir_pending {
                 "remote home is still resolving".to_string()
             } else {
                 "remote home is unavailable for this session".to_string()
             };
+            self.transfer.set_browser_status(status);
             cx.notify();
             return;
         }
-        self.transfer.browser.path_draft.clear();
-        self.transfer.browser.path_editing = false;
+        self.transfer.finish_browser_path_edit();
         self.forget_text_inputs("transfer.browser.path");
         self.open_transfer_browser_directory(path, window, cx);
     }
@@ -872,7 +865,7 @@ fn transfer_browser_path_history_list(
                 .cursor_pointer()
                 .hover(|this| this.bg(rgb(palette.hover)))
                 .on_click(cx.listener(move |this, _, window, cx| {
-                    this.transfer.browser.path_editing = false;
+                    this.transfer.dismiss_browser_path_edit();
                     this.open_transfer_browser_directory(open_path.clone(), window, cx);
                 }))
                 .child(truncate_preview(&display_path, 72)),

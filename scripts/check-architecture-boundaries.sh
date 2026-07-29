@@ -382,6 +382,22 @@ check_no_matches \
   '(self|this|app)\.transfer\.queue(\.|[[:space:]]*=)' \
   crates/nyaterm-desktop/src/features
 check_no_multiline_matches \
+  "TransferFeatureState browser child must stay inside the transfers module" \
+  'struct[[:space:]]+TransferFeatureState[[:space:]]*\{[^}]*pub([[:space:]]|\(crate\)|\(in crate\)|\(in crate::features\))[[:space:]]+browser[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/transfers/state.rs
+check_no_matches \
+  "TransferBrowserState must stay inside the transfers module" \
+  'pub([[:space:]]|\(crate\)|\(in crate\)|\(in crate::features\))[[:space:]]+struct[[:space:]]+TransferBrowserState' \
+  crates/nyaterm-desktop/src/features/transfers/state.rs
+check_no_matches \
+  "transfer browser state access must use TransferFeatureState methods outside transfers" \
+  '(self|this|app)\.transfer\.browser(\.|[[:space:]]*=)' \
+  crates/nyaterm-desktop/src/features/pages \
+  crates/nyaterm-desktop/src/features/root.rs \
+  crates/nyaterm-desktop/src/features/session \
+  crates/nyaterm-desktop/src/features/shell \
+  crates/nyaterm-desktop/src/features/terminal
+check_no_multiline_matches \
   "TransferFeatureState file_ops child must remain private" \
   'struct[[:space:]]+TransferFeatureState[[:space:]]*\{[^}]*pub([[:space:]]|\([^)]*\))[[:space:]]+file_ops[[:space:]]*:' \
   crates/nyaterm-desktop/src/features/transfers/state.rs

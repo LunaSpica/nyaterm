@@ -16,14 +16,11 @@ impl NyaTermApp {
         event: &MouseDownEvent,
         cx: &mut Context<Self>,
     ) {
-        self.transfer.browser.favorites_menu = None;
-        self.transfer.browser.path_menu = None;
-        self.transfer.browser.context_menu = None;
-        self.transfer.browser.upload_menu = Some(TransferBrowserUploadMenuState {
-            x: event.position.x,
-            y: event.position.y + px(22.),
-        });
-        self.transfer.browser.status = "upload menu opened".to_string();
+        self.transfer
+            .open_browser_upload_menu(TransferBrowserUploadMenuState {
+                x: event.position.x,
+                y: event.position.y + px(22.),
+            });
         cx.notify();
     }
 
@@ -31,7 +28,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        self.transfer.browser.upload_menu = None;
+        self.transfer.close_browser_upload_menu();
         cx.notify();
     }
 
@@ -40,14 +37,14 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let state = self
-            .transfer
-            .browser
-            .upload_menu
-            .unwrap_or(TransferBrowserUploadMenuState {
-                x: px(24.),
-                y: px(24.),
-            });
+        let state =
+            self.transfer
+                .browser_view()
+                .upload_menu
+                .unwrap_or(TransferBrowserUploadMenuState {
+                    x: px(24.),
+                    y: px(24.),
+                });
         let (viewport_w, viewport_h) = self.shell.viewport_size();
         let (menu_x, menu_y, menu_max_height) = transfer_menu_position(
             f32::from(state.x),

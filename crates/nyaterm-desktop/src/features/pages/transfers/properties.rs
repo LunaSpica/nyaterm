@@ -18,7 +18,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let path = normalized_transfer_browser_path(&self.transfer.browser.path);
+        let path = normalized_transfer_browser_path(&self.transfer.browser_view().path);
         if path.trim().is_empty() {
             self.terminal.view.status = "open a remote directory first".to_string();
             cx.notify();
@@ -66,7 +66,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.transfer.browser.selected_remote_path = Some(entry.path.clone());
+        self.transfer.select_browser_path(entry.path.clone());
         self.transfer.set_remote_path(entry.path.clone());
         self.forget_text_inputs("transfer.properties.");
         self.transfer
@@ -191,7 +191,8 @@ impl NyaTermApp {
             progress: None,
             control: None,
         });
-        self.transfer.browser.status = format!("Loading properties for {remote_path}");
+        self.transfer
+            .set_browser_status(format!("Loading properties for {remote_path}"));
         let transfer_tx = self.transfer.transfer_event_sender();
         std::thread::spawn(move || {
             let result = SftpService::new(config)
@@ -297,7 +298,8 @@ impl NyaTermApp {
             progress: None,
             control: None,
         });
-        self.transfer.browser.status = format!("Updating properties for {remote_path}");
+        self.transfer
+            .set_browser_status(format!("Updating properties for {remote_path}"));
         let transfer_tx = self.transfer.transfer_event_sender();
         std::thread::spawn(move || {
             let result = (|| {

@@ -578,11 +578,11 @@ impl NyaTermApp {
             && self.transfer_browser_auto_sync_cwd_enabled()
             && !self.transfer_sync_cwd_job_running()
             && remote_refresh_due(
-                self.transfer.browser.auto_sync_cwd_last_at,
+                self.transfer.browser_auto_sync_cwd_last_at(),
                 TRANSFER_AUTO_SYNC_CWD_INTERVAL_SECONDS,
             )
         {
-            self.transfer.browser.auto_sync_cwd_last_at = Some(Instant::now());
+            self.transfer.mark_browser_auto_sync_cwd(Instant::now());
             self.start_transfer_sync_cwd_job(window, cx);
             dirty = true;
         }

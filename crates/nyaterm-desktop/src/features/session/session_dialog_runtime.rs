@@ -221,7 +221,7 @@ impl NyaTermApp {
             .layout
             .session_surface_bounds
             .remove(session_id);
-        self.transfer.browser.session_cache.remove(session_id);
+        self.transfer.remove_browser_session_cache(session_id);
         self.transfer.clear_external_sync_for_session(session_id);
         self.transfer
             .close_properties_dialog_for_session(session_id);

@@ -18,10 +18,10 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let parent_path = if self.transfer.browser.path.trim().is_empty() {
+        let parent_path = if self.transfer.browser_view().path.trim().is_empty() {
             self.transfer.normalized_remote_path()
         } else {
-            self.transfer.browser.path.clone()
+            self.transfer.browser_view().path.clone()
         };
         self.transfer
             .open_new_symlink_dialog(TransferNewSymlinkState {
@@ -171,7 +171,7 @@ impl NyaTermApp {
     ) {
         self.forget_text_inputs("transfer.rename.");
         self.ensure_panel_open(crate::models::NavItem::Transfers);
-        let Some(old_path) = self.transfer.browser.selected_remote_path.clone() else {
+        let Some(old_path) = self.transfer.browser_view().selected_remote_path.clone() else {
             self.terminal.view.status = "select an SFTP list entry before renaming".to_string();
             cx.notify();
             return;

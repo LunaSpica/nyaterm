@@ -10,10 +10,9 @@ impl NyaTermApp {
     pub(in crate::features::pages::transfers) fn visible_transfer_browser_entries(
         &self,
     ) -> Vec<SftpFileEntry> {
-        let query = self.transfer.browser.search.trim().to_lowercase();
-        let mut entries = self
-            .transfer
-            .browser
+        let browser = self.transfer.browser_view();
+        let query = browser.search.trim().to_lowercase();
+        let mut entries = browser
             .entries
             .iter()
             .filter(|entry| {
@@ -29,8 +28,8 @@ impl NyaTermApp {
             compare_transfer_browser_entries(
                 left,
                 right,
-                self.transfer.browser.sort_column,
-                self.transfer.browser.sort_direction,
+                browser.sort_column,
+                browser.sort_direction,
             )
         });
         entries
@@ -41,18 +40,7 @@ impl NyaTermApp {
         column: TransferBrowserSortColumn,
         cx: &mut Context<Self>,
     ) {
-        if self.transfer.browser.sort_column == column {
-            self.transfer.browser.sort_direction = self.transfer.browser.sort_direction.toggled();
-        } else {
-            self.transfer.browser.sort_column = column;
-            self.transfer.browser.sort_direction = column.default_direction();
-        }
-        self.transfer.browser.list_offset = 0;
-        self.transfer.browser.status = format!(
-            "sorted by {} {}",
-            self.transfer.browser.sort_column.label().to_lowercase(),
-            self.transfer.browser.sort_direction.marker()
-        );
+        self.transfer.toggle_browser_sort(column);
         cx.notify();
     }
 
@@ -62,13 +50,13 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.mark_user_activity();
-        self.transfer.browser.search = text;
-        self.transfer.browser.list_offset = 0;
-        self.transfer.browser.status = transfer_browser_search_status(
-            self.transfer.browser.search.as_str(),
+        self.transfer.set_browser_search(text);
+        let status = transfer_browser_search_status(
+            self.transfer.browser_view().search.as_str(),
             self.visible_transfer_browser_entries().len(),
-            self.transfer.browser.entries.len(),
+            self.transfer.browser_view().entries.len(),
         );
+        self.transfer.set_browser_status(status);
         cx.notify();
     }
 
@@ -79,23 +67,23 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if let Some(text) = initial_text {
-            self.transfer.browser.search = text;
-            self.transfer.browser.list_offset = 0;
+            self.transfer.set_browser_search(text);
             self.forget_text_inputs("transfer.browser.search");
         }
-        self.transfer.browser.search_expanded = true;
+        self.transfer.expand_browser_search();
         let field = self.text_input(
             "transfer.browser.search",
-            &self.transfer.browser.search.clone(),
+            &self.transfer.browser_view().search.clone(),
             TextInputSetup::placeholder(self.tr("fileExplorer.searchPlaceholder")),
             cx,
         );
         window.focus(&field.read(cx).focus_handle());
-        self.transfer.browser.status = transfer_browser_search_status(
-            self.transfer.browser.search.as_str(),
+        let status = transfer_browser_search_status(
+            self.transfer.browser_view().search.as_str(),
             self.visible_transfer_browser_entries().len(),
-            self.transfer.browser.entries.len(),
+            self.transfer.browser_view().entries.len(),
         );
+        self.transfer.set_browser_status(status);
         cx.notify();
     }
 
@@ -104,16 +92,15 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.transfer.browser.search.is_empty() {
-            self.transfer.browser.search_expanded = false;
+        if self.transfer.browser_view().search.is_empty() {
+            self.transfer.close_browser_search();
             self.forget_text_inputs("transfer.browser.search");
-            self.transfer.browser.status = "file search closed".to_string();
-            window.focus(&self.transfer.browser.focus);
+            self.transfer.set_browser_status("file search closed");
+            window.focus(self.transfer.browser_view().focus);
         } else {
-            self.transfer.browser.search.clear();
-            self.transfer.browser.list_offset = 0;
+            self.transfer.clear_browser_search();
             self.reset_text_input("transfer.browser.search", "", cx);
-            self.transfer.browser.status = "file search cleared".to_string();
+            self.transfer.set_browser_status("file search cleared");
         }
         cx.notify();
     }
