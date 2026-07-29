@@ -275,6 +275,14 @@ check_no_multiline_matches_excluding \
   '(self|this|app)[[:space:]]*\.[[:space:]]*shell[[:space:]]*\.[[:space:]]*(runtime|bottom_panel|viewport|navigation|panels|chrome|workspace|diagnostics)(\.|[[:space:]]*=)' \
   crates/nyaterm-desktop/src/features \
   'crates/nyaterm-desktop/src/features/shell/**'
+check_no_multiline_matches \
+  "ShellFeatureState status must remain private" \
+  'struct[[:space:]]+ShellFeatureState[[:space:]]*\{[^}]*pub([[:space:]]|\([^)]*\))[[:space:]]+status[[:space:]]*:' \
+  crates/nyaterm-desktop/src/features/shell/state.rs
+check_no_multiline_matches \
+  "shell status access must use ShellFeatureState methods" \
+  '(self|this|app)[[:space:]]*\.[[:space:]]*shell[[:space:]]*\.[[:space:]]*status[[:space:]]*(\.|=|\[|,|\)|;)' \
+  crates/nyaterm-desktop/src/features
 check_no_matches \
   "shell runtime state must not expose mutable-reference accessors" \
   'fn[[:space:]]+runtime(_mut|_mutable)|->[[:space:]]*&mut[[:space:]]+ShellRuntimeState' \

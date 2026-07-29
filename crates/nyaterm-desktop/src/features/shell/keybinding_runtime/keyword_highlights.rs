@@ -39,14 +39,16 @@ impl NyaTermApp {
                 self.settings.replace_keyword_config(config);
                 self.settings
                     .update_store_status("keyword highlight settings saved", true);
-                self.shell.status = "keyword highlight settings saved".to_string();
+                self.shell
+                    .set_status("keyword highlight settings saved".to_string());
             }
             Err(error) => {
                 self.settings.update_store_status(
                     format!("keyword highlight settings save failed: {error}"),
                     false,
                 );
-                self.shell.status = self.settings.store_status().message.to_string();
+                self.shell
+                    .set_status(self.settings.store_status().message.to_string());
             }
         }
         cx.notify();
@@ -57,7 +59,8 @@ impl NyaTermApp {
             return;
         }
         if !self.settings.begin_keyword_highlight_path_prompt() {
-            self.shell.status = "keyword highlight import picker is already open".to_string();
+            self.shell
+                .set_status("keyword highlight import picker is already open".to_string());
             cx.notify();
             return;
         }
@@ -70,7 +73,8 @@ impl NyaTermApp {
         let config_dir = self.runtime.config_dir().to_path_buf();
         let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
         let receiver = cx.prompt_for_paths(options);
-        self.shell.status = "selecting keyword highlight import file".to_string();
+        self.shell
+            .set_status("selecting keyword highlight import file".to_string());
         cx.spawn(async move |this, cx| {
             let result = match receiver.await {
                 Ok(Ok(Some(paths))) => match paths.into_iter().next() {
@@ -126,23 +130,26 @@ impl NyaTermApp {
             } => {
                 self.refresh_keyword_highlights();
                 self.rebase_open_settings_draft();
-                self.shell.status = format!(
+                self.shell.set_status(format!(
                     "imported {imported_rules} keyword highlight rule(s), updated {updated_rules}, total {total_rules}"
-                );
+                ));
                 self.settings
-                    .update_store_status(self.shell.status.clone(), true);
+                    .update_store_status(self.shell.status().to_string(), true);
             }
             KeywordHighlightPathPromptResult::Cancelled => {
-                self.shell.status = "keyword highlight import cancelled".to_string();
+                self.shell
+                    .set_status("keyword highlight import cancelled".to_string());
             }
             KeywordHighlightPathPromptResult::Failed(error) => {
-                self.shell.status = format!("keyword highlight import failed: {error}");
+                self.shell
+                    .set_status(format!("keyword highlight import failed: {error}"));
                 self.settings
-                    .update_store_status(self.shell.status.clone(), false);
+                    .update_store_status(self.shell.status().to_string(), false);
             }
             KeywordHighlightPathPromptResult::Closed => {
-                self.shell.status =
-                    "keyword highlight import picker closed before returning".to_string();
+                self.shell.set_status(
+                    "keyword highlight import picker closed before returning".to_string(),
+                );
             }
         }
     }
@@ -319,7 +326,8 @@ impl NyaTermApp {
             "escape" => {
                 self.settings.clear_keyword_highlight_edit();
                 window.focus(self.settings.keyword_highlight_focus());
-                self.shell.status = "keyword rule edit cancelled".to_string();
+                self.shell
+                    .set_status("keyword rule edit cancelled".to_string());
                 cx.notify();
                 return;
             }

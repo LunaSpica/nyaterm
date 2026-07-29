@@ -166,8 +166,7 @@ impl NyaTermApp {
                                 if this.session.session_is_busy(&multiplex_session_id)
                                     || this.is_session_disconnected(&multiplex_session_id)
                                 {
-                                    this.shell.status =
-                                        "SSH multiplex is unavailable for this session".to_string();
+                                    this.shell.set_status("SSH multiplex is unavailable for this session".to_string());
                                     cx.notify();
                                     return;
                                 }
@@ -187,8 +186,7 @@ impl NyaTermApp {
                                     .session_is_busy(&multiplex_startup_session_id)
                                     || this.is_session_disconnected(&multiplex_startup_session_id)
                                 {
-                                    this.shell.status =
-                                        "SSH multiplex is unavailable for this session".to_string();
+                                    this.shell.set_status("SSH multiplex is unavailable for this session".to_string());
                                     cx.notify();
                                     return;
                                 }
@@ -360,8 +358,8 @@ impl NyaTermApp {
                             this.select_session(duplicate_session_id.clone(), cx);
                             this.close_tab_actions(cx);
                             if !this.tab_action_can_spawn_session(&duplicate_session_id) {
-                                this.shell.status =
-                                    "active session cannot be duplicated".to_string();
+                                this.shell
+                                    .set_status("active session cannot be duplicated".to_string());
                                 cx.notify();
                                 return;
                             }
@@ -377,8 +375,8 @@ impl NyaTermApp {
                             this.select_session(startup_session_id.clone(), cx);
                             this.close_tab_actions(cx);
                             if !this.tab_action_can_spawn_session(&startup_session_id) {
-                                this.shell.status =
-                                    "active session cannot be duplicated".to_string();
+                                this.shell
+                                    .set_status("active session cannot be duplicated".to_string());
                                 cx.notify();
                                 return;
                             }
@@ -462,8 +460,9 @@ impl NyaTermApp {
                             this.select_session(split_horizontal_session_id.clone(), cx);
                             this.close_tab_actions(cx);
                             if !this.tab_action_can_spawn_session(&split_horizontal_session_id) {
-                                this.shell.status =
-                                    "active session cannot be duplicated for split".to_string();
+                                this.shell.set_status(
+                                    "active session cannot be duplicated for split".to_string(),
+                                );
                                 cx.notify();
                                 return;
                             }
@@ -483,8 +482,9 @@ impl NyaTermApp {
                             this.select_session(split_vertical_session_id.clone(), cx);
                             this.close_tab_actions(cx);
                             if !this.tab_action_can_spawn_session(&split_vertical_session_id) {
-                                this.shell.status =
-                                    "active session cannot be duplicated for split".to_string();
+                                this.shell.set_status(
+                                    "active session cannot be duplicated for split".to_string(),
+                                );
                                 cx.notify();
                                 return;
                             }
@@ -554,8 +554,9 @@ impl NyaTermApp {
                             this.select_session(info_session_id.clone(), cx);
                             this.close_tab_actions(cx);
                             if !this.tab_action_can_show_session_info(&info_session_id) {
-                                this.shell.status =
-                                    "active session has no saved connection info".to_string();
+                                this.shell.set_status(
+                                    "active session has no saved connection info".to_string(),
+                                );
                                 cx.notify();
                                 return;
                             }

@@ -937,8 +937,8 @@ impl NyaTermApp {
             return;
         }
         if self.is_session_disconnected(&session_id) {
-            self.shell.status =
-                "session disconnected — reconnect before dropping files".to_string();
+            self.shell
+                .set_status("session disconnected — reconnect before dropping files".to_string());
             cx.notify();
             return;
         }
@@ -961,8 +961,8 @@ impl NyaTermApp {
         match kind {
             Some(SessionKind::LocalPty) | None => {
                 if path_strings.is_empty() {
-                    self.shell.status =
-                        "folders cannot be dropped into a local terminal".to_string();
+                    self.shell
+                        .set_status("folders cannot be dropped into a local terminal".to_string());
                     cx.notify();
                     return;
                 }
@@ -972,8 +972,10 @@ impl NyaTermApp {
                 }
                 let text = nyaterm_core::format_local_terminal_drop_input(&path_strings);
                 if self.send_terminal_input(text.into_bytes(), cx) {
-                    self.shell.status =
-                        format!("inserted {} path(s) into terminal", path_strings.len());
+                    self.shell.set_status(format!(
+                        "inserted {} path(s) into terminal",
+                        path_strings.len()
+                    ));
                     cx.notify();
                 }
             }
@@ -981,9 +983,10 @@ impl NyaTermApp {
                 SessionKind::Ssh | SessionKind::Telnet | SessionKind::Serial | SessionKind::RawTcp,
             ) => {
                 if has_dirs {
-                    self.shell.status =
+                    self.shell.set_status(
                         "folders cannot be uploaded via ZMODEM — use the file explorer for SFTP"
-                            .to_string();
+                            .to_string(),
+                    );
                     cx.notify();
                     return;
                 }

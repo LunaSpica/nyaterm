@@ -523,14 +523,15 @@ impl NyaTermApp {
 
         for response in protocol_responses {
             if let Err(error) = self.write_session_protocol_response(session_id, &response) {
-                self.shell.status = format!("trzsz protocol response failed: {error}");
+                self.shell
+                    .set_status(format!("trzsz protocol response failed: {error}"));
                 response_error = true;
                 cx.notify();
             }
         }
 
         if !response_error && let Some(status) = latest_protocol_status.or(latest_trigger_status) {
-            self.shell.status = status;
+            self.shell.set_status(status);
             cx.notify();
         }
         passthrough
@@ -610,7 +611,8 @@ impl NyaTermApp {
         }
         for response in event.responses {
             if let Err(error) = self.write_session_protocol_response(session_id, &response) {
-                self.shell.status = format!("trzsz protocol response failed: {error}");
+                self.shell
+                    .set_status(format!("trzsz protocol response failed: {error}"));
                 dirty = true;
             }
         }
@@ -623,17 +625,18 @@ impl NyaTermApp {
             if let Some(state) = self.session.trzsz_state_mut(session_id) {
                 state.finish_download();
             }
-            self.shell.status = format!("trzsz download failed: {reason}");
+            self.shell
+                .set_status(format!("trzsz download failed: {reason}"));
             dirty = true;
         } else if let Some(message) = event.completed {
             self.finish_trzsz_download_jobs(session_id, true, None, cx);
             if let Some(state) = self.session.trzsz_state_mut(session_id) {
                 state.finish_download();
             }
-            self.shell.status = message;
+            self.shell.set_status(message);
             dirty = true;
         } else if let Some(status) = event.status {
-            self.shell.status = status;
+            self.shell.set_status(status);
             dirty = true;
         }
         if dirty {
@@ -684,7 +687,8 @@ impl NyaTermApp {
         let mut dirty = false;
         for response in event.responses {
             if let Err(error) = self.write_session_protocol_response(session_id, &response) {
-                self.shell.status = format!("trzsz protocol response failed: {error}");
+                self.shell
+                    .set_status(format!("trzsz protocol response failed: {error}"));
                 dirty = true;
             }
         }
@@ -697,17 +701,18 @@ impl NyaTermApp {
             if let Some(state) = self.session.trzsz_state_mut(session_id) {
                 state.finish_upload();
             }
-            self.shell.status = format!("trzsz upload failed: {reason}");
+            self.shell
+                .set_status(format!("trzsz upload failed: {reason}"));
             dirty = true;
         } else if let Some(message) = event.completed {
             self.finish_trzsz_upload_jobs(session_id, true, None, cx);
             if let Some(state) = self.session.trzsz_state_mut(session_id) {
                 state.finish_upload();
             }
-            self.shell.status = message;
+            self.shell.set_status(message);
             dirty = true;
         } else if let Some(status) = event.status {
-            self.shell.status = status;
+            self.shell.set_status(status);
             dirty = true;
         }
         if dirty {
@@ -734,20 +739,23 @@ impl NyaTermApp {
 
     fn prepare_trzsz_download_dir(&mut self, cx: &mut Context<Self>) -> Option<PathBuf> {
         let Some(directory) = self.resolved_transfer_download_dir() else {
-            self.shell.status = "cannot determine trzsz download directory".to_string();
+            self.shell
+                .set_status("cannot determine trzsz download directory".to_string());
             cx.notify();
             return None;
         };
         if directory.exists() && !directory.is_dir() {
-            self.shell.status = format!(
+            self.shell.set_status(format!(
                 "trzsz download path is not a directory: {}",
                 directory.display()
-            );
+            ));
             cx.notify();
             return None;
         }
         if let Err(error) = std::fs::create_dir_all(&directory) {
-            self.shell.status = format!("failed to prepare trzsz download directory: {error}");
+            self.shell.set_status(format!(
+                "failed to prepare trzsz download directory: {error}"
+            ));
             cx.notify();
             return None;
         }
@@ -762,7 +770,8 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> bool {
         if self.transfer.path_prompt_is_open() {
-            self.shell.status = "native path picker is already open".to_string();
+            self.shell
+                .set_status("native path picker is already open".to_string());
             cx.notify();
             return false;
         }
@@ -783,16 +792,17 @@ impl NyaTermApp {
             TransferPathPromptKind::UploadFile
         };
         if !self.transfer.begin_path_prompt(prompt_kind) {
-            self.shell.status = "native path picker is already open".to_string();
+            self.shell
+                .set_status("native path picker is already open".to_string());
             cx.notify();
             return false;
         }
         let receiver = cx.prompt_for_paths(options);
-        self.shell.status = if directory_mode {
+        self.shell.set_status(if directory_mode {
             "selecting trzsz upload directories".to_string()
         } else {
             "selecting trzsz upload files".to_string()
-        };
+        });
         cx.spawn(async move |this, cx| {
             let result = match receiver.await {
                 Ok(Ok(Some(paths))) => {
@@ -888,7 +898,7 @@ impl NyaTermApp {
             directory_mode,
             remote_is_windows,
         );
-        self.shell.status = "preparing trzsz upload".to_string();
+        self.shell.set_status("preparing trzsz upload".to_string());
         cx.notify();
     }
 
@@ -913,14 +923,16 @@ impl NyaTermApp {
         let action_frame = build_trzsz_action_frame(&action, remote_is_windows);
         match self.write_session_protocol_response(session_id, &action_frame) {
             Ok(()) => {
-                self.shell.status =
-                    format!("trzsz upload accepted ({file_count} file(s)) [{session_id}]");
+                self.shell.set_status(format!(
+                    "trzsz upload accepted ({file_count} file(s)) [{session_id}]"
+                ));
             }
             Err(error) => {
                 if let Some(state) = self.session.trzsz_state_mut(session_id) {
                     state.finish_upload();
                 }
-                self.shell.status = format!("trzsz upload ACT failed: {error}");
+                self.shell
+                    .set_status(format!("trzsz upload ACT failed: {error}"));
             }
         }
         cx.notify();
@@ -935,9 +947,10 @@ impl NyaTermApp {
     ) {
         let fail = trzsz_fail_response(reason, remote_is_windows);
         if let Err(error) = self.write_session_protocol_response(session_id, &fail) {
-            self.shell.status = format!("trzsz upload reject failed: {error}");
+            self.shell
+                .set_status(format!("trzsz upload reject failed: {error}"));
         } else {
-            self.shell.status = reason.to_string();
+            self.shell.set_status(reason.to_string());
         }
         if let Some(state) = self.session.trzsz_state_mut(session_id) {
             state.finish_upload();

@@ -312,7 +312,7 @@ impl NyaTermApp {
     pub(in crate::features) fn drain_translate_events(&mut self) -> bool {
         let dirty = self.translation.drain_events();
         if dirty {
-            self.shell.status = self.translation.status().to_string();
+            self.shell.set_status(self.translation.status().to_string());
         }
         dirty
     }

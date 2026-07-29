@@ -20,14 +20,17 @@ impl NyaTermApp {
             return;
         }
         let delay_ms = startup_command.delay_ms.min(60_000);
-        self.shell.status = format!("scheduled startup command for {}", short_id(&session_id));
+        self.shell.set_status(format!(
+            "scheduled startup command for {}",
+            short_id(&session_id)
+        ));
         cx.spawn(async move |this, cx| {
             if delay_ms > 0 {
                 Timer::after(Duration::from_millis(delay_ms)).await;
             }
             let _ = this.update(cx, |this, cx| {
                 if this.send_terminal_input_to_session(session_id, command.into_bytes(), cx) {
-                    this.shell.status = "startup command sent".to_string();
+                    this.shell.set_status("startup command sent".to_string());
                     cx.notify();
                 }
             });
@@ -37,7 +40,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn close_active_session(&mut self, cx: &mut Context<Self>) {
         let Some(session_id) = self.session.active_id_owned() else {
-            self.shell.status = "no active session".to_string();
+            self.shell.set_status("no active session".to_string());
             cx.notify();
             return;
         };
@@ -67,7 +70,7 @@ impl NyaTermApp {
                 Ok(()) => {}
                 Err(_) if disconnected => {}
                 Err(error) if !disconnected && !self.session.has_session(close_id) => {
-                    self.shell.status = format!("close failed: {error}");
+                    self.shell.set_status(format!("close failed: {error}"));
                     cx.notify();
                     return;
                 }
@@ -82,8 +85,10 @@ impl NyaTermApp {
             self.sync_session_event_bridge_policy();
             if let Some(next_session_id) = self.next_session_after(&session_id) {
                 self.activate_session_id(&next_session_id);
-                self.shell.status =
-                    format!("session closed; active {}", short_id(&next_session_id));
+                self.shell.set_status(format!(
+                    "session closed; active {}",
+                    short_id(&next_session_id)
+                ));
             } else {
                 self.session.clear_active_session();
                 self.terminal.view.output = String::from(INITIAL_TERMINAL_BANNER);
@@ -93,10 +98,11 @@ impl NyaTermApp {
                     .view
                     .screen
                     .set_encoding(&self.settings.summary().interaction_default_encoding);
-                self.shell.status = "session closed".to_string();
+                self.shell.set_status("session closed".to_string());
             }
         } else {
-            self.shell.status = format!("closed {}", short_id(&session_id));
+            self.shell
+                .set_status(format!("closed {}", short_id(&session_id)));
         }
         cx.notify();
     }
@@ -107,7 +113,8 @@ impl NyaTermApp {
         label: &'static str,
     ) {
         if session_ids.is_empty() {
-            self.shell.status = format!("no {label} sessions to close");
+            self.shell
+                .set_status(format!("no {label} sessions to close"));
             return;
         }
 
@@ -163,11 +170,11 @@ impl NyaTermApp {
             }
         }
 
-        self.shell.status = if failed == 0 {
+        self.shell.set_status(if failed == 0 {
             format!("closed {closed} {label} session(s)")
         } else {
             format!("closed {closed} {label} session(s), {failed} failed")
-        };
+        });
     }
 
     pub(in crate::features) fn handle_window_minimize(
@@ -180,8 +187,8 @@ impl NyaTermApp {
         // and the flag is honored as a documented no-op tray intent with status feedback.
         if self.settings.summary().minimize_to_tray {
             window.minimize_window();
-            self.shell.status =
-                "minimized (tray mode preferred; OS tray polish pending)".to_string();
+            self.shell
+                .set_status("minimized (tray mode preferred; OS tray polish pending)".to_string());
             cx.notify();
             return;
         }
@@ -198,7 +205,9 @@ impl NyaTermApp {
             // Reuse close-all confirmation as quit-with-sessions gate (Tauri confirm_on_close).
             self.session.dialog_request_quit_after_close_all();
             self.open_close_all_sessions_confirm(window, cx);
-            self.shell.status = format!("confirm close: {open_sessions} session(s) still open");
+            self.shell.set_status(format!(
+                "confirm close: {open_sessions} session(s) still open"
+            ));
             cx.notify();
             return;
         }
@@ -215,12 +224,13 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if self.ordered_sessions().is_empty() {
-            self.shell.status = "no sessions to close".to_string();
+            self.shell.set_status("no sessions to close".to_string());
             cx.notify();
             return;
         }
         self.session.dialog_open_close_all_sessions_confirm();
-        self.shell.status = "close all sessions confirmation opened".to_string();
+        self.shell
+            .set_status("close all sessions confirmation opened".to_string());
         window.focus(self.session.dialog_close_all_sessions_confirm_focus());
         cx.notify();
     }
@@ -230,7 +240,8 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.session.dialog_cancel_close_all_sessions_confirm();
-        self.shell.status = "close all sessions cancelled".to_string();
+        self.shell
+            .set_status("close all sessions cancelled".to_string());
         cx.notify();
     }
 
@@ -245,7 +256,8 @@ impl NyaTermApp {
             if self.settings.summary().startup_restore {
                 self.flush_open_tabs_now();
             }
-            self.shell.status = "sessions closed; closing window".to_string();
+            self.shell
+                .set_status("sessions closed; closing window".to_string());
             window.remove_window();
             return;
         }
@@ -287,7 +299,8 @@ impl NyaTermApp {
             .iter()
             .position(|session| session.id == anchor_session_id)
         else {
-            self.shell.status = "session no longer exists".to_string();
+            self.shell
+                .set_status("session no longer exists".to_string());
             cx.notify();
             return;
         };
@@ -310,7 +323,7 @@ impl NyaTermApp {
         self.terminal.view.output.clear();
         self.terminal.view.output_decoder.reset_decoder();
         self.terminal.view.screen.clear();
-        self.shell.status = "terminal cleared".to_string();
+        self.shell.set_status("terminal cleared".to_string());
         cx.notify();
     }
 

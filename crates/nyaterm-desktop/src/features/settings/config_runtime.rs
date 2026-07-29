@@ -16,7 +16,8 @@ impl NyaTermApp {
             .settings
             .begin_config_path_prompt(ConfigPathPromptKind::Export)
         {
-            self.shell.status = "config path picker is already open".to_string();
+            self.shell
+                .set_status("config path picker is already open".to_string());
             cx.notify();
             return;
         }
@@ -25,7 +26,8 @@ impl NyaTermApp {
         let receiver = cx.prompt_for_new_path(&directory, Some("nyaterm-backup.redb"));
         let config_dir = self.runtime.config_dir().to_path_buf();
         let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
-        self.shell.status = "selecting config backup destination".to_string();
+        self.shell
+            .set_status("selecting config backup destination".to_string());
         self.settings
             .set_store_message("selecting backup destination");
         cx.spawn(async move |this, cx| {
@@ -61,12 +63,14 @@ impl NyaTermApp {
             return;
         }
         if self.settings.config_path_prompt_active() {
-            self.shell.status = "config path picker is already open".to_string();
+            self.shell
+                .set_status("config path picker is already open".to_string());
             cx.notify();
             return;
         }
         if self.session.active_id().is_some() || self.has_pending_session_start() {
-            self.shell.status = "close active session before importing config".to_string();
+            self.shell
+                .set_status("close active session before importing config".to_string());
             cx.notify();
             return;
         }
@@ -87,7 +91,8 @@ impl NyaTermApp {
         let receiver = cx.prompt_for_paths(options);
         let config_dir = self.runtime.config_dir().to_path_buf();
         let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
-        self.shell.status = "selecting portable snapshot to import".to_string();
+        self.shell
+            .set_status("selecting portable snapshot to import".to_string());
         self.settings.set_store_message("selecting .nya snapshot");
         cx.spawn(async move |this, cx| {
             let result = match receiver.await {
@@ -127,38 +132,41 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if !self.settings.begin_snapshot_password_prompt(kind) {
-            self.shell.status = "config path picker is already open".to_string();
+            self.shell
+                .set_status("config path picker is already open".to_string());
             cx.notify();
             return;
         }
         self.forget_text_inputs("snapshot-password.");
         let field = self.text_input("snapshot-password.value", "", TextInputSetup::masked(), cx);
         window.focus(&field.read(cx).focus_handle());
-        self.shell.status = match kind {
-            SnapshotPasswordPromptKind::Export => "enter password for encrypted .nya export",
-            SnapshotPasswordPromptKind::Import => "enter password for encrypted .nya import",
-            SnapshotPasswordPromptKind::CloudPush => "enter password for cloud sync push",
-            SnapshotPasswordPromptKind::CloudPull => "enter password for cloud sync pull",
-            SnapshotPasswordPromptKind::CloudForcePush => {
-                "enter password for forced cloud sync push"
+        self.shell.set_status(
+            match kind {
+                SnapshotPasswordPromptKind::Export => "enter password for encrypted .nya export",
+                SnapshotPasswordPromptKind::Import => "enter password for encrypted .nya import",
+                SnapshotPasswordPromptKind::CloudPush => "enter password for cloud sync push",
+                SnapshotPasswordPromptKind::CloudPull => "enter password for cloud sync pull",
+                SnapshotPasswordPromptKind::CloudForcePush => {
+                    "enter password for forced cloud sync push"
+                }
+                SnapshotPasswordPromptKind::CloudForcePull => {
+                    "enter password for forced cloud sync pull"
+                }
+                SnapshotPasswordPromptKind::CloudProviderPush => {
+                    "enter password for provider cloud sync push"
+                }
+                SnapshotPasswordPromptKind::CloudProviderPull => {
+                    "enter password for provider cloud sync pull"
+                }
+                SnapshotPasswordPromptKind::CloudProviderForcePush => {
+                    "enter password for forced provider cloud sync push"
+                }
+                SnapshotPasswordPromptKind::CloudProviderForcePull => {
+                    "enter password for forced provider cloud sync pull"
+                }
             }
-            SnapshotPasswordPromptKind::CloudForcePull => {
-                "enter password for forced cloud sync pull"
-            }
-            SnapshotPasswordPromptKind::CloudProviderPush => {
-                "enter password for provider cloud sync push"
-            }
-            SnapshotPasswordPromptKind::CloudProviderPull => {
-                "enter password for provider cloud sync pull"
-            }
-            SnapshotPasswordPromptKind::CloudProviderForcePush => {
-                "enter password for forced provider cloud sync push"
-            }
-            SnapshotPasswordPromptKind::CloudProviderForcePull => {
-                "enter password for forced provider cloud sync pull"
-            }
-        }
-        .to_string();
+            .to_string(),
+        );
         let store_message = match kind {
             SnapshotPasswordPromptKind::CloudPush
             | SnapshotPasswordPromptKind::CloudPull
@@ -184,7 +192,8 @@ impl NyaTermApp {
         if password.is_empty() {
             self.settings.restore_snapshot_password_prompt(state.kind);
             self.reset_text_input("snapshot-password.value", "", cx);
-            self.shell.status = "master password is required for encrypted .nya".to_string();
+            self.shell
+                .set_status("master password is required for encrypted .nya".to_string());
             cx.notify();
             return;
         }
@@ -229,7 +238,7 @@ impl NyaTermApp {
             return;
         };
         self.forget_text_inputs("snapshot-password.");
-        self.shell.status = match state.kind {
+        self.shell.set_status(match state.kind {
             SnapshotPasswordPromptKind::Export => "encrypted .nya export cancelled".to_string(),
             SnapshotPasswordPromptKind::Import => "encrypted .nya import cancelled".to_string(),
             SnapshotPasswordPromptKind::CloudPush => "cloud sync push cancelled".to_string(),
@@ -252,7 +261,7 @@ impl NyaTermApp {
             SnapshotPasswordPromptKind::CloudProviderForcePull => {
                 "forced provider cloud sync pull cancelled".to_string()
             }
-        };
+        });
         self.settings.set_store_message("config picker cancelled");
         cx.notify();
     }
@@ -299,7 +308,8 @@ impl NyaTermApp {
             .settings
             .begin_config_path_prompt(ConfigPathPromptKind::EncryptedPortableExport)
         {
-            self.shell.status = "config path picker is already open".to_string();
+            self.shell
+                .set_status("config path picker is already open".to_string());
             cx.notify();
             return;
         }
@@ -307,7 +317,8 @@ impl NyaTermApp {
         let receiver = cx.prompt_for_new_path(&directory, Some("nyaterm-encrypted.nya"));
         let config_dir = self.runtime.config_dir().to_path_buf();
         let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
-        self.shell.status = "selecting encrypted portable snapshot destination".to_string();
+        self.shell
+            .set_status("selecting encrypted portable snapshot destination".to_string());
         self.settings
             .set_store_message("selecting encrypted .nya export destination");
         cx.spawn(async move |this, cx| {
@@ -353,7 +364,8 @@ impl NyaTermApp {
             .settings
             .begin_config_path_prompt(ConfigPathPromptKind::EncryptedPortableImport)
         {
-            self.shell.status = "config path picker is already open".to_string();
+            self.shell
+                .set_status("config path picker is already open".to_string());
             cx.notify();
             return;
         }
@@ -366,7 +378,8 @@ impl NyaTermApp {
         let receiver = cx.prompt_for_paths(options);
         let config_dir = self.runtime.config_dir().to_path_buf();
         let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
-        self.shell.status = "selecting encrypted portable snapshot to import".to_string();
+        self.shell
+            .set_status("selecting encrypted portable snapshot to import".to_string());
         self.settings
             .set_store_message("selecting encrypted .nya snapshot");
         cx.spawn(async move |this, cx| {
@@ -428,7 +441,7 @@ impl NyaTermApp {
                     message,
                     true,
                 );
-                self.shell.status = match kind {
+                self.shell.set_status(match kind {
                     ConfigPathPromptKind::PortableExport => {
                         format!(
                             "portable snapshot exported to {}",
@@ -442,7 +455,7 @@ impl NyaTermApp {
                         )
                     }
                     _ => format!("config exported to {}", info.backup_path.display()),
-                };
+                });
             }
             ConfigPathPromptResult::Imported(info) => {
                 self.refresh_store_from_runtime();
@@ -465,7 +478,7 @@ impl NyaTermApp {
                     _ => format!("imported {} byte config backup{safety}", info.bytes),
                 };
                 self.settings.update_store_status(message, true);
-                self.shell.status = match kind {
+                self.shell.set_status(match kind {
                     ConfigPathPromptKind::PortableImport => {
                         format!(
                             "portable snapshot imported from {}",
@@ -479,10 +492,10 @@ impl NyaTermApp {
                         )
                     }
                     _ => format!("config imported from {}", info.backup_path.display()),
-                };
+                });
             }
             ConfigPathPromptResult::Cancelled => {
-                self.shell.status = match kind {
+                self.shell.set_status(match kind {
                     ConfigPathPromptKind::Export => "config export cancelled".to_string(),
                     ConfigPathPromptKind::Import => "config import cancelled".to_string(),
                     ConfigPathPromptKind::PortableExport => {
@@ -497,11 +510,11 @@ impl NyaTermApp {
                     ConfigPathPromptKind::EncryptedPortableImport => {
                         "encrypted portable snapshot import cancelled".to_string()
                     }
-                };
+                });
                 self.settings.set_store_message("config picker cancelled");
             }
             ConfigPathPromptResult::Failed(error) => {
-                self.shell.status = match kind {
+                self.shell.set_status(match kind {
                     ConfigPathPromptKind::Export => format!("config export failed: {error}"),
                     ConfigPathPromptKind::Import => format!("config import failed: {error}"),
                     ConfigPathPromptKind::PortableExport => {
@@ -516,12 +529,13 @@ impl NyaTermApp {
                     ConfigPathPromptKind::EncryptedPortableImport => {
                         format!("encrypted portable snapshot import failed: {error}")
                     }
-                };
+                });
                 self.settings
-                    .update_store_status(self.shell.status.clone(), false);
+                    .update_store_status(self.shell.status().to_string(), false);
             }
             ConfigPathPromptResult::Closed => {
-                self.shell.status = "config path picker closed before returning".to_string();
+                self.shell
+                    .set_status("config path picker closed before returning".to_string());
                 self.settings.set_store_message("config picker closed");
             }
         }

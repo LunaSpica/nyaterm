@@ -1103,15 +1103,16 @@ impl NyaTermApp {
     ) -> bool {
         let text_bytes = frame.text.len();
         if frame.text.trim().is_empty() {
-            self.shell.status = "terminal buffer is empty".to_string();
+            self.shell
+                .set_status("terminal buffer is empty".to_string());
         } else {
             let char_count = frame.text.chars().count();
             cx.write_to_clipboard(ClipboardItem::new_string(frame.text));
-            self.shell.status = if frame.truncated {
+            self.shell.set_status(if frame.truncated {
                 format!("copied terminal buffer tail ({char_count} chars)")
             } else {
                 format!("copied terminal buffer ({char_count} chars)")
-            };
+            });
         }
         if frame.process_duration >= Duration::from_millis(20)
             && self.should_log_slow_diagnostic("terminal_frame_buffer_text", Instant::now())
@@ -1274,7 +1275,8 @@ impl NyaTermApp {
                 continue;
             }
             if let Err(error) = self.write_session_protocol_response(session_id, &response) {
-                self.shell.status = format!("terminal response failed: {error}");
+                self.shell
+                    .set_status(format!("terminal response failed: {error}"));
                 break;
             }
         }
@@ -1329,7 +1331,8 @@ impl NyaTermApp {
         if let Some(cx) = cx {
             if let Some(text) = clipboard_store.take() {
                 cx.write_to_clipboard(ClipboardItem::new_string(text));
-                self.shell.status = "OSC 52 clipboard updated".to_string();
+                self.shell
+                    .set_status("OSC 52 clipboard updated".to_string());
             }
             if !clipboard_loads.is_empty() {
                 let clipboard_text = cx
@@ -1344,7 +1347,8 @@ impl NyaTermApp {
             }
         } else {
             if clipboard_store.take().is_some() {
-                self.shell.status = "OSC 52 clipboard update skipped: UI unavailable".to_string();
+                self.shell
+                    .set_status("OSC 52 clipboard update skipped: UI unavailable".to_string());
             }
             if !clipboard_loads.is_empty() {
                 queue_osc52_clipboard_load_replies(clipboard_loads, "", pending_pty_writes);

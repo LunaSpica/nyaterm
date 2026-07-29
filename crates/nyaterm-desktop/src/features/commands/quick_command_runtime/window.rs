@@ -167,7 +167,8 @@ fn open_quick_command_window_now_from_app(app: Entity<NyaTermApp>, cx: &mut App)
             window.on_window_should_close(cx, move |_, cx| {
                 close_app.update(cx, |app, cx| {
                     app.commands.close_quick_editor();
-                    app.shell.status = "quick command editor closed".to_string();
+                    app.shell
+                        .set_status("quick command editor closed".to_string());
                     cx.notify();
                 });
                 true
@@ -185,7 +186,8 @@ fn open_quick_command_window_now_from_app(app: Entity<NyaTermApp>, cx: &mut App)
         }
         Err(error) => {
             app.commands.finish_quick_editor_window_open(None);
-            app.shell.status = format!("failed to open quick command window: {error}");
+            app.shell
+                .set_status(format!("failed to open quick command window: {error}"));
             cx.notify();
         }
     });

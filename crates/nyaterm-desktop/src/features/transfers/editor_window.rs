@@ -213,7 +213,8 @@ fn open_remote_file_editor_window_now_from_app(app: Entity<NyaTermApp>, cx: &mut
         }
         Err(error) => {
             app.transfer.clear_editor_window_tracking();
-            app.shell.status = format!("failed to open remote editor window: {error}");
+            app.shell
+                .set_status(format!("failed to open remote editor window: {error}"));
             cx.notify();
         }
     });

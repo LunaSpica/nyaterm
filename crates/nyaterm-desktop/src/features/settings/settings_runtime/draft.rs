@@ -70,7 +70,8 @@ impl NyaTermApp {
         }
         self.settings
             .update_store_status("settings draft changed", true);
-        self.shell.status = "settings draft changed; apply to persist".to_string();
+        self.shell
+            .set_status("settings draft changed; apply to persist".to_string());
         cx.notify();
         true
     }
@@ -170,7 +171,7 @@ impl NyaTermApp {
         }
         self.cloud_sync
             .set_status("apply settings before running cloud sync");
-        self.shell.status = self.cloud_sync.status().to_string();
+        self.shell.set_status(self.cloud_sync.status().to_string());
         cx.notify();
         true
     }
@@ -182,9 +183,10 @@ impl NyaTermApp {
         if !self.settings_draft_dirty() {
             return false;
         }
-        self.shell.status = "apply or cancel settings before importing".to_string();
+        self.shell
+            .set_status("apply or cancel settings before importing".to_string());
         self.settings
-            .update_store_status(self.shell.status.clone(), false);
+            .update_store_status(self.shell.status().to_string(), false);
         cx.notify();
         true
     }
@@ -211,7 +213,8 @@ impl NyaTermApp {
         }
         if let Some(error) = self.pending_settings_cloud_error() {
             self.settings.update_store_status(error.clone(), false);
-            self.shell.status = format!("settings apply blocked: {error}");
+            self.shell
+                .set_status(format!("settings apply blocked: {error}"));
             cx.notify();
             return;
         }
@@ -311,7 +314,7 @@ impl NyaTermApp {
                 }
                 self.shell.clear_settings_draft_snapshot();
                 self.settings.update_store_status("settings applied", true);
-                self.shell.status = "settings applied".to_string();
+                self.shell.set_status("settings applied".to_string());
                 if close_after_apply {
                     self.finish_settings_page(cx);
                 } else {
@@ -322,7 +325,7 @@ impl NyaTermApp {
             Err(error) => {
                 let message = format!("settings apply failed: {error}");
                 self.settings.update_store_status(message.clone(), false);
-                self.shell.status = message;
+                self.shell.set_status(message);
                 cx.notify();
             }
         }
@@ -376,14 +379,16 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn toggle_settings_master_password(&mut self, cx: &mut Context<Self>) {
-        self.shell.status = match self
-            .settings
-            .toggle_master_password(self.cloud_sync.settings().enabled)
-        {
-            Ok(true) => "master password enabled; enter a password".to_string(),
-            Ok(false) => "master password removal staged".to_string(),
-            Err(error) => error.to_string(),
-        };
+        self.shell.set_status(
+            match self
+                .settings
+                .toggle_master_password(self.cloud_sync.settings().enabled)
+            {
+                Ok(true) => "master password enabled; enter a password".to_string(),
+                Ok(false) => "master password removal staged".to_string(),
+                Err(error) => error.to_string(),
+            },
+        );
         cx.notify();
     }
 
@@ -396,7 +401,8 @@ impl NyaTermApp {
         if !self.settings.edit_master_password_draft(text) {
             return;
         }
-        self.shell.status = "master password edited; apply to persist".to_string();
+        self.shell
+            .set_status("master password edited; apply to persist".to_string());
         cx.notify();
     }
 
@@ -410,7 +416,7 @@ impl NyaTermApp {
         if self.shell.finish_settings_navigation() {
             self.persist_ui_layout();
         }
-        self.shell.status = "settings closed".to_string();
+        self.shell.set_status("settings closed".to_string());
         cx.notify();
     }
 }

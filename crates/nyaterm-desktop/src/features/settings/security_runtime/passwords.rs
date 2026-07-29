@@ -145,7 +145,7 @@ impl NyaTermApp {
                 self.refresh_security_catalog();
                 self.security
                     .finish_password_editor(format!("password saved ({})", compact_id(&id)));
-                self.shell.status = "password saved".to_string();
+                self.shell.set_status("password saved".to_string());
             }
             Err(error) => {
                 if let Some(editor) = self.security.password_editor_mut() {

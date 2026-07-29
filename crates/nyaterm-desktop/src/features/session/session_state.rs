@@ -337,7 +337,8 @@ impl NyaTermApp {
         let known = self.session.has_session(&session_id);
         let disconnected = self.is_session_disconnected(&session_id);
         if !known && !disconnected {
-            self.shell.status = "session no longer exists".to_string();
+            self.shell
+                .set_status("session no longer exists".to_string());
             self.remove_session_state(&session_id);
             cx.notify();
             return;
@@ -350,11 +351,11 @@ impl NyaTermApp {
         };
         let disconnected = self.is_session_disconnected(&focus_id) || disconnected;
         self.activate_session_id_with_surface_sync(&focus_id, cx);
-        self.shell.status = if disconnected {
+        self.shell.set_status(if disconnected {
             format!("disconnected {}", short_id(&focus_id))
         } else {
             format!("active {}", short_id(&focus_id))
-        };
+        });
         self.shell.select_nav(NavItem::Workspace);
         cx.notify();
     }
@@ -366,7 +367,7 @@ impl NyaTermApp {
     ) {
         let sessions = self.ordered_sessions();
         if sessions.is_empty() {
-            self.shell.status = "no sessions to switch".to_string();
+            self.shell.set_status("no sessions to switch".to_string());
             cx.notify();
             return;
         }
@@ -384,7 +385,8 @@ impl NyaTermApp {
         let session_id = sessions[next_index].id.clone();
         self.activate_session_id_with_surface_sync(&session_id, cx);
         self.shell.show_workspace();
-        self.shell.status = format!("active {}", short_id(&session_id));
+        self.shell
+            .set_status(format!("active {}", short_id(&session_id)));
         cx.notify();
     }
 
@@ -395,7 +397,7 @@ impl NyaTermApp {
     ) {
         let sessions = self.ordered_sessions();
         if sessions.is_empty() {
-            self.shell.status = "no sessions to switch".to_string();
+            self.shell.set_status("no sessions to switch".to_string());
             cx.notify();
             return;
         }
@@ -403,7 +405,8 @@ impl NyaTermApp {
         let session_id = sessions[index].id.clone();
         self.activate_session_id_with_surface_sync(&session_id, cx);
         self.shell.show_workspace();
-        self.shell.status = format!("active {}", short_id(&session_id));
+        self.shell
+            .set_status(format!("active {}", short_id(&session_id)));
         cx.notify();
     }
 
@@ -441,46 +444,50 @@ impl NyaTermApp {
             return;
         }
         self.session.dialogs.open_tab_actions(session_id, anchor);
-        self.shell.status = "tab actions opened".to_string();
+        self.shell.set_status("tab actions opened".to_string());
         window.focus(self.session.dialogs.tab_actions_focus());
         cx.notify();
     }
 
     pub(in crate::features) fn close_tab_actions(&mut self, cx: &mut Context<Self>) {
         self.session.dialogs.close_tab_actions();
-        self.shell.status = "tab actions closed".to_string();
+        self.shell.set_status("tab actions closed".to_string());
         cx.notify();
     }
 
     pub(in crate::features) fn copy_active_session_name(&mut self, cx: &mut Context<Self>) {
         let Some(session_id) = self.session.active_id() else {
-            self.shell.status = "no active session name to copy".to_string();
+            self.shell
+                .set_status("no active session name to copy".to_string());
             cx.notify();
             return;
         };
         let Some(name) = self.session_display_name(session_id) else {
-            self.shell.status = "active session name is unavailable".to_string();
+            self.shell
+                .set_status("active session name is unavailable".to_string());
             cx.notify();
             return;
         };
         cx.write_to_clipboard(ClipboardItem::new_string(name.clone()));
-        self.shell.status = format!("copied tab name '{name}'");
+        self.shell.set_status(format!("copied tab name '{name}'"));
         cx.notify();
     }
 
     pub(in crate::features) fn copy_active_session_ssh_host(&mut self, cx: &mut Context<Self>) {
         let Some(session_id) = self.session.active_id() else {
-            self.shell.status = "no active SSH host to copy".to_string();
+            self.shell
+                .set_status("no active SSH host to copy".to_string());
             cx.notify();
             return;
         };
         let Some(host) = self.session_ssh_host(session_id) else {
-            self.shell.status = "active session is not SSH".to_string();
+            self.shell
+                .set_status("active session is not SSH".to_string());
             cx.notify();
             return;
         };
         cx.write_to_clipboard(ClipboardItem::new_string(host.clone()));
-        self.shell.status = format!("copied SSH host '{host}'");
+        self.shell.set_status(format!("copied SSH host '{host}'"));
         cx.notify();
     }
 
@@ -490,27 +497,29 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if self.session.active_id().is_none() {
-            self.shell.status = "no active session info".to_string();
+            self.shell.set_status("no active session info".to_string());
             cx.notify();
             return;
         }
         self.session.dialogs.open_session_info();
-        self.shell.status = self
-            .active_session_info_line()
-            .unwrap_or_else(|| "session info opened".to_string());
+        self.shell.set_status(
+            self.active_session_info_line()
+                .unwrap_or_else(|| "session info opened".to_string()),
+        );
         window.focus(self.session.dialogs.session_info_focus());
         cx.notify();
     }
 
     pub(in crate::features) fn close_active_session_info(&mut self, cx: &mut Context<Self>) {
         self.session.dialogs.close_session_info();
-        self.shell.status = "session info closed".to_string();
+        self.shell.set_status("session info closed".to_string());
         cx.notify();
     }
 
     pub(in crate::features) fn copy_active_session_info(&mut self, cx: &mut Context<Self>) {
         let Some(details) = self.active_session_info_details() else {
-            self.shell.status = "no active session info to copy".to_string();
+            self.shell
+                .set_status("no active session info to copy".to_string());
             cx.notify();
             return;
         };
@@ -520,13 +529,13 @@ impl NyaTermApp {
             .collect::<Vec<_>>()
             .join("\n");
         cx.write_to_clipboard(ClipboardItem::new_string(text));
-        self.shell.status = "copied session info".to_string();
+        self.shell.set_status("copied session info".to_string());
         cx.notify();
     }
 
     pub(in crate::features) fn close_tab_color_picker(&mut self, cx: &mut Context<Self>) {
         self.session.dialogs.close_color_picker();
-        self.shell.status = "tab color picker closed".to_string();
+        self.shell.set_status("tab color picker closed".to_string());
         cx.notify();
     }
 
@@ -536,16 +545,17 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(session_id) = self.session.active_id_owned() else {
-            self.shell.status = "no active session color to set".to_string();
+            self.shell
+                .set_status("no active session color to set".to_string());
             cx.notify();
             return;
         };
         self.session.set_tab_color(&session_id, color);
-        self.shell.status = if color.is_some() {
+        self.shell.set_status(if color.is_some() {
             "tab color updated".to_string()
         } else {
             "tab color reset".to_string()
-        };
+        });
         self.session.dialogs.close_color_picker();
         cx.notify();
     }

@@ -287,7 +287,7 @@ impl NyaTermApp {
     pub(in crate::features) fn close_action_link_menu(&mut self, cx: &mut Context<Self>) {
         let mut changed = false;
         if self.terminal.menus.action_link_menu.take().is_some() {
-            self.shell.status = "action link menu closed".to_string();
+            self.shell.set_status("action link menu closed".to_string());
             changed = true;
         }
         if self.terminal.menus.action_link_tooltip.take().is_some() {
@@ -330,7 +330,8 @@ impl NyaTermApp {
             actions: menu_actions,
         });
         self.terminal.menus.context_menu = None;
-        self.shell.status = format!("action link menu: {}", item.kind.label());
+        self.shell
+            .set_status(format!("action link menu: {}", item.kind.label()));
         cx.notify();
         true
     }
@@ -387,13 +388,16 @@ impl NyaTermApp {
             || lower.starts_with("https://")
             || lower.starts_with("mailto:"))
         {
-            self.shell.status = format!("blocked OSC 8 scheme: {url}");
+            self.shell
+                .set_status(format!("blocked OSC 8 scheme: {url}"));
             cx.notify();
             return true;
         }
         match open_external_url_for_action(&url) {
-            Ok(()) => self.shell.status = format!("opened OSC 8 link: {url}"),
-            Err(error) => self.shell.status = format!("open OSC 8 link failed: {error}"),
+            Ok(()) => self.shell.set_status(format!("opened OSC 8 link: {url}")),
+            Err(error) => self
+                .shell
+                .set_status(format!("open OSC 8 link failed: {error}")),
         }
         cx.notify();
         true
@@ -421,8 +425,10 @@ impl NyaTermApp {
         };
         if let Some(url) = default.open_url {
             match open_external_url_for_action(&url) {
-                Ok(()) => self.shell.status = format!("opened {}: {url}", item.kind.label()),
-                Err(error) => self.shell.status = format!("open link failed: {error}"),
+                Ok(()) => self
+                    .shell
+                    .set_status(format!("opened {}: {url}", item.kind.label())),
+                Err(error) => self.shell.set_status(format!("open link failed: {error}")),
             }
             cx.notify();
             return true;

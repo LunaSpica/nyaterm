@@ -555,7 +555,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.connection_state.set_editor_error(error.clone());
-        self.shell.status = error;
+        self.shell.set_status(error);
         cx.notify();
     }
 

@@ -266,7 +266,8 @@ impl NyaTermApp {
                     .interaction_tab_middle_click_action
                     .clone();
                 if action == "none" {
-                    self.shell.status = "middle-click tab action is disabled".to_string();
+                    self.shell
+                        .set_status("middle-click tab action is disabled".to_string());
                     cx.notify();
                 } else {
                     self.run_tab_mouse_action(session_id, action, window, cx);
@@ -331,7 +332,8 @@ impl NyaTermApp {
             .iter()
             .position(|session| session.id == target_session_id)
         else {
-            self.shell.status = "drop target session no longer exists".to_string();
+            self.shell
+                .set_status("drop target session no longer exists".to_string());
             cx.notify();
             return;
         };
@@ -339,7 +341,8 @@ impl NyaTermApp {
             .iter()
             .position(|session| session.id == dragged_session_id)
         else {
-            self.shell.status = "dragged session no longer exists".to_string();
+            self.shell
+                .set_status("dragged session no longer exists".to_string());
             cx.notify();
             return;
         };
@@ -349,7 +352,8 @@ impl NyaTermApp {
             target_index
         };
         self.move_session_to_index(&dragged_session_id, next_index);
-        self.shell.status = format!("moved tab before {}", short_id(&target_session_id));
+        self.shell
+            .set_status(format!("moved tab before {}", short_id(&target_session_id)));
         if self.session.restore_is_complete() {
             self.persist_open_tabs();
         } else if self.terminal_windows_is_multi_leaf() {
@@ -368,13 +372,14 @@ impl NyaTermApp {
             .iter()
             .any(|session| session.id == dragged_session_id)
         {
-            self.shell.status = "dragged session no longer exists".to_string();
+            self.shell
+                .set_status("dragged session no longer exists".to_string());
             cx.notify();
             return;
         }
         let last_index = sessions.len().saturating_sub(1);
         self.move_session_to_index(&dragged_session_id, last_index);
-        self.shell.status = "moved tab to end".to_string();
+        self.shell.set_status("moved tab to end".to_string());
         if self.session.restore_is_complete() {
             self.persist_open_tabs();
         } else if self.terminal_windows_is_multi_leaf() {
@@ -410,7 +415,8 @@ impl NyaTermApp {
             "reconnect_session" => self.reconnect_active_session(window, cx),
             "disconnect_session" => self.disconnect_session(session_id, cx),
             _ => {
-                self.shell.status = format!("unknown tab action '{action}'");
+                self.shell
+                    .set_status(format!("unknown tab action '{action}'"));
                 cx.notify();
             }
         }

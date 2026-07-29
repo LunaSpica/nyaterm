@@ -11,7 +11,8 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(text) = cx.read_from_clipboard().and_then(|item| item.text()) else {
-            self.shell.status = "clipboard does not contain text".to_string();
+            self.shell
+                .set_status("clipboard does not contain text".to_string());
             cx.notify();
             return;
         };
@@ -25,7 +26,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if text.is_empty() {
-            self.shell.status = "clipboard text is empty".to_string();
+            self.shell.set_status("clipboard text is empty".to_string());
             cx.notify();
             return;
         }
@@ -36,7 +37,8 @@ impl NyaTermApp {
             && is_multi_line_paste(&text)
         {
             self.terminal.paste.open(text);
-            self.shell.status = "multi-line paste confirmation opened".to_string();
+            self.shell
+                .set_status("multi-line paste confirmation opened".to_string());
             window.focus(&self.terminal.paste.focus);
             cx.notify();
             return;
@@ -162,13 +164,15 @@ impl NyaTermApp {
 
     pub(in crate::features) fn close_multi_line_paste(&mut self, cx: &mut Context<Self>) {
         self.terminal.paste.clear();
-        self.shell.status = "multi-line paste cancelled".to_string();
+        self.shell
+            .set_status("multi-line paste cancelled".to_string());
         cx.notify();
     }
 
     pub(in crate::features) fn direct_multi_line_paste(&mut self, cx: &mut Context<Self>) {
         let Some(text) = self.terminal.paste.take_normalized_text() else {
-            self.shell.status = "no multi-line paste is active".to_string();
+            self.shell
+                .set_status("no multi-line paste is active".to_string());
             cx.notify();
             return;
         };
@@ -177,7 +181,8 @@ impl NyaTermApp {
 
     pub(in crate::features) fn send_multi_line_paste_by_line(&mut self, cx: &mut Context<Self>) {
         let Some(text) = self.terminal.paste.take_normalized_text() else {
-            self.shell.status = "no multi-line paste is active".to_string();
+            self.shell
+                .set_status("no multi-line paste is active".to_string());
             cx.notify();
             return;
         };

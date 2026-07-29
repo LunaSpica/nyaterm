@@ -169,7 +169,7 @@ impl NyaTermApp {
                 self.refresh_security_catalog();
                 self.security
                     .finish_key_editor(format!("SSH key saved ({})", compact_id(&id)));
-                self.shell.status = "SSH key saved".to_string();
+                self.shell.set_status("SSH key saved".to_string());
             }
             Err(error) => {
                 if let Some(editor) = self.security.key_editor_mut() {

@@ -322,10 +322,10 @@ impl NyaTermApp {
             .write_output(session_id.clone(), marker.clone());
         self.append_terminal_log_for_session(Some(&session_id), &marker, true);
         if self.session.active_id() == Some(session_id.as_str()) {
-            self.shell.status = format!(
+            self.shell.set_status(format!(
                 "terminal output overloaded; dropped {} queued byte(s)",
                 bytes
-            );
+            ));
             return true;
         }
         false
@@ -359,9 +359,11 @@ impl NyaTermApp {
         if known_session {
             // Keep the tab so the user can reconnect (Tauri disconnected pane).
             self.mark_session_disconnected(&session_id, cx);
-            self.shell.status = format!("session disconnected {}", short_id(&session_id));
+            self.shell
+                .set_status(format!("session disconnected {}", short_id(&session_id)));
         } else {
-            self.shell.status = format!("session exited {}", short_id(&session_id));
+            self.shell
+                .set_status(format!("session exited {}", short_id(&session_id)));
         }
         true
     }
@@ -380,7 +382,7 @@ impl NyaTermApp {
             self.recording.write_output(session_id.clone(), log.clone());
         }
         if session_id.is_empty() || self.session.active_id() == Some(session_id.as_str()) {
-            self.shell.status = format!("session error: {message}");
+            self.shell.set_status(format!("session error: {message}"));
             self.append_terminal_log(log);
         } else {
             self.append_terminal_log_for_session(Some(&session_id), &log, true);

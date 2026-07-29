@@ -17,7 +17,8 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if self.transfer.path_prompt_is_open() {
-            self.shell.status = "native path picker is already open".to_string();
+            self.shell
+                .set_status("native path picker is already open".to_string());
             cx.notify();
             return;
         }
@@ -28,7 +29,8 @@ impl NyaTermApp {
             prompt: Some(SharedString::from("Select default download directory")),
         };
         let receiver = cx.prompt_for_paths(options);
-        self.shell.status = "selecting default download directory".to_string();
+        self.shell
+            .set_status("selecting default download directory".to_string());
         cx.spawn(async move |this, cx| {
             let path = match receiver.await {
                 Ok(Ok(Some(paths))) => paths.into_iter().next(),
@@ -40,7 +42,8 @@ impl NyaTermApp {
                         .set_transfer_download_path(path.display().to_string());
                     this.save_transfer_settings("transfer download path saved", cx);
                 } else {
-                    this.shell.status = "download path selection cancelled".to_string();
+                    this.shell
+                        .set_status("download path selection cancelled".to_string());
                     cx.notify();
                 }
             });
@@ -57,7 +60,8 @@ impl NyaTermApp {
             prompt: Some(SharedString::from("Select recording directory")),
         };
         let receiver = cx.prompt_for_paths(options);
-        self.shell.status = "selecting recording directory".to_string();
+        self.shell
+            .set_status("selecting recording directory".to_string());
         cx.spawn(async move |this, cx| {
             let path = match receiver.await {
                 Ok(Ok(Some(paths))) => paths.into_iter().next(),
@@ -68,7 +72,8 @@ impl NyaTermApp {
                     this.settings.set_recording_path(path.display().to_string());
                     this.save_recording_settings(cx);
                 } else {
-                    this.shell.status = "recording path selection cancelled".to_string();
+                    this.shell
+                        .set_status("recording path selection cancelled".to_string());
                     cx.notify();
                 }
             });
@@ -88,7 +93,8 @@ impl NyaTermApp {
             prompt: Some(SharedString::from("Select default editor executable")),
         };
         let receiver = cx.prompt_for_paths(options);
-        self.shell.status = "selecting default editor".to_string();
+        self.shell
+            .set_status("selecting default editor".to_string());
         cx.spawn(async move |this, cx| {
             let path = match receiver.await {
                 Ok(Ok(Some(paths))) => paths.into_iter().next(),
@@ -100,7 +106,8 @@ impl NyaTermApp {
                         .set_transfer_default_editor(path.display().to_string());
                     this.save_transfer_settings("transfer editor path saved", cx);
                 } else {
-                    this.shell.status = "editor path selection cancelled".to_string();
+                    this.shell
+                        .set_status("editor path selection cancelled".to_string());
                     cx.notify();
                 }
             });
@@ -119,16 +126,17 @@ impl NyaTermApp {
 
     pub(in crate::features) fn reveal_transfer_download_dir(&mut self, cx: &mut Context<Self>) {
         let Some(path) = self.resolved_transfer_download_dir() else {
-            self.shell.status = "cannot determine system download directory".to_string();
+            self.shell
+                .set_status("cannot determine system download directory".to_string());
             cx.notify();
             return;
         };
 
         if path.exists() && !path.is_dir() {
-            self.shell.status = format!(
+            self.shell.set_status(format!(
                 "configured download path is not a directory: {}",
                 path.display()
-            );
+            ));
             cx.notify();
             return;
         }
@@ -136,10 +144,12 @@ impl NyaTermApp {
         match std::fs::create_dir_all(&path) {
             Ok(()) => {
                 cx.reveal_path(&path);
-                self.shell.status = format!("opened download directory {}", path.display());
+                self.shell
+                    .set_status(format!("opened download directory {}", path.display()));
             }
             Err(error) => {
-                self.shell.status = format!("failed to prepare download directory: {error}");
+                self.shell
+                    .set_status(format!("failed to prepare download directory: {error}"));
             }
         }
         cx.notify();
@@ -168,17 +178,20 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if remote_paths.is_empty() {
-            self.shell.status = "select remote items before downloading".to_string();
+            self.shell
+                .set_status("select remote items before downloading".to_string());
             cx.notify();
             return;
         }
         if self.transfer.path_prompt_is_open() {
-            self.shell.status = "native path picker is already open".to_string();
+            self.shell
+                .set_status("native path picker is already open".to_string());
             cx.notify();
             return;
         }
         let Some(config) = self.session.active_ssh_config_owned() else {
-            self.shell.status = "start an SSH session first".to_string();
+            self.shell
+                .set_status("start an SSH session first".to_string());
             self.shell.select_nav(NavItem::Transfers);
             cx.notify();
             return;
@@ -199,12 +212,14 @@ impl NyaTermApp {
             .transfer
             .begin_path_prompt(TransferPathPromptKind::DownloadDirectory)
         {
-            self.shell.status = "native path picker is already open".to_string();
+            self.shell
+                .set_status("native path picker is already open".to_string());
             cx.notify();
             return;
         }
         let receiver = cx.prompt_for_paths(options);
-        self.shell.status = "selecting download directory".to_string();
+        self.shell
+            .set_status("selecting download directory".to_string());
         cx.spawn(async move |this, cx| {
             let result = match receiver.await {
                 Ok(Ok(Some(paths))) => {
@@ -245,17 +260,20 @@ impl NyaTermApp {
             kind,
             TransferPathPromptKind::UploadFile | TransferPathPromptKind::UploadDirectory
         ) {
-            self.shell.status = "browser upload requires a file or directory".to_string();
+            self.shell
+                .set_status("browser upload requires a file or directory".to_string());
             cx.notify();
             return;
         }
         if self.transfer.path_prompt_is_open() {
-            self.shell.status = "native path picker is already open".to_string();
+            self.shell
+                .set_status("native path picker is already open".to_string());
             cx.notify();
             return;
         }
         let Some(config) = self.session.active_ssh_config_owned() else {
-            self.shell.status = "start an SSH session first".to_string();
+            self.shell
+                .set_status("start an SSH session first".to_string());
             cx.notify();
             return;
         };
@@ -282,16 +300,17 @@ impl NyaTermApp {
         };
         let remote_path = self.normalized_transfer_browser_upload_target();
         if !self.transfer.begin_path_prompt(kind) {
-            self.shell.status = "native path picker is already open".to_string();
+            self.shell
+                .set_status("native path picker is already open".to_string());
             cx.notify();
             return;
         }
         let receiver = cx.prompt_for_paths(options);
-        self.shell.status = match kind {
+        self.shell.set_status(match kind {
             TransferPathPromptKind::UploadFile => "selecting upload file".to_string(),
             TransferPathPromptKind::UploadDirectory => "selecting upload directory".to_string(),
             TransferPathPromptKind::DownloadDirectory => unreachable!(),
-        };
+        });
         cx.spawn(async move |this, cx| {
             let result = match receiver.await {
                 Ok(Ok(Some(paths))) => {
@@ -344,7 +363,7 @@ impl NyaTermApp {
         match result {
             TransferPathPromptResult::Selected(paths) => {
                 let Some(directory) = paths.into_iter().next() else {
-                    self.shell.status = "path picker cancelled".to_string();
+                    self.shell.set_status("path picker cancelled".to_string());
                     return;
                 };
                 let total = remote_paths.len();
@@ -364,21 +383,25 @@ impl NyaTermApp {
                         cx,
                     );
                 }
-                self.shell.status = format!("{total} SFTP download job(s) started");
+                self.shell
+                    .set_status(format!("{total} SFTP download job(s) started"));
                 self.transfer.browser.status =
                     format!("Downloading {total} item(s) to {}", directory.display());
             }
             TransferPathPromptResult::Cancelled => {
-                self.shell.status = "download directory selection cancelled".to_string();
+                self.shell
+                    .set_status("download directory selection cancelled".to_string());
                 self.transfer.browser.status = "download selection cancelled".to_string();
             }
             TransferPathPromptResult::Failed(error) => {
-                self.shell.status = format!("path picker failed: {error}");
-                self.transfer.browser.status = self.shell.status.clone();
+                self.shell
+                    .set_status(format!("path picker failed: {error}"));
+                self.transfer.browser.status = self.shell.status().to_string();
             }
             TransferPathPromptResult::Closed => {
-                self.shell.status = "path picker closed before returning".to_string();
-                self.transfer.browser.status = self.shell.status.clone();
+                self.shell
+                    .set_status("path picker closed before returning".to_string());
+                self.transfer.browser.status = self.shell.status().to_string();
             }
         }
     }
@@ -401,7 +424,7 @@ impl NyaTermApp {
         match result {
             TransferPathPromptResult::Selected(paths) => {
                 if paths.is_empty() {
-                    self.shell.status = "path picker cancelled".to_string();
+                    self.shell.set_status("path picker cancelled".to_string());
                     self.transfer.browser.status = "upload selection cancelled".to_string();
                     return;
                 }
@@ -446,16 +469,18 @@ impl NyaTermApp {
                 }
             }
             TransferPathPromptResult::Cancelled => {
-                self.shell.status = "path picker cancelled".to_string();
+                self.shell.set_status("path picker cancelled".to_string());
                 self.transfer.browser.status = "upload selection cancelled".to_string();
             }
             TransferPathPromptResult::Failed(error) => {
-                self.shell.status = format!("path picker failed: {error}");
-                self.transfer.browser.status = self.shell.status.clone();
+                self.shell
+                    .set_status(format!("path picker failed: {error}"));
+                self.transfer.browser.status = self.shell.status().to_string();
             }
             TransferPathPromptResult::Closed => {
-                self.shell.status = "path picker closed before returning".to_string();
-                self.transfer.browser.status = self.shell.status.clone();
+                self.shell
+                    .set_status("path picker closed before returning".to_string());
+                self.transfer.browser.status = self.shell.status().to_string();
             }
         }
     }

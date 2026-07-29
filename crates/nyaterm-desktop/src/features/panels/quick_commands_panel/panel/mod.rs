@@ -240,7 +240,8 @@ impl NyaTermApp {
                                     cx.stop_propagation();
                                     this.commands.clear_quick_filters();
                                     this.reset_text_input("quick-command.search", "", cx);
-                                    this.shell.status = "quick command filters cleared".to_string();
+                                    this.shell
+                                        .set_status("quick command filters cleared".to_string());
                                     cx.notify();
                                 }
                             }))

@@ -21,7 +21,8 @@ impl NyaTermApp {
         let Some(config) = self.session.active_ssh_config_owned() else {
             self.remote_ops
                 .set_docker_status("start an SSH session before inspecting Docker");
-            self.shell.status = self.remote_ops.docker_status().to_string();
+            self.shell
+                .set_status(self.remote_ops.docker_status().to_string());
             cx.notify();
             return;
         };
@@ -65,7 +66,8 @@ impl NyaTermApp {
         let Some(config) = self.session.active_ssh_config_owned() else {
             self.remote_ops
                 .set_docker_status("start an SSH session before changing containers");
-            self.shell.status = self.remote_ops.docker_status().to_string();
+            self.shell
+                .set_status(self.remote_ops.docker_status().to_string());
             cx.notify();
             return;
         };
@@ -116,7 +118,8 @@ impl NyaTermApp {
         let Some(config) = self.session.active_ssh_config_owned() else {
             self.remote_ops
                 .set_docker_status("start an SSH session before reading Docker details");
-            self.shell.status = self.remote_ops.docker_status().to_string();
+            self.shell
+                .set_status(self.remote_ops.docker_status().to_string());
             cx.notify();
             return;
         };
@@ -157,7 +160,8 @@ impl NyaTermApp {
 
     pub(in crate::features) fn close_docker_details(&mut self, cx: &mut Context<Self>) {
         self.remote_ops.close_docker_details();
-        self.shell.status = self.remote_ops.docker_status().to_string();
+        self.shell
+            .set_status(self.remote_ops.docker_status().to_string());
         cx.notify();
     }
 
@@ -216,7 +220,8 @@ impl NyaTermApp {
         if self.session.active_id().is_none() {
             self.remote_ops
                 .set_docker_status("start a terminal session before sending Docker commands");
-            self.shell.status = self.remote_ops.docker_status().to_string();
+            self.shell
+                .set_status(self.remote_ops.docker_status().to_string());
             cx.notify();
             return;
         }
@@ -226,10 +231,12 @@ impl NyaTermApp {
         self.shell.select_nav(NavItem::Workspace);
         if self.send_terminal_input(command.into_bytes(), cx) {
             self.remote_ops.set_docker_status(status);
-            self.shell.status = self.remote_ops.docker_status().to_string();
+            self.shell
+                .set_status(self.remote_ops.docker_status().to_string());
             cx.notify();
         } else {
-            self.remote_ops.set_docker_status(self.shell.status.clone());
+            self.remote_ops
+                .set_docker_status(self.shell.status().to_string());
         }
     }
 
@@ -258,7 +265,8 @@ impl NyaTermApp {
         let Some(config) = self.session.active_ssh_config_owned() else {
             self.remote_ops
                 .set_docker_status("start an SSH session before reading compose services");
-            self.shell.status = self.remote_ops.docker_status().to_string();
+            self.shell
+                .set_status(self.remote_ops.docker_status().to_string());
             cx.notify();
             return;
         };
@@ -310,7 +318,8 @@ impl NyaTermApp {
         let Some(config) = self.session.active_ssh_config_owned() else {
             self.remote_ops
                 .set_docker_status("start an SSH session before changing compose services");
-            self.shell.status = self.remote_ops.docker_status().to_string();
+            self.shell
+                .set_status(self.remote_ops.docker_status().to_string());
             cx.notify();
             return;
         };
@@ -371,7 +380,8 @@ impl NyaTermApp {
         let Some(config) = self.session.active_ssh_config_owned() else {
             self.remote_ops
                 .set_docker_status("start an SSH session before changing compose projects");
-            self.shell.status = self.remote_ops.docker_status().to_string();
+            self.shell
+                .set_status(self.remote_ops.docker_status().to_string());
             cx.notify();
             return;
         };
@@ -448,7 +458,8 @@ impl NyaTermApp {
         let Some(config) = self.session.active_ssh_config_owned() else {
             self.remote_ops
                 .set_docker_status("start an SSH session before changing Docker resources");
-            self.shell.status = self.remote_ops.docker_status().to_string();
+            self.shell
+                .set_status(self.remote_ops.docker_status().to_string());
             cx.notify();
             return;
         };
@@ -562,7 +573,8 @@ impl NyaTermApp {
                     self.remote_ops.reset_docker_refresh_failures();
                     self.remote_ops
                         .set_docker_status(docker_overview_status(&overview));
-                    self.shell.status = self.remote_ops.docker_status().to_string();
+                    self.shell
+                        .set_status(self.remote_ops.docker_status().to_string());
                     self.remote_ops.apply_docker_overview(overview);
                 }
                 Ok(DockerJobOutput::Details {
@@ -573,7 +585,8 @@ impl NyaTermApp {
                         "loaded details for {}",
                         compact_id(&container_id)
                     ));
-                    self.shell.status = self.remote_ops.docker_status().to_string();
+                    self.shell
+                        .set_status(self.remote_ops.docker_status().to_string());
                     self.remote_ops.apply_docker_details(container_id, details);
                 }
                 Ok(DockerJobOutput::ComposeServices {
@@ -585,7 +598,8 @@ impl NyaTermApp {
                         "loaded {} service(s) for {project_name}",
                         services.len()
                     ));
-                    self.shell.status = self.remote_ops.docker_status().to_string();
+                    self.shell
+                        .set_status(self.remote_ops.docker_status().to_string());
                     self.remote_ops.set_compose_services(key, services);
                 }
                 Ok(DockerJobOutput::ComposeServiceAction {
@@ -597,7 +611,8 @@ impl NyaTermApp {
                 }) => {
                     self.remote_ops
                         .set_docker_status(format!("compose {action} {service_name}"));
-                    self.shell.status = self.remote_ops.docker_status().to_string();
+                    self.shell
+                        .set_status(self.remote_ops.docker_status().to_string());
                     self.remote_ops.apply_docker_overview(overview);
                     self.remote_ops.set_compose_services(key, services);
                 }
@@ -611,7 +626,8 @@ impl NyaTermApp {
                 }) => {
                     self.remote_ops
                         .set_docker_status(format!("compose {action} {project_name}"));
-                    self.shell.status = self.remote_ops.docker_status().to_string();
+                    self.shell
+                        .set_status(self.remote_ops.docker_status().to_string());
                     self.remote_ops.apply_docker_overview(overview);
                     if let Some(services) = services {
                         self.remote_ops.set_compose_services(key.clone(), services);
@@ -627,7 +643,8 @@ impl NyaTermApp {
                     self.remote_ops.set_docker_status(format!(
                         "{label} completed · {container_count} container(s)"
                     ));
-                    self.shell.status = self.remote_ops.docker_status().to_string();
+                    self.shell
+                        .set_status(self.remote_ops.docker_status().to_string());
                     self.remote_ops.clear_docker_confirm();
                 }
                 Err(error) => {
@@ -637,7 +654,8 @@ impl NyaTermApp {
                     }
                     self.remote_ops
                         .set_docker_status(format!("Docker operation failed: {error}"));
-                    self.shell.status = self.remote_ops.docker_status().to_string();
+                    self.shell
+                        .set_status(self.remote_ops.docker_status().to_string());
                 }
             }
         }

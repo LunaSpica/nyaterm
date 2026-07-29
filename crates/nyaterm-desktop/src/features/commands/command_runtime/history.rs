@@ -78,18 +78,21 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if self.session.active_id().is_none() {
-            self.shell.status = "start a terminal session before using history".to_string();
+            self.shell
+                .set_status("start a terminal session before using history".to_string());
             cx.notify();
             return;
         }
         let Some(command_text) = self.active_session_history_command(index) else {
-            self.shell.status = "history command is no longer available".to_string();
+            self.shell
+                .set_status("history command is no longer available".to_string());
             cx.notify();
             return;
         };
         let mut command = command_text.trim().to_string();
         if command.is_empty() {
-            self.shell.status = "history command is empty".to_string();
+            self.shell
+                .set_status("history command is empty".to_string());
             cx.notify();
             return;
         }
@@ -97,11 +100,11 @@ impl NyaTermApp {
             command.push('\r');
         }
         self.send_terminal_input(command.into_bytes(), cx);
-        self.shell.status = if execute {
+        self.shell.set_status(if execute {
             format!("ran history command '{command_text}'")
         } else {
             format!("inserted history command '{command_text}'")
-        };
+        });
         cx.notify();
     }
 

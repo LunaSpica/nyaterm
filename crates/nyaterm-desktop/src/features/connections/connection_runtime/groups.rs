@@ -22,7 +22,8 @@ impl NyaTermApp {
             None => Some(String::new()),
         };
         let Some(name) = name else {
-            self.shell.status = "connection group is no longer available".to_string();
+            self.shell
+                .set_status("connection group is no longer available".to_string());
             cx.notify();
             return;
         };
@@ -45,7 +46,8 @@ impl NyaTermApp {
                 error: None,
             });
         self.connection_state.build_group_editor_field(cx);
-        self.shell.status = "connection group editor opened".to_string();
+        self.shell
+            .set_status("connection group editor opened".to_string());
         if let Some(field) = self.connection_state.group_editor_field() {
             window.focus(&field.read(cx).focus_handle());
         }
@@ -55,7 +57,8 @@ impl NyaTermApp {
     pub(in crate::features) fn close_connection_group_editor(&mut self, cx: &mut Context<Self>) {
         self.connection_state.close_group_editor();
         self.connection_state.clear_group_editor_field();
-        self.shell.status = "connection group editor closed".to_string();
+        self.shell
+            .set_status("connection group editor closed".to_string());
         cx.notify();
     }
 
@@ -134,7 +137,8 @@ impl NyaTermApp {
                 self.connection_state.expand_list_group(group.id.clone());
                 self.connection_state.close_group_editor();
                 self.refresh_store_from_runtime();
-                self.shell.status = format!("saved connection group {}", group.name);
+                self.shell
+                    .set_status(format!("saved connection group {}", group.name));
             }
             Err(error) => {
                 self.connection_state.set_group_editor_error(error);

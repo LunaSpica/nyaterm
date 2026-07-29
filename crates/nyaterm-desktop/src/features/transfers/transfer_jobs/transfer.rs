@@ -24,7 +24,8 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(config) = self.session.active_ssh_config_owned() else {
-            self.shell.status = "start an SSH session first".to_string();
+            self.shell
+                .set_status("start an SSH session first".to_string());
             self.ensure_panel_open(NavItem::Transfers);
             cx.notify();
             return;
@@ -72,7 +73,8 @@ impl NyaTermApp {
             progress: None,
             control: Some(control.clone()),
         });
-        self.shell.status = format!("SFTP download started for {remote_path}");
+        self.shell
+            .set_status(format!("SFTP download started for {remote_path}"));
         let progress_tx = self.transfer.transfer_event_sender();
         let finished_tx = self.transfer.transfer_event_sender();
         std::thread::spawn(move || {
@@ -126,7 +128,8 @@ impl NyaTermApp {
             progress: None,
             control: Some(control.clone()),
         });
-        self.shell.status = format!("SFTP upload started for {}", local_path.display());
+        self.shell
+            .set_status(format!("SFTP upload started for {}", local_path.display()));
         let progress_tx = self.transfer.transfer_event_sender();
         let finished_tx = self.transfer.transfer_event_sender();
         std::thread::spawn(move || {
@@ -173,7 +176,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(job) = self.transfer.transfer_job_mut(job_id) else {
-            self.shell.status = "transfer job not found".to_string();
+            self.shell.set_status("transfer job not found".to_string());
             cx.notify();
             return;
         };
@@ -182,7 +185,8 @@ impl NyaTermApp {
             job.status,
             TransferJobStatus::Running | TransferJobStatus::Paused
         ) {
-            self.shell.status = format!("transfer {} is not running", job.id);
+            self.shell
+                .set_status(format!("transfer {} is not running", job.id));
             cx.notify();
             return;
         }
@@ -196,13 +200,15 @@ impl NyaTermApp {
             job.detail = "Cancelled".to_string();
             job.progress = None;
             self.cancel_zmodem_transfer(&session_id, cx);
-            self.shell.status = format!("ZMODEM transfer cancelled: {id}");
+            self.shell
+                .set_status(format!("ZMODEM transfer cancelled: {id}"));
             cx.notify();
             return;
         }
 
         let Some(control) = job.control.as_ref() else {
-            self.shell.status = format!("transfer {} cannot be cancelled", job.id);
+            self.shell
+                .set_status(format!("transfer {} cannot be cancelled", job.id));
             cx.notify();
             return;
         };
@@ -210,25 +216,28 @@ impl NyaTermApp {
         control.cancel();
         job.status = TransferJobStatus::Cancelling;
         job.detail = "Cancelling".to_string();
-        self.shell.status = format!("SFTP transfer cancelling: {}", job.id);
+        self.shell
+            .set_status(format!("SFTP transfer cancelling: {}", job.id));
         cx.notify();
     }
 
     pub(in crate::features) fn pause_transfer_job(&mut self, job_id: &str, cx: &mut Context<Self>) {
         let Some(job) = self.transfer.transfer_job_mut(job_id) else {
-            self.shell.status = "transfer job not found".to_string();
+            self.shell.set_status("transfer job not found".to_string());
             cx.notify();
             return;
         };
 
         if job.status != TransferJobStatus::Running {
-            self.shell.status = format!("transfer {} is not running", job.id);
+            self.shell
+                .set_status(format!("transfer {} is not running", job.id));
             cx.notify();
             return;
         }
 
         let Some(control) = job.control.as_ref() else {
-            self.shell.status = format!("transfer {} cannot be paused", job.id);
+            self.shell
+                .set_status(format!("transfer {} cannot be paused", job.id));
             cx.notify();
             return;
         };
@@ -236,7 +245,8 @@ impl NyaTermApp {
         control.pause();
         job.status = TransferJobStatus::Paused;
         job.detail = "Paused".to_string();
-        self.shell.status = format!("SFTP transfer paused: {}", job.id);
+        self.shell
+            .set_status(format!("SFTP transfer paused: {}", job.id));
         cx.notify();
     }
 
@@ -246,19 +256,21 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(job) = self.transfer.transfer_job_mut(job_id) else {
-            self.shell.status = "transfer job not found".to_string();
+            self.shell.set_status("transfer job not found".to_string());
             cx.notify();
             return;
         };
 
         if job.status != TransferJobStatus::Paused {
-            self.shell.status = format!("transfer {} is not paused", job.id);
+            self.shell
+                .set_status(format!("transfer {} is not paused", job.id));
             cx.notify();
             return;
         }
 
         let Some(control) = job.control.as_ref() else {
-            self.shell.status = format!("transfer {} cannot be resumed", job.id);
+            self.shell
+                .set_status(format!("transfer {} cannot be resumed", job.id));
             cx.notify();
             return;
         };
@@ -266,7 +278,8 @@ impl NyaTermApp {
         control.resume();
         job.status = TransferJobStatus::Running;
         job.detail = "Resuming".to_string();
-        self.shell.status = format!("SFTP transfer resumed: {}", job.id);
+        self.shell
+            .set_status(format!("SFTP transfer resumed: {}", job.id));
         cx.notify();
     }
 
@@ -277,13 +290,14 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(config) = self.session.active_ssh_config_owned() else {
-            self.shell.status = "start an SSH session first".to_string();
+            self.shell
+                .set_status("start an SSH session first".to_string());
             self.ensure_panel_open(NavItem::Transfers);
             cx.notify();
             return;
         };
         let Some(job) = self.transfer.transfer_job(&job_id) else {
-            self.shell.status = "transfer job not found".to_string();
+            self.shell.set_status("transfer job not found".to_string());
             cx.notify();
             return;
         };
@@ -292,7 +306,8 @@ impl NyaTermApp {
             job.status,
             TransferJobStatus::Failed | TransferJobStatus::Cancelled
         ) {
-            self.shell.status = format!("transfer {job_id} is not retryable");
+            self.shell
+                .set_status(format!("transfer {job_id} is not retryable"));
             cx.notify();
             return;
         }
@@ -319,7 +334,8 @@ impl NyaTermApp {
                 job.summary = None;
                 job.progress = None;
                 job.control = Some(control.clone());
-                self.shell.status = format!("retrying SFTP download for {remote_path}");
+                self.shell
+                    .set_status(format!("retrying SFTP download for {remote_path}"));
                 let progress_tx = self.transfer.transfer_event_sender();
                 let finished_tx = self.transfer.transfer_event_sender();
                 std::thread::spawn(move || {
@@ -366,7 +382,8 @@ impl NyaTermApp {
                 job.summary = None;
                 job.progress = None;
                 job.control = Some(control.clone());
-                self.shell.status = format!("retrying SFTP upload for {}", local_path.display());
+                self.shell
+                    .set_status(format!("retrying SFTP upload for {}", local_path.display()));
                 let progress_tx = self.transfer.transfer_event_sender();
                 let finished_tx = self.transfer.transfer_event_sender();
                 std::thread::spawn(move || {
@@ -407,7 +424,9 @@ impl NyaTermApp {
                 });
             }
             _ => {
-                self.shell.status = format!("transfer {job_id} does not support native retry yet");
+                self.shell.set_status(format!(
+                    "transfer {job_id} does not support native retry yet"
+                ));
                 cx.notify();
                 return;
             }
@@ -420,11 +439,11 @@ impl NyaTermApp {
         let changed = self
             .transfer
             .pause_visible_transfer_jobs(active_session_id.as_deref());
-        self.shell.status = if changed == 0 {
+        self.shell.set_status(if changed == 0 {
             "no running transfer jobs to pause".to_string()
         } else {
             format!("paused {changed} transfer job(s)")
-        };
+        });
         cx.notify();
     }
 
@@ -433,11 +452,11 @@ impl NyaTermApp {
         let changed = self
             .transfer
             .resume_visible_transfer_jobs(active_session_id.as_deref());
-        self.shell.status = if changed == 0 {
+        self.shell.set_status(if changed == 0 {
             "no paused transfer jobs to resume".to_string()
         } else {
             format!("resumed {changed} transfer job(s)")
-        };
+        });
         cx.notify();
     }
 
@@ -446,11 +465,11 @@ impl NyaTermApp {
         let changed = self
             .transfer
             .cancel_visible_transfer_jobs(active_session_id.as_deref());
-        self.shell.status = if changed == 0 {
+        self.shell.set_status(if changed == 0 {
             "no active transfer jobs to cancel".to_string()
         } else {
             format!("cancelling {changed} transfer job(s)")
-        };
+        });
         cx.notify();
     }
 
@@ -459,11 +478,11 @@ impl NyaTermApp {
         let removed = self
             .transfer
             .clear_completed_transfer_jobs_for_session(active_session_id.as_deref());
-        self.shell.status = if removed == 0 {
+        self.shell.set_status(if removed == 0 {
             "no completed transfer jobs to clear".to_string()
         } else {
             format!("cleared {removed} completed transfer job(s)")
-        };
+        });
         cx.notify();
     }
 
@@ -472,11 +491,11 @@ impl NyaTermApp {
         let removed = self
             .transfer
             .clear_stopped_transfer_jobs_for_session(active_session_id.as_deref());
-        self.shell.status = if removed == 0 {
+        self.shell.set_status(if removed == 0 {
             "no stopped transfer jobs to clear".to_string()
         } else {
             format!("cleared {removed} stopped transfer job(s)")
-        };
+        });
         cx.notify();
     }
 }

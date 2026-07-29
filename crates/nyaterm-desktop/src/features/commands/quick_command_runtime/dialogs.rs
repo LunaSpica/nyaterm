@@ -20,7 +20,8 @@ impl NyaTermApp {
         // The boxes own their text, so they have to be dropped for the next
         // command to seed from its own values.
         self.forget_text_inputs("quick-command.editor.");
-        self.shell.status = "quick command editor opened".to_string();
+        self.shell
+            .set_status("quick command editor opened".to_string());
         if !self.open_quick_command_window(cx) {
             window.focus(self.commands.quick_editor_focus());
         }
@@ -40,7 +41,8 @@ impl NyaTermApp {
             .find(|command| command.id == command_id)
             .cloned()
         else {
-            self.shell.status = "quick command is no longer available".to_string();
+            self.shell
+                .set_status("quick command is no longer available".to_string());
             cx.notify();
             return;
         };
@@ -49,7 +51,8 @@ impl NyaTermApp {
         // The boxes own their text, so they have to be dropped for the next
         // command to seed from its own values.
         self.forget_text_inputs("quick-command.editor.");
-        self.shell.status = "quick command editor opened".to_string();
+        self.shell
+            .set_status("quick command editor opened".to_string());
         if !self.open_quick_command_window(cx) {
             window.focus(self.commands.quick_editor_focus());
         }
@@ -59,7 +62,8 @@ impl NyaTermApp {
     pub(in crate::features) fn close_quick_command_editor(&mut self, cx: &mut Context<Self>) {
         self.commands.close_quick_editor();
         self.forget_text_inputs("quick-command.editor.");
-        self.shell.status = "quick command editor closed".to_string();
+        self.shell
+            .set_status("quick command editor closed".to_string());
         cx.notify();
     }
 
@@ -78,7 +82,8 @@ impl NyaTermApp {
             .find(|command| command.id == command_id)
             .cloned()
         else {
-            self.shell.status = "quick command is no longer available".to_string();
+            self.shell
+                .set_status("quick command is no longer available".to_string());
             cx.notify();
             return;
         };
@@ -92,14 +97,16 @@ impl NyaTermApp {
                 x,
                 y,
             });
-        self.shell.status = "quick command details opened".to_string();
+        self.shell
+            .set_status("quick command details opened".to_string());
         window.focus(self.commands.quick_details_focus());
         cx.notify();
     }
 
     pub(in crate::features) fn close_quick_command_details(&mut self, cx: &mut Context<Self>) {
         self.commands.clear_quick_details();
-        self.shell.status = "quick command details closed".to_string();
+        self.shell
+            .set_status("quick command details closed".to_string());
         cx.notify();
     }
 
@@ -115,7 +122,8 @@ impl NyaTermApp {
             .find(|command| command.id == command_id)
             .cloned()
         else {
-            self.shell.status = "quick command is no longer available".to_string();
+            self.shell
+                .set_status("quick command is no longer available".to_string());
             cx.notify();
             return;
         };
@@ -123,13 +131,15 @@ impl NyaTermApp {
             id: command.id,
             label: command.label,
         });
-        self.shell.status = "quick command delete confirmation opened".to_string();
+        self.shell
+            .set_status("quick command delete confirmation opened".to_string());
         cx.notify();
     }
 
     pub(in crate::features) fn cancel_delete_quick_command(&mut self, cx: &mut Context<Self>) {
         self.commands.clear_quick_delete();
-        self.shell.status = "quick command delete cancelled".to_string();
+        self.shell
+            .set_status("quick command delete cancelled".to_string());
         cx.notify();
     }
 
@@ -161,12 +171,14 @@ impl NyaTermApp {
                     },
                     deleted,
                 );
-                self.shell.status = self.settings.store_status().message.to_string();
+                self.shell
+                    .set_status(self.settings.store_status().message.to_string());
             }
             Err(error) => {
                 self.settings
                     .update_store_status(format!("quick command delete failed: {error}"), false);
-                self.shell.status = self.settings.store_status().message.to_string();
+                self.shell
+                    .set_status(self.settings.store_status().message.to_string());
             }
         }
         cx.notify();
@@ -184,7 +196,8 @@ impl NyaTermApp {
             .find(|category| category.id == category_id)
             .cloned()
         else {
-            self.shell.status = "quick command category is no longer available".to_string();
+            self.shell
+                .set_status("quick command category is no longer available".to_string());
             cx.notify();
             return;
         };
@@ -200,7 +213,8 @@ impl NyaTermApp {
                 name: category.name,
                 command_count,
             });
-        self.shell.status = "quick command category delete confirmation opened".to_string();
+        self.shell
+            .set_status("quick command category delete confirmation opened".to_string());
         cx.notify();
     }
 
@@ -209,7 +223,8 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.commands.clear_quick_category_delete();
-        self.shell.status = "quick command category delete cancelled".to_string();
+        self.shell
+            .set_status("quick command category delete cancelled".to_string());
         cx.notify();
     }
 
@@ -257,14 +272,16 @@ impl NyaTermApp {
                     },
                     deleted_category,
                 );
-                self.shell.status = self.settings.store_status().message.to_string();
+                self.shell
+                    .set_status(self.settings.store_status().message.to_string());
             }
             Err(error) => {
                 self.settings.update_store_status(
                     format!("quick command category delete failed: {error}"),
                     false,
                 );
-                self.shell.status = self.settings.store_status().message.to_string();
+                self.shell
+                    .set_status(self.settings.store_status().message.to_string());
             }
         }
         cx.notify();
@@ -283,7 +300,8 @@ impl NyaTermApp {
             .find(|category| category.id == category_id)
             .cloned()
         else {
-            self.shell.status = "quick command category is no longer available".to_string();
+            self.shell
+                .set_status("quick command category is no longer available".to_string());
             cx.notify();
             return;
         };
@@ -294,7 +312,8 @@ impl NyaTermApp {
                 draft: category.name,
                 error: None,
             });
-        self.shell.status = "quick command category rename opened".to_string();
+        self.shell
+            .set_status("quick command category rename opened".to_string());
         window.focus(self.commands.quick_category_rename_focus());
         cx.notify();
     }
@@ -304,7 +323,8 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.commands.clear_quick_category_rename();
-        self.shell.status = "quick command category rename cancelled".to_string();
+        self.shell
+            .set_status("quick command category rename cancelled".to_string());
         cx.notify();
     }
 
@@ -382,7 +402,8 @@ impl NyaTermApp {
                         false,
                     );
                 }
-                self.shell.status = self.settings.store_status().message.to_string();
+                self.shell
+                    .set_status(self.settings.store_status().message.to_string());
             }
             Err(error) => {
                 self.commands
@@ -391,7 +412,8 @@ impl NyaTermApp {
                     format!("quick command category rename failed: {error}"),
                     false,
                 );
-                self.shell.status = self.settings.store_status().message.to_string();
+                self.shell
+                    .set_status(self.settings.store_status().message.to_string());
             }
         }
         cx.notify();

@@ -30,7 +30,7 @@ impl NyaTermApp {
         // The box owns its text, so it has to be dropped for the next dialog to
         // open empty.
         self.forget_text_inputs("transfer.new-folder.");
-        self.shell.status = "SFTP new folder opened".to_string();
+        self.shell.set_status("SFTP new folder opened".to_string());
         window.focus(self.transfer.new_folder_focus());
         cx.notify();
     }
@@ -38,7 +38,8 @@ impl NyaTermApp {
     pub(in crate::features) fn close_transfer_new_folder_dialog(&mut self, cx: &mut Context<Self>) {
         self.transfer.close_new_folder_dialog();
         self.forget_text_inputs("transfer.new-folder.");
-        self.shell.status = "SFTP new folder cancelled".to_string();
+        self.shell
+            .set_status("SFTP new folder cancelled".to_string());
         cx.notify();
     }
 
@@ -48,13 +49,15 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(state) = self.transfer.new_folder_dialog().cloned() else {
-            self.shell.status = "no SFTP new folder is active".to_string();
+            self.shell
+                .set_status("no SFTP new folder is active".to_string());
             cx.notify();
             return;
         };
         let name = state.value.trim().to_string();
         if !valid_remote_child_name(&name) {
-            self.shell.status = "folder name must be a single non-empty name".to_string();
+            self.shell
+                .set_status("folder name must be a single non-empty name".to_string());
             cx.notify();
             return;
         }
@@ -116,7 +119,8 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(config) = self.session.active_ssh_config_owned() else {
-            self.shell.status = "start an SSH session first".to_string();
+            self.shell
+                .set_status("start an SSH session first".to_string());
             self.ensure_panel_open(crate::models::NavItem::Transfers);
             cx.notify();
             return;
@@ -136,7 +140,8 @@ impl NyaTermApp {
             progress: None,
             control: None,
         });
-        self.shell.status = format!("SFTP create folder started: {remote_path}");
+        self.shell
+            .set_status(format!("SFTP create folder started: {remote_path}"));
         let transfer_tx = self.transfer.transfer_event_sender();
         std::thread::spawn(move || {
             let service = SftpService::new(config);
@@ -180,7 +185,7 @@ impl NyaTermApp {
             open_after_create: false,
         });
         self.forget_text_inputs("transfer.new-file.");
-        self.shell.status = "SFTP new file opened".to_string();
+        self.shell.set_status("SFTP new file opened".to_string());
         window.focus(self.transfer.new_file_focus());
         cx.notify();
     }
@@ -188,7 +193,7 @@ impl NyaTermApp {
     pub(in crate::features) fn close_transfer_new_file_dialog(&mut self, cx: &mut Context<Self>) {
         self.transfer.close_new_file_dialog();
         self.forget_text_inputs("transfer.new-file.");
-        self.shell.status = "SFTP new file cancelled".to_string();
+        self.shell.set_status("SFTP new file cancelled".to_string());
         cx.notify();
     }
 
@@ -198,13 +203,15 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(state) = self.transfer.new_file_dialog().cloned() else {
-            self.shell.status = "no SFTP new file is active".to_string();
+            self.shell
+                .set_status("no SFTP new file is active".to_string());
             cx.notify();
             return;
         };
         let name = state.value.trim().to_string();
         if !valid_remote_child_name(&name) {
-            self.shell.status = "file name must be a single non-empty name".to_string();
+            self.shell
+                .set_status("file name must be a single non-empty name".to_string());
             cx.notify();
             return;
         }
@@ -263,7 +270,8 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(config) = self.session.active_ssh_config_owned() else {
-            self.shell.status = "start an SSH session first".to_string();
+            self.shell
+                .set_status("start an SSH session first".to_string());
             self.ensure_panel_open(crate::models::NavItem::Transfers);
             cx.notify();
             return;
@@ -283,7 +291,8 @@ impl NyaTermApp {
             progress: None,
             control: None,
         });
-        self.shell.status = format!("SFTP create file started: {remote_path}");
+        self.shell
+            .set_status(format!("SFTP create file started: {remote_path}"));
         let transfer_tx = self.transfer.transfer_event_sender();
         std::thread::spawn(move || {
             let service = SftpService::new(config);

@@ -12,12 +12,14 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if !self.commands.open_quick_import_dialog() {
-            self.shell.status = "quick command import picker is already open".to_string();
+            self.shell
+                .set_status("quick command import picker is already open".to_string());
             cx.notify();
             return;
         }
 
-        self.shell.status = "select a quick command import source".to_string();
+        self.shell
+            .set_status("select a quick command import source".to_string());
         window.focus(self.commands.quick_import_focus());
         cx.notify();
     }
@@ -44,7 +46,8 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if !self.commands.request_quick_import_path(kind) {
-            self.shell.status = "quick command import picker is already open".to_string();
+            self.shell
+                .set_status("quick command import picker is already open".to_string());
             cx.notify();
             return;
         }
@@ -58,7 +61,7 @@ impl NyaTermApp {
         let receiver = cx.prompt_for_paths(options);
         let config_dir = self.runtime.config_dir().to_path_buf();
         let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
-        self.shell.status = kind.selecting_status().to_string();
+        self.shell.set_status(kind.selecting_status().to_string());
 
         cx.spawn(async move |this, cx| {
             let result = match receiver.await {
@@ -109,23 +112,25 @@ impl NyaTermApp {
                 total_categories,
             } => {
                 self.refresh_quick_commands();
-                self.shell.status = format!(
+                self.shell.set_status(format!(
                     "imported {imported_commands} quick command(s), updated {updated_commands}, categories +{imported_categories}, total {total_commands}/{total_categories}"
-                );
+                ));
                 self.settings
-                    .update_store_status(self.shell.status.clone(), true);
+                    .update_store_status(self.shell.status().to_string(), true);
             }
             QuickCommandImportPathPromptResult::Cancelled => {
-                self.shell.status = "quick command import cancelled".to_string();
+                self.shell
+                    .set_status("quick command import cancelled".to_string());
             }
             QuickCommandImportPathPromptResult::Failed(error) => {
-                self.shell.status = format!("quick command import failed: {error}");
+                self.shell
+                    .set_status(format!("quick command import failed: {error}"));
                 self.settings
-                    .update_store_status(self.shell.status.clone(), false);
+                    .update_store_status(self.shell.status().to_string(), false);
             }
             QuickCommandImportPathPromptResult::Closed => {
-                self.shell.status =
-                    "quick command import picker closed before returning".to_string();
+                self.shell
+                    .set_status("quick command import picker closed before returning".to_string());
             }
         }
     }

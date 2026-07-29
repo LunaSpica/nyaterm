@@ -61,10 +61,10 @@ impl NyaTermApp {
         let Some(pending) = self.session.start.close_pending(&request_id) else {
             return;
         };
-        self.shell.status = format!(
+        self.shell.set_status(format!(
             "cancelled connection {}",
             pending_session_start_display_name(&pending)
-        );
+        ));
         cx.notify();
     }
 
@@ -93,10 +93,10 @@ impl NyaTermApp {
         if !self.session.start.has_failed() {
             self.shell.clear_last_connect_failure();
         }
-        self.shell.status = format!(
+        self.shell.set_status(format!(
             "closed failed connection {}",
             failed_session_start_display_name(&failed)
-        );
+        ));
         cx.notify();
     }
 
@@ -150,7 +150,7 @@ impl NyaTermApp {
         if !reconnecting {
             self.shell.clear_last_connect_failure();
         }
-        self.shell.status = status_message;
+        self.shell.set_status(status_message);
         // Status + connecting tab already show progress; avoid full terminal decode
         // work on the click path before the worker even starts.
         let _ = append_start_log;
@@ -369,12 +369,13 @@ impl NyaTermApp {
 
     pub(in crate::features) fn send_probe_command(&mut self, cx: &mut Context<Self>) {
         let Some(session_id) = self.session.active_id_owned() else {
-            self.shell.status = "start a session first".to_string();
+            self.shell.set_status("start a session first".to_string());
             cx.notify();
             return;
         };
         if self.is_session_disconnected(&session_id) {
-            self.shell.status = "session disconnected — reconnect before probing".to_string();
+            self.shell
+                .set_status("session disconnected — reconnect before probing".to_string());
             cx.notify();
             return;
         }
@@ -386,10 +387,10 @@ impl NyaTermApp {
         };
         match self.write_session_input_recorded(&session_id, command.as_bytes()) {
             Ok(()) => {
-                self.shell.status = "probe command sent".to_string();
+                self.shell.set_status("probe command sent".to_string());
             }
             Err(error) => {
-                self.shell.status = format!("write failed: {error}");
+                self.shell.set_status(format!("write failed: {error}"));
             }
         }
         cx.notify();
@@ -580,11 +581,11 @@ impl NyaTermApp {
                     // does not stack full terminal decorations on connect.
                     self.enter_connect_settle();
                     self.terminal.enter_session_render_degraded(&session_id);
-                    self.shell.status = format!(
+                    self.shell.set_status(format!(
                         "running {} · {}",
                         short_id(&session_id),
                         event.connection_name
-                    );
+                    ));
                     // Do not append local log text through the full terminal decode path
                     // on connect success — that competes with the first SSH/PTY frames.
                     // Auto-recording file open is deferred to the idle plane.
@@ -652,7 +653,8 @@ impl NyaTermApp {
                         self.shell
                             .set_last_connect_failure(connection_name.clone(), error.clone());
                     }
-                    self.shell.status = format!("failed to start {connection_name}: {error}");
+                    self.shell
+                        .set_status(format!("failed to start {connection_name}: {error}"));
                     if self.session.active_id().is_none() {
                         self.append_terminal_log(format!(
                             "\n# failed to start {}: {error}\n",

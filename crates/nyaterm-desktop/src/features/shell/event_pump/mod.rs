@@ -262,10 +262,10 @@ impl NyaTermApp {
         };
         self.security.activate_screen_lock(lock_status);
         self.forget_text_inputs("lock-screen.password");
-        self.shell.status = format!(
+        self.shell.set_status(format!(
             "screen locked after {} minute(s) idle",
             self.settings.summary().idle_lock_minutes
-        );
+        ));
         if self.settings.summary().has_master_password {
             let field = self.text_input("lock-screen.password", "", TextInputSetup::masked(), cx);
             window.focus(&field.read(cx).focus_handle());
@@ -478,10 +478,10 @@ impl NyaTermApp {
         }
         self.shell.runtime.last_pending_session_status_at = Some(now);
         let message = pending_session_status_message(&name, auth_wait.as_ref());
-        if self.shell.status == message {
+        if self.shell.status() == message {
             return false;
         }
-        self.shell.status = message;
+        self.shell.set_status(message);
         true
     }
 

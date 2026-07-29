@@ -489,7 +489,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.terminal.menus.actions_open = true;
-        self.shell.status = "terminal actions opened".to_string();
+        self.shell.set_status("terminal actions opened".to_string());
         window.focus(&self.terminal.menus.actions_focus);
         cx.notify();
     }
@@ -500,7 +500,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.terminal.menus.actions_open = false;
-        self.shell.status = "terminal actions closed".to_string();
+        self.shell.set_status("terminal actions closed".to_string());
         window.focus(&self.terminal.input.focus);
         cx.notify();
     }
@@ -596,10 +596,12 @@ impl NyaTermApp {
     pub(in crate::features) fn copy_terminal_visible_text(&mut self, cx: &mut Context<Self>) {
         let text = self.active_terminal_visible_text();
         if text.trim().is_empty() {
-            self.shell.status = "visible terminal text is empty".to_string();
+            self.shell
+                .set_status("visible terminal text is empty".to_string());
         } else {
             cx.write_to_clipboard(ClipboardItem::new_string(text));
-            self.shell.status = "copied visible terminal text".to_string();
+            self.shell
+                .set_status("copied visible terminal text".to_string());
         }
         self.terminal.menus.actions_open = false;
         cx.notify();
@@ -609,7 +611,8 @@ impl NyaTermApp {
         self.terminal.menus.actions_open = false;
         self.clear_terminal_selection(cx);
         if self.send_terminal_input(vec![0x0c], cx) {
-            self.shell.status = "clear screen command sent".to_string();
+            self.shell
+                .set_status("clear screen command sent".to_string());
             cx.notify();
         }
     }
@@ -990,8 +993,9 @@ impl NyaTermApp {
             }
         }
         if failed > 0 {
-            self.shell.status =
-                format!("alternate scroll synced {synced} peer(s), {failed} failed");
+            self.shell.set_status(format!(
+                "alternate scroll synced {synced} peer(s), {failed} failed"
+            ));
             cx.notify();
         }
         true
@@ -1549,10 +1553,10 @@ impl NyaTermApp {
         status: impl Into<String>,
     ) -> bool {
         let status = status.into();
-        if !terminal_status_changed(self.shell.status.as_str(), status.as_str()) {
+        if !terminal_status_changed(self.shell.status(), status.as_str()) {
             return false;
         }
-        self.shell.status = status;
+        self.shell.set_status(status);
         true
     }
 

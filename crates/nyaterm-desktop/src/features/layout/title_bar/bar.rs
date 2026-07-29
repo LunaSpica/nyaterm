@@ -442,7 +442,8 @@ impl NyaTermApp {
 
     fn persist_header_status_settings(&mut self) {
         if self.shell.has_settings_draft() {
-            self.shell.status = "header status changed; apply settings to persist".to_string();
+            self.shell
+                .set_status("header status changed; apply settings to persist".to_string());
         } else {
             self.persist_ui_layout();
         }

@@ -60,18 +60,21 @@ impl NyaTermApp {
             .find(|connection| connection.id == connection_id)
             .cloned()
         else {
-            self.shell.status = "connection is no longer available".to_string();
+            self.shell
+                .set_status("connection is no longer available".to_string());
             cx.notify();
             return;
         };
         match self.copy_connections_to_store(&[connection]) {
             Ok(count) => {
-                self.shell.status = format!("copied {count} saved connection(s)");
+                self.shell
+                    .set_status(format!("copied {count} saved connection(s)"));
             }
             Err(error) => {
-                self.shell.status = format!("copy connection failed: {error}");
+                self.shell
+                    .set_status(format!("copy connection failed: {error}"));
                 self.settings
-                    .update_store_status(self.shell.status.clone(), false);
+                    .update_store_status(self.shell.status().to_string(), false);
             }
         }
         cx.notify();
@@ -84,12 +87,14 @@ impl NyaTermApp {
     ) {
         let selected = self.connection_state.selected_connections();
         if selected.is_empty() {
-            self.shell.status = "select saved connections before connecting".to_string();
+            self.shell
+                .set_status("select saved connections before connecting".to_string());
             cx.notify();
             return;
         }
         let queued = self.enqueue_saved_connection_starts(selected, cx);
-        self.shell.status = format!("queued {queued} connection(s)");
+        self.shell
+            .set_status(format!("queued {queued} connection(s)"));
         self.drive_saved_connection_start_queue(window, cx);
     }
 
@@ -103,12 +108,14 @@ impl NyaTermApp {
             .connection_state
             .saved_connections_in_group_tree(&group_id);
         if connections.is_empty() {
-            self.shell.status = "group has no connections".to_string();
+            self.shell
+                .set_status("group has no connections".to_string());
             cx.notify();
             return;
         }
         let queued = self.enqueue_saved_connection_starts(connections, cx);
-        self.shell.status = format!("queued {queued} connection(s) from group");
+        self.shell
+            .set_status(format!("queued {queued} connection(s) from group"));
         self.drive_saved_connection_start_queue(window, cx);
     }
 
@@ -182,7 +189,8 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> bool {
         if self.saved_connection_start_is_pending_or_queued(&connection) {
-            self.shell.status = format!("{} is already queued", connection.name);
+            self.shell
+                .set_status(format!("{} is already queued", connection.name));
             self.shell.show_workspace();
             cx.notify();
             return false;
@@ -191,7 +199,8 @@ impl NyaTermApp {
         let pending_count = self
             .session
             .start_queue_saved_connection(connection, options);
-        self.shell.status = format!("queued {name} ({} pending)", pending_count);
+        self.shell
+            .set_status(format!("queued {name} ({} pending)", pending_count));
         self.shell.show_workspace();
         cx.notify();
         true

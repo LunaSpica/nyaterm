@@ -390,8 +390,9 @@ impl NyaTermApp {
             return;
         }
         if self.is_session_disconnected(session_id) {
-            self.shell.status =
-                "session disconnected - reconnect before filling credentials".to_string();
+            self.shell.set_status(
+                "session disconnected - reconnect before filling credentials".to_string(),
+            );
             cx.notify();
             return;
         }
@@ -403,19 +404,22 @@ impl NyaTermApp {
                 let mut payload = credential.username.clone();
                 payload.push('\r');
                 self.send_terminal_input_without_suggestion_track(payload.into_bytes(), cx);
-                self.shell.status = format!("filled username from '{}'", credential.name);
+                self.shell
+                    .set_status(format!("filled username from '{}'", credential.name));
             }
             CredentialPromptKind::Password => {
                 let password = self.decrypt_saved_credential_password(&credential.id);
                 let Some(password) = password.filter(|value| !value.is_empty()) else {
-                    self.shell.status = format!("credential '{}' has no password", credential.name);
+                    self.shell
+                        .set_status(format!("credential '{}' has no password", credential.name));
                     cx.notify();
                     return;
                 };
                 let mut payload = password;
                 payload.push('\r');
                 self.send_terminal_input_without_suggestion_track(payload.into_bytes(), cx);
-                self.shell.status = format!("filled password from '{}'", credential.name);
+                self.shell
+                    .set_status(format!("filled password from '{}'", credential.name));
             }
         }
         cx.notify();

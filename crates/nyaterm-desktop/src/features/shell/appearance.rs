@@ -297,17 +297,18 @@ impl NyaTermApp {
         };
         self.settings.set_cursor_style(normalized.to_string());
         self.save_appearance_settings(cx);
-        self.shell.status = format!("cursor style → {normalized}");
+        self.shell
+            .set_status(format!("cursor style → {normalized}"));
     }
 
     pub(in crate::features) fn toggle_cursor_blink(&mut self, cx: &mut Context<Self>) {
         let cursor_blink = self.settings.toggle_cursor_blink();
         self.save_appearance_settings(cx);
-        self.shell.status = if cursor_blink {
+        self.shell.set_status(if cursor_blink {
             "cursor blink on".to_string()
         } else {
             "cursor blink off".to_string()
-        };
+        });
     }
 
     pub(in crate::features) fn set_terminal_theme(
@@ -324,10 +325,11 @@ impl NyaTermApp {
         });
         self.settings.set_terminal_theme(theme);
         self.save_appearance_settings(cx);
-        self.shell.status = match self.settings.summary().terminal_theme.as_deref() {
-            Some(id) => format!("terminal theme → {id}"),
-            None => "terminal theme → follow UI".to_string(),
-        };
+        self.shell
+            .set_status(match self.settings.summary().terminal_theme.as_deref() {
+                Some(id) => format!("terminal theme → {id}"),
+                None => "terminal theme → follow UI".to_string(),
+            });
     }
 
     pub(in crate::features) fn set_minimum_contrast_ratio(
@@ -343,7 +345,7 @@ impl NyaTermApp {
             return;
         }
         self.save_appearance_settings(cx);
-        self.shell.status = format!("minimum contrast → {ratio}");
+        self.shell.set_status(format!("minimum contrast → {ratio}"));
     }
 
     pub(in crate::features) fn update_ui_font_family(
@@ -497,7 +499,8 @@ impl NyaTermApp {
             )),
         };
         let receiver = cx.prompt_for_paths(options);
-        self.shell.status = "selecting wallpaper image".to_string();
+        self.shell
+            .set_status("selecting wallpaper image".to_string());
         cx.spawn(async move |this, cx| {
             let path = match receiver.await {
                 Ok(Ok(Some(paths))) => paths.into_iter().next(),
@@ -508,9 +511,11 @@ impl NyaTermApp {
                     this.settings
                         .select_background_image(path.display().to_string());
                     this.save_appearance_settings(cx);
-                    this.shell.status = "wallpaper image selected".to_string();
+                    this.shell
+                        .set_status("wallpaper image selected".to_string());
                 } else {
-                    this.shell.status = "wallpaper selection cancelled".to_string();
+                    this.shell
+                        .set_status("wallpaper selection cancelled".to_string());
                     cx.notify();
                 }
             });
@@ -523,7 +528,7 @@ impl NyaTermApp {
         self.settings.clear_background_image();
         self.settings.close_appearance_menu();
         self.save_appearance_settings(cx);
-        self.shell.status = "wallpaper cleared".to_string();
+        self.shell.set_status("wallpaper cleared".to_string());
     }
 
     pub(in crate::features) fn set_background_image_fit(
@@ -540,7 +545,8 @@ impl NyaTermApp {
         self.settings
             .set_background_image_fit(normalized.to_string());
         self.save_appearance_settings(cx);
-        self.shell.status = format!("wallpaper fit → {normalized}");
+        self.shell
+            .set_status(format!("wallpaper fit → {normalized}"));
     }
 
     pub(in crate::features) fn set_background_image_opacity(
@@ -583,14 +589,16 @@ impl NyaTermApp {
                 self.refresh_visible_terminal_surfaces(cx);
                 self.settings
                     .update_store_status("appearance settings saved", true);
-                self.shell.status = "appearance settings saved".to_string();
+                self.shell
+                    .set_status("appearance settings saved".to_string());
             }
             Err(error) => {
                 self.settings.update_store_status(
                     format!("appearance settings save failed: {error}"),
                     false,
                 );
-                self.shell.status = self.settings.store_status().message.to_string();
+                self.shell
+                    .set_status(self.settings.store_status().message.to_string());
             }
         }
         cx.notify();

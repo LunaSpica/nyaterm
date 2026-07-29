@@ -15,7 +15,8 @@ impl NyaTermApp {
         let Some(config) = self.session.active_ssh_config_owned() else {
             self.remote_ops
                 .set_stats_status("start an SSH session before inspecting stats");
-            self.shell.status = self.remote_ops.stats_status().to_string();
+            self.shell
+                .set_status(self.remote_ops.stats_status().to_string());
             cx.notify();
             return;
         };
@@ -84,7 +85,8 @@ impl NyaTermApp {
                         stats.load.load5,
                         stats.load.load15
                     ));
-                    self.shell.status = self.remote_ops.stats_status().to_string();
+                    self.shell
+                        .set_status(self.remote_ops.stats_status().to_string());
                     // The snapshot is the only place the remote OS is reported,
                     // so this is where a connection's icon can be filled in.
                     self.apply_auto_detected_connection_icon(&event.session_id, &stats.system);
@@ -94,7 +96,8 @@ impl NyaTermApp {
                     self.remote_ops.record_stats_refresh_failure();
                     self.remote_ops
                         .set_stats_status(format!("stats refresh failed: {error}"));
-                    self.shell.status = self.remote_ops.stats_status().to_string();
+                    self.shell
+                        .set_status(self.remote_ops.stats_status().to_string());
                 }
             }
         }

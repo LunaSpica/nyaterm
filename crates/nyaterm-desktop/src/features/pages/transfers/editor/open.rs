@@ -53,7 +53,8 @@ impl NyaTermApp {
         if entry.file_type == SftpFileType::Directory {
             self.transfer
                 .set_browser_status("AI file actions require a file");
-            self.shell.status = "directories cannot be sent to file AI actions".to_string();
+            self.shell
+                .set_status("directories cannot be sent to file AI actions".to_string());
             cx.notify();
             return;
         }
@@ -63,18 +64,21 @@ impl NyaTermApp {
         {
             self.transfer
                 .set_browser_status("file exceeds AI file size limit");
-            self.shell.status = format!("{} is too large for AI file actions", entry.path);
+            self.shell
+                .set_status(format!("{} is too large for AI file actions", entry.path));
             cx.notify();
             return;
         }
         if !self.ai.settings_config().enabled {
             self.transfer.set_browser_status("AI assistant is disabled");
-            self.shell.status = "AI assistant is disabled".to_string();
+            self.shell
+                .set_status("AI assistant is disabled".to_string());
             cx.notify();
             return;
         }
         let Some(config) = self.session.active_ssh_config_owned() else {
-            self.shell.status = "start an SSH session first".to_string();
+            self.shell
+                .set_status("start an SSH session first".to_string());
             cx.notify();
             return;
         };
@@ -105,7 +109,8 @@ impl NyaTermApp {
         });
         self.transfer
             .set_browser_status(format!("loading {remote_path} for AI"));
-        self.shell.status = format!("SFTP AI file action started: {remote_path}");
+        self.shell
+            .set_status(format!("SFTP AI file action started: {remote_path}"));
         let transfer_tx = self.transfer.transfer_event_sender();
         std::thread::spawn(move || {
             let result = SftpService::new(config)
@@ -132,7 +137,8 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(entry) = self.selected_transfer_entry() else {
-            self.shell.status = "select a remote file first".to_string();
+            self.shell
+                .set_status("select a remote file first".to_string());
             cx.notify();
             return;
         };
@@ -145,7 +151,8 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(entry) = self.selected_transfer_entry() else {
-            self.shell.status = "select a remote file first".to_string();
+            self.shell
+                .set_status("select a remote file first".to_string());
             cx.notify();
             return;
         };
@@ -158,7 +165,8 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(entry) = self.selected_transfer_entry() else {
-            self.shell.status = "select a remote file first".to_string();
+            self.shell
+                .set_status("select a remote file first".to_string());
             cx.notify();
             return;
         };
@@ -211,7 +219,8 @@ impl NyaTermApp {
             RemoteFileTextKind::Unknown => {
                 self.transfer
                     .open_unknown_file_dialog(TransferUnknownFileState { entry });
-                self.shell.status = "confirm how to open unknown remote file".to_string();
+                self.shell
+                    .set_status("confirm how to open unknown remote file".to_string());
                 window.focus(self.transfer.unknown_file_focus());
                 cx.notify();
             }
@@ -225,7 +234,8 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if entry.file_type == SftpFileType::Directory {
-            self.shell.status = "directories cannot be opened in the text editor".to_string();
+            self.shell
+                .set_status("directories cannot be opened in the text editor".to_string());
             cx.notify();
             return;
         }
@@ -245,7 +255,7 @@ impl NyaTermApp {
                 window.focus(self.transfer.editor_focus());
             }
             self.transfer.set_browser_status(status.clone());
-            self.shell.status = status;
+            self.shell.set_status(status);
             cx.notify();
             return;
         }
@@ -271,7 +281,8 @@ impl NyaTermApp {
             focused_field: TransferEditorField::Content,
         };
         self.transfer.open_editor_tab(tab);
-        self.shell.status = format!("opening remote text file {}", entry.path);
+        self.shell
+            .set_status(format!("opening remote text file {}", entry.path));
         self.open_remote_file_editor_window(cx);
         if !self.transfer.editor_window_is_open() && !self.transfer.editor_window_open_is_pending()
         {
@@ -283,7 +294,8 @@ impl NyaTermApp {
 
     pub(in crate::features) fn cancel_transfer_unknown_file(&mut self, cx: &mut Context<Self>) {
         self.transfer.close_unknown_file_dialog();
-        self.shell.status = "unknown file open cancelled".to_string();
+        self.shell
+            .set_status("unknown file open cancelled".to_string());
         cx.notify();
     }
 
@@ -318,12 +330,14 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if entry.file_type == SftpFileType::Directory {
-            self.shell.status = "directories cannot be opened in an external editor".to_string();
+            self.shell
+                .set_status("directories cannot be opened in an external editor".to_string());
             cx.notify();
             return;
         }
         let Some(config) = self.session.active_ssh_config_owned() else {
-            self.shell.status = "start an SSH session first".to_string();
+            self.shell
+                .set_status("start an SSH session first".to_string());
             self.ensure_panel_open(NavItem::Transfers);
             cx.notify();
             return;
@@ -344,7 +358,7 @@ impl NyaTermApp {
             if let Some(tab) = self.active_transfer_editor_tab_mut() {
                 tab.error = Some(error.clone());
             }
-            self.shell.status = error;
+            self.shell.set_status(error);
             cx.notify();
             return;
         };
@@ -390,7 +404,8 @@ impl NyaTermApp {
             progress: None,
             control: Some(control.clone()),
         });
-        self.shell.status = format!("downloading {remote_path} for external open");
+        self.shell
+            .set_status(format!("downloading {remote_path} for external open"));
 
         let progress_tx = self.transfer.transfer_event_sender();
         let finished_tx = self.transfer.transfer_event_sender();

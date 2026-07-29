@@ -55,7 +55,8 @@ impl NyaTermApp {
                     self.open_transfer_default(entry, window, cx);
                 }
             } else {
-                self.shell.status = "select a remote item before opening".to_string();
+                self.shell
+                    .set_status("select a remote item before opening".to_string());
                 cx.notify();
             }
             return;

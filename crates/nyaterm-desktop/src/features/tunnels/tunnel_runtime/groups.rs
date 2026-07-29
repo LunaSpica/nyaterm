@@ -27,7 +27,8 @@ impl NyaTermApp {
             (_, None) => Some(String::new()),
         };
         let Some(name) = name else {
-            self.shell.status = "network group is no longer available".to_string();
+            self.shell
+                .set_status("network group is no longer available".to_string());
             cx.notify();
             return;
         };
@@ -42,14 +43,16 @@ impl NyaTermApp {
         // The box owns its text, so it has to be dropped for the next group to
         // seed from its own name.
         self.forget_text_inputs("network.group-editor.");
-        self.shell.status = "network group editor opened".to_string();
+        self.shell
+            .set_status("network group editor opened".to_string());
         cx.notify();
     }
 
     pub(in crate::features) fn close_network_group_editor(&mut self, cx: &mut Context<Self>) {
         self.connection_state.close_network_group_editor();
         self.forget_text_inputs("network.group-editor.");
-        self.shell.status = "network group editor closed".to_string();
+        self.shell
+            .set_status("network group editor closed".to_string());
         cx.notify();
     }
 
@@ -66,7 +69,8 @@ impl NyaTermApp {
 
     pub(in crate::features) fn save_network_group_editor(&mut self, cx: &mut Context<Self>) {
         let Some(editor) = self.connection_state.active_network_group_editor() else {
-            self.shell.status = "no network group editor is active".to_string();
+            self.shell
+                .set_status("no network group editor is active".to_string());
             cx.notify();
             return;
         };
@@ -94,7 +98,8 @@ impl NyaTermApp {
             .tunnel_state
             .tunnel_groups_with_upsert(group_id.as_deref(), name.clone())
         else {
-            self.shell.status = "tunnel group is no longer available".to_string();
+            self.shell
+                .set_status("tunnel group is no longer available".to_string());
             cx.notify();
             return;
         };
@@ -108,14 +113,16 @@ impl NyaTermApp {
             Ok(()) => {
                 self.tunnel_state.commit_tunnel_groups(groups);
                 self.connection_state.close_network_group_editor();
-                self.shell.status = format!("tunnel group '{name}' saved");
+                self.shell
+                    .set_status(format!("tunnel group '{name}' saved"));
                 self.settings
-                    .update_store_status(self.shell.status.clone(), true);
+                    .update_store_status(self.shell.status().to_string(), true);
             }
             Err(error) => {
-                self.shell.status = format!("failed to save tunnel group: {error}");
+                self.shell
+                    .set_status(format!("failed to save tunnel group: {error}"));
                 self.settings
-                    .update_store_status(self.shell.status.clone(), false);
+                    .update_store_status(self.shell.status().to_string(), false);
             }
         }
         cx.notify();
@@ -131,7 +138,8 @@ impl NyaTermApp {
             .tunnel_state
             .proxy_groups_with_upsert(group_id.as_deref(), name.clone())
         else {
-            self.shell.status = "proxy group is no longer available".to_string();
+            self.shell
+                .set_status("proxy group is no longer available".to_string());
             cx.notify();
             return;
         };
@@ -145,14 +153,15 @@ impl NyaTermApp {
             Ok(()) => {
                 self.tunnel_state.commit_proxy_groups(groups);
                 self.connection_state.close_network_group_editor();
-                self.shell.status = format!("proxy group '{name}' saved");
+                self.shell.set_status(format!("proxy group '{name}' saved"));
                 self.settings
-                    .update_store_status(self.shell.status.clone(), true);
+                    .update_store_status(self.shell.status().to_string(), true);
             }
             Err(error) => {
-                self.shell.status = format!("failed to save proxy group: {error}");
+                self.shell
+                    .set_status(format!("failed to save proxy group: {error}"));
                 self.settings
-                    .update_store_status(self.shell.status.clone(), false);
+                    .update_store_status(self.shell.status().to_string(), false);
             }
         }
         cx.notify();
@@ -173,19 +182,22 @@ impl NyaTermApp {
                 label,
                 item_count,
             });
-        self.shell.status = "network group delete confirmation opened".to_string();
+        self.shell
+            .set_status("network group delete confirmation opened".to_string());
         cx.notify();
     }
 
     pub(in crate::features) fn cancel_network_group_delete(&mut self, cx: &mut Context<Self>) {
         self.connection_state.close_network_group_delete_confirm();
-        self.shell.status = "network group delete cancelled".to_string();
+        self.shell
+            .set_status("network group delete cancelled".to_string());
         cx.notify();
     }
 
     pub(in crate::features) fn confirm_network_group_delete(&mut self, cx: &mut Context<Self>) {
         let Some(delete) = self.connection_state.active_network_group_delete_confirm() else {
-            self.shell.status = "no network group delete is pending".to_string();
+            self.shell
+                .set_status("no network group delete is pending".to_string());
             cx.notify();
             return;
         };
@@ -219,14 +231,16 @@ impl NyaTermApp {
                     &group_id,
                     &deleted_tunnel_ids,
                 );
-                self.shell.status = format!("tunnel group '{label}' deleted");
+                self.shell
+                    .set_status(format!("tunnel group '{label}' deleted"));
                 self.settings
-                    .update_store_status(self.shell.status.clone(), true);
+                    .update_store_status(self.shell.status().to_string(), true);
             }
             Err(error) => {
-                self.shell.status = format!("failed to delete tunnel group: {error}");
+                self.shell
+                    .set_status(format!("failed to delete tunnel group: {error}"));
                 self.settings
-                    .update_store_status(self.shell.status.clone(), false);
+                    .update_store_status(self.shell.status().to_string(), false);
             }
         }
         cx.notify();
@@ -255,14 +269,16 @@ impl NyaTermApp {
                     &group_id,
                     &deleted_proxy_ids,
                 );
-                self.shell.status = format!("proxy group '{label}' deleted");
+                self.shell
+                    .set_status(format!("proxy group '{label}' deleted"));
                 self.settings
-                    .update_store_status(self.shell.status.clone(), true);
+                    .update_store_status(self.shell.status().to_string(), true);
             }
             Err(error) => {
-                self.shell.status = format!("failed to delete proxy group: {error}");
+                self.shell
+                    .set_status(format!("failed to delete proxy group: {error}"));
                 self.settings
-                    .update_store_status(self.shell.status.clone(), false);
+                    .update_store_status(self.shell.status().to_string(), false);
             }
         }
         cx.notify();

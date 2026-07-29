@@ -66,7 +66,8 @@ impl NyaTermApp {
         self.terminal.selection.selection = Some(TerminalSelection::all_buffer(cols));
         self.terminal.selection.session_id = self.session.active_id_owned();
         self.terminal.selection.dragging = false;
-        self.shell.status = "selected all terminal text".to_string();
+        self.shell
+            .set_status("selected all terminal text".to_string());
         self.notify_terminal_selection_owner_surface(cx);
         cx.notify();
     }
@@ -122,7 +123,8 @@ impl NyaTermApp {
             return false;
         };
         cx.write_to_clipboard(ClipboardItem::new_string(text));
-        self.shell.status = "copied terminal selection".to_string();
+        self.shell
+            .set_status("copied terminal selection".to_string());
         self.notify_terminal_selection_owner_surface(cx);
         self.terminal.menus.actions_open = false;
         cx.notify();
@@ -201,7 +203,8 @@ impl NyaTermApp {
             ));
             self.terminal.selection.session_id = selection_session_id;
             self.terminal.selection.dragging = false;
-            self.shell.status = format!("selected line {}", cell.row + 1);
+            self.shell
+                .set_status(format!("selected line {}", cell.row + 1));
             self.notify_terminal_selection_owner_surface(cx);
             // Discrete click: status bar update is fine (not a high-frequency path).
             cx.notify();
@@ -222,7 +225,7 @@ impl NyaTermApp {
             ));
             self.terminal.selection.session_id = selection_session_id;
             self.terminal.selection.dragging = false;
-            self.shell.status = "selected word".to_string();
+            self.shell.set_status("selected word".to_string());
             self.notify_terminal_selection_owner_surface(cx);
             cx.notify();
             return;
@@ -360,7 +363,7 @@ impl NyaTermApp {
             let _ = self.copy_terminal_selection(cx);
         } else if self.terminal.selection.selection.is_some() {
             // One shell notify for status after drag ends (not per mouse move).
-            self.shell.status = "selection ready".to_string();
+            self.shell.set_status("selection ready".to_string());
             cx.notify();
         }
         self.notify_terminal_selection_owner_surface(cx);

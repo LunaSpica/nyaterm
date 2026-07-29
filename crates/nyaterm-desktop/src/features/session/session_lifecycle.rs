@@ -20,17 +20,20 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if self.has_pending_session_start() {
-            self.shell.status = "wait for the pending session to finish connecting".to_string();
+            self.shell
+                .set_status("wait for the pending session to finish connecting".to_string());
             cx.notify();
             return;
         }
         let Some(source_session_id) = self.session.active_id_owned() else {
-            self.shell.status = "no active session to duplicate".to_string();
+            self.shell
+                .set_status("no active session to duplicate".to_string());
             cx.notify();
             return;
         };
         let Some(metadata) = self.session.metadata(&source_session_id).cloned() else {
-            self.shell.status = "active session cannot be duplicated".to_string();
+            self.shell
+                .set_status("active session cannot be duplicated".to_string());
             cx.notify();
             return;
         };
@@ -122,22 +125,26 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if self.has_pending_session_start() {
-            self.shell.status = "wait for the pending session to finish connecting".to_string();
+            self.shell
+                .set_status("wait for the pending session to finish connecting".to_string());
             cx.notify();
             return;
         }
         let Some(source_session_id) = self.session.active_id_owned() else {
-            self.shell.status = "no active SSH session to multiplex".to_string();
+            self.shell
+                .set_status("no active SSH session to multiplex".to_string());
             cx.notify();
             return;
         };
         let Some(metadata) = self.session.metadata(&source_session_id).cloned() else {
-            self.shell.status = "active session cannot be multiplexed".to_string();
+            self.shell
+                .set_status("active session cannot be multiplexed".to_string());
             cx.notify();
             return;
         };
         let SessionLaunchConfig::Ssh(config) = metadata.launch_config.clone() else {
-            self.shell.status = "active session is not SSH".to_string();
+            self.shell
+                .set_status("active session is not SSH".to_string());
             cx.notify();
             return;
         };
@@ -170,7 +177,8 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let Some(source_session_id) = self.session.active_id_owned() else {
-            self.shell.status = "no active session to reconnect".to_string();
+            self.shell
+                .set_status("no active session to reconnect".to_string());
             cx.notify();
             return;
         };
@@ -184,17 +192,20 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if self.session.session_is_busy(&session_id) {
-            self.shell.status = "session action already in progress".to_string();
+            self.shell
+                .set_status("session action already in progress".to_string());
             cx.notify();
             return;
         }
         if self.is_session_disconnected(&session_id) {
-            self.shell.status = "session already disconnected".to_string();
+            self.shell
+                .set_status("session already disconnected".to_string());
             cx.notify();
             return;
         }
         if !self.session.has_session(&session_id) {
-            self.shell.status = "session no longer exists".to_string();
+            self.shell
+                .set_status("session no longer exists".to_string());
             cx.notify();
             return;
         }
@@ -205,7 +216,8 @@ impl NyaTermApp {
         self.cleanup_recording_for_session(&session_id);
         self.mark_session_disconnected(&session_id, cx);
         self.session.finish_busy_action(&session_id);
-        self.shell.status = format!("disconnected {}", short_id(&session_id));
+        self.shell
+            .set_status(format!("disconnected {}", short_id(&session_id)));
         cx.notify();
     }
 
@@ -253,17 +265,20 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if self.session.session_is_busy(&session_id) {
-            self.shell.status = "session action already in progress".to_string();
+            self.shell
+                .set_status("session action already in progress".to_string());
             cx.notify();
             return;
         }
         if self.has_pending_session_start() {
-            self.shell.status = "wait for the pending session to finish connecting".to_string();
+            self.shell
+                .set_status("wait for the pending session to finish connecting".to_string());
             cx.notify();
             return;
         }
         if !self.session.has_session(&session_id) {
-            self.shell.status = "session cannot be reconnected".to_string();
+            self.shell
+                .set_status("session cannot be reconnected".to_string());
             cx.notify();
             return;
         }
@@ -298,7 +313,8 @@ impl NyaTermApp {
         self.clear_terminal_mouse_report_for_session(&old_id);
         let Some(metadata) = self.session.metadata(&old_id).cloned() else {
             self.session.finish_busy_action(&old_id);
-            self.shell.status = "session cannot be reconnected".to_string();
+            self.shell
+                .set_status("session cannot be reconnected".to_string());
             cx.notify();
             return;
         };

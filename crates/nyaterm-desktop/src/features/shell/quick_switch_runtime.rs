@@ -52,7 +52,7 @@ impl NyaTermApp {
             TextInputSetup::placeholder(self.tr("sessionQuickSwitcher.searchPlaceholder")),
             cx,
         );
-        self.shell.status = "quick switch opened".to_string();
+        self.shell.set_status("quick switch opened".to_string());
         window.focus(&field.read(cx).focus_handle());
         cx.notify();
     }
@@ -60,7 +60,7 @@ impl NyaTermApp {
     pub(in crate::features) fn close_quick_switch(&mut self, cx: &mut Context<Self>) {
         self.update_quick_switch_state(cx, |store| store.close_quick_switch());
         self.forget_text_inputs("quick-switch.query");
-        self.shell.status = "quick switch closed".to_string();
+        self.shell.set_status("quick switch closed".to_string());
         cx.notify();
     }
 

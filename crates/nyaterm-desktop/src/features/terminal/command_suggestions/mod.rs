@@ -889,11 +889,11 @@ impl NyaTermApp {
                 apply_terminal_input_data(&TerminalInputState::new(), &command);
             self.refresh_command_suggestions(cx);
         }
-        self.shell.status = if execute {
+        self.shell.set_status(if execute {
             format!("executed suggestion from {source}")
         } else {
             format!("filled suggestion from {source}")
-        };
+        });
         cx.notify();
     }
 
@@ -912,7 +912,8 @@ impl NyaTermApp {
         ) {
             Ok(store) => {
                 if let Err(error) = store.delete_command_history(&command) {
-                    self.shell.status = format!("failed to delete history: {error}");
+                    self.shell
+                        .set_status(format!("failed to delete history: {error}"));
                     cx.notify();
                     return;
                 }
@@ -921,7 +922,8 @@ impl NyaTermApp {
                 self.session.remove_command_from_all_history(&command);
             }
             Err(error) => {
-                self.shell.status = format!("failed to open store: {error}");
+                self.shell
+                    .set_status(format!("failed to open store: {error}"));
                 cx.notify();
                 return;
             }
@@ -941,7 +943,8 @@ impl NyaTermApp {
         } else {
             self.refresh_command_suggestions(cx);
         }
-        self.shell.status = format!("deleted history command '{command}'");
+        self.shell
+            .set_status(format!("deleted history command '{command}'"));
         cx.notify();
     }
 

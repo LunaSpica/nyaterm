@@ -18,7 +18,7 @@ impl NyaTermApp {
         };
         self.security.activate_screen_lock(lock_status);
         self.forget_text_inputs("lock-screen.password");
-        self.shell.status = "screen locked".to_string();
+        self.shell.set_status("screen locked".to_string());
         if self.settings.summary().has_master_password {
             let field = self.text_input("lock-screen.password", "", TextInputSetup::masked(), cx);
             window.focus(&field.read(cx).focus_handle());
@@ -31,7 +31,7 @@ impl NyaTermApp {
     pub(in crate::features) fn unlock_app(&mut self, cx: &mut Context<Self>) {
         self.security.deactivate_screen_lock();
         self.forget_text_inputs("lock-screen.password");
-        self.shell.status = "screen unlocked".to_string();
+        self.shell.set_status("screen unlocked".to_string());
         cx.notify();
     }
 
@@ -52,14 +52,14 @@ impl NyaTermApp {
                 let status = self.tr("lockScreen.wrongPassword").to_string();
                 self.security.clear_screen_lock_password_with_status(status);
                 self.reset_text_input("lock-screen.password", "", cx);
-                self.shell.status = "screen unlock rejected".to_string();
+                self.shell.set_status("screen unlock rejected".to_string());
                 cx.notify();
             }
             Err(error) => {
                 let status = format!("{}: {error}", self.tr("lockScreen.unlockFailed"));
                 self.security.clear_screen_lock_password_with_status(status);
                 self.reset_text_input("lock-screen.password", "", cx);
-                self.shell.status = "screen unlock failed".to_string();
+                self.shell.set_status("screen unlock failed".to_string());
                 cx.notify();
             }
         }
@@ -102,11 +102,14 @@ impl NyaTermApp {
         match std::fs::create_dir_all(self.runtime.log_dir()) {
             Ok(()) => {
                 cx.reveal_path(self.runtime.log_dir());
-                self.shell.status =
-                    format!("opened log directory {}", self.runtime.log_dir().display());
+                self.shell.set_status(format!(
+                    "opened log directory {}",
+                    self.runtime.log_dir().display()
+                ));
             }
             Err(error) => {
-                self.shell.status = format!("failed to prepare log directory: {error}");
+                self.shell
+                    .set_status(format!("failed to prepare log directory: {error}"));
             }
         }
         cx.notify();
@@ -114,7 +117,8 @@ impl NyaTermApp {
 
     pub(in crate::features) fn prompt_diagnostics_export(&mut self, cx: &mut Context<Self>) {
         if !self.settings.begin_diagnostics_path_prompt() {
-            self.shell.status = "diagnostics path picker is already open".to_string();
+            self.shell
+                .set_status("diagnostics path picker is already open".to_string());
             cx.notify();
             return;
         }
@@ -123,7 +127,8 @@ impl NyaTermApp {
         let receiver = cx.prompt_for_new_path(&directory, Some("nyaterm-diagnostics.zip"));
         let runtime = self.runtime.clone();
         let options = self.diagnostics_export_options();
-        self.shell.status = "selecting diagnostics export destination".to_string();
+        self.shell
+            .set_status("selecting diagnostics export destination".to_string());
         cx.spawn(async move |this, cx| {
             let result = match receiver.await {
                 Ok(Ok(Some(path))) => {
@@ -157,21 +162,24 @@ impl NyaTermApp {
         }
         match result {
             DiagnosticsPathPromptResult::Exported(info) => {
-                self.shell.status = format!(
+                self.shell.set_status(format!(
                     "diagnostics exported to {} ({} log file(s), {} bytes)",
                     info.output_path.display(),
                     info.log_files,
                     info.bytes
-                );
+                ));
             }
             DiagnosticsPathPromptResult::Cancelled => {
-                self.shell.status = "diagnostics export cancelled".to_string();
+                self.shell
+                    .set_status("diagnostics export cancelled".to_string());
             }
             DiagnosticsPathPromptResult::Failed(error) => {
-                self.shell.status = format!("diagnostics export failed: {error}");
+                self.shell
+                    .set_status(format!("diagnostics export failed: {error}"));
             }
             DiagnosticsPathPromptResult::Closed => {
-                self.shell.status = "diagnostics path picker closed before returning".to_string();
+                self.shell
+                    .set_status("diagnostics path picker closed before returning".to_string());
             }
         }
     }

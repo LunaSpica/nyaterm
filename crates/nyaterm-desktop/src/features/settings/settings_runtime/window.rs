@@ -161,7 +161,8 @@ fn open_settings_window_now_from_app(app: Entity<NyaTermApp>, cx: &mut App) {
         }
         Err(error) => {
             app.shell.fail_settings_window_open();
-            app.shell.status = format!("failed to open settings window: {error}");
+            app.shell
+                .set_status(format!("failed to open settings window: {error}"));
             cx.notify();
         }
     });

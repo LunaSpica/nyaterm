@@ -738,7 +738,7 @@ impl NyaTermApp {
                     })
                     .when(
                         !session_id.is_empty()
-                            && !self.shell.status.trim().is_empty()
+                            && !self.shell.status().trim().is_empty()
                             && !is_active,
                         |this| {
                             this.child(
@@ -754,7 +754,7 @@ impl NyaTermApp {
                                         div()
                                             .text_xs()
                                             .text_color(rgb(palette.text_muted))
-                                            .child(self.shell.status.clone()),
+                                            .child(self.shell.status().to_string()),
                                     ),
                             )
                         },
@@ -792,7 +792,7 @@ impl NyaTermApp {
                                     div()
                                         .text_xs()
                                         .text_color(rgb(palette.text_muted))
-                                        .child(self.shell.status.clone()),
+                                        .child(self.shell.status().to_string()),
                                 ),
                         )
                     })
@@ -958,9 +958,9 @@ impl NyaTermApp {
                                         }
                                     }
                                     if this.terminal.selection.selection.is_none()
-                                        && this.shell.status != "terminal focused"
+                                        && this.shell.status() != "terminal focused"
                                     {
-                                        this.shell.status = "terminal focused".to_string();
+                                        this.shell.set_status("terminal focused".to_string());
                                         cx.notify();
                                     }
                                 })

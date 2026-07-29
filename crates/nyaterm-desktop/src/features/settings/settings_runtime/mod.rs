@@ -22,8 +22,10 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         match open_external_url_simple(url) {
-            Ok(()) => self.shell.status = format!("opened URL: {url}"),
-            Err(error) => self.shell.status = format!("failed to open URL: {error}"),
+            Ok(()) => self.shell.set_status(format!("opened URL: {url}")),
+            Err(error) => self
+                .shell
+                .set_status(format!("failed to open URL: {error}")),
         }
         cx.notify();
     }

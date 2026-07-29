@@ -214,7 +214,7 @@ impl NyaTermApp {
                 self.refresh_security_catalog();
                 self.security
                     .finish_credential_editor(format!("credential saved ({})", compact_id(&id)));
-                self.shell.status = "credential saved".to_string();
+                self.shell.set_status("credential saved".to_string());
             }
             Err(error) => {
                 if let Some(editor) = self.security.credential_editor_mut() {

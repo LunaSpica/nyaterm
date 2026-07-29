@@ -214,8 +214,7 @@ impl NyaTermApp {
                                         cx.listener(move |this, _, window, cx| {
                                             this.terminal.close_actions();
                                             if visible_for_translate.trim().is_empty() {
-                                                this.shell.status =
-                                                    "terminal visible screen is empty".to_string();
+                                                this.shell.set_status("terminal visible screen is empty".to_string());
                                             } else {
                                                 let provider =
                                                     this.translation.provider().to_string();
@@ -327,8 +326,7 @@ impl NyaTermApp {
                                     this.terminal.close_actions();
                                     this.terminal.set_search_mode(TerminalSearchMode::History);
                                     this.open_terminal_search(window, cx);
-                                    this.shell.status =
-                                        "command history search focused".to_string();
+                                    this.shell.set_status("command history search focused".to_string());
                                 }),
                             ))
                             .child(tab_action_button(

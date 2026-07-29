@@ -22,7 +22,8 @@ impl NyaTermApp {
             None => Some(ProxyConfig::default()),
         };
         let Some(proxy) = proxy else {
-            self.shell.status = "proxy profile is no longer available".to_string();
+            self.shell
+                .set_status("proxy profile is no longer available".to_string());
             cx.notify();
             return;
         };
@@ -57,7 +58,7 @@ impl NyaTermApp {
         // The dialog's boxes own their text, so they have to be dropped for
         // the next proxy to seed from its own values.
         self.forget_text_inputs("network.proxy-editor.");
-        self.shell.status = "proxy editor opened".to_string();
+        self.shell.set_status("proxy editor opened".to_string());
         let proxy_editor_focus = self.connection_state.network_proxy_editor_focus_handle();
         window.focus(&proxy_editor_focus);
         cx.notify();
@@ -66,7 +67,7 @@ impl NyaTermApp {
     pub(in crate::features) fn close_network_proxy_editor(&mut self, cx: &mut Context<Self>) {
         self.connection_state.close_network_proxy_editor();
         self.forget_text_inputs("network.proxy-editor.");
-        self.shell.status = "proxy editor closed".to_string();
+        self.shell.set_status("proxy editor closed".to_string());
         cx.notify();
     }
 
@@ -96,7 +97,8 @@ impl NyaTermApp {
 
     pub(in crate::features) fn cycle_network_proxy_protocol(&mut self, cx: &mut Context<Self>) {
         if let Some(protocol) = self.connection_state.cycle_network_proxy_protocol() {
-            self.shell.status = format!("proxy protocol set to {protocol}");
+            self.shell
+                .set_status(format!("proxy protocol set to {protocol}"));
         }
         cx.notify();
     }
@@ -108,14 +110,15 @@ impl NyaTermApp {
                 .iter()
                 .map(|group| group.id.as_str()),
         ) {
-            self.shell.status = "proxy group changed".to_string();
+            self.shell.set_status("proxy group changed".to_string());
         }
         cx.notify();
     }
 
     pub(in crate::features) fn save_network_proxy_editor(&mut self, cx: &mut Context<Self>) {
         let Some(editor) = self.connection_state.active_network_proxy_editor() else {
-            self.shell.status = "no proxy editor is active".to_string();
+            self.shell
+                .set_status("no proxy editor is active".to_string());
             cx.notify();
             return;
         };
@@ -198,16 +201,17 @@ impl NyaTermApp {
             Ok(()) => {
                 self.tunnel_state.commit_proxies(next_proxies);
                 self.connection_state.close_network_proxy_editor();
-                self.shell.status = format!("proxy '{name}' saved");
+                self.shell.set_status(format!("proxy '{name}' saved"));
                 self.settings
-                    .update_store_status(self.shell.status.clone(), true);
+                    .update_store_status(self.shell.status().to_string(), true);
             }
             Err(error) => {
-                self.shell.status = format!("failed to save proxy: {error}");
+                self.shell
+                    .set_status(format!("failed to save proxy: {error}"));
                 self.settings
-                    .update_store_status(self.shell.status.clone(), false);
+                    .update_store_status(self.shell.status().to_string(), false);
                 self.connection_state
-                    .set_network_proxy_editor_error(self.shell.status.clone());
+                    .set_network_proxy_editor_error(self.shell.status().to_string());
             }
         }
         cx.notify();
@@ -221,7 +225,7 @@ impl NyaTermApp {
         let error = error.into();
         self.connection_state
             .set_network_proxy_editor_error(error.clone());
-        self.shell.status = error;
+        self.shell.set_status(error);
         cx.notify();
     }
 }

@@ -90,7 +90,8 @@ impl NyaTermApp {
         cx.write_to_clipboard(ClipboardItem::new_string(value));
         self.remote_ops
             .set_process_status(format!("copied process {label}"));
-        self.shell.status = self.remote_ops.process_status().to_string();
+        self.shell
+            .set_status(self.remote_ops.process_status().to_string());
         cx.notify();
     }
 
@@ -103,7 +104,8 @@ impl NyaTermApp {
         cx.write_to_clipboard(ClipboardItem::new_string(value));
         self.remote_ops
             .set_docker_status(format!("copied Docker {label}"));
-        self.shell.status = self.remote_ops.docker_status().to_string();
+        self.shell
+            .set_status(self.remote_ops.docker_status().to_string());
         cx.notify();
     }
 
@@ -146,7 +148,8 @@ impl NyaTermApp {
         let Some(config) = self.session.active_ssh_config_owned() else {
             self.remote_ops
                 .set_process_status("start an SSH session before listing processes");
-            self.shell.status = self.remote_ops.process_status().to_string();
+            self.shell
+                .set_status(self.remote_ops.process_status().to_string());
             cx.notify();
             return;
         };
@@ -192,7 +195,8 @@ impl NyaTermApp {
         let Some(config) = self.session.active_ssh_config_owned() else {
             self.remote_ops
                 .set_process_status("start an SSH session before signalling processes");
-            self.shell.status = self.remote_ops.process_status().to_string();
+            self.shell
+                .set_status(self.remote_ops.process_status().to_string());
             cx.notify();
             return;
         };
@@ -243,7 +247,8 @@ impl NyaTermApp {
         let Some(config) = self.session.active_ssh_config_owned() else {
             self.remote_ops
                 .set_process_status("start an SSH session before renicing processes");
-            self.shell.status = self.remote_ops.process_status().to_string();
+            self.shell
+                .set_status(self.remote_ops.process_status().to_string());
             cx.notify();
             return;
         };
@@ -308,7 +313,8 @@ impl NyaTermApp {
                         "loaded {} remote process(es)",
                         processes.len()
                     ));
-                    self.shell.status = self.remote_ops.process_status().to_string();
+                    self.shell
+                        .set_status(self.remote_ops.process_status().to_string());
                     self.remote_ops.apply_processes(processes);
                 }
                 Ok(ProcessJobOutput::Signalled {
@@ -318,7 +324,8 @@ impl NyaTermApp {
                 }) => {
                     self.remote_ops
                         .set_process_status(format!("sent {signal} to pid {pid}"));
-                    self.shell.status = self.remote_ops.process_status().to_string();
+                    self.shell
+                        .set_status(self.remote_ops.process_status().to_string());
                     self.remote_ops.clear_process_signal();
                     self.remote_ops.apply_processes(processes);
                 }
@@ -329,7 +336,8 @@ impl NyaTermApp {
                 }) => {
                     self.remote_ops
                         .set_process_status(format!("reniced pid {pid} to {nice}"));
-                    self.shell.status = self.remote_ops.process_status().to_string();
+                    self.shell
+                        .set_status(self.remote_ops.process_status().to_string());
                     self.remote_ops.apply_processes(processes);
                 }
                 Err(error) => {
@@ -342,7 +350,8 @@ impl NyaTermApp {
                     }
                     self.remote_ops
                         .set_process_status(format!("process operation failed: {error}"));
-                    self.shell.status = self.remote_ops.process_status().to_string();
+                    self.shell
+                        .set_status(self.remote_ops.process_status().to_string());
                 }
             }
         }

@@ -301,7 +301,7 @@ impl NyaTermApp {
                                     .child("START"),
                             )
                             .child(status_pill(
-                                status_label(&self.shell.status),
+                                status_label(self.shell.status()),
                                 rgb(palette.link),
                                 rgb(palette.hover),
                             )),

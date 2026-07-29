@@ -22,12 +22,14 @@ impl NyaTermApp {
     ) {
         let request = match self.session.prompts.take_host_key_resolution(&request_id) {
             PromptResolution::Inactive => {
-                self.shell.status = "no SSH host key prompt is active".to_string();
+                self.shell
+                    .set_status("no SSH host key prompt is active".to_string());
                 cx.notify();
                 return;
             }
             PromptResolution::Changed => {
-                self.shell.status = "SSH host key prompt changed before response".to_string();
+                self.shell
+                    .set_status("SSH host key prompt changed before response".to_string());
                 cx.notify();
                 return;
             }
@@ -36,10 +38,10 @@ impl NyaTermApp {
 
         let host = request.host_key.host_identifier.clone();
         let _ = request.response_tx.send(choice);
-        self.shell.status = match choice {
+        self.shell.set_status(match choice {
             HostKeyPromptChoice::Accept => format!("accepted SSH host key for {host}"),
             HostKeyPromptChoice::Reject => format!("rejected SSH host key for {host}"),
-        };
+        });
         cx.notify();
     }
 
@@ -51,12 +53,14 @@ impl NyaTermApp {
     ) {
         let prompt = match self.session.prompts.take_duplicate_resolution(&request_id) {
             PromptResolution::Inactive => {
-                self.shell.status = "no SFTP duplicate prompt is active".to_string();
+                self.shell
+                    .set_status("no SFTP duplicate prompt is active".to_string());
                 cx.notify();
                 return;
             }
             PromptResolution::Changed => {
-                self.shell.status = "SFTP duplicate prompt changed before response".to_string();
+                self.shell
+                    .set_status("SFTP duplicate prompt changed before response".to_string());
                 cx.notify();
                 return;
             }
@@ -65,10 +69,10 @@ impl NyaTermApp {
 
         let target = prompt.request.target_path.clone();
         let _ = prompt.response_tx.send(decision);
-        self.shell.status = format!(
+        self.shell.set_status(format!(
             "SFTP duplicate decision for {target}: {}",
             duplicate_decision_label(decision)
-        );
+        ));
         cx.notify();
     }
 
@@ -79,7 +83,8 @@ impl NyaTermApp {
         let host = credential_prompt_target(&state.prompt);
         let _ = state.response_tx.send(Some(state.value));
         self.forget_text_inputs("ssh.credential.");
-        self.shell.status = format!("submitted SSH credential for {host}");
+        self.shell
+            .set_status(format!("submitted SSH credential for {host}"));
         cx.notify();
     }
 
@@ -90,7 +95,8 @@ impl NyaTermApp {
         let host = credential_prompt_target(&state.prompt);
         let _ = state.response_tx.send(None);
         self.forget_text_inputs("ssh.credential.");
-        self.shell.status = format!("cancelled SSH credential prompt for {host}");
+        self.shell
+            .set_status(format!("cancelled SSH credential prompt for {host}"));
         cx.notify();
     }
 
@@ -104,7 +110,8 @@ impl NyaTermApp {
         let target = keyboard_interactive_prompt_target(&state.request);
         let _ = state.response_tx.send(Some(state.responses));
         self.forget_text_inputs("ssh.keyboard-interactive.");
-        self.shell.status = format!("submitted SSH verification for {target}");
+        self.shell
+            .set_status(format!("submitted SSH verification for {target}"));
         cx.notify();
     }
 
@@ -118,7 +125,8 @@ impl NyaTermApp {
         let target = keyboard_interactive_prompt_target(&state.request);
         let _ = state.response_tx.send(None);
         self.forget_text_inputs("ssh.keyboard-interactive.");
-        self.shell.status = format!("cancelled SSH verification for {target}");
+        self.shell
+            .set_status(format!("cancelled SSH verification for {target}"));
         cx.notify();
     }
 
@@ -139,7 +147,7 @@ impl NyaTermApp {
             .prompts
             .apply_keyboard_interactive_otp_result(result, false)
         {
-            self.shell.status = "OTP code ready".to_string();
+            self.shell.set_status("OTP code ready".to_string());
         }
         cx.notify();
     }
@@ -157,7 +165,8 @@ impl NyaTermApp {
         };
         let input_id = keyboard_interactive_text_input_id(&prompt_id, 0);
         self.reset_text_input(&input_id, &response, cx);
-        self.shell.status = "OTP code sent to verification input".to_string();
+        self.shell
+            .set_status("OTP code sent to verification input".to_string());
         cx.notify();
     }
 
@@ -169,7 +178,7 @@ impl NyaTermApp {
             return;
         };
         cx.write_to_clipboard(ClipboardItem::new_string(code));
-        self.shell.status = "OTP code copied".to_string();
+        self.shell.set_status("OTP code copied".to_string());
         cx.notify();
     }
 
@@ -292,7 +301,8 @@ impl NyaTermApp {
         let Some(host) = self.session.prompts.activate_next_host_key() else {
             return false;
         };
-        self.shell.status = format!("SSH host key decision required for {host}");
+        self.shell
+            .set_status(format!("SSH host key decision required for {host}"));
         true
     }
 
@@ -305,10 +315,10 @@ impl NyaTermApp {
                     response_tx,
                 } => {
                     self.forget_text_inputs("ssh.credential.");
-                    self.shell.status = format!(
+                    self.shell.set_status(format!(
                         "SSH credential required for {}",
                         credential_prompt_target(&prompt)
-                    );
+                    ));
                     self.session
                         .prompts
                         .activate_credential(CredentialPromptState {
@@ -324,10 +334,10 @@ impl NyaTermApp {
                     response_tx,
                 } => {
                     self.forget_text_inputs("ssh.keyboard-interactive.");
-                    self.shell.status = format!(
+                    self.shell.set_status(format!(
                         "SSH verification required for {}",
                         keyboard_interactive_prompt_target(&request)
-                    );
+                    ));
                     let responses = vec![String::new(); request.prompts.len()];
                     let otp_type = request.otp_id.as_deref().and_then(|otp_id| {
                         self.security
@@ -401,7 +411,8 @@ impl NyaTermApp {
         let Some(target) = self.session.prompts.activate_next_duplicate() else {
             return false;
         };
-        self.shell.status = format!("SFTP duplicate decision required for {target}");
+        self.shell
+            .set_status(format!("SFTP duplicate decision required for {target}"));
         true
     }
 }

@@ -8,7 +8,8 @@ use crate::models::{NetworkTab, NetworkTunnelEditorField, NetworkTunnelEditorSta
 impl NyaTermApp {
     pub(in crate::features) fn set_network_tab(&mut self, tab: NetworkTab, cx: &mut Context<Self>) {
         self.connection_state.set_network_tab(tab);
-        self.shell.status = format!("network tab set to {}", tab.label());
+        self.shell
+            .set_status(format!("network tab set to {}", tab.label()));
         cx.notify();
     }
 
@@ -20,9 +21,11 @@ impl NyaTermApp {
     ) {
         let key = network_section_key(tab, &section_id);
         if self.connection_state.toggle_network_section(key) {
-            self.shell.status = format!("expanded {} group", tab.label());
+            self.shell
+                .set_status(format!("expanded {} group", tab.label()));
         } else {
-            self.shell.status = format!("collapsed {} group", tab.label());
+            self.shell
+                .set_status(format!("collapsed {} group", tab.label()));
         }
         cx.notify();
     }
@@ -43,7 +46,8 @@ impl NyaTermApp {
             None => Some(TunnelConfig::default()),
         };
         let Some(tunnel) = tunnel else {
-            self.shell.status = "tunnel profile is no longer available".to_string();
+            self.shell
+                .set_status("tunnel profile is no longer available".to_string());
             cx.notify();
             return;
         };
@@ -82,7 +86,7 @@ impl NyaTermApp {
         // The dialog's boxes own their text, so they have to be dropped for the
         // next tunnel to seed from its own values.
         self.forget_text_inputs("network.tunnel-editor.");
-        self.shell.status = "tunnel editor opened".to_string();
+        self.shell.set_status("tunnel editor opened".to_string());
         let tunnel_editor_focus = self.connection_state.network_tunnel_editor_focus_handle();
         window.focus(&tunnel_editor_focus);
         cx.notify();
@@ -91,7 +95,7 @@ impl NyaTermApp {
     pub(in crate::features) fn close_network_tunnel_editor(&mut self, cx: &mut Context<Self>) {
         self.connection_state.close_network_tunnel_editor();
         self.forget_text_inputs("network.tunnel-editor.");
-        self.shell.status = "tunnel editor closed".to_string();
+        self.shell.set_status("tunnel editor closed".to_string());
         cx.notify();
     }
 
@@ -119,14 +123,16 @@ impl NyaTermApp {
 
     pub(in crate::features) fn cycle_network_tunnel_type(&mut self, cx: &mut Context<Self>) {
         if let Some(tunnel_type) = self.connection_state.cycle_network_tunnel_type() {
-            self.shell.status = format!("tunnel type set to {tunnel_type}");
+            self.shell
+                .set_status(format!("tunnel type set to {tunnel_type}"));
         }
         cx.notify();
     }
 
     pub(in crate::features) fn cycle_network_tunnel_connection(&mut self, cx: &mut Context<Self>) {
         if self.connection_state.cycle_network_tunnel_connection() {
-            self.shell.status = "tunnel SSH connection changed".to_string();
+            self.shell
+                .set_status("tunnel SSH connection changed".to_string());
             cx.notify();
         }
     }
@@ -138,7 +144,7 @@ impl NyaTermApp {
                 .iter()
                 .map(|group| group.id.as_str()),
         ) {
-            self.shell.status = "tunnel group changed".to_string();
+            self.shell.set_status("tunnel group changed".to_string());
         }
         cx.notify();
     }
@@ -155,19 +161,22 @@ impl NyaTermApp {
 
     pub(in crate::features) fn toggle_network_tunnel_auto_open(&mut self, cx: &mut Context<Self>) {
         if let Some(auto_open) = self.connection_state.toggle_network_tunnel_auto_open() {
-            self.shell.status = if auto_open {
-                "tunnel auto-open enabled"
-            } else {
-                "tunnel auto-open disabled"
-            }
-            .to_string();
+            self.shell.set_status(
+                if auto_open {
+                    "tunnel auto-open enabled"
+                } else {
+                    "tunnel auto-open disabled"
+                }
+                .to_string(),
+            );
         }
         cx.notify();
     }
 
     pub(in crate::features) fn save_network_tunnel_editor(&mut self, cx: &mut Context<Self>) {
         let Some(editor) = self.connection_state.active_network_tunnel_editor() else {
-            self.shell.status = "no tunnel editor is active".to_string();
+            self.shell
+                .set_status("no tunnel editor is active".to_string());
             cx.notify();
             return;
         };
@@ -243,16 +252,17 @@ impl NyaTermApp {
             Ok(()) => {
                 self.tunnel_state.commit_tunnels(next_tunnels);
                 self.connection_state.close_network_tunnel_editor();
-                self.shell.status = format!("tunnel '{name}' saved");
+                self.shell.set_status(format!("tunnel '{name}' saved"));
                 self.settings
-                    .update_store_status(self.shell.status.clone(), true);
+                    .update_store_status(self.shell.status().to_string(), true);
             }
             Err(error) => {
-                self.shell.status = format!("failed to save tunnel: {error}");
+                self.shell
+                    .set_status(format!("failed to save tunnel: {error}"));
                 self.settings
-                    .update_store_status(self.shell.status.clone(), false);
+                    .update_store_status(self.shell.status().to_string(), false);
                 self.connection_state
-                    .set_network_tunnel_editor_error(self.shell.status.clone());
+                    .set_network_tunnel_editor_error(self.shell.status().to_string());
             }
         }
         cx.notify();
@@ -266,7 +276,7 @@ impl NyaTermApp {
         let error = error.into();
         self.connection_state
             .set_network_tunnel_editor_error(error.clone());
-        self.shell.status = error;
+        self.shell.set_status(error);
         cx.notify();
     }
 }

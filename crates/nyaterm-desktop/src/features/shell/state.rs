@@ -21,7 +21,7 @@ use crate::models::{
 
 pub(in crate::features) struct ShellFeatureState {
     /// Application-wide transient status shown by shell chrome and terminal overlays.
-    pub(in crate::features) status: String,
+    status: String,
     /// GPUI event-pump, repaint, and shell-persistence scheduling bookkeeping.
     pub(super) runtime: ShellRuntimeState,
     pub(super) bottom_panel: ShellBottomPanelState,
@@ -208,6 +208,14 @@ impl ShellFeatureState {
             },
             diagnostics: ShellDiagnosticState::default(),
         }
+    }
+
+    pub(in crate::features) fn status(&self) -> &str {
+        &self.status
+    }
+
+    pub(in crate::features) fn set_status(&mut self, status: impl Into<String>) {
+        self.status = status.into();
     }
 
     pub(in crate::features) fn bottom_panel_mode(&self) -> BottomPanelMode {
@@ -997,6 +1005,17 @@ mod tests {
         assert_eq!(shell.bottom_panel.command_send_height, 180.);
         assert!(shell.bottom_panel.finish_resize());
         assert!(!shell.bottom_panel.finish_resize());
+    }
+
+    #[test]
+    fn application_status_changes_only_through_owner_operations() {
+        let mut shell = shell(BottomPanelMode::Hidden);
+
+        assert_eq!(shell.status(), "idle");
+        shell.set_status("connected");
+        assert_eq!(shell.status(), "connected");
+        shell.set_status(String::new());
+        assert!(shell.status().is_empty());
     }
 
     #[test]

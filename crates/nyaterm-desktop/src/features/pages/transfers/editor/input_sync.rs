@@ -192,7 +192,8 @@ impl NyaTermApp {
                     .flatten()
             });
         let Some(config) = config else {
-            self.shell.status = "start an SSH session before syncing external edits".to_string();
+            self.shell
+                .set_status("start an SSH session before syncing external edits".to_string());
             return;
         };
         let transfer_tx = self.transfer.transfer_event_sender();
@@ -251,7 +252,8 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.transfer.dismiss_external_sync_prompt(prompt_id);
-        self.shell.status = "external edit sync skipped".to_string();
+        self.shell
+            .set_status("external edit sync skipped".to_string());
         cx.notify();
     }
 }

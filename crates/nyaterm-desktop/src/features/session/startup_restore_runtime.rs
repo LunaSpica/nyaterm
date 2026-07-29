@@ -138,7 +138,8 @@ impl NyaTermApp {
                     match store.save_open_tabs(tabs) {
                         Ok(()) => self.shell.acknowledge_open_tabs_persistence(),
                         Err(error) => {
-                            self.shell.status = format!("failed to save open tabs: {error}");
+                            self.shell
+                                .set_status(format!("failed to save open tabs: {error}"));
                         }
                     }
                 }
@@ -146,13 +147,15 @@ impl NyaTermApp {
                     match store.save_terminal_window_layout(layout.as_ref()) {
                         Ok(()) => self.shell.acknowledge_window_layout_persistence(),
                         Err(error) => {
-                            self.shell.status = format!("failed to save window layout: {error}");
+                            self.shell
+                                .set_status(format!("failed to save window layout: {error}"));
                         }
                     }
                 }
             }
             Err(error) => {
-                self.shell.status = format!("failed to open config store: {error}");
+                self.shell
+                    .set_status(format!("failed to open config store: {error}"));
             }
         }
     }
@@ -388,7 +391,8 @@ impl NyaTermApp {
             }
             store.set_queue(expanded);
         });
-        self.shell.status = format!("restoring {} workspace tab(s)...", queue_len);
+        self.shell
+            .set_status(format!("restoring {} workspace tab(s)...", queue_len));
         self.pump_startup_restore_queue(window, cx);
     }
 
@@ -459,16 +463,18 @@ impl NyaTermApp {
             }
         }
         if self.terminal_windows_is_multi_leaf() {
-            self.shell.status = "restored workspace tabs and window layout".to_string();
+            self.shell
+                .set_status("restored workspace tabs and window layout".to_string());
         } else if !self.shell.workspace_pane_roots().is_empty()
             || self
                 .shell
                 .workspace_split()
                 .is_some_and(|root| root.is_split())
         {
-            self.shell.status = "restored workspace tabs and pane layout".to_string();
+            self.shell
+                .set_status("restored workspace tabs and pane layout".to_string());
         } else if !self.ordered_sessions().is_empty() {
-            self.shell.status = "restored workspace tabs".to_string();
+            self.shell.set_status("restored workspace tabs".to_string());
         }
         if !self.ordered_sessions().is_empty() {
             self.persist_open_tabs();
@@ -497,7 +503,9 @@ impl NyaTermApp {
                 .find(|connection| &connection.id == connection_id)
                 .cloned();
             let Some(connection) = connection else {
-                self.shell.status = format!("restore skipped missing connection {connection_id}");
+                self.shell.set_status(format!(
+                    "restore skipped missing connection {connection_id}"
+                ));
                 return false;
             };
             self.start_saved_connection_with_options(
@@ -532,10 +540,10 @@ impl NyaTermApp {
             return true;
         }
 
-        self.shell.status = format!(
+        self.shell.set_status(format!(
             "restore skipped unsupported tab {} ({})",
             tab.title, tab.session_type
-        );
+        ));
         false
     }
 
@@ -573,7 +581,8 @@ impl NyaTermApp {
         self.sync_workspace_split_from_active_tab();
         self.shell.set_workspace_pane_layout_restored(true);
         self.shell.show_workspace();
-        self.shell.status = "restored pane layout from open_tabs root".to_string();
+        self.shell
+            .set_status("restored pane layout from open_tabs root".to_string());
     }
 }
 
