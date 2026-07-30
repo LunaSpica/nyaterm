@@ -705,10 +705,8 @@ impl NyaTermApp {
             .w_full()
             .when(native_window, |this| this.size_full())
             .when(!native_window, |this| this.max_h(px(640.)))
-            .p_4()
             .flex()
             .flex_col()
-            .gap_3()
             .overflow_hidden()
             // No blanket focus grab here: it existed to keep the old label-div
             // inputs "focused", and would now steal focus back from whichever
@@ -721,6 +719,8 @@ impl NyaTermApp {
             .when(!native_window, |this| {
                 this.child(
                     div()
+                        .px_4()
+                        .pt_4()
                         .text_size(px(15.))
                         .font_weight(FontWeight(700.))
                         .text_color(rgb(palette.text))
@@ -729,45 +729,52 @@ impl NyaTermApp {
             })
             .child(
                 div()
-                    .h(px(32.))
-                    .p_1()
-                    .flex()
-                    .items_center()
-                    .gap_1()
-                    .rounded_md()
-                    .bg(rgb(palette.surface_elevated))
-                    .child(connection_kind_tab(
-                        palette,
-                        "SSH",
-                        editor.kind == ConnectionKindTab::Ssh,
-                        cx.listener(|this, _, _, cx| {
-                            this.set_connection_editor_kind(ConnectionKindTab::Ssh, cx);
-                        }),
-                    ))
-                    .child(connection_kind_tab(
-                        palette,
-                        local_label,
-                        editor.kind == ConnectionKindTab::Local,
-                        cx.listener(|this, _, _, cx| {
-                            this.set_connection_editor_kind(ConnectionKindTab::Local, cx);
-                        }),
-                    ))
-                    .child(connection_kind_tab(
-                        palette,
-                        "Telnet",
-                        editor.kind == ConnectionKindTab::Telnet,
-                        cx.listener(|this, _, _, cx| {
-                            this.set_connection_editor_kind(ConnectionKindTab::Telnet, cx);
-                        }),
-                    ))
-                    .child(connection_kind_tab(
-                        palette,
-                        serial_label,
-                        editor.kind == ConnectionKindTab::Serial,
-                        cx.listener(|this, _, _, cx| {
-                            this.set_connection_editor_kind(ConnectionKindTab::Serial, cx);
-                        }),
-                    )),
+                    .flex_none()
+                    .px_4()
+                    .pt_4()
+                    .when(!native_window, |this| this.pt_3())
+                    .child(
+                        div()
+                            .h(px(32.))
+                            .p_1()
+                            .flex()
+                            .items_center()
+                            .gap_1()
+                            .rounded_md()
+                            .bg(rgb(palette.surface_elevated))
+                            .child(connection_kind_tab(
+                                palette,
+                                "SSH",
+                                editor.kind == ConnectionKindTab::Ssh,
+                                cx.listener(|this, _, _, cx| {
+                                    this.set_connection_editor_kind(ConnectionKindTab::Ssh, cx);
+                                }),
+                            ))
+                            .child(connection_kind_tab(
+                                palette,
+                                local_label,
+                                editor.kind == ConnectionKindTab::Local,
+                                cx.listener(|this, _, _, cx| {
+                                    this.set_connection_editor_kind(ConnectionKindTab::Local, cx);
+                                }),
+                            ))
+                            .child(connection_kind_tab(
+                                palette,
+                                "Telnet",
+                                editor.kind == ConnectionKindTab::Telnet,
+                                cx.listener(|this, _, _, cx| {
+                                    this.set_connection_editor_kind(ConnectionKindTab::Telnet, cx);
+                                }),
+                            ))
+                            .child(connection_kind_tab(
+                                palette,
+                                serial_label,
+                                editor.kind == ConnectionKindTab::Serial,
+                                cx.listener(|this, _, _, cx| {
+                                    this.set_connection_editor_kind(ConnectionKindTab::Serial, cx);
+                                }),
+                            )),
+                    ),
             )
             .child(
                 div()
@@ -775,10 +782,10 @@ impl NyaTermApp {
                     .flex_1()
                     .min_h_0()
                     .overflow_y_scroll()
-                    .pr_1()
+                    .p_4()
                     .flex()
                     .flex_col()
-                    .gap_2()
+                    .gap_3()
                     .child(
                         div()
                             .flex()
@@ -843,10 +850,13 @@ impl NyaTermApp {
             )
             .child(
                 div()
-                    .mt_1()
-                    .pt_3()
+                    .h(px(52.))
+                    .flex_none()
                     .border_t_1()
                     .border_color(rgb(palette.border))
+                    .bg(rgb(palette.section_header))
+                    .px_5()
+                    .py_3()
                     .flex()
                     .items_center()
                     .justify_between()
