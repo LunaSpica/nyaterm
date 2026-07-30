@@ -212,8 +212,6 @@ impl NyaTermApp {
         let mention_index = self.ai.chat_mention_index();
         let discovery_menu_open = self.ai.discovery_menu_is_open();
         let discovery_index = self.ai.discovery_index();
-        let history_clear_confirm_open = self.ai.history_clear_confirm_is_open();
-        let agent_auto_confirm_open = self.ai.agent_auto_confirm_is_open();
         let prompt_input = self
             .text_input_box(
                 "ai.chat.prompt",
@@ -841,12 +839,6 @@ impl NyaTermApp {
                         )
                     }),
             )
-            .when(history_clear_confirm_open, |this| {
-                this.child(self.ai_clear_history_confirm_overlay(cx))
-            })
-            .when(agent_auto_confirm_open, |this| {
-                this.child(self.ai_auto_execution_confirm_overlay(cx))
-            })
     }
 }
 

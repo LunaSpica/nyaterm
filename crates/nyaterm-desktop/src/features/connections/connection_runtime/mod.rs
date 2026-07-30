@@ -6,5 +6,3 @@ mod actions;
 mod auto_icon;
 mod editor;
 mod groups;
-
-pub(super) use window::ConnectionEditorWindow;

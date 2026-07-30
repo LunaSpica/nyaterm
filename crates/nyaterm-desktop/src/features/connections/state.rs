@@ -1,26 +1,21 @@
 use std::collections::{HashMap, HashSet};
 
-use gpui::{
-    App, AppContext as _, Context, Entity, FocusHandle, Pixels, ScrollHandle, SharedString,
-    Subscription, WindowHandle,
-};
+use gpui::{App, AppContext as _, Context, Entity, FocusHandle, SharedString, Subscription};
 use nyaterm_core::{AppSettingsSummary, ConnectionType, Group, SavedConnection};
+use nyaterm_ui::NyaWindowHandle;
 
 use super::catalog::ConnectionCatalogState;
-use super::connection_runtime::{ConnectionEditorToggle, ConnectionEditorWindow};
+use super::connection_runtime::ConnectionEditorToggle;
 use super::interaction::{ConnectionDragKind, ConnectionDropPosition, ConnectionDropTarget};
 use crate::features::NyaTermApp;
 use crate::models::{
-    ConnectionContextMenuState, ConnectionDeleteConfirmState, ConnectionEditorAdvancedTab,
-    ConnectionEditorField, ConnectionEditorMenu, ConnectionEditorPasswordSource,
-    ConnectionEditorState, ConnectionEditorTelnetTab, ConnectionGroupContextMenuState,
-    ConnectionGroupDeleteConfirmState, ConnectionGroupEditorState, ConnectionGroupOpenConfirmState,
-    ConnectionImportSource, ConnectionKindTab, ConnectionListContextMenuState, ConnectionSortMode,
-    NetworkDeleteConfirmState, NetworkGroupDeleteConfirmState, NetworkGroupEditorState,
-    NetworkItemMenuState, NetworkMovePickerState, NetworkProxyEditorField, NetworkProxyEditorState,
-    NetworkTab, NetworkTunnelEditorField, NetworkTunnelEditorState,
+    ConnectionEditorAdvancedTab, ConnectionEditorField, ConnectionEditorPasswordSource,
+    ConnectionEditorSelect, ConnectionEditorState, ConnectionEditorTelnetTab,
+    ConnectionGroupEditorState, ConnectionImportSource, ConnectionKindTab, ConnectionSortMode,
+    NetworkGroupEditorState, NetworkMovePickerState, NetworkProxyEditorField,
+    NetworkProxyEditorState, NetworkTab, NetworkTunnelEditorField, NetworkTunnelEditorState,
 };
-use nyaterm_ui::{TextField, TextFieldEvent};
+use nyaterm_ui::{NyaInputEvent, NyaInputState};
 
 mod editor_logic;
 mod list_logic;
@@ -29,19 +24,18 @@ mod network_logic;
 use self::editor_logic::{
     advance_connection_editor_focus, apply_connection_editor_shell_path,
     apply_connection_editor_text_key, apply_connection_editor_working_dir,
-    apply_connection_group_editor_name_key, clear_connection_editor_group_menu_draft,
     clear_connection_editor_runtime_state, commit_connection_editor_new_group,
     connection_editor_inline_panel_draft, connection_editor_window_open_or_pending,
     editor_field_seeds, insert_connection_editor_description_newline,
     select_saved_connection_after_editor_save, set_connection_editor_advanced_tab,
     set_connection_editor_error, set_connection_editor_field_text, set_connection_editor_icon,
     set_connection_editor_icon_auto_detect, set_connection_editor_kind,
-    set_connection_editor_menu_value, set_connection_editor_password_source,
+    set_connection_editor_password_source, set_connection_editor_select_value,
     set_connection_editor_telnet_tab, set_connection_group_editor_error,
     toggle_connection_editor_flag,
 };
 use self::list_logic::{
-    clear_connection_list_runtime_state, clear_selected_connection_ids, close_connection_more_menu,
+    clear_connection_list_runtime_state, clear_selected_connection_ids,
     connection_drop_position_for_target, cycle_connection_sort_mode,
     remove_connection_list_references, remove_group_list_references,
     retain_loaded_connection_references, retain_loaded_group_list_references,
@@ -51,14 +45,12 @@ use self::list_logic::{
     visible_connection_ids_for_list_state,
 };
 use self::network_logic::{
-    clear_network_proxy_editor, clear_network_tunnel_editor, cycle_network_proxy_group,
-    cycle_network_proxy_protocol, cycle_network_tunnel_connection, cycle_network_tunnel_group,
-    cycle_network_tunnel_type, remove_network_group_references, remove_network_item_references,
-    set_network_group_editor_error, set_network_group_editor_name, set_network_proxy_editor_error,
-    set_network_proxy_editor_field, set_network_tunnel_bind_localhost,
-    set_network_tunnel_editor_error, set_network_tunnel_editor_field,
-    toggle_network_item_menu_state, toggle_network_move_picker_state,
-    toggle_network_tunnel_auto_open,
+    clear_network_proxy_editor, clear_network_tunnel_editor, remove_network_group_references,
+    remove_network_item_references, set_network_group_editor_error, set_network_group_editor_name,
+    set_network_proxy_editor_error, set_network_proxy_editor_field, set_network_proxy_group,
+    set_network_proxy_protocol, set_network_tunnel_bind_localhost, set_network_tunnel_connection,
+    set_network_tunnel_editor_error, set_network_tunnel_editor_field, set_network_tunnel_group,
+    set_network_tunnel_type, toggle_network_move_picker_state, toggle_network_tunnel_auto_open,
 };
 
 pub(in crate::features) struct ConnectionFeatureState {
@@ -67,7 +59,6 @@ pub(in crate::features) struct ConnectionFeatureState {
     import: ConnectionImportState,
     editor: ConnectionEditorFeatureState,
     group_editor: ConnectionGroupEditorFeatureState,
-    confirmations: ConnectionConfirmationState,
     network: NetworkFeatureState,
 }
 
@@ -75,28 +66,17 @@ pub(in crate::features) struct ConnectionFeatureFocus {
     /// Placeholder for the filter box, resolved by the caller so this struct
     /// stays free of the i18n lookup.
     pub filter_placeholder: SharedString,
-    pub import: FocusHandle,
     pub editor: FocusHandle,
-    pub group_editor: FocusHandle,
-    pub group_open_confirm: FocusHandle,
-    pub network_tunnel_editor: FocusHandle,
-    pub network_proxy_editor: FocusHandle,
 }
 
 struct ConnectionListState {
     /// The editable field. It owns the caret, selection and composition; this
     /// struct only caches what it last reported so filtering stays synchronous.
-    search_field: Entity<TextField>,
+    search_field: Entity<NyaInputState>,
     search_draft: String,
     /// Kept alive for as long as the field is, so edits keep arriving.
     _search_subscription: Subscription,
     sort_mode: ConnectionSortMode,
-    more_menu_open: bool,
-    context_menu: Option<ConnectionContextMenuState>,
-    group_context_menu: Option<ConnectionGroupContextMenuState>,
-    list_context_menu: Option<ConnectionListContextMenuState>,
-    /// The "move to group" flyout hanging off whichever context menu is open.
-    move_submenu_open: bool,
     /// Row the arrow keys are currently on while filtering. Distinct from the
     /// selection: walking results must not clobber a multi-select.
     keyboard_active_connection_id: Option<String>,
@@ -112,9 +92,7 @@ struct ConnectionListState {
 }
 
 struct ConnectionImportState {
-    import_dialog_open: bool,
     import_path_prompt: Option<ConnectionImportSource>,
-    import_focus: FocusHandle,
 }
 
 struct ConnectionEditorFeatureState {
@@ -125,50 +103,28 @@ struct ConnectionEditorFeatureState {
     /// caret, selection and composition, and write back through their
     /// subscriptions. Keeping them out of `ConnectionEditorState` keeps that
     /// model a plain value the runtime can clone.
-    fields: HashMap<ConnectionEditorField, Entity<TextField>>,
+    fields: HashMap<ConnectionEditorField, Entity<NyaInputState>>,
     field_subscriptions: Vec<Subscription>,
-    window: Option<WindowHandle<ConnectionEditorWindow>>,
+    window: Option<NyaWindowHandle>,
     window_open_pending: bool,
     focus: FocusHandle,
     icon_picker_open: bool,
-    menu: Option<ConnectionEditorMenu>,
-    /// The open popover claims focus so it can own the arrow keys; without a
-    /// handle of its own the keys would reach whichever field was last focused.
-    menu_focus: FocusHandle,
-    /// Which option the keyboard is on, as an index into the open menu's list.
-    menu_highlight: usize,
-    /// Lets the highlight scroll itself into view in a long list.
-    menu_scroll: ScrollHandle,
 }
 
 struct ConnectionGroupEditorFeatureState {
     draft: Option<ConnectionGroupEditorState>,
     /// The folder-name input, built with the draft it mirrors.
-    field: Option<Entity<TextField>>,
+    field: Option<Entity<NyaInputState>>,
     field_subscription: Option<Subscription>,
-    focus: FocusHandle,
-}
-
-struct ConnectionConfirmationState {
-    clear_all_open: bool,
-    delete: Option<ConnectionDeleteConfirmState>,
-    group_delete: Option<ConnectionGroupDeleteConfirmState>,
-    group_open: Option<ConnectionGroupOpenConfirmState>,
-    group_open_focus: FocusHandle,
 }
 
 struct NetworkFeatureState {
     tab: NetworkTab,
-    delete_confirm: Option<NetworkDeleteConfirmState>,
     group_editor: Option<NetworkGroupEditorState>,
-    group_delete_confirm: Option<NetworkGroupDeleteConfirmState>,
-    item_menu: Option<NetworkItemMenuState>,
     move_picker: Option<NetworkMovePickerState>,
     expanded_sections: HashSet<String>,
     tunnel_editor: Option<NetworkTunnelEditorState>,
     proxy_editor: Option<NetworkProxyEditorState>,
-    tunnel_editor_focus: FocusHandle,
-    proxy_editor_focus: FocusHandle,
 }
 
 impl ConnectionFeatureState {
@@ -181,15 +137,16 @@ impl ConnectionFeatureState {
     ) -> Self {
         let filter_placeholder = focus.filter_placeholder;
         let search_field =
-            cx.new(|cx| TextField::new(cx, String::new()).placeholder(filter_placeholder));
+            cx.new(|cx| NyaInputState::new(cx, String::new()).placeholder(filter_placeholder));
         // The field owns the text; the panel only needs to know when it changed.
         let search_subscription = cx.subscribe(
             &search_field,
-            |app: &mut NyaTermApp, _, event: &TextFieldEvent, cx| {
-                let TextFieldEvent::Changed(text) = event;
-                app.connection_state.set_list_search_text(text.clone());
-                app.sync_connection_keyboard_active(cx);
-                cx.notify();
+            |app: &mut NyaTermApp, _, event: &NyaInputEvent, cx| match event {
+                NyaInputEvent::Changed(text) | NyaInputEvent::Submitted(text) => {
+                    app.connection_state.set_list_search_text(text.clone());
+                    app.sync_connection_keyboard_active(cx);
+                    cx.notify();
+                }
             },
         );
         Self {
@@ -201,11 +158,6 @@ impl ConnectionFeatureState {
                 sort_mode: ConnectionSortMode::from_setting(
                     &settings.ui_saved_connections_sort_mode,
                 ),
-                more_menu_open: false,
-                context_menu: None,
-                group_context_menu: None,
-                list_context_menu: None,
-                move_submenu_open: false,
                 keyboard_active_connection_id: None,
                 drop_target: None,
                 hovered_group_id: None,
@@ -218,9 +170,7 @@ impl ConnectionFeatureState {
                 last_selected_id: None,
             },
             import: ConnectionImportState {
-                import_dialog_open: false,
                 import_path_prompt: None,
-                import_focus: focus.import,
             },
             editor: ConnectionEditorFeatureState {
                 draft: None,
@@ -230,36 +180,19 @@ impl ConnectionFeatureState {
                 window_open_pending: false,
                 focus: focus.editor,
                 icon_picker_open: false,
-                menu: None,
-                menu_focus: cx.focus_handle(),
-                menu_highlight: 0,
-                menu_scroll: ScrollHandle::new(),
             },
             group_editor: ConnectionGroupEditorFeatureState {
                 draft: None,
                 field: None,
                 field_subscription: None,
-                focus: focus.group_editor,
-            },
-            confirmations: ConnectionConfirmationState {
-                clear_all_open: false,
-                delete: None,
-                group_delete: None,
-                group_open: None,
-                group_open_focus: focus.group_open_confirm,
             },
             network: NetworkFeatureState {
                 tab: NetworkTab::Tunnels,
-                delete_confirm: None,
                 group_editor: None,
-                group_delete_confirm: None,
-                item_menu: None,
                 move_picker: None,
                 expanded_sections: HashSet::new(),
                 tunnel_editor: None,
                 proxy_editor: None,
-                tunnel_editor_focus: focus.network_tunnel_editor,
-                proxy_editor_focus: focus.network_proxy_editor,
             },
         }
     }
@@ -342,7 +275,7 @@ impl ConnectionFeatureState {
         self.list.search_is_empty()
     }
 
-    pub fn list_search_field(&self) -> Entity<TextField> {
+    pub fn list_search_field(&self) -> Entity<NyaInputState> {
         self.list.search_field()
     }
 
@@ -352,10 +285,6 @@ impl ConnectionFeatureState {
 
     pub fn list_sort_mode(&self) -> ConnectionSortMode {
         self.list.sort_mode()
-    }
-
-    pub fn list_more_menu_is_open(&self) -> bool {
-        self.list.more_menu_is_open()
     }
 
     pub fn list_has_selection(&self) -> bool {
@@ -386,30 +315,6 @@ impl ConnectionFeatureState {
             self.list.sort_mode,
             &self.list.expanded_group_ids,
         )
-    }
-
-    pub fn list_context_menu_is_open(&self) -> bool {
-        self.list.context_menu_is_open()
-    }
-
-    pub fn active_list_connection_context_menu(&self) -> Option<ConnectionContextMenuState> {
-        self.list.active_context_menu()
-    }
-
-    pub fn list_group_context_menu_is_open(&self) -> bool {
-        self.list.group_context_menu_is_open()
-    }
-
-    pub fn active_list_group_context_menu(&self) -> Option<ConnectionGroupContextMenuState> {
-        self.list.active_group_context_menu()
-    }
-
-    pub fn list_background_context_menu_is_open(&self) -> bool {
-        self.list.list_context_menu_is_open()
-    }
-
-    pub fn active_list_background_context_menu(&self) -> Option<ConnectionListContextMenuState> {
-        self.list.active_list_context_menu()
     }
 
     pub fn list_expanded_group_ids(&self) -> &HashSet<String> {
@@ -447,14 +352,6 @@ impl ConnectionFeatureState {
         self.list.clear_selection();
     }
 
-    pub fn toggle_list_more_menu(&mut self) {
-        self.list.toggle_more_menu();
-    }
-
-    pub fn close_list_more_menu(&mut self) -> bool {
-        self.list.close_more_menu()
-    }
-
     pub fn cycle_list_sort_mode(&mut self) -> ConnectionSortMode {
         self.list.cycle_sort_mode()
     }
@@ -475,33 +372,8 @@ impl ConnectionFeatureState {
         self.list.set_keyboard_active_connection_id(connection_id);
     }
 
-    pub fn list_move_submenu_is_open(&self) -> bool {
-        self.list.move_submenu_is_open()
-    }
-
-    pub fn toggle_list_move_submenu(&mut self) {
-        self.list.toggle_move_submenu();
-    }
-
-    pub fn open_list_background_context_menu(&mut self, x: Pixels, y: Pixels) {
-        self.list.open_list_context_menu(x, y);
-    }
-
-    pub fn open_list_connection_context_menu(
-        &mut self,
-        connection_id: String,
-        x: Pixels,
-        y: Pixels,
-    ) {
-        self.list.open_context_menu(connection_id, x, y);
-    }
-
-    pub fn open_list_group_context_menu(&mut self, group_id: String, x: Pixels, y: Pixels) {
-        self.list.open_group_context_menu(group_id, x, y);
-    }
-
-    pub fn close_list_context_menus(&mut self) {
-        self.list.close_context_menus();
+    pub fn prepare_list_connection_context_menu(&mut self, connection_id: String) {
+        self.list.select_for_context_menu(connection_id);
     }
 
     pub fn toggle_list_group_expanded(&mut self, group_id: String) -> bool {
@@ -559,7 +431,7 @@ impl ConnectionFeatureState {
     }
 
     /// The editor's fields, for handing to the render sections.
-    pub fn editor_fields(&self) -> &HashMap<ConnectionEditorField, Entity<TextField>> {
+    pub fn editor_fields(&self) -> &HashMap<ConnectionEditorField, Entity<NyaInputState>> {
         &self.editor.fields
     }
 
@@ -575,16 +447,24 @@ impl ConnectionFeatureState {
         };
         for (field, value, masked, placeholder) in editor_field_seeds(draft) {
             let entity = cx.new(|cx| {
-                TextField::new(cx, value)
+                let input = NyaInputState::new(cx, value)
                     .masked(masked)
-                    .placeholder(placeholder)
-                    // The description is the one box that takes newlines.
-                    .multi_line(field == ConnectionEditorField::Description)
+                    .placeholder(placeholder);
+                if field == ConnectionEditorField::Description {
+                    input.multi_line(Some(4))
+                } else {
+                    input
+                }
             });
-            let subscription = cx.subscribe(&entity, move |app: &mut NyaTermApp, _, event, cx| {
-                let TextFieldEvent::Changed(text) = event;
-                app.apply_connection_editor_field_text(field, text.clone(), cx);
-            });
+            let subscription =
+                cx.subscribe(
+                    &entity,
+                    move |app: &mut NyaTermApp, _, event, cx| match event {
+                        NyaInputEvent::Changed(text) | NyaInputEvent::Submitted(text) => {
+                            app.apply_connection_editor_field_text(field, text.clone(), cx);
+                        }
+                    },
+                );
             self.editor.fields.insert(field, entity);
             self.editor.field_subscriptions.push(subscription);
         }
@@ -613,7 +493,7 @@ impl ConnectionFeatureState {
         };
         for (field, value, _, _) in editor_field_seeds(draft) {
             if let Some(entity) = self.editor.fields.get(&field) {
-                entity.update(cx, |entity, cx| entity.set_content(value, cx));
+                entity.update(cx, |entity, cx| entity.set_content(&value, cx));
             }
         }
     }
@@ -632,16 +512,8 @@ impl ConnectionFeatureState {
         self.editor.active_draft()
     }
 
-    pub fn active_editor_menu(&self) -> Option<ConnectionEditorMenu> {
-        self.editor.active_menu()
-    }
-
     pub fn editor_icon_picker_is_open(&self) -> bool {
         self.editor.icon_picker_is_open()
-    }
-
-    pub fn editor_menu_is_open(&self) -> bool {
-        self.editor.menu_is_open()
     }
 
     pub fn editor_description_is_focused(&self) -> bool {
@@ -650,10 +522,6 @@ impl ConnectionFeatureState {
 
     pub fn editor_new_group_field_is_focused(&self, cx: &App) -> bool {
         self.editor.new_group_field_is_focused(cx)
-    }
-
-    pub fn editor_new_group_name_focused_in_group_menu(&self) -> bool {
-        self.editor.new_group_name_focused_in_group_menu()
     }
 
     pub fn inline_editor_panel_draft(&self) -> Option<ConnectionEditorState> {
@@ -672,9 +540,7 @@ impl ConnectionFeatureState {
         self.editor.focus_handle()
     }
 
-    pub(in crate::features::connections) fn editor_window_handle(
-        &self,
-    ) -> Option<WindowHandle<ConnectionEditorWindow>> {
+    pub(in crate::features::connections) fn editor_window_handle(&self) -> Option<NyaWindowHandle> {
         self.editor.window_handle()
     }
 
@@ -690,36 +556,12 @@ impl ConnectionFeatureState {
         self.editor.modal_window_open_or_pending()
     }
 
-    pub fn close_editor_popovers(&mut self) {
-        self.editor.close_popovers();
+    pub fn close_editor_icon_picker(&mut self) {
+        self.editor.close_icon_picker();
     }
 
     pub fn toggle_editor_icon_picker(&mut self) {
         self.editor.toggle_icon_picker();
-    }
-
-    pub fn toggle_editor_menu(&mut self, menu: ConnectionEditorMenu) {
-        self.editor.toggle_menu(menu);
-    }
-
-    pub fn editor_menu_focus_handle(&self) -> FocusHandle {
-        self.editor.menu_focus_handle()
-    }
-
-    pub fn editor_menu_scroll_handle(&self) -> ScrollHandle {
-        self.editor.menu_scroll_handle()
-    }
-
-    pub fn editor_menu_highlight(&self) -> usize {
-        self.editor.menu_highlight()
-    }
-
-    pub fn set_editor_menu_highlight(&mut self, index: usize) {
-        self.editor.set_menu_highlight(index);
-    }
-
-    pub fn step_editor_menu_highlight(&mut self, delta: isize, len: usize) {
-        self.editor.step_menu_highlight(delta, len);
     }
 
     pub fn set_editor_icon(&mut self, icon: Option<&str>) -> bool {
@@ -730,12 +572,12 @@ impl ConnectionFeatureState {
         self.editor.set_icon_auto_detect(enabled)
     }
 
-    pub fn set_editor_menu_value(
+    pub fn set_editor_select_value(
         &mut self,
-        menu: ConnectionEditorMenu,
+        select: ConnectionEditorSelect,
         value: Option<String>,
     ) -> bool {
-        self.editor.set_menu_value(menu, value)
+        self.editor.set_select_value(select, value)
     }
 
     pub fn set_editor_password_source(&mut self, source: ConnectionEditorPasswordSource) -> bool {
@@ -774,10 +616,6 @@ impl ConnectionFeatureState {
         self.editor.advance_focus()
     }
 
-    pub fn close_editor_popovers_and_cancel_group_draft(&mut self) {
-        self.editor.close_popovers_and_cancel_group_draft();
-    }
-
     pub fn set_editor_error(&mut self, error: String) -> bool {
         self.editor.set_error(error)
     }
@@ -796,7 +634,7 @@ impl ConnectionFeatureState {
 
     pub(in crate::features::connections) fn clear_editor_window_if_current(
         &mut self,
-        window: WindowHandle<ConnectionEditorWindow>,
+        window: NyaWindowHandle,
     ) -> bool {
         self.editor.clear_window_if_current(window)
     }
@@ -811,7 +649,7 @@ impl ConnectionFeatureState {
 
     pub(in crate::features::connections) fn attach_editor_window(
         &mut self,
-        window: WindowHandle<ConnectionEditorWindow>,
+        window: NyaWindowHandle,
     ) {
         self.editor.attach_window(window);
     }
@@ -820,7 +658,7 @@ impl ConnectionFeatureState {
         self.editor.clear_window();
     }
 
-    pub fn group_editor_field(&self) -> Option<Entity<TextField>> {
+    pub fn group_editor_field(&self) -> Option<Entity<NyaInputState>> {
         self.group_editor.field.clone()
     }
 
@@ -830,12 +668,14 @@ impl ConnectionFeatureState {
             self.group_editor.field_subscription = None;
             return;
         };
-        let entity = cx.new(|cx| TextField::new(cx, draft.name.clone()));
-        let subscription = cx.subscribe(&entity, |app: &mut NyaTermApp, _, event, cx| {
-            let TextFieldEvent::Changed(text) = event;
-            app.connection_state.set_group_editor_name(text.clone());
-            cx.notify();
-        });
+        let entity = cx.new(|cx| NyaInputState::new(cx, draft.name.clone()));
+        let subscription =
+            cx.subscribe(&entity, |app: &mut NyaTermApp, _, event, cx| match event {
+                NyaInputEvent::Changed(text) | NyaInputEvent::Submitted(text) => {
+                    app.connection_state.set_group_editor_name(text.clone());
+                    cx.notify();
+                }
+            });
         self.group_editor.field = Some(entity);
         self.group_editor.field_subscription = Some(subscription);
     }
@@ -856,16 +696,8 @@ impl ConnectionFeatureState {
         self.group_editor.active_draft()
     }
 
-    pub fn group_editor_focus_handle(&self) -> FocusHandle {
-        self.group_editor.focus_handle()
-    }
-
     pub fn begin_group_editor(&mut self, draft: ConnectionGroupEditorState) {
         self.group_editor.begin_edit(draft);
-    }
-
-    pub fn apply_group_editor_name_key(&mut self, key: &str, input: Option<&str>) -> bool {
-        self.group_editor.apply_name_key(key, input)
     }
 
     pub fn set_group_editor_error(&mut self, error: String) -> bool {
@@ -874,70 +706,6 @@ impl ConnectionFeatureState {
 
     pub fn close_group_editor(&mut self) {
         self.group_editor.close();
-    }
-
-    pub fn open_clear_all(&mut self) {
-        self.confirmations.open_clear_all();
-    }
-
-    pub fn close_clear_all(&mut self) {
-        self.confirmations.close_clear_all();
-    }
-
-    pub fn clear_all_is_open(&self) -> bool {
-        self.confirmations.clear_all_is_open()
-    }
-
-    pub fn active_delete_confirm(&self) -> Option<ConnectionDeleteConfirmState> {
-        self.confirmations.active_delete()
-    }
-
-    pub fn open_delete_confirm(&mut self, confirm: ConnectionDeleteConfirmState) {
-        self.confirmations.open_delete(confirm);
-    }
-
-    pub fn close_delete_confirm(&mut self) {
-        self.confirmations.close_delete();
-    }
-
-    pub fn take_delete_confirm(&mut self) -> Option<ConnectionDeleteConfirmState> {
-        self.confirmations.take_delete()
-    }
-
-    pub fn active_group_delete_confirm(&self) -> Option<ConnectionGroupDeleteConfirmState> {
-        self.confirmations.active_group_delete()
-    }
-
-    pub fn open_group_delete_confirm(&mut self, confirm: ConnectionGroupDeleteConfirmState) {
-        self.confirmations.open_group_delete(confirm);
-    }
-
-    pub fn close_group_delete_confirm(&mut self) {
-        self.confirmations.close_group_delete();
-    }
-
-    pub fn take_group_delete_confirm(&mut self) -> Option<ConnectionGroupDeleteConfirmState> {
-        self.confirmations.take_group_delete()
-    }
-
-    pub fn active_group_open_confirm(&self) -> Option<ConnectionGroupOpenConfirmState> {
-        self.confirmations.active_group_open()
-    }
-
-    pub fn open_group_open_confirm(&mut self, confirm: ConnectionGroupOpenConfirmState) {
-        self.confirmations.open_group_open(confirm);
-    }
-
-    pub fn close_group_open_confirm(&mut self) {
-        self.confirmations.close_group_open();
-    }
-
-    pub fn take_group_open_confirm(&mut self) -> Option<ConnectionGroupOpenConfirmState> {
-        self.confirmations.take_group_open()
-    }
-
-    pub fn group_open_focus_handle(&self) -> FocusHandle {
-        self.confirmations.group_open_focus_handle()
     }
 
     pub fn network_active_tab(&self) -> NetworkTab {
@@ -952,24 +720,12 @@ impl ConnectionFeatureState {
         self.network.section_is_expanded(section_key)
     }
 
-    pub fn network_item_menu_is_open(&self, tab: NetworkTab, id: &str) -> bool {
-        self.network.item_menu_is_open(tab, id)
-    }
-
     pub fn network_move_picker_is_open(&self, tab: NetworkTab, id: &str) -> bool {
         self.network.move_picker_is_open(tab, id)
     }
 
-    pub fn active_network_delete_confirm(&self) -> Option<NetworkDeleteConfirmState> {
-        self.network.active_delete_confirm()
-    }
-
     pub fn active_network_group_editor(&self) -> Option<NetworkGroupEditorState> {
         self.network.active_group_editor()
-    }
-
-    pub fn active_network_group_delete_confirm(&self) -> Option<NetworkGroupDeleteConfirmState> {
-        self.network.active_group_delete_confirm()
     }
 
     pub fn active_network_tunnel_editor(&self) -> Option<NetworkTunnelEditorState> {
@@ -980,14 +736,6 @@ impl ConnectionFeatureState {
         self.network.active_proxy_editor()
     }
 
-    pub fn network_tunnel_editor_focus_handle(&self) -> FocusHandle {
-        self.network.tunnel_editor_focus_handle()
-    }
-
-    pub fn network_proxy_editor_focus_handle(&self) -> FocusHandle {
-        self.network.proxy_editor_focus_handle()
-    }
-
     pub fn set_network_tab(&mut self, tab: NetworkTab) {
         self.network.set_tab(tab);
     }
@@ -996,24 +744,12 @@ impl ConnectionFeatureState {
         self.network.toggle_section(section_key)
     }
 
-    pub fn toggle_network_item_menu(&mut self, tab: NetworkTab, id: String) -> bool {
-        self.network.toggle_item_menu(tab, id)
-    }
-
     pub fn toggle_network_move_picker(&mut self, tab: NetworkTab, id: String) -> bool {
         self.network.toggle_move_picker(tab, id)
     }
 
     pub fn close_network_move_picker(&mut self) {
         self.network.close_move_picker();
-    }
-
-    pub fn open_network_delete_confirm(&mut self, confirm: NetworkDeleteConfirmState) {
-        self.network.open_delete_confirm(confirm);
-    }
-
-    pub fn close_network_delete_confirm(&mut self) {
-        self.network.close_delete_confirm();
     }
 
     pub fn begin_network_group_edit(&mut self, draft: NetworkGroupEditorState) {
@@ -1032,14 +768,6 @@ impl ConnectionFeatureState {
         self.network.close_group_editor();
     }
 
-    pub fn open_network_group_delete_confirm(&mut self, confirm: NetworkGroupDeleteConfirmState) {
-        self.network.open_group_delete_confirm(confirm);
-    }
-
-    pub fn close_network_group_delete_confirm(&mut self) {
-        self.network.close_group_delete_confirm();
-    }
-
     pub fn begin_network_tunnel_edit(&mut self, draft: NetworkTunnelEditorState) {
         self.network.begin_tunnel_edit(draft);
     }
@@ -1056,27 +784,21 @@ impl ConnectionFeatureState {
         self.network.set_tunnel_editor_field(field, text)
     }
 
-    pub fn cycle_network_tunnel_type(&mut self) -> Option<String> {
-        self.network.cycle_tunnel_type()
+    pub fn set_network_tunnel_type(&mut self, tunnel_type: &str) -> Option<String> {
+        self.network.set_tunnel_type(tunnel_type)
     }
 
-    pub fn cycle_network_tunnel_connection(&mut self) -> bool {
-        let connection_ids = self
-            .catalog
-            .connections()
-            .iter()
-            .filter(|connection| matches!(&connection.config, ConnectionType::Ssh { .. }))
-            .map(|connection| connection.id.clone())
-            .collect::<Vec<_>>();
-        self.network
-            .cycle_tunnel_connection(connection_ids.iter().map(String::as_str))
+    pub fn set_network_tunnel_connection(&mut self, connection_id: Option<String>) -> bool {
+        let connection_id = connection_id.filter(|id| {
+            self.catalog.connections().iter().any(|connection| {
+                connection.id == *id && matches!(&connection.config, ConnectionType::Ssh { .. })
+            })
+        });
+        self.network.set_tunnel_connection(connection_id)
     }
 
-    pub fn cycle_network_tunnel_group<'a>(
-        &mut self,
-        group_ids: impl IntoIterator<Item = &'a str>,
-    ) -> bool {
-        self.network.cycle_tunnel_group(group_ids)
+    pub fn set_network_tunnel_group(&mut self, group_id: Option<String>) -> bool {
+        self.network.set_tunnel_group(group_id)
     }
 
     pub fn set_network_tunnel_bind_localhost(&mut self, bind_localhost: bool) -> bool {
@@ -1107,15 +829,12 @@ impl ConnectionFeatureState {
         self.network.set_proxy_editor_field(field, text)
     }
 
-    pub fn cycle_network_proxy_protocol(&mut self) -> Option<String> {
-        self.network.cycle_proxy_protocol()
+    pub fn set_network_proxy_protocol(&mut self, protocol: &str) -> Option<String> {
+        self.network.set_proxy_protocol(protocol)
     }
 
-    pub fn cycle_network_proxy_group<'a>(
-        &mut self,
-        group_ids: impl IntoIterator<Item = &'a str>,
-    ) -> bool {
-        self.network.cycle_proxy_group(group_ids)
+    pub fn set_network_proxy_group(&mut self, group_id: Option<String>) -> bool {
+        self.network.set_proxy_group(group_id)
     }
 
     pub fn set_network_proxy_editor_error(&mut self, error: String) -> bool {
@@ -1145,7 +864,6 @@ impl ConnectionFeatureState {
         clear_connection_editor_runtime_state(
             &mut self.editor.draft,
             &mut self.editor.icon_picker_open,
-            &mut self.editor.menu,
             &mut self.editor.window,
             &mut self.editor.window_open_pending,
         );
@@ -1158,24 +876,8 @@ impl ConnectionFeatureState {
         );
     }
 
-    pub fn import_dialog_is_open(&self) -> bool {
-        self.import.is_dialog_open()
-    }
-
     pub fn import_path_prompt_active(&self) -> bool {
         self.import.path_prompt_active()
-    }
-
-    pub fn import_focus_handle(&self) -> FocusHandle {
-        self.import.focus_handle()
-    }
-
-    pub fn open_import_dialog(&mut self) {
-        self.import.open_dialog();
-    }
-
-    pub fn close_import_dialog(&mut self) {
-        self.import.close_dialog();
     }
 
     pub fn begin_import_path_prompt(&mut self, source: ConnectionImportSource) {
@@ -1196,7 +898,7 @@ impl ConnectionListState {
         self.search_draft.is_empty()
     }
 
-    pub fn search_field(&self) -> Entity<TextField> {
+    pub fn search_field(&self) -> Entity<NyaInputState> {
         self.search_field.clone()
     }
 
@@ -1210,32 +912,12 @@ impl ConnectionListState {
         self.sort_mode
     }
 
-    pub fn more_menu_is_open(&self) -> bool {
-        self.more_menu_open
-    }
-
     pub fn has_selection(&self) -> bool {
         !self.selected_ids.is_empty()
     }
 
     pub fn contains_selected_id(&self, connection_id: &str) -> bool {
         self.selected_ids.contains(connection_id)
-    }
-
-    pub fn context_menu_is_open(&self) -> bool {
-        self.context_menu.is_some()
-    }
-
-    pub fn active_context_menu(&self) -> Option<ConnectionContextMenuState> {
-        self.context_menu.clone()
-    }
-
-    pub fn group_context_menu_is_open(&self) -> bool {
-        self.group_context_menu.is_some()
-    }
-
-    pub fn active_group_context_menu(&self) -> Option<ConnectionGroupContextMenuState> {
-        self.group_context_menu.clone()
     }
 
     pub fn expanded_group_ids(&self) -> &HashSet<String> {
@@ -1289,16 +971,6 @@ impl ConnectionListState {
         clear_selected_connection_ids(&mut self.selected_ids, &mut self.last_selected_id);
     }
 
-    pub fn toggle_more_menu(&mut self) {
-        self.more_menu_open = !self.more_menu_open;
-    }
-
-    pub fn close_more_menu(&mut self) -> bool {
-        self.move_submenu_open = false;
-        close_connection_more_menu(&mut self.more_menu_open)
-    }
-
-    /// Record an in-flight IME composition and where its selection sits.
     pub fn cycle_sort_mode(&mut self) -> ConnectionSortMode {
         cycle_connection_sort_mode(&mut self.sort_mode)
     }
@@ -1307,15 +979,6 @@ impl ConnectionListState {
         set_connection_group_hover(&mut self.hovered_group_id, group_id, hovered)
     }
 
-    pub fn list_context_menu_is_open(&self) -> bool {
-        self.list_context_menu.is_some()
-    }
-
-    pub fn active_list_context_menu(&self) -> Option<ConnectionListContextMenuState> {
-        self.list_context_menu.clone()
-    }
-
-    /// Whether the open context menu is showing its "move to group" flyout.
     pub fn keyboard_active_connection_id(&self) -> Option<&str> {
         self.keyboard_active_connection_id.as_deref()
     }
@@ -1328,50 +991,10 @@ impl ConnectionListState {
         self.keyboard_active_connection_id = connection_id;
     }
 
-    pub fn move_submenu_is_open(&self) -> bool {
-        self.move_submenu_open
-    }
-
-    pub fn toggle_move_submenu(&mut self) {
-        self.move_submenu_open = !self.move_submenu_open;
-    }
-
-    pub fn open_list_context_menu(&mut self, x: Pixels, y: Pixels) {
-        self.close_more_menu();
-        self.context_menu = None;
-        self.group_context_menu = None;
-        self.move_submenu_open = false;
-        self.list_context_menu = Some(ConnectionListContextMenuState { x, y });
-    }
-
-    pub fn open_context_menu(&mut self, connection_id: String, x: Pixels, y: Pixels) {
-        self.close_more_menu();
-        self.group_context_menu = None;
-        self.list_context_menu = None;
-        self.move_submenu_open = false;
+    pub fn select_for_context_menu(&mut self, connection_id: String) {
         if !self.selected_ids.contains(&connection_id) {
-            self.select_only(connection_id.clone());
+            self.select_only(connection_id);
         }
-        self.context_menu = Some(ConnectionContextMenuState {
-            connection_id,
-            x,
-            y,
-        });
-    }
-
-    pub fn open_group_context_menu(&mut self, group_id: String, x: Pixels, y: Pixels) {
-        self.close_more_menu();
-        self.context_menu = None;
-        self.list_context_menu = None;
-        self.move_submenu_open = false;
-        self.group_context_menu = Some(ConnectionGroupContextMenuState { group_id, x, y });
-    }
-
-    pub fn close_context_menus(&mut self) {
-        self.context_menu = None;
-        self.group_context_menu = None;
-        self.list_context_menu = None;
-        self.move_submenu_open = false;
     }
 
     pub fn toggle_group_expanded(&mut self, group_id: String) -> bool {
@@ -1423,15 +1046,11 @@ impl ConnectionListState {
     pub fn clear_runtime_state(&mut self) {
         self.search_expanded_base = None;
         self.search_applied_query = None;
-        self.list_context_menu = None;
-        self.move_submenu_open = false;
         self.keyboard_active_connection_id = None;
         clear_connection_list_runtime_state(
             &mut self.selected_ids,
             &mut self.last_selected_id,
             &mut self.expanded_group_ids,
-            &mut self.context_menu,
-            &mut self.group_context_menu,
             &mut self.drop_target,
             &mut self.hovered_group_id,
         );
@@ -1441,7 +1060,6 @@ impl ConnectionListState {
         remove_connection_list_references(
             &mut self.selected_ids,
             &mut self.last_selected_id,
-            &mut self.context_menu,
             &mut self.drop_target,
             connection_id,
         );
@@ -1451,7 +1069,6 @@ impl ConnectionListState {
         remove_group_list_references(
             &mut self.expanded_group_ids,
             &mut self.hovered_group_id,
-            &mut self.group_context_menu,
             &mut self.drop_target,
             group_id,
         );
@@ -1468,14 +1085,12 @@ impl ConnectionListState {
         retain_loaded_connection_references(
             &mut self.selected_ids,
             &mut self.last_selected_id,
-            &mut self.context_menu,
             &mut self.drop_target,
             connection_ids,
         );
         retain_loaded_group_list_references(
             &mut self.expanded_group_ids,
             &mut self.hovered_group_id,
-            &mut self.group_context_menu,
             &mut self.drop_target,
             group_ids,
         );
@@ -1483,28 +1098,11 @@ impl ConnectionListState {
 }
 
 impl ConnectionImportState {
-    pub fn is_dialog_open(&self) -> bool {
-        self.import_dialog_open
-    }
-
     pub fn path_prompt_active(&self) -> bool {
         self.import_path_prompt.is_some()
     }
 
-    pub fn focus_handle(&self) -> FocusHandle {
-        self.import_focus.clone()
-    }
-
-    pub fn open_dialog(&mut self) {
-        self.import_dialog_open = true;
-    }
-
-    pub fn close_dialog(&mut self) {
-        self.import_dialog_open = false;
-    }
-
     pub fn begin_path_prompt(&mut self, source: ConnectionImportSource) {
-        self.import_dialog_open = false;
         self.import_path_prompt = Some(source);
     }
 
@@ -1513,24 +1111,9 @@ impl ConnectionImportState {
     }
 }
 
-/// Where the highlight lands after `delta` steps through `len` options.
-///
-/// Wraps at both ends, and refuses to move in an empty list — the caller has
-/// nothing to highlight there, not even index zero.
-fn stepped_menu_highlight(current: usize, delta: isize, len: usize) -> Option<usize> {
-    if len == 0 {
-        return None;
-    }
-    // Clamp first: a stale highlight from a longer list would otherwise land
-    // somewhere arbitrary after the modulo.
-    let current = current.min(len - 1) as isize;
-    Some((current + delta).rem_euclid(len as isize) as usize)
-}
-
 impl ConnectionEditorFeatureState {
     pub fn begin_edit(&mut self, draft: ConnectionEditorState) {
         self.icon_picker_open = false;
-        self.menu = None;
         self.draft = Some(draft);
     }
 
@@ -1538,16 +1121,12 @@ impl ConnectionEditorFeatureState {
         self.draft.clone()
     }
 
-    pub fn active_menu(&self) -> Option<ConnectionEditorMenu> {
-        self.menu
+    pub fn focus_handle(&self) -> FocusHandle {
+        self.focus.clone()
     }
 
     pub fn icon_picker_is_open(&self) -> bool {
         self.icon_picker_open
-    }
-
-    pub fn menu_is_open(&self) -> bool {
-        self.menu.is_some()
     }
 
     pub fn description_is_focused(&self) -> bool {
@@ -1556,20 +1135,10 @@ impl ConnectionEditorFeatureState {
             .is_some_and(|editor| editor.focused_field == ConnectionEditorField::Description)
     }
 
-    /// Whether the caret is in the group popover's "new folder" box, which
-    /// decides what Enter means while that popover is open.
     pub fn new_group_field_is_focused(&self, cx: &App) -> bool {
         self.fields
             .get(&ConnectionEditorField::NewGroupName)
             .is_some_and(|field| field.read(cx).has_focus())
-    }
-
-    pub fn new_group_name_focused_in_group_menu(&self) -> bool {
-        self.menu == Some(ConnectionEditorMenu::Group)
-            && self
-                .draft
-                .as_ref()
-                .is_some_and(|editor| editor.focused_field == ConnectionEditorField::NewGroupName)
     }
 
     pub fn inline_panel_draft(&self) -> Option<ConnectionEditorState> {
@@ -1590,11 +1159,7 @@ impl ConnectionEditorFeatureState {
         self.draft.is_some()
     }
 
-    pub fn focus_handle(&self) -> FocusHandle {
-        self.focus.clone()
-    }
-
-    pub fn window_handle(&self) -> Option<WindowHandle<ConnectionEditorWindow>> {
+    pub fn window_handle(&self) -> Option<NyaWindowHandle> {
         self.window
     }
 
@@ -1610,56 +1175,18 @@ impl ConnectionEditorFeatureState {
         connection_editor_window_open_or_pending(self.has_window(), self.window_open_pending)
     }
 
-    pub fn close_popovers(&mut self) {
+    pub fn close_icon_picker(&mut self) {
         self.icon_picker_open = false;
-        self.menu = None;
-        self.menu_highlight = 0;
     }
 
     pub fn toggle_icon_picker(&mut self) {
         let opening = !self.icon_picker_open;
-        self.close_popovers();
+        self.close_icon_picker();
         self.icon_picker_open = opening;
     }
 
-    pub fn toggle_menu(&mut self, menu: ConnectionEditorMenu) {
-        self.icon_picker_open = false;
-        let opening = self.menu != Some(menu);
-        self.menu = opening.then_some(menu);
-        self.menu_highlight = 0;
-        if !opening && menu == ConnectionEditorMenu::Group {
-            clear_connection_editor_group_menu_draft(&mut self.draft);
-        }
-    }
-
-    pub fn menu_focus_handle(&self) -> FocusHandle {
-        self.menu_focus.clone()
-    }
-
-    pub fn menu_scroll_handle(&self) -> ScrollHandle {
-        self.menu_scroll.clone()
-    }
-
-    pub fn menu_highlight(&self) -> usize {
-        self.menu_highlight
-    }
-
-    /// Put the highlight on `index`, and scroll it into view.
-    pub fn set_menu_highlight(&mut self, index: usize) {
-        self.menu_highlight = index;
-        self.menu_scroll.scroll_to_item(index);
-    }
-
-    /// Step the highlight by `delta` options, wrapping at both ends the way a
-    /// native combo box does.
-    pub fn step_menu_highlight(&mut self, delta: isize, len: usize) {
-        if let Some(next) = stepped_menu_highlight(self.menu_highlight, delta, len) {
-            self.set_menu_highlight(next);
-        }
-    }
-
     pub fn set_icon(&mut self, icon: Option<&str>) -> bool {
-        self.close_popovers();
+        self.close_icon_picker();
         set_connection_editor_icon(&mut self.draft, icon)
     }
 
@@ -1667,10 +1194,14 @@ impl ConnectionEditorFeatureState {
         set_connection_editor_icon_auto_detect(&mut self.draft, enabled)
     }
 
-    pub fn set_menu_value(&mut self, menu: ConnectionEditorMenu, value: Option<String>) -> bool {
-        let changed = set_connection_editor_menu_value(&mut self.draft, menu, value);
+    pub fn set_select_value(
+        &mut self,
+        select: ConnectionEditorSelect,
+        value: Option<String>,
+    ) -> bool {
+        let changed = set_connection_editor_select_value(&mut self.draft, select, value);
         if changed {
-            self.close_popovers();
+            self.close_icon_picker();
         }
         changed
     }
@@ -1678,7 +1209,7 @@ impl ConnectionEditorFeatureState {
     pub fn set_password_source(&mut self, source: ConnectionEditorPasswordSource) -> bool {
         let changed = set_connection_editor_password_source(&mut self.draft, source);
         if changed {
-            self.close_popovers();
+            self.close_icon_picker();
         }
         changed
     }
@@ -1686,7 +1217,7 @@ impl ConnectionEditorFeatureState {
     pub fn set_advanced_tab(&mut self, tab: ConnectionEditorAdvancedTab) -> bool {
         let changed = set_connection_editor_advanced_tab(&mut self.draft, tab);
         if changed {
-            self.close_popovers();
+            self.close_icon_picker();
         }
         changed
     }
@@ -1694,20 +1225,20 @@ impl ConnectionEditorFeatureState {
     pub fn set_telnet_tab(&mut self, tab: ConnectionEditorTelnetTab) -> bool {
         let changed = set_connection_editor_telnet_tab(&mut self.draft, tab);
         if changed {
-            self.close_popovers();
+            self.close_icon_picker();
         }
         changed
     }
 
     pub fn set_kind(&mut self, kind: ConnectionKindTab) -> bool {
-        self.close_popovers();
+        self.close_icon_picker();
         set_connection_editor_kind(&mut self.draft, kind)
     }
 
     pub fn commit_new_group(&mut self, required_message: String) -> bool {
         let changed = commit_connection_editor_new_group(&mut self.draft, required_message);
         if changed {
-            self.close_popovers();
+            self.close_icon_picker();
         }
         changed
     }
@@ -1715,7 +1246,7 @@ impl ConnectionEditorFeatureState {
     pub fn toggle_flag(&mut self, flag: ConnectionEditorToggle) -> bool {
         let changed = toggle_connection_editor_flag(&mut self.draft, flag);
         if changed && flag == ConnectionEditorToggle::Advanced {
-            self.close_popovers();
+            self.close_icon_picker();
         }
         changed
     }
@@ -1730,11 +1261,6 @@ impl ConnectionEditorFeatureState {
 
     pub fn advance_focus(&mut self) -> bool {
         advance_connection_editor_focus(&mut self.draft)
-    }
-
-    pub fn close_popovers_and_cancel_group_draft(&mut self) {
-        self.close_popovers();
-        clear_connection_editor_group_menu_draft(&mut self.draft);
     }
 
     pub fn set_error(&mut self, error: String) -> bool {
@@ -1753,16 +1279,12 @@ impl ConnectionEditorFeatureState {
         clear_connection_editor_runtime_state(
             &mut self.draft,
             &mut self.icon_picker_open,
-            &mut self.menu,
             &mut self.window,
             &mut self.window_open_pending,
         );
     }
 
-    pub fn clear_window_if_current(
-        &mut self,
-        window: WindowHandle<ConnectionEditorWindow>,
-    ) -> bool {
+    pub fn clear_window_if_current(&mut self, window: NyaWindowHandle) -> bool {
         if self.window.is_some_and(|current| current == window) {
             self.window = None;
             return true;
@@ -1778,7 +1300,7 @@ impl ConnectionEditorFeatureState {
         self.window_open_pending = false;
     }
 
-    pub fn attach_window(&mut self, window: WindowHandle<ConnectionEditorWindow>) {
+    pub fn attach_window(&mut self, window: NyaWindowHandle) {
         self.window = Some(window);
         self.window_open_pending = false;
     }
@@ -1794,16 +1316,8 @@ impl ConnectionGroupEditorFeatureState {
         self.draft.clone()
     }
 
-    pub fn focus_handle(&self) -> FocusHandle {
-        self.focus.clone()
-    }
-
     pub fn begin_edit(&mut self, draft: ConnectionGroupEditorState) {
         self.draft = Some(draft);
-    }
-
-    pub fn apply_name_key(&mut self, key: &str, input: Option<&str>) -> bool {
-        apply_connection_group_editor_name_key(&mut self.draft, key, input)
     }
 
     pub fn set_error(&mut self, error: String) -> bool {
@@ -1812,72 +1326,6 @@ impl ConnectionGroupEditorFeatureState {
 
     pub fn close(&mut self) {
         self.draft = None;
-    }
-}
-
-impl ConnectionConfirmationState {
-    pub fn open_clear_all(&mut self) {
-        self.clear_all_open = true;
-    }
-
-    pub fn close_clear_all(&mut self) {
-        self.clear_all_open = false;
-    }
-
-    pub fn clear_all_is_open(&self) -> bool {
-        self.clear_all_open
-    }
-
-    pub fn active_delete(&self) -> Option<ConnectionDeleteConfirmState> {
-        self.delete.clone()
-    }
-
-    pub fn open_delete(&mut self, confirm: ConnectionDeleteConfirmState) {
-        self.delete = Some(confirm);
-    }
-
-    pub fn close_delete(&mut self) {
-        self.delete = None;
-    }
-
-    pub fn take_delete(&mut self) -> Option<ConnectionDeleteConfirmState> {
-        self.delete.take()
-    }
-
-    pub fn active_group_delete(&self) -> Option<ConnectionGroupDeleteConfirmState> {
-        self.group_delete.clone()
-    }
-
-    pub fn open_group_delete(&mut self, confirm: ConnectionGroupDeleteConfirmState) {
-        self.group_delete = Some(confirm);
-    }
-
-    pub fn close_group_delete(&mut self) {
-        self.group_delete = None;
-    }
-
-    pub fn take_group_delete(&mut self) -> Option<ConnectionGroupDeleteConfirmState> {
-        self.group_delete.take()
-    }
-
-    pub fn active_group_open(&self) -> Option<ConnectionGroupOpenConfirmState> {
-        self.group_open.clone()
-    }
-
-    pub fn open_group_open(&mut self, confirm: ConnectionGroupOpenConfirmState) {
-        self.group_open = Some(confirm);
-    }
-
-    pub fn close_group_open(&mut self) {
-        self.group_open = None;
-    }
-
-    pub fn take_group_open(&mut self) -> Option<ConnectionGroupOpenConfirmState> {
-        self.group_open.take()
-    }
-
-    pub fn group_open_focus_handle(&self) -> FocusHandle {
-        self.group_open_focus.clone()
     }
 }
 
@@ -1894,28 +1342,14 @@ impl NetworkFeatureState {
         self.expanded_sections.contains(section_key)
     }
 
-    pub fn item_menu_is_open(&self, tab: NetworkTab, id: &str) -> bool {
-        self.item_menu
-            .as_ref()
-            .is_some_and(|menu| menu.tab == tab && menu.id == id)
-    }
-
     pub fn move_picker_is_open(&self, tab: NetworkTab, id: &str) -> bool {
         self.move_picker
             .as_ref()
             .is_some_and(|picker| picker.tab == tab && picker.id == id)
     }
 
-    pub fn active_delete_confirm(&self) -> Option<NetworkDeleteConfirmState> {
-        self.delete_confirm.clone()
-    }
-
     pub fn active_group_editor(&self) -> Option<NetworkGroupEditorState> {
         self.group_editor.clone()
-    }
-
-    pub fn active_group_delete_confirm(&self) -> Option<NetworkGroupDeleteConfirmState> {
-        self.group_delete_confirm.clone()
     }
 
     pub fn active_tunnel_editor(&self) -> Option<NetworkTunnelEditorState> {
@@ -1926,22 +1360,12 @@ impl NetworkFeatureState {
         self.proxy_editor.clone()
     }
 
-    pub fn tunnel_editor_focus_handle(&self) -> FocusHandle {
-        self.tunnel_editor_focus.clone()
-    }
-
-    pub fn proxy_editor_focus_handle(&self) -> FocusHandle {
-        self.proxy_editor_focus.clone()
-    }
-
     pub fn set_tab(&mut self, tab: NetworkTab) {
         self.tab = tab;
-        self.item_menu = None;
         self.move_picker = None;
     }
 
     pub fn toggle_section(&mut self, section_key: String) -> bool {
-        self.item_menu = None;
         if self.expanded_sections.remove(&section_key) {
             self.move_picker = None;
             return false;
@@ -1950,29 +1374,15 @@ impl NetworkFeatureState {
         true
     }
 
-    pub fn toggle_item_menu(&mut self, tab: NetworkTab, id: String) -> bool {
-        toggle_network_item_menu_state(&mut self.item_menu, &mut self.move_picker, tab, id)
-    }
-
     pub fn toggle_move_picker(&mut self, tab: NetworkTab, id: String) -> bool {
-        toggle_network_move_picker_state(&mut self.item_menu, &mut self.move_picker, tab, id)
+        toggle_network_move_picker_state(&mut self.move_picker, tab, id)
     }
 
     pub fn close_move_picker(&mut self) {
         self.move_picker = None;
     }
 
-    pub fn open_delete_confirm(&mut self, confirm: NetworkDeleteConfirmState) {
-        self.item_menu = None;
-        self.delete_confirm = Some(confirm);
-    }
-
-    pub fn close_delete_confirm(&mut self) {
-        self.delete_confirm = None;
-    }
-
     pub fn begin_group_edit(&mut self, draft: NetworkGroupEditorState) {
-        self.item_menu = None;
         self.group_editor = Some(draft);
     }
 
@@ -1989,17 +1399,7 @@ impl NetworkFeatureState {
         self.group_editor = None;
     }
 
-    pub fn open_group_delete_confirm(&mut self, confirm: NetworkGroupDeleteConfirmState) {
-        self.item_menu = None;
-        self.group_delete_confirm = Some(confirm);
-    }
-
-    pub fn close_group_delete_confirm(&mut self) {
-        self.group_delete_confirm = None;
-    }
-
     pub fn begin_tunnel_edit(&mut self, draft: NetworkTunnelEditorState) {
-        self.item_menu = None;
         self.tab = NetworkTab::Tunnels;
         self.tunnel_editor = Some(draft);
     }
@@ -2017,19 +1417,16 @@ impl NetworkFeatureState {
         set_network_tunnel_editor_field(&mut self.tunnel_editor, field, text)
     }
 
-    pub fn cycle_tunnel_type(&mut self) -> Option<String> {
-        cycle_network_tunnel_type(&mut self.tunnel_editor)
+    pub fn set_tunnel_type(&mut self, tunnel_type: &str) -> Option<String> {
+        set_network_tunnel_type(&mut self.tunnel_editor, tunnel_type)
     }
 
-    pub fn cycle_tunnel_connection<'a>(
-        &mut self,
-        connection_ids: impl IntoIterator<Item = &'a str>,
-    ) -> bool {
-        cycle_network_tunnel_connection(&mut self.tunnel_editor, connection_ids)
+    pub fn set_tunnel_connection(&mut self, connection_id: Option<String>) -> bool {
+        set_network_tunnel_connection(&mut self.tunnel_editor, connection_id)
     }
 
-    pub fn cycle_tunnel_group<'a>(&mut self, group_ids: impl IntoIterator<Item = &'a str>) -> bool {
-        cycle_network_tunnel_group(&mut self.tunnel_editor, group_ids)
+    pub fn set_tunnel_group(&mut self, group_id: Option<String>) -> bool {
+        set_network_tunnel_group(&mut self.tunnel_editor, group_id)
     }
 
     pub fn set_tunnel_bind_localhost(&mut self, bind_localhost: bool) -> bool {
@@ -2045,7 +1442,6 @@ impl NetworkFeatureState {
     }
 
     pub fn begin_proxy_edit(&mut self, draft: NetworkProxyEditorState) {
-        self.item_menu = None;
         self.tab = NetworkTab::Proxies;
         self.proxy_editor = Some(draft);
     }
@@ -2059,12 +1455,12 @@ impl NetworkFeatureState {
         set_network_proxy_editor_field(&mut self.proxy_editor, field, text)
     }
 
-    pub fn cycle_proxy_protocol(&mut self) -> Option<String> {
-        cycle_network_proxy_protocol(&mut self.proxy_editor)
+    pub fn set_proxy_protocol(&mut self, protocol: &str) -> Option<String> {
+        set_network_proxy_protocol(&mut self.proxy_editor, protocol)
     }
 
-    pub fn cycle_proxy_group<'a>(&mut self, group_ids: impl IntoIterator<Item = &'a str>) -> bool {
-        cycle_network_proxy_group(&mut self.proxy_editor, group_ids)
+    pub fn set_proxy_group(&mut self, group_id: Option<String>) -> bool {
+        set_network_proxy_group(&mut self.proxy_editor, group_id)
     }
 
     pub fn set_proxy_editor_error(&mut self, error: String) -> bool {
@@ -2073,8 +1469,6 @@ impl NetworkFeatureState {
 
     pub fn remove_item_references(&mut self, tab: NetworkTab, id: &str) {
         remove_network_item_references(
-            &mut self.delete_confirm,
-            &mut self.item_menu,
             &mut self.move_picker,
             &mut self.tunnel_editor,
             &mut self.proxy_editor,
@@ -2091,7 +1485,6 @@ impl NetworkFeatureState {
     ) {
         remove_network_group_references(
             &mut self.group_editor,
-            &mut self.group_delete_confirm,
             &mut self.expanded_sections,
             tab,
             group_id,

@@ -3,6 +3,7 @@ use gpui::{App, AppContext, Application, Bounds, WindowBounds, WindowOptions, px
 use nyaterm_app::assets;
 use nyaterm_core::{AppRuntime, LOG_FILE_PREFIX, LOG_FILE_SUFFIX};
 use nyaterm_desktop::AppShell;
+use nyaterm_ui::nya_root;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -16,6 +17,7 @@ fn main() -> anyhow::Result<()> {
     Application::new()
         .with_assets(assets::NyaTermAssets)
         .run(move |cx: &mut App| {
+            gpui_component::init(cx);
             let bounds = Bounds::centered(None, size(px(1280.), px(800.)), cx);
             let app_runtime = runtime.clone();
 
@@ -30,7 +32,7 @@ fn main() -> anyhow::Result<()> {
                     shell.update(cx, |shell, cx| {
                         shell.start_after_window_open(window, cx);
                     });
-                    shell
+                    cx.new(|cx| nya_root(shell, window, cx))
                 },
             )
             .expect("failed to open NyaTerm window");

@@ -2,43 +2,40 @@ use gpui::{Context, KeyDownEvent, Window};
 use nyaterm_core::SessionsConfig;
 
 use crate::features::NyaTermApp;
-use crate::models::{ConnectionDeleteConfirmState, ConnectionGroupDeleteConfirmState};
-
 impl NyaTermApp {
     pub(in crate::features) fn open_connections_clear_all_confirm(
         &mut self,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.connection_state.close_list_more_menu();
-        self.connection_state.open_clear_all();
         self.shell
             .set_status("confirm clearing all saved connections".to_string());
-        cx.notify();
-    }
-
-    pub(in crate::features) fn close_connections_clear_all_confirm(
-        &mut self,
-        cx: &mut Context<Self>,
-    ) {
-        self.connection_state.close_clear_all();
-        cx.notify();
+        self.open_confirm_dialog(
+            (
+                self.tr("savedConnections.clearAll").to_string(),
+                self.tr("savedConnections.clearAllConfirm").to_string(),
+                self.tr("savedConnections.clearAll").to_string(),
+                true,
+                |app, _, cx| {
+                    app.confirm_connections_clear_all(cx);
+                    true
+                },
+            ),
+            window,
+            cx,
+        );
     }
 
     pub(in crate::features) fn confirm_connections_clear_all(&mut self, cx: &mut Context<Self>) {
-        if !self.connection_state.clear_all_is_open() {
-            return;
-        }
         match self.with_connection_store(|store| store.replace_sessions(&SessionsConfig::default()))
         {
             Ok(()) => {
-                self.connection_state.close_clear_all();
                 self.connection_state.clear_list_runtime_state();
-                self.refresh_store_from_runtime();
+                self.refresh_store_from_runtime_and_sync_theme(cx);
                 self.shell
                     .set_status(self.tr("savedConnections.clearAllSuccess").to_string());
             }
             Err(error) => {
-                self.connection_state.close_clear_all();
                 self.shell
                     .set_status(format!("clear saved connections failed: {error}"));
                 self.settings
@@ -51,6 +48,7 @@ impl NyaTermApp {
     pub(in crate::features) fn open_connection_delete_confirm(
         &mut self,
         connection_id: String,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(connection) = self
@@ -64,32 +62,38 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        self.connection_state
-            .open_delete_confirm(ConnectionDeleteConfirmState {
-                connection_id,
-                label: connection.name.clone(),
-            });
+        let label = connection.name.clone();
         self.shell
             .set_status("confirm connection delete".to_string());
-        cx.notify();
+        self.open_confirm_dialog(
+            (
+                self.tr("savedConnections.delete").to_string(),
+                self.tr("savedConnections.deleteConfirm")
+                    .replace("{{name}}", &label),
+                self.tr("savedConnections.delete").to_string(),
+                true,
+                move |app, _, cx| {
+                    app.confirm_connection_delete(connection_id.clone(), label.clone(), cx);
+                    true
+                },
+            ),
+            window,
+            cx,
+        );
     }
 
-    pub(in crate::features) fn close_connection_delete_confirm(&mut self, cx: &mut Context<Self>) {
-        self.connection_state.close_delete_confirm();
-        cx.notify();
-    }
-
-    pub(in crate::features) fn confirm_connection_delete(&mut self, cx: &mut Context<Self>) {
-        let Some(confirm) = self.connection_state.take_delete_confirm() else {
-            return;
-        };
-        match self.with_connection_store(|store| store.delete_connection(&confirm.connection_id)) {
+    fn confirm_connection_delete(
+        &mut self,
+        connection_id: String,
+        label: String,
+        cx: &mut Context<Self>,
+    ) {
+        match self.with_connection_store(|store| store.delete_connection(&connection_id)) {
             Ok(()) => {
                 self.connection_state
-                    .remove_list_connection_references(&confirm.connection_id);
-                self.refresh_store_from_runtime();
-                self.shell
-                    .set_status(format!("deleted connection {}", confirm.label));
+                    .remove_list_connection_references(&connection_id);
+                self.refresh_store_from_runtime_and_sync_theme(cx);
+                self.shell.set_status(format!("deleted connection {label}"));
             }
             Err(error) => {
                 self.shell
@@ -102,6 +106,7 @@ impl NyaTermApp {
     pub(in crate::features) fn open_connection_group_delete_confirm(
         &mut self,
         group_id: String,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(group) = self
@@ -127,37 +132,43 @@ impl NyaTermApp {
             .iter()
             .filter(|child| child.parent_id.as_deref() == Some(group_id.as_str()))
             .count();
-        self.connection_state
-            .open_group_delete_confirm(ConnectionGroupDeleteConfirmState {
-                group_id,
-                label: group.name.clone(),
-                connection_count,
-                child_group_count,
-            });
+        let label = group.name.clone();
         self.shell
             .set_status("confirm connection group delete".to_string());
-        cx.notify();
+        let message = self
+            .tr("savedConnections.deleteFolderConfirm")
+            .replace("{{name}}", &label)
+            .replace("{{count}}", &connection_count.to_string())
+            .replace("{{childCount}}", &child_group_count.to_string());
+        self.open_confirm_dialog(
+            (
+                self.tr("savedConnections.deleteFolder").to_string(),
+                message,
+                self.tr("savedConnections.deleteFolder").to_string(),
+                true,
+                move |app, _, cx| {
+                    app.confirm_connection_group_delete(group_id.clone(), label.clone(), cx);
+                    true
+                },
+            ),
+            window,
+            cx,
+        );
     }
 
-    pub(in crate::features) fn close_connection_group_delete_confirm(
+    fn confirm_connection_group_delete(
         &mut self,
+        group_id: String,
+        label: String,
         cx: &mut Context<Self>,
     ) {
-        self.connection_state.close_group_delete_confirm();
-        cx.notify();
-    }
-
-    pub(in crate::features) fn confirm_connection_group_delete(&mut self, cx: &mut Context<Self>) {
-        let Some(confirm) = self.connection_state.take_group_delete_confirm() else {
-            return;
-        };
-        match self.with_connection_store(|store| store.delete_group(&confirm.group_id)) {
+        match self.with_connection_store(|store| store.delete_group(&group_id)) {
             Ok(()) => {
                 self.connection_state
-                    .remove_list_group_references(&confirm.group_id);
-                self.refresh_store_from_runtime();
+                    .remove_list_group_references(&group_id);
+                self.refresh_store_from_runtime_and_sync_theme(cx);
                 self.shell
-                    .set_status(format!("deleted connection group {}", confirm.label));
+                    .set_status(format!("deleted connection group {label}"));
             }
             Err(error) => {
                 self.shell
@@ -307,7 +318,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let field = self.connection_state.list_search_field();
-        field.update(cx, |field, cx| field.set_content(String::new(), cx));
+        field.update(cx, |field, cx| field.set_content("", cx));
         self.connection_state.set_list_search_text(String::new());
         window.focus(&field.read(cx).focus_handle());
         self.shell
@@ -316,7 +327,11 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::features) fn delete_selected_connections(&mut self, cx: &mut Context<Self>) {
+    pub(in crate::features) fn delete_selected_connections(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let selected = self.connection_state.selected_connections();
         if selected.is_empty() {
             self.shell
@@ -325,7 +340,7 @@ impl NyaTermApp {
             return;
         }
         if selected.len() == 1 {
-            self.open_connection_delete_confirm(selected[0].id.clone(), cx);
+            self.open_connection_delete_confirm(selected[0].id.clone(), window, cx);
             return;
         }
         match self.with_connection_store(|store| {
@@ -339,7 +354,7 @@ impl NyaTermApp {
                     self.connection_state
                         .remove_list_connection_references(&connection.id);
                 }
-                self.refresh_store_from_runtime();
+                self.refresh_store_from_runtime_and_sync_theme(cx);
                 self.shell
                     .set_status(format!("deleted {} connection(s)", selected.len()));
             }

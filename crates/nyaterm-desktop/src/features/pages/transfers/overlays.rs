@@ -1,113 +1,16 @@
 use gpui::{
-    App, ClickEvent, Context, FontWeight, InteractiveElement as _, IntoElement, KeyDownEvent,
-    ParentElement as _, SharedString, StatefulInteractiveElement as _, Styled as _, Window, div,
-    prelude::FluentBuilder as _, px, rgb, rgba,
+    App, ClickEvent, Context, InteractiveElement as _, IntoElement, ParentElement as _,
+    SharedString, StatefulInteractiveElement as _, Styled as _, Window, div,
+    prelude::FluentBuilder as _, px, rgb,
 };
 
-use crate::features::{NyaTermApp, dialog_action_button};
-use crate::models::{TransferJobDeleteState, TransferJobMenuState, TransferJobStatus};
+use crate::features::NyaTermApp;
+use crate::models::{TransferJobMenuState, TransferJobStatus};
 use crate::theme::ThemePalette;
-use crate::widgets::small_button;
 
-use super::{
-    transfer_dialog_width, transfer_job_can_retry, transfer_job_has_local_target,
-    transfer_menu_position,
-};
+use super::{transfer_job_can_retry, transfer_job_has_local_target, transfer_menu_position};
 
 impl NyaTermApp {
-    pub(in crate::features) fn transfer_job_delete_overlay(
-        &mut self,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        let palette = self.theme_palette();
-        let state =
-            self.transfer
-                .transfer_job_delete()
-                .cloned()
-                .unwrap_or(TransferJobDeleteState {
-                    job_id: String::new(),
-                    title: String::new(),
-                });
-        let description = self
-            .tr("fileTransfer.deleteConfirmDesc")
-            .replace("{{name}}", &state.title);
-        let dialog_width = transfer_dialog_width(self.shell.viewport_size().0, 320.);
-
-        div()
-            .id(SharedString::from("transfer-job-delete-overlay"))
-            .absolute()
-            .top_0()
-            .bottom_0()
-            .left_0()
-            .right_0()
-            .bg(rgba(0x00000080))
-            .flex()
-            .items_center()
-            .justify_center()
-            .track_focus(self.transfer.queue_delete_focus())
-            .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(this.transfer.queue_delete_focus());
-                cx.notify();
-            }))
-            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-                cx.stop_propagation();
-                match event.keystroke.key.as_str() {
-                    "escape" => this.cancel_delete_transfer_job(cx),
-                    "enter" => this.confirm_delete_transfer_job(cx),
-                    _ => {}
-                }
-            }))
-            .child(
-                div()
-                    .w(px(dialog_width))
-                    .rounded_md()
-                    .border_1()
-                    .border_color(rgb(palette.border))
-                    .bg(self.shell_surface_color(palette.bg))
-                    .shadow_lg()
-                    .p_6()
-                    .flex()
-                    .flex_col()
-                    .gap_2()
-                    .child(
-                        div()
-                            .text_size(px(18.))
-                            .font_weight(FontWeight(700.))
-                            .child(self.tr("fileTransfer.deleteConfirmTitle")),
-                    )
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(rgb(palette.text_muted))
-                            .child(description),
-                    )
-                    .child(
-                        div()
-                            .mt_1()
-                            .flex()
-                            .justify_end()
-                            .gap_2()
-                            .child(small_button(
-                                palette,
-                                "transfer-job-delete-cancel",
-                                self.tr("dialog.cancel"),
-                                cx.listener(|this, _, _, cx| {
-                                    this.cancel_delete_transfer_job(cx);
-                                }),
-                            ))
-                            .child(dialog_action_button(
-                                palette,
-                                "transfer-job-delete-confirm",
-                                self.tr("fileTransfer.delete"),
-                                true,
-                                cx.listener(|this, _, _, cx| {
-                                    this.confirm_delete_transfer_job(cx);
-                                }),
-                            )),
-                    ),
-            )
-    }
-
     pub(in crate::features) fn transfer_job_menu_overlay(
         &mut self,
         cx: &mut Context<Self>,
@@ -240,9 +143,9 @@ impl NyaTermApp {
                         "transfer-job-menu-delete",
                         self.tr("fileTransfer.delete"),
                         can_delete,
-                        cx.listener(move |this, _, _, cx| {
+                        cx.listener(move |this, _, window, cx| {
                             this.transfer.close_transfer_job_menu();
-                            this.request_delete_transfer_job(delete_id.clone(), cx);
+                            this.request_delete_transfer_job(delete_id.clone(), window, cx);
                         }),
                     )),
             )

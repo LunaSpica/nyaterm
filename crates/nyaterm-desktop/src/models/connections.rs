@@ -37,8 +37,8 @@ impl ConnectionKindTab {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ConnectionEditorMenu {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) enum ConnectionEditorSelect {
     Authentication,
     Group,
     SavedPassword,
@@ -260,26 +260,6 @@ pub(crate) struct ConnectionGroupEditorState {
     pub(crate) name: String,
     pub(crate) parent_id: Option<String>,
     pub(crate) error: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct ConnectionDeleteConfirmState {
-    pub(crate) connection_id: String,
-    pub(crate) label: String,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) struct ConnectionContextMenuState {
-    pub(crate) connection_id: String,
-    pub(crate) x: Pixels,
-    pub(crate) y: Pixels,
-}
-
-/// Right-click on the list background rather than on a row.
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) struct ConnectionListContextMenuState {
-    pub(crate) x: Pixels,
-    pub(crate) y: Pixels,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -852,44 +832,6 @@ mod credential_autofill_match_tests {
             other => panic!("unexpected outcome: {other:?}"),
         }
     }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) struct TerminalContextMenuState {
-    pub(crate) x: Pixels,
-    pub(crate) y: Pixels,
-    /// Snapshot of selected text when the menu opened (Tauri caches selection).
-    pub(crate) selected_text: String,
-    pub(crate) submenu: Option<TerminalContextSubmenu>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum TerminalContextSubmenu {
-    SearchOnline,
-    Ai,
-    Translate,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) struct ConnectionGroupContextMenuState {
-    pub(crate) group_id: String,
-    pub(crate) x: Pixels,
-    pub(crate) y: Pixels,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct ConnectionGroupDeleteConfirmState {
-    pub(crate) group_id: String,
-    pub(crate) label: String,
-    pub(crate) connection_count: usize,
-    pub(crate) child_group_count: usize,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct ConnectionGroupOpenConfirmState {
-    pub(crate) group_id: String,
-    pub(crate) label: String,
-    pub(crate) connection_count: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

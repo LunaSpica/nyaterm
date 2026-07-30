@@ -2,28 +2,25 @@ use std::collections::HashSet;
 
 use super::{
     apply_connection_editor_shell_path, apply_connection_editor_text_key,
-    apply_connection_editor_working_dir, apply_connection_group_editor_name_key,
-    clear_connection_editor_group_menu_draft, clear_connection_editor_runtime_state,
+    apply_connection_editor_working_dir, clear_connection_editor_runtime_state,
     clear_connection_list_runtime_state, clear_network_proxy_editor, clear_network_tunnel_editor,
-    clear_selected_connection_ids, close_connection_more_menu, commit_connection_editor_new_group,
+    clear_selected_connection_ids, commit_connection_editor_new_group,
     connection_drop_position_for_target, connection_editor_inline_panel_draft,
     connection_editor_window_open_or_pending, cycle_connection_sort_mode,
-    cycle_network_proxy_protocol, cycle_network_tunnel_connection, cycle_network_tunnel_group,
-    cycle_network_tunnel_type, insert_connection_editor_description_newline,
-    remove_connection_list_references, remove_group_list_references,
-    remove_network_group_references, remove_network_item_references,
+    insert_connection_editor_description_newline, remove_connection_list_references,
+    remove_group_list_references, remove_network_group_references, remove_network_item_references,
     retain_loaded_connection_references, retain_loaded_group_list_references,
     saved_connections_in_group_tree_for_list_state, select_connection_ids,
     select_saved_connection_after_editor_save, selected_connections_for_list_state,
     set_connection_drop_target_if_changed, set_connection_editor_advanced_tab,
     set_connection_editor_error, set_connection_editor_field_text, set_connection_editor_icon,
-    set_connection_editor_kind, set_connection_editor_menu_value,
-    set_connection_editor_password_source, set_connection_editor_telnet_tab,
+    set_connection_editor_kind, set_connection_editor_password_source,
+    set_connection_editor_select_value, set_connection_editor_telnet_tab,
     set_connection_group_editor_error, set_connection_group_hover, set_network_group_editor_error,
     set_network_group_editor_name, set_network_proxy_editor_error, set_network_proxy_editor_field,
-    set_network_tunnel_bind_localhost, set_network_tunnel_editor_error,
-    set_network_tunnel_editor_field, stepped_menu_highlight, sync_connection_search_expansion,
-    toggle_connection_editor_flag, toggle_network_item_menu_state,
+    set_network_proxy_protocol, set_network_tunnel_bind_localhost, set_network_tunnel_connection,
+    set_network_tunnel_editor_error, set_network_tunnel_editor_field, set_network_tunnel_group,
+    set_network_tunnel_type, sync_connection_search_expansion, toggle_connection_editor_flag,
     toggle_network_move_picker_state, toggle_network_tunnel_auto_open,
     visible_connection_ids_for_list_state,
 };
@@ -31,11 +28,9 @@ use crate::features::{
     ConnectionDragKind, ConnectionDropPosition, ConnectionDropTarget, ConnectionEditorToggle,
 };
 use crate::models::{
-    ConnectionContextMenuState, ConnectionEditorAdvancedTab, ConnectionEditorField,
-    ConnectionEditorMenu, ConnectionEditorPasswordSource, ConnectionEditorState,
-    ConnectionEditorTelnetTab, ConnectionGroupContextMenuState, ConnectionGroupEditorState,
-    ConnectionKindTab, ConnectionSortMode, NetworkDeleteConfirmState,
-    NetworkGroupDeleteConfirmState, NetworkGroupEditorState, NetworkItemMenuState,
+    ConnectionEditorAdvancedTab, ConnectionEditorField, ConnectionEditorPasswordSource,
+    ConnectionEditorSelect, ConnectionEditorState, ConnectionEditorTelnetTab,
+    ConnectionGroupEditorState, ConnectionKindTab, ConnectionSortMode, NetworkGroupEditorState,
     NetworkMovePickerState, NetworkProxyEditorField, NetworkProxyEditorState, NetworkTab,
     NetworkTunnelEditorField, NetworkTunnelEditorState,
 };
@@ -116,15 +111,6 @@ fn clear_selected_connection_ids_clears_selection_and_anchor() {
 
     assert!(selected_ids.is_empty());
     assert_eq!(last_selected_id, None);
-}
-
-#[test]
-fn close_connection_more_menu_reports_whether_menu_was_open() {
-    let mut more_menu_open = true;
-
-    assert!(close_connection_more_menu(&mut more_menu_open));
-    assert!(!more_menu_open);
-    assert!(!close_connection_more_menu(&mut more_menu_open));
 }
 
 #[test]
@@ -216,16 +202,6 @@ fn clear_connection_list_runtime_state_removes_transient_ui_references() {
     let mut selected_ids = HashSet::from(["one".to_string()]);
     let mut last_selected_id = Some("one".to_string());
     let mut expanded_group_ids = HashSet::from(["group-a".to_string()]);
-    let mut context_menu = Some(ConnectionContextMenuState {
-        connection_id: "one".to_string(),
-        x: gpui::px(1.),
-        y: gpui::px(2.),
-    });
-    let mut group_context_menu = Some(ConnectionGroupContextMenuState {
-        group_id: "group-a".to_string(),
-        x: gpui::px(3.),
-        y: gpui::px(4.),
-    });
     let mut drop_target = Some(ConnectionDropTarget {
         id: Some("group-a".to_string()),
         kind: ConnectionDragKind::Group,
@@ -237,8 +213,6 @@ fn clear_connection_list_runtime_state_removes_transient_ui_references() {
         &mut selected_ids,
         &mut last_selected_id,
         &mut expanded_group_ids,
-        &mut context_menu,
-        &mut group_context_menu,
         &mut drop_target,
         &mut hovered_group_id,
     );
@@ -246,8 +220,6 @@ fn clear_connection_list_runtime_state_removes_transient_ui_references() {
     assert!(selected_ids.is_empty());
     assert_eq!(last_selected_id, None);
     assert!(expanded_group_ids.is_empty());
-    assert_eq!(context_menu, None);
-    assert_eq!(group_context_menu, None);
     assert_eq!(drop_target, None);
     assert_eq!(hovered_group_id, None);
 }
@@ -409,11 +381,6 @@ fn visible_connection_ids_for_list_state_tracks_expanded_tree_order() {
 fn remove_connection_references_clears_invalid_list_state() {
     let mut selected_ids = HashSet::from(["one".to_string(), "two".to_string()]);
     let mut last_selected_id = Some("one".to_string());
-    let mut context_menu = Some(ConnectionContextMenuState {
-        connection_id: "one".to_string(),
-        x: gpui::px(4.),
-        y: gpui::px(8.),
-    });
     let mut drop_target = Some(ConnectionDropTarget {
         id: Some("one".to_string()),
         kind: ConnectionDragKind::Connection,
@@ -423,14 +390,12 @@ fn remove_connection_references_clears_invalid_list_state() {
     remove_connection_list_references(
         &mut selected_ids,
         &mut last_selected_id,
-        &mut context_menu,
         &mut drop_target,
         "one",
     );
 
     assert_eq!(selected_ids, HashSet::from(["two".to_string()]));
     assert_eq!(last_selected_id, None);
-    assert_eq!(context_menu, None);
     assert_eq!(drop_target, None);
 }
 
@@ -438,11 +403,6 @@ fn remove_connection_references_clears_invalid_list_state() {
 fn remove_group_references_clears_invalid_list_state() {
     let mut expanded_group_ids = HashSet::from(["root".to_string(), "child".to_string()]);
     let mut hovered_group_id = Some("child".to_string());
-    let mut group_context_menu = Some(ConnectionGroupContextMenuState {
-        group_id: "child".to_string(),
-        x: gpui::px(4.),
-        y: gpui::px(8.),
-    });
     let mut drop_target = Some(ConnectionDropTarget {
         id: Some("child".to_string()),
         kind: ConnectionDragKind::Group,
@@ -452,14 +412,12 @@ fn remove_group_references_clears_invalid_list_state() {
     remove_group_list_references(
         &mut expanded_group_ids,
         &mut hovered_group_id,
-        &mut group_context_menu,
         &mut drop_target,
         "child",
     );
 
     assert_eq!(expanded_group_ids, HashSet::from(["root".to_string()]));
     assert_eq!(hovered_group_id, None);
-    assert_eq!(group_context_menu, None);
     assert_eq!(drop_target, None);
 }
 
@@ -467,19 +425,9 @@ fn remove_group_references_clears_invalid_list_state() {
 fn retain_loaded_connection_list_references_prunes_stale_refresh_state() {
     let mut selected_ids = HashSet::from(["kept".to_string(), "stale".to_string()]);
     let mut last_selected_id = Some("stale".to_string());
-    let mut context_menu = Some(ConnectionContextMenuState {
-        connection_id: "stale".to_string(),
-        x: gpui::px(4.),
-        y: gpui::px(8.),
-    });
     let mut expanded_group_ids =
         HashSet::from(["kept-group".to_string(), "stale-group".to_string()]);
     let mut hovered_group_id = Some("stale-group".to_string());
-    let mut group_context_menu = Some(ConnectionGroupContextMenuState {
-        group_id: "stale-group".to_string(),
-        x: gpui::px(4.),
-        y: gpui::px(8.),
-    });
     let mut drop_target = Some(ConnectionDropTarget {
         id: Some("stale-group".to_string()),
         kind: ConnectionDragKind::Group,
@@ -491,49 +439,42 @@ fn retain_loaded_connection_list_references_prunes_stale_refresh_state() {
     retain_loaded_connection_references(
         &mut selected_ids,
         &mut last_selected_id,
-        &mut context_menu,
         &mut drop_target,
         &connection_ids,
     );
     retain_loaded_group_list_references(
         &mut expanded_group_ids,
         &mut hovered_group_id,
-        &mut group_context_menu,
         &mut drop_target,
         &group_ids,
     );
 
     assert_eq!(selected_ids, HashSet::from(["kept".to_string()]));
     assert_eq!(last_selected_id, None);
-    assert_eq!(context_menu, None);
     assert_eq!(
         expanded_group_ids,
         HashSet::from(["kept-group".to_string()])
     );
     assert_eq!(hovered_group_id, None);
-    assert_eq!(group_context_menu, None);
     assert_eq!(drop_target, None);
 }
 
 #[test]
-fn clear_connection_editor_runtime_state_clears_secret_draft_and_overlays() {
+fn clear_connection_editor_runtime_state_clears_secret_draft_and_icon_picker() {
     let mut draft = Some(connection_editor_state_with_secret_draft());
     let mut icon_picker_open = true;
-    let mut menu = Some(ConnectionEditorMenu::Authentication);
     let mut window = None;
     let mut window_open_pending = true;
 
     clear_connection_editor_runtime_state(
         &mut draft,
         &mut icon_picker_open,
-        &mut menu,
         &mut window,
         &mut window_open_pending,
     );
 
     assert_eq!(draft, None);
     assert!(!icon_picker_open);
-    assert_eq!(menu, None);
     assert_eq!(window, None);
     assert!(!window_open_pending);
 }
@@ -542,7 +483,6 @@ fn clear_connection_editor_runtime_state_clears_secret_draft_and_overlays() {
 fn finish_connection_editor_save_state_clears_editor_and_selects_saved_connection() {
     let mut draft = Some(connection_editor_state_with_secret_draft());
     let mut icon_picker_open = true;
-    let mut menu = Some(ConnectionEditorMenu::Group);
     let mut window = None;
     let mut window_open_pending = true;
     let mut selected_ids = HashSet::from(["old".to_string()]);
@@ -552,7 +492,6 @@ fn finish_connection_editor_save_state_clears_editor_and_selects_saved_connectio
     clear_connection_editor_runtime_state(
         &mut draft,
         &mut icon_picker_open,
-        &mut menu,
         &mut window,
         &mut window_open_pending,
     );
@@ -566,7 +505,6 @@ fn finish_connection_editor_save_state_clears_editor_and_selects_saved_connectio
 
     assert_eq!(draft, None);
     assert!(!icon_picker_open);
-    assert_eq!(menu, None);
     assert_eq!(window, None);
     assert!(!window_open_pending);
     assert_eq!(selected_ids, HashSet::from(["conn-b".to_string()]));
@@ -591,23 +529,6 @@ fn connection_editor_inline_panel_draft_requires_draft_without_window() {
     assert!(connection_editor_window_open_or_pending(true, false));
     assert!(connection_editor_window_open_or_pending(false, true));
     assert!(!connection_editor_window_open_or_pending(false, false));
-}
-
-#[test]
-fn clear_connection_editor_group_menu_draft_resets_group_field_only() {
-    let mut draft = Some(ConnectionEditorState {
-        new_group_name: "scratch".to_string(),
-        focused_field: ConnectionEditorField::NewGroupName,
-        error: Some("keep validation".to_string()),
-        ..connection_editor_state_with_secret_draft()
-    });
-
-    clear_connection_editor_group_menu_draft(&mut draft);
-
-    let editor = draft.expect("editor remains open");
-    assert!(editor.new_group_name.is_empty());
-    assert_eq!(editor.focused_field, ConnectionEditorField::Name);
-    assert_eq!(editor.error.as_deref(), Some("keep validation"));
 }
 
 #[test]
@@ -660,9 +581,9 @@ fn set_connection_editor_auth_none_clears_password_and_key_state() {
         ..connection_editor_state_with_secret_draft()
     });
 
-    assert!(set_connection_editor_menu_value(
+    assert!(set_connection_editor_select_value(
         &mut draft,
-        ConnectionEditorMenu::Authentication,
+        ConnectionEditorSelect::Authentication,
         Some("none".to_string()),
     ));
 
@@ -677,7 +598,7 @@ fn set_connection_editor_auth_none_clears_password_and_key_state() {
 }
 
 #[test]
-fn set_connection_editor_group_menu_value_clears_group_draft() {
+fn set_connection_editor_group_select_value_clears_group_draft() {
     let mut draft = Some(ConnectionEditorState {
         new_group_name: "scratch".to_string(),
         pending_group_name: Some("pending".to_string()),
@@ -687,9 +608,9 @@ fn set_connection_editor_group_menu_value_clears_group_draft() {
         ..connection_editor_state_with_secret_draft()
     });
 
-    assert!(set_connection_editor_menu_value(
+    assert!(set_connection_editor_select_value(
         &mut draft,
-        ConnectionEditorMenu::Group,
+        ConnectionEditorSelect::Group,
         Some("group-a".to_string()),
     ));
 
@@ -793,25 +714,6 @@ fn set_connection_editor_telnet_tab_clears_error() {
         ConnectionEditorTelnetTab::Compatibility
     );
     assert_eq!(editor.error, None);
-}
-
-#[test]
-fn stepped_menu_highlight_wraps_at_both_ends() {
-    assert_eq!(stepped_menu_highlight(0, 1, 3), Some(1));
-    assert_eq!(stepped_menu_highlight(2, 1, 3), Some(0));
-    assert_eq!(stepped_menu_highlight(0, -1, 3), Some(2));
-}
-
-#[test]
-fn stepped_menu_highlight_refuses_an_empty_list() {
-    assert_eq!(stepped_menu_highlight(0, 1, 0), None);
-}
-
-#[test]
-fn stepped_menu_highlight_clamps_a_highlight_left_over_from_a_longer_list() {
-    // Switching the connection kind swaps every select underneath.
-    assert_eq!(stepped_menu_highlight(9, 1, 3), Some(0));
-    assert_eq!(stepped_menu_highlight(9, -1, 3), Some(1));
 }
 
 #[test]
@@ -993,57 +895,6 @@ fn apply_connection_editor_paths_update_field_and_clear_error() {
 }
 
 #[test]
-fn connection_group_editor_name_key_updates_name_and_clears_error() {
-    let mut draft = Some(ConnectionGroupEditorState {
-        id: Some("group-a".to_string()),
-        name: "prod".to_string(),
-        parent_id: Some("root".to_string()),
-        error: Some("stale validation".to_string()),
-    });
-
-    assert!(apply_connection_group_editor_name_key(
-        &mut draft,
-        "x",
-        Some("x")
-    ));
-    assert!(apply_connection_group_editor_name_key(
-        &mut draft,
-        "backspace",
-        None
-    ));
-
-    let editor = draft.expect("group editor remains open");
-    assert_eq!(editor.name, "prod");
-    assert_eq!(editor.parent_id.as_deref(), Some("root"));
-    assert_eq!(editor.error, None);
-}
-
-#[test]
-fn connection_group_editor_name_key_ignores_empty_input_without_draft() {
-    let mut draft = Some(ConnectionGroupEditorState {
-        id: None,
-        name: "root".to_string(),
-        parent_id: None,
-        error: Some("keep validation".to_string()),
-    });
-
-    assert!(!apply_connection_group_editor_name_key(
-        &mut draft, "shift", None
-    ));
-    assert_eq!(
-        draft.as_ref().and_then(|editor| editor.error.as_deref()),
-        Some("keep validation")
-    );
-
-    let mut missing = None;
-    assert!(!apply_connection_group_editor_name_key(
-        &mut missing,
-        "x",
-        Some("x")
-    ));
-}
-
-#[test]
 fn set_connection_group_editor_error_updates_active_draft() {
     let mut draft = Some(ConnectionGroupEditorState {
         id: None,
@@ -1123,7 +974,7 @@ fn network_tunnel_editor_field_filters_ports_and_clears_error() {
 }
 
 #[test]
-fn network_tunnel_type_cycle_resets_hidden_dynamic_focus() {
+fn network_tunnel_type_selection_resets_hidden_dynamic_focus() {
     let mut tunnel_editor = Some(NetworkTunnelEditorState {
         tunnel_type: "remote".to_string(),
         focused_field: NetworkTunnelEditorField::TargetPort,
@@ -1132,7 +983,7 @@ fn network_tunnel_type_cycle_resets_hidden_dynamic_focus() {
     });
 
     assert_eq!(
-        cycle_network_tunnel_type(&mut tunnel_editor).as_deref(),
+        set_network_tunnel_type(&mut tunnel_editor, "dynamic").as_deref(),
         Some("dynamic")
     );
 
@@ -1143,7 +994,7 @@ fn network_tunnel_type_cycle_resets_hidden_dynamic_focus() {
 }
 
 #[test]
-fn network_tunnel_cycles_connection_group_and_flags() {
+fn network_tunnel_selects_connection_group_and_flags() {
     let mut tunnel_editor = Some(NetworkTunnelEditorState {
         connection_id: Some("conn-a".to_string()),
         group_id: None,
@@ -1153,11 +1004,14 @@ fn network_tunnel_cycles_connection_group_and_flags() {
         ..network_tunnel_editor("tunnel-a")
     });
 
-    assert!(cycle_network_tunnel_connection(
+    assert!(set_network_tunnel_connection(
         &mut tunnel_editor,
-        ["conn-a", "conn-b"]
+        Some("conn-b".to_string()),
     ));
-    assert!(cycle_network_tunnel_group(&mut tunnel_editor, ["group-a"]));
+    assert!(set_network_tunnel_group(
+        &mut tunnel_editor,
+        Some("group-a".to_string()),
+    ));
     assert!(set_network_tunnel_bind_localhost(&mut tunnel_editor, true));
     assert_eq!(
         toggle_network_tunnel_auto_open(&mut tunnel_editor),
@@ -1200,7 +1054,7 @@ fn network_proxy_editor_field_filters_port_and_preserves_password_draft() {
 }
 
 #[test]
-fn network_proxy_protocol_cycle_resets_hidden_focus() {
+fn network_proxy_protocol_selection_resets_hidden_focus() {
     let mut proxy_editor = Some(NetworkProxyEditorState {
         protocol: "http".to_string(),
         focused_field: NetworkProxyEditorField::Password,
@@ -1209,7 +1063,7 @@ fn network_proxy_protocol_cycle_resets_hidden_focus() {
     });
 
     assert_eq!(
-        cycle_network_proxy_protocol(&mut proxy_editor).as_deref(),
+        set_network_proxy_protocol(&mut proxy_editor, "proxycommand").as_deref(),
         Some("proxycommand")
     );
 
@@ -1220,55 +1074,15 @@ fn network_proxy_protocol_cycle_resets_hidden_focus() {
 }
 
 #[test]
-fn toggle_network_item_menu_closes_move_picker_and_toggles_same_item() {
-    let mut item_menu = None;
-    let mut move_picker = Some(NetworkMovePickerState {
-        tab: NetworkTab::Tunnels,
-        id: "old".to_string(),
-    });
-
-    assert!(toggle_network_item_menu_state(
-        &mut item_menu,
-        &mut move_picker,
-        NetworkTab::Tunnels,
-        "one".to_string(),
-    ));
-
-    assert_eq!(
-        item_menu,
-        Some(NetworkItemMenuState {
-            tab: NetworkTab::Tunnels,
-            id: "one".to_string(),
-        })
-    );
-    assert_eq!(move_picker, None);
-
-    assert!(!toggle_network_item_menu_state(
-        &mut item_menu,
-        &mut move_picker,
-        NetworkTab::Tunnels,
-        "one".to_string(),
-    ));
-
-    assert_eq!(item_menu, None);
-}
-
-#[test]
-fn toggle_network_move_picker_closes_item_menu_and_toggles_same_item() {
-    let mut item_menu = Some(NetworkItemMenuState {
-        tab: NetworkTab::Proxies,
-        id: "proxy".to_string(),
-    });
+fn toggle_network_move_picker_toggles_same_item() {
     let mut move_picker = None;
 
     assert!(toggle_network_move_picker_state(
-        &mut item_menu,
         &mut move_picker,
         NetworkTab::Proxies,
         "proxy".to_string(),
     ));
 
-    assert_eq!(item_menu, None);
     assert_eq!(
         move_picker,
         Some(NetworkMovePickerState {
@@ -1278,7 +1092,6 @@ fn toggle_network_move_picker_closes_item_menu_and_toggles_same_item() {
     );
 
     assert!(!toggle_network_move_picker_state(
-        &mut item_menu,
         &mut move_picker,
         NetworkTab::Proxies,
         "proxy".to_string(),
@@ -1289,15 +1102,6 @@ fn toggle_network_move_picker_closes_item_menu_and_toggles_same_item() {
 
 #[test]
 fn remove_network_item_references_clears_only_matching_tab_and_id() {
-    let mut delete_confirm = Some(NetworkDeleteConfirmState {
-        tab: NetworkTab::Tunnels,
-        id: "one".to_string(),
-        label: "One".to_string(),
-    });
-    let mut item_menu = Some(NetworkItemMenuState {
-        tab: NetworkTab::Tunnels,
-        id: "one".to_string(),
-    });
     let mut move_picker = Some(NetworkMovePickerState {
         tab: NetworkTab::Tunnels,
         id: "one".to_string(),
@@ -1306,8 +1110,6 @@ fn remove_network_item_references_clears_only_matching_tab_and_id() {
     let mut proxy_editor = Some(network_proxy_editor("one"));
 
     remove_network_item_references(
-        &mut delete_confirm,
-        &mut item_menu,
         &mut move_picker,
         &mut tunnel_editor,
         &mut proxy_editor,
@@ -1315,8 +1117,6 @@ fn remove_network_item_references_clears_only_matching_tab_and_id() {
         "one",
     );
 
-    assert_eq!(delete_confirm, None);
-    assert_eq!(item_menu, None);
     assert_eq!(move_picker, None);
     assert_eq!(tunnel_editor, None);
     assert_eq!(proxy_editor, Some(network_proxy_editor("one")));
@@ -1330,12 +1130,6 @@ fn remove_network_group_references_clears_matching_group_state() {
         name: "Group A".to_string(),
         error: Some("stale".to_string()),
     });
-    let mut group_delete_confirm = Some(NetworkGroupDeleteConfirmState {
-        tab: NetworkTab::Tunnels,
-        id: "group-a".to_string(),
-        label: "Group A".to_string(),
-        item_count: 2,
-    });
     let mut expanded_sections = HashSet::from([
         "tunnel:group-a".to_string(),
         "proxy:group-a".to_string(),
@@ -1344,14 +1138,12 @@ fn remove_network_group_references_clears_matching_group_state() {
 
     remove_network_group_references(
         &mut group_editor,
-        &mut group_delete_confirm,
         &mut expanded_sections,
         NetworkTab::Tunnels,
         "group-a",
     );
 
     assert_eq!(group_editor, None);
-    assert_eq!(group_delete_confirm, None);
     assert_eq!(
         expanded_sections,
         HashSet::from(["proxy:group-a".to_string(), "tunnel:group-b".to_string()])
@@ -1366,22 +1158,7 @@ fn remove_network_group_and_item_references_clears_deleted_child_state() {
         name: "Group A".to_string(),
         error: None,
     });
-    let mut group_delete_confirm = Some(NetworkGroupDeleteConfirmState {
-        tab: NetworkTab::Proxies,
-        id: "group-a".to_string(),
-        label: "Group A".to_string(),
-        item_count: 1,
-    });
     let mut expanded_sections = HashSet::from(["proxy:group-a".to_string()]);
-    let mut delete_confirm = Some(NetworkDeleteConfirmState {
-        tab: NetworkTab::Proxies,
-        id: "proxy-a".to_string(),
-        label: "Proxy A".to_string(),
-    });
-    let mut item_menu = Some(NetworkItemMenuState {
-        tab: NetworkTab::Proxies,
-        id: "proxy-a".to_string(),
-    });
     let mut move_picker = Some(NetworkMovePickerState {
         tab: NetworkTab::Proxies,
         id: "proxy-a".to_string(),
@@ -1391,14 +1168,11 @@ fn remove_network_group_and_item_references_clears_deleted_child_state() {
 
     remove_network_group_references(
         &mut group_editor,
-        &mut group_delete_confirm,
         &mut expanded_sections,
         NetworkTab::Proxies,
         "group-a",
     );
     remove_network_item_references(
-        &mut delete_confirm,
-        &mut item_menu,
         &mut move_picker,
         &mut tunnel_editor,
         &mut proxy_editor,
@@ -1407,10 +1181,7 @@ fn remove_network_group_and_item_references_clears_deleted_child_state() {
     );
 
     assert_eq!(group_editor, None);
-    assert_eq!(group_delete_confirm, None);
     assert!(expanded_sections.is_empty());
-    assert_eq!(delete_confirm, None);
-    assert_eq!(item_menu, None);
     assert_eq!(move_picker, None);
     assert_eq!(proxy_editor, None);
     assert_eq!(tunnel_editor, Some(network_tunnel_editor("proxy-a")));

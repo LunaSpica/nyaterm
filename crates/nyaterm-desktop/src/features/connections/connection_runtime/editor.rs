@@ -6,9 +6,8 @@ use super::helpers::{
 };
 use crate::features::NyaTermApp;
 use crate::models::{
-    ConnectionEditorAdvancedTab, ConnectionEditorField, ConnectionEditorMenu,
-    ConnectionEditorPasswordSource, ConnectionEditorState, ConnectionEditorTelnetTab,
-    ConnectionKindTab,
+    ConnectionEditorAdvancedTab, ConnectionEditorField, ConnectionEditorPasswordSource,
+    ConnectionEditorSelect, ConnectionEditorState, ConnectionEditorTelnetTab, ConnectionKindTab,
 };
 
 impl NyaTermApp {
@@ -162,36 +161,14 @@ impl NyaTermApp {
         }
     }
 
-    pub(in crate::features) fn toggle_connection_editor_menu(
+    pub(in crate::features) fn set_connection_editor_select_value(
         &mut self,
-        menu: ConnectionEditorMenu,
-        cx: &mut Context<Self>,
-    ) {
-        self.connection_state.toggle_editor_menu(menu);
-        cx.notify();
-    }
-
-    /// Dismiss one select's popover, ignoring a stale click for another.
-    pub(in crate::features) fn close_connection_editor_menu(
-        &mut self,
-        menu: ConnectionEditorMenu,
-        cx: &mut Context<Self>,
-    ) {
-        if self.connection_state.active_editor_menu() != Some(menu) {
-            return;
-        }
-        self.connection_state.close_editor_popovers();
-        cx.notify();
-    }
-
-    pub(in crate::features) fn set_connection_editor_menu_value(
-        &mut self,
-        menu: ConnectionEditorMenu,
+        select: ConnectionEditorSelect,
         value: Option<&str>,
         cx: &mut Context<Self>,
     ) {
         self.connection_state
-            .set_editor_menu_value(menu, value.map(ToOwned::to_owned));
+            .set_editor_select_value(select, value.map(ToOwned::to_owned));
         cx.notify();
     }
 
@@ -353,83 +330,11 @@ impl NyaTermApp {
             return;
         };
         let (min, max) = connection_editor_number_bounds(field);
-        let next = stepped_number(entity.read(cx).content(), delta, min, max);
+        let next = stepped_number(&entity.read(cx).value(cx), delta, min, max);
         let next = next.to_string();
         self.connection_state.reset_editor_field(field, &next, cx);
         self.connection_state.set_editor_field_text(field, next);
         cx.notify();
-    }
-
-    /// Drive an open select from the keyboard.
-    ///
-    /// The popover owns these keys rather than the editor surface, because only
-    /// it knows the option list — the choices are built where they are rendered,
-    /// and mirroring them into the runtime would be a second source of truth.
-    /// Returns whether the key was consumed.
-    pub(in crate::features) fn handle_connection_editor_menu_key(
-        &mut self,
-        menu: ConnectionEditorMenu,
-        values: &[Option<String>],
-        event: &KeyDownEvent,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> bool {
-        self.mark_user_activity();
-        let keystroke = &event.keystroke;
-        if keystroke.modifiers.platform || keystroke.modifiers.control || keystroke.modifiers.alt {
-            return false;
-        }
-
-        match keystroke.key.as_str() {
-            "escape" => {
-                self.connection_state
-                    .close_editor_popovers_and_cancel_group_draft();
-                let focus = self.connection_state.editor_focus_handle();
-                window.focus(&focus);
-                cx.notify();
-                true
-            }
-            "down" | "up" => {
-                let delta = if keystroke.key == "down" { 1 } else { -1 };
-                self.connection_state
-                    .step_editor_menu_highlight(delta, values.len());
-                cx.notify();
-                true
-            }
-            "home" | "end" => {
-                if values.is_empty() {
-                    return false;
-                }
-                let index = if keystroke.key == "home" {
-                    0
-                } else {
-                    values.len() - 1
-                };
-                self.connection_state.set_editor_menu_highlight(index);
-                cx.notify();
-                true
-            }
-            "enter" => {
-                // Enter in the group popover's "new folder" box creates the
-                // folder; anywhere else it takes the highlighted option.
-                if menu == ConnectionEditorMenu::Group
-                    && self.connection_state.editor_new_group_field_is_focused(cx)
-                {
-                    self.commit_connection_editor_new_group(cx);
-                    return true;
-                }
-                let highlight = self.connection_state.editor_menu_highlight();
-                let Some(value) = values.get(highlight) else {
-                    return false;
-                };
-                let value = value.clone();
-                self.set_connection_editor_menu_value(menu, value.as_deref(), cx);
-                let focus = self.connection_state.editor_focus_handle();
-                window.focus(&focus);
-                true
-            }
-            _ => false,
-        }
     }
 
     pub(in crate::features) fn handle_connection_editor_key_down(
@@ -447,13 +352,7 @@ impl NyaTermApp {
         match keystroke.key.as_str() {
             "escape" => {
                 if self.connection_state.editor_icon_picker_is_open() {
-                    self.connection_state.close_editor_popovers();
-                    cx.notify();
-                    return;
-                }
-                if self.connection_state.editor_menu_is_open() {
-                    self.connection_state
-                        .close_editor_popovers_and_cancel_group_draft();
+                    self.connection_state.close_editor_icon_picker();
                     cx.notify();
                     return;
                 }
@@ -469,10 +368,7 @@ impl NyaTermApp {
                     cx.notify();
                     return;
                 }
-                if self
-                    .connection_state
-                    .editor_new_group_name_focused_in_group_menu()
-                {
+                if self.connection_state.editor_new_group_field_is_focused(cx) {
                     self.commit_connection_editor_new_group(cx);
                     return;
                 }

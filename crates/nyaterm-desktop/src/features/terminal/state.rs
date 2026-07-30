@@ -18,8 +18,8 @@ use super::terminal_surface_entity::TerminalSurface;
 use super::window_state::TerminalWindowState;
 use crate::models::{
     ActionLinkMenuState, ActionLinkTooltipState, MultiLinePasteDraft, RecordingHistorySearchEvent,
-    RecordingHistorySearchKey, TerminalContextMenuState, TerminalFrameEvent, TerminalFramePipeline,
-    TerminalSearchMode, TerminalSelection, TerminalViewState, normalize_paste_newlines,
+    RecordingHistorySearchKey, TerminalFrameEvent, TerminalFramePipeline, TerminalSearchMode,
+    TerminalSelection, TerminalViewState, normalize_paste_newlines,
 };
 use crate::theme::ThemePalette;
 
@@ -119,7 +119,6 @@ pub(super) struct TerminalLayoutState {
 pub(super) struct TerminalMenuState {
     pub(super) actions_open: bool,
     pub(super) actions_focus: FocusHandle,
-    pub(super) context_menu: Option<TerminalContextMenuState>,
     pub(super) action_link_menu: Option<ActionLinkMenuState>,
     pub(super) action_link_tooltip: Option<ActionLinkTooltipState>,
     /// Pending action-link hover (Tauri 250ms delay before showing tooltip).
@@ -144,7 +143,6 @@ pub(in crate::features) struct TerminalPasteReviewView<'a> {
 pub(in crate::features) struct TerminalOverlayVisibility {
     pub paste_review: bool,
     pub actions: bool,
-    pub context_menu: bool,
     pub action_link_menu: bool,
     pub action_link_tooltip: bool,
 }
@@ -212,7 +210,6 @@ impl TerminalFeatureState {
             menus: TerminalMenuState {
                 actions_open: false,
                 actions_focus: focus.actions,
-                context_menu: None,
                 action_link_menu: None,
                 action_link_tooltip: None,
                 action_link_hover_pending: None,
@@ -260,7 +257,6 @@ impl TerminalFeatureState {
         TerminalOverlayVisibility {
             paste_review: self.paste.draft.is_some(),
             actions: self.menus.actions_open,
-            context_menu: self.menus.context_menu.is_some(),
             action_link_menu: self.menus.action_link_menu.is_some(),
             action_link_tooltip: self.menus.action_link_tooltip.is_some(),
         }
@@ -281,11 +277,9 @@ impl TerminalFeatureState {
     pub(in crate::features) fn clear_activation_interaction(&mut self) -> bool {
         let had_interaction = self.selection.selection.take().is_some()
             || self.selection.dragging
-            || self.menus.context_menu.is_some()
             || self.menus.action_link_menu.is_some()
             || self.menus.action_link_tooltip.is_some();
         self.selection.dragging = false;
-        self.menus.context_menu = None;
         self.menus.action_link_menu = None;
         self.menus.action_link_tooltip = None;
         self.menus.action_link_hover_pending = None;
@@ -578,7 +572,6 @@ mod tests {
         let overlays = state.overlay_visibility();
         assert!(overlays.paste_review);
         assert!(overlays.actions);
-        assert!(!overlays.context_menu);
         assert!(!state.buffer_search_is_open());
 
         state.set_search_mode(TerminalSearchMode::Buffer);

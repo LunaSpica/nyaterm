@@ -4,12 +4,11 @@ use gpui::{
 };
 use nyaterm_transport::RemoteDockerOverview;
 
-use crate::features::{NyaTermApp, gpui_code_font_family, modal_dialog_shell};
-use crate::models::{DockerConfirmState, DockerTab};
+use crate::features::{NyaTermApp, gpui_code_font_family};
+use crate::models::DockerTab;
 use crate::theme::ThemePalette;
-use crate::widgets::small_button;
 
-use super::{DockerLabels, DockerRenderContext};
+use super::DockerRenderContext;
 
 pub(in crate::features::pages::remote) struct DockerTabBarLabels {
     pub tabs: [String; 5],
@@ -304,57 +303,4 @@ fn docker_tab_menu_item(
         })
         .child(label)
         .when(!disabled, |this| this.on_click(on_click))
-}
-
-pub(in crate::features::pages::remote) fn docker_confirm_panel(
-    palette: ThemePalette,
-    dialog_bg: gpui::Rgba,
-    confirm: DockerConfirmState,
-    labels: DockerLabels,
-    cx: &mut Context<NyaTermApp>,
-) -> impl IntoElement {
-    let card = div()
-        .p_4()
-        .flex()
-        .flex_col()
-        .gap_3()
-        .child(
-            div()
-                .text_size(px(15.))
-                .font_weight(FontWeight(800.))
-                .text_color(rgb(0xfda4af))
-                .child(confirm.title),
-        )
-        .child(
-            div()
-                .font_family(gpui_code_font_family())
-                .text_xs()
-                .line_height(px(17.))
-                .text_color(rgb(0xfecdd3))
-                .child(confirm.detail),
-        )
-        .child(
-            div()
-                .pt_2()
-                .flex()
-                .justify_end()
-                .gap_2()
-                .child(small_button(
-                    palette,
-                    "docker-confirm-cancel",
-                    labels.cancel,
-                    cx.listener(|this, _, _, cx| {
-                        this.cancel_docker_confirm(cx);
-                    }),
-                ))
-                .child(small_button(
-                    palette,
-                    "docker-confirm-run",
-                    labels.confirm,
-                    cx.listener(|this, _, window, cx| {
-                        this.confirm_docker_action(window, cx);
-                    }),
-                )),
-        );
-    modal_dialog_shell(palette, dialog_bg, "docker-confirm-modal", 420., card)
 }

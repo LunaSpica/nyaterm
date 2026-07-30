@@ -7,7 +7,7 @@ use nyaterm_core::{
 };
 
 use crate::features::NyaTermApp;
-pub(in crate::features) use crate::theme::{ThemePalette, theme_palette};
+pub(in crate::features) use crate::theme::{ThemePalette, apply_component_theme, theme_palette};
 
 const TERMINAL_FONT_SIZE_MIN: i16 = 8;
 const TERMINAL_FONT_SIZE_MAX: i16 = 72;
@@ -16,6 +16,10 @@ impl NyaTermApp {
     pub(in crate::features) fn apply_gpui_settings(&mut self, settings: AppSettingsSummary) {
         self.settings.replace_summary(settings);
         self.invalidate_paint_theme_caches();
+    }
+
+    pub(in crate::features) fn sync_component_theme(&self, cx: &mut App) {
+        apply_component_theme(self.theme_palette(), cx);
     }
 
     pub(in crate::features) fn gpui_terminal_font_family(&self) -> String {
@@ -236,6 +240,7 @@ impl NyaTermApp {
             theme
         };
         self.settings.set_appearance_theme(theme.to_string());
+        self.sync_component_theme(cx);
         self.save_appearance_settings(cx);
     }
 
@@ -286,11 +291,7 @@ impl NyaTermApp {
         self.save_appearance_settings(cx);
     }
 
-    pub(in crate::features) fn set_cursor_style(
-        &mut self,
-        style: &'static str,
-        cx: &mut Context<Self>,
-    ) {
+    pub(in crate::features) fn set_cursor_style(&mut self, style: &str, cx: &mut Context<Self>) {
         let normalized = match style {
             "underline" | "bar" => style,
             _ => "block",
@@ -334,7 +335,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn set_minimum_contrast_ratio(
         &mut self,
-        ratio: &'static str,
+        ratio: &str,
         cx: &mut Context<Self>,
     ) {
         let ratio = match ratio {
@@ -375,7 +376,6 @@ impl NyaTermApp {
             return;
         };
         *font = family;
-        self.settings.close_appearance_menu();
         self.save_appearance_font_stack(terminal, fonts, cx);
     }
 
@@ -422,7 +422,6 @@ impl NyaTermApp {
         if fonts.is_empty() {
             fonts.push(fallback.to_string());
         }
-        self.settings.close_appearance_menu();
         self.save_appearance_font_stack(terminal, fonts, cx);
     }
 
@@ -526,14 +525,13 @@ impl NyaTermApp {
 
     pub(in crate::features) fn clear_background_image(&mut self, cx: &mut Context<Self>) {
         self.settings.clear_background_image();
-        self.settings.close_appearance_menu();
         self.save_appearance_settings(cx);
         self.shell.set_status("wallpaper cleared".to_string());
     }
 
     pub(in crate::features) fn set_background_image_fit(
         &mut self,
-        fit: &'static str,
+        fit: &str,
         cx: &mut Context<Self>,
     ) {
         let normalized = match fit {

@@ -1,23 +1,21 @@
 use std::collections::HashSet;
 
-use gpui::WindowHandle;
+use nyaterm_ui::NyaWindowHandle;
 
-use super::super::connection_runtime::{ConnectionEditorToggle, ConnectionEditorWindow};
+use super::super::connection_runtime::ConnectionEditorToggle;
 use crate::models::{
-    ConnectionEditorAdvancedTab, ConnectionEditorField, ConnectionEditorMenu,
-    ConnectionEditorPasswordSource, ConnectionEditorState, ConnectionEditorTelnetTab,
+    ConnectionEditorAdvancedTab, ConnectionEditorField, ConnectionEditorPasswordSource,
+    ConnectionEditorSelect, ConnectionEditorState, ConnectionEditorTelnetTab,
     ConnectionGroupEditorState, ConnectionKindTab,
 };
 
 pub(super) fn clear_connection_editor_runtime_state(
     draft: &mut Option<ConnectionEditorState>,
     icon_picker_open: &mut bool,
-    menu: &mut Option<ConnectionEditorMenu>,
-    window: &mut Option<WindowHandle<ConnectionEditorWindow>>,
+    window: &mut Option<NyaWindowHandle>,
     window_open_pending: &mut bool,
 ) {
     *icon_picker_open = false;
-    *menu = None;
     *draft = None;
     *window = None;
     *window_open_pending = false;
@@ -56,16 +54,6 @@ pub(super) fn connection_editor_window_open_or_pending(
     has_window || window_open_pending
 }
 
-pub(super) fn clear_connection_editor_group_menu_draft(draft: &mut Option<ConnectionEditorState>) {
-    let Some(editor) = draft.as_mut() else {
-        return;
-    };
-    editor.new_group_name.clear();
-    if editor.focused_field == ConnectionEditorField::NewGroupName {
-        editor.focused_field = ConnectionEditorField::Name;
-    }
-}
-
 pub(super) fn set_connection_editor_icon(
     draft: &mut Option<ConnectionEditorState>,
     icon: Option<&str>,
@@ -98,59 +86,59 @@ pub(super) fn set_connection_editor_icon_auto_detect(
     true
 }
 
-pub(super) fn set_connection_editor_menu_value(
+pub(super) fn set_connection_editor_select_value(
     draft: &mut Option<ConnectionEditorState>,
-    menu: ConnectionEditorMenu,
+    select: ConnectionEditorSelect,
     value: Option<String>,
 ) -> bool {
     let Some(editor) = draft.as_mut() else {
         return false;
     };
-    match menu {
-        ConnectionEditorMenu::Authentication => {
+    match select {
+        ConnectionEditorSelect::Authentication => {
             editor.auth_mode = value.unwrap_or_else(|| "password".to_string());
             if editor.auth_mode == "none" {
                 clear_connection_editor_password_secret(editor);
                 editor.key_id = None;
             }
         }
-        ConnectionEditorMenu::Group => {
+        ConnectionEditorSelect::Group => {
             editor.group_id = value;
             editor.new_group_name.clear();
             editor.pending_group_name = None;
             editor.pending_group_parent_id = None;
             editor.focused_field = ConnectionEditorField::Name;
         }
-        ConnectionEditorMenu::SavedPassword => editor.password_id = value,
-        ConnectionEditorMenu::SshKey => editor.key_id = value,
-        ConnectionEditorMenu::Otp => {
+        ConnectionEditorSelect::SavedPassword => editor.password_id = value,
+        ConnectionEditorSelect::SshKey => editor.key_id = value,
+        ConnectionEditorSelect::Otp => {
             editor.otp_id = value;
             if editor.otp_id.is_none() {
                 editor.auto_fill_otp = false;
             }
         }
-        ConnectionEditorMenu::Proxy => editor.proxy_id = value,
-        ConnectionEditorMenu::ProxyJump => editor.proxy_jump_id = value,
-        ConnectionEditorMenu::Backspace => {
+        ConnectionEditorSelect::Proxy => editor.proxy_id = value,
+        ConnectionEditorSelect::ProxyJump => editor.proxy_jump_id = value,
+        ConnectionEditorSelect::Backspace => {
             editor.backspace_mode = value.unwrap_or_else(|| "del".to_string());
         }
-        ConnectionEditorMenu::TelnetEnterMode => {
+        ConnectionEditorSelect::TelnetEnterMode => {
             editor.telnet_enter_mode = value.unwrap_or_else(|| "cr".to_string());
         }
-        ConnectionEditorMenu::Shell => {
+        ConnectionEditorSelect::Shell => {
             editor.shell_path = value.unwrap_or_else(|| "powershell.exe".to_string());
         }
-        ConnectionEditorMenu::SerialPort => editor.serial_port = value.unwrap_or_default(),
-        ConnectionEditorMenu::BaudRate => {
+        ConnectionEditorSelect::SerialPort => editor.serial_port = value.unwrap_or_default(),
+        ConnectionEditorSelect::BaudRate => {
             editor.baud_rate = value.unwrap_or_else(|| "115200".to_string());
         }
-        ConnectionEditorMenu::DataBits => {
+        ConnectionEditorSelect::DataBits => {
             editor.data_bits = value.unwrap_or_else(|| "8".to_string());
         }
-        ConnectionEditorMenu::Parity => {
+        ConnectionEditorSelect::Parity => {
             editor.parity = value.unwrap_or_else(|| "none".to_string());
         }
-        ConnectionEditorMenu::StopBits => {
+        ConnectionEditorSelect::StopBits => {
             editor.stop_bits = value.unwrap_or_else(|| "1".to_string());
         }
     }
@@ -450,31 +438,6 @@ pub(super) fn apply_connection_editor_working_dir(
     editor.working_dir = working_dir;
     editor.error = None;
     true
-}
-
-pub(super) fn apply_connection_group_editor_name_key(
-    draft: &mut Option<ConnectionGroupEditorState>,
-    key: &str,
-    input: Option<&str>,
-) -> bool {
-    let Some(editor) = draft.as_mut() else {
-        return false;
-    };
-    match key {
-        "backspace" => {
-            editor.name.pop();
-            editor.error = None;
-            true
-        }
-        _ => {
-            let Some(input) = input.filter(|input| !input.is_empty()) else {
-                return false;
-            };
-            editor.name.push_str(input);
-            editor.error = None;
-            true
-        }
-    }
 }
 
 pub(super) fn set_connection_group_editor_error(

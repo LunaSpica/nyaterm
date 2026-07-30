@@ -1,14 +1,15 @@
 //! A registry of real text inputs, keyed by an id the caller picks.
 //!
-//! Ordinary form, prompt and search inputs use [`TextField`] entities instead
-//! of label divs with hand-written character handling. Full editing surfaces
-//! such as the terminal, paste review and remote file editor keep their own
-//! input handlers because their selection and command semantics are different.
+//! Ordinary form, prompt and search inputs use [`NyaInputState`] entities
+//! backed by `gpui-component`. Full editing surfaces such as the terminal,
+//! paste review and remote file editor keep their own input handlers because
+//! their selection and command semantics are different.
 //!
-//! The connection editor owns one [`TextField`] entity per field. For smaller
-//! panels, the fields live here instead, keyed by a string id and created the
-//! first time a panel renders one. A panel needs no state of its own beyond the
-//! value it already keeps, and edits arrive as one event with the id attached.
+//! The connection editor owns dedicated [`NyaInputState`] entities for fields
+//! with custom focus choreography. For smaller panels, the fields live here
+//! instead, keyed by a string id and created the first time a panel renders one.
+//! A panel needs no state of its own beyond the value it already keeps, and
+//! edits arrive as one event with the id attached.
 
 use std::collections::HashMap;
 
@@ -17,7 +18,7 @@ use gpui::{
     ParentElement as _, SharedString, Styled as _, Subscription, div, prelude::FluentBuilder as _,
     px, rgb,
 };
-use nyaterm_ui::{TextField, TextFieldEvent};
+use nyaterm_ui::{NyaInput, NyaInputEvent, NyaInputState};
 
 use super::NyaTermApp;
 
@@ -70,7 +71,7 @@ pub(in crate::features) fn secret_input_setup(secret: bool) -> TextInputSetup {
 
 #[derive(Default)]
 pub(in crate::features) struct TextInputRegistry {
-    fields: HashMap<SharedString, Entity<TextField>>,
+    fields: HashMap<SharedString, Entity<NyaInputState>>,
     /// Kept alive alongside its field, so edits keep arriving.
     subscriptions: HashMap<SharedString, Subscription>,
 }
@@ -88,23 +89,31 @@ impl NyaTermApp {
         seed: &str,
         setup: TextInputSetup,
         cx: &mut Context<Self>,
-    ) -> Entity<TextField> {
+    ) -> Entity<NyaInputState> {
         let id = id.into();
         if let Some(field) = self.text_inputs.fields.get(&id) {
             return field.clone();
         }
 
         let entity = cx.new(|cx| {
-            TextField::new(cx, seed)
-                .placeholder(setup.placeholder)
-                .masked(setup.masked)
-                .multi_line(setup.multi_line)
+            let input = NyaInputState::new(cx, seed.to_string()).placeholder(setup.placeholder);
+            let input = if setup.multi_line {
+                input.multi_line(Some(4))
+            } else {
+                input
+            };
+            input.masked(setup.masked)
         });
         let subscription_id = id.clone();
-        let subscription = cx.subscribe(&entity, move |app: &mut NyaTermApp, _, event, cx| {
-            let TextFieldEvent::Changed(text) = event;
-            app.on_text_input_changed(subscription_id.clone(), text.clone(), cx);
-        });
+        let subscription =
+            cx.subscribe(
+                &entity,
+                move |app: &mut NyaTermApp, _, event, cx| match event {
+                    NyaInputEvent::Changed(text) | NyaInputEvent::Submitted(text) => {
+                        app.on_text_input_changed(subscription_id.clone(), text.clone(), cx);
+                    }
+                },
+            );
         self.text_inputs.fields.insert(id.clone(), entity.clone());
         self.text_inputs.subscriptions.insert(id, subscription);
         entity
@@ -159,7 +168,7 @@ impl NyaTermApp {
                     .flex_1()
                     .text_xs()
                     .text_color(rgb(palette.text))
-                    .child(field),
+                    .child(NyaInput::new(&field)),
             )
     }
 

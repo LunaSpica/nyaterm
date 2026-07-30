@@ -39,8 +39,6 @@ pub(in crate::features) struct AiFeatureState {
 /// Focus handles the AI feature needs at construction time.
 pub(in crate::features) struct AiFeatureFocus {
     pub chat: FocusHandle,
-    pub clear_history_confirm: FocusHandle,
-    pub auto_execution_confirm: FocusHandle,
     pub action: FocusHandle,
     pub manual_model: FocusHandle,
     pub credential: FocusHandle,
@@ -110,8 +108,6 @@ struct AiHistoryState {
     audit_count: usize,
     usage_count_job_id: u64,
     audit_write_lock: Arc<Mutex<()>>,
-    clear_confirm_open: bool,
-    clear_confirm_focus: FocusHandle,
 }
 
 /// Model discovery job and the model picker it feeds.
@@ -133,8 +129,6 @@ struct AiAgentState {
     steps: Vec<AiAgentStepView>,
     thought_expanded: HashSet<u16>,
     output_expanded: HashSet<u16>,
-    auto_execution_confirm_open: bool,
-    auto_execution_confirm_focus: FocusHandle,
 }
 
 pub(in crate::features) struct AiChatLaunch {
@@ -243,8 +237,6 @@ impl AiFeatureState {
                 audit_count,
                 usage_count_job_id: 0,
                 audit_write_lock: Arc::new(Mutex::new(())),
-                clear_confirm_open: false,
-                clear_confirm_focus: focus.clear_history_confirm,
             },
             discovery: AiDiscoveryState {
                 tx: discovery_tx,
@@ -262,8 +254,6 @@ impl AiFeatureState {
                 steps: Vec::new(),
                 thought_expanded: HashSet::new(),
                 output_expanded: HashSet::new(),
-                auto_execution_confirm_open: false,
-                auto_execution_confirm_focus: focus.auto_execution_confirm,
             },
             panel: AiPanelState {
                 execution_menu_open: false,
@@ -945,34 +935,17 @@ impl AiFeatureState {
         self.history.pending
     }
 
-    pub(in crate::features) fn history_clear_confirm_is_open(&self) -> bool {
-        self.history.clear_confirm_open
-    }
-
-    pub(in crate::features) fn history_clear_confirm_focus(&self) -> &FocusHandle {
-        &self.history.clear_confirm_focus
-    }
-
-    pub(in crate::features) fn request_history_clear_confirm(&mut self) -> Option<FocusHandle> {
+    pub(in crate::features) fn request_history_clear_confirm(&mut self) -> bool {
         if self.history.sessions.is_empty() {
-            return None;
+            return false;
         }
-        self.history.clear_confirm_open = true;
         self.chat.message_menu = None;
         self.discovery.menu_open = false;
         self.panel.execution_menu_open = false;
-        Some(self.history.clear_confirm_focus.clone())
-    }
-
-    pub(in crate::features) fn cancel_history_clear_confirm(&mut self) {
-        self.history.cancel_clear_confirm();
+        true
     }
 
     pub(in crate::features) fn confirm_history_clear(&mut self) -> bool {
-        if !self.history.clear_confirm_open {
-            return false;
-        }
-        self.history.clear_confirm_open = false;
         self.history.open = false;
         true
     }
@@ -1544,29 +1517,11 @@ impl AiFeatureState {
         self.agent.output_expanded.contains(&step_index)
     }
 
-    pub(in crate::features) fn agent_auto_confirm_is_open(&self) -> bool {
-        self.agent.auto_execution_confirm_open
-    }
-
-    pub(in crate::features) fn agent_auto_confirm_focus(&self) -> &FocusHandle {
-        &self.agent.auto_execution_confirm_focus
-    }
-
-    pub(in crate::features) fn request_agent_auto_confirm(&mut self) -> FocusHandle {
+    pub(in crate::features) fn request_agent_auto_confirm(&mut self) {
         self.close_transient_menus();
-        self.agent.auto_execution_confirm_open = true;
-        self.agent.auto_execution_confirm_focus.clone()
-    }
-
-    pub(in crate::features) fn cancel_agent_auto_confirm(&mut self) {
-        self.agent.cancel_auto_execution_confirm();
     }
 
     pub(in crate::features) fn confirm_agent_auto_execution(&mut self) -> bool {
-        if !self.agent.auto_execution_confirm_open {
-            return false;
-        }
-        self.agent.auto_execution_confirm_open = false;
         self.settings.config.agent_command_execution_mode = AgentCommandExecutionMode::Auto;
         self.panel.status = "Agent execution mode: auto".to_string();
         true
@@ -1713,18 +1668,6 @@ impl AiChatState {
         self.mention_open = false;
         self.mention_query.clear();
         self.mention_index = 0;
-    }
-}
-
-impl AiHistoryState {
-    fn cancel_clear_confirm(&mut self) {
-        self.clear_confirm_open = false;
-    }
-}
-
-impl AiAgentState {
-    fn cancel_auto_execution_confirm(&mut self) {
-        self.auto_execution_confirm_open = false;
     }
 }
 

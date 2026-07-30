@@ -5,8 +5,9 @@ use gpui::{
 };
 
 use super::super::{send_command_hex_byte_count, send_command_hex_guide_rows};
-use crate::features::{ChromeTooltip, NyaTermApp, TextInputSetup};
+use crate::features::{NyaTermApp, TextInputSetup};
 use crate::send_command::{SendCommandDataType, format_send_command_hex_display};
+use nyaterm_ui::NyaTooltip;
 
 impl NyaTermApp {
     pub(super) fn send_command_bar_editor(
@@ -371,7 +372,7 @@ fn send_command_floating_action_button(
                 })
                 .text_color(rgb(0xffffff)),
         )
-        .tooltip(move |_, cx| cx.new(|_| ChromeTooltip::new(tooltip)).into())
+        .tooltip(move |window, cx| NyaTooltip::new(tooltip).build(window, cx))
         .when(!disabled, |this| {
             this.cursor_pointer()
                 .hover(move |this| {

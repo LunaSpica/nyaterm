@@ -7,16 +7,16 @@
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 
-use gpui::{Pixels, ScrollHandle, WindowHandle};
+use gpui::{Pixels, ScrollHandle};
+use nyaterm_ui::NyaWindowHandle;
 
 use super::super::app_state::SettingsDraftSnapshot;
-use super::super::settings::SettingsWindow;
 use super::runtime_state::ShellRuntimeState;
 use crate::models::{
     ActivityBarContextMenuState, ActivityBarLayoutState, BottomPanelMode, BottomPanelResizeState,
     HeaderStatusState, MainMode, NavItem, PanelResizeSide, PanelResizeState, PanelSide,
-    PanelStackResizeState, RightFocus, SettingsTab, TitleMenu, TitleMenuSubmenu, WorkspacePaneNode,
-    WorkspaceSplitResizeState, WorkspaceSplitState,
+    PanelStackResizeState, RightFocus, SettingsTab, WorkspacePaneNode, WorkspaceSplitResizeState,
+    WorkspaceSplitState,
 };
 
 pub(in crate::features) struct ShellFeatureState {
@@ -82,7 +82,7 @@ pub(super) struct ShellSettingsNavigationState {
     pub(super) active_tab: SettingsTab,
     pub(super) expanded_groups: HashSet<String>,
     pub(super) draft_snapshot: Option<SettingsDraftSnapshot>,
-    pub(super) window: Option<WindowHandle<SettingsWindow>>,
+    pub(super) window: Option<NyaWindowHandle>,
     pub(super) window_open_pending: bool,
     pub(super) previous_left_collapsed: Option<bool>,
     pub(super) previous_right_collapsed: Option<bool>,
@@ -112,8 +112,6 @@ pub(super) struct ShellChromeState {
     pub(super) about_open: bool,
     pub(super) activity_bar_layout: ActivityBarLayoutState,
     pub(super) activity_bar_context_menu: Option<ActivityBarContextMenuState>,
-    pub(super) title_menu_open: Option<TitleMenu>,
-    pub(super) title_menu_submenu: Option<TitleMenuSubmenu>,
     pub(super) header_status: HeaderStatusState,
     pub(super) open_tabs_menu_open: bool,
     pub(super) new_session_menu_open: bool,
@@ -186,8 +184,6 @@ impl ShellFeatureState {
                 about_open: false,
                 activity_bar_layout: init.activity_bar_layout,
                 activity_bar_context_menu: None,
-                title_menu_open: None,
-                title_menu_submenu: None,
                 header_status: HeaderStatusState::default(),
                 open_tabs_menu_open: false,
                 new_session_menu_open: false,
@@ -325,7 +321,7 @@ impl ShellFeatureState {
         self.navigation.settings.draft_snapshot.take().is_some()
     }
 
-    pub(in crate::features) fn settings_window(&self) -> Option<WindowHandle<SettingsWindow>> {
+    pub(in crate::features) fn settings_window(&self) -> Option<NyaWindowHandle> {
         self.navigation.settings.window
     }
 
@@ -342,10 +338,7 @@ impl ShellFeatureState {
         true
     }
 
-    pub(in crate::features) fn complete_settings_window_open(
-        &mut self,
-        handle: WindowHandle<SettingsWindow>,
-    ) {
+    pub(in crate::features) fn complete_settings_window_open(&mut self, handle: NyaWindowHandle) {
         self.navigation.settings.window = Some(handle);
         self.navigation.settings.window_open_pending = false;
         self.navigation.settings.previous_left_collapsed = None;
@@ -359,7 +352,7 @@ impl ShellFeatureState {
 
     pub(in crate::features) fn clear_settings_window_if(
         &mut self,
-        handle: WindowHandle<SettingsWindow>,
+        handle: NyaWindowHandle,
     ) -> bool {
         if self.navigation.settings.window != Some(handle) {
             return false;
@@ -476,82 +469,14 @@ impl ShellFeatureState {
         self.chrome.activity_bar_context_menu.as_ref()
     }
 
-    pub(in crate::features) fn title_menu(&self) -> Option<TitleMenu> {
-        self.chrome.title_menu_open
-    }
-
-    pub(in crate::features) fn title_submenu(&self) -> Option<TitleMenuSubmenu> {
-        self.chrome.title_menu_submenu
-    }
-
-    pub(in crate::features) fn toggle_title_menu(&mut self, menu: TitleMenu) {
-        self.chrome.title_menu_open = if self.chrome.title_menu_open == Some(menu) {
-            None
-        } else {
-            Some(menu)
-        };
-        self.chrome.title_menu_submenu = None;
-        if self.chrome.title_menu_open.is_some() {
-            self.chrome.header_status.menu_open = false;
-            self.chrome.open_tabs_menu_open = false;
-            self.chrome.close_new_session_menu();
-        }
-    }
-
-    pub(in crate::features) fn close_title_menu(&mut self) -> bool {
-        self.chrome.title_menu_submenu = None;
-        self.chrome.title_menu_open.take().is_some()
-    }
-
-    pub(in crate::features) fn open_title_submenu(&mut self, submenu: TitleMenuSubmenu) -> bool {
-        if self.chrome.title_menu_submenu == Some(submenu) {
-            return false;
-        }
-        self.chrome.title_menu_submenu = Some(submenu);
-        true
-    }
-
-    pub(in crate::features) fn toggle_title_submenu(&mut self, submenu: TitleMenuSubmenu) {
-        self.chrome.title_menu_submenu = if self.chrome.title_menu_submenu == Some(submenu) {
-            None
-        } else {
-            Some(submenu)
-        };
-    }
-
-    pub(in crate::features) fn close_title_menus(&mut self) -> bool {
-        self.chrome.title_menu_open.take().is_some()
-            | self.chrome.title_menu_submenu.take().is_some()
-    }
-
     pub(in crate::features) fn close_root_menus(&mut self) -> bool {
-        let mut changed = self.close_title_menus();
-        changed |= std::mem::take(&mut self.chrome.header_status.menu_open);
-        changed |= self.chrome.close_open_tabs_menu();
+        let mut changed = self.chrome.close_open_tabs_menu();
         changed |= self.chrome.close_new_session_menu();
         changed
     }
 
-    pub(in crate::features) fn header_status_menu_is_open(&self) -> bool {
-        self.chrome.header_status.menu_open
-    }
-
     pub(in crate::features) fn header_status_rendered_minute(&self) -> i64 {
         self.chrome.header_status.rendered_minute
-    }
-
-    pub(in crate::features) fn toggle_header_status_menu(&mut self) {
-        self.chrome.header_status.menu_open = !self.chrome.header_status.menu_open;
-        if self.chrome.header_status.menu_open {
-            self.chrome.title_menu_open = None;
-            self.chrome.title_menu_submenu = None;
-            self.chrome.open_tabs_menu_open = false;
-            self.chrome.close_new_session_menu();
-        }
-    }
-
-    pub(in crate::features) fn close_header_status_menu(&mut self) {
-        self.chrome.header_status.menu_open = false;
     }
 
     pub(in crate::features) fn set_header_status_rendered_minute(&mut self, minute: i64) {
@@ -900,7 +825,6 @@ impl ShellChromeState {
         self.open_tabs_menu_open = !self.open_tabs_menu_open;
         if self.open_tabs_menu_open {
             self.close_new_session_menu();
-            self.title_menu_open = None;
         }
     }
 
@@ -912,7 +836,6 @@ impl ShellChromeState {
         self.new_session_menu_open = !self.new_session_menu_open;
         if self.new_session_menu_open {
             self.open_tabs_menu_open = false;
-            self.title_menu_open = None;
         }
         self.new_session_all_sessions_open = false;
         self.new_session_group_menu_path.clear();
@@ -969,7 +892,7 @@ mod tests {
     use super::{ShellFeatureInit, ShellFeatureState};
     use crate::models::{
         ActivityBarLayoutState, BottomPanelMode, MainMode, NavItem, PanelResizeSide, PanelSide,
-        TitleMenu, TitleMenuSubmenu, WorkspacePaneNode, WorkspaceSplitDirection,
+        WorkspacePaneNode, WorkspaceSplitDirection,
     };
 
     fn shell(mode: BottomPanelMode) -> ShellFeatureState {
@@ -1086,9 +1009,6 @@ mod tests {
     #[test]
     fn root_menu_close_clears_every_owned_menu_branch() {
         let mut shell = shell(BottomPanelMode::Hidden);
-        shell.chrome.title_menu_open = Some(TitleMenu::View);
-        shell.chrome.title_menu_submenu = Some(TitleMenuSubmenu::Theme);
-        shell.chrome.header_status.menu_open = true;
         shell.chrome.open_tabs_menu_open = true;
         shell.chrome.new_session_menu_open = true;
         shell.chrome.new_session_all_sessions_open = true;
@@ -1098,9 +1018,6 @@ mod tests {
             .push("group".to_string());
 
         assert!(shell.close_root_menus());
-        assert_eq!(shell.title_menu(), None);
-        assert_eq!(shell.title_submenu(), None);
-        assert!(!shell.header_status_menu_is_open());
         assert!(!shell.open_tabs_menu_is_open());
         assert!(!shell.new_session_menu_is_open());
         assert!(!shell.new_session_all_sessions_is_open());

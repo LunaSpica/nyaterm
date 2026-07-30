@@ -12,16 +12,14 @@ use gpui::FocusHandle;
 use nyaterm_core::{OtpEntry, SavedCredential, SavedPassword, SshKey};
 
 use crate::models::{
-    SecurityAuthTab, SecurityCredentialEditorState, SecurityDeleteConfirmState,
-    SecurityKeyEditorState, SecurityOtpEditorState, SecurityPasswordEditorState,
-    SecurityUnlockAction,
+    SecurityAuthTab, SecurityCredentialEditorState, SecurityKeyEditorState, SecurityOtpEditorState,
+    SecurityPasswordEditorState, SecurityUnlockAction,
 };
 
 pub(in crate::features) struct SecurityFeatureState {
     catalog: SecurityCatalogState,
     auth_tab: SecurityAuthTab,
     editors: SecurityEditorState,
-    delete_confirm: Option<SecurityDeleteConfirmState>,
     revealed: SecurityRevealedState,
     status: String,
     unlock: SecurityUnlockState,
@@ -129,7 +127,6 @@ impl SecurityFeatureState {
                 credential: None,
                 credential_focus: focus.credential_editor,
             },
-            delete_confirm: None,
             revealed: SecurityRevealedState {
                 otp_codes: HashMap::new(),
                 passwords: HashMap::new(),
@@ -454,7 +451,6 @@ impl SecurityFeatureState {
     ) {
         self.clear_editors();
         self.editors.key = Some(editor);
-        self.delete_confirm = None;
         self.status = status;
     }
 
@@ -465,7 +461,6 @@ impl SecurityFeatureState {
     ) {
         self.clear_editors();
         self.editors.otp = Some(editor);
-        self.delete_confirm = None;
         self.status = status;
     }
 
@@ -476,7 +471,6 @@ impl SecurityFeatureState {
     ) {
         self.clear_editors();
         self.editors.password = Some(editor);
-        self.delete_confirm = None;
         self.status = status;
     }
 
@@ -487,7 +481,6 @@ impl SecurityFeatureState {
     ) {
         self.clear_editors();
         self.editors.credential = Some(editor);
-        self.delete_confirm = None;
         self.status = status;
     }
 
@@ -522,14 +515,6 @@ impl SecurityFeatureState {
 
     pub(in crate::features) fn finish_otp_qr_import(&mut self) {
         self.editors.otp_qr_importing = false;
-    }
-
-    pub(in crate::features) fn delete_confirm(&self) -> Option<&SecurityDeleteConfirmState> {
-        self.delete_confirm.as_ref()
-    }
-
-    pub(in crate::features) fn request_delete(&mut self, confirm: SecurityDeleteConfirmState) {
-        self.delete_confirm = Some(confirm);
     }
 
     pub(in crate::features) fn apply_editor_input(&mut self, id: &str, text: String) -> bool {
@@ -630,10 +615,6 @@ impl SecurityFeatureState {
         }
     }
 
-    pub(in crate::features) fn cancel_delete(&mut self) {
-        self.delete_confirm = None;
-    }
-
     pub(in crate::features) fn close_unlock_prompt(&mut self) {
         self.unlock.prompt_open = false;
         self.unlock.draft.clear();
@@ -650,7 +631,6 @@ impl SecurityFeatureState {
         self.revealed.credentials.clear();
         self.editors.password = None;
         self.editors.credential = None;
-        self.delete_confirm = None;
         self.unlock.pending_action = None;
         self.close_unlock_prompt();
         self.unlock.master_required_prompt_open = false;
@@ -667,8 +647,8 @@ mod tests {
 
     use super::{SecurityCatalogState, SecurityFeatureFocus, SecurityFeatureState};
     use crate::models::{
-        SecurityAuthTab, SecurityDeleteConfirmState, SecurityKeyEditorField,
-        SecurityKeyEditorState, SecurityPasswordEditorState, SecurityUnlockAction,
+        SecurityKeyEditorField, SecurityKeyEditorState, SecurityPasswordEditorState,
+        SecurityUnlockAction,
     };
 
     fn security_state() -> SecurityFeatureState {
@@ -749,13 +729,8 @@ mod tests {
     }
 
     #[test]
-    fn opening_an_editor_replaces_the_previous_editor_and_delete_confirmation() {
+    fn opening_an_editor_replaces_the_previous_editor() {
         let mut security = security_state();
-        security.request_delete(SecurityDeleteConfirmState {
-            kind: SecurityAuthTab::Passwords,
-            id: "password-id".to_string(),
-            label: "password".to_string(),
-        });
 
         security.open_password_editor(
             SecurityPasswordEditorState {
@@ -769,7 +744,6 @@ mod tests {
             "password editor opened".to_string(),
         );
         assert!(security.password_editor().is_some());
-        assert!(security.delete_confirm().is_none());
 
         security.open_key_editor(
             SecurityKeyEditorState {

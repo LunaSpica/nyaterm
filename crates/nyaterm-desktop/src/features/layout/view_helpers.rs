@@ -92,10 +92,7 @@ pub(super) fn session_action_svg_button(
                     this.group_hover(id, move |this| this.text_color(rgb(palette.text)))
                 }),
         )
-        .tooltip(move |_, cx| {
-            cx.new(|_| crate::features::ChromeTooltip::new(tooltip.clone()))
-                .into()
-        })
+        .tooltip(move |window, cx| nyaterm_ui::NyaTooltip::new(tooltip.clone()).build(window, cx))
         .on_click(move |event, window, cx| {
             if enabled {
                 on_click(event, window, cx);

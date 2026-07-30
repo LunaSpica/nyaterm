@@ -6,16 +6,17 @@ mod telnet;
 use std::collections::{HashMap, HashSet};
 
 use gpui::{
-    AnyElement, App, Context, FontWeight, IntoElement, KeyDownEvent, SharedString, div,
+    AnyElement, App, Context, Entity, FontWeight, IntoElement, KeyDownEvent, SharedString, div,
     prelude::{
         FluentBuilder, InteractiveElement, ParentElement, StatefulInteractiveElement, Styled,
     },
     px, rgb, rgba,
 };
 use nyaterm_core::{ConnectionType, Group, SavedConnection, natural_compare, truncate_preview};
+use nyaterm_ui::{NyaSelectOption, NyaSelectState};
 
 use self::local::connection_editor_local_section;
-use self::serial::{SerialConnectionSectionOptions, connection_editor_serial_section};
+use self::serial::connection_editor_serial_section;
 use self::ssh::{
     SshConnectionSectionLabels, SshConnectionSectionOptions, connection_editor_ssh_section,
 };
@@ -24,19 +25,19 @@ use super::super::list::{
     ConnectionEditorChoice, ConnectionEditorFields, ConnectionEditorRenderContext,
     ConnectionGroupChoice, connection_editor_group_select, connection_kind_tab, editor_field,
 };
+use crate::features::selects::NO_SELECTION_VALUE;
 use crate::features::{
     CONNECTION_ICON_OPTIONS, DEFAULT_CONNECTION_ICON, NyaTermApp, modal_dialog_shell,
     resolve_connection_icon, themed_icon,
 };
 use crate::models::{
-    ConnectionEditorField, ConnectionEditorMenu, ConnectionEditorState, ConnectionKindTab,
+    ConnectionEditorField, ConnectionEditorSelect, ConnectionEditorState, ConnectionKindTab,
 };
 
 #[derive(Clone, Copy)]
 struct ConnectionEditorSectionContext<'a> {
     palette: crate::theme::ThemePalette,
     editor: &'a ConnectionEditorState,
-    active_menu: Option<ConnectionEditorMenu>,
     language: &'a str,
     fields: &'a ConnectionEditorFields,
 }
@@ -58,6 +59,74 @@ impl NyaTermApp {
         self.connection_editor_surface(editor, true, cx)
     }
 
+    fn connection_editor_select_entity(
+        &mut self,
+        select_key: ConnectionEditorSelect,
+        choices: &[ConnectionEditorChoice],
+        placeholder: impl Into<SharedString>,
+        cx: &mut Context<Self>,
+    ) -> Entity<NyaSelectState> {
+        let options = choices
+            .iter()
+            .map(|choice| {
+                NyaSelectOption::new(
+                    choice
+                        .value
+                        .clone()
+                        .unwrap_or_else(|| NO_SELECTION_VALUE.to_string()),
+                    choice.label.clone(),
+                )
+            })
+            .collect::<Vec<_>>();
+        let selected_value = choices.iter().find(|choice| choice.selected).map(|choice| {
+            choice
+                .value
+                .clone()
+                .unwrap_or_else(|| NO_SELECTION_VALUE.to_string())
+        });
+        let select = self.select_entity(
+            connection_editor_select_id(select_key),
+            options,
+            selected_value,
+            false,
+            cx,
+        );
+        select.update(cx, |select, cx| select.set_placeholder(placeholder, cx));
+        select
+    }
+
+    fn connection_editor_group_select_entity(
+        &mut self,
+        choices: &[ConnectionGroupChoice],
+        cx: &mut Context<Self>,
+    ) -> Entity<NyaSelectState> {
+        let options = choices
+            .iter()
+            .map(|choice| {
+                NyaSelectOption::new(
+                    choice
+                        .value
+                        .clone()
+                        .unwrap_or_else(|| NO_SELECTION_VALUE.to_string()),
+                    format!("{}{}", "  ".repeat(choice.depth), choice.label),
+                )
+            })
+            .collect::<Vec<_>>();
+        let selected_value = choices.iter().find(|choice| choice.selected).map(|choice| {
+            choice
+                .value
+                .clone()
+                .unwrap_or_else(|| NO_SELECTION_VALUE.to_string())
+        });
+        self.select_entity(
+            "connection-editor-group-select",
+            options,
+            selected_value,
+            false,
+            cx,
+        )
+    }
+
     fn connection_editor_surface(
         &mut self,
         editor: ConnectionEditorState,
@@ -66,12 +135,6 @@ impl NyaTermApp {
     ) -> AnyElement {
         let palette = self.theme_palette();
         let language = self.settings.summary().language.clone();
-        let fields = ConnectionEditorFields::new(
-            self.connection_state.editor_fields().clone(),
-            self.connection_state.editor_menu_focus_handle(),
-            self.connection_state.editor_menu_scroll_handle(),
-            self.connection_state.editor_menu_highlight(),
-        );
         let title = if editor.id.is_some() {
             self.tr("dialog.editConnection")
         } else {
@@ -89,13 +152,6 @@ impl NyaTermApp {
         let icon_auto_detect_label = self.tr("dialog.iconAutoDetect");
         let icon_auto_detect_hint = self.tr("dialog.iconAutoDetectTooltip");
         let icon_auto_detect = editor.icon_auto_detect;
-        let group_label = editor.pending_group_name.clone().unwrap_or_else(|| {
-            editor
-                .group_id
-                .as_deref()
-                .and_then(|id| connection_group_path_label(self.connection_state.groups(), id))
-                .unwrap_or_else(|| none_label.to_string())
-        });
         let mut group_options = vec![ConnectionGroupChoice {
             value: None,
             label: none_label.to_string(),
@@ -320,6 +376,18 @@ impl NyaTermApp {
             },
         })
         .collect::<Vec<_>>();
+        let telnet_enter_options = [
+            ("crlf", "CRLF (\\r\\n)"),
+            ("cr", "CR (\\r)"),
+            ("lf", "LF (\\n)"),
+        ]
+        .into_iter()
+        .map(|(value, label)| ConnectionEditorChoice {
+            value: Some(value.to_string()),
+            label: label.to_string(),
+            selected: editor.telnet_enter_mode == value,
+        })
+        .collect::<Vec<_>>();
         let mut serial_port_options = Vec::new();
         if !editor.serial_port.is_empty()
             && !self
@@ -402,10 +470,88 @@ impl NyaTermApp {
             selected: editor.shell_path == value,
         })
         .collect::<Vec<_>>();
+        let mut selects = HashMap::new();
+        selects.insert(
+            ConnectionEditorSelect::Group,
+            self.connection_editor_group_select_entity(&group_options, cx),
+        );
+        for (select_key, choices, placeholder) in [
+            (
+                ConnectionEditorSelect::SavedPassword,
+                password_options.as_slice(),
+                password_label.clone(),
+            ),
+            (
+                ConnectionEditorSelect::SshKey,
+                key_options.as_slice(),
+                key_label.clone(),
+            ),
+            (
+                ConnectionEditorSelect::Otp,
+                otp_options.as_slice(),
+                otp_label.clone(),
+            ),
+            (
+                ConnectionEditorSelect::Proxy,
+                proxy_options.as_slice(),
+                proxy_label.clone(),
+            ),
+            (
+                ConnectionEditorSelect::ProxyJump,
+                jump_options.as_slice(),
+                jump_label.clone(),
+            ),
+            (
+                ConnectionEditorSelect::Backspace,
+                backspace_options.as_slice(),
+                String::new(),
+            ),
+            (
+                ConnectionEditorSelect::TelnetEnterMode,
+                telnet_enter_options.as_slice(),
+                "CR (\\r)".to_string(),
+            ),
+            (
+                ConnectionEditorSelect::Shell,
+                shell_options.as_slice(),
+                shell_label.to_string(),
+            ),
+            (
+                ConnectionEditorSelect::SerialPort,
+                serial_port_options.as_slice(),
+                self.tr("dialog.selectSerialPort").to_string(),
+            ),
+            (
+                ConnectionEditorSelect::BaudRate,
+                baud_options.as_slice(),
+                self.tr("dialog.customBaudRate").to_string(),
+            ),
+            (
+                ConnectionEditorSelect::DataBits,
+                data_bits_options.as_slice(),
+                String::new(),
+            ),
+            (
+                ConnectionEditorSelect::Parity,
+                parity_options.as_slice(),
+                String::new(),
+            ),
+            (
+                ConnectionEditorSelect::StopBits,
+                stop_bits_options.as_slice(),
+                String::new(),
+            ),
+        ] {
+            selects.insert(
+                select_key,
+                self.connection_editor_select_entity(select_key, choices, placeholder, cx),
+            );
+        }
+        let fields =
+            ConnectionEditorFields::new(self.connection_state.editor_fields().clone(), selects);
         let icon_key = editor.icon.as_deref();
         let icon_def = resolve_connection_icon(icon_key, editor.kind.label());
         let icon_picker_open = self.connection_state.editor_icon_picker_is_open();
-        let active_menu = self.connection_state.active_editor_menu();
         let icon_picker_bg = if native_window {
             rgb(palette.surface)
         } else {
@@ -417,7 +563,6 @@ impl NyaTermApp {
         let section_context = ConnectionEditorSectionContext {
             palette,
             editor: &editor,
-            active_menu,
             language: &language,
             fields: &fields,
         };
@@ -656,9 +801,6 @@ impl NyaTermApp {
                                         cx,
                                     },
                                     group_title,
-                                    group_label,
-                                    active_menu == Some(ConnectionEditorMenu::Group),
-                                    group_options,
                                     group_parent_hint,
                                 ),
                             )),
@@ -667,52 +809,22 @@ impl NyaTermApp {
                         this.child(connection_editor_ssh_section(
                             section_context,
                             SshConnectionSectionLabels {
-                                password: password_label.clone(),
-                                key: key_label.clone(),
                                 otp: otp_label.clone(),
                                 proxy: proxy_label.clone(),
                                 jump: jump_label.clone(),
                             },
-                            SshConnectionSectionOptions {
-                                auth: auth_options,
-                                passwords: password_options,
-                                keys: key_options,
-                                otp: otp_options,
-                                proxies: proxy_options,
-                                jumps: jump_options,
-                                backspace: backspace_options.clone(),
-                            },
+                            SshConnectionSectionOptions { auth: auth_options },
                             cx,
                         ))
                     })
                     .when(editor.kind == ConnectionKindTab::Local, |this| {
-                        this.child(connection_editor_local_section(
-                            section_context,
-                            shell_label,
-                            shell_options,
-                            cx,
-                        ))
+                        this.child(connection_editor_local_section(section_context, cx))
                     })
                     .when(editor.kind == ConnectionKindTab::Telnet, |this| {
-                        this.child(connection_editor_telnet_section(
-                            section_context,
-                            backspace_options.clone(),
-                            cx,
-                        ))
+                        this.child(connection_editor_telnet_section(section_context, cx))
                     })
                     .when(editor.kind == ConnectionKindTab::Serial, |this| {
-                        this.child(connection_editor_serial_section(
-                            section_context,
-                            SerialConnectionSectionOptions {
-                                serial_ports: serial_port_options,
-                                baud_rates: baud_options,
-                                data_bits: data_bits_options,
-                                parity: parity_options,
-                                stop_bits: stop_bits_options,
-                                backspace: backspace_options,
-                            },
-                            cx,
-                        ))
+                        this.child(connection_editor_serial_section(section_context, cx))
                     })
                     .child(connection_description_field(
                         palette,
@@ -792,6 +904,28 @@ impl NyaTermApp {
             )
             .into_any_element()
         }
+    }
+}
+
+fn connection_editor_select_id(select: ConnectionEditorSelect) -> &'static str {
+    match select {
+        ConnectionEditorSelect::Authentication => {
+            unreachable!("authentication uses a radio group")
+        }
+        ConnectionEditorSelect::Group => "connection-editor-group-select",
+        ConnectionEditorSelect::SavedPassword => "connection-editor-saved-password",
+        ConnectionEditorSelect::SshKey => "connection-editor-ssh-key",
+        ConnectionEditorSelect::Otp => "connection-editor-otp",
+        ConnectionEditorSelect::Proxy => "connection-editor-proxy",
+        ConnectionEditorSelect::ProxyJump => "connection-editor-proxy-jump",
+        ConnectionEditorSelect::Backspace => "connection-editor-backspace",
+        ConnectionEditorSelect::TelnetEnterMode => "connection-editor-telnet-enter-mode",
+        ConnectionEditorSelect::Shell => "connection-editor-shell",
+        ConnectionEditorSelect::SerialPort => "connection-editor-serial-port",
+        ConnectionEditorSelect::BaudRate => "connection-editor-baud-rate",
+        ConnectionEditorSelect::DataBits => "connection-editor-data-bits",
+        ConnectionEditorSelect::Parity => "connection-editor-parity",
+        ConnectionEditorSelect::StopBits => "connection-editor-stop-bits",
     }
 }
 

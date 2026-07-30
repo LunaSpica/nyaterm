@@ -255,8 +255,12 @@ impl NyaTermApp {
                                     palette,
                                     format!("security-otp-del-{otp_id}"),
                                     self.tr("common.delete"),
-                                    cx.listener(move |this, _, _, cx| {
-                                        this.request_delete_security_otp(delete_id.clone(), cx);
+                                    cx.listener(move |this, _, window, cx| {
+                                        this.request_delete_security_otp(
+                                            delete_id.clone(),
+                                            window,
+                                            cx,
+                                        );
                                     }),
                                 )),
                         ),

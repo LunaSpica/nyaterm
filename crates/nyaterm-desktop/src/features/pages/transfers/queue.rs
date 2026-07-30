@@ -1,13 +1,12 @@
 use gpui::{
-    AppContext as _, Context, InteractiveElement as _, IntoElement, KeyDownEvent,
-    ParentElement as _, SharedString, StatefulInteractiveElement as _, Styled as _, div, px, rgb,
+    Context, InteractiveElement as _, IntoElement, KeyDownEvent, ParentElement as _, SharedString,
+    StatefulInteractiveElement as _, Styled as _, div, px, rgb,
 };
 use nyaterm_core::truncate_preview;
 
-use crate::features::{
-    ChromeTooltip, NyaTermApp, gpui_code_font_family, panel_header_with_actions,
-};
+use crate::features::{NyaTermApp, gpui_code_font_family, panel_header_with_actions};
 use crate::models::{TransferJobState, TransferJobStatus};
+use nyaterm_ui::NyaTooltip;
 
 use super::helpers::{queue_action_button, transfer_job_row};
 
@@ -113,8 +112,8 @@ impl NyaTermApp {
                 window.focus(this.transfer.queue_focus());
                 cx.notify();
             }))
-            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-                this.handle_transfer_queue_key_down(event, cx);
+            .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
+                this.handle_transfer_queue_key_down(event, window, cx);
             }))
             .child(panel_header_with_actions(
                 self.tr("panel.fileTransfer"),
@@ -210,7 +209,7 @@ impl NyaTermApp {
                             .hover(|this| this.text_color(rgb(palette.text)))
                             .tooltip({
                                 let label = self.tr("fileTransfer.downloadPath").to_string();
-                                move |_, cx| cx.new(|_| ChromeTooltip::new(label.clone())).into()
+                                move |window, cx| NyaTooltip::new(label.clone()).build(window, cx)
                             })
                             .child(download_path)
                             .on_click(cx.listener(|this, _, _, cx| {

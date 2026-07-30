@@ -1,30 +1,43 @@
 use gpui::prelude::*;
-use gpui::{Context, FontWeight, IntoElement, div, px, rgb};
+use gpui::{Context, IntoElement, div, px, rgb};
 
-use super::super::common::{network_dialog_footer, network_modal_shell};
 use super::super::tunnel::tunnel_editor_selector;
 use super::helpers::proxy_protocol_label;
-use crate::features::{NyaTermApp, TextInputSetup};
+use crate::features::{NO_SELECTION_VALUE, NyaTermApp, TextInputSetup};
 use crate::models::{NetworkProxyEditorField, NetworkProxyEditorState};
+use nyaterm_ui::NyaSelectOption;
 
-pub(in crate::features::pages::tunnels) fn network_proxy_editor_panel(
+pub(in crate::features::pages::tunnels) fn network_proxy_editor_content(
     palette: crate::theme::ThemePalette,
     editor: NetworkProxyEditorState,
     app: &mut NyaTermApp,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
-    let protocol_label = proxy_protocol_label(&editor.protocol);
-    let group_label = editor
+    let protocol_options = ["socks5", "http", "proxycommand"]
+        .into_iter()
+        .map(|protocol| NyaSelectOption::new(protocol, proxy_protocol_label(protocol)))
+        .collect();
+    let selected_protocol = match editor.protocol.as_str() {
+        "http" => "http",
+        "proxycommand" => "proxycommand",
+        _ => "socks5",
+    }
+    .to_string();
+    let mut group_options = vec![NyaSelectOption::new(
+        NO_SELECTION_VALUE,
+        app.tr("network.ungrouped"),
+    )];
+    group_options.extend(
+        app.tunnel_state
+            .proxy_groups()
+            .iter()
+            .map(|group| NyaSelectOption::new(group.id.clone(), group.name.clone())),
+    );
+    let selected_group = editor
         .group_id
-        .as_deref()
-        .and_then(|id| {
-            app.tunnel_state
-                .proxy_groups()
-                .iter()
-                .find(|group| group.id == id)
-                .map(|group| group.name.clone())
-        })
-        .unwrap_or_else(|| app.tr("network.ungrouped").to_string());
+        .clone()
+        .filter(|id| group_options.iter().any(|option| option.value() == id))
+        .unwrap_or_else(|| NO_SELECTION_VALUE.to_string());
     // A stored password is never shown, so the box says so in its placeholder
     // rather than putting a row of asterisks where the text would go.
     let password_placeholder = if editor.existing_password.is_some() || editor.password_id.is_some()
@@ -97,58 +110,39 @@ pub(in crate::features::pages::tunnels) fn network_proxy_editor_panel(
         )
     });
 
-    let card = div()
-        .p_6()
+    div()
         .flex()
         .flex_col()
         .gap_4()
         .child(
             div()
-                .min_w_0()
-                .flex()
-                .flex_col()
-                .gap_1()
-                .child(
-                    div()
-                        .text_size(px(15.))
-                        .font_weight(FontWeight(700.))
-                        .text_color(rgb(palette.text))
-                        .child(if editor.id.is_some() {
-                            app.tr("network.editProxy")
-                        } else {
-                            app.tr("network.newProxy")
-                        }),
-                )
-                .child(
-                    div()
-                        .text_size(px(12.))
-                        .text_color(rgb(palette.text_muted))
-                        .child(app.tr("network.proxyDialogDescription")),
-                ),
+                .text_size(px(12.))
+                .text_color(rgb(palette.text_muted))
+                .child(app.tr("network.proxyDialogDescription")),
         )
         .child(
             div()
                 .flex()
                 .gap_3()
                 .child(div().w(px(144.)).flex_none().child(tunnel_editor_selector(
+                    app,
                     palette,
                     "network-proxy-editor-protocol",
                     app.tr("network.protocol"),
-                    protocol_label.to_string(),
-                    cx.listener(|this, _, _, cx| {
-                        this.cycle_network_proxy_protocol(cx);
-                    }),
+                    protocol_options,
+                    selected_protocol,
+                    cx,
                 )))
                 .child(div().flex_1().min_w_0().child(name_input)),
         )
         .child(tunnel_editor_selector(
+            app,
             palette,
             "network-proxy-editor-group",
             app.tr("network.group"),
-            group_label,
-            cx.listener(|this, _, _, cx| {
-                this.cycle_network_proxy_group(cx);
-            }),
+            group_options,
+            selected_group,
+            cx,
         ))
         .when(editor.is_proxy_command(), |this| {
             this.children(command_input).child(
@@ -179,41 +173,6 @@ pub(in crate::features::pages::tunnels) fn network_proxy_editor_panel(
         .when_some(editor.error.clone(), |this, error| {
             this.child(div().text_xs().text_color(rgb(palette.danger)).child(error))
         })
-        .child(network_dialog_footer(
-            app,
-            palette,
-            "network-proxy-editor-cancel",
-            "network-proxy-editor-save",
-            app.tr("common.save"),
-            cx.listener(|this, _, _, cx| {
-                this.close_network_proxy_editor(cx);
-            }),
-            cx.listener(|this, _, _, cx| {
-                this.save_network_proxy_editor(cx);
-            }),
-        ));
-
-    let card = card.on_key_down(cx.listener(|this, event: &gpui::KeyDownEvent, _, cx| {
-        match event.keystroke.key.as_str() {
-            "escape" => {
-                cx.stop_propagation();
-                this.close_network_proxy_editor(cx);
-            }
-            "enter" => {
-                cx.stop_propagation();
-                this.save_network_proxy_editor(cx);
-            }
-            _ => {}
-        }
-    }));
-
-    network_modal_shell(
-        palette,
-        app.shell_surface_color(palette.bg),
-        "network-proxy-editor-modal",
-        520.,
-        card,
-    )
 }
 
 pub(in crate::features::pages::tunnels) fn proxy_editor_input(

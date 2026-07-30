@@ -373,10 +373,7 @@ fn recording_action_svg_button(
                 .path(icon_path)
                 .text_color(color),
         )
-        .tooltip(move |_, cx| {
-            cx.new(|_| crate::features::ChromeTooltip::new(tooltip.clone()))
-                .into()
-        })
+        .tooltip(move |window, cx| nyaterm_ui::NyaTooltip::new(tooltip.clone()).build(window, cx))
         .on_click(move |event, window, cx| {
             if enabled {
                 on_click(event, window, cx);

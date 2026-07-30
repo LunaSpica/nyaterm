@@ -5,8 +5,7 @@ use gpui::{
 use nyaterm_core::truncate_preview;
 use nyaterm_transport::RemoteProcess;
 
-use crate::features::{NyaTermApp, format_file_size, modal_dialog_shell};
-use crate::models::RemoteProcessSignalConfirmState;
+use crate::features::{NyaTermApp, format_file_size};
 use crate::theme::ThemePalette;
 use crate::widgets::small_button;
 
@@ -22,14 +21,6 @@ pub(in crate::features::pages::remote) struct ProcessDetailLabels {
     pub copy_command: &'static str,
     pub nice_value: &'static str,
     pub apply_nice: &'static str,
-}
-
-#[derive(Clone, Copy)]
-pub(in crate::features::pages::remote) struct ProcessSignalLabels {
-    pub title: &'static str,
-    pub description: &'static str,
-    pub cancel: &'static str,
-    pub confirm: &'static str,
 }
 
 pub(in crate::features::pages::remote) fn process_details(
@@ -258,71 +249,4 @@ fn process_metric(
                 .overflow_hidden()
                 .child(value),
         )
-}
-
-pub(in crate::features::pages::remote) fn process_signal_confirm_panel(
-    palette: ThemePalette,
-    dialog_bg: gpui::Rgba,
-    confirm: RemoteProcessSignalConfirmState,
-    labels: ProcessSignalLabels,
-    cx: &mut Context<NyaTermApp>,
-) -> impl IntoElement {
-    let description = labels
-        .description
-        .replace("{{signal}}", confirm.signal)
-        .replace("{{pid}}", &confirm.pid.to_string())
-        .replace(
-            "{{command}}",
-            &format!("kill -{} -- {}", confirm.signal, confirm.pid),
-        );
-    let card = div()
-        .p_4()
-        .flex()
-        .flex_col()
-        .gap_3()
-        .child(
-            div()
-                .text_size(px(15.))
-                .font_weight(FontWeight(800.))
-                .text_color(rgb(palette.danger))
-                .child(labels.title),
-        )
-        .child(
-            div()
-                .font_family(crate::features::gpui_code_font_family())
-                .text_xs()
-                .line_height(px(17.))
-                .text_color(rgb(palette.text_muted))
-                .child(description),
-        )
-        .child(
-            div()
-                .pt_2()
-                .flex()
-                .justify_end()
-                .gap_2()
-                .child(small_button(
-                    palette,
-                    "process-signal-cancel",
-                    labels.cancel,
-                    cx.listener(|this, _, _, cx| {
-                        this.cancel_process_signal_confirm(cx);
-                    }),
-                ))
-                .child(small_button(
-                    palette,
-                    "process-signal-confirm",
-                    labels.confirm,
-                    cx.listener(|this, _, window, cx| {
-                        this.confirm_process_signal(window, cx);
-                    }),
-                )),
-        );
-    modal_dialog_shell(
-        palette,
-        dialog_bg,
-        "process-signal-confirm-modal",
-        420.,
-        card,
-    )
 }

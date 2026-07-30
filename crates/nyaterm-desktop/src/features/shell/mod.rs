@@ -23,6 +23,6 @@ pub(in crate::features) use appearance::{
 };
 pub(in crate::features) use state::{ShellFeatureInit, ShellFeatureState};
 pub(in crate::features) use tab_mouse::{
-    ChromeTooltip, SessionTabDragPayload, SessionTabDragPreview, SessionTabTooltip,
-    TAB_MOUSE_ACTIONS, TabMouseActionTarget,
+    SessionTabDragPayload, SessionTabDragPreview, SessionTabTooltip, TAB_MOUSE_ACTIONS,
+    TabMouseActionTarget,
 };

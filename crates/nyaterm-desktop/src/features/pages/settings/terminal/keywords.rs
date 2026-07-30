@@ -3,9 +3,11 @@ use gpui::{
     Window, div, prelude::*, px, rgb, rgba, svg,
 };
 
-use crate::features::{ChromeTooltip, NyaTermApp, TextInputSetup};
+use crate::features::{NyaTermApp, TextInputSetup};
 use crate::models::KeywordHighlightEditorField;
 use crate::theme::ThemePalette;
+use nyaterm_ui::NyaSwitch;
+use nyaterm_ui::NyaTooltip;
 
 use super::super::{
     settings_form_row, settings_form_section, settings_switch, settings_switch_with_enabled,
@@ -841,7 +843,7 @@ fn keyword_highlight_icon_button(
                 .path(icon_path)
                 .text_color(rgb(palette.danger)),
         )
-        .tooltip(move |_, cx| cx.new(|_| ChromeTooltip::new(tooltip)).into())
+        .tooltip(move |window, cx| NyaTooltip::new(tooltip).build(window, cx))
         .when(enabled, |this| {
             this.cursor_pointer()
                 .hover(move |this| this.bg(hover_bg))
@@ -850,42 +852,18 @@ fn keyword_highlight_icon_button(
 }
 
 fn keyword_highlight_rule_switch(
-    palette: ThemePalette,
+    _palette: ThemePalette,
     id: impl Into<String>,
     checked: bool,
     enabled: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
-    let on_bg = palette.primary;
-    let off_bg = palette.border;
-    let on_hover = palette.primary_hover;
-    let off_hover = palette.hover;
-
-    div()
-        .id(SharedString::from(id.into()))
-        .h(px(22.))
-        .w(px(40.))
-        .flex()
-        .items_center()
-        .rounded_full()
-        .px(px(2.))
-        .bg(if checked { rgb(on_bg) } else { rgb(off_bg) })
-        .when(enabled, |this| {
-            this.cursor_pointer()
-                .hover(move |this| {
-                    this.bg(if checked {
-                        rgb(on_hover)
-                    } else {
-                        rgb(off_hover)
-                    })
-                })
-                .on_click(on_click)
+    NyaSwitch::new(id.into())
+        .checked(checked)
+        .disabled(!enabled)
+        .on_click(move |_, window, cx| {
+            if enabled {
+                on_click(&ClickEvent::default(), window, cx);
+            }
         })
-        .child(
-            div()
-                .size(px(18.))
-                .rounded_full()
-                .bg(rgb(0xffffff))
-                .when(checked, |this| this.ml_auto()),
-        )
 }

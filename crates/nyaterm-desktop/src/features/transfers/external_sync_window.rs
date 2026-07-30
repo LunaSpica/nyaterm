@@ -1,7 +1,8 @@
 use gpui::{
     App, AppContext, Bounds, Context, Entity, IntoElement, Render, Subscription, Window,
-    WindowBounds, WindowHandle, WindowKind, WindowOptions, div, prelude::*, px, rgb, size,
+    WindowBounds, WindowKind, WindowOptions, div, prelude::*, px, rgb, size,
 };
+use nyaterm_ui::{NyaWindowHandle, nya_root};
 
 use crate::features::{NyaTermApp, child_window_header, child_window_titlebar};
 
@@ -183,7 +184,7 @@ fn open_transfer_external_sync_window_now_from_app(
     let close_prompt_id = prompt_id.clone();
     let view_app = app.clone();
     let view_prompt_id = prompt_id.clone();
-    let result: anyhow::Result<WindowHandle<TransferExternalSyncWindow>> = cx.open_window(
+    let result: anyhow::Result<NyaWindowHandle> = cx.open_window(
         WindowOptions {
             titlebar: child_window_titlebar(title),
             window_bounds: Some(WindowBounds::Windowed(bounds)),
@@ -201,7 +202,8 @@ fn open_transfer_external_sync_window_now_from_app(
             });
             let prompt_focus = view_app.read(cx).transfer.external_sync_focus().clone();
             window.focus(&prompt_focus);
-            cx.new(|cx| TransferExternalSyncWindow::new(view_app, view_prompt_id, cx))
+            let view = cx.new(|cx| TransferExternalSyncWindow::new(view_app, view_prompt_id, cx));
+            cx.new(|cx| nya_root(view, window, cx))
         },
     );
 

@@ -9,10 +9,9 @@ use crate::models::RemoteProcessSortKey;
 use crate::widgets::empty_panel;
 
 use super::process::{
-    ProcessDetailLabels, ProcessDisplayMode, ProcessSignalLabels, ProcessTableLabels,
-    ProcessTableRowActions, ProcessTableRowPresentation, process_details,
-    process_details_height_px, process_display_mode, process_matches, process_row_height_px,
-    process_signal_confirm_panel, process_sort_button, process_table_row, sort_processes,
+    ProcessDetailLabels, ProcessDisplayMode, ProcessTableLabels, ProcessTableRowActions,
+    ProcessTableRowPresentation, process_details, process_details_height_px, process_display_mode,
+    process_matches, process_row_height_px, process_sort_button, process_table_row, sort_processes,
 };
 
 impl NyaTermApp {
@@ -55,7 +54,6 @@ impl NyaTermApp {
                 .child(empty_panel(message, palette));
         }
         let menu_bg = self.shell_surface_color(palette.surface);
-        let dialog_bg = self.shell_surface_color(palette.bg);
         let table_labels = ProcessTableLabels {
             more: self.tr("common.more"),
             copy_pid: self.tr("processManager.copyPid"),
@@ -74,12 +72,6 @@ impl NyaTermApp {
             copy_command: self.tr("processManager.copyCommand"),
             nice_value: self.tr("processManager.niceValue"),
             apply_nice: self.tr("processManager.applyNice"),
-        };
-        let signal_labels = ProcessSignalLabels {
-            title: self.tr("processManager.confirmSignalTitle"),
-            description: self.tr("processManager.confirmSignalDesc"),
-            cancel: self.tr("common.cancel"),
-            confirm: self.tr("common.confirm"),
         };
         let normalized_query = process_state.search_draft.trim().to_ascii_lowercase();
         let mut filtered_processes = process_state
@@ -444,14 +436,5 @@ impl NyaTermApp {
                             .child(rows),
                     ),
             )
-            .when_some(process_state.signal_confirm.clone(), |this, confirm| {
-                this.child(process_signal_confirm_panel(
-                    palette,
-                    dialog_bg,
-                    confirm,
-                    signal_labels,
-                    cx,
-                ))
-            })
     }
 }

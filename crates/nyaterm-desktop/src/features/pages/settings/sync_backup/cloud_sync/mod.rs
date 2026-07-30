@@ -1,8 +1,9 @@
 use gpui::{
     AnyElement, App, ClickEvent, Context, FontWeight, IntoElement, SharedString, Window, div,
-    prelude::*, px, rgb, rgba, svg,
+    prelude::*, px, rgb, rgba,
 };
 use nyaterm_core::CloudSyncSettings;
+use nyaterm_ui::NyaSelectOption;
 
 use crate::features::{
     NyaTermApp, compact_id, configured_cloud_sync_provider, dialog_action_button,
@@ -24,9 +25,7 @@ impl NyaTermApp {
         enabled: bool,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let palette = self.theme_palette();
-        let menu_open = self.cloud_sync.provider_menu_open() && enabled;
-        let providers = [
+        let options = [
             ("webdav", "WebDAV"),
             ("s3", "S3 Compatible"),
             ("gitee_snippet", "Gitee Snippet"),
@@ -34,91 +33,18 @@ impl NyaTermApp {
             ("google_drive", "Google Drive"),
             ("onedrive", "OneDrive"),
             ("aliyun_drive", "AliyunDrive"),
-        ];
-        let active_label = cloud_sync_provider_label(active_provider);
-        let mut menu = div()
-            .mt_1()
-            .rounded_md()
-            .border_1()
-            .border_color(rgb(palette.border))
-            .bg(rgb(palette.surface_elevated))
-            .py_1()
-            .flex()
-            .flex_col();
-
-        for (provider, label) in providers {
-            let selected = provider == active_provider;
-            menu = menu.child(
-                div()
-                    .id(SharedString::from(format!("cloud-provider-{provider}")))
-                    .h(px(30.))
-                    .px_3()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .cursor_pointer()
-                    .bg(if selected {
-                        rgb(palette.hover)
-                    } else {
-                        rgb(palette.surface_elevated)
-                    })
-                    .hover(move |this| this.bg(rgb(palette.hover)))
-                    .text_size(px(11.))
-                    .font_weight(if selected {
-                        FontWeight(600.)
-                    } else {
-                        FontWeight(500.)
-                    })
-                    .text_color(if selected {
-                        rgb(palette.primary)
-                    } else {
-                        rgb(palette.text)
-                    })
-                    .child(label)
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.update_cloud_sync_provider(provider, cx);
-                    })),
-            );
-        }
-
-        div()
-            .w_full()
-            .max_w(px(220.))
-            .flex()
-            .flex_col()
-            .opacity(if enabled { 1.0 } else { 0.45 })
-            .child(
-                div()
-                    .id("cloud-provider-select")
-                    .h(px(32.))
-                    .px_3()
-                    .rounded_md()
-                    .border_1()
-                    .border_color(rgb(palette.border))
-                    .bg(rgb(palette.input))
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .text_size(px(11.))
-                    .text_color(rgb(palette.text))
-                    .child(active_label)
-                    .child(
-                        svg()
-                            .size(px(13.))
-                            .path("icons/chevron-down.svg")
-                            .text_color(rgb(palette.text)),
-                    )
-                    .when(enabled, |this| {
-                        this.cursor_pointer()
-                            .hover(move |this| this.bg(rgb(palette.hover)))
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.cloud_sync.toggle_provider_menu();
-                                cx.notify();
-                            }))
-                    }),
-            )
-            .when(menu_open, |this| this.child(menu))
-            .into_any_element()
+        ]
+        .into_iter()
+        .map(|(provider, label)| NyaSelectOption::new(provider, label))
+        .collect();
+        self.select_control(
+            "cloud-provider-select",
+            options,
+            Some(active_provider.to_string()),
+            !enabled,
+            cx,
+        )
+        .into_any_element()
     }
 
     pub(in crate::features) fn cloud_sync_input(

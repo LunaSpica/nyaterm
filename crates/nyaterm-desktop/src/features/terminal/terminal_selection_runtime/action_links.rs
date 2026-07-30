@@ -84,7 +84,6 @@ impl NyaTermApp {
         }
         // Hide while menus are open or while selecting text.
         if self.terminal.menus.action_link_menu.is_some()
-            || self.terminal.menus.context_menu.is_some()
             || self.terminal.selection.dragging
             || self.translation.dialog_is_open()
         {
@@ -327,7 +326,6 @@ impl NyaTermApp {
             value: item.value,
             actions: menu_actions,
         });
-        self.terminal.menus.context_menu = None;
         self.shell
             .set_status(format!("action link menu: {}", item.kind.label()));
         cx.notify();

@@ -120,9 +120,6 @@ pub(in crate::features::pages::tunnels) fn tunnel_section(
             let move_picker_open = app
                 .connection_state
                 .network_move_picker_is_open(NetworkTab::Tunnels, &tunnel.id);
-            let menu_open = app
-                .connection_state
-                .network_item_menu_is_open(NetworkTab::Tunnels, &tunnel.id);
             let current_group_id = tunnel.group_id.clone();
             rows = rows.child(
                 div()
@@ -142,9 +139,7 @@ pub(in crate::features::pages::tunnels) fn tunnel_section(
                             mode_label,
                             menu: NetworkItemMenuConfig {
                                 palette,
-                                background: app.shell_surface_color(palette.surface),
                                 id: format!("network-tunnel-actions-{}", tunnel.id),
-                                open: menu_open,
                                 more_label: app.tr("common.more"),
                                 edit_label: app.tr("common.edit"),
                                 move_label: app.tr("network.moveToGroup"),
@@ -152,12 +147,6 @@ pub(in crate::features::pages::tunnels) fn tunnel_section(
                                 can_move: !app.tunnel_state.tunnel_groups().is_empty(),
                             },
                         },
-                        cx.listener({
-                            let id = tunnel.id.clone();
-                            move |this, _, _, cx| {
-                                this.toggle_network_item_menu(NetworkTab::Tunnels, id.clone(), cx);
-                            }
-                        }),
                         cx.listener(move |this, _, window, cx| {
                             this.start_tunnel_job(tunnel_for_open.clone(), window, cx);
                         }),
@@ -178,11 +167,12 @@ pub(in crate::features::pages::tunnels) fn tunnel_section(
                                 cx,
                             );
                         }),
-                        cx.listener(move |this, _, _, cx| {
+                        cx.listener(move |this, _, window, cx| {
                             this.open_network_delete_confirm(
                                 NetworkTab::Tunnels,
                                 tunnel_id_for_delete.clone(),
                                 tunnel_label_for_delete.clone(),
+                                window,
                                 cx,
                             );
                         }),
@@ -272,42 +262,32 @@ pub(in crate::features::pages::tunnels) fn tunnel_section(
                     let rename_id = group.id.clone();
                     let delete_id = group.id.clone();
                     let delete_label = group.name.clone();
-                    let menu_id = format!("group:{}", group.id);
-                    let menu_open = app
-                        .connection_state
-                        .network_item_menu_is_open(NetworkTab::Tunnels, &menu_id);
                     this.child(network_item_overflow_menu(
                         NetworkItemMenuConfig {
                             palette,
-                            background: app.shell_surface_color(palette.surface),
                             id: format!("tunnel-group-actions-{}", group.id),
-                            open: menu_open,
                             more_label: app.tr("common.more"),
                             edit_label: app.tr("network.renameGroup"),
                             move_label: app.tr("network.moveToGroup"),
                             delete_label: app.tr("network.deleteGroup"),
                             can_move: false,
                         },
-                        cx.listener({
-                            let id = menu_id.clone();
-                            move |this, _, _, cx| {
-                                this.toggle_network_item_menu(NetworkTab::Tunnels, id.clone(), cx);
-                            }
-                        }),
-                        cx.listener(move |this, _, _, cx| {
+                        cx.listener(move |this, _, window, cx| {
                             this.open_network_group_editor(
                                 NetworkTab::Tunnels,
                                 Some(rename_id.clone()),
+                                window,
                                 cx,
                             );
                         }),
                         cx.listener(|_, _, _, _| {}),
-                        cx.listener(move |this, _, _, cx| {
+                        cx.listener(move |this, _, window, cx| {
                             this.open_network_group_delete_confirm(
                                 NetworkTab::Tunnels,
                                 delete_id.clone(),
                                 delete_label.clone(),
                                 item_count,
+                                window,
                                 cx,
                             );
                         }),

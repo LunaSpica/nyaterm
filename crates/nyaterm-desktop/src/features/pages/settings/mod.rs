@@ -5,8 +5,9 @@ use gpui::{
 
 use crate::models::{SettingsTab, SnapshotPasswordPromptKind, SnapshotPasswordPromptState};
 use crate::theme::ThemePalette;
+use nyaterm_ui::{NyaButton, NyaButtonVariant, NyaSwitch, NyaTooltip};
 
-use super::super::{ChromeTooltip, NyaTermApp};
+use super::super::NyaTermApp;
 
 mod ai;
 mod security;
@@ -543,7 +544,7 @@ impl NyaTermApp {
                 )
             })
             .when(compact, |this| {
-                this.tooltip(move |_, cx| cx.new(|_| ChromeTooltip::new(title)).into())
+                this.tooltip(move |window, cx| NyaTooltip::new(title).build(window, cx))
             })
             .on_click(cx.listener(move |this, _, _, cx| {
                 this.shell.toggle_settings_group(group.to_string());
@@ -620,11 +621,10 @@ impl NyaTermApp {
                 this.child(div().min_w_0().flex_1().overflow_hidden().child(label))
             })
             .when(compact, |this| {
-                this.tooltip(move |_, cx| cx.new(|_| ChromeTooltip::new(label)).into())
+                this.tooltip(move |window, cx| NyaTooltip::new(label).build(window, cx))
             })
             .on_click(cx.listener(move |this, _, _, cx| {
                 this.shell.set_settings_active_tab(tab);
-                this.settings.close_appearance_menu();
                 cx.notify();
             }))
     }
@@ -830,108 +830,34 @@ pub(in crate::features::pages) fn settings_switch(
 }
 
 pub(super) fn settings_switch_with_enabled(
-    palette: ThemePalette,
+    _palette: ThemePalette,
     id: impl Into<String>,
     checked: bool,
     enabled: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
-    let on_bg = palette.primary;
-    let off_bg = palette.border;
-    let on_hover = palette.primary_hover;
-    let off_hover = palette.hover;
-    div()
-        .id(SharedString::from(id.into()))
-        .h(px(22.))
-        .w(px(40.))
-        .flex()
-        .items_center()
-        .rounded_full()
-        .px(px(2.))
-        .bg(if checked { rgb(on_bg) } else { rgb(off_bg) })
-        .opacity(if enabled { 1.0 } else { 0.45 })
-        .when(enabled, |this| {
-            this.cursor_pointer()
-                .hover(move |this| {
-                    this.bg(if checked {
-                        rgb(on_hover)
-                    } else {
-                        rgb(off_hover)
-                    })
-                })
-                .on_click(on_click)
+    NyaSwitch::new(id.into())
+        .checked(checked)
+        .disabled(!enabled)
+        .on_click(move |_, window, cx| {
+            if enabled {
+                on_click(&ClickEvent::default(), window, cx);
+            }
         })
-        .child(
-            div()
-                .size(px(18.))
-                .rounded_full()
-                .bg(rgb(0xffffff))
-                .when(checked, |this| this.ml_auto()),
-        )
 }
 
 /// Compact choice chips for enum-like settings.
 pub(super) fn settings_choice_chip(
-    palette: ThemePalette,
+    _palette: ThemePalette,
     id: impl Into<String>,
     label: impl Into<SharedString>,
     selected: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
-    let label = label.into();
-    let selected_border = palette.primary;
-    let idle_border = palette.border;
-    // Selected chip bg: light themes tint lightly; dark themes use hover/elevated surface.
-    let selected_bg = {
-        let luminance = {
-            let r = ((palette.bg >> 16) & 0xff) as f32;
-            let g = ((palette.bg >> 8) & 0xff) as f32;
-            let b = (palette.bg & 0xff) as f32;
-            (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255.0
-        };
-        if luminance > 0.6 {
-            // light: soft hover-ish fill
-            palette.hover
-        } else {
-            palette.hover
-        }
-    };
-    let idle_bg = palette.input;
-    let selected_text = palette.primary;
-    let idle_text = palette.text_muted;
-    let hover_bg = palette.surface_elevated;
-    let hover_text = palette.text;
-    div()
-        .id(SharedString::from(id.into()))
-        .h(px(28.))
-        .px_2()
-        .flex()
-        .items_center()
-        .rounded_md()
-        .border_1()
-        .border_color(if selected {
-            rgb(selected_border)
-        } else {
-            rgb(idle_border)
-        })
-        .bg(if selected {
-            rgb(selected_bg)
-        } else {
-            rgb(idle_bg)
-        })
-        .text_size(px(11.))
-        .font_weight(if selected {
-            FontWeight(600.)
-        } else {
-            FontWeight(500.)
-        })
-        .text_color(if selected {
-            rgb(selected_text)
-        } else {
-            rgb(idle_text)
-        })
-        .cursor_pointer()
-        .hover(move |this| this.bg(rgb(hover_bg)).text_color(rgb(hover_text)))
-        .child(label)
+    NyaButton::new(id.into(), label.into())
+        .variant(NyaButtonVariant::Ghost)
+        .selected(selected)
+        .small()
+        .compact()
         .on_click(on_click)
 }

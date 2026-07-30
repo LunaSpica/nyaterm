@@ -232,7 +232,33 @@ impl NyaTermApp {
         self.session.dialog_open_close_all_sessions_confirm();
         self.shell
             .set_status("close all sessions confirmation opened".to_string());
-        window.focus(self.session.dialog_close_all_sessions_confirm_focus());
+        let title_key = if self.session.dialog_should_quit_after_close_all() {
+            "dialog.confirmClose"
+        } else {
+            "tabCtx.closeAll"
+        };
+        let description_key = if self.session.dialog_should_quit_after_close_all() {
+            "dialog.confirmCloseDesc"
+        } else {
+            "tabCtx.closeAllConfirm"
+        };
+        let action_key = if self.session.dialog_should_quit_after_close_all() {
+            "dialog.confirmCloseAction"
+        } else {
+            "tabCtx.closeAll"
+        };
+        self.open_confirm_dialog_with_cancel(
+            (
+                self.tr(title_key).to_string(),
+                self.tr(description_key).to_string(),
+                self.tr(action_key).to_string(),
+                true,
+                |app, window, cx| app.confirm_close_all_sessions(window, cx),
+                |app, cx| app.cancel_close_all_sessions_confirm(cx),
+            ),
+            window,
+            cx,
+        );
         cx.notify();
     }
 
@@ -250,7 +276,7 @@ impl NyaTermApp {
         &mut self,
         window: &mut Window,
         cx: &mut Context<Self>,
-    ) {
+    ) -> bool {
         let quit_after = self.session.dialog_take_close_all_sessions_confirm();
         self.close_all_sessions(cx);
         if quit_after {
@@ -260,9 +286,10 @@ impl NyaTermApp {
             self.shell
                 .set_status("sessions closed; closing window".to_string());
             window.remove_window();
-            return;
+            return true;
         }
         cx.notify();
+        true
     }
 
     pub(in crate::features) fn close_all_sessions(&mut self, cx: &mut Context<Self>) {

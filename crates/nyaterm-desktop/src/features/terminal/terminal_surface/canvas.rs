@@ -6,6 +6,7 @@ use gpui::{
     SharedString, div, prelude::*, px, rgb, rgba,
 };
 use nyaterm_terminal::{TerminalScreen, TerminalSnapshot};
+use nyaterm_ui::NyaContextMenu;
 
 use crate::features::NyaTermApp;
 use crate::features::formatting::format_terminal_line_timestamp_ms;
@@ -566,6 +567,21 @@ impl NyaTermApp {
             .map(|metadata| terminal_canvas_session_kind_label(&metadata.launch_config))
             .unwrap_or("Local");
         let (drop_title, drop_hint) = nyaterm_core::terminal_drop_overlay_copy(drop_session_kind);
+        let selection_belongs_to_surface = self
+            .terminal
+            .selection
+            .session_id
+            .as_deref()
+            .map(|selection_session_id| selection_session_id == session_id)
+            .unwrap_or(is_active);
+        let context_selection = selection_belongs_to_surface
+            .then(|| self.selected_terminal_text())
+            .flatten()
+            .unwrap_or_default();
+        let context_menu_enabled = !session_id.is_empty()
+            && !terminal_mouse_reporting
+            && !self.settings.summary().interaction_right_click_paste;
+        let context_menu_items = self.terminal_context_menu_items(context_selection, cx);
 
         let canvas = div()
             .flex_1()
@@ -793,291 +809,303 @@ impl NyaTermApp {
                         )
                     })
                     .child(
-                        div()
-                            .id(SharedString::from(format!(
-                                "terminal-output-{output_session_id}"
-                            )))
-                            .relative()
-                            .flex_1()
-                            .min_h_0()
-                            .when(!is_disconnected && !terminal_mouse_reporting, |this| {
-                                this.cursor_text()
-                            })
-                            .when(
-                                is_active && self.terminal.menus.action_link_tooltip.is_some(),
-                                |this| this.cursor_pointer(),
-                            )
-                            .pl(px(self.terminal_content_insets().left))
-                            .pr(px(self.terminal_content_insets().right))
-                            .pt(px(self.terminal_content_insets().top))
-                            .pb(px(self.terminal_content_insets().bottom))
-                            .overflow_hidden()
-                            .can_drop(|drag, _, _| drag.is::<gpui::ExternalPaths>())
-                            .on_drag_move({
-                                let session_id = output_session_id.clone();
-                                cx.listener(
-                                    move |this,
-                                          event: &gpui::DragMoveEvent<gpui::ExternalPaths>,
-                                          _,
-                                          cx| {
-                                        let _ = event;
-                                        this.set_terminal_file_drop_hover(
-                                            Some(session_id.clone()),
-                                            cx,
-                                        );
-                                    },
-                                )
-                            })
-                            .on_drop({
-                                let session_id = output_session_id.clone();
-                                cx.listener(move |this, paths: &gpui::ExternalPaths, _, cx| {
-                                    this.handle_terminal_external_file_drop(
-                                        session_id.clone(),
-                                        paths.paths().to_vec(),
-                                        cx,
-                                    );
+                        NyaContextMenu::new(
+                            div()
+                                .id(SharedString::from(format!(
+                                    "terminal-output-{output_session_id}"
+                                )))
+                                .relative()
+                                .flex_1()
+                                .min_h_0()
+                                .when(!is_disconnected && !terminal_mouse_reporting, |this| {
+                                    this.cursor_text()
                                 })
-                            })
-                            .on_mouse_down(MouseButton::Left, {
-                                let session_id = output_session_id.clone();
-                                cx.listener(
-                                    move |this, event: &gpui::MouseDownEvent, window, cx| {
-                                        this.activate_workspace_pane(session_id.clone(), cx);
-                                        window.focus(&this.terminal.input.focus);
-                                        this.close_terminal_context_menu(cx);
-                                        this.close_action_link_menu(cx);
-                                        let mods = event.modifiers;
-                                        let skip_selection =
-                                            this.settings.summary().terminal_action_links_enabled
-                                                && (mods.alt || mods.control || mods.platform);
-                                        if !skip_selection {
-                                            this.start_terminal_selection_for_session(
-                                                Some(session_id.as_str()),
-                                                event,
+                                .when(
+                                    is_active && self.terminal.menus.action_link_tooltip.is_some(),
+                                    |this| this.cursor_pointer(),
+                                )
+                                .pl(px(self.terminal_content_insets().left))
+                                .pr(px(self.terminal_content_insets().right))
+                                .pt(px(self.terminal_content_insets().top))
+                                .pb(px(self.terminal_content_insets().bottom))
+                                .overflow_hidden()
+                                .can_drop(|drag, _, _| drag.is::<gpui::ExternalPaths>())
+                                .on_drag_move({
+                                    let session_id = output_session_id.clone();
+                                    cx.listener(
+                                        move |this,
+                                              event: &gpui::DragMoveEvent<gpui::ExternalPaths>,
+                                              _,
+                                              cx| {
+                                            let _ = event;
+                                            this.set_terminal_file_drop_hover(
+                                                Some(session_id.clone()),
                                                 cx,
                                             );
-                                        }
-                                        cx.stop_propagation();
-                                    },
-                                )
-                            })
-                            .on_mouse_down(MouseButton::Right, {
-                                let session_id = output_session_id.clone();
-                                cx.listener(
-                                    move |this, event: &gpui::MouseDownEvent, window, cx| {
-                                        this.activate_workspace_pane(session_id.clone(), cx);
-                                        window.focus(&this.terminal.input.focus);
-                                        if let Some(cell) = this.point_to_terminal_cell_for_session(
-                                            Some(session_id.as_str()),
-                                            event.position,
+                                        },
+                                    )
+                                })
+                                .on_drop({
+                                    let session_id = output_session_id.clone();
+                                    cx.listener(move |this, paths: &gpui::ExternalPaths, _, cx| {
+                                        this.handle_terminal_external_file_drop(
+                                            session_id.clone(),
+                                            paths.paths().to_vec(),
                                             cx,
-                                        ) && this.maybe_send_mouse_report_for_session(
-                                            TerminalMouseReportRequest {
-                                                session_id: &session_id,
-                                                button: 2,
-                                                col: cell.col as u16,
-                                                row: cell.row as u16,
-                                                press: true,
-                                                motion: false,
-                                                modifiers: event.modifiers,
-                                            },
-                                            cx,
-                                        ) {
+                                        );
+                                    })
+                                })
+                                .on_mouse_down(MouseButton::Left, {
+                                    let session_id = output_session_id.clone();
+                                    cx.listener(
+                                        move |this, event: &gpui::MouseDownEvent, window, cx| {
+                                            this.activate_workspace_pane(session_id.clone(), cx);
+                                            window.focus(&this.terminal.input.focus);
+                                            this.close_action_link_menu(cx);
+                                            let mods = event.modifiers;
+                                            let skip_selection = this
+                                                .settings
+                                                .summary()
+                                                .terminal_action_links_enabled
+                                                && (mods.alt || mods.control || mods.platform);
+                                            if !skip_selection {
+                                                this.start_terminal_selection_for_session(
+                                                    Some(session_id.as_str()),
+                                                    event,
+                                                    cx,
+                                                );
+                                            }
                                             cx.stop_propagation();
-                                            return;
-                                        }
-                                        if this.settings.summary().interaction_right_click_paste {
-                                            this.paste_from_clipboard(window, cx);
-                                            this.clear_terminal_selection(cx);
-                                        } else {
-                                            this.open_terminal_context_menu(event, cx);
-                                        }
-                                        cx.stop_propagation();
-                                    },
-                                )
-                            })
-                            .on_mouse_down(MouseButton::Middle, {
-                                let session_id = output_session_id.clone();
-                                cx.listener(
-                                    move |this, event: &gpui::MouseDownEvent, window, cx| {
-                                        // xterm/Linux middle-click paste convention.
-                                        this.activate_workspace_pane(session_id.clone(), cx);
-                                        window.focus(&this.terminal.input.focus);
-                                        this.close_terminal_context_menu(cx);
-                                        this.close_action_link_menu(cx);
-                                        if let Some(cell) = this.point_to_terminal_cell_for_session(
-                                            Some(session_id.as_str()),
-                                            event.position,
-                                            cx,
-                                        ) && this.maybe_send_mouse_report_for_session(
-                                            TerminalMouseReportRequest {
-                                                session_id: &session_id,
-                                                button: 1,
-                                                col: cell.col as u16,
-                                                row: cell.row as u16,
-                                                press: true,
-                                                motion: false,
-                                                modifiers: event.modifiers,
-                                            },
-                                            cx,
-                                        ) {
-                                            cx.stop_propagation();
-                                            return;
-                                        }
-                                        this.paste_from_clipboard(window, cx);
-                                        cx.stop_propagation();
-                                    },
-                                )
-                            })
-                            .on_click({
-                                let session_id = output_session_id.clone();
-                                cx.listener(move |this, event: &ClickEvent, window, cx| {
-                                    this.activate_workspace_pane(session_id.clone(), cx);
-                                    if event.is_right_click() {
-                                        // Right-click is handled on mouse_down for Tauri-like context menu.
-                                        cx.stop_propagation();
-                                        return;
-                                    }
-                                    window.focus(&this.terminal.input.focus);
-                                    let modifiers = event.modifiers();
-                                    if this.settings.summary().terminal_action_links_enabled {
-                                        if modifiers.alt {
-                                            if this.try_open_action_link_menu_at_click(event, cx) {
+                                        },
+                                    )
+                                })
+                                .on_mouse_down(MouseButton::Right, {
+                                    let session_id = output_session_id.clone();
+                                    cx.listener(
+                                        move |this, event: &gpui::MouseDownEvent, window, cx| {
+                                            this.activate_workspace_pane(session_id.clone(), cx);
+                                            window.focus(&this.terminal.input.focus);
+                                            if let Some(cell) = this
+                                                .point_to_terminal_cell_for_session(
+                                                    Some(session_id.as_str()),
+                                                    event.position,
+                                                    cx,
+                                                )
+                                                && this.maybe_send_mouse_report_for_session(
+                                                    TerminalMouseReportRequest {
+                                                        session_id: &session_id,
+                                                        button: 2,
+                                                        col: cell.col as u16,
+                                                        row: cell.row as u16,
+                                                        press: true,
+                                                        motion: false,
+                                                        modifiers: event.modifiers,
+                                                    },
+                                                    cx,
+                                                )
+                                            {
                                                 cx.stop_propagation();
                                                 return;
                                             }
-                                        } else if (modifiers.control || modifiers.platform)
-                                            && this.try_activate_action_link_at_click(event, cx)
-                                        {
+                                            if this.settings.summary().interaction_right_click_paste
+                                            {
+                                                this.paste_from_clipboard(window, cx);
+                                                this.clear_terminal_selection(cx);
+                                            } else {
+                                                this.prepare_terminal_context_menu(cx);
+                                            }
+                                            cx.stop_propagation();
+                                        },
+                                    )
+                                })
+                                .on_mouse_down(MouseButton::Middle, {
+                                    let session_id = output_session_id.clone();
+                                    cx.listener(
+                                        move |this, event: &gpui::MouseDownEvent, window, cx| {
+                                            // xterm/Linux middle-click paste convention.
+                                            this.activate_workspace_pane(session_id.clone(), cx);
+                                            window.focus(&this.terminal.input.focus);
+                                            this.close_action_link_menu(cx);
+                                            if let Some(cell) = this
+                                                .point_to_terminal_cell_for_session(
+                                                    Some(session_id.as_str()),
+                                                    event.position,
+                                                    cx,
+                                                )
+                                                && this.maybe_send_mouse_report_for_session(
+                                                    TerminalMouseReportRequest {
+                                                        session_id: &session_id,
+                                                        button: 1,
+                                                        col: cell.col as u16,
+                                                        row: cell.row as u16,
+                                                        press: true,
+                                                        motion: false,
+                                                        modifiers: event.modifiers,
+                                                    },
+                                                    cx,
+                                                )
+                                            {
+                                                cx.stop_propagation();
+                                                return;
+                                            }
+                                            this.paste_from_clipboard(window, cx);
+                                            cx.stop_propagation();
+                                        },
+                                    )
+                                })
+                                .on_click({
+                                    let session_id = output_session_id.clone();
+                                    cx.listener(move |this, event: &ClickEvent, window, cx| {
+                                        this.activate_workspace_pane(session_id.clone(), cx);
+                                        if event.is_right_click() {
+                                            // Right-click is handled on mouse_down for Tauri-like context menu.
                                             cx.stop_propagation();
                                             return;
                                         }
-                                    }
-                                    if this.terminal.selection.selection.is_none()
-                                        && this.shell.status() != "terminal focused"
-                                    {
-                                        this.shell.set_status("terminal focused".to_string());
-                                        cx.notify();
-                                    }
+                                        window.focus(&this.terminal.input.focus);
+                                        let modifiers = event.modifiers();
+                                        if this.settings.summary().terminal_action_links_enabled {
+                                            if modifiers.alt {
+                                                if this
+                                                    .try_open_action_link_menu_at_click(event, cx)
+                                                {
+                                                    cx.stop_propagation();
+                                                    return;
+                                                }
+                                            } else if (modifiers.control || modifiers.platform)
+                                                && this.try_activate_action_link_at_click(event, cx)
+                                            {
+                                                cx.stop_propagation();
+                                                return;
+                                            }
+                                        }
+                                        if this.terminal.selection.selection.is_none()
+                                            && this.shell.status() != "terminal focused"
+                                        {
+                                            this.shell.set_status("terminal focused".to_string());
+                                            cx.notify();
+                                        }
+                                    })
                                 })
-                            })
-                            .child(
-                                div()
-                                    .size_full()
-                                    .flex()
-                                    .flex_row()
-                                    .min_h_0()
-                                    .relative()
-                                    .child(
-                                        div()
-                                            .flex_1()
-                                            .min_w_0()
-                                            .min_h_0()
-                                            .relative()
-                                            .child(output)
-                                            .when(output_session_id.is_empty(), |this| {
-                                                this.child(terminal_bounds_tracker(
-                                                    cx.entity(),
-                                                    None,
-                                                    is_active,
-                                                ))
-                                            }),
-                                    )
-                                    // Scrollbar is painted by TerminalSurface for live sessions.
-                                    .when(session_id.is_empty(), |this| {
-                                        this.child(self.terminal_scrollbar_element(
-                                            &session_id,
-                                            is_active,
-                                            scroll_offset,
-                                            cx,
-                                        ))
-                                    }),
-                            )
-                            .when(show_visual_bell, |this| {
-                                this.child(
+                                .child(
                                     div()
-                                        .absolute()
-                                        .inset_0()
-                                        .bg(rgba(0xffffff22))
-                                        .border_2()
-                                        .border_color(rgb(palette.warning))
-                                        .rounded_sm(),
+                                        .size_full()
+                                        .flex()
+                                        .flex_row()
+                                        .min_h_0()
+                                        .relative()
+                                        .child(
+                                            div()
+                                                .flex_1()
+                                                .min_w_0()
+                                                .min_h_0()
+                                                .relative()
+                                                .child(output)
+                                                .when(output_session_id.is_empty(), |this| {
+                                                    this.child(terminal_bounds_tracker(
+                                                        cx.entity(),
+                                                        None,
+                                                        is_active,
+                                                    ))
+                                                }),
+                                        )
+                                        // Scrollbar is painted by TerminalSurface for live sessions.
+                                        .when(session_id.is_empty(), |this| {
+                                            this.child(self.terminal_scrollbar_element(
+                                                &session_id,
+                                                is_active,
+                                                scroll_offset,
+                                                cx,
+                                            ))
+                                        }),
                                 )
-                            })
-                            .when_some(
-                                ime_preedit_text.clone().zip(ime_preedit_position),
-                                |this, (marked_text, (x, y))| {
+                                .when(show_visual_bell, |this| {
                                     this.child(
                                         div()
                                             .absolute()
-                                            .left(px(x))
-                                            .top(px(y))
-                                            .h(px(cell_h))
-                                            .max_w(px(360.))
-                                            .px_1()
+                                            .inset_0()
+                                            .bg(rgba(0xffffff22))
+                                            .border_2()
+                                            .border_color(rgb(palette.warning))
+                                            .rounded_sm(),
+                                    )
+                                })
+                                .when_some(
+                                    ime_preedit_text.clone().zip(ime_preedit_position),
+                                    |this, (marked_text, (x, y))| {
+                                        this.child(
+                                            div()
+                                                .absolute()
+                                                .left(px(x))
+                                                .top(px(y))
+                                                .h(px(cell_h))
+                                                .max_w(px(360.))
+                                                .px_1()
+                                                .flex()
+                                                .items_center()
+                                                .overflow_hidden()
+                                                .whitespace_nowrap()
+                                                .border_b_2()
+                                                .border_color(rgb(palette.link))
+                                                .bg(rgba((palette.terminal_cursor << 8) | 0x33))
+                                                .text_color(rgb(palette.terminal_fg))
+                                                .font_family(terminal_font_family.clone())
+                                                .text_size(px(self
+                                                    .settings
+                                                    .summary()
+                                                    .terminal_font_size
+                                                    as f32))
+                                                .child(marked_text),
+                                        )
+                                    },
+                                )
+                                .when(file_drop_hover && !session_id.is_empty(), |this| {
+                                    this.child(
+                                        div()
+                                            .absolute()
+                                            .inset_2()
+                                            .rounded_lg()
+                                            .border_2()
+                                            .border_color(rgb(palette.link))
+                                            .bg(rgba(0x3b82f624))
                                             .flex()
                                             .items_center()
-                                            .overflow_hidden()
-                                            .whitespace_nowrap()
-                                            .border_b_2()
-                                            .border_color(rgb(palette.link))
-                                            .bg(rgba((palette.terminal_cursor << 8) | 0x33))
-                                            .text_color(rgb(palette.terminal_fg))
-                                            .font_family(terminal_font_family.clone())
-                                            .text_size(px(
-                                                self.settings.summary().terminal_font_size as f32,
-                                            ))
-                                            .child(marked_text),
+                                            .justify_center()
+                                            .child(
+                                                div()
+                                                    .max_w(px(320.))
+                                                    .rounded_lg()
+                                                    .border_1()
+                                                    .border_color(rgb(palette.link))
+                                                    .bg(rgb(palette.surface))
+                                                    .px_6()
+                                                    .py_4()
+                                                    .shadow_lg()
+                                                    .flex()
+                                                    .flex_col()
+                                                    .items_center()
+                                                    .gap_1()
+                                                    .child(
+                                                        div()
+                                                            .text_sm()
+                                                            .font_weight(FontWeight(700.))
+                                                            .text_color(rgb(palette.text))
+                                                            .child(drop_title),
+                                                    )
+                                                    .child(
+                                                        div()
+                                                            .text_xs()
+                                                            .text_color(rgb(palette.text_muted))
+                                                            .child(drop_hint),
+                                                    ),
+                                            ),
                                     )
-                                },
-                            )
-                            .when(file_drop_hover && !session_id.is_empty(), |this| {
-                                this.child(
-                                    div()
-                                        .absolute()
-                                        .inset_2()
-                                        .rounded_lg()
-                                        .border_2()
-                                        .border_color(rgb(palette.link))
-                                        .bg(rgba(0x3b82f624))
-                                        .flex()
-                                        .items_center()
-                                        .justify_center()
-                                        .child(
-                                            div()
-                                                .max_w(px(320.))
-                                                .rounded_lg()
-                                                .border_1()
-                                                .border_color(rgb(palette.link))
-                                                .bg(rgb(palette.surface))
-                                                .px_6()
-                                                .py_4()
-                                                .shadow_lg()
-                                                .flex()
-                                                .flex_col()
-                                                .items_center()
-                                                .gap_1()
-                                                .child(
-                                                    div()
-                                                        .text_sm()
-                                                        .font_weight(FontWeight(700.))
-                                                        .text_color(rgb(palette.text))
-                                                        .child(drop_title),
-                                                )
-                                                .child(
-                                                    div()
-                                                        .text_xs()
-                                                        .text_color(rgb(palette.text_muted))
-                                                        .child(drop_hint),
-                                                ),
-                                        ),
-                                )
-                            })
-                            .when(show_sync_action_overlay, |this| {
-                                let pause_session_id = output_session_id.clone();
-                                let leave_session_id = output_session_id.clone();
-                                let close_session_id = output_session_id.clone();
-                                this.child(
+                                })
+                                .when(show_sync_action_overlay, |this| {
+                                    let pause_session_id = output_session_id.clone();
+                                    let leave_session_id = output_session_id.clone();
+                                    let close_session_id = output_session_id.clone();
+                                    this.child(
                                     div()
                                         .id(SharedString::from(format!(
                                             "terminal-sync-overlay-{output_session_id}"
@@ -1177,46 +1205,49 @@ impl NyaTermApp {
                                                 ),
                                         ),
                                 )
-                            })
-                            .when_some(performance_overlay_copy, |this, (title, detail)| {
-                                this.child(
-                                    div()
-                                        .id(SharedString::from(format!(
-                                            "terminal-perf-overlay-{output_session_id}"
-                                        )))
-                                        .absolute()
-                                        .left(px(12.))
-                                        .right(px(12.))
-                                        .top(px(12.))
-                                        .flex()
-                                        .justify_end()
-                                        .child(
-                                            div()
-                                                .max_w(px(360.))
-                                                .rounded_md()
-                                                .border_1()
-                                                .border_color(rgb(palette.border))
-                                                .bg(rgb(palette.surface))
-                                                .px_3()
-                                                .py_2()
-                                                .shadow_lg()
-                                                .child(
-                                                    div()
-                                                        .text_xs()
-                                                        .font_weight(FontWeight(700.))
-                                                        .text_color(rgb(palette.text))
-                                                        .child(title),
-                                                )
-                                                .child(
-                                                    div()
-                                                        .mt_1()
-                                                        .text_xs()
-                                                        .text_color(rgb(palette.text_dimmed))
-                                                        .child(detail),
-                                                ),
-                                        ),
-                                )
-                            }),
+                                })
+                                .when_some(performance_overlay_copy, |this, (title, detail)| {
+                                    this.child(
+                                        div()
+                                            .id(SharedString::from(format!(
+                                                "terminal-perf-overlay-{output_session_id}"
+                                            )))
+                                            .absolute()
+                                            .left(px(12.))
+                                            .right(px(12.))
+                                            .top(px(12.))
+                                            .flex()
+                                            .justify_end()
+                                            .child(
+                                                div()
+                                                    .max_w(px(360.))
+                                                    .rounded_md()
+                                                    .border_1()
+                                                    .border_color(rgb(palette.border))
+                                                    .bg(rgb(palette.surface))
+                                                    .px_3()
+                                                    .py_2()
+                                                    .shadow_lg()
+                                                    .child(
+                                                        div()
+                                                            .text_xs()
+                                                            .font_weight(FontWeight(700.))
+                                                            .text_color(rgb(palette.text))
+                                                            .child(title),
+                                                    )
+                                                    .child(
+                                                        div()
+                                                            .mt_1()
+                                                            .text_xs()
+                                                            .text_color(rgb(palette.text_dimmed))
+                                                            .child(detail),
+                                                    ),
+                                            ),
+                                    )
+                                }),
+                            context_menu_items,
+                        )
+                        .enabled(context_menu_enabled),
                     )
                     .when(is_active && self.terminal.search.open, |this| {
                         this.child(self.terminal_search_bar(cx))

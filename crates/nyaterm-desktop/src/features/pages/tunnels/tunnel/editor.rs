@@ -1,44 +1,59 @@
 use gpui::prelude::*;
 use gpui::{App, ClickEvent, Context, FontWeight, IntoElement, Window, div, px, rgb};
 
-use super::super::common::{network_dialog_footer, network_modal_shell};
-use crate::features::{NyaTermApp, TextInputSetup};
+use crate::features::{NO_SELECTION_VALUE, NyaTermApp, TextInputSetup};
 use crate::models::{NetworkTunnelEditorField, NetworkTunnelEditorState};
-use nyaterm_core::truncate_preview;
+use nyaterm_core::ConnectionType;
+use nyaterm_ui::NyaSelectOption;
 
-pub(in crate::features::pages::tunnels) fn network_tunnel_editor_panel(
+pub(in crate::features::pages::tunnels) fn network_tunnel_editor_content(
     palette: crate::theme::ThemePalette,
     editor: NetworkTunnelEditorState,
     app: &mut NyaTermApp,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
-    let connection_label = editor
-        .connection_id
-        .as_deref()
-        .and_then(|id| {
-            app.connection_state
-                .connections()
-                .iter()
-                .find(|connection| connection.id == id)
-                .map(|connection| connection.name.clone())
-        })
-        .unwrap_or_else(|| app.tr("network.connectionPickerPlaceholder").to_string());
-    let group_label = editor
+    let type_options = vec![
+        NyaSelectOption::new("local", app.tr("network.localTunnel")),
+        NyaSelectOption::new("remote", app.tr("network.remoteTunnel")),
+        NyaSelectOption::new("dynamic", app.tr("network.dynamicTunnel")),
+    ];
+    let selected_type = match editor.tunnel_type.as_str() {
+        "remote" => "remote",
+        "dynamic" => "dynamic",
+        _ => "local",
+    }
+    .to_string();
+    let mut group_options = vec![NyaSelectOption::new(
+        NO_SELECTION_VALUE,
+        app.tr("network.ungrouped"),
+    )];
+    group_options.extend(
+        app.tunnel_state
+            .tunnel_groups()
+            .iter()
+            .map(|group| NyaSelectOption::new(group.id.clone(), group.name.clone())),
+    );
+    let selected_group = editor
         .group_id
-        .as_deref()
-        .and_then(|id| {
-            app.tunnel_state
-                .tunnel_groups()
-                .iter()
-                .find(|group| group.id == id)
-                .map(|group| group.name.clone())
-        })
-        .unwrap_or_else(|| app.tr("network.ungrouped").to_string());
-    let mode_label = match editor.tunnel_type.as_str() {
-        "remote" => app.tr("network.remoteTunnel"),
-        "dynamic" => app.tr("network.dynamicTunnel"),
-        _ => app.tr("network.localTunnel"),
-    };
+        .clone()
+        .filter(|id| group_options.iter().any(|option| option.value() == id))
+        .unwrap_or_else(|| NO_SELECTION_VALUE.to_string());
+    let mut connection_options = vec![NyaSelectOption::new(
+        NO_SELECTION_VALUE,
+        app.tr("network.connectionPickerPlaceholder"),
+    )];
+    connection_options.extend(
+        app.connection_state
+            .connections()
+            .iter()
+            .filter(|connection| matches!(&connection.config, ConnectionType::Ssh { .. }))
+            .map(|connection| NyaSelectOption::new(connection.id.clone(), connection.name.clone())),
+    );
+    let selected_connection = editor
+        .connection_id
+        .clone()
+        .filter(|id| connection_options.iter().any(|option| option.value() == id))
+        .unwrap_or_else(|| NO_SELECTION_VALUE.to_string());
     let preview = tunnel_editor_preview(&editor);
     // Built up front: the card is one long builder chain that only reads `app`,
     // and creating an input needs it mutably.
@@ -86,34 +101,15 @@ pub(in crate::features::pages::tunnels) fn network_tunnel_editor_panel(
         )
     });
 
-    let card = div()
-        .p_6()
+    div()
         .flex()
         .flex_col()
         .gap_4()
         .child(
             div()
-                .min_w_0()
-                .flex()
-                .flex_col()
-                .gap_1()
-                .child(
-                    div()
-                        .text_size(px(15.))
-                        .font_weight(FontWeight(700.))
-                        .text_color(rgb(palette.text))
-                        .child(if editor.id.is_some() {
-                            app.tr("network.editTunnel")
-                        } else {
-                            app.tr("network.newTunnel")
-                        }),
-                )
-                .child(
-                    div()
-                        .text_size(px(12.))
-                        .text_color(rgb(palette.text_muted))
-                        .child(app.tr("network.tunnelDialogDescription")),
-                ),
+                .text_size(px(12.))
+                .text_color(rgb(palette.text_muted))
+                .child(app.tr("network.tunnelDialogDescription")),
         )
         .child(
             div()
@@ -122,32 +118,32 @@ pub(in crate::features::pages::tunnels) fn network_tunnel_editor_panel(
                 .gap_2()
                 .child(name_input)
                 .child(tunnel_editor_selector(
+                    app,
                     palette,
                     "network-tunnel-editor-type",
                     app.tr("network.tunnelType"),
-                    mode_label.to_string(),
-                    cx.listener(|this, _, _, cx| {
-                        this.cycle_network_tunnel_type(cx);
-                    }),
+                    type_options,
+                    selected_type,
+                    cx,
                 ))
                 .child(tunnel_editor_selector(
+                    app,
                     palette,
                     "network-tunnel-editor-group",
                     app.tr("network.group"),
-                    group_label,
-                    cx.listener(|this, _, _, cx| {
-                        this.cycle_network_tunnel_group(cx);
-                    }),
+                    group_options,
+                    selected_group,
+                    cx,
                 )),
         )
         .child(tunnel_editor_selector(
+            app,
             palette,
             "network-tunnel-editor-connection",
             app.tr("network.savedConnection"),
-            connection_label,
-            cx.listener(|this, _, _, cx| {
-                this.cycle_network_tunnel_connection(cx);
-            }),
+            connection_options,
+            selected_connection,
+            cx,
         ))
         .child(
             div()
@@ -225,45 +221,6 @@ pub(in crate::features::pages::tunnels) fn network_tunnel_editor_panel(
         .when_some(editor.error.clone(), |this, error| {
             this.child(div().text_xs().text_color(rgb(palette.danger)).child(error))
         })
-        .child(network_dialog_footer(
-            app,
-            palette,
-            "network-tunnel-editor-cancel",
-            "network-tunnel-editor-save",
-            app.tr("common.save"),
-            cx.listener(|this, _, _, cx| {
-                this.close_network_tunnel_editor(cx);
-            }),
-            cx.listener(|this, _, _, cx| {
-                this.save_network_tunnel_editor(cx);
-            }),
-        ));
-
-    // Escape and Enter belong to the dialog, not to any one box: the inputs
-    // deliberately leave both unconsumed so they reach here.
-    let card = card
-        .on_key_down(cx.listener(|this, event: &gpui::KeyDownEvent, _, cx| {
-            match event.keystroke.key.as_str() {
-                "escape" => {
-                    cx.stop_propagation();
-                    this.close_network_tunnel_editor(cx);
-                }
-                "enter" => {
-                    cx.stop_propagation();
-                    this.save_network_tunnel_editor(cx);
-                }
-                _ => {}
-            }
-        }))
-        .into_any_element();
-
-    network_modal_shell(
-        palette,
-        app.shell_surface_color(palette.bg),
-        "network-tunnel-editor-modal",
-        640.,
-        card,
-    )
 }
 
 pub(in crate::features::pages::tunnels) fn tunnel_editor_input(
@@ -295,41 +252,30 @@ pub(in crate::features::pages::tunnels) fn tunnel_editor_field_key(
     }
 }
 
-pub(in crate::features::pages::tunnels) fn tunnel_editor_selector(
+pub(in crate::features::pages::tunnels) fn tunnel_editor_selector<I>(
+    app: &mut NyaTermApp,
     palette: crate::theme::ThemePalette,
-    id: impl Into<String>,
+    id: I,
     label: &'static str,
-    value: String,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
+    options: Vec<NyaSelectOption>,
+    selected_value: String,
+    cx: &mut Context<NyaTermApp>,
+) -> impl IntoElement + use<I>
+where
+    I: Into<String>,
+{
     div()
-        .id(gpui::SharedString::from(id.into()))
         .h(px(52.))
-        .px_3()
-        .py_2()
         .flex()
         .flex_col()
         .gap_1()
-        .rounded_md()
-        .border_1()
-        .border_color(rgb(palette.border))
-        .bg(rgb(palette.bg))
-        .cursor_pointer()
-        .hover(|this| this.bg(rgb(palette.surface)))
         .child(
             div()
                 .text_size(px(11.))
                 .text_color(rgb(palette.text_muted))
                 .child(label),
         )
-        .child(
-            div()
-                .font_family(crate::features::gpui_code_font_family())
-                .text_size(px(12.))
-                .text_color(rgb(palette.text))
-                .child(truncate_preview(&value, 42)),
-        )
-        .on_click(on_click)
+        .child(app.select_control(id.into(), options, Some(selected_value), false, cx))
 }
 
 pub(in crate::features::pages::tunnels) fn tunnel_editor_option(

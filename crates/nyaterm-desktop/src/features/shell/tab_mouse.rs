@@ -151,51 +151,6 @@ impl Render for SessionTabTooltip {
     }
 }
 
-/// Compact chrome tooltip (activity bar / bottom panel / settings).
-pub(in crate::features) struct ChromeTooltip {
-    pub title: String,
-    pub detail: Option<String>,
-}
-
-impl ChromeTooltip {
-    pub(in crate::features) fn new(title: impl Into<String>) -> Self {
-        Self {
-            title: title.into(),
-            detail: None,
-        }
-    }
-}
-
-impl Render for ChromeTooltip {
-    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-        let mut body = div().flex().flex_col().gap_1().child(
-            div()
-                .text_size(px(12.))
-                .font_weight(FontWeight(700.))
-                .text_color(rgb(0xe5edf7))
-                .child(self.title.clone()),
-        );
-        if let Some(detail) = &self.detail {
-            body = body.child(
-                div()
-                    .text_size(px(11.))
-                    .text_color(rgb(0x8f98aa))
-                    .child(detail.clone()),
-            );
-        }
-        div()
-            .px_3()
-            .py_2()
-            .max_w(px(240.))
-            .rounded_md()
-            .border_1()
-            .border_color(rgb(0x334155))
-            .bg(rgba(0x151b24f2))
-            .shadow_lg()
-            .child(body)
-    }
-}
-
 fn line_looks_copyable(line: &str) -> bool {
     let trimmed = line.trim();
     if trimmed.is_empty() {

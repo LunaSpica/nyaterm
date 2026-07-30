@@ -1,10 +1,11 @@
-use gpui::{Context, KeyDownEvent, Window};
+use gpui::{Context, ParentElement as _, Window, div};
 use nyaterm_core::ConnectionStore;
+use nyaterm_ui::{NyaConfirmDialog, NyaDialogFooter, NyaDialogWindowExt};
 
 use crate::features::NyaTermApp;
 use crate::models::{
-    QuickCommandCategoryDeleteState, QuickCommandCategoryRenameState, QuickCommandDeleteState,
-    QuickCommandDetailsState, QuickCommandEditorState,
+    QuickCommandCategoryDeleteState, QuickCommandCategoryRenameState, QuickCommandDetailsState,
+    QuickCommandEditorState,
 };
 
 use super::helpers::quick_command_category_label;
@@ -113,6 +114,7 @@ impl NyaTermApp {
     pub(in crate::features) fn open_delete_quick_command_confirm(
         &mut self,
         command_id: String,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(command) = self
@@ -127,26 +129,49 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        self.commands.request_quick_delete(QuickCommandDeleteState {
-            id: command.id,
-            label: command.label,
-        });
         self.shell
             .set_status("quick command delete confirmation opened".to_string());
+        let title = self.tr("quickCommands.delete").to_string();
+        let message = self
+            .tr("quickCommands.deleteConfirm")
+            .replace("{{name}}", &command.label);
+        let cancel_label = self.tr("common.cancel").to_string();
+        let delete_label = self.tr("common.delete").to_string();
+        let app = cx.weak_entity();
+        let command_id = command.id.clone();
+        let command_label = command.label.clone();
+        window.open_nya_dialog(cx, move |dialog, _, _| {
+            let confirm_app = app.clone();
+            let command_id = command_id.clone();
+            let command_label = command_label.clone();
+            NyaConfirmDialog::new(
+                dialog.title(title.clone()).width(384.),
+                NyaDialogFooter::new(cancel_label.clone(), delete_label.clone()).danger(),
+            )
+            .content(div().child(message.clone()))
+            .on_confirm(move |_, _, cx| {
+                confirm_app
+                    .update(cx, |app, cx| {
+                        app.confirm_delete_quick_command(
+                            command_id.clone(),
+                            command_label.clone(),
+                            cx,
+                        )
+                    })
+                    .is_ok()
+            })
+            .on_cancel(|_, _, _| true)
+            .into_dialog()
+        });
         cx.notify();
     }
 
-    pub(in crate::features) fn cancel_delete_quick_command(&mut self, cx: &mut Context<Self>) {
-        self.commands.clear_quick_delete();
-        self.shell
-            .set_status("quick command delete cancelled".to_string());
-        cx.notify();
-    }
-
-    pub(in crate::features) fn confirm_delete_quick_command(&mut self, cx: &mut Context<Self>) {
-        let Some(delete) = self.commands.quick_delete().cloned() else {
-            return;
-        };
+    fn confirm_delete_quick_command(
+        &mut self,
+        command_id: String,
+        command_label: String,
+        cx: &mut Context<Self>,
+    ) {
         match ConnectionStore::open_with_portable_key_path(
             self.runtime.config_dir(),
             self.runtime.portable_key_path().map(ToOwned::to_owned),
@@ -154,7 +179,7 @@ impl NyaTermApp {
         .and_then(|store| {
             let mut config = store.load_quick_commands()?;
             let before = config.commands.len();
-            config.commands.retain(|command| command.id != delete.id);
+            config.commands.retain(|command| command.id != command_id);
             let deleted = config.commands.len() != before;
             store.save_quick_commands(config.clone())?;
             Ok((config, deleted))
@@ -162,12 +187,11 @@ impl NyaTermApp {
             Ok((config, deleted)) => {
                 self.commands
                     .replace_quick_command_catalog(config.commands, config.categories);
-                self.commands.clear_quick_delete();
                 self.settings.update_store_status(
                     if deleted {
-                        format!("quick command '{}' deleted", delete.label)
+                        format!("quick command '{command_label}' deleted")
                     } else {
-                        format!("quick command '{}' was already deleted", delete.label)
+                        format!("quick command '{command_label}' was already deleted")
                     },
                     deleted,
                 );
@@ -187,6 +211,7 @@ impl NyaTermApp {
     pub(in crate::features) fn open_delete_quick_command_category_confirm(
         &mut self,
         category_id: String,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(category) = self
@@ -207,14 +232,31 @@ impl NyaTermApp {
             .iter()
             .filter(|command| command.category_id.as_deref() == Some(category.id.as_str()))
             .count();
+        let category_name = category.name.clone();
         self.commands
             .request_quick_category_delete(QuickCommandCategoryDeleteState {
                 id: category.id,
-                name: category.name,
-                command_count,
+                name: category_name.clone(),
             });
         self.shell
             .set_status("quick command category delete confirmation opened".to_string());
+        let title = self.tr("quickCommands.deleteCategory").to_string();
+        let message = self
+            .tr("quickCommands.deleteCategoryConfirm")
+            .replace("{{name}}", &category_name)
+            .replace("{{count}}", &command_count.to_string());
+        self.open_confirm_dialog_with_cancel(
+            (
+                title,
+                message,
+                self.tr("common.delete").to_string(),
+                true,
+                |app, _, cx| app.confirm_delete_quick_command_category(cx),
+                |app, cx| app.cancel_delete_quick_command_category(cx),
+            ),
+            window,
+            cx,
+        );
         cx.notify();
     }
 
@@ -231,11 +273,11 @@ impl NyaTermApp {
     pub(in crate::features) fn confirm_delete_quick_command_category(
         &mut self,
         cx: &mut Context<Self>,
-    ) {
+    ) -> bool {
         let Some(delete) = self.commands.quick_category_delete().cloned() else {
-            return;
+            return true;
         };
-        match ConnectionStore::open_with_portable_key_path(
+        let succeeded = match ConnectionStore::open_with_portable_key_path(
             self.runtime.config_dir(),
             self.runtime.portable_key_path().map(ToOwned::to_owned),
         )
@@ -274,6 +316,7 @@ impl NyaTermApp {
                 );
                 self.shell
                     .set_status(self.settings.store_status().message.to_string());
+                true
             }
             Err(error) => {
                 self.settings.update_store_status(
@@ -282,9 +325,11 @@ impl NyaTermApp {
                 );
                 self.shell
                     .set_status(self.settings.store_status().message.to_string());
+                false
             }
-        }
+        };
         cx.notify();
+        succeeded
     }
 
     pub(in crate::features) fn open_rename_quick_command_category(
@@ -314,7 +359,18 @@ impl NyaTermApp {
             });
         self.shell
             .set_status("quick command category rename opened".to_string());
-        window.focus(self.commands.quick_category_rename_focus());
+        self.open_form_dialog(
+            (
+                self.tr("quickCommands.renameCategory").to_string(),
+                384.,
+                self.tr("common.confirm").to_string(),
+                |app, _, cx| app.quick_command_category_rename_dialog_content(cx),
+                |app, _, cx| app.confirm_rename_quick_command_category(cx),
+                |app, cx| app.cancel_rename_quick_command_category(cx),
+            ),
+            window,
+            cx,
+        );
         cx.notify();
     }
 
@@ -331,16 +387,16 @@ impl NyaTermApp {
     pub(in crate::features) fn confirm_rename_quick_command_category(
         &mut self,
         cx: &mut Context<Self>,
-    ) {
+    ) -> bool {
         let Some(rename) = self.commands.quick_category_rename().cloned() else {
-            return;
+            return true;
         };
         let name = rename.draft.trim().to_string();
         if name.is_empty() {
             let message = self.tr("quickCommands.categoryNameRequired").to_string();
             self.commands.set_quick_category_rename_error(message);
             cx.notify();
-            return;
+            return false;
         }
         if self
             .commands
@@ -353,10 +409,10 @@ impl NyaTermApp {
             let message = self.tr("quickCommands.categoryNameDuplicated").to_string();
             self.commands.set_quick_category_rename_error(message);
             cx.notify();
-            return;
+            return false;
         }
 
-        match ConnectionStore::open_with_portable_key_path(
+        let renamed = match ConnectionStore::open_with_portable_key_path(
             self.runtime.config_dir(),
             self.runtime.portable_key_path().map(ToOwned::to_owned),
         )
@@ -404,6 +460,7 @@ impl NyaTermApp {
                 }
                 self.shell
                     .set_status(self.settings.store_status().message.to_string());
+                renamed
             }
             Err(error) => {
                 self.commands
@@ -414,32 +471,11 @@ impl NyaTermApp {
                 );
                 self.shell
                     .set_status(self.settings.store_status().message.to_string());
+                false
             }
-        }
+        };
         cx.notify();
-    }
-
-    pub(in crate::features) fn handle_quick_command_category_rename_key_down(
-        &mut self,
-        event: &KeyDownEvent,
-        cx: &mut Context<Self>,
-    ) {
-        self.mark_user_activity();
-        let keystroke = &event.keystroke;
-        if keystroke.modifiers.platform
-            || keystroke.modifiers.control
-            || keystroke.modifiers.alt
-            || keystroke.modifiers.function
-        {
-            return;
-        }
-
-        // The box owns the text; the dialog owns the keys that close or confirm.
-        match keystroke.key.as_str() {
-            "escape" => self.cancel_rename_quick_command_category(cx),
-            "enter" => self.confirm_rename_quick_command_category(cx),
-            _ => {}
-        }
+        renamed
     }
 
     /// Apply an edit from the category rename box.

@@ -1,16 +1,18 @@
-use gpui::Context;
+use gpui::{Context, Window};
 use nyaterm_core::ConnectionStore;
 
 use crate::features::NyaTermApp;
-use crate::models::{NetworkGroupDeleteConfirmState, NetworkGroupEditorState, NetworkTab};
+use crate::models::{NetworkGroupEditorState, NetworkTab};
 
 impl NyaTermApp {
     pub(in crate::features) fn open_network_group_editor(
         &mut self,
         tab: NetworkTab,
         group_id: Option<String>,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let editing = group_id.is_some();
         let name = match (tab, group_id.as_deref()) {
             (NetworkTab::Tunnels, Some(id)) => self
                 .tunnel_state
@@ -46,6 +48,29 @@ impl NyaTermApp {
         self.shell
             .set_status("network group editor opened".to_string());
         cx.notify();
+        self.open_form_dialog(
+            (
+                if editing {
+                    self.tr("network.renameGroup").to_string()
+                } else {
+                    self.tr("network.newGroup").to_string()
+                },
+                420.,
+                self.tr("common.save").to_string(),
+                |app, _, cx| app.network_group_editor_dialog_content(cx),
+                |app, _, cx| {
+                    app.save_network_group_editor(cx);
+                    let saved = app.connection_state.active_network_group_editor().is_none();
+                    if saved {
+                        app.forget_text_inputs("network.group-editor.");
+                    }
+                    saved
+                },
+                |app, cx| app.close_network_group_editor(cx),
+            ),
+            window,
+            cx,
+        );
     }
 
     pub(in crate::features) fn close_network_group_editor(&mut self, cx: &mut Context<Self>) {
@@ -173,39 +198,36 @@ impl NyaTermApp {
         id: String,
         label: String,
         item_count: usize,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.connection_state
-            .open_network_group_delete_confirm(NetworkGroupDeleteConfirmState {
-                tab,
-                id,
-                label,
-                item_count,
-            });
         self.shell
             .set_status("network group delete confirmation opened".to_string());
-        cx.notify();
-    }
-
-    pub(in crate::features) fn cancel_network_group_delete(&mut self, cx: &mut Context<Self>) {
-        self.connection_state.close_network_group_delete_confirm();
-        self.shell
-            .set_status("network group delete cancelled".to_string());
-        cx.notify();
-    }
-
-    pub(in crate::features) fn confirm_network_group_delete(&mut self, cx: &mut Context<Self>) {
-        let Some(delete) = self.connection_state.active_network_group_delete_confirm() else {
-            self.shell
-                .set_status("no network group delete is pending".to_string());
-            cx.notify();
-            return;
-        };
-
-        match delete.tab {
-            NetworkTab::Tunnels => self.delete_tunnel_group(delete.id, delete.label, cx),
-            NetworkTab::Proxies => self.delete_proxy_group(delete.id, delete.label, cx),
-        }
+        let description = self
+            .tr("network.deleteGroupConfirm")
+            .replace("{{name}}", &label)
+            .replace("{{count}}", &item_count.to_string());
+        self.open_confirm_dialog(
+            (
+                self.tr("network.deleteGroup").to_string(),
+                description,
+                self.tr("common.delete").to_string(),
+                true,
+                move |app, _, cx| {
+                    match tab {
+                        NetworkTab::Tunnels => {
+                            app.delete_tunnel_group(id.clone(), label.clone(), cx)
+                        }
+                        NetworkTab::Proxies => {
+                            app.delete_proxy_group(id.clone(), label.clone(), cx)
+                        }
+                    }
+                    true
+                },
+            ),
+            window,
+            cx,
+        );
     }
 
     pub(in crate::features) fn delete_tunnel_group(

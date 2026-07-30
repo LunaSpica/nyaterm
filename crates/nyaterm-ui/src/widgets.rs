@@ -1,7 +1,7 @@
+use crate::button::{NyaButton, NyaButtonVariant, NyaIconButton};
 use crate::theme::ThemePalette;
 use gpui::{
     App, ClickEvent, FontWeight, Hsla, IntoElement, SharedString, Window, div, prelude::*, px, rgb,
-    svg,
 };
 
 fn platform_code_font_family() -> &'static str {
@@ -113,28 +113,15 @@ pub fn session_info_row(
 }
 
 pub fn small_button(
-    palette: ThemePalette,
+    _palette: ThemePalette,
     id: impl Into<String>,
     label: &'static str,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
-    let hover_bg = palette.hover;
-    let hover_text = palette.text;
-    div()
-        .id(SharedString::from(id.into()))
-        .h(px(28.))
-        .px_3()
-        .flex()
-        .items_center()
-        .rounded_sm()
-        .border_1()
-        .border_color(rgb(palette.border))
-        .bg(rgb(palette.surface_elevated))
-        .text_color(rgb(palette.text))
-        .text_xs()
-        .cursor_pointer()
-        .hover(move |this| this.bg(rgb(hover_bg)).text_color(rgb(hover_text)))
-        .child(label)
+    NyaButton::new(id.into(), label)
+        .variant(NyaButtonVariant::Secondary)
+        .small()
+        .compact()
         .on_click(on_click)
 }
 
@@ -142,39 +129,14 @@ pub fn mode_button(
     id: impl Into<String>,
     label: &'static str,
     active: bool,
-    palette: ThemePalette,
+    _palette: ThemePalette,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
-    // Tauri AI mode switch: compact segment, primary when active.
-    div()
-        .id(SharedString::from(id.into()))
-        .h(px(26.))
-        .px_3()
-        .flex()
-        .items_center()
-        .rounded_md()
-        .bg(if active {
-            rgb(palette.hover)
-        } else {
-            rgb(palette.input)
-        })
-        .text_color(if active {
-            rgb(palette.primary)
-        } else {
-            rgb(palette.text_muted)
-        })
-        .text_size(px(11.))
-        .font_weight(if active {
-            FontWeight(600.)
-        } else {
-            FontWeight(500.)
-        })
-        .cursor_pointer()
-        .hover(move |this| {
-            this.bg(rgb(palette.surface_elevated))
-                .text_color(rgb(palette.text))
-        })
-        .child(label)
+    NyaButton::new(id.into(), label)
+        .variant(NyaButtonVariant::Ghost)
+        .selected(active)
+        .small()
+        .compact()
         .on_click(on_click)
 }
 
@@ -182,34 +144,10 @@ pub fn svg_icon_button(
     id: impl Into<String>,
     icon_path: &'static str,
     icon_size: f32,
-    palette: ThemePalette,
+    _palette: ThemePalette,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
-    let id = SharedString::from(id.into());
-    // `svg()` reads its tint from its own computed style, which GPUI starts from
-    // `Style::default()` — the color on this `div` reaches text but not the glyph,
-    // and a glyph with no color of its own is skipped at paint time. Hence the
-    // explicit color, and the group so hover still brightens the icon.
-    div()
-        .id(id.clone())
-        .group(id.clone())
-        .size(px(24.))
-        .flex()
-        .items_center()
-        .justify_center()
-        .rounded_md()
-        .text_color(rgb(palette.text_muted))
-        .cursor_pointer()
-        .hover(move |this| {
-            this.bg(rgb(palette.surface_elevated))
-                .text_color(rgb(palette.text))
-        })
-        .child(
-            svg()
-                .size(px(icon_size))
-                .path(icon_path)
-                .text_color(rgb(palette.text_muted))
-                .group_hover(id, move |this| this.text_color(rgb(palette.text))),
-        )
+    NyaIconButton::new(id.into(), icon_path)
+        .icon_size(px(icon_size))
         .on_click(on_click)
 }

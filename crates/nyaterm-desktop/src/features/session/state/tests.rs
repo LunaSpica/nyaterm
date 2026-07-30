@@ -1,7 +1,7 @@
 use std::sync::{Arc, mpsc};
 use std::time::Instant;
 
-use gpui::{TestAppContext, px};
+use gpui::TestAppContext;
 use nyaterm_core::{AiExecutionProfile, ConnectionType, SavedConnection};
 use nyaterm_transport::{
     LocalSessionConfig, SessionEvent, SessionKind, SessionManager, SshCredentialPrompt,
@@ -12,8 +12,8 @@ use nyaterm_transport::{
 use crate::features::runtime_jobs::SessionStartResult;
 use crate::features::session::HostKeyPromptIssue;
 use crate::models::{
-    ActiveSessionMenuState, SessionEventBridge, SessionLaunchConfig, SessionRuntimeMetadata,
-    StartupCommandAction, TabActionsSubmenu, TerminalFramePipeline, WorkspaceSplitDirection,
+    SessionEventBridge, SessionLaunchConfig, SessionRuntimeMetadata, StartupCommandAction,
+    TabActionsSubmenu, TerminalFramePipeline, WorkspaceSplitDirection,
 };
 
 use super::{
@@ -98,12 +98,8 @@ fn session_state(cx: &TestAppContext) -> SessionFeatureState {
         SessionFeatureFocus {
             credential: focus(),
             tab_actions: focus(),
-            close_all: focus(),
-            rename: focus(),
             color_picker: focus(),
             info: focus(),
-            startup_command: focus(),
-            temporary_ssh_link: focus(),
         },
     )
 }
@@ -283,12 +279,8 @@ fn session_state_owns_live_runtime_and_initializes_transient_state() {
         SessionFeatureFocus {
             credential: focus(),
             tab_actions: focus(),
-            close_all: focus(),
-            rename: focus(),
             color_picker: focus(),
             info: focus(),
-            startup_command: focus(),
-            temporary_ssh_link: focus(),
         },
     );
 
@@ -308,10 +300,6 @@ fn session_state_owns_live_runtime_and_initializes_transient_state() {
     assert!(Arc::ptr_eq(&sessions.prompt_otp_provider(), &otp_provider));
     assert!(sessions.prompt_active_credential().is_none());
     assert!(sessions.prompt_active_keyboard_interactive().is_none());
-    assert!(!sessions.dialog_close_all_sessions_confirm_is_open());
-    assert!(!sessions.dialog_rename_is_open());
-    assert!(!sessions.dialog_startup_command_is_open());
-
     assert!(!sessions.restore_is_complete());
     assert!(sessions.mark_restore_complete());
     assert!(!sessions.mark_restore_complete());
@@ -346,25 +334,7 @@ fn session_state_owns_live_runtime_and_initializes_transient_state() {
         Some(["cargo check".to_string()].as_slice())
     );
 
-    let menu = ActiveSessionMenuState {
-        session_id: "session-b".to_string(),
-        x: px(10.),
-        y: px(20.),
-    };
-    sessions.toggle_active_menu(menu.clone());
-    assert_eq!(
-        sessions.active_menu().map(|menu| menu.session_id.as_str()),
-        Some("session-b")
-    );
-    sessions.toggle_active_menu(menu);
-    assert!(sessions.active_menu().is_none());
-    sessions.set_active_menu(ActiveSessionMenuState {
-        session_id: "session-b".to_string(),
-        x: px(10.),
-        y: px(20.),
-    });
     assert!(sessions.begin_reconnect_action("session-b".to_string()));
-    assert!(sessions.active_menu().is_none());
     assert_eq!(sessions.busy_action("session-b"), Some("reconnect"));
     assert!(!sessions.begin_disconnect_action("session-b".to_string()));
     sessions.finish_busy_action("session-b");
@@ -386,11 +356,7 @@ fn session_state_owns_live_runtime_and_initializes_transient_state() {
     assert_eq!(action, StartupCommandAction::Multiplex);
     assert_eq!(request.command, "uptime");
     assert_eq!(request.delay_ms, 60_000);
-    assert!(!sessions.dialogs.startup_command_is_open());
-    assert_eq!(
-        sessions.dialogs.startup_command_action(),
-        StartupCommandAction::Duplicate
-    );
+    assert!(sessions.dialogs.take_startup_command().is_none());
 
     sessions
         .dialogs
@@ -418,7 +384,6 @@ fn session_state_owns_live_runtime_and_initializes_transient_state() {
         sessions.dialogs.take_rename_submission(),
         RenameSessionSubmission::Empty
     ));
-    assert!(sessions.dialogs.rename_is_open());
     assert!(
         sessions
             .dialogs
@@ -675,12 +640,6 @@ fn removing_session_catalog_clears_all_session_scoped_entries() {
         sessions.active_ai_execution_profile(),
         AiExecutionProfile::Auto
     );
-    sessions.set_active_menu(ActiveSessionMenuState {
-        session_id: "session-a".to_string(),
-        x: px(10.),
-        y: px(20.),
-    });
-
     assert_eq!(
         sessions.remove_session_catalog("session-a").as_deref(),
         Some("multiplex-a")
@@ -693,7 +652,6 @@ fn removing_session_catalog_clears_all_session_scoped_entries() {
     assert!(sessions.tab_color("session-a").is_none());
     assert!(sessions.command_history_for("session-a").is_none());
     assert!(!sessions.session_is_busy("session-a"));
-    assert!(sessions.active_menu().is_none());
     assert!(sessions.active_id().is_none());
     assert!(sessions.active_ssh_config().is_none());
     assert_eq!(

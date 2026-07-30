@@ -6,6 +6,7 @@ use crate::features::{tunnel_endpoint, tunnel_mode, tunnel_name};
 use crate::widgets::status_pill;
 use nyaterm_core::{TunnelConfig, truncate_preview};
 use nyaterm_transport::SshTunnelInfo;
+use nyaterm_ui::NyaSwitch;
 
 pub(in crate::features::pages::tunnels) struct TunnelNetworkRow<'a> {
     pub tunnel: &'a TunnelConfig,
@@ -20,7 +21,6 @@ pub(in crate::features::pages::tunnels) struct TunnelNetworkRow<'a> {
 
 pub(in crate::features::pages::tunnels) fn tunnel_network_row(
     row: TunnelNetworkRow<'_>,
-    on_toggle: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     on_open: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     on_close: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     on_edit: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
@@ -150,48 +150,22 @@ pub(in crate::features::pages::tunnels) fn tunnel_network_row(
                 .gap_1()
                 .child(toggle)
                 .child(network_item_overflow_menu(
-                    menu, on_toggle, on_edit, on_move, on_delete,
+                    menu, on_edit, on_move, on_delete,
                 )),
         )
 }
 
 fn network_switch_button(
-    palette: crate::theme::ThemePalette,
+    _palette: crate::theme::ThemePalette,
     id: impl Into<String>,
     on: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
-    // Compact switch stand-in for Tauri Switch next to tunnel rows.
-    div()
-        .id(gpui::SharedString::from(id.into()))
-        .w(px(34.))
-        .h(px(18.))
-        .rounded_full()
-        .border_1()
-        .border_color(if on {
-            rgb(palette.success)
-        } else {
-            rgb(palette.border)
+    NyaSwitch::new(id.into())
+        .checked(on)
+        .on_click(move |_, window, cx| {
+            on_click(&ClickEvent::default(), window, cx);
         })
-        .bg(if on {
-            rgb(palette.success)
-        } else {
-            rgb(palette.surface_elevated)
-        })
-        .flex()
-        .items_center()
-        .px(px(2.))
-        .cursor_pointer()
-        .hover(|this| this.opacity(0.9))
-        .child(
-            div()
-                .size(px(12.))
-                .rounded_full()
-                .bg(rgb(0xffffff))
-                .when(on, |this| this.ml_auto())
-                .when(!on, |this| this.mr_auto()),
-        )
-        .on_click(on_click)
 }
 
 pub(super) fn tunnel_status_style(

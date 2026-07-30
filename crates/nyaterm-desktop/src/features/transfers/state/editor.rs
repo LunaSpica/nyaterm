@@ -1,9 +1,9 @@
 //! Built-in remote-editor workspace, tab lifecycle and window tracking.
 
-use gpui::{FocusHandle, WindowHandle};
+use gpui::FocusHandle;
 use nyaterm_transport::{SftpRemoteTextFile, SftpWriteTextResult};
+use nyaterm_ui::NyaWindowHandle;
 
-use crate::features::transfers::editor_window::RemoteFileEditorWindow;
 use crate::models::{TransferEditorState, TransferEditorWorkspaceState};
 
 use super::{
@@ -484,9 +484,7 @@ impl TransferFeatureState {
         std::mem::take(&mut self.editor.tabs_menu_open)
     }
 
-    pub(in crate::features::transfers) fn editor_window(
-        &self,
-    ) -> Option<WindowHandle<RemoteFileEditorWindow>> {
+    pub(in crate::features::transfers) fn editor_window(&self) -> Option<NyaWindowHandle> {
         self.editor.window
     }
 
@@ -511,7 +509,7 @@ impl TransferFeatureState {
 
     pub(in crate::features::transfers) fn finish_editor_window_open(
         &mut self,
-        handle: WindowHandle<RemoteFileEditorWindow>,
+        handle: NyaWindowHandle,
     ) {
         self.editor.window = Some(handle);
         self.editor.window_open_pending = false;
@@ -519,7 +517,7 @@ impl TransferFeatureState {
 
     pub(in crate::features::transfers) fn finish_editor_window_activation(
         &mut self,
-        handle: WindowHandle<RemoteFileEditorWindow>,
+        handle: NyaWindowHandle,
         activated: bool,
     ) -> bool {
         self.editor.window_open_pending = false;
@@ -532,7 +530,7 @@ impl TransferFeatureState {
 
     pub(in crate::features::transfers) fn clear_editor_window_if(
         &mut self,
-        handle: WindowHandle<RemoteFileEditorWindow>,
+        handle: NyaWindowHandle,
     ) -> bool {
         if self.editor.window.is_some_and(|current| current == handle) {
             self.editor.window = None;

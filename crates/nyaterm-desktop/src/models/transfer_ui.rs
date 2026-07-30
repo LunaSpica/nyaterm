@@ -101,19 +101,6 @@ pub(crate) struct TransferMoveState {
     pub(crate) value: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct TransferDeleteState {
-    pub(crate) remote_path: String,
-    pub(crate) name: String,
-    pub(crate) paths: Vec<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct TransferJobDeleteState {
-    pub(crate) job_id: String,
-    pub(crate) title: String,
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct TransferJobMenuState {
     pub(crate) job_id: String,
@@ -176,7 +163,6 @@ pub(crate) struct TransferPropertiesState {
     pub(crate) recursive: bool,
     pub(crate) saving: bool,
     pub(crate) error: Option<String>,
-    pub(crate) focused_field: TransferPropertiesField,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

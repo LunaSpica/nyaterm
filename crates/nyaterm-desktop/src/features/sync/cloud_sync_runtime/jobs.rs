@@ -169,7 +169,7 @@ impl NyaTermApp {
                         this.cloud_sync
                             .complete_job(result.state, result.status.message.clone());
                         this.shell.set_status(result.status.message);
-                        this.refresh_store_from_runtime();
+                        this.refresh_store_from_runtime_and_sync_theme(cx);
                     }
                     Err(error) => {
                         let status = cloud_sync_history_status(&error);
@@ -342,7 +342,7 @@ impl NyaTermApp {
                         this.cloud_sync
                             .complete_job(result.state, result.status.message.clone());
                         this.shell.set_status(result.status.message);
-                        this.refresh_store_from_runtime();
+                        this.refresh_store_from_runtime_and_sync_theme(cx);
                     }
                     Err(error) => {
                         let status = cloud_sync_history_status(&error);

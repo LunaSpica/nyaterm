@@ -6,10 +6,10 @@ use nyaterm_core::truncate_preview;
 
 use crate::features::settings::SearchEngineMenu;
 use crate::features::{
-    ChromeTooltip, NyaTermApp, SEARCH_ENGINE_ICON_IDS, TextInputSetup, mono_icon,
-    search_engine_icon,
+    NyaTermApp, SEARCH_ENGINE_ICON_IDS, TextInputSetup, mono_icon, search_engine_icon,
 };
 use crate::theme::ThemePalette;
+use nyaterm_ui::NyaTooltip;
 
 use super::super::settings_switch;
 
@@ -159,11 +159,9 @@ impl NyaTermApp {
                                                     .justify_center()
                                                     .cursor_pointer()
                                                     .hover(|this| this.bg(rgb(palette.hover)))
-                                                    .tooltip(move |_, cx| {
-                                                        cx.new(|_| {
-                                                            ChromeTooltip::new(select_icon_label)
-                                                        })
-                                                        .into()
+                                                    .tooltip(move |window, cx| {
+                                                        NyaTooltip::new(select_icon_label)
+                                                            .build(window, cx)
                                                     })
                                                     .child(match icon_def {
                                                         Some(def) => mono_icon(
@@ -250,13 +248,9 @@ impl NyaTermApp {
                                                             .id(SharedString::from(format!(
                                                                 "settings-search-engine-menu-tip-{index}"
                                                             )))
-                                                            .tooltip(move |_, cx| {
-                                                                cx.new(|_| {
-                                                                    ChromeTooltip::new(
-                                                                        show_menu_label,
-                                                                    )
-                                                                })
-                                                                .into()
+                                                            .tooltip(move |window, cx| {
+                                                                NyaTooltip::new(show_menu_label)
+                                                                    .build(window, cx)
                                                             })
                                                             .child(settings_switch(
                                                                 palette,
@@ -503,7 +497,7 @@ fn search_engine_icon_choice(
         .justify_center()
         .cursor_pointer()
         .hover(|this| this.bg(rgb(palette.hover)))
-        .tooltip(move |_, cx| cx.new(|_| ChromeTooltip::new(tooltip.clone())).into())
+        .tooltip(move |window, cx| NyaTooltip::new(tooltip.clone()).build(window, cx))
         .child(mono_icon(icon_path, rgb(color).into(), 15.))
         .on_click(on_click)
 }
@@ -578,7 +572,7 @@ fn search_engine_icon_button(
         .text_color(rgb(palette.text_muted))
         .cursor_pointer()
         .hover(|this| this.bg(rgb(palette.hover)).text_color(rgb(palette.text)))
-        .tooltip(move |_, cx| cx.new(|_| ChromeTooltip::new(tooltip)).into())
+        .tooltip(move |window, cx| NyaTooltip::new(tooltip).build(window, cx))
         .child(
             svg()
                 .size(px(15.))

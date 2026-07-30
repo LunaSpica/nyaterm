@@ -12,24 +12,21 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::mpsc;
 use std::time::Instant;
 
-use gpui::{FocusHandle, Pixels, WindowHandle};
+use gpui::{FocusHandle, Pixels};
 use nyaterm_transport::{SftpDuplicatePolicy, SftpFileEntry, SftpFileProperties};
+use nyaterm_ui::NyaWindowHandle;
 
 use crate::models::{
     TransferBrowserColumnResizeState, TransferBrowserColumnWidths, TransferBrowserContextMenuState,
     TransferBrowserDragSelectionState, TransferBrowserFavoritesMenuState,
     TransferBrowserNavigationSnapshot, TransferBrowserPathMenuState,
     TransferBrowserPendingRenameState, TransferBrowserSessionCacheState, TransferBrowserSortColumn,
-    TransferBrowserSortDirection, TransferBrowserUploadMenuState, TransferDeleteState,
-    TransferEditorWorkspaceState, TransferExternalSyncPromptState, TransferHeightResizeState,
-    TransferJobDeleteState, TransferJobMenuState, TransferJobResult, TransferJobState,
-    TransferJobStatus, TransferMoveState, TransferNewFileState, TransferNewFolderState,
-    TransferNewSymlinkState, TransferPathPromptKind, TransferPropertiesState, TransferRenameState,
-    TransferUnknownFileState,
+    TransferBrowserSortDirection, TransferBrowserUploadMenuState, TransferEditorWorkspaceState,
+    TransferExternalSyncPromptState, TransferHeightResizeState, TransferJobMenuState,
+    TransferJobResult, TransferJobState, TransferJobStatus, TransferMoveState,
+    TransferNewFileState, TransferNewFolderState, TransferNewSymlinkState, TransferPathPromptKind,
+    TransferPropertiesState, TransferRenameState, TransferUnknownFileState,
 };
-
-use super::editor_window::RemoteFileEditorWindow;
-use super::external_sync_window::TransferExternalSyncWindow;
 
 pub(in crate::features) struct TransferFeatureState {
     queue: TransferQueueState,
@@ -45,16 +42,8 @@ pub(in crate::features) struct TransferFeatureState {
 pub(in crate::features) struct TransferFeatureFocus {
     pub panel: FocusHandle,
     pub queue: FocusHandle,
-    pub job_delete: FocusHandle,
     pub browser: FocusHandle,
     pub rename: FocusHandle,
-    pub move_to: FocusHandle,
-    pub delete: FocusHandle,
-    pub new_folder: FocusHandle,
-    pub new_file: FocusHandle,
-    pub new_symlink: FocusHandle,
-    pub properties: FocusHandle,
-    pub unknown_file: FocusHandle,
     pub editor: FocusHandle,
     pub external_sync: FocusHandle,
 }
@@ -66,10 +55,8 @@ struct TransferQueueState {
     jobs: Vec<TransferJobState>,
     next_job_sequence: u64,
     selected_job_id: Option<String>,
-    job_delete: Option<TransferJobDeleteState>,
     job_menu: Option<TransferJobMenuState>,
     focus: FocusHandle,
-    job_delete_focus: FocusHandle,
 }
 
 /// Manual transfer endpoints and the duplicate policy that applies to them.
@@ -162,19 +149,11 @@ struct TransferFileOpsState {
     rename_focus_pending: bool,
     rename_focus: FocusHandle,
     move_to: Option<TransferMoveState>,
-    move_focus: FocusHandle,
-    delete: Option<TransferDeleteState>,
-    delete_focus: FocusHandle,
     new_folder: Option<TransferNewFolderState>,
-    new_folder_focus: FocusHandle,
     new_file: Option<TransferNewFileState>,
-    new_file_focus: FocusHandle,
     new_symlink: Option<TransferNewSymlinkState>,
-    new_symlink_focus: FocusHandle,
     properties: Option<TransferPropertiesState>,
-    properties_focus: FocusHandle,
     unknown_file: Option<TransferUnknownFileState>,
-    unknown_file_focus: FocusHandle,
 }
 
 /// Built-in remote file editor workspace.
@@ -182,7 +161,7 @@ struct TransferEditorFeatureState {
     workspace: Option<TransferEditorWorkspaceState>,
     tabs_menu_open: bool,
     focus: FocusHandle,
-    window: Option<WindowHandle<RemoteFileEditorWindow>>,
+    window: Option<NyaWindowHandle>,
     window_open_pending: bool,
 }
 
@@ -219,7 +198,7 @@ pub(in crate::features) enum TransferEditorCloseAfterSave {
 /// Handing a remote file to an external editor and syncing it back.
 struct TransferExternalSyncState {
     prompts: HashMap<String, TransferExternalSyncPromptState>,
-    windows: HashMap<String, WindowHandle<TransferExternalSyncWindow>>,
+    windows: HashMap<String, NyaWindowHandle>,
     window_open_pending: HashSet<String>,
     always_uploads: HashSet<String>,
     focus: FocusHandle,
@@ -243,7 +222,7 @@ impl TransferFeatureState {
         let (tx, rx) = mpsc::channel();
         Self {
             file_ops: TransferFileOpsState::new(&focus),
-            queue: TransferQueueState::new(tx, rx, focus.queue, focus.job_delete),
+            queue: TransferQueueState::new(tx, rx, focus.queue),
             paths: TransferPathState::new(remote_path, local_path, duplicate_policy),
             browser: TransferBrowserState {
                 path: ".".to_string(),
@@ -298,10 +277,6 @@ impl TransferFeatureState {
 
     pub(in crate::features) fn queue_focus(&self) -> &FocusHandle {
         self.queue.focus()
-    }
-
-    pub(in crate::features) fn queue_delete_focus(&self) -> &FocusHandle {
-        self.queue.delete_focus()
     }
 
     pub(in crate::features) fn transfer_jobs(&self) -> &[TransferJobState] {
@@ -377,24 +352,8 @@ impl TransferFeatureState {
         self.queue.selected_or_latest_visible_job_id(session_id)
     }
 
-    pub(in crate::features) fn transfer_job_delete(&self) -> Option<&TransferJobDeleteState> {
-        self.queue.job_delete()
-    }
-
-    pub(in crate::features) fn request_transfer_job_delete(
-        &mut self,
-        job_id: &str,
-        title: String,
-    ) -> bool {
-        self.queue.request_job_delete(job_id, title)
-    }
-
-    pub(in crate::features) fn confirm_transfer_job_delete(&mut self) -> Option<(String, bool)> {
-        self.queue.confirm_job_delete()
-    }
-
-    pub(in crate::features) fn cancel_transfer_job_delete(&mut self) {
-        self.queue.cancel_job_delete();
+    pub(in crate::features) fn delete_transfer_job(&mut self, job_id: &str) -> bool {
+        self.queue.remove_job(job_id)
     }
 
     pub(in crate::features) fn transfer_job_menu(&self) -> Option<&TransferJobMenuState> {
@@ -517,30 +476,6 @@ impl TransferFeatureState {
         true
     }
 
-    pub(in crate::features) fn move_focus(&self) -> &FocusHandle {
-        &self.file_ops.move_focus
-    }
-
-    pub(in crate::features) fn delete_dialog(&self) -> Option<&TransferDeleteState> {
-        self.file_ops.delete.as_ref()
-    }
-
-    pub(in crate::features) fn open_delete_dialog(&mut self, state: TransferDeleteState) {
-        self.file_ops.delete = Some(state);
-    }
-
-    pub(in crate::features) fn close_delete_dialog(&mut self) {
-        self.file_ops.delete = None;
-    }
-
-    pub(in crate::features) fn take_delete_dialog(&mut self) -> Option<TransferDeleteState> {
-        self.file_ops.delete.take()
-    }
-
-    pub(in crate::features) fn delete_focus(&self) -> &FocusHandle {
-        &self.file_ops.delete_focus
-    }
-
     pub(in crate::features) fn new_folder_dialog(&self) -> Option<&TransferNewFolderState> {
         self.file_ops.new_folder.as_ref()
     }
@@ -575,10 +510,6 @@ impl TransferFeatureState {
         };
         state.mode ^= bit;
         true
-    }
-
-    pub(in crate::features) fn new_folder_focus(&self) -> &FocusHandle {
-        &self.file_ops.new_folder_focus
     }
 
     pub(in crate::features) fn new_file_dialog(&self) -> Option<&TransferNewFileState> {
@@ -617,10 +548,6 @@ impl TransferFeatureState {
         true
     }
 
-    pub(in crate::features) fn new_file_focus(&self) -> &FocusHandle {
-        &self.file_ops.new_file_focus
-    }
-
     pub(in crate::features) fn new_symlink_dialog(&self) -> Option<&TransferNewSymlinkState> {
         self.file_ops.new_symlink.as_ref()
     }
@@ -649,19 +576,8 @@ impl TransferFeatureState {
         true
     }
 
-    pub(in crate::features) fn new_symlink_focus(&self) -> &FocusHandle {
-        &self.file_ops.new_symlink_focus
-    }
-
     pub(in crate::features) fn properties_dialog(&self) -> Option<&TransferPropertiesState> {
         self.file_ops.properties.as_ref()
-    }
-
-    pub(in crate::features) fn properties_dialog_is_open_for_session(
-        &self,
-        session_id: Option<&str>,
-    ) -> bool {
-        self.file_ops.properties_matches(session_id, None)
     }
 
     pub(in crate::features) fn open_properties_dialog(&mut self, state: TransferPropertiesState) {
@@ -683,38 +599,6 @@ impl TransferFeatureState {
         true
     }
 
-    pub(in crate::features) fn set_properties_focused_field(
-        &mut self,
-        field: crate::models::TransferPropertiesField,
-    ) -> Option<String> {
-        let state = self.file_ops.properties.as_mut()?;
-        state.focused_field = field;
-        Some(match field {
-            crate::models::TransferPropertiesField::Mode => state.mode_value.clone(),
-            crate::models::TransferPropertiesField::Owner => state.owner_value.clone(),
-            crate::models::TransferPropertiesField::Group => state.group_value.clone(),
-        })
-    }
-
-    pub(in crate::features) fn next_properties_field(
-        &self,
-    ) -> Option<crate::models::TransferPropertiesField> {
-        self.file_ops
-            .properties
-            .as_ref()
-            .map(|state| match state.focused_field {
-                crate::models::TransferPropertiesField::Mode => {
-                    crate::models::TransferPropertiesField::Owner
-                }
-                crate::models::TransferPropertiesField::Owner => {
-                    crate::models::TransferPropertiesField::Group
-                }
-                crate::models::TransferPropertiesField::Group => {
-                    crate::models::TransferPropertiesField::Mode
-                }
-            })
-    }
-
     pub(in crate::features) fn set_properties_input(
         &mut self,
         field: crate::models::TransferPropertiesField,
@@ -728,7 +612,6 @@ impl TransferFeatureState {
             crate::models::TransferPropertiesField::Owner => state.owner_value = value,
             crate::models::TransferPropertiesField::Group => state.group_value = value,
         }
-        state.focused_field = field;
         state.error = None;
         true
     }
@@ -836,10 +719,6 @@ impl TransferFeatureState {
         true
     }
 
-    pub(in crate::features) fn properties_focus(&self) -> &FocusHandle {
-        &self.file_ops.properties_focus
-    }
-
     pub(in crate::features) fn unknown_file_dialog(&self) -> Option<&TransferUnknownFileState> {
         self.file_ops.unknown_file.as_ref()
     }
@@ -859,10 +738,6 @@ impl TransferFeatureState {
         &mut self,
     ) -> Option<TransferUnknownFileState> {
         self.file_ops.unknown_file.take()
-    }
-
-    pub(in crate::features) fn unknown_file_focus(&self) -> &FocusHandle {
-        &self.file_ops.unknown_file_focus
     }
 
     pub(in crate::features) fn external_sync_focus(&self) -> &FocusHandle {
@@ -952,7 +827,7 @@ impl TransferFeatureState {
 
     pub(in crate::features::transfers) fn first_external_sync_window(
         &self,
-    ) -> Option<(String, WindowHandle<TransferExternalSyncWindow>)> {
+    ) -> Option<(String, NyaWindowHandle)> {
         self.external_sync
             .windows
             .iter()
@@ -963,7 +838,7 @@ impl TransferFeatureState {
     pub(in crate::features::transfers) fn external_sync_window(
         &self,
         prompt_id: &str,
-    ) -> Option<WindowHandle<TransferExternalSyncWindow>> {
+    ) -> Option<NyaWindowHandle> {
         self.external_sync.windows.get(prompt_id).copied()
     }
 
@@ -990,7 +865,7 @@ impl TransferFeatureState {
     pub(in crate::features::transfers) fn finish_external_sync_window_open(
         &mut self,
         prompt_id: String,
-        handle: WindowHandle<TransferExternalSyncWindow>,
+        handle: NyaWindowHandle,
     ) {
         self.external_sync.windows.insert(prompt_id.clone(), handle);
         self.external_sync.window_open_pending.remove(&prompt_id);
@@ -1076,19 +951,11 @@ impl TransferFileOpsState {
             rename_focus_pending: false,
             rename_focus: focus.rename.clone(),
             move_to: None,
-            move_focus: focus.move_to.clone(),
-            delete: None,
-            delete_focus: focus.delete.clone(),
             new_folder: None,
-            new_folder_focus: focus.new_folder.clone(),
             new_file: None,
-            new_file_focus: focus.new_file.clone(),
             new_symlink: None,
-            new_symlink_focus: focus.new_symlink.clone(),
             properties: None,
-            properties_focus: focus.properties.clone(),
             unknown_file: None,
-            unknown_file_focus: focus.unknown_file.clone(),
         }
     }
 
@@ -1246,7 +1113,6 @@ impl TransferQueueState {
         tx: mpsc::Sender<TransferJobResult>,
         rx: mpsc::Receiver<TransferJobResult>,
         focus: FocusHandle,
-        job_delete_focus: FocusHandle,
     ) -> Self {
         Self {
             tx,
@@ -1254,19 +1120,13 @@ impl TransferQueueState {
             jobs: Vec::new(),
             next_job_sequence: 0,
             selected_job_id: None,
-            job_delete: None,
             job_menu: None,
             focus,
-            job_delete_focus,
         }
     }
 
     fn focus(&self) -> &FocusHandle {
         &self.focus
-    }
-
-    fn delete_focus(&self) -> &FocusHandle {
-        &self.job_delete_focus
     }
 
     fn jobs(&self) -> &[TransferJobState] {
@@ -1355,32 +1215,6 @@ impl TransferQueueState {
             })
     }
 
-    fn job_delete(&self) -> Option<&TransferJobDeleteState> {
-        self.job_delete.as_ref()
-    }
-
-    fn request_job_delete(&mut self, job_id: &str, title: String) -> bool {
-        if self.job(job_id).is_none() {
-            return false;
-        }
-        self.selected_job_id = Some(job_id.to_string());
-        self.job_delete = Some(TransferJobDeleteState {
-            job_id: job_id.to_string(),
-            title,
-        });
-        true
-    }
-
-    fn confirm_job_delete(&mut self) -> Option<(String, bool)> {
-        let state = self.job_delete.take()?;
-        let removed = self.remove_job(&state.job_id);
-        Some((state.job_id, removed))
-    }
-
-    fn cancel_job_delete(&mut self) {
-        self.job_delete = None;
-    }
-
     fn job_menu(&self) -> Option<&TransferJobMenuState> {
         self.job_menu.as_ref()
     }
@@ -1404,7 +1238,6 @@ impl TransferQueueState {
 
     fn reset_interaction(&mut self) {
         self.selected_job_id = None;
-        self.job_delete = None;
         self.job_menu = None;
     }
 
@@ -1419,13 +1252,6 @@ impl TransferQueueState {
         {
             self.job_menu = None;
         }
-        if self
-            .job_delete
-            .as_ref()
-            .is_some_and(|delete| delete.job_id == job_id)
-        {
-            self.job_delete = None;
-        }
     }
 
     fn prune_missing_interaction(&mut self) {
@@ -1437,18 +1263,11 @@ impl TransferQueueState {
             .job_menu
             .as_ref()
             .is_some_and(|menu| self.job(&menu.job_id).is_none());
-        let delete_missing = self
-            .job_delete
-            .as_ref()
-            .is_some_and(|delete| self.job(&delete.job_id).is_none());
         if selected_missing {
             self.selected_job_id = None;
         }
         if menu_missing {
             self.job_menu = None;
-        }
-        if delete_missing {
-            self.job_delete = None;
         }
     }
 

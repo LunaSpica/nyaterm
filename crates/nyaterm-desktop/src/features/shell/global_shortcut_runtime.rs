@@ -16,16 +16,12 @@ impl NyaTermApp {
         }
 
         if event.keystroke.key.as_str() == "escape" {
-            if self.update.dialog_is_open() {
-                self.close_update_dialog(cx);
-                return true;
-            }
             if self.shell.chrome.about_open {
                 self.close_about(cx);
                 return true;
             }
             if self.translation.dialog_is_open() {
-                self.close_translation_dialog(cx);
+                self.close_translation_dialog(window, cx);
                 return true;
             }
         }

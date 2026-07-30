@@ -1,10 +1,11 @@
 mod chrome;
 pub(in crate::features) use chrome::{
     bounded_dialog_width, child_window_header, child_window_titlebar, dialog_action_button,
-    logo_mark, modal_close_icon_button, modal_dialog_footer_localized,
-    modal_dialog_footer_localized_danger, modal_dialog_shell, panel_header_with_actions,
+    logo_mark, modal_close_icon_button, modal_dialog_shell, panel_header_with_actions,
     window_control_button,
 };
+
+mod dialogs;
 
 mod inspector_widgets;
 pub(in crate::features) use inspector_widgets::{

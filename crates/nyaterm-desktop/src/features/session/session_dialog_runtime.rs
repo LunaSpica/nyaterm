@@ -1,6 +1,6 @@
-use gpui::{Context, KeyDownEvent, Window};
+use gpui::{Context, Window};
 
-use crate::features::{NyaTermApp, TextInputSetup};
+use crate::features::NyaTermApp;
 use crate::models::{SessionLaunchConfig, StartupCommandAction};
 
 use super::state::RenameSessionSubmission;
@@ -20,16 +20,19 @@ impl NyaTermApp {
         };
         self.session.dialogs.open_rename(session_id, &current_name);
         self.forget_text_inputs("session.rename");
-        let rename_draft = self.session.dialogs.rename_draft().to_string();
-        let field = self.text_input(
-            "session.rename",
-            &rename_draft,
-            TextInputSetup::placeholder(self.tr("tabCtx.renamePlaceholder")),
+        self.shell.set_status("rename tab opened".to_string());
+        self.open_form_dialog(
+            (
+                self.tr("tabCtx.renameTitle").to_string(),
+                320.,
+                self.tr("common.save").to_string(),
+                |app, _, cx| app.rename_session_dialog_content(cx),
+                |app, _, cx| app.submit_rename_session(cx),
+                |app, cx| app.close_rename_session(cx),
+            ),
+            window,
             cx,
         );
-        self.shell.set_status("rename tab opened".to_string());
-        window.focus(&field.read(cx).focus_handle());
-        field.update(cx, |field, cx| field.select_all(window, cx));
         cx.notify();
     }
 
@@ -40,18 +43,18 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::features) fn submit_rename_session(&mut self, cx: &mut Context<Self>) {
+    pub(in crate::features) fn submit_rename_session(&mut self, cx: &mut Context<Self>) -> bool {
         let (session_id, trimmed) = match self.session.dialogs.take_rename_submission() {
             RenameSessionSubmission::Inactive => {
                 self.shell.set_status("no tab rename is active".to_string());
                 cx.notify();
-                return;
+                return true;
             }
             RenameSessionSubmission::Empty => {
                 self.shell
                     .set_status("tab name cannot be empty".to_string());
                 cx.notify();
-                return;
+                return false;
             }
             RenameSessionSubmission::Ready { session_id, name } => (session_id, name),
         };
@@ -60,23 +63,7 @@ impl NyaTermApp {
             .set_custom_name(session_id.clone(), trimmed.clone());
         self.shell.set_status(format!("renamed tab to {trimmed}"));
         cx.notify();
-    }
-
-    pub(in crate::features) fn handle_rename_key_down(
-        &mut self,
-        event: &KeyDownEvent,
-        cx: &mut Context<Self>,
-    ) {
-        self.mark_user_activity();
-        let keystroke = &event.keystroke;
-        if keystroke.modifiers.platform || keystroke.modifiers.alt || keystroke.modifiers.control {
-            return;
-        }
-        match keystroke.key.as_str() {
-            "escape" => self.close_rename_session(cx),
-            "enter" => self.submit_rename_session(cx),
-            _ => {}
-        }
+        true
     }
 
     pub(in crate::features) fn open_startup_command_dialog(
@@ -129,14 +116,25 @@ impl NyaTermApp {
         );
         self.session.dialogs.open_startup_command(action, delay_ms);
         self.forget_text_inputs("session.startup-command");
-        let field = self.text_input(
-            "session.startup-command",
-            "",
-            TextInputSetup::placeholder(self.tr("tabCtx.commandRequired")),
+        self.shell.set_status(action.status_opened().to_string());
+        let title = self
+            .tr(match action {
+                StartupCommandAction::Duplicate => "tabCtx.runCommandTitle",
+                StartupCommandAction::Multiplex => "tabCtx.multiplexSshWithCommand",
+            })
+            .to_string();
+        self.open_form_dialog(
+            (
+                title,
+                448.,
+                self.tr("common.confirm").to_string(),
+                |app, _, cx| app.startup_command_dialog_content(cx),
+                |app, window, cx| app.submit_startup_command_dialog(window, cx),
+                |app, cx| app.close_startup_command_dialog(cx),
+            ),
+            window,
             cx,
         );
-        self.shell.set_status(action.status_opened().to_string());
-        window.focus(&field.read(cx).focus_handle());
         cx.notify();
     }
 
@@ -160,12 +158,12 @@ impl NyaTermApp {
         &mut self,
         window: &mut Window,
         cx: &mut Context<Self>,
-    ) {
+    ) -> bool {
         let Some((action, startup_command)) = self.session.dialogs.take_startup_command() else {
             self.shell
                 .set_status("startup command cannot be empty".to_string());
             cx.notify();
-            return;
+            return false;
         };
         self.forget_text_inputs("session.startup-command");
         match action {
@@ -176,26 +174,7 @@ impl NyaTermApp {
                 self.multiplex_active_ssh_session_with_startup(Some(startup_command), window, cx);
             }
         }
-    }
-
-    pub(in crate::features) fn handle_startup_command_key_down(
-        &mut self,
-        event: &KeyDownEvent,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.mark_user_activity();
-        let keystroke = &event.keystroke;
-        if keystroke.modifiers.platform || keystroke.modifiers.alt || keystroke.modifiers.control {
-            return;
-        }
-        match keystroke.key.as_str() {
-            "escape" => self.close_startup_command_dialog(cx),
-            "enter" => self.submit_startup_command_dialog(window, cx),
-            "up" => self.adjust_startup_command_delay(100, cx),
-            "down" => self.adjust_startup_command_delay(-100, cx),
-            _ => {}
-        }
+        true
     }
 
     pub(in crate::features) fn apply_session_text_input(

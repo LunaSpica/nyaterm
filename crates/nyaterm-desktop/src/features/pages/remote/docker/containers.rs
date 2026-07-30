@@ -364,7 +364,7 @@ fn docker_container_action_menu(
             format!("docker-menu-kill-{short}"),
             labels.kill,
             !running,
-            cx.listener(move |this, _, _, cx| {
+            cx.listener(move |this, _, window, cx| {
                 this.remote_ops.close_docker_container_menu();
                 let target = if kill_name.trim().is_empty() {
                     compact_id(&kill_id)
@@ -380,6 +380,7 @@ fn docker_container_action_menu(
                             action: "kill",
                         },
                     },
+                    window,
                     cx,
                 );
             }),
@@ -389,7 +390,7 @@ fn docker_container_action_menu(
             format!("docker-menu-remove-{short}"),
             labels.delete,
             false,
-            cx.listener(move |this, _, _, cx| {
+            cx.listener(move |this, _, window, cx| {
                 this.remote_ops.close_docker_container_menu();
                 let target = if remove_name.trim().is_empty() {
                     compact_id(&remove_id)
@@ -405,6 +406,7 @@ fn docker_container_action_menu(
                             action: "remove",
                         },
                     },
+                    window,
                     cx,
                 );
             }),

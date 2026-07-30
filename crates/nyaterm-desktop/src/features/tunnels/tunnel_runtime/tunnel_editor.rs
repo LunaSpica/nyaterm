@@ -36,6 +36,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let editing = tunnel_id.is_some();
         let tunnel = match tunnel_id.as_deref() {
             Some(id) => self
                 .tunnel_state
@@ -87,9 +88,33 @@ impl NyaTermApp {
         // next tunnel to seed from its own values.
         self.forget_text_inputs("network.tunnel-editor.");
         self.shell.set_status("tunnel editor opened".to_string());
-        let tunnel_editor_focus = self.connection_state.network_tunnel_editor_focus_handle();
-        window.focus(&tunnel_editor_focus);
         cx.notify();
+        self.open_form_dialog(
+            (
+                if editing {
+                    self.tr("network.editTunnel").to_string()
+                } else {
+                    self.tr("network.newTunnel").to_string()
+                },
+                640.,
+                self.tr("common.save").to_string(),
+                |app, _, cx| app.network_tunnel_editor_dialog_content(cx),
+                |app, _, cx| {
+                    app.save_network_tunnel_editor(cx);
+                    let saved = app
+                        .connection_state
+                        .active_network_tunnel_editor()
+                        .is_none();
+                    if saved {
+                        app.forget_text_inputs("network.tunnel-editor.");
+                    }
+                    saved
+                },
+                |app, cx| app.close_network_tunnel_editor(cx),
+            ),
+            window,
+            cx,
+        );
     }
 
     pub(in crate::features) fn close_network_tunnel_editor(&mut self, cx: &mut Context<Self>) {
@@ -121,29 +146,45 @@ impl NyaTermApp {
         }
     }
 
-    pub(in crate::features) fn cycle_network_tunnel_type(&mut self, cx: &mut Context<Self>) {
-        if let Some(tunnel_type) = self.connection_state.cycle_network_tunnel_type() {
+    pub(in crate::features) fn set_network_tunnel_type(
+        &mut self,
+        tunnel_type: &str,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(tunnel_type) = self.connection_state.set_network_tunnel_type(tunnel_type) {
             self.shell
                 .set_status(format!("tunnel type set to {tunnel_type}"));
         }
         cx.notify();
     }
 
-    pub(in crate::features) fn cycle_network_tunnel_connection(&mut self, cx: &mut Context<Self>) {
-        if self.connection_state.cycle_network_tunnel_connection() {
+    pub(in crate::features) fn set_network_tunnel_connection(
+        &mut self,
+        connection_id: Option<String>,
+        cx: &mut Context<Self>,
+    ) {
+        if self
+            .connection_state
+            .set_network_tunnel_connection(connection_id)
+        {
             self.shell
                 .set_status("tunnel SSH connection changed".to_string());
             cx.notify();
         }
     }
 
-    pub(in crate::features) fn cycle_network_tunnel_group(&mut self, cx: &mut Context<Self>) {
-        if self.connection_state.cycle_network_tunnel_group(
+    pub(in crate::features) fn set_network_tunnel_group(
+        &mut self,
+        group_id: Option<String>,
+        cx: &mut Context<Self>,
+    ) {
+        let group_id = group_id.filter(|id| {
             self.tunnel_state
                 .tunnel_groups()
                 .iter()
-                .map(|group| group.id.as_str()),
-        ) {
+                .any(|group| group.id == *id)
+        });
+        if self.connection_state.set_network_tunnel_group(group_id) {
             self.shell.set_status("tunnel group changed".to_string());
         }
         cx.notify();

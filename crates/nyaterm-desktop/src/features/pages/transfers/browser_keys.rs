@@ -87,11 +87,7 @@ impl NyaTermApp {
             return;
         }
 
-        if keystroke.key == "delete"
-            && unmodified
-            && !self.selected_transfer_entries().is_empty()
-            && self.transfer.delete_dialog().is_none()
-        {
+        if keystroke.key == "delete" && unmodified && !self.selected_transfer_entries().is_empty() {
             cx.stop_propagation();
             self.open_selected_transfer_delete_dialog(window, cx);
         }

@@ -1,4 +1,4 @@
-use gpui::{Context, KeyDownEvent, Window};
+use gpui::{Context, Window};
 use nyaterm_core::{Group, uuid};
 
 use crate::features::NyaTermApp;
@@ -12,6 +12,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let editing = group_id.is_some();
         let name = match group_id.as_deref() {
             Some(id) => self
                 .connection_state
@@ -48,6 +49,29 @@ impl NyaTermApp {
         self.connection_state.build_group_editor_field(cx);
         self.shell
             .set_status("connection group editor opened".to_string());
+        self.open_form_dialog(
+            (
+                if editing {
+                    self.tr("savedConnections.renameFolder").to_string()
+                } else {
+                    self.tr("savedConnections.newFolder").to_string()
+                },
+                384.,
+                self.tr("common.save").to_string(),
+                |app, _, cx| app.connection_group_editor_dialog_content(cx),
+                |app, _, cx| {
+                    app.save_connection_group_editor(cx);
+                    let saved = app.connection_state.active_group_editor_draft().is_none();
+                    if saved {
+                        app.connection_state.clear_group_editor_field();
+                    }
+                    saved
+                },
+                |app, cx| app.close_connection_group_editor(cx),
+            ),
+            window,
+            cx,
+        );
         if let Some(field) = self.connection_state.group_editor_field() {
             window.focus(&field.read(cx).focus_handle());
         }
@@ -60,43 +84,6 @@ impl NyaTermApp {
         self.shell
             .set_status("connection group editor closed".to_string());
         cx.notify();
-    }
-
-    pub(in crate::features) fn handle_connection_group_editor_key_down(
-        &mut self,
-        event: &KeyDownEvent,
-        cx: &mut Context<Self>,
-    ) {
-        self.mark_user_activity();
-        let keystroke = &event.keystroke;
-        if keystroke.modifiers.alt || keystroke.modifiers.function {
-            return;
-        }
-        match keystroke.key.as_str() {
-            "escape" => self.close_connection_group_editor(cx),
-            "enter" => self.save_connection_group_editor(cx),
-            "backspace" if !keystroke.modifiers.platform && !keystroke.modifiers.control => {
-                if self
-                    .connection_state
-                    .apply_group_editor_name_key("backspace", None)
-                {
-                    cx.notify();
-                }
-            }
-            _ if !keystroke.modifiers.platform && !keystroke.modifiers.control => {
-                if let Some(input) = keystroke
-                    .key_char
-                    .as_deref()
-                    .filter(|input| !input.is_empty())
-                    && self
-                        .connection_state
-                        .apply_group_editor_name_key(keystroke.key.as_str(), Some(input))
-                {
-                    cx.notify();
-                }
-            }
-            _ => {}
-        }
     }
 
     pub(in crate::features) fn save_connection_group_editor(&mut self, cx: &mut Context<Self>) {
@@ -134,7 +121,7 @@ impl NyaTermApp {
             Ok(()) => {
                 self.connection_state.expand_list_group(group.id.clone());
                 self.connection_state.close_group_editor();
-                self.refresh_store_from_runtime();
+                self.refresh_store_from_runtime_and_sync_theme(cx);
                 self.shell
                     .set_status(format!("saved connection group {}", group.name));
             }

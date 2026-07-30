@@ -1,10 +1,11 @@
-use gpui::{Context, KeyDownEvent, Window};
+use gpui::{Context, Window};
+use nyaterm_core::truncate_preview;
 use nyaterm_transport::SftpService;
 
 use crate::features::NyaTermApp;
 use crate::models::{
-    TransferDeleteState, TransferJobEvent, TransferJobKind, TransferJobOutput, TransferJobResult,
-    TransferJobState, TransferJobStatus, TransferMoveState,
+    TransferJobEvent, TransferJobKind, TransferJobOutput, TransferJobResult, TransferJobState,
+    TransferJobStatus, TransferMoveState,
 };
 
 use super::super::helpers::{remote_file_name, remote_parent_path};
@@ -25,11 +26,23 @@ impl NyaTermApp {
         }
         self.transfer.open_move_dialog(TransferMoveState {
             old_path: old_path.clone(),
-            name,
+            name: name.clone(),
             value: old_path,
         });
         self.shell.set_status("SFTP move opened".to_string());
-        window.focus(self.transfer.move_focus());
+        self.open_form_dialog(
+            (
+                self.tr("fileExplorer.moveTo")
+                    .replace("{{name}}", &truncate_preview(&name, 48)),
+                384.,
+                self.tr("common.save").to_string(),
+                |app, _, cx| app.transfer_move_dialog_content(cx),
+                |app, window, cx| app.submit_transfer_move(window, cx),
+                |app, cx| app.close_transfer_move_dialog(cx),
+            ),
+            window,
+            cx,
+        );
         cx.notify();
     }
 
@@ -44,47 +57,28 @@ impl NyaTermApp {
         &mut self,
         window: &mut Window,
         cx: &mut Context<Self>,
-    ) {
+    ) -> bool {
         let Some(state) = self.transfer.move_dialog().cloned() else {
             self.shell.set_status("no SFTP move is active".to_string());
             cx.notify();
-            return;
+            return true;
         };
         let new_path = state.value.trim().to_string();
         if new_path.is_empty() {
             self.shell
                 .set_status("target path cannot be empty".to_string());
             cx.notify();
-            return;
+            return false;
         }
         if new_path == state.old_path {
             self.transfer.close_move_dialog();
             self.shell.set_status("SFTP move unchanged".to_string());
             cx.notify();
-            return;
+            return true;
         }
         self.transfer.close_move_dialog();
         self.start_sftp_move_job(state.old_path, new_path, window, cx);
-    }
-
-    pub(in crate::features) fn handle_transfer_move_key_down(
-        &mut self,
-        event: &KeyDownEvent,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.mark_user_activity();
-        let keystroke = &event.keystroke;
-        if keystroke.modifiers.platform || keystroke.modifiers.alt || keystroke.modifiers.control {
-            return;
-        }
-
-        // The box owns the text; the dialog owns the keys that close or submit.
-        match keystroke.key.as_str() {
-            "escape" => self.close_transfer_move_dialog(cx),
-            "enter" => self.submit_transfer_move(window, cx),
-            _ => {}
-        }
+        true
     }
 
     /// Apply an edit from the move dialog's path box.
@@ -172,66 +166,56 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        let remote_path = paths.first().cloned().unwrap_or_default();
-        let name = if paths.len() == 1 {
-            remote_file_name(&remote_path)
+        let delete_count = paths.len();
+        let title = if delete_count == 1 {
+            self.tr("fileExplorer.sureDelete")
+                .replace("{{name}}", &remote_file_name(&paths[0]))
         } else {
-            format!("{} remote items", paths.len())
+            self.tr("fileExplorer.sureDeleteMultiple")
+                .replace("{{count}}", &delete_count.to_string())
         };
-        self.transfer.open_delete_dialog(TransferDeleteState {
-            remote_path,
-            name,
-            paths,
-        });
+        let preview = paths
+            .iter()
+            .take(6)
+            .map(|path| truncate_preview(&remote_file_name(path), 72))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let remaining = delete_count.saturating_sub(6);
+        let mut detail = self.tr("fileExplorer.deleteConfirmHint").to_string();
+        if delete_count > 1 {
+            detail.push_str("\n\n");
+            detail.push_str(&preview);
+            if remaining > 0 {
+                detail.push('\n');
+                detail.push_str(
+                    &self
+                        .tr("fileExplorer.moreItems")
+                        .replace("{{count}}", &remaining.to_string()),
+                );
+            }
+        }
         self.shell
             .set_status("SFTP delete confirmation opened".to_string());
-        window.focus(self.transfer.delete_focus());
+        self.open_confirm_dialog(
+            (
+                title,
+                detail,
+                self.tr("fileExplorer.delete").to_string(),
+                true,
+                move |app, window, cx| {
+                    for remote_path in &paths {
+                        app.start_sftp_delete_job(remote_path.clone(), window, cx);
+                    }
+                    app.shell
+                        .set_status(format!("{delete_count} SFTP delete job(s) started"));
+                    cx.notify();
+                    true
+                },
+            ),
+            window,
+            cx,
+        );
         cx.notify();
-    }
-
-    pub(in crate::features) fn close_transfer_delete_dialog(&mut self, cx: &mut Context<Self>) {
-        self.transfer.close_delete_dialog();
-        self.shell.set_status("SFTP delete cancelled".to_string());
-        cx.notify();
-    }
-
-    pub(in crate::features) fn submit_transfer_delete(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(state) = self.transfer.take_delete_dialog() else {
-            self.shell
-                .set_status("no SFTP delete is active".to_string());
-            cx.notify();
-            return;
-        };
-        let total = state.paths.len();
-        for remote_path in state.paths {
-            self.start_sftp_delete_job(remote_path, window, cx);
-        }
-        self.shell
-            .set_status(format!("{total} SFTP delete job(s) started"));
-        cx.notify();
-    }
-
-    pub(in crate::features) fn handle_transfer_delete_key_down(
-        &mut self,
-        event: &KeyDownEvent,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.mark_user_activity();
-        let keystroke = &event.keystroke;
-        if keystroke.modifiers.platform || keystroke.modifiers.alt || keystroke.modifiers.control {
-            return;
-        }
-
-        match keystroke.key.as_str() {
-            "escape" => self.close_transfer_delete_dialog(cx),
-            "enter" => self.submit_transfer_delete(window, cx),
-            _ => {}
-        }
     }
 
     pub(in crate::features) fn start_sftp_delete_job(

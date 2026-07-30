@@ -1,5 +1,6 @@
-use gpui::{AppContext, Context, PathPromptOptions, SharedString, Window};
+use gpui::{AppContext, Context, IntoElement, PathPromptOptions, SharedString, Window};
 use nyaterm_core::ConnectionStore;
+use nyaterm_ui::NyaDialogWindowExt as _;
 
 use crate::features::NyaTermApp;
 use crate::models::ConnectionImportSource;
@@ -41,6 +42,7 @@ impl NyaTermApp {
     ) {
         if self.connection_state.import_path_prompt_active()
             || self.settings.config_path_prompt_active()
+            || window.has_active_nya_dialog(cx)
         {
             self.shell
                 .set_status("connection import picker is already open".to_string());
@@ -48,27 +50,26 @@ impl NyaTermApp {
             return;
         }
 
-        self.connection_state.open_import_dialog();
-        self.connection_state.close_list_more_menu();
-        self.shell.close_title_menus();
         self.shell
             .set_status("select a connection import source".to_string());
-        let import_focus = self.connection_state.import_focus_handle();
-        window.focus(&import_focus);
-        cx.notify();
-    }
-
-    pub(in crate::features) fn close_connection_import_dialog(&mut self, cx: &mut Context<Self>) {
-        self.connection_state.close_import_dialog();
+        self.open_content_dialog(
+            self.tr("settings.importConfig").to_string(),
+            480.,
+            |app, _, cx| app.connection_import_dialog_content(cx).into_any_element(),
+            |_, _| {},
+            window,
+            cx,
+        );
         cx.notify();
     }
 
     pub(in crate::features) fn select_connection_import_source(
         &mut self,
         source: ConnectionImportSource,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.connection_state.close_import_dialog();
+        window.close_nya_dialog(cx);
         if source == ConnectionImportSource::NyatermBackup {
             self.prompt_portable_snapshot_import(cx);
             return;
@@ -139,7 +140,7 @@ impl NyaTermApp {
         self.connection_state.finish_import_path_prompt();
         match result {
             ConnectionImportResult::Imported(count) => {
-                self.refresh_store_from_runtime();
+                self.refresh_store_from_runtime_and_sync_theme(cx);
                 self.connection_state.expand_all_catalog_groups();
                 let message = self
                     .tr("savedConnections.importSuccess")

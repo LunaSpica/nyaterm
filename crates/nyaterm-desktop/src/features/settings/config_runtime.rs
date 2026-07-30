@@ -75,7 +75,7 @@ impl NyaTermApp {
                 Err(_) => ConfigPathPromptResult::Closed,
             };
             let _ = this.update(cx, |this, cx| {
-                this.apply_config_path_prompt_result(ConfigPathPromptKind::Export, result);
+                this.apply_config_path_prompt_result(ConfigPathPromptKind::Export, result, cx);
                 cx.notify();
             });
         })
@@ -142,7 +142,11 @@ impl NyaTermApp {
                 Err(_) => ConfigPathPromptResult::Closed,
             };
             let _ = this.update(cx, |this, cx| {
-                this.apply_config_path_prompt_result(ConfigPathPromptKind::PortableImport, result);
+                this.apply_config_path_prompt_result(
+                    ConfigPathPromptKind::PortableImport,
+                    result,
+                    cx,
+                );
                 cx.notify();
             });
         })
@@ -360,6 +364,7 @@ impl NyaTermApp {
                 this.apply_config_path_prompt_result(
                     ConfigPathPromptKind::EncryptedPortableExport,
                     result,
+                    cx,
                 );
                 cx.notify();
             });
@@ -422,6 +427,7 @@ impl NyaTermApp {
                 this.apply_config_path_prompt_result(
                     ConfigPathPromptKind::EncryptedPortableImport,
                     result,
+                    cx,
                 );
                 cx.notify();
             });
@@ -434,6 +440,7 @@ impl NyaTermApp {
         &mut self,
         kind: ConfigPathPromptKind,
         result: ConfigPathPromptResult,
+        cx: &mut Context<Self>,
     ) {
         if !self.settings.finish_config_path_prompt(kind) {
             return;
@@ -462,7 +469,7 @@ impl NyaTermApp {
                 });
             }
             ConfigPathPromptResult::Imported(info) => {
-                self.refresh_store_from_runtime();
+                self.refresh_store_from_runtime_and_sync_theme(cx);
                 self.rebase_open_settings_draft();
                 let safety = info
                     .safety_backup_path
@@ -535,6 +542,14 @@ impl NyaTermApp {
                 self.settings.set_store_message("config picker closed");
             }
         }
+    }
+
+    pub(in crate::features) fn refresh_store_from_runtime_and_sync_theme(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        self.refresh_store_from_runtime();
+        self.sync_component_theme(cx);
     }
 
     pub(in crate::features) fn refresh_store_from_runtime(&mut self) {

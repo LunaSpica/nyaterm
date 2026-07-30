@@ -4,7 +4,7 @@ use gpui::{
 };
 
 use crate::theme::ThemePalette;
-use crate::widgets::small_button;
+use nyaterm_ui::{NyaButton, NyaButtonVariant, NyaIconButton};
 
 pub(in crate::features) fn logo_mark(palette: ThemePalette) -> impl IntoElement {
     div()
@@ -279,117 +279,35 @@ pub(in crate::features) fn bounded_dialog_width(
 }
 
 pub(in crate::features) fn dialog_action_button(
-    palette: ThemePalette,
+    _palette: ThemePalette,
     id: impl Into<String>,
     label: &'static str,
     danger: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
-    let background = if danger {
-        palette.danger
+    let variant = if danger {
+        NyaButtonVariant::Danger
     } else {
-        palette.primary
+        NyaButtonVariant::Primary
     };
-    let hover_background = if danger {
-        palette.danger
-    } else {
-        palette.primary_hover
-    };
-    div()
-        .id(SharedString::from(id.into()))
-        .h(px(28.))
-        .px_3()
-        .flex()
-        .items_center()
-        .rounded_sm()
-        .bg(rgb(background))
-        .text_color(rgb(palette.bg))
-        .text_xs()
-        .cursor_pointer()
-        .hover(move |this| this.bg(rgb(hover_background)))
-        .child(label)
+
+    NyaButton::new(id.into(), label)
+        .variant(variant)
+        .small()
+        .compact()
         .on_click(on_click)
 }
 
 pub(in crate::features) fn modal_close_icon_button(
-    palette: ThemePalette,
+    _palette: ThemePalette,
     id: impl Into<String>,
     tooltip: &'static str,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
-    div()
-        .id(SharedString::from(id.into()))
-        .size(px(28.))
-        .flex_none()
-        .rounded_sm()
-        .flex()
-        .items_center()
-        .justify_center()
-        .cursor_pointer()
-        .hover(|this| this.bg(rgb(palette.hover)))
-        .tooltip(move |_, cx| {
-            cx.new(|_| crate::features::ChromeTooltip::new(tooltip))
-                .into()
-        })
+    NyaIconButton::new(id.into(), "icons/window/close.svg")
+        .icon_size(px(14.))
+        .tooltip(tooltip)
         .on_click(on_click)
-        .child(
-            svg()
-                .size(px(14.))
-                .path("icons/window/close.svg")
-                .text_color(rgb(palette.text_muted)),
-        )
-}
-
-pub(in crate::features) fn modal_dialog_footer_localized(
-    palette: ThemePalette,
-    cancel_id: impl Into<String>,
-    save_id: impl Into<String>,
-    cancel_label: &'static str,
-    save_label: &'static str,
-    on_cancel: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-    on_save: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    div()
-        .mt_1()
-        .pt_3()
-        .border_t_1()
-        .border_color(rgb(palette.border))
-        .flex()
-        .items_center()
-        .justify_end()
-        .gap_2()
-        .child(small_button(palette, cancel_id, cancel_label, on_cancel))
-        .child(dialog_action_button(
-            palette, save_id, save_label, false, on_save,
-        ))
-}
-
-pub(in crate::features) fn modal_dialog_footer_localized_danger(
-    palette: ThemePalette,
-    cancel_id: impl Into<String>,
-    action_id: impl Into<String>,
-    cancel_label: &'static str,
-    action_label: &'static str,
-    on_cancel: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-    on_action: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    div()
-        .mt_1()
-        .pt_3()
-        .border_t_1()
-        .border_color(rgb(palette.border))
-        .flex()
-        .items_center()
-        .justify_end()
-        .gap_2()
-        .child(small_button(palette, cancel_id, cancel_label, on_cancel))
-        .child(dialog_action_button(
-            palette,
-            action_id,
-            action_label,
-            true,
-            on_action,
-        ))
 }
 
 #[cfg(test)]

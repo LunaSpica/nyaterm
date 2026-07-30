@@ -2,10 +2,7 @@ use gpui::{ClipboardItem, Context, KeyDownEvent, Window};
 use nyaterm_core::{ConnectionStore, SavedCredential};
 
 use crate::features::{NyaTermApp, compact_id, none_if_blank};
-use crate::models::{
-    SecurityAuthTab, SecurityCredentialEditorState, SecurityDeleteConfirmState,
-    SecurityUnlockAction,
-};
+use crate::models::{SecurityAuthTab, SecurityCredentialEditorState, SecurityUnlockAction};
 
 impl NyaTermApp {
     pub(in crate::features) fn open_security_credential_editor(
@@ -243,11 +240,13 @@ impl NyaTermApp {
             .find(|entry| entry.id == credential_id)
             .map(|entry| entry.name.clone())
             .unwrap_or_else(|| credential_id.clone());
-        self.security.request_delete(SecurityDeleteConfirmState {
-            kind: SecurityAuthTab::Credentials,
-            id: credential_id,
+        self.open_security_delete_dialog(
+            SecurityAuthTab::Credentials,
+            credential_id,
             label,
-        });
+            window,
+            cx,
+        );
         cx.notify();
     }
 

@@ -53,7 +53,7 @@ pub(in crate::features::pages::remote) fn docker_images_panel(
                 "icons/fe/delete.svg",
                 14.,
                 palette,
-                cx.listener(move |this, _, _, cx| {
+                cx.listener(move |this, _, window, cx| {
                     this.request_docker_confirm(
                         DockerConfirmState {
                             title: labels.confirm_action_title.to_string(),
@@ -63,6 +63,7 @@ pub(in crate::features::pages::remote) fn docker_images_panel(
                                 force: false,
                             },
                         },
+                        window,
                         cx,
                     );
                 }),
@@ -106,7 +107,7 @@ pub(in crate::features::pages::remote) fn docker_volumes_panel(
                 "icons/fe/delete.svg",
                 14.,
                 palette,
-                cx.listener(move |this, _, _, cx| {
+                cx.listener(move |this, _, window, cx| {
                     this.request_docker_confirm(
                         DockerConfirmState {
                             title: labels.confirm_action_title.to_string(),
@@ -116,6 +117,7 @@ pub(in crate::features::pages::remote) fn docker_volumes_panel(
                                 force: false,
                             },
                         },
+                        window,
                         cx,
                     );
                 }),
@@ -165,7 +167,7 @@ pub(in crate::features::pages::remote) fn docker_networks_panel(
                 "icons/fe/delete.svg",
                 14.,
                 palette,
-                cx.listener(move |this, _, _, cx| {
+                cx.listener(move |this, _, window, cx| {
                     this.request_docker_confirm(
                         DockerConfirmState {
                             title: labels.confirm_action_title.to_string(),
@@ -174,6 +176,7 @@ pub(in crate::features::pages::remote) fn docker_networks_panel(
                                 network_id: network_id.clone(),
                             },
                         },
+                        window,
                         cx,
                     );
                 }),

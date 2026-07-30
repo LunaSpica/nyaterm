@@ -1,4 +1,4 @@
-use gpui::{Context, KeyDownEvent, Window};
+use gpui::{Context, Window};
 use nyaterm_transport::SftpService;
 
 use crate::features::NyaTermApp;
@@ -31,7 +31,18 @@ impl NyaTermApp {
         // open empty.
         self.forget_text_inputs("transfer.new-folder.");
         self.shell.set_status("SFTP new folder opened".to_string());
-        window.focus(self.transfer.new_folder_focus());
+        self.open_form_dialog(
+            (
+                self.tr("fileExplorer.newFolder").to_string(),
+                500.,
+                self.tr("common.confirm").to_string(),
+                |app, _, cx| app.transfer_new_folder_dialog_content(cx),
+                |app, window, cx| app.submit_transfer_new_folder(window, cx),
+                |app, cx| app.close_transfer_new_folder_dialog(cx),
+            ),
+            window,
+            cx,
+        );
         cx.notify();
     }
 
@@ -47,19 +58,19 @@ impl NyaTermApp {
         &mut self,
         window: &mut Window,
         cx: &mut Context<Self>,
-    ) {
+    ) -> bool {
         let Some(state) = self.transfer.new_folder_dialog().cloned() else {
             self.shell
                 .set_status("no SFTP new folder is active".to_string());
             cx.notify();
-            return;
+            return true;
         };
         let name = state.value.trim().to_string();
         if !valid_remote_child_name(&name) {
             self.shell
                 .set_status("folder name must be a single non-empty name".to_string());
             cx.notify();
-            return;
+            return false;
         }
         self.transfer.close_new_folder_dialog();
         let remote_path = remote_child_path(&state.parent_path, &name);
@@ -71,27 +82,7 @@ impl NyaTermApp {
             window,
             cx,
         );
-    }
-
-    pub(in crate::features) fn handle_transfer_new_folder_key_down(
-        &mut self,
-        event: &KeyDownEvent,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.mark_user_activity();
-        let keystroke = &event.keystroke;
-        if keystroke.modifiers.platform || keystroke.modifiers.alt || keystroke.modifiers.control {
-            return;
-        }
-
-        // The box owns the text; the dialog owns the keys that close or submit
-        // it, which the box deliberately leaves unconsumed.
-        match keystroke.key.as_str() {
-            "escape" => self.close_transfer_new_folder_dialog(cx),
-            "enter" => self.submit_transfer_new_folder(window, cx),
-            _ => {}
-        }
+        true
     }
 
     /// Apply an edit from the new-folder dialog's name box.
@@ -186,7 +177,18 @@ impl NyaTermApp {
         });
         self.forget_text_inputs("transfer.new-file.");
         self.shell.set_status("SFTP new file opened".to_string());
-        window.focus(self.transfer.new_file_focus());
+        self.open_form_dialog(
+            (
+                self.tr("fileExplorer.newFile").to_string(),
+                500.,
+                self.tr("common.confirm").to_string(),
+                |app, _, cx| app.transfer_new_file_dialog_content(cx),
+                |app, window, cx| app.submit_transfer_new_file(window, cx),
+                |app, cx| app.close_transfer_new_file_dialog(cx),
+            ),
+            window,
+            cx,
+        );
         cx.notify();
     }
 
@@ -201,19 +203,19 @@ impl NyaTermApp {
         &mut self,
         window: &mut Window,
         cx: &mut Context<Self>,
-    ) {
+    ) -> bool {
         let Some(state) = self.transfer.new_file_dialog().cloned() else {
             self.shell
                 .set_status("no SFTP new file is active".to_string());
             cx.notify();
-            return;
+            return true;
         };
         let name = state.value.trim().to_string();
         if !valid_remote_child_name(&name) {
             self.shell
                 .set_status("file name must be a single non-empty name".to_string());
             cx.notify();
-            return;
+            return false;
         }
         self.transfer.close_new_file_dialog();
         let remote_path = remote_child_path(&state.parent_path, &name);
@@ -225,26 +227,7 @@ impl NyaTermApp {
             window,
             cx,
         );
-    }
-
-    pub(in crate::features) fn handle_transfer_new_file_key_down(
-        &mut self,
-        event: &KeyDownEvent,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.mark_user_activity();
-        let keystroke = &event.keystroke;
-        if keystroke.modifiers.platform || keystroke.modifiers.alt || keystroke.modifiers.control {
-            return;
-        }
-
-        // The box owns the text; the dialog owns the keys that close or submit.
-        match keystroke.key.as_str() {
-            "escape" => self.close_transfer_new_file_dialog(cx),
-            "enter" => self.submit_transfer_new_file(window, cx),
-            _ => {}
-        }
+        true
     }
 
     /// Apply an edit from the new-file dialog's name box.

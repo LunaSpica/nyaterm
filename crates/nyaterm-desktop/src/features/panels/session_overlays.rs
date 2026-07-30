@@ -1,106 +1,27 @@
 use gpui::{
-    Context, FontWeight, IntoElement, KeyDownEvent, SharedString, div, prelude::*, px, rgb, rgba,
+    AnyElement, Context, FontWeight, IntoElement, ParentElement as _, SharedString, Styled as _,
+    div, prelude::*, px, rgb, rgba,
 };
 use nyaterm_core::truncate_preview;
 
-use crate::features::view_widgets::dialog_action_button;
 use crate::features::{NyaTermApp, TextInputSetup};
-use crate::models::StartupCommandAction;
 use crate::widgets::{session_info_row, small_button};
 
 use super::TAB_PRESET_COLORS;
 
 impl NyaTermApp {
-    pub(in crate::features) fn rename_session_overlay(
+    pub(in crate::features) fn rename_session_dialog_content(
         &mut self,
         cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        let palette = self.theme_palette();
+    ) -> AnyElement {
         let rename_draft = self.session.dialog_rename_draft().to_string();
-        let rename_input = self
-            .text_input_box(
-                "session.rename",
-                &rename_draft,
-                TextInputSetup::placeholder(self.tr("tabCtx.renamePlaceholder")),
-                cx,
-            )
-            .into_any_element();
-        let can_save = !self.session.dialog_rename_draft().trim().is_empty();
-        let dialog_width = (self.shell.viewport_size().0 - 32.).clamp(280., 320.);
-
-        div()
-            .id(SharedString::from("rename-tab-overlay"))
-            .absolute()
-            .top_0()
-            .bottom_0()
-            .left_0()
-            .right_0()
-            .bg(rgba(0x00000080))
-            .flex()
-            .items_center()
-            .justify_center()
-            .track_focus(self.session.dialog_rename_focus())
-            .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(this.session.dialog_rename_focus());
-                cx.notify();
-            }))
-            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-                cx.stop_propagation();
-                this.handle_rename_key_down(event, cx);
-            }))
-            .child(
-                div()
-                    .id(SharedString::from("rename-tab-dialog"))
-                    .w(px(dialog_width))
-                    .rounded_md()
-                    .border_1()
-                    .border_color(rgb(palette.border))
-                    .bg(self.shell_surface_color(palette.bg))
-                    .shadow_lg()
-                    .p_6()
-                    .on_click(|_, _, cx| cx.stop_propagation())
-                    .child(
-                        div()
-                            .text_sm()
-                            .font_weight(FontWeight(800.))
-                            .text_color(rgb(palette.text))
-                            .child(self.tr("tabCtx.renameTitle")),
-                    )
-                    .child(
-                        div()
-                            .mt_3()
-                            .font_family(crate::features::gpui_code_font_family())
-                            .text_sm()
-                            .child(rename_input),
-                    )
-                    .child(
-                        div()
-                            .mt_4()
-                            .flex()
-                            .items_center()
-                            .justify_end()
-                            .gap_2()
-                            .child(small_button(
-                                palette,
-                                "rename-tab-cancel",
-                                self.tr("common.cancel"),
-                                cx.listener(|this, _, _, cx| {
-                                    this.close_rename_session(cx);
-                                }),
-                            ))
-                            .child(div().when(!can_save, |this| this.opacity(0.45)).child(
-                                dialog_action_button(
-                                    palette,
-                                    "rename-tab-save",
-                                    self.tr("common.save"),
-                                    false,
-                                    cx.listener(|this, _, _, cx| {
-                                        this.submit_rename_session(cx);
-                                    }),
-                                ),
-                            )),
-                    ),
-            )
+        self.text_input_box(
+            "session.rename",
+            &rename_draft,
+            TextInputSetup::placeholder(self.tr("tabCtx.renamePlaceholder")),
+            cx,
+        )
+        .into_any_element()
     }
 
     pub(in crate::features) fn tab_color_picker_overlay(
@@ -151,7 +72,7 @@ impl NyaTermApp {
                 window.focus(this.session.dialog_color_picker_focus());
                 cx.notify();
             }))
-            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+            .on_key_down(cx.listener(|this, event: &gpui::KeyDownEvent, _, cx| {
                 cx.stop_propagation();
                 if event.keystroke.key == "escape" {
                     this.close_tab_color_picker(cx);
@@ -255,7 +176,7 @@ impl NyaTermApp {
                 window.focus(this.session.dialog_session_info_focus());
                 cx.notify();
             }))
-            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+            .on_key_down(cx.listener(|this, event: &gpui::KeyDownEvent, _, cx| {
                 cx.stop_propagation();
                 if event.keystroke.key == "escape" {
                     this.close_active_session_info(cx);
@@ -331,173 +252,101 @@ impl NyaTermApp {
             )
     }
 
-    pub(in crate::features) fn startup_command_overlay(
+    pub(in crate::features) fn startup_command_dialog_content(
         &mut self,
         cx: &mut Context<Self>,
-    ) -> impl IntoElement {
+    ) -> AnyElement {
         let palette = self.theme_palette();
-        let action = self.session.dialog_startup_command_action();
-        let action_title = self.tr(match action {
-            StartupCommandAction::Duplicate => "tabCtx.runCommandTitle",
-            StartupCommandAction::Multiplex => "tabCtx.multiplexSshWithCommand",
-        });
-        let startup_command_draft = self.session.dialog_startup_command_draft().to_string();
+        let command_draft = self.session.dialog_startup_command_draft().to_string();
         let command_input = self
             .text_input_box(
                 "session.startup-command",
-                &startup_command_draft,
+                &command_draft,
                 TextInputSetup::placeholder(self.tr("tabCtx.commandRequired")),
                 cx,
             )
             .into_any_element();
-        let can_submit = !self
-            .session
-            .dialog_startup_command_draft()
-            .trim()
-            .is_empty();
         let delay_label = format!("{} ms", self.session.dialog_startup_command_delay_ms());
-        let dialog_width = (self.shell.viewport_size().0 - 32.).clamp(280., 448.);
 
         div()
-            .id(SharedString::from("startup-command-overlay"))
-            .absolute()
-            .top_0()
-            .bottom_0()
-            .left_0()
-            .right_0()
-            .bg(rgba(0x00000080))
+            .min_w_0()
             .flex()
-            .items_center()
-            .justify_center()
-            .track_focus(self.session.dialog_startup_command_focus())
-            .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(this.session.dialog_startup_command_focus());
-                cx.notify();
-            }))
-            .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
-                cx.stop_propagation();
-                this.handle_startup_command_key_down(event, window, cx);
-            }))
+            .flex_col()
+            .gap_3()
             .child(
                 div()
-                    .id(SharedString::from("startup-command-dialog"))
-                    .w(px(dialog_width))
-                    .rounded_md()
+                    .text_xs()
+                    .font_weight(FontWeight(600.))
+                    .text_color(rgb(palette.text_muted))
+                    .child(self.tr("tabCtx.commandInput")),
+            )
+            .child(command_input)
+            .child(
+                div()
+                    .text_xs()
+                    .font_weight(FontWeight(600.))
+                    .text_color(rgb(palette.text_muted))
+                    .child(self.tr("tabCtx.commandDelay")),
+            )
+            .child(
+                div()
+                    .h(px(36.))
+                    .px_3()
+                    .rounded_sm()
                     .border_1()
                     .border_color(rgb(palette.border))
-                    .bg(self.shell_surface_color(palette.bg))
-                    .shadow_lg()
-                    .p_6()
-                    .on_click(|_, _, cx| cx.stop_propagation())
+                    .bg(rgb(palette.input))
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap_3()
                     .child(
                         div()
-                            .text_sm()
-                            .font_weight(FontWeight(800.))
-                            .text_color(rgb(palette.text))
-                            .child(action_title),
-                    )
-                    .child(
-                        div()
-                            .mt_3()
-                            .text_xs()
-                            .font_weight(FontWeight(600.))
-                            .text_color(rgb(palette.text_muted))
-                            .child(self.tr("tabCtx.commandInput")),
-                    )
-                    .child(
-                        div()
-                            .mt_1()
                             .font_family(crate::features::gpui_code_font_family())
                             .text_sm()
-                            .child(command_input),
+                            .text_color(rgb(palette.text))
+                            .child(delay_label),
                     )
                     .child(
                         div()
-                            .mt_3()
-                            .text_xs()
-                            .font_weight(FontWeight(600.))
-                            .text_color(rgb(palette.text_muted))
-                            .child(self.tr("tabCtx.commandDelay")),
-                    )
-                    .child(
-                        div()
-                            .mt_1()
-                            .h(px(36.))
-                            .px_3()
-                            .rounded_sm()
-                            .border_1()
-                            .border_color(rgb(palette.border))
-                            .bg(rgb(palette.input))
                             .flex()
                             .items_center()
-                            .justify_between()
-                            .gap_3()
-                            .child(
-                                div()
-                                    .font_family(crate::features::gpui_code_font_family())
-                                    .text_sm()
-                                    .text_color(rgb(palette.text))
-                                    .child(delay_label),
-                            )
-                            .child(
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .gap_2()
-                                    .child(small_button(
-                                        palette,
-                                        "startup-delay-minus",
-                                        "-100",
-                                        cx.listener(|this, _, _, cx| {
-                                            this.adjust_startup_command_delay(-100, cx);
-                                        }),
-                                    ))
-                                    .child(small_button(
-                                        palette,
-                                        "startup-delay-zero",
-                                        "0",
-                                        cx.listener(|this, _, _, cx| {
-                                            this.session.dialog_reset_startup_command_delay();
-                                            cx.notify();
-                                        }),
-                                    ))
-                                    .child(small_button(
-                                        palette,
-                                        "startup-delay-plus",
-                                        "+100",
-                                        cx.listener(|this, _, _, cx| {
-                                            this.adjust_startup_command_delay(100, cx);
-                                        }),
-                                    )),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .mt_4()
-                            .flex()
-                            .items_center()
-                            .justify_end()
                             .gap_2()
                             .child(small_button(
                                 palette,
-                                "startup-command-cancel",
-                                self.tr("common.cancel"),
+                                "startup-delay-minus",
+                                "-100",
                                 cx.listener(|this, _, _, cx| {
-                                    this.close_startup_command_dialog(cx);
+                                    this.adjust_startup_command_delay(-100, cx);
                                 }),
                             ))
-                            .child(div().when(!can_submit, |this| this.opacity(0.45)).child(
-                                dialog_action_button(
-                                    palette,
-                                    "startup-command-submit",
-                                    self.tr("common.confirm"),
-                                    false,
-                                    cx.listener(|this, _, window, cx| {
-                                        this.submit_startup_command_dialog(window, cx);
-                                    }),
-                                ),
+                            .child(small_button(
+                                palette,
+                                "startup-delay-zero",
+                                "0",
+                                cx.listener(|this, _, _, cx| {
+                                    this.session.dialog_reset_startup_command_delay();
+                                    cx.notify();
+                                }),
+                            ))
+                            .child(small_button(
+                                palette,
+                                "startup-delay-plus",
+                                "+100",
+                                cx.listener(|this, _, _, cx| {
+                                    this.adjust_startup_command_delay(100, cx);
+                                }),
                             )),
                     ),
             )
+            .when(command_draft.trim().is_empty(), |this| {
+                this.child(
+                    div()
+                        .text_size(px(12.))
+                        .text_color(rgb(palette.danger))
+                        .child(self.tr("tabCtx.commandRequired")),
+                )
+            })
+            .into_any_element()
     }
 }

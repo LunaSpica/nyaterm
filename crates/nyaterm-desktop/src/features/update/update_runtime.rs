@@ -1,4 +1,5 @@
-use gpui::Context;
+use gpui::{Context, IntoElement, Window};
+use nyaterm_ui::NyaDialogWindowExt as _;
 
 use crate::features::NyaTermApp;
 use crate::http::update::check_native_update;
@@ -6,13 +7,32 @@ use crate::http::update::check_native_update;
 use super::state::UpdateJobResult;
 
 impl NyaTermApp {
-    pub(in crate::features) fn open_update_dialog(&mut self, cx: &mut Context<Self>) {
-        self.update.open_dialog();
+    pub(in crate::features) fn open_update_dialog(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if window.has_active_nya_dialog(cx) {
+            cx.notify();
+            return;
+        }
+        self.open_content_dialog(
+            self.tr("updater.checking").to_string(),
+            560.,
+            |app, _, cx| app.update_dialog_content(cx).into_any_element(),
+            |_, _| {},
+            window,
+            cx,
+        );
         self.start_update_check(cx);
     }
 
-    pub(in crate::features) fn close_update_dialog(&mut self, cx: &mut Context<Self>) {
-        self.update.close_dialog();
+    pub(in crate::features) fn close_update_dialog(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        window.close_nya_dialog(cx);
         cx.notify();
     }
 

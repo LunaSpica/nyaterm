@@ -737,11 +737,9 @@ impl NyaTermApp {
                                     .path("icons/chevron-down.svg")
                                     .text_color(rgb(palette.text_muted)),
                             )
-                            .tooltip(move |_, cx| {
-                                cx.new(|_| {
-                                    crate::features::ChromeTooltip::new(open_tabs_label.clone())
-                                })
-                                .into()
+                            .tooltip(move |window, cx| {
+                                nyaterm_ui::NyaTooltip::new(open_tabs_label.clone())
+                                    .build(window, cx)
                             })
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.toggle_open_tabs_menu(cx);
@@ -786,11 +784,8 @@ impl NyaTermApp {
                                 .path("icons/conn/add.svg")
                                 .text_color(rgb(palette.text_muted)),
                         )
-                        .tooltip(move |_, cx| {
-                            cx.new(|_| {
-                                crate::features::ChromeTooltip::new(new_session_label.clone())
-                            })
-                            .into()
+                        .tooltip(move |window, cx| {
+                            nyaterm_ui::NyaTooltip::new(new_session_label.clone()).build(window, cx)
                         })
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.toggle_new_session_menu(cx);

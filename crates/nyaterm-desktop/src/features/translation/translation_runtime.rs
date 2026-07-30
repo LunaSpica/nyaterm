@@ -1,8 +1,6 @@
-use gpui::{
-    ClipboardItem, Context, FontWeight, IntoElement, MouseButton, SharedString, Window, div,
-    prelude::*, px, rgb, rgba,
-};
+use gpui::{ClipboardItem, Context, IntoElement, SharedString, Window, div, prelude::*, px, rgb};
 use nyaterm_core::ConnectionStore;
+use nyaterm_ui::NyaDialogWindowExt as _;
 
 use crate::features::NyaTermApp;
 use crate::http::translation::translate_text;
@@ -88,6 +86,17 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
+        self.open_content_dialog(
+            self.tr("translation.title").to_string(),
+            540.,
+            |app, _, cx| app.translation_dialog_content(cx).into_any_element(),
+            |app, cx| {
+                app.translation.close_dialog();
+                cx.notify();
+            },
+            window,
+            cx,
+        );
         // Kick off immediately (Tauri TranslationDialog behavior).
         if !self.translation.is_pending() {
             self.run_translation(window, cx);
@@ -96,13 +105,18 @@ impl NyaTermApp {
         }
     }
 
-    pub(in crate::features) fn close_translation_dialog(&mut self, cx: &mut Context<Self>) {
+    pub(in crate::features) fn close_translation_dialog(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if self.translation.close_dialog() {
+            window.close_nya_dialog(cx);
             cx.notify();
         }
     }
 
-    pub(in crate::features) fn translation_dialog_overlay(
+    pub(in crate::features) fn translation_dialog_content(
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
@@ -114,7 +128,6 @@ impl NyaTermApp {
         let source = dialog.source_text.clone();
         let pending = self.translation.is_pending();
         let status = self.translation.status().to_string();
-        let title_label = self.tr("translation.title");
         let source_label = self.tr("translation.sourceText");
         let translated_label = self.tr("translation.translatedText");
         let loading_label = self.tr("translation.loading");
@@ -189,122 +202,83 @@ impl NyaTermApp {
         }
 
         div()
-            .id(SharedString::from("translation-dialog-overlay"))
-            .absolute()
-            .top_0()
-            .bottom_0()
-            .left_0()
-            .right_0()
-            .bg(rgba(0x00000080))
+            .id(SharedString::from("translation-dialog-content"))
             .flex()
-            .items_center()
-            .justify_center()
-            .on_mouse_down(
-                MouseButton::Left,
-                cx.listener(|this, _, _, cx| {
-                    this.close_translation_dialog(cx);
-                }),
+            .flex_col()
+            .gap_3()
+            .child(
+                div().flex().items_center().gap_2().child(
+                    div()
+                        .px_2()
+                        .py(px(2.))
+                        .rounded_sm()
+                        .bg(rgb(palette.surface))
+                        .text_size(px(11.))
+                        .text_color(rgb(palette.text_muted))
+                        .child(provider_label),
+                ),
             )
             .child(
                 div()
-                    .id(SharedString::from("translation-dialog"))
-                    .w(px(540.))
-                    .max_w_full()
-                    .mx_4()
-                    .rounded_md()
-                    .border_1()
-                    .border_color(rgb(palette.border))
-                    .bg(rgb(palette.bg))
-                    .shadow_lg()
-                    .p_6()
-                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                    .on_click(|_, _, cx| cx.stop_propagation())
+                    .text_size(px(11.))
+                    .text_color(rgb(palette.text_muted))
+                    .child(source_label),
+            )
+            .child(source_box)
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
                     .child(
                         div()
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .font_weight(FontWeight(800.))
-                                    .text_color(rgb(palette.text))
-                                    .child(title_label),
-                            )
-                            .child(
-                                div()
-                                    .px_2()
-                                    .py(px(2.))
-                                    .rounded_sm()
-                                    .bg(rgb(palette.surface))
-                                    .text_size(px(11.))
-                                    .text_color(rgb(palette.text_muted))
-                                    .child(provider_label),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .mt_3()
                             .text_size(px(11.))
                             .text_color(rgb(palette.text_muted))
-                            .child(source_label),
+                            .child(translated_label),
                     )
-                    .child(div().mt_1().child(source_box))
+                    .when_some(detected_label, |this, label| {
+                        this.child(
+                            div()
+                                .text_size(px(11.))
+                                .text_color(rgb(palette.text_dimmed))
+                                .child(label),
+                        )
+                    }),
+            )
+            .child(result_box)
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_end()
+                    .gap_2()
                     .child(
                         div()
-                            .mt_3()
-                            .flex()
-                            .items_center()
-                            .justify_between()
-                            .child(
-                                div()
-                                    .text_size(px(11.))
-                                    .text_color(rgb(palette.text_muted))
-                                    .child(translated_label),
-                            )
-                            .when_some(detected_label, |this, label| {
-                                this.child(
-                                    div()
-                                        .text_size(px(11.))
-                                        .text_color(rgb(palette.text_dimmed))
-                                        .child(label),
-                                )
-                            }),
-                    )
-                    .child(div().mt_1().child(result_box))
-                    .child(
-                        div()
-                            .mt_4()
-                            .flex()
-                            .items_center()
-                            .justify_end()
-                            .gap_2()
-                            .child(div().when(!can_copy, |this| this.opacity(0.45)).child(
-                                small_button(
-                                    palette,
-                                    "translation-dialog-copy",
-                                    copy_label,
-                                    cx.listener(|this, _, _, cx| {
-                                        if let Some(result) = this.translation.result_snapshot() {
-                                            cx.write_to_clipboard(ClipboardItem::new_string(
-                                                result.translated,
-                                            ));
-                                            this.translation
-                                                .mark_result_copied(copied_label.to_string());
-                                            cx.notify();
-                                        }
-                                    }),
-                                ),
-                            ))
+                            .when(!can_copy, |this| this.opacity(0.45))
                             .child(small_button(
                                 palette,
-                                "translation-dialog-close",
-                                close_label,
+                                "translation-dialog-copy",
+                                copy_label,
                                 cx.listener(|this, _, _, cx| {
-                                    this.close_translation_dialog(cx);
+                                    if let Some(result) = this.translation.result_snapshot() {
+                                        cx.write_to_clipboard(ClipboardItem::new_string(
+                                            result.translated,
+                                        ));
+                                        this.translation
+                                            .mark_result_copied(copied_label.to_string());
+                                        cx.notify();
+                                    }
                                 }),
                             )),
-                    ),
+                    )
+                    .child(small_button(
+                        palette,
+                        "translation-dialog-close",
+                        close_label,
+                        cx.listener(|this, _, window, cx| {
+                            this.close_translation_dialog(window, cx);
+                        }),
+                    )),
             )
             .into_any_element()
     }

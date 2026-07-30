@@ -4,21 +4,11 @@ use nyaterm_transport::{SshTunnelConfig, SshTunnelMode};
 
 use super::helpers::network_group_label;
 use crate::features::{NyaTermApp, TunnelJobOutput, TunnelJobResult, tunnel_mode, tunnel_name};
-use crate::models::{NetworkDeleteConfirmState, NetworkTab};
+use crate::models::NetworkTab;
 
 const TUNNEL_EVENT_DRAIN_LIMIT: usize = 32;
 
 impl NyaTermApp {
-    pub(in crate::features) fn toggle_network_item_menu(
-        &mut self,
-        tab: NetworkTab,
-        id: String,
-        cx: &mut Context<Self>,
-    ) {
-        self.connection_state.toggle_network_item_menu(tab, id);
-        cx.notify();
-    }
-
     pub(in crate::features) fn open_network_move_picker(
         &mut self,
         tab: NetworkTab,
@@ -139,34 +129,37 @@ impl NyaTermApp {
         tab: NetworkTab,
         id: String,
         label: String,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.connection_state
-            .open_network_delete_confirm(NetworkDeleteConfirmState { tab, id, label });
         self.shell
             .set_status("network delete confirmation opened".to_string());
-        cx.notify();
-    }
-
-    pub(in crate::features) fn cancel_network_delete(&mut self, cx: &mut Context<Self>) {
-        self.connection_state.close_network_delete_confirm();
-        self.shell
-            .set_status("network delete cancelled".to_string());
-        cx.notify();
-    }
-
-    pub(in crate::features) fn confirm_network_delete(&mut self, cx: &mut Context<Self>) {
-        let Some(delete) = self.connection_state.active_network_delete_confirm() else {
-            self.shell
-                .set_status("no network delete is pending".to_string());
-            cx.notify();
-            return;
+        let type_label = match tab {
+            NetworkTab::Tunnels => self.tr("network.tunnelConfig"),
+            NetworkTab::Proxies => self.tr("network.proxyConfig"),
         };
-
-        match delete.tab {
-            NetworkTab::Tunnels => self.delete_tunnel_profile(delete.id, delete.label, cx),
-            NetworkTab::Proxies => self.delete_proxy_profile(delete.id, delete.label, cx),
-        }
+        self.open_confirm_dialog(
+            (
+                format!("{} {type_label}", self.tr("common.delete")),
+                self.tr("common.deletingConfirm")
+                    .replace("{{name}}", &label),
+                self.tr("common.delete").to_string(),
+                true,
+                move |app, _, cx| {
+                    match tab {
+                        NetworkTab::Tunnels => {
+                            app.delete_tunnel_profile(id.clone(), label.clone(), cx)
+                        }
+                        NetworkTab::Proxies => {
+                            app.delete_proxy_profile(id.clone(), label.clone(), cx)
+                        }
+                    }
+                    true
+                },
+            ),
+            window,
+            cx,
+        );
     }
 
     pub(in crate::features) fn delete_tunnel_profile(

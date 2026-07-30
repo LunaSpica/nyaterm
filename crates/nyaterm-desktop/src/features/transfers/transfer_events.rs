@@ -6,6 +6,7 @@ use nyaterm_core::{AiAction, truncate_preview};
 use nyaterm_transport::{
     SFTP_TRANSFER_CANCELLED, SftpFileEntry, SftpFileType, SftpTransferProgress,
 };
+use nyaterm_ui::NyaDialogWindowExt as _;
 
 use crate::features::NyaTermApp;
 use crate::features::formatting::format_permissions_octal;
@@ -595,6 +596,7 @@ impl NyaTermApp {
                         properties,
                     ) {
                         forget_properties_inputs = true;
+                        window.close_nya_dialog(cx);
                     }
                     self.shell.set_status(format!(
                         "SFTP properties updated in {parent_path}: {remote_path}"

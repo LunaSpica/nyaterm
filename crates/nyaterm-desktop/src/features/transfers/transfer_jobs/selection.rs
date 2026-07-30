@@ -45,6 +45,7 @@ impl NyaTermApp {
     pub(in crate::features) fn request_delete_transfer_job(
         &mut self,
         job_id: String,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(job) = self.transfer.transfer_job(&job_id) else {
@@ -59,12 +60,36 @@ impl NyaTermApp {
             return;
         }
         let title = transfer_job_title(&job.kind);
-        self.transfer.request_transfer_job_delete(&job_id, title);
+        let description = self
+            .tr("fileTransfer.deleteConfirmDesc")
+            .replace("{{name}}", &title);
+        self.transfer.select_transfer_job_id(&job_id);
+        self.open_confirm_dialog(
+            (
+                self.tr("fileTransfer.deleteConfirmTitle").to_string(),
+                description,
+                self.tr("fileTransfer.delete").to_string(),
+                true,
+                move |app, _, cx| {
+                    let removed = app.transfer.delete_transfer_job(&job_id);
+                    app.shell.set_status(if removed {
+                        format!("deleted transfer {job_id}")
+                    } else {
+                        "transfer job not found".to_string()
+                    });
+                    cx.notify();
+                    true
+                },
+            ),
+            window,
+            cx,
+        );
         cx.notify();
     }
 
     pub(in crate::features) fn request_delete_selected_transfer_job(
         &mut self,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let active_session_id = self.session.active_id();
@@ -76,27 +101,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        self.request_delete_transfer_job(job_id, cx);
-    }
-
-    pub(in crate::features) fn confirm_delete_transfer_job(&mut self, cx: &mut Context<Self>) {
-        let Some((job_id, removed)) = self.transfer.confirm_transfer_job_delete() else {
-            cx.notify();
-            return;
-        };
-        self.shell.set_status(if removed {
-            format!("deleted transfer {job_id}")
-        } else {
-            "transfer job not found".to_string()
-        });
-        cx.notify();
-    }
-
-    pub(in crate::features) fn cancel_delete_transfer_job(&mut self, cx: &mut Context<Self>) {
-        self.transfer.cancel_transfer_job_delete();
-        self.shell
-            .set_status("transfer delete cancelled".to_string());
-        cx.notify();
+        self.request_delete_transfer_job(job_id, window, cx);
     }
 
     pub(in crate::features) fn reveal_transfer_job_target_directory(
@@ -127,6 +132,7 @@ impl NyaTermApp {
     pub(in crate::features) fn handle_transfer_queue_key_down(
         &mut self,
         event: &KeyDownEvent,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let keystroke = &event.keystroke;
@@ -134,10 +140,9 @@ impl NyaTermApp {
             && !keystroke.modifiers.control
             && !keystroke.modifiers.platform
             && !keystroke.modifiers.shift;
-        if unmodified && keystroke.key == "delete" && self.transfer.transfer_job_delete().is_none()
-        {
+        if unmodified && keystroke.key == "delete" {
             cx.stop_propagation();
-            self.request_delete_selected_transfer_job(cx);
+            self.request_delete_selected_transfer_job(window, cx);
         }
     }
 

@@ -5,25 +5,22 @@ use gpui::{
 };
 
 use crate::features::NyaTermApp;
-use crate::models::{ConnectionEditorField, ConnectionEditorMenu};
+use crate::models::{ConnectionEditorField, ConnectionEditorSelect};
 use crate::widgets::small_button;
 
 use super::super::super::list::{
-    ConnectionEditorChoice, ConnectionEditorRenderContext, connection_editor_select, editor_field,
+    ConnectionEditorRenderContext, connection_editor_select, editor_field,
 };
 
 use super::ConnectionEditorSectionContext;
 
 pub(super) fn connection_editor_local_section(
     section: ConnectionEditorSectionContext<'_>,
-    shell_label: &'static str,
-    shell_options: Vec<ConnectionEditorChoice>,
     cx: &mut Context<NyaTermApp>,
 ) -> gpui::Div {
     let ConnectionEditorSectionContext {
         palette,
         editor: _,
-        active_menu: open_menu,
         language,
         fields,
     } = section;
@@ -60,10 +57,7 @@ pub(super) fn connection_editor_local_section(
                                     },
                                     "connection-editor-shell-preset",
                                     "",
-                                    shell_label,
-                                    ConnectionEditorMenu::Shell,
-                                    open_menu == Some(ConnectionEditorMenu::Shell),
-                                    shell_options,
+                                    ConnectionEditorSelect::Shell,
                                 )),
                         )
                         .child(div().min_w_0().flex_1().child(editor_field(

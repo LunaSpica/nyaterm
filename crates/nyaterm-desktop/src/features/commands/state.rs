@@ -3,17 +3,15 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use gpui::{FocusHandle, WindowHandle};
+use gpui::FocusHandle;
 use nyaterm_core::{CommandHistoryEntry, QuickCommand, QuickCommandCategory};
+use nyaterm_ui::NyaWindowHandle;
 
-use super::quick_command_runtime::QuickCommandWindow;
 use crate::features::{CommandPersistenceRequest, CommandPersistenceResult};
 use crate::models::{
-    QuickCommandCategoryDeleteState, QuickCommandCategoryMenuState,
-    QuickCommandCategoryRenameState, QuickCommandDeleteState, QuickCommandDetailsState,
+    QuickCommandCategoryDeleteState, QuickCommandCategoryRenameState, QuickCommandDetailsState,
     QuickCommandEditorField, QuickCommandEditorState, QuickCommandImportPathPromptKind,
-    QuickCommandRowMenuState, QuickCommandSortMode, QuickCommandVariablePromptState,
-    QuickCommandViewMode,
+    QuickCommandSortMode, QuickCommandVariablePromptState, QuickCommandViewMode,
 };
 
 use super::runtime_state::{CommandPersistencePoll, CommandRuntimeState};
@@ -174,24 +172,6 @@ impl CommandFeatureState {
         self.quick.list.view_mode
     }
 
-    pub(in crate::features) fn quick_sort_menu_is_open(&self) -> bool {
-        self.quick.list.sort_menu_open
-    }
-
-    pub(in crate::features) fn quick_view_menu_is_open(&self) -> bool {
-        self.quick.list.view_menu_open
-    }
-
-    pub(in crate::features) fn quick_row_menu(&self) -> Option<&QuickCommandRowMenuState> {
-        self.quick.list.row_menu.as_ref()
-    }
-
-    pub(in crate::features) fn quick_category_menu(
-        &self,
-    ) -> Option<&QuickCommandCategoryMenuState> {
-        self.quick.list.category_menu.as_ref()
-    }
-
     pub(in crate::features) fn set_quick_search_draft(&mut self, text: String) {
         self.quick.list.search_draft = text;
     }
@@ -203,79 +183,22 @@ impl CommandFeatureState {
 
     pub(in crate::features) fn select_quick_category(&mut self, category_id: String) {
         self.quick.list.selected_category = category_id;
-        self.close_quick_menus();
     }
 
     pub(in crate::features) fn set_quick_view_mode(&mut self, mode: QuickCommandViewMode) {
-        self.close_quick_row_menu();
         self.close_quick_toolbar_popovers();
         self.quick.list.view_mode = mode;
     }
 
     pub(in crate::features) fn set_quick_sort_mode(&mut self, mode: QuickCommandSortMode) {
-        self.close_quick_row_menu();
         self.close_quick_toolbar_popovers();
         self.quick.list.sort_mode = mode;
     }
 
-    pub(in crate::features) fn toggle_quick_sort_menu(&mut self) {
-        let open = !self.quick.list.sort_menu_open;
-        self.close_quick_toolbar_popovers();
-        self.close_quick_row_menu();
-        self.quick.list.sort_menu_open = open;
-    }
-
-    pub(in crate::features) fn toggle_quick_view_menu(&mut self) {
-        let open = !self.quick.list.view_menu_open;
-        self.close_quick_toolbar_popovers();
-        self.close_quick_row_menu();
-        self.quick.list.view_menu_open = open;
-    }
-
     pub(in crate::features) fn close_quick_toolbar_popovers(&mut self) -> bool {
-        let changed = self.quick.list.sort_menu_open
-            || self.quick.list.view_menu_open
-            || self.quick.list.category_menu.is_some()
-            || self.quick.ai.popover_open;
+        let changed = self.quick.ai.popover_open;
         self.quick.close_toolbar_popovers();
         changed
-    }
-
-    pub(in crate::features) fn close_quick_row_menu(&mut self) {
-        self.quick.list.row_menu = None;
-    }
-
-    pub(in crate::features) fn close_quick_menus(&mut self) {
-        self.quick.list.row_menu = None;
-        self.quick.list.category_menu = None;
-    }
-
-    pub(in crate::features) fn toggle_quick_row_menu(&mut self, menu: QuickCommandRowMenuState) {
-        if self
-            .quick
-            .list
-            .row_menu
-            .as_ref()
-            .is_some_and(|current| current.command_id == menu.command_id)
-        {
-            self.quick.list.row_menu = None;
-        } else {
-            self.quick.list.row_menu = Some(menu);
-            self.quick.list.category_menu = None;
-        }
-    }
-
-    pub(in crate::features) fn open_quick_row_menu(&mut self, menu: QuickCommandRowMenuState) {
-        self.quick.list.row_menu = Some(menu);
-        self.quick.list.category_menu = None;
-    }
-
-    pub(in crate::features) fn open_quick_category_menu(
-        &mut self,
-        menu: QuickCommandCategoryMenuState,
-    ) {
-        self.quick.list.row_menu = None;
-        self.quick.list.category_menu = Some(menu);
     }
 
     pub(in crate::features) fn quick_editor(&self) -> Option<&QuickCommandEditorState> {
@@ -291,7 +214,6 @@ impl CommandFeatureState {
     }
 
     pub(in crate::features) fn open_quick_editor(&mut self, editor: QuickCommandEditorState) {
-        self.close_quick_row_menu();
         self.quick.editor.draft = Some(editor);
     }
 
@@ -410,9 +332,7 @@ impl CommandFeatureState {
         }
     }
 
-    pub(in crate::features::commands) fn quick_editor_window(
-        &self,
-    ) -> Option<WindowHandle<QuickCommandWindow>> {
+    pub(in crate::features::commands) fn quick_editor_window(&self) -> Option<NyaWindowHandle> {
         self.quick.editor.window
     }
 
@@ -447,7 +367,7 @@ impl CommandFeatureState {
 
     pub(in crate::features::commands) fn finish_quick_editor_window_open(
         &mut self,
-        window: Option<WindowHandle<QuickCommandWindow>>,
+        window: Option<NyaWindowHandle>,
     ) {
         self.quick.editor.window = window;
         self.quick.editor.window_open_pending = false;
@@ -455,7 +375,7 @@ impl CommandFeatureState {
 
     pub(in crate::features::commands) fn clear_quick_editor_window_if(
         &mut self,
-        expected: WindowHandle<QuickCommandWindow>,
+        expected: NyaWindowHandle,
     ) -> bool {
         if self.quick.editor.window == Some(expected) {
             self.quick.editor.window = None;
@@ -468,19 +388,6 @@ impl CommandFeatureState {
         self.quick.editor.window_open_pending = false;
     }
 
-    pub(in crate::features) fn quick_delete(&self) -> Option<&QuickCommandDeleteState> {
-        self.quick.dialogs.delete.as_ref()
-    }
-
-    pub(in crate::features) fn request_quick_delete(&mut self, state: QuickCommandDeleteState) {
-        self.close_quick_row_menu();
-        self.quick.dialogs.delete = Some(state);
-    }
-
-    pub(in crate::features) fn clear_quick_delete(&mut self) {
-        self.quick.dialogs.delete = None;
-    }
-
     pub(in crate::features) fn quick_details(&self) -> Option<&QuickCommandDetailsState> {
         self.quick.dialogs.details.as_ref()
     }
@@ -490,7 +397,6 @@ impl CommandFeatureState {
     }
 
     pub(in crate::features) fn request_quick_details(&mut self, state: QuickCommandDetailsState) {
-        self.close_quick_row_menu();
         self.quick.dialogs.details = Some(state);
     }
 
@@ -508,7 +414,6 @@ impl CommandFeatureState {
         &mut self,
         state: QuickCommandCategoryDeleteState,
     ) {
-        self.close_quick_menus();
         self.quick.dialogs.category_delete = Some(state);
     }
 
@@ -535,15 +440,10 @@ impl CommandFeatureState {
         self.quick.dialogs.category_rename.as_ref()
     }
 
-    pub(in crate::features) fn quick_category_rename_focus(&self) -> &FocusHandle {
-        &self.quick.dialogs.category_rename_focus
-    }
-
     pub(in crate::features) fn request_quick_category_rename(
         &mut self,
         state: QuickCommandCategoryRenameState,
     ) {
-        self.close_quick_menus();
         self.quick.dialogs.category_rename = Some(state);
     }
 
@@ -656,30 +556,10 @@ impl CommandFeatureState {
         true
     }
 
-    pub(in crate::features) fn quick_import_dialog_is_open(&self) -> bool {
-        self.quick.import.dialog_open
-    }
-
     pub(in crate::features) fn quick_import_path_prompt(
         &self,
     ) -> Option<QuickCommandImportPathPromptKind> {
         self.quick.import.path_prompt
-    }
-
-    pub(in crate::features) fn quick_import_focus(&self) -> &FocusHandle {
-        &self.quick.import.focus
-    }
-
-    pub(in crate::features) fn open_quick_import_dialog(&mut self) -> bool {
-        if self.quick.import.path_prompt.is_some() {
-            return false;
-        }
-        self.quick.import.dialog_open = true;
-        true
-    }
-
-    pub(in crate::features) fn close_quick_import_dialog(&mut self) {
-        self.quick.import.dialog_open = false;
     }
 
     pub(in crate::features) fn request_quick_import_path(
@@ -689,7 +569,6 @@ impl CommandFeatureState {
         if self.quick.import.path_prompt.is_some() {
             return false;
         }
-        self.quick.import.dialog_open = false;
         self.quick.import.path_prompt = Some(kind);
         true
     }
@@ -709,7 +588,6 @@ impl CommandFeatureState {
     pub(in crate::features) fn toggle_quick_ai_popover(&mut self) -> bool {
         let open = !self.quick.ai.popover_open;
         self.close_quick_toolbar_popovers();
-        self.close_quick_row_menu();
         self.quick.ai.popover_open = open;
         open
     }
@@ -777,9 +655,7 @@ impl CommandCatalogState {
 pub(in crate::features) struct QuickCommandFeatureFocus {
     pub editor: FocusHandle,
     pub details: FocusHandle,
-    pub category_rename: FocusHandle,
     pub variable: FocusHandle,
-    pub import: FocusHandle,
 }
 
 /// Panel list state: search, category filter, sort/view mode and their menus.
@@ -788,39 +664,29 @@ struct QuickCommandListState {
     selected_category: String,
     sort_mode: QuickCommandSortMode,
     view_mode: QuickCommandViewMode,
-    sort_menu_open: bool,
-    view_menu_open: bool,
-    /// Open row overflow/context menu.
-    row_menu: Option<QuickCommandRowMenuState>,
-    /// Open category context menu.
-    category_menu: Option<QuickCommandCategoryMenuState>,
 }
 
 /// Quick command editor draft and its optional detached window.
 struct QuickCommandEditorFeatureState {
     draft: Option<QuickCommandEditorState>,
     focus: FocusHandle,
-    window: Option<WindowHandle<QuickCommandWindow>>,
+    window: Option<NyaWindowHandle>,
     window_open_pending: bool,
 }
 
 /// Delete/details/rename confirmations and the variable prompt.
 struct QuickCommandDialogState {
-    delete: Option<QuickCommandDeleteState>,
     details: Option<QuickCommandDetailsState>,
     details_focus: FocusHandle,
     category_delete: Option<QuickCommandCategoryDeleteState>,
     category_rename: Option<QuickCommandCategoryRenameState>,
-    category_rename_focus: FocusHandle,
     variable_prompt: Option<QuickCommandVariablePromptState>,
     variable_focus: FocusHandle,
 }
 
 /// Import source picker and its path prompt.
 struct QuickCommandImportState {
-    dialog_open: bool,
     path_prompt: Option<QuickCommandImportPathPromptKind>,
-    focus: FocusHandle,
 }
 
 /// AI-assisted quick command popover.
@@ -841,10 +707,6 @@ impl QuickCommandFeatureState {
                 selected_category: "all".to_string(),
                 sort_mode,
                 view_mode,
-                sort_menu_open: false,
-                view_menu_open: false,
-                row_menu: None,
-                category_menu: None,
             },
             editor: QuickCommandEditorFeatureState {
                 draft: None,
@@ -853,20 +715,14 @@ impl QuickCommandFeatureState {
                 window_open_pending: false,
             },
             dialogs: QuickCommandDialogState {
-                delete: None,
                 details: None,
                 details_focus: focus.details,
                 category_delete: None,
                 category_rename: None,
-                category_rename_focus: focus.category_rename,
                 variable_prompt: None,
                 variable_focus: focus.variable,
             },
-            import: QuickCommandImportState {
-                dialog_open: false,
-                path_prompt: None,
-                focus: focus.import,
-            },
+            import: QuickCommandImportState { path_prompt: None },
             ai: QuickCommandAiState {
                 popover_open: false,
                 prompt_draft: String::new(),
@@ -876,11 +732,8 @@ impl QuickCommandFeatureState {
 }
 
 impl QuickCommandFeatureState {
-    /// Closes every toolbar popover at once; they are mutually exclusive.
+    /// Closes the AI toolbar popover before another toolbar action takes over.
     pub(in crate::features) fn close_toolbar_popovers(&mut self) {
-        self.list.sort_menu_open = false;
-        self.list.view_menu_open = false;
-        self.list.category_menu = None;
         self.ai.popover_open = false;
     }
 }
@@ -889,13 +742,12 @@ impl QuickCommandFeatureState {
 mod tests {
     use std::path::PathBuf;
 
-    use gpui::{TestAppContext, px};
+    use gpui::TestAppContext;
     use nyaterm_core::{QuickCommand, QuickCommandCategory};
 
     use crate::models::{
-        QuickCommandCategoryMenuState, QuickCommandEditorState, QuickCommandImportPathPromptKind,
-        QuickCommandRowMenuState, QuickCommandSortMode, QuickCommandVariableDef,
-        QuickCommandVariablePromptState, QuickCommandViewMode,
+        QuickCommandEditorState, QuickCommandImportPathPromptKind, QuickCommandSortMode,
+        QuickCommandVariableDef, QuickCommandVariablePromptState, QuickCommandViewMode,
     };
 
     use super::{
@@ -933,9 +785,7 @@ mod tests {
             focus: QuickCommandFeatureFocus {
                 editor: focus(),
                 details: focus(),
-                category_rename: focus(),
                 variable: focus(),
-                import: focus(),
             },
             config_dir: PathBuf::new(),
             portable_key_path: None,
@@ -943,29 +793,14 @@ mod tests {
     }
 
     #[test]
-    fn quick_toolbar_popovers_and_context_menus_are_exclusive() {
+    fn quick_ai_popover_toggles_and_closes() {
         let mut state = command_state();
 
-        state.toggle_quick_sort_menu();
-        assert!(state.quick_sort_menu_is_open());
         state.toggle_quick_ai_popover();
-        assert!(!state.quick_sort_menu_is_open());
         assert!(state.quick_ai_popover_is_open());
-
-        state.open_quick_category_menu(QuickCommandCategoryMenuState {
-            category_id: "category-1".to_string(),
-            x: px(10.),
-            y: px(12.),
-        });
-        assert!(state.quick_category_menu().is_some());
-        assert!(state.quick_row_menu().is_none());
-        state.open_quick_row_menu(QuickCommandRowMenuState {
-            command_id: "command-1".to_string(),
-            x: px(14.),
-            y: px(16.),
-        });
-        assert!(state.quick_category_menu().is_none());
-        assert!(state.quick_row_menu().is_some());
+        assert!(state.close_quick_toolbar_popovers());
+        assert!(!state.quick_ai_popover_is_open());
+        assert!(!state.close_quick_toolbar_popovers());
     }
 
     #[test]
@@ -977,7 +812,6 @@ mod tests {
         state.request_quick_category_delete(crate::models::QuickCommandCategoryDeleteState {
             id: "category-1".to_string(),
             name: "Common".to_string(),
-            command_count: 1,
         });
 
         state.finish_quick_category_delete("category-1");
@@ -1029,12 +863,10 @@ mod tests {
     #[test]
     fn import_and_detached_editor_lifecycles_clear_pending_state_atomically() {
         let mut state = command_state();
-        assert!(state.open_quick_import_dialog());
         assert!(state.request_quick_import_path(QuickCommandImportPathPromptKind::NyatermJson));
-        assert!(!state.quick_import_dialog_is_open());
-        assert!(!state.open_quick_import_dialog());
+        assert!(!state.request_quick_import_path(QuickCommandImportPathPromptKind::XshellXts));
         state.finish_quick_import_path();
-        assert!(state.open_quick_import_dialog());
+        assert!(state.request_quick_import_path(QuickCommandImportPathPromptKind::XshellXts));
 
         state.open_quick_editor(QuickCommandEditorState::blank());
         assert!(state.request_quick_editor_window());

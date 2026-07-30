@@ -32,7 +32,18 @@ impl NyaTermApp {
             });
         self.forget_text_inputs("transfer.new-symlink.");
         self.shell.set_status("SFTP new symlink opened".to_string());
-        window.focus(self.transfer.new_symlink_focus());
+        self.open_form_dialog(
+            (
+                self.tr("fileExplorer.newSymlink").to_string(),
+                480.,
+                self.tr("common.confirm").to_string(),
+                |app, _, cx| app.transfer_new_symlink_dialog_content(cx),
+                |app, window, cx| app.submit_transfer_new_symlink(window, cx),
+                |app, cx| app.close_transfer_new_symlink_dialog(cx),
+            ),
+            window,
+            cx,
+        );
         cx.notify();
     }
 
@@ -51,12 +62,12 @@ impl NyaTermApp {
         &mut self,
         window: &mut Window,
         cx: &mut Context<Self>,
-    ) {
+    ) -> bool {
         let Some(state) = self.transfer.new_symlink_dialog().cloned() else {
             self.shell
                 .set_status("no SFTP new symlink is active".to_string());
             cx.notify();
-            return;
+            return true;
         };
         let name = state.name.trim().to_string();
         let target_path = state.target.trim().to_string();
@@ -64,37 +75,18 @@ impl NyaTermApp {
             self.shell
                 .set_status("symlink name must be a single non-empty name".to_string());
             cx.notify();
-            return;
+            return false;
         }
         if target_path.is_empty() {
             self.shell
                 .set_status("symlink target cannot be empty".to_string());
             cx.notify();
-            return;
+            return false;
         }
         self.transfer.close_new_symlink_dialog();
         let link_path = remote_child_path(&state.parent_path, &name);
         self.start_sftp_symlink_job(link_path, target_path, state.parent_path, window, cx);
-    }
-
-    pub(in crate::features) fn handle_transfer_new_symlink_key_down(
-        &mut self,
-        event: &KeyDownEvent,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.mark_user_activity();
-        let keystroke = &event.keystroke;
-        if keystroke.modifiers.platform || keystroke.modifiers.alt || keystroke.modifiers.control {
-            return;
-        }
-
-        // The boxes own the text; the dialog owns the keys that close or submit.
-        match keystroke.key.as_str() {
-            "escape" => self.close_transfer_new_symlink_dialog(cx),
-            "enter" => self.submit_transfer_new_symlink(window, cx),
-            _ => {}
-        }
+        true
     }
 
     /// Apply an edit from one of the symlink dialog's boxes.

@@ -42,13 +42,6 @@ impl RemoteProcessSortDirection {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct RemoteProcessSignalConfirmState {
-    pub(crate) pid: u32,
-    pub(crate) signal: &'static str,
-    pub(crate) command: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum DockerConfirmAction {
     ContainerAction {
         container_id: String,

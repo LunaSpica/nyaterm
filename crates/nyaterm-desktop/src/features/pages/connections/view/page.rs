@@ -6,14 +6,14 @@ use gpui::{
     },
     px, rgb, svg, uniform_list,
 };
+use nyaterm_ui::{NyaContextMenu, NyaDropdownMenu};
 
 use crate::features::{ConnectionDragKind, ConnectionDragPayload, NyaTermApp};
 use crate::models::ConnectionSortMode;
 
 use super::super::list::{
     ConnectionListRow, connection_sections, connection_tree_indent_px, flatten_connection_rows,
-    icon_action_button, icon_action_button_styled, menu_item_submenu_trigger, menu_item_with_icon,
-    menu_separator,
+    icon_action_button, icon_action_button_styled,
 };
 
 const CONNECTION_LIST_ROW_HEIGHT_PX: f32 = 34.;
@@ -97,12 +97,6 @@ impl NyaTermApp {
                     if this.connection_state.list_has_selection() {
                         this.clear_selected_connections(cx);
                     }
-                }),
-            )
-            .on_mouse_down(
-                MouseButton::Right,
-                cx.listener(|this, event: &gpui::MouseDownEvent, _, cx| {
-                    this.open_connection_list_context_menu(event, cx);
                 }),
             )
             .on_drop(cx.listener(|this, payload: &ConnectionDragPayload, _, cx| {
@@ -212,6 +206,8 @@ impl NyaTermApp {
             );
         }
 
+        let list = NyaContextMenu::new(list, self.connection_list_context_menu_items(cx));
+
         // Tauri: PanelHeader (shared stack) + search/action strip + flat tree list.
         // Count is shown in the shared panel header via meta; strip hosts search + icons.
         div()
@@ -223,36 +219,6 @@ impl NyaTermApp {
             .bg(self.shell_transparent_color(palette.surface))
             .child(self.connections_search_bar(window, cx))
             .child(list)
-            .when_some(
-                self.connection_state.active_group_editor_draft(),
-                |this, editor| this.child(self.connection_group_editor_panel(editor, cx)),
-            )
-            .when_some(
-                self.connection_state.active_delete_confirm(),
-                |this, confirm| this.child(self.connection_delete_confirm_panel(confirm, cx)),
-            )
-            .when_some(
-                self.connection_state.active_group_delete_confirm(),
-                |this, confirm| this.child(self.connection_group_delete_confirm_panel(confirm, cx)),
-            )
-            .when_some(
-                self.connection_state.active_group_open_confirm(),
-                |this, confirm| this.child(self.connection_group_open_confirm_panel(confirm, cx)),
-            )
-            .when(self.connection_state.clear_all_is_open(), |this| {
-                this.child(self.connections_clear_all_confirm_panel(cx))
-            })
-            .when(self.connection_state.list_context_menu_is_open(), |this| {
-                this.child(self.connection_context_menu_overlay(cx))
-            })
-            .when(
-                self.connection_state.list_group_context_menu_is_open(),
-                |this| this.child(self.connection_group_context_menu_overlay(cx)),
-            )
-            .when(
-                self.connection_state.list_background_context_menu_is_open(),
-                |this| this.child(self.connection_list_context_menu_overlay(cx)),
-            )
     }
 
     pub(in crate::features) fn connections_search_bar(
@@ -281,23 +247,13 @@ impl NyaTermApp {
             ConnectionSortMode::NameAsc => "savedConnections.sortNameAsc",
             ConnectionSortMode::NameDesc => "savedConnections.sortNameDesc",
         });
-        let more_open = self.connection_state.list_more_menu_is_open();
-        let can_clear_all = !self.connection_state.connections().is_empty();
-        let selected = self.connection_state.selected_connections();
-        let selected_count = selected.len();
-        let move_submenu_open = self.connection_state.list_move_submenu_is_open();
-        let selected_ids = selected
-            .into_iter()
-            .map(|connection| connection.id)
-            .collect::<Vec<_>>();
-        let connect_selected_label = if selected_count > 1 {
-            format!(
-                "{} ({selected_count})",
-                self.tr("savedConnections.connectSelected")
-            )
-        } else {
-            self.tr("savedConnections.connect").to_string()
-        };
+        let more_menu = NyaDropdownMenu::new("connections-more")
+            .icon("icons/conn/more.svg")
+            .icon_size(px(14.))
+            .tooltip(self.tr("common.more"))
+            .min_width(px(180.))
+            .items(self.connection_more_menu_items(cx))
+            .on_trigger(|_, _, cx| cx.stop_propagation());
 
         // Tauri search strip: px-2 py-1.5, input h-7.
         div()
@@ -422,136 +378,6 @@ impl NyaTermApp {
                     this.open_connection_editor(None, None, false, window, cx);
                 }),
             ))
-            .child(
-                div()
-                    .relative()
-                    .on_mouse_down(MouseButton::Left, |_, _, cx| {
-                        cx.stop_propagation();
-                    })
-                    .child(icon_action_button(
-                        palette,
-                        "connections-more",
-                        "icons/conn/more.svg",
-                        self.tr("common.more"),
-                        cx.listener(|this, _, _, cx| {
-                            this.connection_state.toggle_list_more_menu();
-                            cx.notify();
-                        }),
-                    ))
-                    .when(more_open, |this| {
-                        this.child(
-                            div()
-                                .id(SharedString::from("connections-more-menu"))
-                                .absolute()
-                                .top(px(30.))
-                                .right(px(0.))
-                                .w(px(160.))
-                                .rounded_md()
-                                .border_1()
-                                .border_color(rgb(palette.border))
-                                .bg(self.shell_surface_color(palette.surface))
-                                .shadow_sm()
-                                .py_1()
-                                .child(menu_item_with_icon(
-                                    palette,
-                                    "connections-export",
-                                    "icons/menu/export.svg",
-                                    self.tr("settings.exportConfig"),
-                                    false,
-                                    cx.listener(|this, _, _, cx| {
-                                        this.connection_state.close_list_more_menu();
-                                        this.prompt_config_export(cx);
-                                    }),
-                                ))
-                                .child(menu_item_with_icon(
-                                    palette,
-                                    "connections-import",
-                                    "icons/import.svg",
-                                    self.tr("settings.importConfig"),
-                                    false,
-                                    cx.listener(|this, _, window, cx| {
-                                        this.connection_state.close_list_more_menu();
-                                        this.open_connection_import_dialog(window, cx);
-                                    }),
-                                ))
-                                // Tauri parks the multi-selection actions here and
-                                // in the list background menu instead of on a
-                                // toolbar that shoves the tree down.
-                                .when(selected_count > 0, |this| {
-                                    this.child(menu_separator(palette))
-                                        .child(menu_item_with_icon(
-                                            palette,
-                                            "connections-selected-connect",
-                                            "icons/conn/connect.svg",
-                                            connect_selected_label.clone(),
-                                            false,
-                                            cx.listener(|this, _, window, cx| {
-                                                this.connection_state.close_list_more_menu();
-                                                this.start_selected_saved_connections(window, cx);
-                                            }),
-                                        ))
-                                        .child(menu_item_with_icon(
-                                            palette,
-                                            "connections-selected-copy",
-                                            "icons/copy.svg",
-                                            self.tr("savedConnections.copySelected"),
-                                            false,
-                                            cx.listener(|this, _, _, cx| {
-                                                this.connection_state.close_list_more_menu();
-                                                this.copy_selected_connections(cx);
-                                            }),
-                                        ))
-                                        .child(menu_item_submenu_trigger(
-                                            palette,
-                                            "connections-selected-move",
-                                            "icons/net/move.svg",
-                                            self.tr("savedConnections.moveToGroup"),
-                                            move_submenu_open,
-                                            cx.listener(|this, _, _, cx| {
-                                                this.connection_state.toggle_list_move_submenu();
-                                                cx.notify();
-                                            }),
-                                        ))
-                                        .child(menu_item_with_icon(
-                                            palette,
-                                            "connections-selected-delete",
-                                            "icons/net/delete.svg",
-                                            self.tr("savedConnections.delete"),
-                                            true,
-                                            cx.listener(|this, _, _, cx| {
-                                                this.connection_state.close_list_more_menu();
-                                                this.delete_selected_connections(cx);
-                                            }),
-                                        ))
-                                })
-                                // The header menu is laid out inline rather than
-                                // through the shared overlay, so its flyout is an
-                                // absolutely positioned sibling opening leftwards —
-                                // the menu already sits against the panel edge.
-                                .when(move_submenu_open && selected_count > 0, |this| {
-                                    this.child(div().absolute().top(px(0.)).right(px(164.)).child(
-                                        self.connection_move_to_group_submenu(
-                                            "connections-selected-move-menu",
-                                            selected_ids.clone(),
-                                            cx,
-                                        ),
-                                    ))
-                                })
-                                .when(can_clear_all, |this| {
-                                    this.child(menu_separator(palette))
-                                        .child(menu_item_with_icon(
-                                            palette,
-                                            "connections-clear-all",
-                                            "icons/transfer/clear-all.svg",
-                                            self.tr("savedConnections.clearAll"),
-                                            true,
-                                            cx.listener(|this, _, _, cx| {
-                                                this.open_connections_clear_all_confirm(cx);
-                                            }),
-                                        ))
-                                }),
-                        )
-                    }),
-            )
+            .child(more_menu)
     }
 }

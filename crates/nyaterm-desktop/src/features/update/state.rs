@@ -22,7 +22,6 @@ pub(in crate::features) struct UpdateFeatureState {
     status: String,
     info: Option<NativeUpdateInfo>,
     pending: bool,
-    dialog_open: bool,
 }
 
 impl UpdateFeatureState {
@@ -34,20 +33,7 @@ impl UpdateFeatureState {
             status: format!("Current version {}", env!("CARGO_PKG_VERSION")),
             info: None,
             pending: false,
-            dialog_open: false,
         }
-    }
-
-    pub(super) fn open_dialog(&mut self) {
-        self.dialog_open = true;
-    }
-
-    pub(super) fn close_dialog(&mut self) {
-        self.dialog_open = false;
-    }
-
-    pub(in crate::features) fn dialog_is_open(&self) -> bool {
-        self.dialog_open
     }
 
     pub(in crate::features) fn status(&self) -> &str {
@@ -112,18 +98,12 @@ mod tests {
 
     #[test]
     fn update_state_owns_job_channel_and_initial_status() {
-        let mut state = UpdateFeatureState::new();
+        let state = UpdateFeatureState::new();
 
         assert!(state.status().contains(env!("CARGO_PKG_VERSION")));
         assert!(state.rx.try_recv().is_err());
         assert!(state.info().is_none());
         assert!(!state.is_pending());
-        assert!(!state.dialog_is_open());
-
-        state.open_dialog();
-        assert!(state.dialog_is_open());
-        state.close_dialog();
-        assert!(!state.dialog_is_open());
     }
 
     #[test]

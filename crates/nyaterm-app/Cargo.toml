@@ -9,8 +9,10 @@ repository.workspace = true
 [dependencies]
 anyhow.workspace = true
 gpui.workspace = true
+gpui-component.workspace = true
 nyaterm-core.workspace = true
 nyaterm-desktop.workspace = true
+nyaterm-ui.workspace = true
 rust-embed.workspace = true
 tracing.workspace = true
 tracing-appender.workspace = true

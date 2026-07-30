@@ -1,7 +1,8 @@
 use gpui::{Context, FontWeight, IntoElement, SharedString, div, prelude::*, px, rgb};
 
-use crate::features::{ChromeTooltip, NyaTermApp, TextInputSetup};
+use crate::features::{NyaTermApp, TextInputSetup};
 use crate::widgets::small_button;
+use nyaterm_ui::NyaTooltip;
 
 use super::{
     settings_choice_chip, settings_form_row, settings_form_section, settings_switch,
@@ -73,8 +74,8 @@ impl NyaTermApp {
                         div()
                             .id("settings-master-password-switch-wrap")
                             .when(!master_password_switch_enabled, |this| {
-                                this.tooltip(move |_, cx| {
-                                    cx.new(|_| ChromeTooltip::new(master_locked_desc)).into()
+                                this.tooltip(move |window, cx| {
+                                    NyaTooltip::new(master_locked_desc).build(window, cx)
                                 })
                             })
                             .child(settings_switch_with_enabled(

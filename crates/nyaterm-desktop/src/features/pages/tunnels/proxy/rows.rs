@@ -31,10 +31,6 @@ pub(in crate::features::pages::tunnels) fn proxy_network_row(
     let proxy_id_for_edit = proxy.id.clone();
     let proxy_id_for_delete = proxy.id.clone();
     let proxy_label_for_delete = proxy.name.clone();
-    let menu_open = app
-        .connection_state
-        .network_item_menu_is_open(NetworkTab::Proxies, &proxy.id);
-
     // Tauri ProxyRow: name, protocol, address; overflow actions on the right.
     div()
         .px_3()
@@ -77,32 +73,25 @@ pub(in crate::features::pages::tunnels) fn proxy_network_row(
         .child(network_item_overflow_menu(
             NetworkItemMenuConfig {
                 palette,
-                background: app.shell_surface_color(palette.surface),
                 id: format!("proxy-actions-{}", proxy.id),
-                open: menu_open,
                 more_label: app.tr("common.more"),
                 edit_label: app.tr("common.edit"),
                 move_label: app.tr("network.moveToGroup"),
                 delete_label: app.tr("common.delete"),
                 can_move: !app.tunnel_state.proxy_groups().is_empty(),
             },
-            cx.listener({
-                let id = proxy.id.clone();
-                move |this, _, _, cx| {
-                    this.toggle_network_item_menu(NetworkTab::Proxies, id.clone(), cx)
-                }
-            }),
             cx.listener(move |this, _, window, cx| {
                 this.open_network_proxy_editor(Some(proxy_id_for_edit.clone()), window, cx);
             }),
             cx.listener(move |this, _, _, cx| {
                 this.open_network_move_picker(NetworkTab::Proxies, proxy_id_for_move.clone(), cx);
             }),
-            cx.listener(move |this, _, _, cx| {
+            cx.listener(move |this, _, window, cx| {
                 this.open_network_delete_confirm(
                     NetworkTab::Proxies,
                     proxy_id_for_delete.clone(),
                     proxy_label_for_delete.clone(),
+                    window,
                     cx,
                 );
             }),

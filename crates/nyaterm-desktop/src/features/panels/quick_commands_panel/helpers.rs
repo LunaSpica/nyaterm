@@ -1,4 +1,5 @@
 use gpui::{IntoElement, SharedString, div, prelude::*, px, rgb, svg};
+use nyaterm_ui::{NyaDropdownMenu, NyaMenuItem};
 
 use crate::widgets::status_pill;
 
@@ -6,35 +7,32 @@ pub(super) struct QuickCommandRowPresentation<'a> {
     pub command_id: &'a str,
     pub show_badge: bool,
     pub execution_mode: &'a str,
-    pub menu_open: bool,
 }
 
-pub(super) struct QuickCommandRowHandlers<OnRun, OnDetails, OnMore> {
+pub(super) struct QuickCommandRowHandlers<OnRun, OnDetails> {
     pub on_run: OnRun,
     pub on_details: OnDetails,
-    pub on_more: OnMore,
+    pub menu_items: Vec<NyaMenuItem>,
 }
 
-pub(super) fn quick_command_row_actions<OnRun, OnDetails, OnMore>(
+pub(super) fn quick_command_row_actions<OnRun, OnDetails>(
     palette: crate::theme::ThemePalette,
     presentation: QuickCommandRowPresentation<'_>,
-    handlers: QuickCommandRowHandlers<OnRun, OnDetails, OnMore>,
+    handlers: QuickCommandRowHandlers<OnRun, OnDetails>,
 ) -> impl IntoElement
 where
     OnRun: Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
     OnDetails: Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
-    OnMore: Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
 {
     let QuickCommandRowPresentation {
         command_id,
         show_badge,
         execution_mode,
-        menu_open,
     } = presentation;
     let QuickCommandRowHandlers {
         on_run,
         on_details,
-        on_more,
+        menu_items,
     } = handlers;
     // Tauri renderCommandActions: optional badge + Send + Details + More menu.
     div()
@@ -73,9 +71,13 @@ where
             "icons/eye.svg",
             on_details,
         ))
-        .child(quick_command_more_menu(
-            palette, command_id, menu_open, on_more,
-        ))
+        .child(
+            NyaDropdownMenu::new(format!("quick-command-more-{command_id}"))
+                .icon("icons/session/more.svg")
+                .icon_size(px(14.))
+                .min_width(px(148.))
+                .items(menu_items),
+        )
 }
 
 fn quick_command_action_icon_button(
@@ -105,41 +107,4 @@ fn quick_command_action_icon_button(
                 .text_color(rgb(palette.text_muted)),
         )
         .on_click(on_click)
-}
-
-pub(super) fn quick_command_more_menu(
-    palette: crate::theme::ThemePalette,
-    command_id: &str,
-    menu_open: bool,
-    on_more: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
-) -> impl IntoElement {
-    div().relative().child(
-        div()
-            .id(SharedString::from(format!(
-                "quick-command-more-{command_id}"
-            )))
-            .size(px(26.))
-            .flex()
-            .items_center()
-            .justify_center()
-            .rounded_md()
-            .text_color(rgb(palette.text_muted))
-            .cursor_pointer()
-            .hover(|this| {
-                this.bg(rgb(palette.surface_elevated))
-                    .text_color(rgb(palette.text))
-            })
-            .when(menu_open, |this| {
-                this.bg(rgb(palette.surface_elevated))
-                    .text_color(rgb(palette.text))
-            })
-            .child(
-                svg()
-                    .size(px(14.))
-                    .flex_none()
-                    .path("icons/session/more.svg")
-                    .text_color(rgb(palette.text_muted)),
-            )
-            .on_click(on_more),
-    )
 }

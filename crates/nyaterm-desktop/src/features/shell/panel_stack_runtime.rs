@@ -1,19 +1,20 @@
 use std::collections::HashSet;
 
 use gpui::{
-    AnyElement, App, AppContext as _, ClickEvent, Context, InteractiveElement as _, IntoElement,
-    MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement as _, SharedString,
+    AnyElement, App, ClickEvent, Context, InteractiveElement as _, IntoElement, MouseButton,
+    MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement as _, SharedString,
     StatefulInteractiveElement as _, Styled as _, Window, div, prelude::FluentBuilder as _, px,
     rgb, svg,
 };
 use nyaterm_core::{AgentCommandExecutionMode, truncate_preview};
 
-use crate::features::{ChromeTooltip, NyaTermApp, TextInputSetup, panel_header_with_actions};
+use crate::features::{NyaTermApp, TextInputSetup, panel_header_with_actions};
 use crate::models::{
     ActivityBarZone, MainMode, NavItem, NetworkTab, PanelSide, RightFocus, SecurityAuthTab,
     SettingsTab,
 };
 use crate::theme::ThemePalette;
+use nyaterm_ui::NyaTooltip;
 
 const EXCLUSIVE_PANEL_IDS: &[&str] = &["aiAssistant"];
 const NON_PANEL_IDS: &[&str] = &["settings", "lock", "quickCmdBar", "serialSend"];
@@ -792,10 +793,12 @@ impl NyaTermApp {
                                                             .text_color(rgb(palette.danger)),
                                                     )
                                                     .child(prune_label)
-                                                    .on_click(cx.listener(|this, _, _, cx| {
-                                                        this.remote_ops.close_docker_menus();
-                                                        this.prune_docker_system(cx);
-                                                    })),
+                                                    .on_click(cx.listener(
+                                                        |this, _, window, cx| {
+                                                            this.remote_ops.close_docker_menus();
+                                                            this.prune_docker_system(window, cx);
+                                                        },
+                                                    )),
                                             ),
                                     )
                                 }),
@@ -899,7 +902,7 @@ fn header_svg_icon_button(
             })
         })
         .when(!enabled, |this| this.opacity(0.45))
-        .tooltip(move |_, cx| cx.new(|_| ChromeTooltip::new(tooltip.clone())).into())
+        .tooltip(move |window, cx| NyaTooltip::new(tooltip.clone()).build(window, cx))
         .child(
             svg()
                 .size(px(16.))

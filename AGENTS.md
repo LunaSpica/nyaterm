@@ -40,8 +40,8 @@ This is a Rust 2024 Cargo workspace using resolver `3`.
 * `crates/nyaterm-transport`: local PTY, SSH, Telnet, Serial, SFTP, tunnels,
   remote operations, and transfer-protocol runtime. It must remain independent
   of GPUI and desktop presentation types.
-* `crates/nyaterm-ui`: shared GPUI theme tokens and reusable presentation
-  widgets such as `TextField`.
+* `crates/nyaterm-ui`: shared GPUI theme tokens, the `gpui-component`
+  integration boundary, and reusable NyaTerm presentation/interaction widgets.
 * `crates/nyaterm-store`: transitional persistence facade. Storage
   implementation currently remains in `nyaterm-core`; do not expand the
   re-export-only boundary without either moving the implementation or updating
@@ -126,9 +126,15 @@ services, GPUI types and helpers from their authoritative modules.
 
 ## UI and Input Rules
 
-Ordinary form, prompt, and search inputs should use `nyaterm-ui::TextField` and
-the `nyaterm-core::TextEdit` editing model, either owned directly by a feature
-or via the id-keyed registry in `features/text_inputs.rs`.
+Ordinary form, prompt, search, menu, select, switch and dialog controls must
+use the wrappers exposed by `nyaterm-ui` as they are migrated. `nyaterm-ui` owns
+the `gpui-component` integration, theme mapping and stable NyaTerm component
+API. Desktop feature modules must not depend directly on `gpui-component`.
+
+Ordinary text inputs should use `nyaterm-ui::NyaInput`/`NyaInputState`, either
+owned directly by a focused feature or through the id-keyed registry in
+`features/text_inputs.rs`. Do not reintroduce the old hand-painted ordinary
+input implementation.
 
 Do not mechanically replace full editing surfaces with single-line registry
 fields. Terminal input, paste review, and `RemoteTextEditor` have dedicated

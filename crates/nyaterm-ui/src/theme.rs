@@ -734,7 +734,7 @@ pub fn theme_palette(theme: &str) -> ThemePalette {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::theme_palette;
 
     #[test]
     fn semantic_colors_match_tauri_theme_tokens() {

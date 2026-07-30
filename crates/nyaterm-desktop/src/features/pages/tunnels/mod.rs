@@ -6,6 +6,7 @@ use gpui::{
 use std::collections::HashMap;
 
 use crate::models::NetworkTab;
+use nyaterm_ui::{NyaTabItem, NyaTabs};
 
 use super::super::NyaTermApp;
 
@@ -13,12 +14,9 @@ mod common;
 mod proxy;
 mod tunnel;
 
-use common::{
-    network_delete_confirm_panel, network_group_delete_confirm_panel, network_group_editor_panel,
-    network_tab_button,
-};
-use proxy::{network_proxy_editor_panel, proxy_section, proxy_sections};
-use tunnel::{network_tunnel_editor_panel, tunnel_section, tunnel_sections};
+use common::network_group_editor_content;
+use proxy::{network_proxy_editor_content, proxy_section, proxy_sections};
+use tunnel::{network_tunnel_editor_content, tunnel_section, tunnel_sections};
 
 impl NyaTermApp {
     pub(in crate::features) fn tunnels_view(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -106,33 +104,25 @@ impl NyaTermApp {
                         .flex_col()
                         // TabsList grid-cols-2 h-8
                         .child(
-                            div()
-                                .h(px(32.))
-                                .w_full()
-                                .flex()
-                                .items_center()
-                                .gap_1()
-                                .rounded_md()
-                                .bg(rgb(self.theme_palette().input))
-                                .p_1()
-                                .child(network_tab_button(
-                                    "network-tab-tunnels",
-                                    self.tr("network.tunnels").to_string(),
-                                    self.connection_state.network_tab_is(NetworkTab::Tunnels),
-                                    self.theme_palette(),
-                                    cx.listener(|this, _, _, cx| {
-                                        this.set_network_tab(NetworkTab::Tunnels, cx);
-                                    }),
-                                ))
-                                .child(network_tab_button(
-                                    "network-tab-proxies",
-                                    self.tr("network.proxy").to_string(),
-                                    self.connection_state.network_tab_is(NetworkTab::Proxies),
-                                    self.theme_palette(),
-                                    cx.listener(|this, _, _, cx| {
-                                        this.set_network_tab(NetworkTab::Proxies, cx);
-                                    }),
-                                )),
+                            NyaTabs::new("network-tabs")
+                                .items([
+                                    NyaTabItem::new(self.tr("network.tunnels").to_string()),
+                                    NyaTabItem::new(self.tr("network.proxy").to_string()),
+                                ])
+                                .selected_index(
+                                    if self.connection_state.network_tab_is(NetworkTab::Tunnels) {
+                                        0
+                                    } else {
+                                        1
+                                    },
+                                )
+                                .on_select(cx.listener(|this, index, _, cx| {
+                                    let tab = match *index {
+                                        0 => NetworkTab::Tunnels,
+                                        _ => NetworkTab::Proxies,
+                                    };
+                                    this.set_network_tab(tab, cx);
+                                })),
                         )
                         // Config row: label left, group + new right (Tauri)
                         .child(
@@ -158,10 +148,11 @@ impl NyaTermApp {
                                             palette,
                                             "network-group-new",
                                             "icons/fe/new-folder.svg",
-                                            cx.listener(|this, _, _, cx| {
+                                            cx.listener(|this, _, window, cx| {
                                                 this.open_network_group_editor(
                                                     this.connection_state.network_active_tab(),
                                                     None,
+                                                    window,
                                                     cx,
                                                 );
                                             }),
@@ -210,32 +201,36 @@ impl NyaTermApp {
             )
     }
 
-    /// The network panel's dialogs, rendered by the root rather than the panel.
-    ///
-    /// A dialog drawn inside the panel is clipped to it, and the panel is a
-    /// couple of hundred pixels wide; the transfer overlays are hosted this way
-    /// for the same reason.
-    pub(in crate::features) fn network_dialog_overlay(
+    pub(in crate::features) fn network_group_editor_dialog_content(
         &mut self,
         cx: &mut Context<Self>,
-    ) -> Option<AnyElement> {
+    ) -> AnyElement {
+        let Some(editor) = self.connection_state.active_network_group_editor() else {
+            return div().into_any_element();
+        };
+        network_group_editor_content(self, editor, cx).into_any_element()
+    }
+
+    pub(in crate::features) fn network_tunnel_editor_dialog_content(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let palette = self.theme_palette();
-        if let Some(confirm) = self.connection_state.active_network_delete_confirm() {
-            return Some(network_delete_confirm_panel(self, confirm, cx).into_any_element());
-        }
-        if let Some(editor) = self.connection_state.active_network_group_editor() {
-            return Some(network_group_editor_panel(self, editor, cx).into_any_element());
-        }
-        if let Some(confirm) = self.connection_state.active_network_group_delete_confirm() {
-            return Some(network_group_delete_confirm_panel(self, confirm, cx).into_any_element());
-        }
-        if let Some(editor) = self.connection_state.active_network_tunnel_editor() {
-            return Some(network_tunnel_editor_panel(palette, editor, self, cx).into_any_element());
-        }
-        if let Some(editor) = self.connection_state.active_network_proxy_editor() {
-            return Some(network_proxy_editor_panel(palette, editor, self, cx).into_any_element());
-        }
-        None
+        let Some(editor) = self.connection_state.active_network_tunnel_editor() else {
+            return div().into_any_element();
+        };
+        network_tunnel_editor_content(palette, editor, self, cx).into_any_element()
+    }
+
+    pub(in crate::features) fn network_proxy_editor_dialog_content(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let palette = self.theme_palette();
+        let Some(editor) = self.connection_state.active_network_proxy_editor() else {
+            return div().into_any_element();
+        };
+        network_proxy_editor_content(palette, editor, self, cx).into_any_element()
     }
 }
 

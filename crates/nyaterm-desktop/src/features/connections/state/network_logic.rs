@@ -1,9 +1,8 @@
 use std::collections::HashSet;
 
 use crate::models::{
-    NetworkDeleteConfirmState, NetworkGroupDeleteConfirmState, NetworkGroupEditorState,
-    NetworkItemMenuState, NetworkMovePickerState, NetworkProxyEditorField, NetworkProxyEditorState,
-    NetworkTab, NetworkTunnelEditorField, NetworkTunnelEditorState,
+    NetworkGroupEditorState, NetworkMovePickerState, NetworkProxyEditorField,
+    NetworkProxyEditorState, NetworkTab, NetworkTunnelEditorField, NetworkTunnelEditorState,
 };
 
 /// Write the group draft's name.
@@ -30,32 +29,11 @@ pub(super) fn set_network_group_editor_error(
     true
 }
 
-pub(super) fn toggle_network_item_menu_state(
-    item_menu: &mut Option<NetworkItemMenuState>,
-    move_picker: &mut Option<NetworkMovePickerState>,
-    tab: NetworkTab,
-    id: String,
-) -> bool {
-    if item_menu
-        .as_ref()
-        .is_some_and(|menu| menu.tab == tab && menu.id == id)
-    {
-        *item_menu = None;
-        return false;
-    }
-
-    *item_menu = Some(NetworkItemMenuState { tab, id });
-    *move_picker = None;
-    true
-}
-
 pub(super) fn toggle_network_move_picker_state(
-    item_menu: &mut Option<NetworkItemMenuState>,
     move_picker: &mut Option<NetworkMovePickerState>,
     tab: NetworkTab,
     id: String,
 ) -> bool {
-    *item_menu = None;
     if move_picker
         .as_ref()
         .is_some_and(|picker| picker.tab == tab && picker.id == id)
@@ -69,26 +47,12 @@ pub(super) fn toggle_network_move_picker_state(
 }
 
 pub(super) fn remove_network_item_references(
-    delete_confirm: &mut Option<NetworkDeleteConfirmState>,
-    item_menu: &mut Option<NetworkItemMenuState>,
     move_picker: &mut Option<NetworkMovePickerState>,
     tunnel_editor: &mut Option<NetworkTunnelEditorState>,
     proxy_editor: &mut Option<NetworkProxyEditorState>,
     tab: NetworkTab,
     id: &str,
 ) {
-    if delete_confirm
-        .as_ref()
-        .is_some_and(|confirm| confirm.tab == tab && confirm.id == id)
-    {
-        *delete_confirm = None;
-    }
-    if item_menu
-        .as_ref()
-        .is_some_and(|menu| menu.tab == tab && menu.id == id)
-    {
-        *item_menu = None;
-    }
     if move_picker
         .as_ref()
         .is_some_and(|picker| picker.tab == tab && picker.id == id)
@@ -117,7 +81,6 @@ pub(super) fn remove_network_item_references(
 
 pub(super) fn remove_network_group_references(
     group_editor: &mut Option<NetworkGroupEditorState>,
-    group_delete_confirm: &mut Option<NetworkGroupDeleteConfirmState>,
     expanded_sections: &mut HashSet<String>,
     tab: NetworkTab,
     group_id: &str,
@@ -128,12 +91,6 @@ pub(super) fn remove_network_group_references(
         .is_some_and(|editor| editor.tab == tab && editor.id.as_deref() == Some(group_id))
     {
         *group_editor = None;
-    }
-    if group_delete_confirm
-        .as_ref()
-        .is_some_and(|confirm| confirm.tab == tab && confirm.id == group_id)
-    {
-        *group_delete_confirm = None;
     }
 }
 
@@ -174,13 +131,14 @@ fn network_tunnel_editor_field_mut(editor: &mut NetworkTunnelEditorState) -> &mu
     }
 }
 
-pub(super) fn cycle_network_tunnel_type(
+pub(super) fn set_network_tunnel_type(
     tunnel_editor: &mut Option<NetworkTunnelEditorState>,
+    tunnel_type: &str,
 ) -> Option<String> {
     let editor = tunnel_editor.as_mut()?;
-    editor.tunnel_type = match editor.tunnel_type.as_str() {
-        "local" => "remote",
-        "remote" => "dynamic",
+    editor.tunnel_type = match tunnel_type {
+        "remote" => "remote",
+        "dynamic" => "dynamic",
         _ => "local",
     }
     .to_string();
@@ -196,27 +154,26 @@ pub(super) fn cycle_network_tunnel_type(
     Some(editor.tunnel_type.clone())
 }
 
-pub(super) fn cycle_network_tunnel_connection<'a>(
+pub(super) fn set_network_tunnel_connection(
     tunnel_editor: &mut Option<NetworkTunnelEditorState>,
-    connection_ids: impl IntoIterator<Item = &'a str>,
+    connection_id: Option<String>,
 ) -> bool {
     let Some(editor) = tunnel_editor.as_mut() else {
         return false;
     };
-    editor.connection_id =
-        next_network_optional_id(editor.connection_id.as_deref(), connection_ids);
+    editor.connection_id = connection_id;
     editor.error = None;
     true
 }
 
-pub(super) fn cycle_network_tunnel_group<'a>(
+pub(super) fn set_network_tunnel_group(
     tunnel_editor: &mut Option<NetworkTunnelEditorState>,
-    group_ids: impl IntoIterator<Item = &'a str>,
+    group_id: Option<String>,
 ) -> bool {
     let Some(editor) = tunnel_editor.as_mut() else {
         return false;
     };
-    editor.group_id = next_network_optional_id(editor.group_id.as_deref(), group_ids);
+    editor.group_id = group_id;
     editor.error = None;
     true
 }
@@ -290,13 +247,14 @@ fn network_proxy_editor_field_mut(editor: &mut NetworkProxyEditorState) -> &mut 
     }
 }
 
-pub(super) fn cycle_network_proxy_protocol(
+pub(super) fn set_network_proxy_protocol(
     proxy_editor: &mut Option<NetworkProxyEditorState>,
+    protocol: &str,
 ) -> Option<String> {
     let editor = proxy_editor.as_mut()?;
-    editor.protocol = match editor.protocol.as_str() {
-        "socks5" => "http",
-        "http" => "proxycommand",
+    editor.protocol = match protocol {
+        "http" => "http",
+        "proxycommand" => "proxycommand",
         _ => "socks5",
     }
     .to_string();
@@ -315,14 +273,14 @@ pub(super) fn cycle_network_proxy_protocol(
     Some(editor.protocol.clone())
 }
 
-pub(super) fn cycle_network_proxy_group<'a>(
+pub(super) fn set_network_proxy_group(
     proxy_editor: &mut Option<NetworkProxyEditorState>,
-    group_ids: impl IntoIterator<Item = &'a str>,
+    group_id: Option<String>,
 ) -> bool {
     let Some(editor) = proxy_editor.as_mut() else {
         return false;
     };
-    editor.group_id = next_network_optional_id(editor.group_id.as_deref(), group_ids);
+    editor.group_id = group_id;
     editor.error = None;
     true
 }
@@ -336,22 +294,6 @@ pub(super) fn set_network_proxy_editor_error(
     };
     editor.error = Some(error);
     true
-}
-
-fn next_network_optional_id<'a>(
-    current_id: Option<&str>,
-    ids: impl IntoIterator<Item = &'a str>,
-) -> Option<String> {
-    let mut cycle = std::iter::once(None)
-        .chain(ids.into_iter().map(Some))
-        .collect::<Vec<_>>();
-    if cycle.is_empty() {
-        return None;
-    }
-    let current_index = cycle.iter().position(|id| *id == current_id).unwrap_or(0);
-    cycle
-        .remove((current_index + 1) % cycle.len())
-        .map(ToOwned::to_owned)
 }
 
 fn network_section_key(tab: NetworkTab, section_id: &str) -> String {

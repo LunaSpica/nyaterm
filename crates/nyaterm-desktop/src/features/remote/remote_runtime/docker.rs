@@ -436,25 +436,33 @@ impl NyaTermApp {
     pub(in crate::features) fn request_docker_confirm(
         &mut self,
         confirm: DockerConfirmState,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.remote_ops.request_docker_confirm(confirm);
-        cx.notify();
+        let title = confirm.title.clone();
+        let detail = confirm.detail.clone();
+        self.open_confirm_dialog(
+            (
+                title,
+                detail,
+                self.tr("common.confirm").to_string(),
+                true,
+                move |app, window, cx| {
+                    app.run_confirmed_docker_action(confirm.clone(), window, cx);
+                    true
+                },
+            ),
+            window,
+            cx,
+        );
     }
 
-    pub(in crate::features) fn cancel_docker_confirm(&mut self, cx: &mut Context<Self>) {
-        self.remote_ops.cancel_docker_confirm();
-        cx.notify();
-    }
-
-    pub(in crate::features) fn confirm_docker_action(
+    fn run_confirmed_docker_action(
         &mut self,
+        confirm: DockerConfirmState,
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(confirm) = self.remote_ops.docker_confirm() else {
-            return;
-        };
         let Some(config) = self.session.active_ssh_config_owned() else {
             self.remote_ops
                 .set_docker_status("start an SSH session before changing Docker resources");
@@ -540,13 +548,18 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::features) fn prune_docker_system(&mut self, cx: &mut Context<Self>) {
+    pub(in crate::features) fn prune_docker_system(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.request_docker_confirm(
             DockerConfirmState {
                 title: "Docker system prune".to_string(),
                 detail: "docker system prune -f --volumes".to_string(),
                 action: DockerConfirmAction::Prune { volumes: true },
             },
+            window,
             cx,
         );
     }
@@ -635,7 +648,6 @@ impl NyaTermApp {
                         self.remote_ops
                             .set_compose_service_error(key.clone(), error);
                     }
-                    self.remote_ops.clear_docker_confirm();
                 }
                 Ok(DockerJobOutput::RefreshedAfterAction { label, overview }) => {
                     let container_count = overview.containers.len();
@@ -645,7 +657,6 @@ impl NyaTermApp {
                     ));
                     self.shell
                         .set_status(self.remote_ops.docker_status().to_string());
-                    self.remote_ops.clear_docker_confirm();
                 }
                 Err(error) => {
                     if was_overview_refresh && self.remote_ops.record_docker_refresh_failure() >= 3

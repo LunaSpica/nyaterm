@@ -1,7 +1,8 @@
 use gpui::{
     App, AppContext, Bounds, Context, Entity, IntoElement, Render, Subscription, Window,
-    WindowBounds, WindowHandle, WindowKind, WindowOptions, div, prelude::*, px, rgb, size,
+    WindowBounds, WindowKind, WindowOptions, div, prelude::*, px, rgb, size,
 };
+use nyaterm_ui::{NyaWindowHandle, nya_root};
 
 use crate::features::{NyaTermApp, child_window_header, child_window_titlebar};
 
@@ -154,7 +155,7 @@ fn open_quick_command_window_now_from_app(app: Entity<NyaTermApp>, cx: &mut App)
     let bounds = Bounds::centered(None, size(px(540.), px(640.)), cx);
     let close_app = app.clone();
     let view_app = app.clone();
-    let result: anyhow::Result<WindowHandle<QuickCommandWindow>> = cx.open_window(
+    let result: anyhow::Result<NyaWindowHandle> = cx.open_window(
         WindowOptions {
             titlebar: child_window_titlebar(title),
             window_bounds: Some(WindowBounds::Windowed(bounds)),
@@ -175,7 +176,8 @@ fn open_quick_command_window_now_from_app(app: Entity<NyaTermApp>, cx: &mut App)
             });
             let editor_focus = view_app.read(cx).commands.quick_editor_focus().clone();
             window.focus(&editor_focus);
-            cx.new(|cx| QuickCommandWindow::new(view_app, cx))
+            let view = cx.new(|cx| QuickCommandWindow::new(view_app, cx));
+            cx.new(|cx| nya_root(view, window, cx))
         },
     );
 

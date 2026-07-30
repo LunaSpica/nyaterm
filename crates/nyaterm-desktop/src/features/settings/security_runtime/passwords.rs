@@ -2,9 +2,7 @@ use gpui::{ClipboardItem, Context, KeyDownEvent, Window};
 use nyaterm_core::{ConnectionStore, SavedPassword};
 
 use crate::features::{NyaTermApp, compact_id};
-use crate::models::{
-    SecurityAuthTab, SecurityDeleteConfirmState, SecurityPasswordEditorState, SecurityUnlockAction,
-};
+use crate::models::{SecurityAuthTab, SecurityPasswordEditorState, SecurityUnlockAction};
 
 impl NyaTermApp {
     pub(in crate::features) fn open_security_password_editor(
@@ -171,11 +169,13 @@ impl NyaTermApp {
             .find(|entry| entry.id == password_id)
             .map(|entry| entry.name.clone())
             .unwrap_or_else(|| password_id.clone());
-        self.security.request_delete(SecurityDeleteConfirmState {
-            kind: SecurityAuthTab::Passwords,
-            id: password_id,
+        self.open_security_delete_dialog(
+            SecurityAuthTab::Passwords,
+            password_id,
             label,
-        });
+            window,
+            cx,
+        );
         cx.notify();
     }
 

@@ -166,9 +166,8 @@ impl NyaTermApp {
                             })
                             .tooltip({
                                 let label = self.tr("fileExplorer.favorites").to_string();
-                                move |_, cx| {
-                                    cx.new(|_| crate::features::ChromeTooltip::new(label.clone()))
-                                        .into()
+                                move |window, cx| {
+                                    nyaterm_ui::NyaTooltip::new(label.clone()).build(window, cx)
                                 }
                             })
                             .on_mouse_down(
@@ -549,9 +548,8 @@ fn transfer_browser_breadcrumb_row(
         .overflow_hidden()
         .font_family(crate::features::gpui_code_font_family())
         .text_size(px(10.))
-        .tooltip(move |_, cx| {
-            cx.new(|_| crate::features::ChromeTooltip::new(display_path.clone()))
-                .into()
+        .tooltip(move |window, cx| {
+            nyaterm_ui::NyaTooltip::new(display_path.clone()).build(window, cx)
         });
 
     if !overflow_segments.is_empty() {
@@ -571,9 +569,8 @@ fn transfer_browser_breadcrumb_row(
                     this.bg(rgb(palette.surface_elevated))
                         .text_color(rgb(palette.text))
                 })
-                .tooltip(move |_, cx| {
-                    cx.new(|_| crate::features::ChromeTooltip::new(overflow_label.clone()))
-                        .into()
+                .tooltip(move |window, cx| {
+                    nyaterm_ui::NyaTooltip::new(overflow_label.clone()).build(window, cx)
                 })
                 .on_mouse_down(
                     MouseButton::Left,
@@ -666,11 +663,8 @@ fn transfer_browser_breadcrumb_row(
                             this.bg(rgb(palette.surface_elevated))
                                 .text_color(rgb(palette.text))
                         })
-                        .tooltip(move |_, cx| {
-                            cx.new(|_| {
-                                crate::features::ChromeTooltip::new(children_tooltip.clone())
-                            })
-                            .into()
+                        .tooltip(move |window, cx| {
+                            nyaterm_ui::NyaTooltip::new(children_tooltip.clone()).build(window, cx)
                         })
                         .on_mouse_down(
                             MouseButton::Left,

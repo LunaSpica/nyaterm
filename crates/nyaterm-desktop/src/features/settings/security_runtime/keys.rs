@@ -2,9 +2,7 @@ use gpui::{Context, KeyDownEvent, PathPromptOptions, SharedString, Window};
 use nyaterm_core::{ConnectionStore, SshKey};
 
 use crate::features::{NyaTermApp, compact_id};
-use crate::models::{
-    SecurityAuthTab, SecurityDeleteConfirmState, SecurityKeyEditorField, SecurityKeyEditorState,
-};
+use crate::models::{SecurityAuthTab, SecurityKeyEditorField, SecurityKeyEditorState};
 
 impl NyaTermApp {
     pub(in crate::features) fn open_security_key_editor(
@@ -181,6 +179,7 @@ impl NyaTermApp {
     pub(in crate::features) fn request_delete_security_key(
         &mut self,
         key_id: String,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let label = self
@@ -190,11 +189,7 @@ impl NyaTermApp {
             .find(|key| key.id == key_id)
             .map(|key| key.name.clone())
             .unwrap_or_else(|| key_id.clone());
-        self.security.request_delete(SecurityDeleteConfirmState {
-            kind: SecurityAuthTab::Keys,
-            id: key_id,
-            label,
-        });
+        self.open_security_delete_dialog(SecurityAuthTab::Keys, key_id, label, window, cx);
         cx.notify();
     }
 

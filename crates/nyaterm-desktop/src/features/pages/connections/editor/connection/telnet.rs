@@ -7,54 +7,15 @@ use gpui::{
 };
 
 use crate::features::{ConnectionEditorToggle, NyaTermApp};
-use crate::models::{ConnectionEditorField, ConnectionEditorMenu, ConnectionEditorTelnetTab};
+use crate::models::{ConnectionEditorField, ConnectionEditorSelect, ConnectionEditorTelnetTab};
+use nyaterm_ui::{NyaSwitch, NyaTabItem, NyaTabs};
 
 use super::super::super::list::{
-    ConnectionEditorChoice, ConnectionEditorRenderContext, connection_editor_select, editor_field,
-    editor_stepper_field, required,
+    ConnectionEditorRenderContext, connection_editor_select, editor_field, editor_stepper_field,
+    required,
 };
 
 use super::ConnectionEditorSectionContext;
-
-fn telnet_segment_tab(
-    palette: crate::theme::ThemePalette,
-    id: &'static str,
-    label: &'static str,
-    selected: bool,
-    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
-) -> impl IntoElement {
-    div()
-        .id(id)
-        .h(px(28.))
-        .min_w_0()
-        .flex_1()
-        .flex()
-        .items_center()
-        .justify_center()
-        .rounded_sm()
-        .border_1()
-        .border_color(if selected {
-            rgba((palette.primary << 8) | 0x66)
-        } else {
-            rgba(0x00000000)
-        })
-        .bg(if selected {
-            rgba((palette.primary << 8) | 0x18)
-        } else {
-            rgba(0x00000000)
-        })
-        .text_xs()
-        .font_weight(FontWeight(600.))
-        .text_color(if selected {
-            rgb(palette.primary)
-        } else {
-            rgb(palette.text_muted)
-        })
-        .cursor_pointer()
-        .hover(|this| this.bg(rgb(palette.hover)).text_color(rgb(palette.text)))
-        .child(label)
-        .on_click(on_click)
-}
 
 fn telnet_switch_row(
     palette: crate::theme::ThemePalette,
@@ -99,96 +60,49 @@ fn telnet_switch_row(
                 ),
         )
         .child(
-            div()
-                .id(id)
-                .mt(px(2.))
-                .w(px(36.))
-                .h(px(20.))
-                .flex_none()
-                .flex()
-                .items_center()
-                .px(px(2.))
-                .rounded_full()
-                .bg(if checked {
-                    rgb(palette.primary)
-                } else {
-                    rgb(palette.border)
-                })
-                .when(enabled, |this| {
-                    this.cursor_pointer()
-                        .hover(|this| this.opacity(0.85))
-                        .on_click(on_click)
-                })
-                .child(
-                    div()
-                        .size(px(16.))
-                        .rounded_full()
-                        .bg(rgb(palette.on_primary))
-                        .when(checked, |this| this.ml_auto()),
-                ),
+            div().mt(px(2.)).flex_none().child(
+                NyaSwitch::new(id)
+                    .checked(checked)
+                    .disabled(!enabled)
+                    .on_click(move |_, window, cx| {
+                        if enabled {
+                            on_click(&gpui::ClickEvent::default(), window, cx);
+                        }
+                    }),
+            ),
         )
 }
 
 pub(super) fn connection_editor_telnet_section(
     section: ConnectionEditorSectionContext<'_>,
-    backspace_options: Vec<ConnectionEditorChoice>,
     cx: &mut Context<NyaTermApp>,
 ) -> gpui::Div {
     let ConnectionEditorSectionContext {
         palette,
         editor,
-        active_menu: open_menu,
         language,
         fields,
     } = section;
     let tr = |key: &'static str| crate::i18n::text(language, key);
-    let backspace_value = match editor.backspace_mode.as_str() {
-        "ctrl-h" | "bs" | "ctrl_h" => tr("dialog.backspaceCtrlH"),
-        _ => tr("dialog.backspaceDel"),
-    };
-    let enter_value = match editor.telnet_enter_mode.as_str() {
-        "crlf" => "CRLF (\\r\\n)",
-        "lf" => "LF (\\n)",
-        _ => "CR (\\r)",
-    };
-    let enter_options = [
-        ("crlf", "CRLF (\\r\\n)"),
-        ("cr", "CR (\\r)"),
-        ("lf", "LF (\\n)"),
-    ]
-    .into_iter()
-    .map(|(value, label)| ConnectionEditorChoice {
-        value: Some(value.to_string()),
-        label: label.to_string(),
-        selected: editor.telnet_enter_mode == value,
-    })
-    .collect::<Vec<_>>();
-
-    let tabs = div()
-        .h(px(32.))
-        .p_1()
-        .flex()
-        .gap_1()
-        .rounded_md()
-        .bg(rgb(palette.surface_elevated))
-        .child(telnet_segment_tab(
-            palette,
-            "connection-telnet-input-tab",
-            tr("dialog.telnetInputSettings"),
-            editor.telnet_advanced_tab == ConnectionEditorTelnetTab::Input,
-            cx.listener(|this, _, _, cx| {
-                this.set_connection_editor_telnet_tab(ConnectionEditorTelnetTab::Input, cx);
-            }),
-        ))
-        .child(telnet_segment_tab(
-            palette,
-            "connection-telnet-compatibility-tab",
-            tr("dialog.telnetCompatibility"),
-            editor.telnet_advanced_tab == ConnectionEditorTelnetTab::Compatibility,
-            cx.listener(|this, _, _, cx| {
-                this.set_connection_editor_telnet_tab(ConnectionEditorTelnetTab::Compatibility, cx);
-            }),
-        ));
+    let tabs = NyaTabs::new("connection-telnet-tabs")
+        .items([
+            NyaTabItem::new(tr("dialog.telnetInputSettings")),
+            NyaTabItem::new(tr("dialog.telnetCompatibility")),
+        ])
+        .selected_index(
+            if editor.telnet_advanced_tab == ConnectionEditorTelnetTab::Input {
+                0
+            } else {
+                1
+            },
+        )
+        .on_select(cx.listener(|this, index, _, cx| {
+            let tab = match *index {
+                0 => ConnectionEditorTelnetTab::Input,
+                _ => ConnectionEditorTelnetTab::Compatibility,
+            };
+            this.set_connection_editor_telnet_tab(tab, cx);
+        }));
 
     div()
         .flex()
@@ -273,10 +187,7 @@ pub(super) fn connection_editor_telnet_section(
                                             },
                                             "connection-editor-telnet-backspace",
                                             tr("dialog.backspaceMode"),
-                                            backspace_value,
-                                            ConnectionEditorMenu::Backspace,
-                                            open_menu == Some(ConnectionEditorMenu::Backspace),
-                                            backspace_options,
+                                            ConnectionEditorSelect::Backspace,
                                         ))
                                         .child(connection_editor_select(
                                             ConnectionEditorRenderContext {
@@ -286,11 +197,7 @@ pub(super) fn connection_editor_telnet_section(
                                             },
                                             "connection-editor-telnet-enter-mode",
                                             tr("dialog.telnetEnterMode"),
-                                            enter_value,
-                                            ConnectionEditorMenu::TelnetEnterMode,
-                                            open_menu
-                                                == Some(ConnectionEditorMenu::TelnetEnterMode),
-                                            enter_options,
+                                            ConnectionEditorSelect::TelnetEnterMode,
                                         )),
                                 ),
                         )

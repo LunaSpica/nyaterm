@@ -1,20 +1,18 @@
-use gpui::{
-    Context, FontWeight, InteractiveElement as _, IntoElement, KeyDownEvent, ParentElement as _,
-    SharedString, StatefulInteractiveElement as _, Styled as _, div, px, rgb, rgba,
-};
+use gpui::{Context, ParentElement as _, Styled as _, Window, div, rgb};
 use nyaterm_transport::{SftpFileEntry, SftpFileType};
+use nyaterm_ui::{NyaButton, NyaButtonVariant, NyaDialogWindowExt};
 
-use crate::features::{NyaTermApp, dialog_action_button};
+use crate::features::NyaTermApp;
 use crate::models::TransferUnknownFileState;
-use crate::widgets::small_button;
 
 use super::{remote_file_name, transfer_dialog_width};
 
 impl NyaTermApp {
-    pub(in crate::features) fn transfer_unknown_file_overlay(
+    pub(in crate::features) fn open_transfer_unknown_file_component_dialog(
         &mut self,
+        window: &mut Window,
         cx: &mut Context<Self>,
-    ) -> impl IntoElement {
+    ) {
         let palette = self.theme_palette();
         let state =
             self.transfer
@@ -37,98 +35,94 @@ impl NyaTermApp {
         } else {
             state.entry.name.clone()
         };
-        let dialog_width = transfer_dialog_width(self.shell.viewport_size().0, 512.);
+        let title = self.tr("fileExplorer.unknownFileTypeTitle").to_string();
         let description = self
             .tr("fileExplorer.unknownFileTypeDesc")
             .replace("{{name}}", &name);
+        let cancel_label = self.tr("common.cancel").to_string();
+        let internal_label = self
+            .tr("fileExplorer.unknownFileTypeOpenInternal")
+            .to_string();
+        let external_label = self
+            .tr("fileExplorer.unknownFileTypeOpenExternal")
+            .to_string();
+        let width = transfer_dialog_width(self.shell.viewport_size().0, 512.);
+        let app = cx.weak_entity();
 
-        div()
-            .id(SharedString::from("transfer-unknown-file-overlay"))
-            .absolute()
-            .top_0()
-            .bottom_0()
-            .left_0()
-            .right_0()
-            .bg(rgba(0x00000080))
-            .flex()
-            .items_center()
-            .justify_center()
-            .track_focus(self.transfer.unknown_file_focus())
-            .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(this.transfer.unknown_file_focus());
-                cx.notify();
-            }))
-            .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
-                cx.stop_propagation();
-                match event.keystroke.key.as_str() {
-                    "escape" => this.cancel_transfer_unknown_file(cx),
-                    "enter" => this.open_unknown_transfer_file_external(window, cx),
-                    _ => {}
-                }
-            }))
-            .child(
-                div()
-                    .id(SharedString::from("transfer-unknown-file-dialog"))
-                    .w(px(dialog_width))
-                    .rounded_md()
-                    .border_1()
-                    .border_color(rgb(palette.border))
-                    .bg(self.shell_surface_color(palette.bg))
-                    .shadow_lg()
-                    .p_6()
-                    .flex()
-                    .flex_col()
-                    .gap_3()
-                    .on_click(|_, _, cx| {
-                        cx.stop_propagation();
-                    })
-                    .child(
-                        div().flex().items_center().justify_between().gap_3().child(
+        window.open_nya_dialog(cx, move |dialog, _, _| {
+            let cancel_app = app.clone();
+            let internal_app = app.clone();
+            let external_app = app.clone();
+            let close_app = app.clone();
+            dialog
+                .title(title.clone())
+                .width(width)
+                .content(
+                    div()
+                        .min_w_0()
+                        .flex()
+                        .flex_col()
+                        .gap_4()
+                        .child(
                             div()
-                                .text_size(px(18.))
-                                .font_weight(FontWeight(800.))
-                                .text_color(rgb(palette.text))
-                                .child(self.tr("fileExplorer.unknownFileTypeTitle")),
+                                .text_sm()
+                                .text_color(rgb(palette.text_muted))
+                                .child(description.clone()),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .flex_wrap()
+                                .justify_end()
+                                .gap_2()
+                                .child(
+                                    NyaButton::new("transfer-unknown-cancel", cancel_label.clone())
+                                        .small()
+                                        .on_click(move |_, window, cx| {
+                                            let _ = cancel_app.update(cx, |app, cx| {
+                                                app.cancel_transfer_unknown_file(cx);
+                                            });
+                                            window.close_nya_dialog(cx);
+                                        }),
+                                )
+                                .child(
+                                    NyaButton::new(
+                                        "transfer-unknown-internal",
+                                        internal_label.clone(),
+                                    )
+                                    .small()
+                                    .on_click(
+                                        move |_, window, cx| {
+                                            let _ = internal_app.update(cx, |app, cx| {
+                                                app.open_unknown_transfer_file_internal(window, cx);
+                                            });
+                                            window.close_nya_dialog(cx);
+                                        },
+                                    ),
+                                )
+                                .child(
+                                    NyaButton::new(
+                                        "transfer-unknown-external",
+                                        external_label.clone(),
+                                    )
+                                    .small()
+                                    .variant(NyaButtonVariant::Primary)
+                                    .on_click(
+                                        move |_, window, cx| {
+                                            let _ = external_app.update(cx, |app, cx| {
+                                                app.open_unknown_transfer_file_external(window, cx);
+                                            });
+                                            window.close_nya_dialog(cx);
+                                        },
+                                    ),
+                                ),
                         ),
-                    )
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(rgb(palette.text_muted))
-                            .child(description),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .flex_wrap()
-                            .justify_end()
-                            .gap_2()
-                            .child(small_button(
-                                palette,
-                                "transfer-unknown-cancel",
-                                self.tr("common.cancel"),
-                                cx.listener(|this, _, _, cx| {
-                                    this.cancel_transfer_unknown_file(cx);
-                                }),
-                            ))
-                            .child(small_button(
-                                palette,
-                                "transfer-unknown-internal",
-                                self.tr("fileExplorer.unknownFileTypeOpenInternal"),
-                                cx.listener(|this, _, window, cx| {
-                                    this.open_unknown_transfer_file_internal(window, cx);
-                                }),
-                            ))
-                            .child(dialog_action_button(
-                                palette,
-                                "transfer-unknown-external",
-                                self.tr("fileExplorer.unknownFileTypeOpenExternal"),
-                                false,
-                                cx.listener(|this, _, window, cx| {
-                                    this.open_unknown_transfer_file_external(window, cx);
-                                }),
-                            )),
-                    ),
-            )
+                )
+                .on_close(move |_, _, cx| {
+                    let _ = close_app.update(cx, |app, cx| {
+                        app.cancel_transfer_unknown_file(cx);
+                    });
+                })
+        });
     }
 }

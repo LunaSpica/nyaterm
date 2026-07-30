@@ -5,9 +5,9 @@ use gpui::{
 use nyaterm_core::{AgentCommandExecutionMode, truncate_preview};
 
 use crate::features::formatting::group_ai_sessions_by_date;
-use crate::features::view_widgets::{dialog_action_button, tab_menu_separator};
+use crate::features::view_widgets::tab_menu_separator;
 use crate::features::{NyaTermApp, TextInputSetup};
-use crate::widgets::{small_button, svg_icon_button};
+use crate::widgets::svg_icon_button;
 
 impl NyaTermApp {
     pub(in crate::features) fn open_ai_clear_history_confirm(
@@ -15,23 +15,29 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(focus) = self.ai.request_history_clear_confirm() else {
-            return;
-        };
-        window.focus(&focus);
-        cx.notify();
-    }
-
-    pub(in crate::features) fn cancel_ai_clear_history_confirm(&mut self, cx: &mut Context<Self>) {
-        self.ai.cancel_history_clear_confirm();
-        cx.notify();
-    }
-
-    pub(in crate::features) fn confirm_ai_clear_history(&mut self, cx: &mut Context<Self>) {
-        if !self.ai.confirm_history_clear() {
+        if !self.ai.request_history_clear_confirm() {
             return;
         }
+        self.open_confirm_dialog(
+            (
+                self.tr("ai.clearHistoryTitle").to_string(),
+                self.tr("ai.clearHistoryDesc").to_string(),
+                self.tr("ai.clearHistory").to_string(),
+                true,
+                |app, _, cx| app.confirm_ai_clear_history(cx),
+            ),
+            window,
+            cx,
+        );
+        cx.notify();
+    }
+
+    pub(in crate::features) fn confirm_ai_clear_history(&mut self, cx: &mut Context<Self>) -> bool {
+        if !self.ai.confirm_history_clear() {
+            return false;
+        }
         self.clear_all_ai_history(cx);
+        true
     }
 
     pub(in crate::features) fn open_ai_auto_execution_confirm(
@@ -39,206 +45,31 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let focus = self.ai.request_agent_auto_confirm();
-        window.focus(&focus);
+        self.ai.request_agent_auto_confirm();
+        self.open_confirm_dialog(
+            (
+                self.tr("ai.autoExecutionConfirmTitle").to_string(),
+                self.tr("ai.autoExecutionConfirmDesc").to_string(),
+                self.tr("ai.enableAutoExecution").to_string(),
+                true,
+                |app, _, cx| app.confirm_ai_auto_execution(cx),
+            ),
+            window,
+            cx,
+        );
         cx.notify();
     }
 
-    pub(in crate::features) fn cancel_ai_auto_execution_confirm(&mut self, cx: &mut Context<Self>) {
-        self.ai.cancel_agent_auto_confirm();
-        cx.notify();
-    }
-
-    pub(in crate::features) fn confirm_ai_auto_execution(&mut self, cx: &mut Context<Self>) {
+    pub(in crate::features) fn confirm_ai_auto_execution(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> bool {
         if !self.ai.confirm_agent_auto_execution() {
-            return;
+            return false;
         }
         self.persist_ai_settings_now(cx);
         cx.notify();
-    }
-
-    pub(in crate::features) fn ai_auto_execution_confirm_overlay(
-        &mut self,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        let palette = self.theme_palette();
-
-        div()
-            .id(SharedString::from("ai-auto-execution-confirm-overlay"))
-            .absolute()
-            .top_0()
-            .bottom_0()
-            .left_0()
-            .right_0()
-            .bg(rgba(0x00000080))
-            .flex()
-            .items_center()
-            .justify_center()
-            .p_3()
-            .track_focus(self.ai.agent_auto_confirm_focus())
-            .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(this.ai.agent_auto_confirm_focus());
-                cx.notify();
-            }))
-            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-                cx.stop_propagation();
-                match event.keystroke.key.as_str() {
-                    "escape" => this.cancel_ai_auto_execution_confirm(cx),
-                    "enter" => this.confirm_ai_auto_execution(cx),
-                    _ => {}
-                }
-            }))
-            .child(
-                div()
-                    .id(SharedString::from("ai-auto-execution-confirm-dialog"))
-                    .w(px(384.))
-                    .max_w_full()
-                    .rounded_md()
-                    .border_1()
-                    .border_color(rgb(palette.border))
-                    .bg(rgb(palette.bg))
-                    .shadow_lg()
-                    .p_6()
-                    .flex()
-                    .flex_col()
-                    .gap_4()
-                    .on_click(|_, _, cx| cx.stop_propagation())
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .gap_1()
-                            .child(
-                                div()
-                                    .text_size(px(15.))
-                                    .font_weight(FontWeight(800.))
-                                    .text_color(rgb(palette.text))
-                                    .child(self.tr("ai.autoExecutionConfirmTitle")),
-                            )
-                            .child(
-                                div()
-                                    .text_size(px(12.))
-                                    .line_height(px(17.))
-                                    .text_color(rgb(palette.text_muted))
-                                    .child(self.tr("ai.autoExecutionConfirmDesc")),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .justify_end()
-                            .gap_2()
-                            .child(small_button(
-                                palette,
-                                "ai-auto-execution-cancel",
-                                self.tr("common.cancel"),
-                                cx.listener(|this, _, _, cx| {
-                                    this.cancel_ai_auto_execution_confirm(cx);
-                                }),
-                            ))
-                            .child(dialog_action_button(
-                                palette,
-                                "ai-auto-execution-confirm",
-                                self.tr("ai.enableAutoExecution"),
-                                true,
-                                cx.listener(|this, _, _, cx| {
-                                    this.confirm_ai_auto_execution(cx);
-                                }),
-                            )),
-                    ),
-            )
-    }
-
-    pub(in crate::features) fn ai_clear_history_confirm_overlay(
-        &mut self,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        let palette = self.theme_palette();
-        div()
-            .id(SharedString::from("ai-clear-history-confirm-overlay"))
-            .absolute()
-            .top_0()
-            .bottom_0()
-            .left_0()
-            .right_0()
-            .bg(rgba(0x00000080))
-            .flex()
-            .items_center()
-            .justify_center()
-            .p_3()
-            .track_focus(self.ai.history_clear_confirm_focus())
-            .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(this.ai.history_clear_confirm_focus());
-                cx.notify();
-            }))
-            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-                cx.stop_propagation();
-                match event.keystroke.key.as_str() {
-                    "escape" => this.cancel_ai_clear_history_confirm(cx),
-                    "enter" => this.confirm_ai_clear_history(cx),
-                    _ => {}
-                }
-            }))
-            .child(
-                div()
-                    .id(SharedString::from("ai-clear-history-confirm-dialog"))
-                    .w(px(384.))
-                    .max_w_full()
-                    .rounded_md()
-                    .border_1()
-                    .border_color(rgb(palette.border))
-                    .bg(rgb(palette.bg))
-                    .shadow_lg()
-                    .p_6()
-                    .flex()
-                    .flex_col()
-                    .gap_4()
-                    .on_click(|_, _, cx| cx.stop_propagation())
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .gap_1()
-                            .child(
-                                div()
-                                    .text_size(px(15.))
-                                    .font_weight(FontWeight(800.))
-                                    .text_color(rgb(palette.text))
-                                    .child(self.tr("ai.clearHistoryTitle")),
-                            )
-                            .child(
-                                div()
-                                    .text_size(px(12.))
-                                    .text_color(rgb(palette.text_muted))
-                                    .child(self.tr("ai.clearHistoryDesc")),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .justify_end()
-                            .gap_2()
-                            .child(small_button(
-                                palette,
-                                "ai-clear-history-cancel",
-                                self.tr("common.cancel"),
-                                cx.listener(|this, _, _, cx| {
-                                    this.cancel_ai_clear_history_confirm(cx);
-                                }),
-                            ))
-                            .child(dialog_action_button(
-                                palette,
-                                "ai-clear-history-confirm",
-                                self.tr("ai.clearHistory"),
-                                true,
-                                cx.listener(|this, _, _, cx| {
-                                    this.confirm_ai_clear_history(cx);
-                                }),
-                            )),
-                    ),
-            )
+        true
     }
 
     pub(in crate::features) fn ai_execution_mode_menu(

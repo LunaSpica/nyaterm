@@ -11,18 +11,18 @@ mod browser_selection;
 mod editor;
 mod entry_row;
 mod file_ops;
+mod forms;
 mod helpers;
 mod overlays;
 mod overlays_context;
-mod overlays_create;
 mod overlays_delete_move;
 mod overlays_editor;
 mod overlays_favorites;
-mod overlays_properties;
 mod overlays_unknown;
 mod overlays_upload;
 mod path_bar;
 mod properties;
+mod properties_dialog;
 mod queue;
 
 use entry_row::{

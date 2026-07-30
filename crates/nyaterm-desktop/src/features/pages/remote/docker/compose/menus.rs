@@ -90,7 +90,7 @@ pub(super) fn docker_compose_project_action_menu(
             format!("compose-down-{short}"),
             labels.down,
             false,
-            cx.listener(move |this, _, _, cx| {
+            cx.listener(move |this, _, window, cx| {
                 this.remote_ops.close_docker_compose_menu();
                 this.request_docker_confirm(
                     DockerConfirmState {
@@ -102,6 +102,7 @@ pub(super) fn docker_compose_project_action_menu(
                             action: "down",
                         },
                     },
+                    window,
                     cx,
                 );
             }),

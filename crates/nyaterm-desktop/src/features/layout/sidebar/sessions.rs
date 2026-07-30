@@ -1,12 +1,10 @@
-use gpui::{
-    ClickEvent, Context, FontWeight, IntoElement, SharedString, div, prelude::*, px, rgb, rgba, svg,
-};
+use gpui::{Context, FontWeight, IntoElement, SharedString, div, prelude::*, px, rgb, rgba, svg};
 use nyaterm_core::{RuntimeMode, truncate_preview};
 use nyaterm_transport::SessionInfo;
+use nyaterm_ui::{NyaDropdownMenu, NyaMenuItem};
 
 use crate::features::formatting::{session_kind_label, status_label};
 use crate::features::{NyaTermApp, TextInputSetup};
-use crate::models::ActiveSessionMenuState;
 use crate::widgets::{capability_line, empty_panel, small_button, status_pill};
 
 use super::super::view_helpers::session_action_svg_button;
@@ -400,17 +398,61 @@ impl NyaTermApp {
         let session_id = session.id.clone();
         let row_group = SharedString::from(format!("active-session-group-{}", session.id));
         let rename_session_id = session.id.clone();
-        let menu_session_id = session.id.clone();
+        let reconnect_session_id = session.id.clone();
+        let disconnect_session_id = session.id.clone();
         let custom_color = self.session.tab_color(&session.id);
         let is_active = self.session.active_id() == Some(session.id.as_str());
         let is_disconnected = self.session.is_disconnected(&session.id);
         let has_unread = self.terminal.session_has_unread(&session.id);
         let busy_action = self.session.busy_action(&session.id).map(str::to_string);
         let is_busy = busy_action.is_some();
-        let menu_open = self
-            .session
-            .active_menu()
-            .is_some_and(|menu| menu.session_id == session.id);
+        let can_reconnect = !is_busy && !self.session.start_has_pending();
+        let can_disconnect = !is_busy && !is_disconnected;
+        let reconnect_label = if busy_action.as_deref() == Some("reconnect") {
+            self.tr("tabCtx.reconnecting").to_string()
+        } else {
+            self.tr("tabCtx.reconnect").to_string()
+        };
+        let disconnect_label = if busy_action.as_deref() == Some("disconnect") {
+            self.tr("tabCtx.disconnecting").to_string()
+        } else {
+            self.tr("tabCtx.disconnect").to_string()
+        };
+        let menu = NyaDropdownMenu::new(format!("active-session-more-{}", session.id))
+            .icon("icons/session/more.svg")
+            .icon_size(px(14.))
+            .tooltip(self.tr("common.more"))
+            .disabled(is_busy)
+            .min_width(px(160.))
+            .items([
+                NyaMenuItem::action(reconnect_label)
+                    .icon("icons/session/reconnect.svg")
+                    .disabled(!can_reconnect)
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        if this.session.session_is_busy(&reconnect_session_id)
+                            || this.session.start_has_pending()
+                        {
+                            cx.notify();
+                            return;
+                        }
+                        this.select_session(reconnect_session_id.clone(), cx);
+                        this.reconnect_session(reconnect_session_id.clone(), window, cx);
+                    })),
+                NyaMenuItem::action(disconnect_label)
+                    .icon("icons/session/disconnect.svg")
+                    .disabled(!can_disconnect)
+                    .danger()
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        if this.session.session_is_busy(&disconnect_session_id)
+                            || this.session.is_disconnected(&disconnect_session_id)
+                        {
+                            cx.notify();
+                            return;
+                        }
+                        this.disconnect_session(disconnect_session_id.clone(), cx);
+                    })),
+            ])
+            .on_trigger(|_, _, cx| cx.stop_propagation());
         let accent = if let Some(custom_color) = custom_color {
             rgb(custom_color)
         } else if is_disconnected {
@@ -507,7 +549,7 @@ impl NyaTermApp {
                             .items_center()
                             .gap_0()
                             .flex_none()
-                            .opacity(if menu_open { 1. } else { 0. })
+                            .opacity(0.)
                             .group_hover(row_group, |style| style.opacity(1.))
                             .child(session_action_svg_button(
                                 palette,
@@ -520,34 +562,13 @@ impl NyaTermApp {
                                     if this.session.session_is_busy(&rename_session_id) {
                                         return;
                                     }
-                                    this.session.close_active_menu();
                                     this.open_rename_session(rename_session_id.clone(), window, cx);
                                 }),
                             ))
-                            .child(session_action_svg_button(
-                                palette,
-                                format!("active-session-more-{menu_session_id}"),
-                                "icons/session/more.svg",
-                                self.tr("common.more").to_string(),
-                                !is_busy,
-                                cx.listener(move |this, event: &ClickEvent, _, cx| {
-                                    cx.stop_propagation();
-                                    if this.session.session_is_busy(&menu_session_id) {
-                                        return;
-                                    }
-                                    let point = event.position();
-                                    this.session.toggle_active_menu(ActiveSessionMenuState {
-                                        session_id: menu_session_id.clone(),
-                                        x: point.x,
-                                        y: point.y,
-                                    });
-                                    cx.notify();
-                                }),
-                            )),
+                            .child(menu),
                     ),
             )
             .on_click(cx.listener(move |this, _, _, cx| {
-                this.session.close_active_menu();
                 this.select_session(session_id.clone(), cx);
             }))
     }

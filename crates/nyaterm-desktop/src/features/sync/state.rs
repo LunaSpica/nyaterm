@@ -25,7 +25,6 @@ pub(in crate::features) struct CloudSyncFeatureState {
     /// Prevent overlapping network jobs from applying cloud state out of order.
     job_running: bool,
     focused_field: CloudSyncInputField,
-    provider_menu_open: bool,
     github: GithubGistAuthFeatureState,
 }
 
@@ -79,7 +78,6 @@ impl CloudSyncFeatureState {
             status: "local provider ready".to_string(),
             job_running: false,
             focused_field: CloudSyncInputField::RemoteRoot,
-            provider_menu_open: false,
             github: GithubGistAuthFeatureState {
                 auth: GithubGistAuthState::default(),
                 tx,
@@ -131,10 +129,6 @@ impl CloudSyncFeatureState {
 
     pub(in crate::features) fn job_running(&self) -> bool {
         self.job_running
-    }
-
-    pub(in crate::features) fn provider_menu_open(&self) -> bool {
-        self.provider_menu_open
     }
 
     pub(in crate::features) fn github_auth(&self) -> &GithubGistAuthState {
@@ -229,14 +223,9 @@ impl CloudSyncFeatureState {
         self.status = status.into();
     }
 
-    pub(in crate::features) fn select_provider(&mut self, provider: &'static str) {
+    pub(in crate::features) fn select_provider(&mut self, provider: &str) {
         self.settings.provider = provider.to_string();
-        self.provider_menu_open = false;
         self.status = format!("provider set to {provider}; save to persist");
-    }
-
-    pub(in crate::features) fn toggle_provider_menu(&mut self) {
-        self.provider_menu_open = !self.provider_menu_open;
     }
 
     pub(in crate::features) fn toggle_enabled(&mut self) {

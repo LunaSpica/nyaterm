@@ -6,12 +6,17 @@ use crate::models::{CloudSyncInputField, SettingsTab};
 impl NyaTermApp {
     pub(in crate::features) fn update_cloud_sync_provider(
         &mut self,
-        provider: &'static str,
+        provider: &str,
         cx: &mut Context<Self>,
     ) {
         if !self.cloud_sync_form_enabled() {
             return;
         }
+        let provider = match provider {
+            "s3" | "gitee_snippet" | "github_gist" | "google_drive" | "onedrive"
+            | "aliyun_drive" => provider,
+            _ => "webdav",
+        };
         if provider != "github_gist" && self.cloud_sync.github_auth().pending {
             self.cancel_github_gist_auth(cx);
         }

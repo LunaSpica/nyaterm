@@ -1,19 +1,51 @@
-use gpui::Context;
+use gpui::{Context, Window};
 use nyaterm_core::ConnectionStore;
 
 use crate::features::NyaTermApp;
 use crate::models::SecurityAuthTab;
 
 impl NyaTermApp {
-    pub(in crate::features) fn cancel_security_delete(&mut self, cx: &mut Context<Self>) {
-        self.security.cancel_delete();
-        cx.notify();
+    pub(in crate::features) fn open_security_delete_dialog(
+        &mut self,
+        kind: SecurityAuthTab,
+        id: String,
+        label: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let (title_key, description_key) = match kind {
+            SecurityAuthTab::Keys => ("settings.deleteKey", "settings.deleteKeyConfirm"),
+            SecurityAuthTab::Passwords => (
+                "passwordManager.deleteTitle",
+                "passwordManager.deleteConfirm",
+            ),
+            SecurityAuthTab::Credentials => (
+                "credentialManager.deleteTitle",
+                "credentialManager.deleteConfirm",
+            ),
+            SecurityAuthTab::Otp => ("otpManager.deleteTitle", "otpManager.deleteConfirm"),
+        };
+        let message = self.tr(description_key).replace("{{name}}", &label);
+        self.open_confirm_dialog(
+            (
+                self.tr(title_key).to_string(),
+                message,
+                self.tr("common.delete").to_string(),
+                true,
+                move |app, _, cx| app.delete_security_item(kind, id.clone(), label.clone(), cx),
+            ),
+            window,
+            cx,
+        );
     }
 
-    pub(in crate::features) fn confirm_security_delete(&mut self, cx: &mut Context<Self>) {
-        let Some(confirm) = self.security.delete_confirm().cloned() else {
-            return;
-        };
+    fn delete_security_item(
+        &mut self,
+        kind: SecurityAuthTab,
+        id: String,
+        label: String,
+        cx: &mut Context<Self>,
+    ) -> bool {
         let store = match ConnectionStore::open_with_portable_key_path(
             self.runtime.config_dir(),
             self.runtime.portable_key_path().map(ToOwned::to_owned),
@@ -22,29 +54,30 @@ impl NyaTermApp {
             Err(error) => {
                 self.security.set_status(error.to_string());
                 cx.notify();
-                return;
+                return false;
             }
         };
-        let result = match confirm.kind {
-            SecurityAuthTab::Keys => store.delete_ssh_key(&confirm.id),
-            SecurityAuthTab::Passwords => store.delete_password(&confirm.id),
-            SecurityAuthTab::Credentials => store.delete_credential(&confirm.id),
-            SecurityAuthTab::Otp => store.delete_otp_entry(&confirm.id),
+        let result = match kind {
+            SecurityAuthTab::Keys => store.delete_ssh_key(&id),
+            SecurityAuthTab::Passwords => store.delete_password(&id),
+            SecurityAuthTab::Credentials => store.delete_credential(&id),
+            SecurityAuthTab::Otp => store.delete_otp_entry(&id),
         };
         match result {
             Ok(()) => {
-                self.security
-                    .clear_revealed_for_deleted(confirm.kind, &confirm.id);
+                self.security.clear_revealed_for_deleted(kind, &id);
                 self.refresh_security_catalog();
-                self.security.cancel_delete();
-                let status = format!("{} deleted", confirm.label);
+                let status = format!("{label} deleted");
                 self.security.set_status(status.clone());
                 self.shell.set_status(status);
+                cx.notify();
+                true
             }
             Err(error) => {
                 self.security.set_status(error.to_string());
+                cx.notify();
+                false
             }
         }
-        cx.notify();
     }
 }

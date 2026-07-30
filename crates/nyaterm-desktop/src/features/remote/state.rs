@@ -15,10 +15,7 @@ use nyaterm_transport::{
 
 use crate::features::formatting::docker_compose_project_key;
 use crate::features::{DockerJobResult, ProcessJobResult, StatsJobResult};
-use crate::models::{
-    DockerConfirmState, DockerTab, RemoteProcessSignalConfirmState, RemoteProcessSortDirection,
-    RemoteProcessSortKey,
-};
+use crate::models::{DockerTab, RemoteProcessSortDirection, RemoteProcessSortKey};
 
 pub(in crate::features) struct RemoteJobTicket<Event> {
     pub job_id: u64,
@@ -129,7 +126,6 @@ struct DockerPaneState {
     pub details: Option<DockerContainerDetails>,
     pub details_container_id: Option<String>,
     pub details_last_refresh_at: Option<Instant>,
-    pub confirm: Option<DockerConfirmState>,
     pub container_menu_id: Option<String>,
     pub compose_menu_id: Option<String>,
     pub tab: DockerTab,
@@ -155,7 +151,6 @@ struct ProcessPaneState {
     pub selected_pid: Option<u32>,
     pub menu_pid: Option<u32>,
     pub nice_draft: String,
-    pub signal_confirm: Option<RemoteProcessSignalConfirmState>,
 }
 
 struct StatsPaneState {
@@ -171,7 +166,6 @@ pub(in crate::features) struct DockerPresentationState {
     pub status: String,
     pub details: Option<DockerContainerDetails>,
     pub details_container_id: Option<String>,
-    pub confirm: Option<DockerConfirmState>,
     pub container_menu_id: Option<String>,
     pub compose_menu_id: Option<String>,
     pub tab: DockerTab,
@@ -197,7 +191,6 @@ pub(in crate::features) struct ProcessPresentationState {
     pub selected_pid: Option<u32>,
     pub menu_pid: Option<u32>,
     pub nice_draft: String,
-    pub signal_confirm: Option<RemoteProcessSignalConfirmState>,
     pub pending: bool,
 }
 
@@ -220,7 +213,6 @@ impl RemoteOpsFeatureState {
                 details: None,
                 details_container_id: None,
                 details_last_refresh_at: None,
-                confirm: None,
                 container_menu_id: None,
                 compose_menu_id: None,
                 tab: DockerTab::Containers,
@@ -245,7 +237,6 @@ impl RemoteOpsFeatureState {
                 selected_pid: None,
                 menu_pid: None,
                 nice_draft: "0".to_string(),
-                signal_confirm: None,
             },
             stats: StatsPaneState {
                 job: RemoteJobState::new(),
@@ -268,7 +259,6 @@ impl RemoteOpsFeatureState {
             status: self.docker.status.clone(),
             details: self.docker.details.clone(),
             details_container_id: self.docker.details_container_id.clone(),
-            confirm: self.docker.confirm.clone(),
             container_menu_id: self.docker.container_menu_id.clone(),
             compose_menu_id: self.docker.compose_menu_id.clone(),
             tab: self.docker.tab,
@@ -295,7 +285,6 @@ impl RemoteOpsFeatureState {
             selected_pid: self.process.selected_pid,
             menu_pid: self.process.menu_pid,
             nice_draft: self.process.nice_draft.clone(),
-            signal_confirm: self.process.signal_confirm.clone(),
             pending: self.process.is_pending(),
         }
     }
@@ -499,18 +488,6 @@ impl RemoteOpsFeatureState {
         self.docker.close_details();
     }
 
-    pub(in crate::features) fn request_docker_confirm(&mut self, confirm: DockerConfirmState) {
-        self.docker.request_confirm(confirm);
-    }
-
-    pub(in crate::features) fn cancel_docker_confirm(&mut self) {
-        self.docker.cancel_confirm();
-    }
-
-    pub(in crate::features) fn docker_confirm(&self) -> Option<DockerConfirmState> {
-        self.docker.confirm.clone()
-    }
-
     pub(in crate::features) fn toggle_compose_project(
         &mut self,
         key: String,
@@ -578,28 +555,6 @@ impl RemoteOpsFeatureState {
 
     pub(in crate::features) fn validated_process_nice_draft(&mut self) -> Option<(u32, i32)> {
         self.process.validated_nice_draft()
-    }
-
-    pub(in crate::features) fn request_process_signal(
-        &mut self,
-        pid: u32,
-        signal: &'static str,
-    ) -> bool {
-        self.process.request_signal(pid, signal)
-    }
-
-    pub(in crate::features) fn cancel_process_signal(&mut self) {
-        self.process.cancel_signal_confirm();
-    }
-
-    pub(in crate::features) fn clear_process_signal(&mut self) {
-        self.process.signal_confirm = None;
-    }
-
-    pub(in crate::features) fn take_process_signal(
-        &mut self,
-    ) -> Option<RemoteProcessSignalConfirmState> {
-        self.process.take_signal_confirm()
     }
 
     pub(in crate::features) fn toggle_stats_cpu_expanded(&mut self) {
@@ -680,10 +635,6 @@ impl RemoteOpsFeatureState {
         self.docker.compose_service_errors.insert(key, error);
     }
 
-    pub(in crate::features) fn clear_docker_confirm(&mut self) {
-        self.docker.confirm = None;
-    }
-
     pub(in crate::features) fn reset_docker_refresh_failures(&mut self) {
         self.docker.reset_refresh_failures();
     }
@@ -736,7 +687,6 @@ impl RemoteOpsFeatureState {
         self.process.snapshot_loaded = false;
         self.process.selected_pid = None;
         self.process.menu_pid = None;
-        self.process.signal_confirm = None;
     }
 
     pub(in crate::features) fn apply_processes(&mut self, processes: Vec<RemoteProcess>) {
@@ -862,16 +812,6 @@ impl DockerPaneState {
         self.status = "container details closed".to_string();
     }
 
-    pub(in crate::features) fn request_confirm(&mut self, confirm: DockerConfirmState) {
-        self.confirm = Some(confirm);
-        self.status = "confirm Docker operation".to_string();
-    }
-
-    pub(in crate::features) fn cancel_confirm(&mut self) {
-        self.confirm = None;
-        self.status = "Docker operation cancelled".to_string();
-    }
-
     pub(in crate::features) fn apply_overview(&mut self, overview: RemoteDockerOverview) {
         if let Some(details_id) = self.details_container_id.as_deref()
             && !overview
@@ -905,7 +845,6 @@ impl DockerPaneState {
         self.details = None;
         self.details_container_id = None;
         self.details_last_refresh_at = None;
-        self.confirm = None;
         self.container_menu_id = None;
         self.compose_menu_id = None;
         self.compose_services.clear();
@@ -1013,47 +952,6 @@ impl ProcessPaneState {
         Some((pid, nice))
     }
 
-    pub(in crate::features) fn request_signal(&mut self, pid: u32, signal: &'static str) -> bool {
-        if signal != "KILL" {
-            return false;
-        }
-        let command = self
-            .items
-            .iter()
-            .find(|process| process.pid == pid)
-            .map(|process| process.command_line.clone())
-            .filter(|command| !command.trim().is_empty())
-            .or_else(|| {
-                self.items
-                    .iter()
-                    .find(|process| process.pid == pid)
-                    .map(|process| process.command.clone())
-            })
-            .unwrap_or_else(|| "unknown process".to_string());
-        self.signal_confirm = Some(RemoteProcessSignalConfirmState {
-            pid,
-            signal,
-            command,
-        });
-        self.status = format!("confirm {signal} for pid {pid}");
-        true
-    }
-
-    pub(in crate::features) fn cancel_signal_confirm(&mut self) {
-        self.signal_confirm = None;
-        self.status = "process signal cancelled".to_string();
-    }
-
-    pub(in crate::features) fn take_signal_confirm(
-        &mut self,
-    ) -> Option<RemoteProcessSignalConfirmState> {
-        let confirm = self.signal_confirm.take();
-        if confirm.is_none() {
-            self.status = "no process signal pending".to_string();
-        }
-        confirm
-    }
-
     pub(in crate::features) fn apply_processes(&mut self, processes: Vec<RemoteProcess>) {
         let contains_pid = |pid| processes.iter().any(|process| process.pid == pid);
         if self.selected_pid.is_some_and(|pid| !contains_pid(pid)) {
@@ -1062,13 +960,6 @@ impl ProcessPaneState {
         }
         if self.menu_pid.is_some_and(|pid| !contains_pid(pid)) {
             self.menu_pid = None;
-        }
-        if self
-            .signal_confirm
-            .as_ref()
-            .is_some_and(|confirm| !contains_pid(confirm.pid))
-        {
-            self.signal_confirm = None;
         }
         self.items = processes.into();
         self.snapshot_loaded = true;
@@ -1080,7 +971,6 @@ impl ProcessPaneState {
         self.snapshot_loaded = false;
         self.selected_pid = None;
         self.menu_pid = None;
-        self.signal_confirm = None;
         self.status = "ready".to_string();
     }
 }
@@ -1235,21 +1125,18 @@ mod tests {
         state.apply_processes(vec![process(42)]);
         state.toggle_process_selection(42);
         state.toggle_process_menu(42);
-        assert!(state.request_process_signal(42, "KILL"));
         state.apply_process_nice_input("-1234x".to_string());
 
         let presentation = state.process_presentation();
         assert_eq!(presentation.nice_draft, "-123");
         assert_eq!(presentation.selected_pid, Some(42));
         assert_eq!(presentation.menu_pid, Some(42));
-        assert!(presentation.signal_confirm.is_some());
 
         state.apply_processes(Vec::new());
 
         let presentation = state.process_presentation();
         assert!(presentation.selected_pid.is_none());
         assert!(presentation.menu_pid.is_none());
-        assert!(presentation.signal_confirm.is_none());
         assert_eq!(presentation.nice_draft, "0");
     }
 

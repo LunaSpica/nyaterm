@@ -103,7 +103,6 @@ struct KeywordHighlightSettingsState {
 }
 
 struct AppearanceSettingsState {
-    menu_open: Option<String>,
     ui_font_options: Vec<String>,
     terminal_font_options: Vec<String>,
 }
@@ -176,7 +175,6 @@ impl SettingsFeatureState {
                 focus: focus.keyword_highlight,
             },
             appearance: AppearanceSettingsState {
-                menu_open: None,
                 ui_font_options,
                 terminal_font_options,
             },
@@ -1068,22 +1066,6 @@ impl SettingsFeatureState {
 
     pub(in crate::features) fn clear_keybinding_search(&mut self) {
         self.keybindings.search_draft.clear();
-    }
-
-    pub(in crate::features) fn appearance_menu_open(&self, id: &str) -> bool {
-        self.appearance.menu_open.as_deref() == Some(id)
-    }
-
-    pub(in crate::features) fn toggle_appearance_menu(&mut self, id: &str) {
-        if self.appearance_menu_open(id) {
-            self.appearance.menu_open = None;
-        } else {
-            self.appearance.menu_open = Some(id.to_string());
-        }
-    }
-
-    pub(in crate::features) fn close_appearance_menu(&mut self) {
-        self.appearance.menu_open = None;
     }
 
     pub(in crate::features) fn ui_font_options(&self) -> &[String] {

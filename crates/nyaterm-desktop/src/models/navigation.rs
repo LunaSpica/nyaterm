@@ -381,14 +381,6 @@ pub(crate) enum TitleMenu {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum TitleMenuSubmenu {
-    Theme,
-    Language,
-    SmartSplit,
-    SyncInput,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum TabActionsSubmenu {
     Color,
     SshAdvanced,

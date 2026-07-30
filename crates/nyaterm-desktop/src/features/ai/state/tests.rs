@@ -17,8 +17,6 @@ use super::{AiFeatureFocus, AiFeatureInit, AiFeatureState, AiSettingsMutation};
 fn state(cx: &TestAppContext) -> AiFeatureState {
     let focus = cx.update(|cx| AiFeatureFocus {
         chat: cx.focus_handle(),
-        clear_history_confirm: cx.focus_handle(),
-        auto_execution_confirm: cx.focus_handle(),
         action: cx.focus_handle(),
         manual_model: cx.focus_handle(),
         credential: cx.focus_handle(),
@@ -290,15 +288,11 @@ fn history_and_auto_execution_confirmations_transition_on_the_owner() {
         updated_at: String::new(),
     });
 
-    assert!(state.request_history_clear_confirm().is_some());
-    assert!(state.history_clear_confirm_is_open());
+    assert!(state.request_history_clear_confirm());
     assert!(state.confirm_history_clear());
-    assert!(!state.history_clear_confirm_is_open());
 
     state.request_agent_auto_confirm();
-    assert!(state.agent_auto_confirm_is_open());
     assert!(state.confirm_agent_auto_execution());
-    assert!(!state.agent_auto_confirm_is_open());
     assert_eq!(state.panel_status(), "Agent execution mode: auto");
 }
 

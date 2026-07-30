@@ -2,10 +2,13 @@ use gpui::{
     App, ClickEvent, Context, FontWeight, IntoElement, SharedString, Window, div, prelude::*, px,
     rgb, rgba, svg,
 };
-use nyaterm_core::truncate_preview;
+use nyaterm_ui::NyaSelectOption;
 
-use crate::features::{ChromeTooltip, NyaTermApp, appearance_font_stack, gpui_code_font_family};
+use crate::features::{
+    FOLLOW_UI_THEME_VALUE, NyaTermApp, appearance_font_stack, gpui_code_font_family,
+};
 use crate::theme::{APPEARANCE_THEME_IDS, ThemePalette, appearance_theme_label};
+use nyaterm_ui::NyaTooltip;
 
 use super::super::{settings_form_row, settings_form_section, settings_switch};
 
@@ -275,14 +278,15 @@ impl NyaTermApp {
         } else {
             "appearance-ui-font-add"
         };
+        let add_handler: AppearanceClickHandler = Box::new(cx.listener(move |this, _, _, cx| {
+            this.add_appearance_fallback_font(terminal, cx);
+        }));
         let add_action = appearance_icon_text_button(
             palette,
             add_id,
             "icons/conn/add.svg",
             self.tr("settings.addFallbackFont"),
-            cx.listener(move |this, _, _, cx| {
-                this.add_appearance_fallback_font(terminal, cx);
-            }),
+            add_handler,
         );
         let built_in_label = self.tr("settings.fontBuiltIn");
         let primary_label = self.tr("settings.fontPrimary");
@@ -300,17 +304,9 @@ impl NyaTermApp {
                 .gap_3()
                 .children(fonts.into_iter().enumerate().map(|(index, family)| {
                     let menu_id = format!("appearance-{kind}-font-{index}");
-                    let open = self.settings.appearance_menu_open(&menu_id);
-                    let menu_id_for_toggle = menu_id.clone();
-                    let toggle: AppearanceClickHandler =
-                        Box::new(cx.listener(move |this, _, _, cx| {
-                            this.settings.toggle_appearance_menu(&menu_id_for_toggle);
-                            cx.notify();
-                        }));
                     let select_options = options
                         .iter()
                         .map(|option| {
-                            let selected = option.eq_ignore_ascii_case(&family);
                             let built_in = if terminal {
                                 option.eq_ignore_ascii_case("JetBrains Mono")
                             } else {
@@ -323,24 +319,10 @@ impl NyaTermApp {
                             } else {
                                 option.clone()
                             };
-                            let value = option.clone();
-                            let handler: AppearanceClickHandler =
-                                Box::new(cx.listener(move |this, _, _, cx| {
-                                    this.set_appearance_font_stack_entry(
-                                        terminal,
-                                        index,
-                                        value.clone(),
-                                        cx,
-                                    );
-                                }));
-                            AppearanceSelectOption {
-                                label,
-                                font_family: option.clone(),
-                                selected,
-                                on_click: handler,
-                            }
+                            NyaSelectOption::new(option.clone(), label).font_family(option.clone())
                         })
                         .collect::<Vec<_>>();
+                    let selected_family = family.clone();
                     let delete_id = format!("appearance-{kind}-font-delete-{index}");
                     let delete: AppearanceClickHandler =
                         Box::new(cx.listener(move |this, _, _, cx| {
@@ -376,18 +358,13 @@ impl NyaTermApp {
                                         .text_color(rgb(palette.text_muted))
                                         .child(row_label),
                                 )
-                                .child(
-                                    appearance_select_control(
-                                        palette,
-                                        menu_id,
-                                        family,
-                                        open,
-                                        toggle,
-                                        select_options,
-                                    )
-                                    .flex_1()
-                                    .min_w(px(220.)),
-                                )
+                                .child(div().flex_1().min_w(px(220.)).child(self.select_control(
+                                    menu_id,
+                                    select_options,
+                                    Some(selected_family),
+                                    false,
+                                    cx,
+                                )))
                                 .child(appearance_icon_button(
                                     palette,
                                     delete_id,
@@ -515,7 +492,6 @@ impl NyaTermApp {
         terminal: bool,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let palette = self.theme_palette();
         let id = if terminal {
             "appearance-terminal-theme"
         } else {
@@ -530,59 +506,41 @@ impl NyaTermApp {
         } else {
             Some(self.settings.summary().theme.as_str())
         };
-        let value = current
-            .map(appearance_theme_label)
-            .unwrap_or_else(|| self.tr("settings.followUiTheme"))
-            .to_string();
         let mut options = Vec::new();
         if terminal {
-            let handler: AppearanceClickHandler = Box::new(cx.listener(|this, _, _, cx| {
-                this.settings.close_appearance_menu();
-                this.set_terminal_theme(None, cx);
-            }));
-            options.push(AppearancePlainSelectOption {
-                label: self.tr("settings.followUiTheme").to_string(),
-                selected: current.is_none(),
-                on_click: handler,
-            });
+            options.push(NyaSelectOption::new(
+                FOLLOW_UI_THEME_VALUE,
+                self.tr("settings.followUiTheme"),
+            ));
         }
         for theme_id in APPEARANCE_THEME_IDS {
-            let selected = current == Some(*theme_id)
-                || (current == Some("catppuccin") && *theme_id == "catppuccin-mocha");
-            let theme = (*theme_id).to_string();
-            let handler: AppearanceClickHandler = if terminal {
-                Box::new(cx.listener(move |this, _, _, cx| {
-                    this.settings.close_appearance_menu();
-                    this.set_terminal_theme(Some(&theme), cx);
-                }))
-            } else {
-                Box::new(cx.listener(move |this, _, _, cx| {
-                    this.settings.close_appearance_menu();
-                    this.update_appearance_theme(&theme, cx);
-                }))
-            };
-            options.push(AppearancePlainSelectOption {
-                label: appearance_theme_label(theme_id).to_string(),
-                selected,
-                on_click: handler,
-            });
+            options.push(NyaSelectOption::new(
+                *theme_id,
+                appearance_theme_label(theme_id),
+            ));
         }
-
-        appearance_plain_select_control(
-            palette,
-            id,
-            value,
-            self.settings.appearance_menu_open(id),
-            true,
-            appearance_menu_toggle_handler(id, cx),
-            options,
-        )
+        let selected = current
+            .map(|theme| {
+                if theme == "catppuccin" {
+                    "catppuccin-mocha"
+                } else {
+                    theme
+                }
+            })
+            .unwrap_or(FOLLOW_UI_THEME_VALUE)
+            .to_string();
+        self.select_control(id, options, Some(selected), false, cx)
     }
 
     fn appearance_contrast_select(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
-        let palette = self.theme_palette();
         let id = "appearance-minimum-contrast";
-        let current = self.settings.summary().minimum_contrast_ratio.clone();
+        let current = match self.settings.summary().minimum_contrast_ratio.as_str() {
+            "3" => "3",
+            "4.5" => "4.5",
+            "7" => "7",
+            "21" => "21",
+            _ => "1",
+        };
         let label_for = |ratio: &str| match ratio {
             "3" => self.tr("settings.minimumContrastRatio_3"),
             "4.5" => self.tr("settings.minimumContrastRatio_4_5"),
@@ -592,28 +550,9 @@ impl NyaTermApp {
         };
         let options = ["1", "3", "4.5", "7", "21"]
             .into_iter()
-            .map(|ratio| {
-                let handler: AppearanceClickHandler =
-                    Box::new(cx.listener(move |this, _, _, cx| {
-                        this.settings.close_appearance_menu();
-                        this.set_minimum_contrast_ratio(ratio, cx);
-                    }));
-                AppearancePlainSelectOption {
-                    label: label_for(ratio).to_string(),
-                    selected: current == ratio,
-                    on_click: handler,
-                }
-            })
+            .map(|ratio| NyaSelectOption::new(ratio, label_for(ratio)))
             .collect();
-        appearance_plain_select_control(
-            palette,
-            id,
-            label_for(&current).to_string(),
-            self.settings.appearance_menu_open(id),
-            true,
-            appearance_menu_toggle_handler(id, cx),
-            options,
-        )
+        self.select_control(id, options, Some(current.to_string()), false, cx)
     }
 
     fn appearance_background_fit_select(
@@ -621,7 +560,6 @@ impl NyaTermApp {
         enabled: bool,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let palette = self.theme_palette();
         let id = "appearance-background-fit";
         let current = match self.settings.summary().background_image_fit.as_str() {
             "contain" => "contain",
@@ -637,28 +575,9 @@ impl NyaTermApp {
         };
         let options = ["cover", "contain", "stretch", "tile"]
             .into_iter()
-            .map(|fit| {
-                let handler: AppearanceClickHandler =
-                    Box::new(cx.listener(move |this, _, _, cx| {
-                        this.settings.close_appearance_menu();
-                        this.set_background_image_fit(fit, cx);
-                    }));
-                AppearancePlainSelectOption {
-                    label: label_for(fit).to_string(),
-                    selected: current == fit,
-                    on_click: handler,
-                }
-            })
+            .map(|fit| NyaSelectOption::new(fit, label_for(fit)))
             .collect();
-        appearance_plain_select_control(
-            palette,
-            id,
-            label_for(current).to_string(),
-            self.settings.appearance_menu_open(id),
-            enabled,
-            appearance_menu_toggle_handler(id, cx),
-            options,
-        )
+        self.select_control(id, options, Some(current.to_string()), !enabled, cx)
     }
 
     fn appearance_font_weight_select(
@@ -666,11 +585,10 @@ impl NyaTermApp {
         bold: bool,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let palette = self.theme_palette();
         let id = if bold {
-            "appearance-font-weight-bold"
+            "appearance-terminal-font-weight-bold"
         } else {
-            "appearance-font-weight"
+            "appearance-terminal-font-weight"
         };
         let current = if bold {
             self.settings.summary().terminal_font_weight_bold
@@ -687,40 +605,26 @@ impl NyaTermApp {
         };
         let options = [300_u16, 400, 500, 600, 700, 800]
             .into_iter()
-            .map(|weight| {
-                let handler: AppearanceClickHandler = if bold {
-                    Box::new(cx.listener(move |this, _, _, cx| {
-                        this.settings.close_appearance_menu();
-                        this.set_terminal_font_weight_bold(weight, cx);
-                    }))
-                } else {
-                    Box::new(cx.listener(move |this, _, _, cx| {
-                        this.settings.close_appearance_menu();
-                        this.set_terminal_font_weight(weight, cx);
-                    }))
-                };
-                AppearancePlainSelectOption {
-                    label: label_for(weight).to_string(),
-                    selected: current == weight,
-                    on_click: handler,
-                }
-            })
+            .map(|weight| NyaSelectOption::new(weight.to_string(), label_for(weight)))
             .collect();
-        appearance_plain_select_control(
-            palette,
-            id,
-            label_for(current).to_string(),
-            self.settings.appearance_menu_open(id),
-            true,
-            appearance_menu_toggle_handler(id, cx),
-            options,
-        )
+        let selected = match current {
+            300 => 300,
+            500 => 500,
+            600 => 600,
+            700 => 700,
+            800 => 800,
+            _ => 400,
+        };
+        self.select_control(id, options, Some(selected.to_string()), false, cx)
     }
 
     fn appearance_cursor_style_select(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
-        let palette = self.theme_palette();
         let id = "appearance-cursor-style";
-        let current = self.settings.summary().cursor_style.clone();
+        let current = match self.settings.summary().cursor_style.as_str() {
+            "underline" => "underline",
+            "bar" => "bar",
+            _ => "block",
+        };
         let label_for = |style: &str| match style {
             "underline" => self.tr("settings.cursorUnderline"),
             "bar" => self.tr("settings.cursorBar"),
@@ -728,265 +632,13 @@ impl NyaTermApp {
         };
         let options = ["block", "underline", "bar"]
             .into_iter()
-            .map(|style| {
-                let handler: AppearanceClickHandler =
-                    Box::new(cx.listener(move |this, _, _, cx| {
-                        this.settings.close_appearance_menu();
-                        this.set_cursor_style(style, cx);
-                    }));
-                AppearancePlainSelectOption {
-                    label: label_for(style).to_string(),
-                    selected: current == style,
-                    on_click: handler,
-                }
-            })
+            .map(|style| NyaSelectOption::new(style, label_for(style)))
             .collect();
-        appearance_plain_select_control(
-            palette,
-            id,
-            label_for(&current).to_string(),
-            self.settings.appearance_menu_open(id),
-            true,
-            appearance_menu_toggle_handler(id, cx),
-            options,
-        )
+        self.select_control(id, options, Some(current.to_string()), false, cx)
     }
 }
 
 type AppearanceClickHandler = Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>;
-
-fn appearance_menu_toggle_handler(
-    id: &'static str,
-    cx: &mut Context<NyaTermApp>,
-) -> AppearanceClickHandler {
-    Box::new(cx.listener(move |this, _, _, cx| {
-        this.settings.toggle_appearance_menu(id);
-        cx.notify();
-    }))
-}
-
-struct AppearanceSelectOption {
-    label: String,
-    font_family: String,
-    selected: bool,
-    on_click: AppearanceClickHandler,
-}
-
-struct AppearancePlainSelectOption {
-    label: String,
-    selected: bool,
-    on_click: AppearanceClickHandler,
-}
-
-fn appearance_select_control(
-    palette: ThemePalette,
-    id: String,
-    value: String,
-    open: bool,
-    on_toggle: AppearanceClickHandler,
-    options: Vec<AppearanceSelectOption>,
-) -> gpui::Div {
-    let hover = palette.hover;
-    div()
-        .flex()
-        .flex_col()
-        .min_w_0()
-        .child(
-            div()
-                .id(SharedString::from(format!("{id}-trigger")))
-                .h(px(34.))
-                .w_full()
-                .px_3()
-                .rounded_sm()
-                .border_1()
-                .border_color(if open {
-                    rgb(palette.link)
-                } else {
-                    rgb(palette.border)
-                })
-                .bg(rgb(palette.bg))
-                .flex()
-                .items_center()
-                .justify_between()
-                .gap_2()
-                .cursor_pointer()
-                .hover(move |this| this.bg(rgb(hover)))
-                .child(
-                    div()
-                        .min_w_0()
-                        .flex_1()
-                        .overflow_hidden()
-                        .font_family(value.clone())
-                        .text_size(px(12.))
-                        .text_color(rgb(palette.text))
-                        .child(truncate_preview(&value, 44)),
-                )
-                .child(
-                    svg()
-                        .size(px(14.))
-                        .flex_none()
-                        .path("icons/chevron-down.svg")
-                        .text_color(rgb(palette.text_dimmed)),
-                )
-                .on_click(on_toggle),
-        )
-        .when(open, |this| {
-            this.child(
-                div()
-                    .id(SharedString::from(format!("{id}-options")))
-                    .mt_1()
-                    .max_h(px(240.))
-                    .overflow_scroll()
-                    .rounded_sm()
-                    .border_1()
-                    .border_color(rgb(palette.border))
-                    .bg(rgb(palette.surface_elevated))
-                    .p_1()
-                    .children(options.into_iter().enumerate().map(|(index, option)| {
-                        div()
-                            .id(SharedString::from(format!("{id}-option-{index}")))
-                            .h(px(30.))
-                            .px_2()
-                            .rounded_sm()
-                            .flex()
-                            .items_center()
-                            .justify_between()
-                            .gap_2()
-                            .bg(if option.selected {
-                                rgb(palette.hover)
-                            } else {
-                                rgb(0x00000000)
-                            })
-                            .font_family(option.font_family)
-                            .text_size(px(11.))
-                            .text_color(rgb(palette.text))
-                            .cursor_pointer()
-                            .hover(move |this| this.bg(rgb(hover)))
-                            .child(
-                                div()
-                                    .min_w_0()
-                                    .flex_1()
-                                    .overflow_hidden()
-                                    .child(option.label),
-                            )
-                            .when(option.selected, |this| {
-                                this.child(
-                                    svg()
-                                        .size(px(13.))
-                                        .flex_none()
-                                        .path("icons/check.svg")
-                                        .text_color(rgb(palette.primary)),
-                                )
-                            })
-                            .on_click(option.on_click)
-                    })),
-            )
-        })
-}
-
-fn appearance_plain_select_control(
-    palette: ThemePalette,
-    id: &'static str,
-    value: String,
-    open: bool,
-    enabled: bool,
-    on_toggle: AppearanceClickHandler,
-    options: Vec<AppearancePlainSelectOption>,
-) -> impl IntoElement {
-    let hover = palette.hover;
-    div()
-        .w_full()
-        .max_w(px(360.))
-        .flex()
-        .flex_col()
-        .opacity(if enabled { 1.0 } else { 0.5 })
-        .child(
-            div()
-                .id(SharedString::from(format!("{id}-trigger")))
-                .h(px(34.))
-                .w_full()
-                .px_3()
-                .rounded_sm()
-                .border_1()
-                .border_color(if open {
-                    rgb(palette.link)
-                } else {
-                    rgb(palette.border)
-                })
-                .bg(rgb(palette.bg))
-                .flex()
-                .items_center()
-                .justify_between()
-                .gap_2()
-                .child(
-                    div()
-                        .min_w_0()
-                        .flex_1()
-                        .overflow_hidden()
-                        .text_size(px(12.))
-                        .text_color(rgb(palette.text))
-                        .child(value),
-                )
-                .child(
-                    svg()
-                        .size(px(14.))
-                        .flex_none()
-                        .path("icons/chevron-down.svg")
-                        .text_color(rgb(palette.text_dimmed)),
-                )
-                .when(enabled, |this| {
-                    this.cursor_pointer()
-                        .hover(move |this| this.bg(rgb(hover)))
-                        .on_click(on_toggle)
-                }),
-        )
-        .when(open && enabled, |this| {
-            this.child(
-                div()
-                    .id(SharedString::from(format!("{id}-options")))
-                    .mt_1()
-                    .max_h(px(240.))
-                    .overflow_scroll()
-                    .rounded_sm()
-                    .border_1()
-                    .border_color(rgb(palette.border))
-                    .bg(rgb(palette.surface_elevated))
-                    .p_1()
-                    .children(options.into_iter().enumerate().map(|(index, option)| {
-                        div()
-                            .id(SharedString::from(format!("{id}-option-{index}")))
-                            .min_h(px(30.))
-                            .px_2()
-                            .py_1()
-                            .rounded_sm()
-                            .flex()
-                            .items_center()
-                            .justify_between()
-                            .gap_2()
-                            .bg(if option.selected {
-                                rgb(palette.hover)
-                            } else {
-                                rgb(0x00000000)
-                            })
-                            .text_size(px(11.))
-                            .text_color(rgb(palette.text))
-                            .cursor_pointer()
-                            .hover(move |this| this.bg(rgb(hover)))
-                            .child(div().min_w_0().flex_1().child(option.label))
-                            .when(option.selected, |this| {
-                                this.child(
-                                    svg()
-                                        .size(px(13.))
-                                        .flex_none()
-                                        .path("icons/check.svg")
-                                        .text_color(rgb(palette.primary)),
-                                )
-                            })
-                            .on_click(option.on_click)
-                    })),
-            )
-        })
-}
 
 fn appearance_form_section_with_action(
     palette: ThemePalette,
@@ -1196,6 +848,6 @@ fn appearance_icon_button(
                 .path(icon_path)
                 .text_color(rgb(palette.danger)),
         )
-        .tooltip(move |_, cx| cx.new(|_| ChromeTooltip::new(tooltip)).into())
+        .tooltip(move |window, cx| NyaTooltip::new(tooltip).build(window, cx))
         .on_click(on_click)
 }

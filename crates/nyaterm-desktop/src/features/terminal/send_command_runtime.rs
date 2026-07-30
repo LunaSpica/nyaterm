@@ -7,7 +7,6 @@ use std::time::Duration;
 use gpui::{Context, KeyDownEvent, Timer, Window};
 use nyaterm_transport::SessionKind;
 
-use crate::features::SendCommandMenu;
 use crate::features::{NyaTermApp, TextInputSetup};
 use crate::send_command::{
     SendCommandControlFocus, SendCommandDataType, SendCommandLineEnding, SendCommandMode,
@@ -120,33 +119,6 @@ impl NyaTermApp {
             self.reset_text_input(&format!("send-command.{control_id}"), &filtered, cx);
         }
         cx.notify();
-    }
-
-    pub(in crate::features) fn toggle_send_command_data_menu(&mut self, cx: &mut Context<Self>) {
-        if self.send_command.toggle_menu(SendCommandMenu::Data) {
-            cx.notify();
-        }
-    }
-
-    pub(in crate::features) fn toggle_send_command_mode_menu(&mut self, cx: &mut Context<Self>) {
-        if self.send_command.toggle_menu(SendCommandMenu::Mode) {
-            cx.notify();
-        }
-    }
-
-    pub(in crate::features) fn toggle_send_command_target_menu(&mut self, cx: &mut Context<Self>) {
-        if self.send_command.toggle_menu(SendCommandMenu::Target) {
-            cx.notify();
-        }
-    }
-
-    pub(in crate::features) fn toggle_send_command_line_ending_menu(
-        &mut self,
-        cx: &mut Context<Self>,
-    ) {
-        if self.send_command.toggle_menu(SendCommandMenu::LineEnding) {
-            cx.notify();
-        }
     }
 
     pub(in crate::features) fn handle_send_command_key_down(

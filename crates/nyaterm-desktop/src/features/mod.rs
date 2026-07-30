@@ -12,6 +12,7 @@ mod recording;
 mod remote;
 mod root;
 mod runtime_jobs;
+mod selects;
 mod session;
 mod settings;
 mod shell;
@@ -58,7 +59,7 @@ pub(in crate::features) use icons::{
     quick_command_icon, resolve_connection_icon, search_engine_icon,
 };
 pub(in crate::features) use panels::{
-    SendCommandFeatureFocus, SendCommandFeatureState, SendCommandMenu, SendCommandPresentationState,
+    SendCommandFeatureFocus, SendCommandFeatureState, SendCommandPresentationState,
 };
 pub(in crate::features) use recording::RecordingFeatureState;
 pub(in crate::features) use remote::{RemoteOpsFeatureFocus, RemoteOpsFeatureState};
@@ -69,6 +70,7 @@ pub(in crate::features) use runtime_jobs::{
     SessionStartResult, SessionStartSuccess, StatsJobResult, TunnelJobOutput, TunnelJobResult,
     spawn_command_persistence_worker,
 };
+pub(in crate::features) use selects::{FOLLOW_UI_THEME_VALUE, NO_SELECTION_VALUE, SelectRegistry};
 pub(in crate::features) use session::{
     CredentialPromptBroker, HostKeyPromptBroker, NativeOtpProvider, PendingSessionStart,
     SavedConnectionStartOptions, SessionFeatureFocus, SessionFeatureState,
@@ -78,8 +80,8 @@ pub(in crate::features) use settings::{
     SecurityCatalogState, SecurityFeatureFocus, SecurityFeatureState,
 };
 pub(in crate::features) use shell::{
-    ChromeTooltip, SessionTabDragPayload, SessionTabDragPreview, SessionTabTooltip,
-    ShellFeatureInit, ShellFeatureState, TAB_MOUSE_ACTIONS, TabMouseActionTarget,
+    SessionTabDragPayload, SessionTabDragPreview, SessionTabTooltip, ShellFeatureInit,
+    ShellFeatureState, TAB_MOUSE_ACTIONS, TabMouseActionTarget,
 };
 pub(in crate::features) use shell::{
     appearance_font_options, appearance_font_stack, gpui_code_font_family,
@@ -101,8 +103,7 @@ pub(in crate::features) use tunnels::{TunnelCatalogState, TunnelFeatureState};
 pub(in crate::features) use update::UpdateFeatureState;
 pub(in crate::features) use view_widgets::{
     bounded_dialog_width, child_window_header, child_window_titlebar, color_icon,
-    connection_type_icon, dialog_action_button, logo_mark, modal_close_icon_button,
-    modal_dialog_footer_localized, modal_dialog_footer_localized_danger, modal_dialog_shell,
-    mono_icon, panel_header_with_actions, stats_progress_bar, themed_icon, transfer_entry_icon,
+    connection_type_icon, dialog_action_button, logo_mark, modal_dialog_shell, mono_icon,
+    panel_header_with_actions, stats_progress_bar, themed_icon, transfer_entry_icon,
     window_control_button,
 };

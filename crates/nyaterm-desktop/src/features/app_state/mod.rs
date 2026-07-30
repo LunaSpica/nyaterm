@@ -6,6 +6,7 @@ use super::connections::ConnectionFeatureState;
 use super::panels::SendCommandFeatureState;
 use super::recording::RecordingFeatureState;
 use super::remote::RemoteOpsFeatureState;
+use super::selects::SelectRegistry;
 use super::session::SessionFeatureState;
 use super::settings::{SecurityFeatureState, SettingsFeatureState};
 use super::shell::ShellFeatureState;
@@ -30,6 +31,8 @@ pub struct NyaTermApp {
     /// Real text inputs for the panels that have not been given their own,
     /// keyed by an id the panel picks. See `features::text_inputs`.
     pub(in crate::features) text_inputs: TextInputRegistry,
+    /// Component-backed selects keyed by stable feature ids.
+    pub(in crate::features) selects: SelectRegistry,
     pub(in crate::features) commands: CommandFeatureState,
     pub(in crate::features) remote_ops: RemoteOpsFeatureState,
     pub(in crate::features) security: SecurityFeatureState,

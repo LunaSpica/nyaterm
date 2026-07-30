@@ -64,7 +64,7 @@ impl NyaTermApp {
 
         match self.persist_connection_order(&siblings) {
             Ok(()) => {
-                self.refresh_store_from_runtime();
+                self.refresh_store_from_runtime_and_sync_theme(cx);
                 self.shell.set_status("connection reordered".to_string());
             }
             Err(error) => {
@@ -139,7 +139,7 @@ impl NyaTermApp {
 
         match self.persist_connection_order(&siblings) {
             Ok(()) => {
-                self.refresh_store_from_runtime();
+                self.refresh_store_from_runtime_and_sync_theme(cx);
                 self.shell.set_status("connection reordered".to_string());
             }
             Err(error) => {
@@ -192,7 +192,7 @@ impl NyaTermApp {
                 if let Some(gid) = group_id {
                     self.connection_state.expand_list_group(gid);
                 }
-                self.refresh_store_from_runtime();
+                self.refresh_store_from_runtime_and_sync_theme(cx);
                 self.shell.set_status("connection moved".to_string());
             }
             Err(error) => {
@@ -241,7 +241,7 @@ impl NyaTermApp {
                 if let Some(group_id) = group_id {
                     self.connection_state.expand_list_group(group_id);
                 }
-                self.refresh_store_from_runtime();
+                self.refresh_store_from_runtime_and_sync_theme(cx);
                 self.shell
                     .set_status(format!("moved {moved_count} connection(s)"));
             }
@@ -302,7 +302,7 @@ impl NyaTermApp {
         siblings.insert(target_idx, moved);
         match self.persist_group_order(&siblings) {
             Ok(()) => {
-                self.refresh_store_from_runtime();
+                self.refresh_store_from_runtime_and_sync_theme(cx);
                 self.shell.set_status("group reordered".to_string());
             }
             Err(error) => {
@@ -357,7 +357,7 @@ impl NyaTermApp {
         siblings.push(moved);
         match self.persist_group_order(&siblings) {
             Ok(()) => {
-                self.refresh_store_from_runtime();
+                self.refresh_store_from_runtime_and_sync_theme(cx);
                 self.shell.set_status("group moved".to_string());
             }
             Err(error) => {

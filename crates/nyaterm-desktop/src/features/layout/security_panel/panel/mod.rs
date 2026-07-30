@@ -4,8 +4,7 @@ use gpui::{
 };
 
 use crate::features::NyaTermApp;
-use crate::features::view_widgets::{modal_dialog_footer_localized_danger, modal_dialog_shell};
-use crate::models::{SecurityAuthTab, SecurityDeleteConfirmState};
+use crate::models::SecurityAuthTab;
 use crate::theme::ThemePalette;
 
 mod credentials;
@@ -66,75 +65,12 @@ impl NyaTermApp {
                 ),
                 |this| this.child(self.security_secret_footer(cx)),
             )
-            .when_some(self.security.delete_confirm().cloned(), |this, confirm| {
-                this.child(self.security_delete_confirm_panel(confirm, cx))
-            })
             .when(self.security.unlock_prompt_open(), |this| {
                 this.child(self.security_unlock_prompt(cx))
             })
             .when(self.security.master_required_prompt_open(), |this| {
                 this.child(self.security_master_required_prompt(cx))
             })
-    }
-
-    fn security_delete_confirm_panel(
-        &mut self,
-        confirm: SecurityDeleteConfirmState,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        let palette = self.theme_palette();
-        let (title_key, description_key) = match confirm.kind {
-            SecurityAuthTab::Keys => ("settings.deleteKey", "settings.deleteKeyConfirm"),
-            SecurityAuthTab::Passwords => (
-                "passwordManager.deleteTitle",
-                "passwordManager.deleteConfirm",
-            ),
-            SecurityAuthTab::Credentials => (
-                "credentialManager.deleteTitle",
-                "credentialManager.deleteConfirm",
-            ),
-            SecurityAuthTab::Otp => ("otpManager.deleteTitle", "otpManager.deleteConfirm"),
-        };
-        let description = self.tr(description_key).replace("{{name}}", &confirm.label);
-        let card = div()
-            .p_6()
-            .flex()
-            .flex_col()
-            .gap_3()
-            .child(
-                div()
-                    .text_size(px(15.))
-                    .font_weight(FontWeight(700.))
-                    .text_color(rgb(palette.text))
-                    .child(self.tr(title_key)),
-            )
-            .child(
-                div()
-                    .text_size(px(12.))
-                    .line_height(px(18.))
-                    .text_color(rgb(palette.text_muted))
-                    .child(description),
-            )
-            .child(modal_dialog_footer_localized_danger(
-                palette,
-                "security-delete-cancel",
-                "security-delete-confirm",
-                self.tr("common.cancel"),
-                self.tr("common.delete"),
-                cx.listener(|this, _, _, cx| {
-                    this.cancel_security_delete(cx);
-                }),
-                cx.listener(|this, _, _, cx| {
-                    this.confirm_security_delete(cx);
-                }),
-            ));
-        modal_dialog_shell(
-            palette,
-            self.shell_surface_color(palette.bg),
-            "security-delete-confirm-modal",
-            384.,
-            card,
-        )
     }
 }
 

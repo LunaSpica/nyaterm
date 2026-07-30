@@ -3,7 +3,7 @@ use nyaterm_transport::SessionKind;
 
 use super::super::send_command_hex_preview;
 use crate::features::{NyaTermApp, SendCommandPresentationState};
-use crate::send_command::{SendCommandDataType, SendCommandLineEnding, SendCommandMode};
+use crate::send_command::{SendCommandDataType, SendCommandMode};
 
 pub(super) struct SendCommandBarViewState {
     pub(super) send: SendCommandPresentationState,
@@ -14,7 +14,6 @@ pub(super) struct SendCommandBarViewState {
     pub(super) validation_error: bool,
     pub(super) preview: String,
     pub(super) input_hint: &'static str,
-    pub(super) line_ending_label: &'static str,
     pub(super) is_sending: bool,
     pub(super) progress_ratio: f32,
     pub(super) progress_label: String,
@@ -53,12 +52,6 @@ impl NyaTermApp {
             self.tr("serialSend.hexPlaceholder")
         } else {
             self.tr("serialSend.textPlaceholder")
-        };
-        let line_ending_label = match send.line_ending {
-            SendCommandLineEnding::None => self.tr("serialSend.noLineEnding"),
-            SendCommandLineEnding::Cr => "CR",
-            SendCommandLineEnding::Lf => "LF",
-            SendCommandLineEnding::Crlf => "CR+LF",
         };
         let _ = (unit_count, byte_count);
         let is_sending = send.sending;
@@ -109,7 +102,6 @@ impl NyaTermApp {
             validation_error,
             preview,
             input_hint,
-            line_ending_label,
             is_sending,
             progress_ratio,
             progress_label,

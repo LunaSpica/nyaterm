@@ -2,8 +2,9 @@ use std::collections::{HashMap, HashSet};
 
 use gpui::{
     App, AppContext, Bounds, Context, Entity, IntoElement, Render, Subscription, Window,
-    WindowBounds, WindowHandle, WindowOptions, div, prelude::*, px, rgb, size,
+    WindowBounds, WindowOptions, div, prelude::*, px, rgb, size,
 };
+use nyaterm_ui::{NyaWindowHandle, nya_root};
 
 use super::remote_text_editor::RemoteTextEditor;
 use crate::features::{NyaTermApp, child_window_header, child_window_titlebar};
@@ -184,7 +185,7 @@ fn open_remote_file_editor_window_now_from_app(app: Entity<NyaTermApp>, cx: &mut
     let bounds = Bounds::centered(None, size(px(980.), px(720.)), cx);
     let close_app = app.clone();
     let view_app = app.clone();
-    let result: anyhow::Result<WindowHandle<RemoteFileEditorWindow>> = cx.open_window(
+    let result: anyhow::Result<NyaWindowHandle> = cx.open_window(
         WindowOptions {
             titlebar: child_window_titlebar(title),
             window_bounds: Some(WindowBounds::Windowed(bounds)),
@@ -202,7 +203,8 @@ fn open_remote_file_editor_window_now_from_app(app: Entity<NyaTermApp>, cx: &mut
                     should_close
                 })
             });
-            cx.new(|cx| RemoteFileEditorWindow::new(view_app, cx))
+            let view = cx.new(|cx| RemoteFileEditorWindow::new(view_app, cx));
+            cx.new(|cx| nya_root(view, window, cx))
         },
     );
 

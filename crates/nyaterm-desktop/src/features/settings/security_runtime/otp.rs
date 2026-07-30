@@ -4,7 +4,7 @@ use gpui::{
 use nyaterm_core::{ConnectionStore, OtpEntry};
 
 use crate::features::{NyaTermApp, compact_id};
-use crate::models::{SecurityAuthTab, SecurityDeleteConfirmState, SecurityOtpEditorState};
+use crate::models::{SecurityAuthTab, SecurityOtpEditorState};
 
 impl NyaTermApp {
     pub(in crate::features) fn import_security_otp_from_qr(&mut self, cx: &mut Context<Self>) {
@@ -279,6 +279,7 @@ impl NyaTermApp {
     pub(in crate::features) fn request_delete_security_otp(
         &mut self,
         otp_id: String,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let label = self
@@ -304,11 +305,7 @@ impl NyaTermApp {
                 }
             })
             .unwrap_or_else(|| otp_id.clone());
-        self.security.request_delete(SecurityDeleteConfirmState {
-            kind: SecurityAuthTab::Otp,
-            id: otp_id,
-            label,
-        });
+        self.open_security_delete_dialog(SecurityAuthTab::Otp, otp_id, label, window, cx);
         cx.notify();
     }
 

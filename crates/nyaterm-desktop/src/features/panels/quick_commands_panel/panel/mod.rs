@@ -1,12 +1,14 @@
 use gpui::{
     AnyElement, App, ClickEvent, Context, FontWeight, IntoElement, KeyDownEvent, MouseButton,
-    SharedString, Window, div, prelude::*, px, rgb, rgba, svg, uniform_list,
+    SharedString, Window, div, prelude::*, px, rgb, svg, uniform_list,
 };
 
 use super::super::{filtered_quick_commands, quick_command_category_options};
-use crate::features::{ChromeTooltip, NyaTermApp, TextInputSetup};
+use crate::features::{NyaTermApp, TextInputSetup};
 use crate::models::{QuickCommandSortMode, QuickCommandViewMode};
 use crate::widgets::small_button;
+use nyaterm_ui::NyaTooltip;
+use nyaterm_ui::{NyaDropdownMenu, NyaMenuItem};
 
 mod rows;
 use rows::quick_command_tile_column_count;
@@ -20,7 +22,6 @@ struct QuickCommandToolbarContext {
 
 struct QuickCommandSortMenuConfig {
     current: QuickCommandSortMode,
-    open: bool,
     sort_label: &'static str,
     created_label: &'static str,
     name_label: &'static str,
@@ -30,7 +31,6 @@ struct QuickCommandSortMenuConfig {
 struct QuickCommandViewMenuConfig {
     current: QuickCommandViewMode,
     icon_path: &'static str,
-    open: bool,
     view_label: &'static str,
     list_label: &'static str,
     compact_label: &'static str,
@@ -305,10 +305,8 @@ impl NyaTermApp {
                     )
                     .child(quick_command_toolbar_divider(palette))
                     .child(quick_command_sort_menu_button(
-                        toolbar_context,
                         QuickCommandSortMenuConfig {
                             current: self.commands.quick_sort_mode(),
-                            open: self.commands.quick_sort_menu_is_open(),
                             sort_label: self.tr("quickCommands.sort"),
                             created_label: self.tr("quickCommands.sortByCreated"),
                             name_label: self.tr("quickCommands.sortByName"),
@@ -317,11 +315,9 @@ impl NyaTermApp {
                         cx,
                     ))
                     .child(quick_command_view_menu_button(
-                        toolbar_context,
                         QuickCommandViewMenuConfig {
                             current: self.commands.quick_view_mode(),
                             icon_path: view_icon,
-                            open: self.commands.quick_view_menu_is_open(),
                             view_label: self.tr("quickCommands.viewMode"),
                             list_label: self.tr("quickCommands.listMode"),
                             compact_label: self.tr("quickCommands.compactListMode"),
@@ -396,140 +392,84 @@ impl NyaTermApp {
 }
 
 fn quick_command_sort_menu_button(
-    context: QuickCommandToolbarContext,
     config: QuickCommandSortMenuConfig,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
-    let QuickCommandToolbarContext {
-        palette,
-        popover_bg,
-    } = context;
     let QuickCommandSortMenuConfig {
         current,
-        open,
         sort_label,
         created_label,
         name_label,
         usage_label,
     } = config;
-    div()
-        .relative()
-        .child(quick_command_toolbar_icon_button(
-            palette,
-            "quick-command-sort",
-            "icons/conn/sort.svg",
-            current != QuickCommandSortMode::Created || open,
-            format!(
-                "{} · {}",
-                sort_label,
-                quick_command_sort_mode_label(current, created_label, name_label, usage_label)
-            ),
-            cx.listener(|this, _, _, cx| {
-                this.commands.toggle_quick_sort_menu();
-                cx.notify();
-            }),
+    NyaDropdownMenu::new("quick-command-sort")
+        .icon("icons/conn/sort.svg")
+        .icon_size(px(14.))
+        .selected(current != QuickCommandSortMode::Created)
+        .tooltip(format!(
+            "{} · {}",
+            sort_label,
+            quick_command_sort_mode_label(current, created_label, name_label, usage_label)
         ))
-        .when(open, |this| {
-            this.child(
-                quick_command_toolbar_dropdown(palette, popover_bg, "quick-command-sort-menu")
-                    .child(quick_command_toolbar_menu_item(
-                        palette,
-                        "quick-command-sort-created",
-                        created_label,
-                        current == QuickCommandSortMode::Created,
-                        cx.listener(|this, _, _, cx| {
-                            this.set_quick_command_sort_mode(QuickCommandSortMode::Created, cx);
-                        }),
-                    ))
-                    .child(quick_command_toolbar_menu_item(
-                        palette,
-                        "quick-command-sort-name",
-                        name_label,
-                        current == QuickCommandSortMode::Name,
-                        cx.listener(|this, _, _, cx| {
-                            this.set_quick_command_sort_mode(QuickCommandSortMode::Name, cx);
-                        }),
-                    ))
-                    .child(quick_command_toolbar_menu_item(
-                        palette,
-                        "quick-command-sort-usage",
-                        usage_label,
-                        current == QuickCommandSortMode::Usage,
-                        cx.listener(|this, _, _, cx| {
-                            this.set_quick_command_sort_mode(QuickCommandSortMode::Usage, cx);
-                        }),
-                    )),
-            )
-        })
+        .min_width(px(154.))
+        .items([
+            NyaMenuItem::action(created_label)
+                .checked(current == QuickCommandSortMode::Created)
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.set_quick_command_sort_mode(QuickCommandSortMode::Created, cx);
+                })),
+            NyaMenuItem::action(name_label)
+                .checked(current == QuickCommandSortMode::Name)
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.set_quick_command_sort_mode(QuickCommandSortMode::Name, cx);
+                })),
+            NyaMenuItem::action(usage_label)
+                .checked(current == QuickCommandSortMode::Usage)
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.set_quick_command_sort_mode(QuickCommandSortMode::Usage, cx);
+                })),
+        ])
 }
 
 fn quick_command_view_menu_button(
-    context: QuickCommandToolbarContext,
     config: QuickCommandViewMenuConfig,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
-    let QuickCommandToolbarContext {
-        palette,
-        popover_bg,
-    } = context;
     let QuickCommandViewMenuConfig {
         current,
         icon_path,
-        open,
         view_label,
         list_label,
         compact_label,
         tile_label,
     } = config;
-    div()
-        .relative()
-        .child(quick_command_toolbar_icon_button(
-            palette,
-            "quick-command-view",
-            icon_path,
-            true,
-            format!(
-                "{} · {}",
-                view_label,
-                quick_command_view_mode_label(current, list_label, compact_label, tile_label)
-            ),
-            cx.listener(|this, _, _, cx| {
-                this.commands.toggle_quick_view_menu();
-                cx.notify();
-            }),
+    NyaDropdownMenu::new("quick-command-view")
+        .icon(icon_path)
+        .icon_size(px(14.))
+        .selected(true)
+        .tooltip(format!(
+            "{} · {}",
+            view_label,
+            quick_command_view_mode_label(current, list_label, compact_label, tile_label)
         ))
-        .when(open, |this| {
-            this.child(
-                quick_command_toolbar_dropdown(palette, popover_bg, "quick-command-view-menu")
-                    .child(quick_command_toolbar_menu_item(
-                        palette,
-                        "quick-command-view-list",
-                        list_label,
-                        current == QuickCommandViewMode::List,
-                        cx.listener(|this, _, _, cx| {
-                            this.set_quick_command_view_mode(QuickCommandViewMode::List, cx);
-                        }),
-                    ))
-                    .child(quick_command_toolbar_menu_item(
-                        palette,
-                        "quick-command-view-compact",
-                        compact_label,
-                        current == QuickCommandViewMode::Compact,
-                        cx.listener(|this, _, _, cx| {
-                            this.set_quick_command_view_mode(QuickCommandViewMode::Compact, cx);
-                        }),
-                    ))
-                    .child(quick_command_toolbar_menu_item(
-                        palette,
-                        "quick-command-view-tile",
-                        tile_label,
-                        current == QuickCommandViewMode::Tile,
-                        cx.listener(|this, _, _, cx| {
-                            this.set_quick_command_view_mode(QuickCommandViewMode::Tile, cx);
-                        }),
-                    )),
-            )
-        })
+        .min_width(px(154.))
+        .items([
+            NyaMenuItem::action(list_label)
+                .checked(current == QuickCommandViewMode::List)
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.set_quick_command_view_mode(QuickCommandViewMode::List, cx);
+                })),
+            NyaMenuItem::action(compact_label)
+                .checked(current == QuickCommandViewMode::Compact)
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.set_quick_command_view_mode(QuickCommandViewMode::Compact, cx);
+                })),
+            NyaMenuItem::action(tile_label)
+                .checked(current == QuickCommandViewMode::Tile)
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.set_quick_command_view_mode(QuickCommandViewMode::Tile, cx);
+                })),
+        ])
 }
 
 fn quick_command_ai_popover_button(
@@ -683,69 +623,7 @@ fn quick_command_toolbar_icon_button(
                     rgb(palette.text_muted)
                 }),
         )
-        .tooltip(move |_, cx| cx.new(|_| ChromeTooltip::new(tooltip.clone())).into())
-        .on_click(on_click)
-}
-
-fn quick_command_toolbar_dropdown(
-    palette: crate::theme::ThemePalette,
-    popover_bg: gpui::Rgba,
-    id: &'static str,
-) -> gpui::Stateful<gpui::Div> {
-    div()
-        .id(SharedString::from(id))
-        .absolute()
-        .top(px(28.))
-        .right_0()
-        .w(px(154.))
-        .rounded_md()
-        .border_1()
-        .border_color(rgb(palette.border))
-        .bg(popover_bg)
-        .shadow_lg()
-        .py_1()
-        .flex()
-        .flex_col()
-}
-
-fn quick_command_toolbar_menu_item(
-    palette: crate::theme::ThemePalette,
-    id: &'static str,
-    label: &'static str,
-    active: bool,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    div()
-        .id(SharedString::from(id))
-        .h(px(28.))
-        .px_3()
-        .flex()
-        .items_center()
-        .justify_between()
-        .gap_2()
-        .text_size(px(12.))
-        .text_color(if active {
-            rgb(palette.link)
-        } else {
-            rgb(palette.text)
-        })
-        .bg(if active {
-            rgb(palette.hover)
-        } else {
-            rgba(0x00000000)
-        })
-        .cursor_pointer()
-        .hover(|this| this.bg(rgb(palette.surface_elevated)))
-        .child(div().min_w_0().flex_1().child(label))
-        .when(active, |this| {
-            this.child(
-                div()
-                    .text_size(px(10.))
-                    .font_weight(FontWeight(700.))
-                    .text_color(rgb(palette.link))
-                    .child("ON"),
-            )
-        })
+        .tooltip(move |window, cx| NyaTooltip::new(tooltip.clone()).build(window, cx))
         .on_click(on_click)
 }
 

@@ -103,9 +103,8 @@ impl NyaTermApp {
                     .hover(|this| this.border_color(rgb(palette.text)))
                     .tooltip({
                         let label = name.to_string();
-                        move |_, cx| {
-                            cx.new(|_| crate::features::ChromeTooltip::new(label.clone()))
-                                .into()
+                        move |window, cx| {
+                            nyaterm_ui::NyaTooltip::new(label.clone()).build(window, cx)
                         }
                     })
                     .on_click(cx.listener(move |this, _, _, cx| {

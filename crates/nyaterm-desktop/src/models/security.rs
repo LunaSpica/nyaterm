@@ -74,13 +74,6 @@ pub(crate) struct SecurityOtpEditorState {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct SecurityDeleteConfirmState {
-    pub(crate) kind: SecurityAuthTab,
-    pub(crate) id: String,
-    pub(crate) label: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SecurityPasswordEditorState {
     pub(crate) id: Option<String>,
     pub(crate) name: String,

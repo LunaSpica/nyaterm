@@ -58,8 +58,6 @@ pub(in crate::features::pages::remote) struct DockerLabels {
     pub copy: &'static str,
     pub refresh: &'static str,
     pub close: &'static str,
-    pub cancel: &'static str,
-    pub confirm: &'static str,
     pub state_created: &'static str,
     pub state_dead: &'static str,
     pub state_exited: &'static str,
@@ -120,9 +118,7 @@ mod resources;
 
 pub(super) use compose::{DockerComposePanelState, docker_compose_panel};
 pub(super) use containers::{DockerContainersPanelState, docker_containers_panel};
-pub(super) use controls::{
-    DockerTabBarLabels, docker_confirm_panel, docker_overview_strip, docker_tab_bar,
-};
+pub(super) use controls::{DockerTabBarLabels, docker_overview_strip, docker_tab_bar};
 pub(super) use details::docker_details_panel;
 pub(super) use matchers::{
     docker_compose_project_matches, docker_container_matches, docker_image_matches,

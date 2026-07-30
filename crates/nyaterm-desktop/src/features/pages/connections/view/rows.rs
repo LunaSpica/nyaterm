@@ -1,14 +1,15 @@
 use std::sync::Arc;
 
 use gpui::{
-    AppContext as _, Context, FontWeight, IntoElement, MouseButton, MouseDownEvent, Render,
-    SharedString, Window, div,
+    AppContext as _, Context, FontWeight, IntoElement, MouseButton, Render, SharedString, Window,
+    div,
     prelude::{
         FluentBuilder, InteractiveElement, ParentElement, StatefulInteractiveElement, Styled,
     },
     px, relative, rgb, rgba, svg,
 };
 use nyaterm_core::SavedConnection;
+use nyaterm_ui::NyaContextMenu;
 
 use crate::features::{
     ConnectionDragKind, ConnectionDragPayload, ConnectionDragPreview, ConnectionDropPosition,
@@ -116,201 +117,185 @@ impl NyaTermApp {
             return div().flex().flex_col().child(body);
         }
 
-        div()
+        let context_items = self
+            .connection_group_context_menu_items(section.group_id.clone().unwrap_or_default(), cx);
+        let group_header = div()
+            .id(SharedString::from(format!(
+                "connection-section-{}",
+                section.group_id.clone().unwrap_or_else(|| "root".into())
+            )))
+            .relative()
+            .h(px(28.))
+            .min_w(relative(1.))
             .flex()
-            .flex_col()
-            .child(
-                div()
-                    .id(SharedString::from(format!(
-                        "connection-section-{}",
-                        section.group_id.clone().unwrap_or_else(|| "root".into())
-                    )))
-                    .relative()
-                    .h(px(28.))
-                    .min_w(relative(1.))
-                    .flex()
-                    .items_center()
-                    .gap(px(6.))
-                    .px_2()
-                    .pl(px(8. + section.depth as f32 * 16.))
-                    .rounded_sm()
-                    .cursor_pointer()
-                    .bg({
-                        let drop_inside = self.connection_state.list_drop_position_for_kind_target(
-                            ConnectionDragKind::Group,
-                            section.group_id.as_deref(),
-                        ) == Some(ConnectionDropPosition::Inside);
-                        if drop_inside
-                            || self
-                                .connection_state
-                                .list_group_is_hovered(section.group_id.as_deref())
-                        {
-                            rgb(palette.hover)
-                        } else {
-                            rgba(0x00000000)
-                        }
-                    })
-                    .when(
-                        self.connection_state.list_drop_position_for_kind_target(
-                            ConnectionDragKind::Group,
-                            section.group_id.as_deref(),
-                        ) == Some(ConnectionDropPosition::Inside),
-                        |this| this.border_1().border_color(rgb(self.theme_palette().link)),
+            .items_center()
+            .gap(px(6.))
+            .px_2()
+            .pl(px(8. + section.depth as f32 * 16.))
+            .rounded_sm()
+            .cursor_pointer()
+            .bg({
+                let drop_inside = self.connection_state.list_drop_position_for_kind_target(
+                    ConnectionDragKind::Group,
+                    section.group_id.as_deref(),
+                ) == Some(ConnectionDropPosition::Inside);
+                if drop_inside
+                    || self
+                        .connection_state
+                        .list_group_is_hovered(section.group_id.as_deref())
+                {
+                    rgb(palette.hover)
+                } else {
+                    rgba(0x00000000)
+                }
+            })
+            .when(
+                self.connection_state.list_drop_position_for_kind_target(
+                    ConnectionDragKind::Group,
+                    section.group_id.as_deref(),
+                ) == Some(ConnectionDropPosition::Inside),
+                |this| this.border_1().border_color(rgb(self.theme_palette().link)),
+            )
+            .on_hover({
+                let hover_group = section.group_id.clone();
+                cx.listener(move |this, hovered: &bool, _, cx| {
+                    if let Some(group_id) = hover_group.clone()
+                        && this
+                            .connection_state
+                            .set_list_group_hover(group_id, *hovered)
+                    {
+                        cx.notify();
+                    }
+                })
+            })
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|_, _, _, cx| cx.stop_propagation()),
+            )
+            .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
+            .when_some(section.group_id.clone(), |this, drag_group_id| {
+                let drop_group_id = drag_group_id.clone();
+                let label = section.label.clone();
+                this.cursor_move()
+                    .on_drag(
+                        ConnectionDragPayload {
+                            kind: ConnectionDragKind::Group,
+                            id: drag_group_id.clone(),
+                            label,
+                        },
+                        |payload, position, _, cx| {
+                            cx.new(|_| ConnectionDragPreview::new(payload.clone(), position))
+                        },
                     )
-                    .on_hover({
-                        let hover_group = section.group_id.clone();
-                        cx.listener(move |this, hovered: &bool, _, cx| {
-                            if let Some(group_id) = hover_group.clone()
-                                && this
-                                    .connection_state
-                                    .set_list_group_hover(group_id, *hovered)
-                            {
+                    .on_drag_move(cx.listener({
+                        let target_id = drop_group_id.clone();
+                        move |this, event: &gpui::DragMoveEvent<ConnectionDragPayload>, _, cx| {
+                            let _ = event.drag(cx);
+                            let y = event.event.position.y;
+                            let bounds = event.bounds;
+                            let rel = if bounds.size.height > px(0.) {
+                                ((y - bounds.origin.y) / bounds.size.height).clamp(0., 1.)
+                            } else {
+                                0.5
+                            };
+                            let position = if rel < 0.25 {
+                                ConnectionDropPosition::Before
+                            } else if rel > 0.75 {
+                                ConnectionDropPosition::After
+                            } else {
+                                ConnectionDropPosition::Inside
+                            };
+                            let next = ConnectionDropTarget {
+                                id: Some(target_id.clone()),
+                                kind: ConnectionDragKind::Group,
+                                position,
+                            };
+                            if this.connection_state.set_list_drop_target_if_changed(next) {
                                 cx.notify();
                             }
-                        })
-                    })
-                    .on_mouse_down(
-                        MouseButton::Left,
-                        cx.listener(|_, _, _, cx| cx.stop_propagation()),
-                    )
-                    .on_mouse_down(MouseButton::Right, {
-                        let menu_group = section.group_id.clone();
-                        cx.listener(move |this, event: &MouseDownEvent, _, cx| {
-                            if let Some(group_id) = menu_group.clone() {
-                                cx.stop_propagation();
-                                this.open_connection_group_context_menu(group_id, event, cx);
-                            }
-                        })
-                    })
-                    .when_some(section.group_id.clone(), |this, drag_group_id| {
-                        let drop_group_id = drag_group_id.clone();
-                        let label = section.label.clone();
-                        this.cursor_move()
-                            .on_drag(
-                                ConnectionDragPayload {
-                                    kind: ConnectionDragKind::Group,
-                                    id: drag_group_id.clone(),
-                                    label,
-                                },
-                                |payload, position, _, cx| {
-                                    cx.new(|_| {
-                                        ConnectionDragPreview::new(payload.clone(), position)
-                                    })
-                                },
-                            )
-                            .on_drag_move(cx.listener({
-                                let target_id = drop_group_id.clone();
-                                move |this,
-                                      event: &gpui::DragMoveEvent<ConnectionDragPayload>,
-                                      _,
-                                      cx| {
-                                    let _ = event.drag(cx);
-                                    let y = event.event.position.y;
-                                    let bounds = event.bounds;
-                                    let rel = if bounds.size.height > px(0.) {
-                                        ((y - bounds.origin.y) / bounds.size.height).clamp(0., 1.)
-                                    } else {
-                                        0.5
-                                    };
-                                    let position = if rel < 0.25 {
-                                        ConnectionDropPosition::Before
-                                    } else if rel > 0.75 {
-                                        ConnectionDropPosition::After
-                                    } else {
-                                        ConnectionDropPosition::Inside
-                                    };
-                                    let next = ConnectionDropTarget {
-                                        id: Some(target_id.clone()),
-                                        kind: ConnectionDragKind::Group,
-                                        position,
-                                    };
-                                    if this.connection_state.set_list_drop_target_if_changed(next) {
-                                        cx.notify();
-                                    }
-                                }
-                            }))
-                            .on_drop(cx.listener(
-                                move |this, payload: &ConnectionDragPayload, _, cx| {
-                                    let position =
-                                        this.connection_state.list_drop_position_for_target(
-                                            &drop_group_id,
-                                            ConnectionDropPosition::Inside,
-                                        );
-                                    this.connection_state.clear_list_drop_target();
-                                    match payload.kind {
-                                        ConnectionDragKind::Connection => {
-                                            this.move_connection_into_group(
-                                                payload.id.clone(),
-                                                Some(drop_group_id.clone()),
-                                                cx,
-                                            );
-                                        }
-                                        ConnectionDragKind::Group => match position {
-                                            ConnectionDropPosition::Inside => {
-                                                this.move_group_into_group(
-                                                    payload.id.clone(),
-                                                    Some(drop_group_id.clone()),
-                                                    cx,
-                                                );
-                                            }
-                                            _ => {
-                                                this.move_group_before(
-                                                    payload.id.clone(),
-                                                    drop_group_id.clone(),
-                                                    cx,
-                                                );
-                                            }
-                                        },
-                                    }
-                                },
-                            ))
-                    })
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        cx.stop_propagation();
-                        if let Some(group_id) = group_id.clone() {
-                            this.toggle_connection_group_expanded(group_id, cx);
                         }
                     }))
-                    // The name takes the slack so the count sits against the right
-                    // edge of the panel, where Tauri puts it.
-                    .child(
-                        svg()
-                            .size(px(14.))
-                            .flex_none()
-                            .path(if expanded {
-                                "icons/chevron-down.svg"
-                            } else {
-                                "icons/fe/forward.svg"
-                            })
-                            .text_color(rgb(palette.text_muted)),
+                    .on_drop(
+                        cx.listener(move |this, payload: &ConnectionDragPayload, _, cx| {
+                            let position = this.connection_state.list_drop_position_for_target(
+                                &drop_group_id,
+                                ConnectionDropPosition::Inside,
+                            );
+                            this.connection_state.clear_list_drop_target();
+                            match payload.kind {
+                                ConnectionDragKind::Connection => {
+                                    this.move_connection_into_group(
+                                        payload.id.clone(),
+                                        Some(drop_group_id.clone()),
+                                        cx,
+                                    );
+                                }
+                                ConnectionDragKind::Group => match position {
+                                    ConnectionDropPosition::Inside => {
+                                        this.move_group_into_group(
+                                            payload.id.clone(),
+                                            Some(drop_group_id.clone()),
+                                            cx,
+                                        );
+                                    }
+                                    _ => {
+                                        this.move_group_before(
+                                            payload.id.clone(),
+                                            drop_group_id.clone(),
+                                            cx,
+                                        );
+                                    }
+                                },
+                            }
+                        }),
                     )
-                    .child(connection_type_icon(
-                        palette,
-                        resolve_connection_icon(Some("folder"), "SSH"),
-                        false,
-                        16.,
-                    ))
-                    .child(
-                        div()
-                            .min_w_0()
-                            .flex_1()
-                            .text_xs()
-                            .font_weight(FontWeight(500.))
-                            .text_color(rgb(palette.text_muted))
-                            .overflow_hidden()
-                            .whitespace_nowrap()
-                            .text_ellipsis()
-                            .child(group_label.clone()),
-                    )
-                    .child(
-                        div()
-                            .flex_none()
-                            .text_xs()
-                            .text_color(rgb(palette.text_dimmed))
-                            .child(count.to_string()),
-                    ),
+            })
+            .on_click(cx.listener(move |this, _, _, cx| {
+                cx.stop_propagation();
+                if let Some(group_id) = group_id.clone() {
+                    this.toggle_connection_group_expanded(group_id, cx);
+                }
+            }))
+            // The name takes the slack so the count sits against the right
+            // edge of the panel, where Tauri puts it.
+            .child(
+                svg()
+                    .size(px(14.))
+                    .flex_none()
+                    .path(if expanded {
+                        "icons/chevron-down.svg"
+                    } else {
+                        "icons/fe/forward.svg"
+                    })
+                    .text_color(rgb(palette.text_muted)),
             )
-            .child(body)
+            .child(connection_type_icon(
+                palette,
+                resolve_connection_icon(Some("folder"), "SSH"),
+                false,
+                16.,
+            ))
+            .child(
+                div()
+                    .min_w_0()
+                    .flex_1()
+                    .text_xs()
+                    .font_weight(FontWeight(500.))
+                    .text_color(rgb(palette.text_muted))
+                    .overflow_hidden()
+                    .whitespace_nowrap()
+                    .text_ellipsis()
+                    .child(group_label.clone()),
+            )
+            .child(
+                div()
+                    .flex_none()
+                    .text_xs()
+                    .text_color(rgb(palette.text_dimmed))
+                    .child(count.to_string()),
+            );
+        let group_header = NyaContextMenu::new(group_header, context_items);
+        div().flex().flex_col().child(group_header).child(body)
     }
 
     pub(in crate::features) fn saved_connection_row(
@@ -349,10 +334,11 @@ impl NyaTermApp {
         let show_after = drop_position == Some(ConnectionDropPosition::After);
         let show_inside = drop_position == Some(ConnectionDropPosition::Inside);
         let row_id = connection.id.clone();
+        let context_items = self.connection_context_menu_items(connection.clone(), cx);
 
         // Tauri ConnectionItem: py-1.5 single-line row (~34px) with hover actions.
         let palette = self.theme_palette();
-        div()
+        let row = div()
             .id(SharedString::from(format!(
                 "connection-row-{}",
                 connection.id
@@ -469,9 +455,9 @@ impl NyaTermApp {
             )
             .on_mouse_down(
                 MouseButton::Right,
-                cx.listener(move |this, event: &MouseDownEvent, _, cx| {
+                cx.listener(move |this, _, _, cx| {
                     cx.stop_propagation();
-                    this.open_connection_context_menu(menu_id.clone(), event, cx);
+                    this.prepare_connection_context_menu(menu_id.clone(), cx);
                 }),
             )
             .on_click(
@@ -572,6 +558,7 @@ impl NyaTermApp {
                         .rounded_full()
                         .bg(rgb(palette.link)),
                 )
-            })
+            });
+        NyaContextMenu::new(row, context_items)
     }
 }

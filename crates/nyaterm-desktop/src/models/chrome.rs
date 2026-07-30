@@ -55,14 +55,12 @@ impl HeaderStatusMode {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct HeaderStatusState {
-    pub(crate) menu_open: bool,
     pub(crate) rendered_minute: i64,
 }
 
 impl Default for HeaderStatusState {
     fn default() -> Self {
         Self {
-            menu_open: false,
             rendered_minute: -1,
         }
     }
@@ -120,36 +118,9 @@ pub(crate) struct QuickCommandEditorState {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct QuickCommandDeleteState {
-    pub(crate) id: String,
-    pub(crate) label: String,
-}
-
-#[derive(Debug, Clone)]
 pub(crate) struct QuickCommandDetailsState {
     pub(crate) command: QuickCommand,
     pub(crate) category: String,
-    pub(crate) x: Pixels,
-    pub(crate) y: Pixels,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) struct QuickCommandRowMenuState {
-    pub(crate) command_id: String,
-    pub(crate) x: Pixels,
-    pub(crate) y: Pixels,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) struct QuickCommandCategoryMenuState {
-    pub(crate) category_id: String,
-    pub(crate) x: Pixels,
-    pub(crate) y: Pixels,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) struct ActiveSessionMenuState {
-    pub(crate) session_id: String,
     pub(crate) x: Pixels,
     pub(crate) y: Pixels,
 }
@@ -172,7 +143,6 @@ pub(crate) struct AiDetectedErrorState {
 pub(crate) struct QuickCommandCategoryDeleteState {
     pub(crate) id: String,
     pub(crate) name: String,
-    pub(crate) command_count: usize,
 }
 
 #[derive(Debug, Clone)]

@@ -1,17 +1,16 @@
 use gpui::{
-    Context, IntoElement, MouseButton, SharedString, Window, WindowControlArea, div, prelude::*,
-    px, rgb, rgba, svg,
+    Context, IntoElement, MouseButton, Window, WindowControlArea, div, prelude::*, px, rgb, svg,
 };
 use nyaterm_transport::SessionKind;
+use nyaterm_ui::{NyaDropdownMenu, NyaMenuAnchor};
 use time::{OffsetDateTime, UtcOffset, Weekday, macros::format_description};
 
 use crate::features::{
-    ChromeTooltip, NyaTermApp, format_file_size, format_rate, format_uptime, logo_mark, short_id,
+    NyaTermApp, format_file_size, format_rate, format_uptime, logo_mark, short_id,
     window_control_button,
 };
-use crate::models::{HeaderStatusMode, TitleMenu, TitleMenuSubmenu};
+use crate::models::{HeaderStatusMode, TitleMenu};
 
-use super::super::title_menu_helpers::{title_menu_item, title_menu_separator};
 use super::super::view_helpers::session_kind_icon_path;
 
 struct HeaderStatusContent {
@@ -207,11 +206,30 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let menu_open = self.shell.header_status_menu_is_open();
         let select_label = self.tr("headerStatus.select");
+        let selected =
+            HeaderStatusMode::from_setting(&self.settings.summary().ui_header_status_mode);
+        let mut items = HeaderStatusMode::ALL
+            .into_iter()
+            .map(|mode| {
+                nyaterm_ui::NyaMenuItem::action(self.tr(mode.i18n_key()))
+                    .icon(mode.icon_path())
+                    .checked(selected == mode)
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.set_header_status_mode(mode, cx);
+                    }))
+            })
+            .collect::<Vec<_>>();
+        items.extend([
+            nyaterm_ui::NyaMenuItem::separator(),
+            nyaterm_ui::NyaMenuItem::action(self.tr("headerStatus.hide"))
+                .icon("icons/close.svg")
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.set_header_status_visible(false, cx);
+                })),
+        ]);
 
         div()
-            .relative()
             .max_w(px(520.))
             .flex()
             .items_center()
@@ -219,7 +237,6 @@ impl NyaTermApp {
             .rounded_sm()
             .text_xs()
             .text_color(rgb(palette.text_muted))
-            .when(menu_open, |this| this.bg(rgb(palette.hover)))
             .child(
                 div()
                     .min_w_0()
@@ -248,84 +265,25 @@ impl NyaTermApp {
             )
             .child(
                 div()
-                    .id("header-status-menu-trigger")
-                    .size(px(24.))
                     .flex_none()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .rounded_sm()
-                    .cursor_pointer()
-                    .hover(move |this| this.bg(rgb(palette.hover)).text_color(rgb(palette.text)))
                     .on_mouse_down(
                         MouseButton::Left,
                         cx.listener(|_, _, _, cx| cx.stop_propagation()),
                     )
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.toggle_header_status_menu(cx);
-                    }))
-                    .tooltip(move |_, cx| cx.new(|_| ChromeTooltip::new(select_label)).into())
                     .child(
-                        svg()
-                            .size(px(14.))
-                            .path("icons/chevron-down.svg")
-                            .text_color(rgb(palette.text_muted)),
+                        NyaDropdownMenu::new("header-status-menu-trigger")
+                            .icon("icons/chevron-down.svg")
+                            .icon_size(px(14.))
+                            .tooltip(select_label)
+                            .min_width(px(196.))
+                            .items(items)
+                            .on_trigger(cx.listener(|this, _, _, cx| {
+                                this.shell.close_open_tabs_menu();
+                                this.shell.close_new_session_menu();
+                                cx.notify();
+                            })),
                     ),
             )
-            .when(menu_open, |this| {
-                this.child(self.header_status_dropdown(cx))
-            })
-    }
-
-    fn header_status_dropdown(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let palette = self.theme_palette();
-        let selected =
-            HeaderStatusMode::from_setting(&self.settings.summary().ui_header_status_mode);
-        let mut menu = div()
-            .id("header-status-menu")
-            .absolute()
-            .top(px(30.))
-            .right_0()
-            .w(px(196.))
-            .rounded_md()
-            .border_1()
-            .border_color(rgb(palette.border))
-            .bg(self.shell_surface_color(palette.surface))
-            .shadow_lg()
-            .py_1()
-            .flex()
-            .flex_col()
-            .on_mouse_down(
-                MouseButton::Left,
-                cx.listener(|_, _, _, cx| cx.stop_propagation()),
-            );
-
-        for mode in HeaderStatusMode::ALL {
-            menu = menu.child(title_menu_item(
-                palette,
-                format!("header-status-mode-{}", mode.persistence_id()),
-                Some(mode.icon_path()),
-                selected == mode,
-                self.tr(mode.i18n_key()),
-                None,
-                cx.listener(move |this, _, _, cx| {
-                    this.set_header_status_mode(mode, cx);
-                }),
-            ));
-        }
-
-        menu.child(title_menu_separator(palette))
-            .child(title_menu_item(
-                palette,
-                "header-status-hide",
-                Some("icons/close.svg"),
-                false,
-                self.tr("headerStatus.hide"),
-                None,
-                cx.listener(|this, _, _, cx| {
-                    this.set_header_status_visible(false, cx);
-                }),
-            ))
     }
 
     fn header_status_content(&self) -> HeaderStatusContent {
@@ -410,11 +368,6 @@ impl NyaTermApp {
         }
     }
 
-    pub(in crate::features) fn toggle_header_status_menu(&mut self, cx: &mut Context<Self>) {
-        self.shell.toggle_header_status_menu();
-        cx.notify();
-    }
-
     pub(in crate::features) fn set_header_status_mode(
         &mut self,
         mode: HeaderStatusMode,
@@ -422,7 +375,6 @@ impl NyaTermApp {
     ) {
         self.settings
             .set_header_status_mode(mode.persistence_id().to_string());
-        self.shell.close_header_status_menu();
         self.shell
             .set_header_status_rendered_minute(current_unix_minute());
         self.persist_header_status_settings();
@@ -435,7 +387,6 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.settings.set_header_status_visible(visible);
-        self.shell.close_header_status_menu();
         self.persist_header_status_settings();
         cx.notify();
     }
@@ -542,68 +493,26 @@ impl NyaTermApp {
         menu: TitleMenu,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let open = self.shell.title_menu() == Some(menu);
         let id_label = menu.label();
         let label = self.tr(menu.i18n_key());
-        let palette = self.theme_palette();
+        let items = self.title_menu_items(menu, cx);
         div()
-            .relative()
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|_, _, _, cx| cx.stop_propagation()),
             )
             .child(
-                div()
-                    .id(SharedString::from(format!("title-menu-trigger-{id_label}")))
-                    .h(px(28.))
-                    .px_2()
-                    .flex()
-                    .items_center()
-                    .rounded_sm()
-                    .text_xs()
-                    .text_color(if open {
-                        rgb(palette.text)
-                    } else {
-                        rgb(palette.text_muted)
-                    })
-                    .bg(if open {
-                        rgb(palette.hover)
-                    } else {
-                        rgba(0x00000000)
-                    })
-                    .cursor_pointer()
-                    .hover(move |this| this.bg(rgb(palette.hover)).text_color(rgb(palette.primary)))
-                    .child(label)
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.toggle_title_menu(menu, cx);
+                NyaDropdownMenu::new(format!("title-menu-trigger-{id_label}"))
+                    .label(label)
+                    .anchor(NyaMenuAnchor::TopLeft)
+                    .min_width(px(220.))
+                    .items(items)
+                    .on_trigger(cx.listener(|this, _, _, cx| {
+                        this.shell.close_open_tabs_menu();
+                        this.shell.close_new_session_menu();
+                        cx.notify();
                     })),
             )
-            .when(open, |this| this.child(self.title_menu_dropdown(menu, cx)))
-    }
-
-    pub(in crate::features) fn toggle_title_menu(
-        &mut self,
-        menu: TitleMenu,
-        cx: &mut Context<Self>,
-    ) {
-        self.shell.toggle_title_menu(menu);
-        cx.notify();
-    }
-
-    pub(in crate::features) fn close_title_menu(&mut self, cx: &mut Context<Self>) {
-        if self.shell.close_title_menu() {
-            cx.notify();
-        }
-    }
-
-    pub(in crate::features) fn open_title_submenu(
-        &mut self,
-        submenu: TitleMenuSubmenu,
-        cx: &mut Context<Self>,
-    ) {
-        if self.shell.open_title_submenu(submenu) {
-            cx.notify();
-        }
     }
 }
 

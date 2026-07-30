@@ -1,7 +1,7 @@
 use gpui::{App, ClickEvent, IntoElement, SharedString, Window, div, prelude::*, px, rgb, svg};
 
-use crate::features::ChromeTooltip;
 use crate::theme::ThemePalette;
+use nyaterm_ui::NyaTooltip;
 
 pub(in crate::features::pages::remote) fn usage_color(
     palette: ThemePalette,
@@ -37,7 +37,7 @@ pub(in crate::features::pages::remote) fn compact_remote_svg_button(
             this.bg(rgb(palette.surface_elevated))
                 .text_color(rgb(palette.text))
         })
-        .tooltip(move |_, cx| cx.new(|_| ChromeTooltip::new(tooltip.clone())).into())
+        .tooltip(move |window, cx| NyaTooltip::new(tooltip.clone()).build(window, cx))
         .child(
             svg()
                 .size(px(16.))

@@ -63,15 +63,73 @@ these as staged extraction candidates, not as formatting-only refactor targets.
 
 ## Completed
 
+- `gpui-component` infrastructure and ordinary-control migration are in place.
+  The workspace pins
+  `gpui-component = "=0.5.1"`, and dependency verification on 2026-07-30 shows
+  a single compatible `gpui v0.2.2`. `nyaterm-ui` owns the component wrappers,
+  theme bridge, and `NyaRoot`/`NyaWindowHandle` host aliases; desktop feature
+  modules must continue importing NyaTerm wrapper types rather than
+  `gpui_component` directly. The main window plus settings, connection editor,
+  quick-command editor, remote editor, and external-sync child windows now open
+  with `NyaRoot` as the first view layer while preserving typed window
+  activation, stale-handle cleanup, pending-open guards, and close handlers.
+  Startup, explicit theme changes, config imports and cloud-sync pulls keep
+  `ThemePalette` authoritative by syncing component colors from the current
+  NyaTerm palette after settings are loaded or changed.
+  Phase 1 ordinary input migration is in place: the shared id-keyed
+  `TextInputRegistry`, connection-list search, connection-editor fields, and
+  connection group-name editor now own `nyaterm-ui::NyaInputState` and render
+  `gpui-component` `Input` for ordinary form/search/prompt fields. The legacy
+  `nyaterm-ui/src/text_field.rs` custom caret, hit-testing, selection and IME
+  implementation has been removed; terminal input, paste review,
+  `RemoteTextEditor` and other full editing surfaces keep their dedicated
+  paths.
+  The reusable button, switch, checkbox, radio, tab, select, menu, tooltip and
+  dialog wrappers are exported only from `nyaterm-ui`. The common
+  `small_button`, `mode_button` and settings `settings_choice_chip` helpers plus
+  shared `dialog_action_button`
+  now delegate to `nyaterm-ui::NyaButton`, the shared `svg_icon_button` and
+  `modal_close_icon_button` helpers delegate to an asset-path based
+  `nyaterm-ui::NyaIconButton`, and the tunnel row open/close control, shared
+  settings switch helpers, Telnet option switches and keyword-highlight rule
+  switches render controlled `nyaterm-ui::NyaSwitch` controls while
+  feature/transport, connection-editor draft and settings state remain
+  authoritative. The tunnel list and Telnet editor segmented tab controls now
+  render through `nyaterm-ui::NyaTabs` while `NetworkTab` and
+  `ConnectionEditorTelnetTab` remain authoritative. `nyaterm-ui::NyaSelectState`
+  is now a real component-backed wrapper for string-valued selects, including
+  optional NyaTerm font previews. The desktop `SelectRegistry` owns component
+  popup/focus state while persisted settings own selected values. Appearance
+  theme, terminal theme, contrast, wallpaper fit, font weight, cursor style,
+  font-stack rows, and AI risk use this path; their manual menus and the shared
+  settings `menu_open` mirror have been removed. Tunnel/proxy editor selectors,
+  all four send-command selectors, and cloud-sync provider selection also use
+  the registry. Their click-to-cycle/manual absolute menu implementations and
+  pure-UI open flags were removed while draft, send-progress, and cloud-sync
+  feature state remain authoritative for selected values.
+  Ordinary component dialogs now host CRUD, confirmation, import, translation
+  result and update-check flows, including network group/tunnel/proxy dialogs,
+  connection and quick-command confirmations, SFTP file-operation dialogs,
+  Docker/process/security/AI/session confirmations, quick-command and
+  connection import source pickers, translation results, and native update
+  checks. Pure visual dialog state removed in the same passes includes import
+  dialog open/focus fields, update dialog open state, AI confirmation booleans,
+  close-all-session confirmation state, category rename focus and SFTP
+  properties focus mirrors.
+  Header-specific icon buttons, remote Docker tabs, settings sidebar tabs and
+  terminal search's dedicated mode buttons remain custom until their broader
+  domain passes.
+
 - Ordinary form, prompt and search inputs are real widgets, not label divs.
-  `nyaterm-ui::TextField` owns the caret, selection, IME composition and
-  clipboard for a box; `nyaterm-core::TextEdit` owns its editing model. Panels
-  either own entities directly (the connection editor) or use the id-keyed
-  registry in `features/text_inputs.rs`. Coverage includes settings and network
-  editors, quick commands and send-command controls, security and SSH prompts,
-  AI and sync fields, session overlays and filters, SFTP paths/search/dialogs/
-  properties, terminal search, and keyword-highlight rules. The removed
-  `transfer_input` helper is not a compatibility path.
+  `nyaterm-ui::NyaInputState` delegates caret, selection, IME composition and
+  clipboard behavior to `gpui-component::input::InputState` behind the
+  `nyaterm-ui` wrapper boundary. Panels either own entities directly (the
+  connection editor) or use the id-keyed registry in `features/text_inputs.rs`.
+  Coverage includes settings and network editors, quick commands and
+  send-command controls, security and SSH prompts, AI and sync fields, session
+  overlays and filters, SFTP paths/search/dialogs/properties, terminal search,
+  and keyword-highlight rules. The removed `transfer_input` helper is not a
+  compatibility path.
 
   Full editing surfaces are separate by design: the terminal and paste review
   use terminal input routing, and `RemoteTextEditor` owns editor-specific
@@ -304,7 +362,7 @@ these as staged extraction candidates, not as formatting-only refactor targets.
 - Translation and native-update background state now have authoritative
   `TranslationFeatureState` and `UpdateFeatureState` owners. Eighteen app fields
   became two feature fields; each owner constructs and retains its own job
-  channel together with pending/status/result and dialog state. Translation
+  channel together with pending/status/result workflow state. Translation
   settings and the secret draft moved as one compatibility-sensitive unit,
   while their existing load/save, masking and fallback paths are unchanged.
   Native update runtime also moved out of the settings module into its own
@@ -319,6 +377,10 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   persistence-time secret-draft merging behind `TranslationFeatureState`, and
   removed the duplicate translation `target_language` field so
   `TranslationSettings::target_language` is the only writable source.
+  Translation result and native update dialogs are now hosted by the component
+  `NyaDialog`; translation keeps an open/result state because it suppresses
+  terminal action-link UI while active, while update no longer stores a visual
+  `dialog_open` flag.
 - Cloud-sync configuration, compatibility state, history, conflicts, secret
   drafts and GitHub device-flow runtime now have one authoritative
   `CloudSyncFeatureState` owner with a focused `github` child. Fifteen app
@@ -1619,14 +1681,14 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   test are removed. Runtime cursor painting already uses the live terminal
   element path, and the deleted helper had no production caller.
 - AI credential rows no longer retain the obsolete `credential_edit` marker or
-  its three-field enum. Real TextFields already own editing/focus, while
+  its three-field enum. Ordinary input entities own editing/focus, while
   `credential_secret_drafts` and the existing commit/persist path remain the
   authoritative save flow. Five related AI UI-local bindings and one stale
   master-password placeholder binding were also removed; credential formats,
   secret masking and persistence are unchanged.
-- Construction-time focus handles and focus enums that TextField now owns are
-  removed from terminal, transfer, network, AI and security state. The
-  remaining SSH-key focus enum still drives key/certificate picker routing.
+- Construction-time focus handles and focus enums that ordinary input entities
+  now own are removed from terminal, transfer, network, AI and security state.
+  The remaining SSH-key focus enum still drives key/certificate picker routing.
   Process nice-value editing now uses its localized placeholder, and activity
   drag payloads carry only the tab identity consumed by the drop path.
 - Workspace split tests now exercise the production `dock_tab` API directly;

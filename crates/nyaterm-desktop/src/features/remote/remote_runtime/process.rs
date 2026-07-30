@@ -116,28 +116,29 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.remote_ops.request_process_signal(pid, signal) {
-            cx.notify();
-        } else {
+        if signal != "KILL" {
             self.signal_process(pid, signal, window, cx);
-        }
-    }
-
-    pub(in crate::features) fn cancel_process_signal_confirm(&mut self, cx: &mut Context<Self>) {
-        self.remote_ops.cancel_process_signal();
-        cx.notify();
-    }
-
-    pub(in crate::features) fn confirm_process_signal(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(confirm) = self.remote_ops.take_process_signal() else {
-            cx.notify();
             return;
-        };
-        self.signal_process(confirm.pid, confirm.signal, window, cx);
+        }
+        let description = self
+            .tr("processManager.confirmSignalDesc")
+            .replace("{{signal}}", signal)
+            .replace("{{pid}}", &pid.to_string())
+            .replace("{{command}}", &format!("kill -{signal} -- {pid}"));
+        self.open_confirm_dialog(
+            (
+                self.tr("processManager.confirmSignalTitle").to_string(),
+                description,
+                self.tr("common.confirm").to_string(),
+                true,
+                move |app, window, cx| {
+                    app.signal_process(pid, signal, window, cx);
+                    true
+                },
+            ),
+            window,
+            cx,
+        );
     }
 
     pub(in crate::features) fn refresh_processes(
@@ -326,7 +327,6 @@ impl NyaTermApp {
                         .set_process_status(format!("sent {signal} to pid {pid}"));
                     self.shell
                         .set_status(self.remote_ops.process_status().to_string());
-                    self.remote_ops.clear_process_signal();
                     self.remote_ops.apply_processes(processes);
                 }
                 Ok(ProcessJobOutput::Reniced {

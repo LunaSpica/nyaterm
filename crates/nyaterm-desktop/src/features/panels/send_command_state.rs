@@ -35,7 +35,7 @@ struct SendCommandComposerState {
     hex_scroll_y: f32,
 }
 
-/// How the payload is interpreted and delivered, plus the menus that set it.
+/// How the payload is interpreted and delivered.
 struct SendCommandOptionsState {
     data_type: SendCommandDataType,
     mode: SendCommandMode,
@@ -45,10 +45,6 @@ struct SendCommandOptionsState {
     count_input: String,
     interval_seconds: f64,
     interval_input: String,
-    data_menu_open: bool,
-    mode_menu_open: bool,
-    target_menu_open: bool,
-    line_ending_menu_open: bool,
 }
 
 /// In-flight send: cancellation flag and the counters shown in the bar.
@@ -73,23 +69,11 @@ pub(in crate::features) struct SendCommandPresentationState {
     pub target: SendCommandTarget,
     pub count_input: String,
     pub interval_input: String,
-    pub data_menu_open: bool,
-    pub mode_menu_open: bool,
-    pub target_menu_open: bool,
-    pub line_ending_menu_open: bool,
     pub sending: bool,
     pub completed: u32,
     pub total: u32,
     pub round: u32,
     pub rounds: u32,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(in crate::features) enum SendCommandMenu {
-    Data,
-    Mode,
-    Target,
-    LineEnding,
 }
 
 pub(in crate::features) struct SendCommandRunState {
@@ -126,10 +110,6 @@ impl SendCommandFeatureState {
                 count_input: "1".to_string(),
                 interval_seconds: 1.0,
                 interval_input: "1.00".to_string(),
-                data_menu_open: false,
-                mode_menu_open: false,
-                target_menu_open: false,
-                line_ending_menu_open: false,
             },
             progress: SendCommandProgressState {
                 sending: false,
@@ -154,10 +134,6 @@ impl SendCommandFeatureState {
             target: self.options.target.clone(),
             count_input: self.options.count_input.clone(),
             interval_input: self.options.interval_input.clone(),
-            data_menu_open: self.options.data_menu_open,
-            mode_menu_open: self.options.mode_menu_open,
-            target_menu_open: self.options.target_menu_open,
-            line_ending_menu_open: self.options.line_ending_menu_open,
             sending: self.progress.sending,
             completed: self.progress.completed,
             total: self.progress.total,
@@ -185,7 +161,6 @@ impl SendCommandFeatureState {
         if self.progress.sending {
             return None;
         }
-        self.options.close_menus();
         self.composer.control_focus = Some(control);
         Some(match control {
             SendCommandControlFocus::Count => self.sync_count_input(),
@@ -248,27 +223,6 @@ impl SendCommandFeatureState {
             SendCommandControlFocus::Count => self.sync_count_input(),
             SendCommandControlFocus::Interval => self.sync_interval_input(),
         }
-    }
-
-    pub(in crate::features) fn toggle_menu(&mut self, menu: SendCommandMenu) -> bool {
-        if self.progress.sending {
-            return false;
-        }
-        self.composer.control_focus = None;
-        let next = match menu {
-            SendCommandMenu::Data => !self.options.data_menu_open,
-            SendCommandMenu::Mode => !self.options.mode_menu_open,
-            SendCommandMenu::Target => !self.options.target_menu_open,
-            SendCommandMenu::LineEnding => !self.options.line_ending_menu_open,
-        };
-        self.options.close_menus();
-        match menu {
-            SendCommandMenu::Data => self.options.data_menu_open = next,
-            SendCommandMenu::Mode => self.options.mode_menu_open = next,
-            SendCommandMenu::Target => self.options.target_menu_open = next,
-            SendCommandMenu::LineEnding => self.options.line_ending_menu_open = next,
-        }
-        true
     }
 
     pub(in crate::features) fn clear_draft(&mut self) {
@@ -370,7 +324,6 @@ impl SendCommandFeatureState {
             return false;
         }
         self.options.target = target;
-        self.options.close_menus();
         true
     }
 
@@ -401,7 +354,6 @@ impl SendCommandFeatureState {
             return None;
         }
         self.options.data_type = data_type;
-        self.options.close_menus();
         match data_type {
             SendCommandDataType::Hex
                 if matches!(
@@ -431,7 +383,6 @@ impl SendCommandFeatureState {
             return None;
         }
         self.options.mode = mode;
-        self.options.close_menus();
         Some(self.reset_default_interval())
     }
 
@@ -443,7 +394,6 @@ impl SendCommandFeatureState {
             return false;
         }
         self.options.line_ending = line_ending;
-        self.options.close_menus();
         true
     }
 
@@ -507,13 +457,6 @@ impl SendCommandComposerState {
 
 /// Option edits that only touch how the payload is interpreted and delivered.
 impl SendCommandOptionsState {
-    fn close_menus(&mut self) {
-        self.data_menu_open = false;
-        self.mode_menu_open = false;
-        self.target_menu_open = false;
-        self.line_ending_menu_open = false;
-    }
-
     /// Parses the repeat-count field.
     ///
     /// `live` means the user is still typing, so an unparsable value is left
@@ -570,7 +513,7 @@ mod tests {
 
     use crate::send_command::{SendCommandControlFocus, SendCommandDataType, SendCommandMode};
 
-    use super::{SendCommandFeatureFocus, SendCommandFeatureState, SendCommandMenu};
+    use super::{SendCommandFeatureFocus, SendCommandFeatureState};
 
     fn send_command_state(cx: &TestAppContext) -> SendCommandFeatureState {
         cx.update(|cx| {
@@ -581,16 +524,9 @@ mod tests {
     }
 
     #[test]
-    fn send_command_owner_keeps_menus_and_data_mode_compatible() {
+    fn send_command_owner_keeps_data_and_mode_compatible() {
         let cx = TestAppContext::single();
         let mut state = send_command_state(&cx);
-
-        assert!(state.toggle_menu(SendCommandMenu::Data));
-        assert!(state.presentation().data_menu_open);
-        assert!(state.toggle_menu(SendCommandMenu::Mode));
-        let presentation = state.presentation();
-        assert!(!presentation.data_menu_open);
-        assert!(presentation.mode_menu_open);
 
         assert_eq!(
             state.set_data_type(SendCommandDataType::Hex),
@@ -599,7 +535,6 @@ mod tests {
         let presentation = state.presentation();
         assert_eq!(presentation.data_type, SendCommandDataType::Hex);
         assert_eq!(presentation.mode, SendCommandMode::Byte);
-        assert!(!presentation.mode_menu_open);
 
         assert_eq!(
             state.set_mode(SendCommandMode::Packet),
@@ -648,7 +583,6 @@ mod tests {
         assert!(!run.infinite);
         assert_eq!(run.rounds, 1);
         assert!(state.is_sending());
-        assert!(!state.toggle_menu(SendCommandMenu::Target));
         assert!(!state.set_target(crate::send_command::SendCommandTarget::AllCompatible));
         assert_eq!(state.set_data_type(SendCommandDataType::Hex), None);
         state.set_progress_round(1);

@@ -1,7 +1,8 @@
 use gpui::{
     App, AppContext, Bounds, Context, Entity, IntoElement, Render, Subscription, Window,
-    WindowBounds, WindowHandle, WindowKind, WindowOptions, div, prelude::*, px, rgb, size,
+    WindowBounds, WindowKind, WindowOptions, div, prelude::*, px, rgb, size,
 };
+use nyaterm_ui::{NyaWindowHandle, nya_root};
 
 use crate::features::{NyaTermApp, child_window_header, child_window_titlebar};
 use crate::models::ConnectionEditorField;
@@ -166,7 +167,7 @@ fn open_connection_editor_window_now_from_app(app: Entity<NyaTermApp>, cx: &mut 
     let bounds = Bounds::centered(None, size(px(520.), px(620.)), cx);
     let close_app = app.clone();
     let view_app = app.clone();
-    let result: anyhow::Result<WindowHandle<ConnectionEditorWindow>> = cx.open_window(
+    let result: anyhow::Result<NyaWindowHandle> = cx.open_window(
         WindowOptions {
             titlebar: child_window_titlebar(title),
             window_bounds: Some(WindowBounds::Windowed(bounds)),
@@ -186,7 +187,8 @@ fn open_connection_editor_window_now_from_app(app: Entity<NyaTermApp>, cx: &mut 
             });
             let editor_focus = view_app.read(cx).connection_state.editor_focus_handle();
             window.focus(&editor_focus);
-            cx.new(|cx| ConnectionEditorWindow::new(view_app, cx))
+            let view = cx.new(|cx| ConnectionEditorWindow::new(view_app, cx));
+            cx.new(|cx| nya_root(view, window, cx))
         },
     );
 

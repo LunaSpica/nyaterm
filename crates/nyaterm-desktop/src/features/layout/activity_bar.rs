@@ -5,9 +5,10 @@ use gpui::{
 
 use crate::features::NyaTermApp;
 use crate::features::runtime_jobs::ActivitySide;
-use crate::features::shell::{ActivityBarDragPayload, ActivityBarDragPreview, ChromeTooltip};
+use crate::features::shell::{ActivityBarDragPayload, ActivityBarDragPreview};
 use crate::features::view_widgets::activity_icon;
 use crate::models::{ActivityBarEntry, ActivityBarZone};
+use nyaterm_ui::NyaTooltip;
 
 impl NyaTermApp {
     pub(in crate::features) fn activity_bar_context_menu_overlay(
@@ -382,7 +383,7 @@ impl NyaTermApp {
             })
             .tooltip({
                 let title = tooltip.clone();
-                move |_, cx| cx.new(|_| ChromeTooltip::new(title.clone())).into()
+                move |window, cx| NyaTooltip::new(title.clone()).build(window, cx)
             })
             .on_click(cx.listener(move |this, _, window, cx| {
                 this.activate_activity_entry(entry, window, cx);

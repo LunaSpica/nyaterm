@@ -6,7 +6,7 @@ use crate::widgets::empty_panel;
 
 use super::docker::{
     DockerComposePanelState, DockerContainersPanelState, DockerLabels, DockerRenderContext,
-    DockerTabBarLabels, docker_compose_panel, docker_compose_project_matches, docker_confirm_panel,
+    DockerTabBarLabels, docker_compose_panel, docker_compose_project_matches,
     docker_container_matches, docker_containers_panel, docker_details_panel, docker_image_matches,
     docker_images_panel, docker_network_matches, docker_networks_panel, docker_overview_strip,
     docker_tab_bar, docker_volume_matches, docker_volumes_panel,
@@ -70,8 +70,6 @@ impl NyaTermApp {
             copy: self.tr("common.copyToClipboard"),
             refresh: self.tr("common.refresh"),
             close: self.tr("common.close"),
-            cancel: self.tr("common.cancel"),
-            confirm: self.tr("common.confirm"),
             state_created: self.tr("dockerManager.stateLabels.created"),
             state_dead: self.tr("dockerManager.stateLabels.dead"),
             state_exited: self.tr("dockerManager.stateLabels.exited"),
@@ -303,11 +301,6 @@ impl NyaTermApp {
                         .cloned(),
                     labels,
                     cx,
-                ))
-            })
-            .when_some(docker.confirm.clone(), |this, confirm| {
-                this.child(docker_confirm_panel(
-                    palette, dialog_bg, confirm, labels, cx,
                 ))
             })
     }

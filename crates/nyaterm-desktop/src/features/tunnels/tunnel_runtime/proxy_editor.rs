@@ -12,6 +12,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let editing = proxy_id.is_some();
         let proxy = match proxy_id.as_deref() {
             Some(id) => self
                 .tunnel_state
@@ -59,9 +60,30 @@ impl NyaTermApp {
         // the next proxy to seed from its own values.
         self.forget_text_inputs("network.proxy-editor.");
         self.shell.set_status("proxy editor opened".to_string());
-        let proxy_editor_focus = self.connection_state.network_proxy_editor_focus_handle();
-        window.focus(&proxy_editor_focus);
         cx.notify();
+        self.open_form_dialog(
+            (
+                if editing {
+                    self.tr("network.editProxy").to_string()
+                } else {
+                    self.tr("network.newProxy").to_string()
+                },
+                520.,
+                self.tr("common.save").to_string(),
+                |app, _, cx| app.network_proxy_editor_dialog_content(cx),
+                |app, _, cx| {
+                    app.save_network_proxy_editor(cx);
+                    let saved = app.connection_state.active_network_proxy_editor().is_none();
+                    if saved {
+                        app.forget_text_inputs("network.proxy-editor.");
+                    }
+                    saved
+                },
+                |app, cx| app.close_network_proxy_editor(cx),
+            ),
+            window,
+            cx,
+        );
     }
 
     pub(in crate::features) fn close_network_proxy_editor(&mut self, cx: &mut Context<Self>) {
@@ -95,21 +117,30 @@ impl NyaTermApp {
         }
     }
 
-    pub(in crate::features) fn cycle_network_proxy_protocol(&mut self, cx: &mut Context<Self>) {
-        if let Some(protocol) = self.connection_state.cycle_network_proxy_protocol() {
+    pub(in crate::features) fn set_network_proxy_protocol(
+        &mut self,
+        protocol: &str,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(protocol) = self.connection_state.set_network_proxy_protocol(protocol) {
             self.shell
                 .set_status(format!("proxy protocol set to {protocol}"));
         }
         cx.notify();
     }
 
-    pub(in crate::features) fn cycle_network_proxy_group(&mut self, cx: &mut Context<Self>) {
-        if self.connection_state.cycle_network_proxy_group(
+    pub(in crate::features) fn set_network_proxy_group(
+        &mut self,
+        group_id: Option<String>,
+        cx: &mut Context<Self>,
+    ) {
+        let group_id = group_id.filter(|id| {
             self.tunnel_state
                 .proxy_groups()
                 .iter()
-                .map(|group| group.id.as_str()),
-        ) {
+                .any(|group| group.id == *id)
+        });
+        if self.connection_state.set_network_proxy_group(group_id) {
             self.shell.set_status("proxy group changed".to_string());
         }
         cx.notify();

@@ -11,8 +11,6 @@ mod search_engines;
 mod terminal_remote;
 mod window;
 
-pub(in crate::features) use window::SettingsWindow;
-
 use helpers::open_external_url_simple;
 
 impl NyaTermApp {

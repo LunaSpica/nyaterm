@@ -1,11 +1,10 @@
 use gpui::{
-    AnyElement, App, ClickEvent, FontWeight, InteractiveElement as _, IntoElement,
-    ParentElement as _, SharedString, StatefulInteractiveElement as _, Styled as _, Window, div,
+    AnyElement, FontWeight, IntoElement, ParentElement as _, SharedString, Styled as _, div,
     prelude::FluentBuilder as _, px, rgb,
 };
 use nyaterm_transport::SftpFileEntry;
 
-use crate::models::{TransferPropertiesField, TransferPropertiesState};
+use crate::models::TransferPropertiesState;
 use crate::theme::ThemePalette;
 
 use super::format_permissions_octal;
@@ -80,36 +79,6 @@ pub(in crate::features::pages::transfers) fn property_section_heading(
         .child(label.to_ascii_uppercase())
 }
 
-pub(in crate::features::pages::transfers) fn property_input_row(
-    palette: ThemePalette,
-    id: &'static str,
-    label: &'static str,
-    input: AnyElement,
-    disabled: bool,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    div()
-        .flex()
-        .items_center()
-        .gap_3()
-        .child(
-            div()
-                .w(px(72.))
-                .text_xs()
-                .text_color(rgb(palette.text_muted))
-                .child(label),
-        )
-        .child(
-            div()
-                .id(SharedString::from(id))
-                .flex_1()
-                .min_w_0()
-                .when(disabled, |this| this.opacity(0.65))
-                .on_click(on_click)
-                .child(input),
-        )
-}
-
 pub(in crate::features::pages::transfers) fn transfer_properties_state_from_entry(
     entry: SftpFileEntry,
     session_id: Option<String>,
@@ -128,7 +97,6 @@ pub(in crate::features::pages::transfers) fn transfer_properties_state_from_entr
         recursive: false,
         saving: false,
         error: None,
-        focused_field: TransferPropertiesField::Mode,
     }
 }
 

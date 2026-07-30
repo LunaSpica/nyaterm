@@ -14,13 +14,6 @@ impl NetworkTab {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct NetworkDeleteConfirmState {
-    pub(crate) tab: NetworkTab,
-    pub(crate) id: String,
-    pub(crate) label: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct NetworkGroupEditorState {
     pub(crate) tab: NetworkTab,
     pub(crate) id: Option<String>,
@@ -29,21 +22,7 @@ pub(crate) struct NetworkGroupEditorState {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct NetworkGroupDeleteConfirmState {
-    pub(crate) tab: NetworkTab,
-    pub(crate) id: String,
-    pub(crate) label: String,
-    pub(crate) item_count: usize,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct NetworkMovePickerState {
-    pub(crate) tab: NetworkTab,
-    pub(crate) id: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct NetworkItemMenuState {
     pub(crate) tab: NetworkTab,
     pub(crate) id: String,
 }

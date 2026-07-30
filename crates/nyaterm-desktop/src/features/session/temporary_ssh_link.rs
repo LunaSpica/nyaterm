@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
-use gpui::{Context, KeyDownEvent, Window};
+use gpui::{Context, Window};
 use nyaterm_core::AiExecutionProfile;
 use nyaterm_transport::SshSessionConfig;
 
 use super::NativeHostKeyVerifier;
-use crate::features::{NyaTermApp, SavedConnectionStartOptions, TextInputSetup};
+use crate::features::{NyaTermApp, SavedConnectionStartOptions};
 use crate::temporary_ssh_link::{TemporarySshLinkConfig, parse_temporary_ssh_link};
 
 impl NyaTermApp {
@@ -22,16 +22,20 @@ impl NyaTermApp {
         }
         self.session.dialogs.open_temporary_ssh_link();
         self.forget_text_inputs("temporary-ssh.link");
-        let draft = self.session.dialogs.temporary_ssh_link_draft().to_string();
-        let field = self.text_input(
-            "temporary-ssh.link",
-            &draft,
-            TextInputSetup::placeholder(self.tr("temporarySsh.placeholder")),
-            cx,
-        );
         self.shell
             .set_status("temporary SSH link opened".to_string());
-        window.focus(&field.read(cx).focus_handle());
+        self.open_form_dialog(
+            (
+                self.tr("temporarySsh.title").to_string(),
+                480.,
+                self.tr("temporarySsh.connect").to_string(),
+                |app, _, cx| app.temporary_ssh_link_dialog_content(cx),
+                |app, window, cx| app.submit_temporary_ssh_link_dialog(window, cx),
+                |app, cx| app.close_temporary_ssh_link_dialog(cx),
+            ),
+            window,
+            cx,
+        );
         cx.notify();
     }
 
@@ -47,7 +51,7 @@ impl NyaTermApp {
         &mut self,
         _window: &mut Window,
         cx: &mut Context<Self>,
-    ) {
+    ) -> bool {
         if self.session.start_has_pending() {
             self.session
                 .dialogs
@@ -55,7 +59,7 @@ impl NyaTermApp {
             self.shell
                 .set_status("wait for the pending session to finish connecting".to_string());
             cx.notify();
-            return;
+            return false;
         }
 
         let parsed = match parse_temporary_ssh_link(self.session.dialogs.temporary_ssh_link_draft())
@@ -68,7 +72,7 @@ impl NyaTermApp {
                 self.shell
                     .set_status("temporary SSH link is invalid".to_string());
                 cx.notify();
-                return;
+                return false;
             }
         };
         let config = self.temporary_ssh_session_config(parsed.clone());
@@ -82,21 +86,7 @@ impl NyaTermApp {
             SavedConnectionStartOptions::default(),
             cx,
         );
-    }
-
-    pub(in crate::features) fn handle_temporary_ssh_link_key_down(
-        &mut self,
-        event: &KeyDownEvent,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.mark_user_activity();
-        let keystroke = &event.keystroke;
-        match keystroke.key.as_str() {
-            "escape" => self.close_temporary_ssh_link_dialog(cx),
-            "enter" => self.submit_temporary_ssh_link_dialog(window, cx),
-            _ => {}
-        }
+        true
     }
 
     pub(in crate::features) fn apply_temporary_ssh_link(

@@ -1,4 +1,4 @@
-use gpui::{App, ClickEvent, IntoElement, SharedString, Window, div, prelude::*, px, rgb, svg};
+use gpui::{App, ClickEvent, IntoElement, SharedString, Window, div, prelude::*, px, rgb};
 
 use crate::features::IconDef;
 use crate::features::view_widgets::mono_icon;
@@ -62,51 +62,6 @@ pub(super) fn terminal_ctx_item_with_icon(
         );
     }
     row
-}
-
-pub(super) fn terminal_ctx_submenu_item(
-    palette: crate::theme::ThemePalette,
-    id: impl Into<String>,
-    label: impl Into<String>,
-    icon_path: &'static str,
-    active: bool,
-    on_hover: impl Fn(&bool, &mut Window, &mut App) + 'static,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    div()
-        .id(SharedString::from(id.into()))
-        .h(px(28.))
-        .px_3()
-        .flex()
-        .items_center()
-        .justify_between()
-        .gap_3()
-        .text_size(px(12.))
-        .text_color(rgb(palette.text))
-        .cursor_pointer()
-        .when(active, |this| this.bg(rgb(palette.hover)))
-        .hover(|this| this.bg(rgb(palette.hover)))
-        .on_hover(on_hover)
-        .on_click(on_click)
-        .child(
-            div()
-                .flex()
-                .items_center()
-                .gap_2()
-                .child(mono_icon(icon_path, rgb(palette.text_muted).into(), 14.))
-                .child(label.into()),
-        )
-        .child(
-            svg()
-                .size(px(12.))
-                .flex_none()
-                .path("icons/fe/forward.svg")
-                .text_color(rgb(palette.text_dimmed)),
-        )
-}
-
-pub(super) fn terminal_ctx_separator(palette: crate::theme::ThemePalette) -> impl IntoElement {
-    div().h(px(1.)).my_1().mx_2().bg(rgb(palette.border))
 }
 
 pub(super) fn open_external_url(url: &str) -> Result<(), String> {

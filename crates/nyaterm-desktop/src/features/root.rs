@@ -20,24 +20,20 @@ const WALLPAPER_TILE_MIN_SIZE: f32 = 8.;
 /// with a fallback that recomputed exactly these expressions.
 struct OverlayFlags {
     tab_actions_open: bool,
-    rename_open: bool,
     color_picker_open: bool,
     session_info_open: bool,
-    startup_command_open: bool,
-    temporary_ssh_link_open: bool,
     multi_line_paste_open: bool,
     terminal_actions_open: bool,
-    terminal_context_menu_open: bool,
     action_link_menu_open: bool,
     action_link_tooltip_open: bool,
     command_suggestions_open: bool,
     credential_suggestions_open: bool,
-    close_all_sessions_confirm_open: bool,
     locked: bool,
 }
 
 impl NyaTermApp {
     pub(crate) fn start_after_window_open(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.sync_component_theme(cx);
         self.refresh_window_render_inputs(window, cx);
         self.start_terminal_frame_event_wake(cx);
         self.try_restore_open_tabs(window, cx);
@@ -87,12 +83,10 @@ impl NyaTermApp {
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|this, _, _, cx| {
-                    let changed = this.shell.close_root_menus()
-                        || this.remote_ops.docker_menus_open()
-                        || this.connection_state.list_more_menu_is_open();
+                    let changed =
+                        this.shell.close_root_menus() || this.remote_ops.docker_menus_open();
                     if changed {
                         this.remote_ops.close_docker_menus();
-                        this.connection_state.close_list_more_menu();
                         cx.notify();
                     }
                 }),
@@ -450,27 +444,17 @@ impl NyaTermApp {
         let terminal_overlays = self.terminal.overlay_visibility();
         let overlay = OverlayFlags {
             tab_actions_open: self.session.dialog_tab_actions_session_id().is_some(),
-            rename_open: self.session.dialog_rename_is_open(),
             color_picker_open: self.session.dialog_color_picker_is_open(),
             session_info_open: self.session.dialog_session_info_is_open(),
-            startup_command_open: self.session.dialog_startup_command_is_open(),
-            temporary_ssh_link_open: self.session.dialog_temporary_ssh_link_is_open(),
             multi_line_paste_open: terminal_overlays.paste_review,
             terminal_actions_open: terminal_overlays.actions,
-            terminal_context_menu_open: terminal_overlays.context_menu,
             action_link_menu_open: terminal_overlays.action_link_menu,
             action_link_tooltip_open: terminal_overlays.action_link_tooltip,
             command_suggestions_open: self.terminal.command_suggestions_open(),
             credential_suggestions_open: self.terminal.credential_suggestions_open(),
-            close_all_sessions_confirm_open: self
-                .session
-                .dialog_close_all_sessions_confirm_is_open(),
             locked: self.security.screen_locked(),
         };
         let quick_switch_open = self.quick_switch_open(cx);
-        let transfer_properties_open = self
-            .transfer
-            .properties_dialog_is_open_for_session(self.session.active_id());
         let transfer_editor_open = self.transfer.editor_inline_overlay_is_open();
         let transfer_external_sync_open = self.active_external_editor_sync_prompt().is_some();
         let ssh_auth_prompt_open = self.session.prompt_has_active_ssh_auth();
@@ -479,50 +463,17 @@ impl NyaTermApp {
             .when(overlay.tab_actions_open, |this| {
                 this.child(self.tab_actions_overlay(cx))
             })
-            .when(overlay.rename_open, |this| {
-                this.child(self.rename_session_overlay(cx))
-            })
             .when(overlay.color_picker_open, |this| {
                 this.child(self.tab_color_picker_overlay(cx))
             })
             .when(overlay.session_info_open, |this| {
                 this.child(self.session_info_overlay(cx))
             })
-            .when(overlay.startup_command_open, |this| {
-                this.child(self.startup_command_overlay(cx))
-            })
-            .when(overlay.temporary_ssh_link_open, |this| {
-                this.child(self.temporary_ssh_link_overlay(cx))
-            })
-            .when(self.transfer.move_dialog().is_some(), |this| {
-                this.child(self.transfer_move_overlay(cx))
-            })
-            .when(self.transfer.delete_dialog().is_some(), |this| {
-                this.child(self.transfer_delete_overlay(cx))
-            })
-            .when(self.transfer.transfer_job_delete().is_some(), |this| {
-                this.child(self.transfer_job_delete_overlay(cx))
-            })
             .when(self.transfer.transfer_job_menu().is_some(), |this| {
                 this.child(self.transfer_job_menu_overlay(cx))
             })
-            .when(self.transfer.new_folder_dialog().is_some(), |this| {
-                this.child(self.transfer_new_folder_overlay(cx))
-            })
-            .when(self.transfer.new_file_dialog().is_some(), |this| {
-                this.child(self.transfer_new_file_overlay(cx))
-            })
-            .when(self.transfer.new_symlink_dialog().is_some(), |this| {
-                this.child(self.transfer_new_symlink_overlay(cx))
-            })
-            .when(transfer_properties_open, |this| {
-                this.child(self.transfer_properties_overlay(cx))
-            })
             .when(transfer_editor_open, |this| {
                 this.child(self.transfer_editor_overlay(cx))
-            })
-            .when(self.transfer.unknown_file_dialog().is_some(), |this| {
-                this.child(self.transfer_unknown_file_overlay(cx))
             })
             .when(transfer_external_sync_open, |this| {
                 this.child(self.transfer_external_sync_prompt_overlay(cx))
@@ -547,23 +498,15 @@ impl NyaTermApp {
             .when(overlay.terminal_actions_open, |this| {
                 this.child(self.terminal_actions_overlay(cx))
             })
-            .children(self.network_dialog_overlay(cx))
-            .when(overlay.terminal_context_menu_open, |this| {
-                this.child(self.terminal_context_menu_overlay(cx))
-            })
             .when(overlay.action_link_menu_open, |this| {
                 this.child(self.action_link_menu_overlay(cx))
             })
             .when(
                 overlay.action_link_tooltip_open
                     && !overlay.action_link_menu_open
-                    && !overlay.terminal_context_menu_open
                     && !self.translation.dialog_is_open(),
                 |this| this.child(self.action_link_tooltip_overlay(cx)),
             )
-            .when(self.translation.dialog_is_open(), |this| {
-                this.child(self.translation_dialog_overlay(cx))
-            })
             .when(overlay.command_suggestions_open, |this| {
                 this.child(self.command_suggestions_overlay(cx))
             })
@@ -580,35 +523,11 @@ impl NyaTermApp {
             .when(self.commands.quick_editor_is_inline(), |this| {
                 this.child(self.quick_command_editor_overlay(cx))
             })
-            .when(self.commands.quick_delete().is_some(), |this| {
-                this.child(self.quick_command_delete_overlay(cx))
-            })
             .when(self.commands.quick_details().is_some(), |this| {
                 this.child(self.quick_command_details_overlay(cx))
             })
-            .when(self.commands.quick_row_menu().is_some(), |this| {
-                this.child(self.quick_command_row_menu_overlay(cx))
-            })
-            .when(self.commands.quick_category_menu().is_some(), |this| {
-                this.child(self.quick_command_category_menu_overlay(cx))
-            })
-            .when(self.session.active_menu().is_some(), |this| {
-                this.child(self.active_session_menu_overlay(cx))
-            })
-            .when(self.commands.quick_category_delete().is_some(), |this| {
-                this.child(self.quick_command_category_delete_overlay(cx))
-            })
-            .when(self.commands.quick_category_rename().is_some(), |this| {
-                this.child(self.quick_command_category_rename_overlay(cx))
-            })
             .when(self.commands.quick_variable_prompt().is_some(), |this| {
                 this.child(self.quick_command_variable_prompt_overlay(cx))
-            })
-            .when(self.commands.quick_import_dialog_is_open(), |this| {
-                this.child(self.quick_command_import_overlay(cx))
-            })
-            .when(self.connection_state.import_dialog_is_open(), |this| {
-                this.child(self.connection_import_overlay(cx))
             })
             .when(quick_switch_open, |this| {
                 this.child(self.quick_switch_overlay(cx))
@@ -619,14 +538,8 @@ impl NyaTermApp {
             .when(overlay.locked, |this| {
                 this.child(self.lock_screen_overlay(window, cx))
             })
-            .when(overlay.close_all_sessions_confirm_open, |this| {
-                this.child(self.close_all_sessions_confirm_overlay(cx))
-            })
             .when(self.shell.about_is_open(), |this| {
                 this.child(self.about_overlay(cx))
-            })
-            .when(self.update.dialog_is_open(), |this| {
-                this.child(self.update_overlay(cx))
             })
             .when(self.modal_child_window_open(), |this| {
                 this.child(self.modal_owner_backdrop(cx))

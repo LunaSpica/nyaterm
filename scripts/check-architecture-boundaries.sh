@@ -149,7 +149,7 @@ check_exact_struct_fields \
   "NyaTermApp must remain a composition root with the approved owner set" \
   NyaTermApp \
   crates/nyaterm-desktop/src/features/app_state/mod.rs \
-  stores runtime connection_state text_inputs commands remote_ops security settings ai terminal \
+  stores runtime connection_state text_inputs selects commands remote_ops security settings ai terminal \
   send_command transfer translation update cloud_sync session shell sync_input recording tunnel_state
 check_no_matches \
   "features/mod.rs must not become a shared domain-constant bucket" \
@@ -2118,6 +2118,11 @@ check_no_matches \
   "panel stack network projection must use ConnectionFeatureState methods" \
   'connection_state\.network\.(tab|delete_confirm|group_editor|group_delete_confirm|item_menu|move_picker|expanded_sections|tunnel_editor|proxy_editor|group_editor_focus|tunnel_editor_focus|proxy_editor_focus)(\.|[[:space:]]|==|,|\)|$)' \
   crates/nyaterm-desktop/src/features/shell/panel_stack_runtime.rs
+
+check_no_matches \
+  "desktop feature modules must use nyaterm-ui wrappers instead of gpui-component directly" \
+  'use[[:space:]]+gpui_component|gpui_component::' \
+  crates/nyaterm-desktop/src/features
 
 # Obvious secret-bearing Debug derives are forbidden. This is intentionally
 # conservative; if a secret-bearing type really needs Debug, implement a custom

@@ -1,59 +1,31 @@
-use gpui::{
-    Context, IntoElement, MouseButton, MouseDownEvent, SharedString, div, prelude::*, px, rgb,
-};
+use gpui::{ClipboardItem, Context};
+use nyaterm_ui::NyaMenuItem;
 
 use crate::action_links::{ActionLinkAction, actions_for_match, find_action_links};
 use crate::features::NyaTermApp;
-
-use crate::models::{
-    NavItem, TerminalContextMenuState, TerminalContextSubmenu, TerminalSearchMode,
-};
+use crate::models::{NavItem, TerminalSearchMode};
 
 use super::helpers::{
-    available_translation_providers, clamp_menu_position, open_external_url, search_engine_url,
-    selection_as_openable_url, terminal_ctx_item_with_icon, terminal_ctx_separator,
-    terminal_ctx_submenu_item,
+    available_translation_providers, open_external_url, search_engine_url,
+    selection_as_openable_url,
 };
 
 impl NyaTermApp {
-    pub(in crate::features) fn open_terminal_context_menu(
-        &mut self,
-        event: &MouseDownEvent,
-        cx: &mut Context<Self>,
-    ) {
-        let selected_text = self.selected_terminal_text().unwrap_or_default();
+    pub(in crate::features) fn prepare_terminal_context_menu(&mut self, cx: &mut Context<Self>) {
         self.terminal.menus.action_link_menu = None;
         self.terminal.menus.action_link_tooltip = None;
         self.terminal.assist.command_suggestions = None;
         self.terminal.assist.credential_suggestions = None;
-        self.terminal.menus.context_menu = Some(TerminalContextMenuState {
-            x: event.position.x,
-            y: event.position.y,
-            selected_text,
-            submenu: None,
-        });
         self.shell
             .set_status("terminal context menu opened".to_string());
         cx.notify();
     }
 
-    pub(in crate::features) fn close_terminal_context_menu(&mut self, cx: &mut Context<Self>) {
-        if self.terminal.menus.context_menu.take().is_some() {
-            self.shell
-                .set_status("terminal context menu closed".to_string());
-            cx.notify();
-        }
-    }
-
-    pub(in crate::features) fn terminal_context_menu_overlay(
+    pub(in crate::features) fn terminal_context_menu_items(
         &mut self,
+        selected: String,
         cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        let palette = self.theme_palette();
-        let Some(menu) = self.terminal.menus.context_menu.clone() else {
-            return div().into_any_element();
-        };
-        let selected = menu.selected_text.clone();
+    ) -> Vec<NyaMenuItem> {
         let has_selection = !selected.is_empty();
         let shortcut = |id: &str, fallback: &str| self.display_shortcut_for(id, fallback);
         let copy_sc = shortcut("terminal.copy", "Ctrl+Shift+C");
@@ -62,147 +34,27 @@ impl NyaTermApp {
         let find_sc = shortcut("terminal.find", "Ctrl+Shift+F");
         let clear_sc = shortcut("terminal.clear", "Ctrl+L");
         let select_all_sc = shortcut("terminal.selectAll", "Ctrl+Shift+A");
-        let selected_for_find = selected.clone();
-        let selected_for_paste = selected.clone();
-        let search_engines: Vec<(String, String, Option<String>)> = self
-            .settings
-            .summary()
-            .search_custom_engines
-            .iter()
-            .filter(|engine| {
-                engine.show_in_menu
-                    && !engine.name.trim().is_empty()
-                    && !engine.url_template.trim().is_empty()
-            })
-            .map(|engine| {
-                (
-                    engine.name.clone(),
-                    engine.url_template.clone(),
-                    engine.icon.clone(),
-                )
-            })
-            .collect();
-        let terminal_ai_actions: Vec<(String, String, String)> =
-            if self.ai.settings_config().enabled {
-                self.ai
-                    .settings_config()
-                    .terminal_ai_actions
-                    .iter()
-                    .filter(|action| action.enabled && !action.name.trim().is_empty())
-                    .map(|action| {
-                        (
-                            action.id.clone(),
-                            action.name.clone(),
-                            action.prompt.clone(),
-                        )
-                    })
-                    .collect()
-            } else {
-                Vec::new()
-            };
-        let translation_providers: Vec<(String, String)> =
-            available_translation_providers(self.translation.settings())
-                .into_iter()
-                .map(|(id, _)| {
-                    let label = self
-                        .tr(match id.as_str() {
-                            "google" => "translation.google",
-                            "microsoft" => "translation.microsoft",
-                            "deepl" => "translation.deepl",
-                            "baidu" => "translation.baidu",
-                            "ali" => "translation.ali",
-                            "youdao" => "translation.youdao",
-                            _ => "translation.provider",
-                        })
-                        .to_string();
-                    (id, label)
-                })
-                .collect();
-        let selection_link_kind: Option<&'static str> = None;
-        let selection_actions: Vec<(String, ActionLinkAction)> =
-            if self.settings.summary().terminal_action_links_enabled && has_selection {
-                let trimmed = selected.trim();
-                let matchers = &self.settings.summary().terminal_action_links_matchers;
-                let entity = find_action_links(trimmed, matchers, true)
-                    .into_iter()
-                    .find(|item| item.text == trimmed || item.value == trimmed)
-                    .or_else(|| {
-                        find_action_links(trimmed, matchers, true)
-                            .into_iter()
-                            .next()
-                    });
-                entity
-                    .map(|item| {
-                        let kind = item.kind.label().to_string();
-                        actions_for_match(&item)
-                            .into_iter()
-                            .map(|action| (kind.clone(), action))
-                            .collect()
-                    })
-                    .unwrap_or_default()
-            } else {
-                Vec::new()
-            };
-        let _ = selection_link_kind;
-
-        let (viewport_w, viewport_h) = self.shell.viewport_size();
-        // Approximate height from max-h for clamp (scrollable menus can be shorter).
-        let (menu_x, menu_y) = clamp_menu_position(
-            f32::from(menu.x),
-            f32::from(menu.y),
-            248.,
-            420.,
-            viewport_w,
-            viewport_h,
-        );
-        let mut items = div()
-            .id(SharedString::from("terminal-context-menu"))
-            .absolute()
-            .top(px(menu_y))
-            .left(px(menu_x))
-            .w(px(248.))
-            .max_h(px(420.))
-            .overflow_y_scroll()
-            .rounded_md()
-            .border_1()
-            .border_color(rgb(palette.border))
-            .bg(self.shell_surface_color(palette.surface))
-            .shadow_lg()
-            .py_1()
-            .flex()
-            .flex_col()
-            .on_mouse_down(MouseButton::Left, |_, _, _| {})
-            .on_click(|_, _, cx| cx.stop_propagation());
+        let mut items = Vec::new();
 
         if has_selection {
-            items = items
-                .child(terminal_ctx_item_with_icon(
-                    palette,
-                    "term-ctx-copy",
-                    self.tr("terminalCtx.copy"),
-                    Some(crate::features::IconDef::mono(
-                        "icons/copy.svg",
-                        palette.text_muted,
-                    )),
-                    Some(copy_sc),
-                    cx.listener(|this, _, _, cx| {
-                        this.close_terminal_context_menu(cx);
-                        let _ = this.copy_terminal_selection(cx);
-                    }),
-                ))
-                .when_some(selection_as_openable_url(&selected), |this, url| {
-                    let open_url = url.clone();
-                    this.child(terminal_ctx_item_with_icon(
-                        palette,
-                        "term-ctx-open-url",
-                        self.tr("terminalCtx.openLink"),
-                        Some(crate::features::IconDef::mono(
-                            "icons/conn/connect.svg",
-                            palette.text_muted,
-                        )),
-                        None,
-                        cx.listener(move |this, _, _, cx| {
-                            this.close_terminal_context_menu(cx);
+            let selected_for_copy = selected.clone();
+            items.push(
+                NyaMenuItem::action(self.tr("terminalCtx.copy"))
+                    .icon("icons/copy.svg")
+                    .shortcut(copy_sc)
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        cx.write_to_clipboard(ClipboardItem::new_string(selected_for_copy.clone()));
+                        this.shell
+                            .set_status("copied terminal selection".to_string());
+                        cx.notify();
+                    })),
+            );
+            if let Some(url) = selection_as_openable_url(&selected) {
+                let open_url = url.clone();
+                items.push(
+                    NyaMenuItem::action(self.tr("terminalCtx.openLink"))
+                        .icon("icons/conn/connect.svg")
+                        .on_click(cx.listener(move |this, _, _, cx| {
                             match open_external_url(&open_url) {
                                 Ok(()) => {
                                     this.shell.set_status(format!("opened link: {open_url}"));
@@ -212,397 +64,273 @@ impl NyaTermApp {
                                 }
                             }
                             cx.notify();
-                        }),
-                    ))
-                })
-                .children(selection_actions.into_iter().map(|(kind, action)| {
-                    let label = format!("{kind} · {}", action.label);
-                    let command = action.command.clone();
-                    let open_url = action.open_url.clone();
-                    terminal_ctx_item_with_icon(
-                        palette,
-                        format!("term-ctx-action-link-{}", action.id),
-                        label,
-                        Some(crate::features::IconDef::mono(
-                            "icons/fe/forward.svg",
-                            palette.text_muted,
-                        )),
-                        None,
-                        cx.listener(move |this, _, _, cx| {
-                            this.close_terminal_context_menu(cx);
-                            if let Some(url) = open_url.clone() {
-                                match open_external_url(&url) {
-                                    Ok(()) => {
-                                        this.shell.set_status(format!("opened link: {url}"));
-                                    }
-                                    Err(error) => {
-                                        this.shell.set_status(format!("open link failed: {error}"));
-                                    }
-                                }
-                                cx.notify();
-                                return;
-                            }
-                            if let Some(command) = command.clone() {
-                                this.execute_action_link_command(command, cx);
-                            }
-                        }),
-                    )
-                }))
-                .child(terminal_ctx_item_with_icon(
-                    palette,
-                    "term-ctx-find-selection",
-                    self.tr("terminalCtx.find"),
-                    Some(crate::features::IconDef::mono(
-                        "icons/fe/search.svg",
-                        palette.text_muted,
-                    )),
-                    Some(find_sc),
-                    cx.listener(move |this, _, window, cx| {
-                        this.close_terminal_context_menu(cx);
+                        })),
+                );
+            }
+
+            items.extend(self.terminal_selection_action_link_items(&selected, cx));
+
+            let selected_for_find = selected.clone();
+            items.push(
+                NyaMenuItem::action(self.tr("terminalCtx.find"))
+                    .icon("icons/fe/search.svg")
+                    .shortcut(find_sc)
+                    .on_click(cx.listener(move |this, _, window, cx| {
                         this.terminal.search.query = selected_for_find.clone();
                         this.terminal.search.mode = TerminalSearchMode::Buffer;
                         this.terminal.search.active_index = 0;
                         this.open_terminal_search(window, cx);
-                    }),
-                ))
-                .child(terminal_ctx_submenu_item(
-                    palette,
-                    "term-ctx-search-online",
-                    self.tr("terminalCtx.searchOnline"),
-                    "icons/menu/travel-explore.svg",
-                    menu.submenu == Some(TerminalContextSubmenu::SearchOnline),
-                    cx.listener(|this, hovered: &bool, _, cx| {
-                        if *hovered {
-                            this.open_terminal_context_submenu(
-                                TerminalContextSubmenu::SearchOnline,
-                                cx,
-                            );
-                        }
-                    }),
-                    cx.listener(|this, _, _, cx| {
-                        this.open_terminal_context_submenu(
-                            TerminalContextSubmenu::SearchOnline,
-                            cx,
-                        );
-                    }),
-                ))
-                .when(!terminal_ai_actions.is_empty(), |this| {
-                    this.child(terminal_ctx_submenu_item(
-                        palette,
-                        "term-ctx-ai",
-                        self.tr("ai.title"),
-                        "icons/ai.svg",
-                        menu.submenu == Some(TerminalContextSubmenu::Ai),
-                        cx.listener(|this, hovered: &bool, _, cx| {
-                            if *hovered {
-                                this.open_terminal_context_submenu(TerminalContextSubmenu::Ai, cx);
-                            }
-                        }),
-                        cx.listener(|this, _, _, cx| {
-                            this.open_terminal_context_submenu(TerminalContextSubmenu::Ai, cx);
-                        }),
-                    ))
-                })
-                .when(!translation_providers.is_empty(), |this| {
-                    this.child(terminal_ctx_submenu_item(
-                        palette,
-                        "term-ctx-translate",
-                        self.tr("terminalCtx.translate"),
-                        "icons/translation.svg",
-                        menu.submenu == Some(TerminalContextSubmenu::Translate),
-                        cx.listener(|this, hovered: &bool, _, cx| {
-                            if *hovered {
-                                this.open_terminal_context_submenu(
-                                    TerminalContextSubmenu::Translate,
-                                    cx,
-                                );
-                            }
-                        }),
-                        cx.listener(|this, _, _, cx| {
-                            this.open_terminal_context_submenu(
-                                TerminalContextSubmenu::Translate,
-                                cx,
-                            );
-                        }),
-                    ))
-                })
-                .child(terminal_ctx_separator(palette))
-                .child(terminal_ctx_item_with_icon(
-                    palette,
-                    "term-ctx-paste",
-                    self.tr("terminalCtx.paste"),
-                    Some(crate::features::IconDef::mono(
-                        "icons/menu/paste.svg",
-                        palette.text_muted,
-                    )),
-                    Some(paste_sc),
-                    cx.listener(|this, _, window, cx| {
-                        this.close_terminal_context_menu(cx);
+                    })),
+            );
+
+            let search_items = self.terminal_online_search_menu_items(&selected, cx);
+            items.push(
+                NyaMenuItem::submenu(self.tr("terminalCtx.searchOnline"), search_items)
+                    .icon("icons/menu/travel-explore.svg"),
+            );
+
+            let ai_items = self.terminal_ai_context_menu_items(&selected, cx);
+            if !ai_items.is_empty() {
+                items
+                    .push(NyaMenuItem::submenu(self.tr("ai.title"), ai_items).icon("icons/ai.svg"));
+            }
+
+            let translation_items = self.terminal_translation_menu_items(&selected, cx);
+            if !translation_items.is_empty() {
+                items.push(
+                    NyaMenuItem::submenu(self.tr("terminalCtx.translate"), translation_items)
+                        .icon("icons/translation.svg"),
+                );
+            }
+
+            let selected_for_paste = selected.clone();
+            items.extend([
+                NyaMenuItem::separator(),
+                NyaMenuItem::action(self.tr("terminalCtx.paste"))
+                    .icon("icons/menu/paste.svg")
+                    .shortcut(paste_sc)
+                    .on_click(cx.listener(|this, _, window, cx| {
                         this.paste_from_clipboard(window, cx);
-                    }),
-                ))
-                .child(terminal_ctx_item_with_icon(
-                    palette,
-                    "term-ctx-paste-selected",
-                    self.tr("terminalCtx.pasteSelectedText"),
-                    Some(crate::features::IconDef::mono(
-                        "icons/menu/paste-go.svg",
-                        palette.text_muted,
-                    )),
-                    Some(paste_sel_sc),
-                    cx.listener(move |this, _, window, cx| {
-                        this.close_terminal_context_menu(cx);
+                    })),
+                NyaMenuItem::action(self.tr("terminalCtx.pasteSelectedText"))
+                    .icon("icons/menu/paste-go.svg")
+                    .shortcut(paste_sel_sc)
+                    .on_click(cx.listener(move |this, _, window, cx| {
                         this.paste_terminal_text(selected_for_paste.clone(), window, cx);
-                    }),
-                ));
+                    })),
+            ]);
         } else {
-            items = items
-                .child(terminal_ctx_item_with_icon(
-                    palette,
-                    "term-ctx-paste",
-                    self.tr("terminalCtx.paste"),
-                    Some(crate::features::IconDef::mono(
-                        "icons/menu/paste.svg",
-                        palette.text_muted,
-                    )),
-                    Some(paste_sc),
-                    cx.listener(|this, _, window, cx| {
-                        this.close_terminal_context_menu(cx);
+            items.extend([
+                NyaMenuItem::action(self.tr("terminalCtx.paste"))
+                    .icon("icons/menu/paste.svg")
+                    .shortcut(paste_sc)
+                    .on_click(cx.listener(|this, _, window, cx| {
                         this.paste_from_clipboard(window, cx);
-                    }),
-                ))
-                .child(terminal_ctx_item_with_icon(
-                    palette,
-                    "term-ctx-find",
-                    self.tr("terminalCtx.find"),
-                    Some(crate::features::IconDef::mono(
-                        "icons/fe/search.svg",
-                        palette.text_muted,
-                    )),
-                    Some(find_sc),
-                    cx.listener(|this, _, window, cx| {
-                        this.close_terminal_context_menu(cx);
+                    })),
+                NyaMenuItem::action(self.tr("terminalCtx.find"))
+                    .icon("icons/fe/search.svg")
+                    .shortcut(find_sc)
+                    .on_click(cx.listener(|this, _, window, cx| {
                         this.open_terminal_search(window, cx);
-                    }),
-                ));
+                    })),
+            ]);
         }
 
-        items = items
-            .child(terminal_ctx_separator(palette))
-            .child(terminal_ctx_item_with_icon(
-                palette,
-                "term-ctx-clear-screen",
-                self.tr("terminalCtx.clearScreen"),
-                Some(crate::features::IconDef::mono(
-                    "icons/menu/clear-all.svg",
-                    palette.text_muted,
-                )),
-                Some(clear_sc),
-                cx.listener(|this, _, _, cx| {
-                    this.close_terminal_context_menu(cx);
+        items.extend([
+            NyaMenuItem::separator(),
+            NyaMenuItem::action(self.tr("terminalCtx.clearScreen"))
+                .icon("icons/menu/clear-all.svg")
+                .shortcut(clear_sc)
+                .on_click(cx.listener(|this, _, _, cx| {
                     this.send_terminal_clear_screen(cx);
-                }),
-            ))
-            .child(terminal_ctx_item_with_icon(
-                palette,
-                "term-ctx-clear-all",
-                self.tr("terminalCtx.clearAll"),
-                Some(crate::features::IconDef::mono(
-                    "icons/menu/delete-sweep.svg",
-                    palette.text_muted,
-                )),
-                None,
-                cx.listener(|this, _, _, cx| {
-                    this.close_terminal_context_menu(cx);
+                })),
+            NyaMenuItem::action(self.tr("terminalCtx.clearAll"))
+                .icon("icons/menu/delete-sweep.svg")
+                .on_click(cx.listener(|this, _, _, cx| {
                     this.clear_terminal(cx);
-                }),
-            ))
-            .child(terminal_ctx_separator(palette))
-            .child(terminal_ctx_item_with_icon(
-                palette,
-                "term-ctx-select-all",
-                self.tr("terminalCtx.selectAll"),
-                Some(crate::features::IconDef::mono(
-                    "icons/menu/select-all.svg",
-                    palette.text_muted,
-                )),
-                Some(select_all_sc),
-                cx.listener(|this, _, _, cx| {
-                    this.close_terminal_context_menu(cx);
+                })),
+            NyaMenuItem::separator(),
+            NyaMenuItem::action(self.tr("terminalCtx.selectAll"))
+                .icon("icons/menu/select-all.svg")
+                .shortcut(select_all_sc)
+                .on_click(cx.listener(|this, _, _, cx| {
                     this.select_all_terminal(cx);
-                }),
-            ))
-            .child(terminal_ctx_item_with_icon(
-                palette,
-                "term-ctx-more-actions",
-                self.tr("terminalCtx.moreActions"),
-                Some(crate::features::IconDef::mono(
-                    "icons/session/more.svg",
-                    palette.text_muted,
-                )),
-                None,
-                cx.listener(|this, _, window, cx| {
-                    this.close_terminal_context_menu(cx);
+                })),
+            NyaMenuItem::action(self.tr("terminalCtx.moreActions"))
+                .icon("icons/session/more.svg")
+                .on_click(cx.listener(|this, _, window, cx| {
                     this.open_terminal_actions(window, cx);
-                }),
-            ));
-
-        let submenu = menu.submenu.map(|submenu| {
-            let submenu_w = 210.;
-            let gap = 4.;
-            let submenu_x = if menu_x + 248. + gap + submenu_w <= viewport_w - 8. {
-                menu_x + 248. + gap
-            } else {
-                (menu_x - submenu_w - gap).max(8.)
-            };
-            let mut panel = div()
-                .id(SharedString::from("terminal-context-submenu"))
-                .absolute()
-                .top(px(menu_y))
-                .left(px(submenu_x))
-                .w(px(submenu_w))
-                .max_h(px(420.))
-                .overflow_y_scroll()
-                .rounded_md()
-                .border_1()
-                .border_color(rgb(palette.border))
-                .bg(self.shell_surface_color(palette.surface))
-                .shadow_lg()
-                .py_1()
-                .flex()
-                .flex_col()
-                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                .on_click(|_, _, cx| cx.stop_propagation());
-
-            match submenu {
-                TerminalContextSubmenu::SearchOnline => {
-                    panel =
-                        panel.children(search_engines.into_iter().map(|(name, template, icon)| {
-                            let query = selected.clone();
-                            let icon_def =
-                                crate::features::search_engine_icon(icon.as_deref(), palette);
-                            terminal_ctx_item_with_icon(
-                                palette,
-                                format!("term-ctx-search-{name}"),
-                                name.clone(),
-                                Some(icon_def),
-                                None,
-                                cx.listener(move |this, _, _, cx| {
-                                    this.close_terminal_context_menu(cx);
-                                    let url = search_engine_url(&template, &query);
-                                    match open_external_url(&url) {
-                                        Ok(()) => {
-                                            this.shell.set_status(format!(
-                                                "opened online search: {name}"
-                                            ));
-                                        }
-                                        Err(error) => {
-                                            this.shell.set_status(format!(
-                                                "online search failed: {error}"
-                                            ));
-                                        }
-                                    }
-                                    cx.notify();
-                                }),
-                            )
-                        }));
-                }
-                TerminalContextSubmenu::Ai => {
-                    panel = panel.children(terminal_ai_actions.into_iter().map(
-                        |(id, name, prompt)| {
-                            let query = selected.clone();
-                            terminal_ctx_item_with_icon(
-                                palette,
-                                format!("term-ctx-ai-action-{id}"),
-                                name.clone(),
-                                Some(crate::features::IconDef::mono(
-                                    "icons/ai.svg",
-                                    palette.text_muted,
-                                )),
-                                None,
-                                cx.listener(move |this, _, window, cx| {
-                                    this.close_terminal_context_menu(cx);
-                                    this.ensure_panel_open(NavItem::AiAssistant);
-                                    let body = if query.chars().count() > 2_800 {
-                                        let clipped: String = query.chars().take(2_800).collect();
-                                        format!("{clipped}…")
-                                    } else {
-                                        query.clone()
-                                    };
-                                    this.set_ai_prompt_draft(format!("{prompt}\n\n{body}"), cx);
-                                    this.ai
-                                        .set_panel_status(format!("AI action loaded: {name}"));
-                                    window.focus(this.ai.chat_focus());
-                                    cx.notify();
-                                }),
-                            )
-                        },
-                    ));
-                }
-                TerminalContextSubmenu::Translate => {
-                    panel = panel.children(translation_providers.into_iter().map(|(id, label)| {
-                        let selected = selected.clone();
-                        terminal_ctx_item_with_icon(
-                            palette,
-                            format!("term-ctx-translate-{id}"),
-                            label.clone(),
-                            Some(crate::features::IconDef::mono(
-                                "icons/translation.svg",
-                                palette.text_muted,
-                            )),
-                            None,
-                            cx.listener(move |this, _, window, cx| {
-                                this.close_terminal_context_menu(cx);
-                                this.open_translation_dialog(
-                                    selected.clone(),
-                                    id.clone(),
-                                    label.clone(),
-                                    window,
-                                    cx,
-                                );
-                            }),
-                        )
-                    }));
-                }
-            }
-            panel
-        });
-
-        div()
-            .id(SharedString::from("terminal-context-menu-overlay"))
-            .absolute()
-            .top_0()
-            .bottom_0()
-            .left_0()
-            .right_0()
-            .on_mouse_down(
-                MouseButton::Left,
-                cx.listener(|this, _, _, cx| {
-                    this.close_terminal_context_menu(cx);
-                }),
-            )
-            .on_mouse_down(
-                MouseButton::Right,
-                cx.listener(|this, _, _, cx| {
-                    this.close_terminal_context_menu(cx);
-                }),
-            )
-            .child(items)
-            .when_some(submenu, |this, submenu| this.child(submenu))
-            .into_any_element()
+                })),
+        ]);
+        items
     }
 
-    fn open_terminal_context_submenu(
+    fn terminal_selection_action_link_items(
         &mut self,
-        submenu: TerminalContextSubmenu,
+        selected: &str,
         cx: &mut Context<Self>,
-    ) {
-        let Some(menu) = self.terminal.menus.context_menu.as_mut() else {
-            return;
-        };
-        if menu.submenu != Some(submenu) {
-            menu.submenu = Some(submenu);
-            cx.notify();
+    ) -> Vec<NyaMenuItem> {
+        if !self.settings.summary().terminal_action_links_enabled {
+            return Vec::new();
         }
+        let trimmed = selected.trim();
+        let matchers = &self.settings.summary().terminal_action_links_matchers;
+        let entity = find_action_links(trimmed, matchers, true)
+            .into_iter()
+            .find(|item| item.text == trimmed || item.value == trimmed)
+            .or_else(|| {
+                find_action_links(trimmed, matchers, true)
+                    .into_iter()
+                    .next()
+            });
+        let Some(entity) = entity else {
+            return Vec::new();
+        };
+        let kind = entity.kind.label().to_string();
+        actions_for_match(&entity)
+            .into_iter()
+            .map(|action| self.terminal_action_link_menu_item(kind.clone(), action, cx))
+            .collect()
+    }
+
+    fn terminal_action_link_menu_item(
+        &mut self,
+        kind: String,
+        action: ActionLinkAction,
+        cx: &mut Context<Self>,
+    ) -> NyaMenuItem {
+        let command = action.command.clone();
+        let open_url = action.open_url.clone();
+        NyaMenuItem::action(format!("{kind} · {}", action.label))
+            .icon("icons/fe/forward.svg")
+            .on_click(cx.listener(move |this, _, _, cx| {
+                if let Some(url) = open_url.clone() {
+                    match open_external_url(&url) {
+                        Ok(()) => this.shell.set_status(format!("opened link: {url}")),
+                        Err(error) => this.shell.set_status(format!("open link failed: {error}")),
+                    }
+                    cx.notify();
+                } else if let Some(command) = command.clone() {
+                    this.execute_action_link_command(command, cx);
+                }
+            }))
+    }
+
+    fn terminal_online_search_menu_items(
+        &mut self,
+        selected: &str,
+        cx: &mut Context<Self>,
+    ) -> Vec<NyaMenuItem> {
+        self.settings
+            .summary()
+            .search_custom_engines
+            .iter()
+            .filter(|engine| {
+                engine.show_in_menu
+                    && !engine.name.trim().is_empty()
+                    && !engine.url_template.trim().is_empty()
+            })
+            .cloned()
+            .map(|engine| {
+                let query = selected.to_string();
+                let name = engine.name.clone();
+                let status_name = name.clone();
+                let template = engine.url_template;
+                let icon = crate::features::search_engine_icon(
+                    engine.icon.as_deref(),
+                    self.theme_palette(),
+                );
+                NyaMenuItem::action(name)
+                    .icon(icon.path)
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        let url = search_engine_url(&template, &query);
+                        match open_external_url(&url) {
+                            Ok(()) => this
+                                .shell
+                                .set_status(format!("opened online search: {status_name}")),
+                            Err(error) => this
+                                .shell
+                                .set_status(format!("online search failed: {error}")),
+                        }
+                        cx.notify();
+                    }))
+            })
+            .collect()
+    }
+
+    fn terminal_ai_context_menu_items(
+        &mut self,
+        selected: &str,
+        cx: &mut Context<Self>,
+    ) -> Vec<NyaMenuItem> {
+        if !self.ai.settings_config().enabled {
+            return Vec::new();
+        }
+        self.ai
+            .settings_config()
+            .terminal_ai_actions
+            .iter()
+            .filter(|action| action.enabled && !action.name.trim().is_empty())
+            .cloned()
+            .map(|action| {
+                let query = selected.to_string();
+                let name = action.name.clone();
+                let status_name = name.clone();
+                let prompt = action.prompt;
+                NyaMenuItem::action(name)
+                    .icon("icons/ai.svg")
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.ensure_panel_open(NavItem::AiAssistant);
+                        let body = if query.chars().count() > 2_800 {
+                            let clipped: String = query.chars().take(2_800).collect();
+                            format!("{clipped}…")
+                        } else {
+                            query.clone()
+                        };
+                        this.set_ai_prompt_draft(format!("{prompt}\n\n{body}"), cx);
+                        this.ai
+                            .set_panel_status(format!("AI action loaded: {status_name}"));
+                        window.focus(this.ai.chat_focus());
+                        cx.notify();
+                    }))
+            })
+            .collect()
+    }
+
+    fn terminal_translation_menu_items(
+        &mut self,
+        selected: &str,
+        cx: &mut Context<Self>,
+    ) -> Vec<NyaMenuItem> {
+        available_translation_providers(self.translation.settings())
+            .into_iter()
+            .map(|(id, _)| {
+                let label = self
+                    .tr(match id.as_str() {
+                        "google" => "translation.google",
+                        "microsoft" => "translation.microsoft",
+                        "deepl" => "translation.deepl",
+                        "baidu" => "translation.baidu",
+                        "ali" => "translation.ali",
+                        "youdao" => "translation.youdao",
+                        _ => "translation.provider",
+                    })
+                    .to_string();
+                let selected = selected.to_string();
+                let provider_id = id.clone();
+                let provider_label = label.clone();
+                NyaMenuItem::action(label)
+                    .icon("icons/translation.svg")
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.open_translation_dialog(
+                            selected.clone(),
+                            provider_id.clone(),
+                            provider_label.clone(),
+                            window,
+                            cx,
+                        );
+                    }))
+            })
+            .collect()
     }
 }

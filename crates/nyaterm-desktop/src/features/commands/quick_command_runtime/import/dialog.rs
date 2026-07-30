@@ -1,4 +1,5 @@
-use gpui::{AppContext, Context, PathPromptOptions, SharedString, Window};
+use gpui::{AppContext, Context, IntoElement, PathPromptOptions, SharedString, Window};
+use nyaterm_ui::NyaDialogWindowExt as _;
 
 use crate::features::NyaTermApp;
 use crate::models::{QuickCommandImportPathPromptKind, QuickCommandImportPathPromptResult};
@@ -11,7 +12,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if !self.commands.open_quick_import_dialog() {
+        if self.commands.quick_import_path_prompt().is_some() || window.has_active_nya_dialog(cx) {
             self.shell
                 .set_status("quick command import picker is already open".to_string());
             cx.notify();
@@ -20,23 +21,27 @@ impl NyaTermApp {
 
         self.shell
             .set_status("select a quick command import source".to_string());
-        window.focus(self.commands.quick_import_focus());
-        cx.notify();
-    }
-
-    pub(in crate::features) fn close_quick_command_import_dialog(
-        &mut self,
-        cx: &mut Context<Self>,
-    ) {
-        self.commands.close_quick_import_dialog();
+        self.open_content_dialog(
+            self.tr("quickCommands.importTitle").to_string(),
+            380.,
+            |app, _, cx| {
+                app.quick_command_import_dialog_content(cx)
+                    .into_any_element()
+            },
+            |_, _| {},
+            window,
+            cx,
+        );
         cx.notify();
     }
 
     pub(in crate::features) fn select_quick_command_import_source(
         &mut self,
         kind: QuickCommandImportPathPromptKind,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        window.close_nya_dialog(cx);
         self.prompt_quick_command_import(kind, cx);
     }
 

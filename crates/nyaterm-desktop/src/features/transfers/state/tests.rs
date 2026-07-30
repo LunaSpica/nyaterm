@@ -12,7 +12,7 @@ use crate::models::{
     TransferBrowserNavigationSnapshot, TransferBrowserSessionCacheState, TransferEditorField,
     TransferEditorState, TransferExternalSyncPromptState, TransferJobEvent, TransferJobKind,
     TransferJobResult, TransferJobState, TransferJobStatus, TransferNewFolderState,
-    TransferPathPromptKind, TransferPropertiesField, TransferPropertiesState, TransferRenameState,
+    TransferPathPromptKind, TransferPropertiesState, TransferRenameState,
 };
 
 use super::{
@@ -25,16 +25,8 @@ fn transfer_focus(cx: &TestAppContext) -> TransferFeatureFocus {
     cx.update(|cx| TransferFeatureFocus {
         panel: cx.focus_handle(),
         queue: cx.focus_handle(),
-        job_delete: cx.focus_handle(),
         browser: cx.focus_handle(),
         rename: cx.focus_handle(),
-        move_to: cx.focus_handle(),
-        delete: cx.focus_handle(),
-        new_folder: cx.focus_handle(),
-        new_file: cx.focus_handle(),
-        new_symlink: cx.focus_handle(),
-        properties: cx.focus_handle(),
-        unknown_file: cx.focus_handle(),
         editor: cx.focus_handle(),
         external_sync: cx.focus_handle(),
     })
@@ -194,8 +186,8 @@ fn browser_selection_replacement_preserves_the_explicit_active_path() {
 
 fn transfer_queue(cx: &TestAppContext) -> TransferQueueState {
     let (tx, rx) = mpsc::channel();
-    let (focus, delete_focus) = cx.update(|cx| (cx.focus_handle(), cx.focus_handle()));
-    TransferQueueState::new(tx, rx, focus, delete_focus)
+    let focus = cx.update(|cx| cx.focus_handle());
+    TransferQueueState::new(tx, rx, focus)
 }
 
 fn transfer_job(
@@ -622,7 +614,6 @@ fn transfer_properties_ignore_stale_results_and_close_for_the_owner_session() {
         recursive: false,
         saving: false,
         error: None,
-        focused_field: TransferPropertiesField::Mode,
     });
 
     assert!(!transfer.complete_properties_load(
@@ -688,7 +679,6 @@ fn transfer_properties_ignore_stale_results_and_close_for_the_owner_session() {
         recursive: false,
         saving: true,
         error: None,
-        focused_field: TransferPropertiesField::Mode,
     });
     assert!(!transfer.complete_properties_update(
         Some("session-a"),
@@ -704,7 +694,7 @@ fn transfer_properties_ignore_stale_results_and_close_for_the_owner_session() {
 }
 
 #[test]
-fn transfer_queue_owns_admission_events_and_delete_interaction() {
+fn transfer_queue_owns_admission_events_and_job_removal() {
     let cx = TestAppContext::single();
     let mut queue = transfer_queue(&cx);
     queue.enqueue(transfer_job(
@@ -724,11 +714,7 @@ fn transfer_queue_owns_admission_events_and_delete_interaction() {
     );
     assert!(queue.can_delete_job("job-1", Some("session-a")));
 
-    assert!(queue.request_job_delete("job-1", "Download".to_string()));
-    assert_eq!(
-        queue.confirm_job_delete(),
-        Some(("job-1".to_string(), true))
-    );
+    assert!(queue.remove_job("job-1"));
     assert!(queue.is_empty());
     assert_eq!(queue.selected_job_id(), None);
     assert_eq!(queue.next_job_id("download"), "download-3");
@@ -772,7 +758,6 @@ fn transfer_queue_batches_are_scoped_to_the_visible_session() {
         false,
     ));
     assert!(queue.open_job_menu("completed-a", px(8.), px(8.)));
-    assert!(queue.request_job_delete("completed-a", "Completed".to_string()));
 
     assert_eq!(queue.pause_visible_jobs(Some("session-a")), 1);
     assert_eq!(
@@ -793,7 +778,6 @@ fn transfer_queue_batches_are_scoped_to_the_visible_session() {
     assert!(queue.job("completed-a").is_none());
     assert_eq!(queue.selected_job_id(), None);
     assert!(queue.job_menu().is_none());
-    assert!(queue.job_delete().is_none());
     assert!(queue.job("running-b").is_some());
     assert_eq!(queue.clear_stopped_jobs(Some("session-b")), 0);
 }

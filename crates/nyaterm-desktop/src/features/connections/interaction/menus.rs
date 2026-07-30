@@ -1,50 +1,15 @@
-use gpui::{Context, MouseDownEvent, Window};
+use gpui::{Context, Window};
 use nyaterm_core::SavedConnection;
 
 use crate::features::{NyaTermApp, SavedConnectionStartOptions};
-use crate::models::ConnectionGroupOpenConfirmState;
-
 impl NyaTermApp {
-    pub(in crate::features) fn open_connection_context_menu(
+    pub(in crate::features) fn prepare_connection_context_menu(
         &mut self,
         connection_id: String,
-        event: &MouseDownEvent,
-        cx: &mut Context<Self>,
-    ) {
-        self.connection_state.open_list_connection_context_menu(
-            connection_id,
-            event.position.x,
-            event.position.y,
-        );
-        cx.notify();
-    }
-
-    pub(in crate::features) fn open_connection_list_context_menu(
-        &mut self,
-        event: &MouseDownEvent,
         cx: &mut Context<Self>,
     ) {
         self.connection_state
-            .open_list_background_context_menu(event.position.x, event.position.y);
-        cx.notify();
-    }
-
-    pub(in crate::features) fn open_connection_group_context_menu(
-        &mut self,
-        group_id: String,
-        event: &MouseDownEvent,
-        cx: &mut Context<Self>,
-    ) {
-        self.connection_state.open_list_group_context_menu(
-            group_id,
-            event.position.x,
-            event.position.y,
-        );
-        cx.notify();
-    }
-
-    pub(in crate::features) fn close_connection_context_menus(&mut self, cx: &mut Context<Self>) {
-        self.connection_state.close_list_context_menus();
+            .prepare_list_connection_context_menu(connection_id);
         cx.notify();
     }
 
@@ -140,34 +105,25 @@ impl NyaTermApp {
         if connection_count == 0 {
             return;
         }
-        self.connection_state
-            .open_group_open_confirm(ConnectionGroupOpenConfirmState {
-                group_id,
-                label: group.name.clone(),
-                connection_count,
-            });
-        let group_open_focus = self.connection_state.group_open_focus_handle();
-        window.focus(&group_open_focus);
-        cx.notify();
-    }
-
-    pub(in crate::features) fn close_connection_group_open_confirm(
-        &mut self,
-        cx: &mut Context<Self>,
-    ) {
-        self.connection_state.close_group_open_confirm();
-        cx.notify();
-    }
-
-    pub(in crate::features) fn confirm_connection_group_open(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(confirm) = self.connection_state.take_group_open_confirm() else {
-            return;
-        };
-        self.start_group_connections(confirm.group_id, window, cx);
+        let label = group.name.clone();
+        let description = self
+            .tr("savedConnections.openAllConnectionsConfirm")
+            .replace("{{name}}", &label)
+            .replace("{{count}}", &connection_count.to_string());
+        self.open_confirm_dialog(
+            (
+                self.tr("savedConnections.openAllConnections").to_string(),
+                description,
+                self.tr("savedConnections.openAllConnections").to_string(),
+                false,
+                move |app, window, cx| {
+                    app.start_group_connections(group_id.clone(), window, cx);
+                    true
+                },
+            ),
+            window,
+            cx,
+        );
     }
 
     pub(in crate::features) fn enqueue_saved_connection_start(

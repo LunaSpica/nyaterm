@@ -1,11 +1,12 @@
 use gpui::{
-    App, AppContext as _, ClickEvent, Context, InteractiveElement as _, IntoElement, MouseButton,
-    MouseDownEvent, ParentElement as _, SharedString, StatefulInteractiveElement as _, Styled as _,
-    Window, div, prelude::*, px, rgb, svg,
+    App, ClickEvent, Context, InteractiveElement as _, IntoElement, MouseButton, MouseDownEvent,
+    ParentElement as _, SharedString, StatefulInteractiveElement as _, Styled as _, Window, div,
+    prelude::*, px, rgb, svg,
 };
 
-use crate::features::{ChromeTooltip, NyaTermApp};
+use crate::features::NyaTermApp;
 use crate::theme::ThemePalette;
+use nyaterm_ui::NyaTooltip;
 
 pub(super) fn compact_transfer_footer_button(
     palette: ThemePalette,
@@ -29,7 +30,7 @@ pub(super) fn compact_transfer_footer_button(
             this.bg(rgb(palette.surface_elevated))
                 .text_color(rgb(palette.text))
         })
-        .tooltip(move |_, cx| cx.new(|_| ChromeTooltip::new(tooltip.clone())).into())
+        .tooltip(move |window, cx| NyaTooltip::new(tooltip.clone()).build(window, cx))
         .child(
             svg()
                 .size(px(14.))
@@ -81,7 +82,7 @@ pub(super) fn compact_transfer_footer_button_active(
                     rgb(palette.text)
                 })
         })
-        .tooltip(move |_, cx| cx.new(|_| ChromeTooltip::new(tooltip.clone())).into())
+        .tooltip(move |window, cx| NyaTooltip::new(tooltip.clone()).build(window, cx))
         .child(
             svg()
                 .size(px(14.))
@@ -117,7 +118,7 @@ pub(super) fn compact_transfer_upload_menu_button(
             this.bg(rgb(palette.surface_elevated))
                 .text_color(rgb(palette.text))
         })
-        .tooltip(move |_, cx| cx.new(|_| ChromeTooltip::new(tooltip.clone())).into())
+        .tooltip(move |window, cx| NyaTooltip::new(tooltip.clone()).build(window, cx))
         .child(
             svg()
                 .size(px(16.))
@@ -155,7 +156,7 @@ pub(super) fn compact_transfer_toolbar_button(
             this.bg(rgb(palette.surface_elevated))
                 .text_color(rgb(palette.text))
         })
-        .tooltip(move |_, cx| cx.new(|_| ChromeTooltip::new(tooltip.clone())).into())
+        .tooltip(move |window, cx| NyaTooltip::new(tooltip.clone()).build(window, cx))
         .child(
             svg()
                 .size(px(16.))
@@ -188,7 +189,7 @@ pub(super) fn compact_transfer_toolbar_button_enabled(
             rgb(palette.text_dimmed)
         })
         .opacity(if enabled { 1.0 } else { 0.45 })
-        .tooltip(move |_, cx| cx.new(|_| ChromeTooltip::new(tooltip.clone())).into())
+        .tooltip(move |window, cx| NyaTooltip::new(tooltip.clone()).build(window, cx))
         .child(
             svg()
                 .size(px(16.))
@@ -246,7 +247,7 @@ pub(super) fn compact_transfer_toolbar_button_active(
                     rgb(palette.text)
                 })
         })
-        .tooltip(move |_, cx| cx.new(|_| ChromeTooltip::new(tooltip.clone())).into())
+        .tooltip(move |window, cx| NyaTooltip::new(tooltip.clone()).build(window, cx))
         .child(
             svg()
                 .size(px(16.))

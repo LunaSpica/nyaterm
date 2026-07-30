@@ -1,6 +1,6 @@
 use gpui::{
-    App, ClickEvent, Context, FontWeight, IntoElement, KeyDownEvent, SharedString, Window, div,
-    prelude::*, px, rgb, rgba,
+    App, ClickEvent, Context, FontWeight, IntoElement, SharedString, Window, div, prelude::*, px,
+    rgb,
 };
 
 use crate::features::NyaTermApp;
@@ -8,7 +8,7 @@ use crate::models::QuickCommandImportPathPromptKind;
 use crate::widgets::small_button;
 
 impl NyaTermApp {
-    pub(in crate::features) fn quick_command_import_overlay(
+    pub(in crate::features) fn quick_command_import_dialog_content(
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
@@ -25,143 +25,88 @@ impl NyaTermApp {
             "https://nyaterm.app/docs/guide/quick-commands#import-quick-commands"
         };
         div()
-            .id(SharedString::from("quick-command-import-overlay"))
-            .absolute()
-            .top_0()
-            .bottom_0()
-            .left_0()
-            .right_0()
-            .bg(rgba(0x00000080))
+            .id("quick-command-import-content")
             .flex()
-            .items_center()
-            .justify_center()
-            .track_focus(self.commands.quick_import_focus())
-            .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(this.commands.quick_import_focus());
-                cx.notify();
-            }))
-            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-                cx.stop_propagation();
-                if event.keystroke.key == "escape" {
-                    this.close_quick_command_import_dialog(cx);
-                }
-            }))
+            .flex_col()
+            .gap_4()
             .child(
                 div()
-                    .id(SharedString::from("quick-command-import-dialog"))
-                    .w(px((self.shell.viewport_size().0 - 32.).clamp(280., 380.)))
-                    .max_w_full()
-                    .rounded_md()
-                    .border_1()
-                    .border_color(rgb(palette.border))
-                    .bg(self.shell_surface_color(palette.bg))
-                    .shadow_lg()
-                    .p_6()
+                    .text_xs()
+                    .text_color(rgb(palette.text_muted))
+                    .child(self.tr("quickCommands.importSelectSource")),
+            )
+            .child(
+                div()
+                    .grid()
+                    .grid_cols(2)
+                    .gap_3()
+                    .child(quick_command_import_source_card(
+                        palette,
+                        "quick-command-import-windterm-card",
+                        "WT",
+                        self.tr("quickCommands.importWindTerm"),
+                        self.tr("quickCommands.importWindTermHint"),
+                        0x60a5fa,
+                        cx.listener(|this, _, window, cx| {
+                            this.select_quick_command_import_source(
+                                QuickCommandImportPathPromptKind::WindTermQuickbar,
+                                window,
+                                cx,
+                            );
+                        }),
+                    ))
+                    .child(quick_command_import_source_card(
+                        palette,
+                        "quick-command-import-xshell-card",
+                        "XS",
+                        self.tr("quickCommands.importXshell"),
+                        self.tr("quickCommands.importXshellHint"),
+                        0xfacc15,
+                        cx.listener(|this, _, window, cx| {
+                            this.select_quick_command_import_source(
+                                QuickCommandImportPathPromptKind::XshellXts,
+                                window,
+                                cx,
+                            );
+                        }),
+                    ))
+                    .child(quick_command_import_source_card(
+                        palette,
+                        "quick-command-import-json-card",
+                        "{}",
+                        self.tr("quickCommands.importNyaTermJson"),
+                        self.tr("quickCommands.importNyaTermJsonHint"),
+                        0x6ee7b7,
+                        cx.listener(|this, _, window, cx| {
+                            this.select_quick_command_import_source(
+                                QuickCommandImportPathPromptKind::NyatermJson,
+                                window,
+                                cx,
+                            );
+                        }),
+                    )),
+            )
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap_3()
                     .child(
                         div()
-                            .flex()
-                            .items_start()
-                            .justify_between()
-                            .gap_3()
-                            .child(
-                                div()
-                                    .min_w_0()
-                                    .child(
-                                        div()
-                                            .text_sm()
-                                            .font_weight(FontWeight(800.))
-                                            .text_color(rgb(palette.text))
-                                            .child(self.tr("quickCommands.importTitle")),
-                                    )
-                                    .child(
-                                        div()
-                                            .mt_1()
-                                            .text_xs()
-                                            .text_color(rgb(palette.text_muted))
-                                            .child(self.tr("quickCommands.importSelectSource")),
-                                    ),
-                            )
-                            .child(small_button(
-                                palette,
-                                "quick-command-import-close-top",
-                                self.tr("common.close"),
-                                cx.listener(|this, _, _, cx| {
-                                    this.close_quick_command_import_dialog(cx);
-                                }),
-                            )),
+                            .text_size(px(11.))
+                            .line_height(px(16.))
+                            .text_color(rgb(palette.text_muted))
+                            .child(self.tr("quickCommands.importMergeHint")),
                     )
-                    .child(
-                        div()
-                            .mt_4()
-                            .grid()
-                            .grid_cols(2)
-                            .gap_3()
-                            .child(quick_command_import_source_card(
-                                palette,
-                                "quick-command-import-windterm-card",
-                                "WT",
-                                self.tr("quickCommands.importWindTerm"),
-                                self.tr("quickCommands.importWindTermHint"),
-                                0x60a5fa,
-                                cx.listener(|this, _, _, cx| {
-                                    this.select_quick_command_import_source(
-                                        QuickCommandImportPathPromptKind::WindTermQuickbar,
-                                        cx,
-                                    );
-                                }),
-                            ))
-                            .child(quick_command_import_source_card(
-                                palette,
-                                "quick-command-import-xshell-card",
-                                "XS",
-                                self.tr("quickCommands.importXshell"),
-                                self.tr("quickCommands.importXshellHint"),
-                                0xfacc15,
-                                cx.listener(|this, _, _, cx| {
-                                    this.select_quick_command_import_source(
-                                        QuickCommandImportPathPromptKind::XshellXts,
-                                        cx,
-                                    );
-                                }),
-                            ))
-                            .child(quick_command_import_source_card(
-                                palette,
-                                "quick-command-import-json-card",
-                                "{}",
-                                self.tr("quickCommands.importNyaTermJson"),
-                                self.tr("quickCommands.importNyaTermJsonHint"),
-                                0x6ee7b7,
-                                cx.listener(|this, _, _, cx| {
-                                    this.select_quick_command_import_source(
-                                        QuickCommandImportPathPromptKind::NyatermJson,
-                                        cx,
-                                    );
-                                }),
-                            )),
-                    )
-                    .child(
-                        div()
-                            .mt_4()
-                            .flex()
-                            .items_center()
-                            .justify_between()
-                            .gap_3()
-                            .child(
-                                div()
-                                    .text_size(px(11.))
-                                    .line_height(px(16.))
-                                    .text_color(rgb(palette.text_muted))
-                                    .child(self.tr("quickCommands.importMergeHint")),
-                            )
-                            .child(small_button(
-                                palette,
-                                "quick-command-import-docs",
-                                self.tr("quickCommands.importDocs"),
-                                cx.listener(move |this, _, _, cx| {
-                                    this.open_external_url_for_ui(docs_url, cx);
-                                }),
-                            )),
-                    ),
+                    .child(small_button(
+                        palette,
+                        "quick-command-import-docs",
+                        self.tr("quickCommands.importDocs"),
+                        cx.listener(move |this, _, _, cx| {
+                            this.open_external_url_for_ui(docs_url, cx);
+                        }),
+                    )),
             )
     }
 }

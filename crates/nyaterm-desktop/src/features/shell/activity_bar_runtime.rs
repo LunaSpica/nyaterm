@@ -161,7 +161,6 @@ impl NyaTermApp {
         event: &MouseDownEvent,
         cx: &mut Context<Self>,
     ) {
-        self.shell.chrome.title_menu_open = None;
         self.shell.chrome.activity_bar_context_menu = Some(ActivityBarContextMenuState {
             entry_id,
             zone,

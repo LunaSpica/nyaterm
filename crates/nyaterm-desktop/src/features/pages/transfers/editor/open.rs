@@ -221,7 +221,7 @@ impl NyaTermApp {
                     .open_unknown_file_dialog(TransferUnknownFileState { entry });
                 self.shell
                     .set_status("confirm how to open unknown remote file".to_string());
-                window.focus(self.transfer.unknown_file_focus());
+                self.open_transfer_unknown_file_component_dialog(window, cx);
                 cx.notify();
             }
         }
@@ -293,9 +293,11 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn cancel_transfer_unknown_file(&mut self, cx: &mut Context<Self>) {
-        self.transfer.close_unknown_file_dialog();
-        self.shell
-            .set_status("unknown file open cancelled".to_string());
+        if self.transfer.unknown_file_dialog().is_some() {
+            self.transfer.close_unknown_file_dialog();
+            self.shell
+                .set_status("unknown file open cancelled".to_string());
+        }
         cx.notify();
     }
 
