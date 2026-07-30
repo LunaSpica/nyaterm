@@ -215,7 +215,7 @@ impl NyaTermApp {
             .items_center()
             .when(!native_window, |this| this.justify_center())
             .when(native_window, |this| this.justify_start())
-            .overflow_y_scroll()
+            .overflow_hidden()
             .track_focus(self.commands.quick_editor_focus())
             // No blanket focus grab: it kept the surface "focused" for the old
             // label-div fields, and would now steal focus back from whichever
@@ -227,7 +227,8 @@ impl NyaTermApp {
                 div()
                     .id(SharedString::from("quick-command-editor-dialog"))
                     .w_full()
-                    .max_w(px(560.))
+                    .when(native_window, |this| this.size_full())
+                    .when(!native_window, |this| this.max_w(px(560.)).max_h(px(640.)))
                     .when(!native_window, |this| {
                         this.rounded_md()
                             .border_1()
@@ -235,10 +236,12 @@ impl NyaTermApp {
                             .shadow_lg()
                     })
                     .bg(dialog_bg)
-                    .p_4()
+                    .flex()
+                    .flex_col()
+                    .overflow_hidden()
                     .when(!native_window, |this| {
                         this.child(
-                            div().flex().items_center().gap_3().child(
+                            div().flex().items_center().gap_3().px_4().pt_4().child(
                                 div()
                                     .text_sm()
                                     .font_weight(FontWeight(800.))
@@ -247,213 +250,233 @@ impl NyaTermApp {
                             ),
                         )
                     })
-                    .when(editor.error.is_some(), |this| {
-                        this.child(
-                            div()
-                                .mt_3()
-                                .rounded_sm()
-                                .border_1()
-                                .border_color(rgb(palette.danger))
-                                .bg(rgb(0x1f0b0b))
-                                .p_2()
-                                .text_xs()
-                                .text_color(rgb(palette.danger))
-                                .child(editor.error.clone().unwrap_or_default()),
-                        )
-                    })
                     .child(
                         div()
-                            .mt_3()
+                            .id("quick-command-editor-body")
+                            .flex_1()
+                            .min_h_0()
+                            .overflow_y_scroll()
+                            .p_4()
                             .flex()
-                            .when(wide_fields, |this| this.flex_row())
-                            .when(!wide_fields, |this| this.flex_col())
+                            .flex_col()
                             .gap_3()
-                            .child(div().min_w_0().flex_1().child(label_input))
+                            .when(editor.error.is_some(), |this| {
+                                this.child(
+                                    div()
+                                        .rounded_sm()
+                                        .border_1()
+                                        .border_color(rgb(palette.danger))
+                                        .bg(rgb(0x1f0b0b))
+                                        .p_2()
+                                        .text_xs()
+                                        .text_color(rgb(palette.danger))
+                                        .child(editor.error.clone().unwrap_or_default()),
+                                )
+                            })
                             .child(
                                 div()
-                                    .id("quick-command-editor-category")
-                                    .min_w_0()
-                                    .flex_1()
+                                    .flex()
+                                    .when(wide_fields, |this| this.flex_row())
+                                    .when(!wide_fields, |this| this.flex_col())
+                                    .gap_3()
+                                    .child(div().min_w_0().flex_1().child(label_input))
+                                    .child(
+                                        div()
+                                            .id("quick-command-editor-category")
+                                            .min_w_0()
+                                            .flex_1()
+                                            .rounded_sm()
+                                            .border_1()
+                                            .border_color(
+                                                if editor.focused_field
+                                                    == QuickCommandEditorField::Category
+                                                {
+                                                    rgb(0x4ade80)
+                                                } else {
+                                                    rgb(palette.border)
+                                                },
+                                            )
+                                            .bg(
+                                                if editor.focused_field
+                                                    == QuickCommandEditorField::Category
+                                                {
+                                                    rgb(0x0f1f18)
+                                                } else {
+                                                    rgb(palette.input)
+                                                },
+                                            )
+                                            .p_2()
+                                            .cursor_pointer()
+                                            .on_click(cx.listener(|this, _, window, cx| {
+                                                this.focus_quick_command_editor_field(
+                                                    QuickCommandEditorField::Category,
+                                                    window,
+                                                    cx,
+                                                );
+                                            }))
+                                            .child(
+                                                div()
+                                                    .text_size(px(10.))
+                                                    .text_color(rgb(palette.text_muted))
+                                                    .child(category_label_text),
+                                            )
+                                            .child(
+                                                div()
+                                                    .mt_1()
+                                                    .flex()
+                                                    .items_center()
+                                                    .justify_between()
+                                                    .gap_2()
+                                                    .child(
+                                                        div()
+                                                            .min_w_0()
+                                                            .text_xs()
+                                                            .text_color(rgb(palette.text))
+                                                            .child(truncate_preview(
+                                                                &category_display,
+                                                                26,
+                                                            )),
+                                                    )
+                                                    .child(
+                                                        div()
+                                                            .text_size(px(10.))
+                                                            .text_color(rgb(palette.text_muted))
+                                                            .child(category_search_label),
+                                                    ),
+                                            )
+                                            .child(category_choices),
+                                    ),
+                            )
+                            .child(description_input)
+                            .child(
+                                div()
                                     .rounded_sm()
                                     .border_1()
-                                    .border_color(
-                                        if editor.focused_field == QuickCommandEditorField::Category
-                                        {
-                                            rgb(0x4ade80)
-                                        } else {
-                                            rgb(palette.border)
-                                        },
-                                    )
-                                    .bg(
-                                        if editor.focused_field == QuickCommandEditorField::Category
-                                        {
-                                            rgb(0x0f1f18)
-                                        } else {
-                                            rgb(palette.input)
-                                        },
-                                    )
+                                    .border_color(rgb(palette.border))
+                                    .bg(rgb(palette.input))
                                     .p_2()
-                                    .cursor_pointer()
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        this.focus_quick_command_editor_field(
-                                            QuickCommandEditorField::Category,
-                                            window,
-                                            cx,
-                                        );
-                                    }))
+                                    .flex()
+                                    .items_start()
+                                    .gap_4()
+                                    .child(
+                                        div()
+                                            .min_w_0()
+                                            .flex_1()
+                                            .child(
+                                                div()
+                                                    .flex()
+                                                    .items_center()
+                                                    .justify_between()
+                                                    .gap_2()
+                                                    .child(
+                                                        div()
+                                                            .text_size(px(10.))
+                                                            .text_color(rgb(palette.text_muted))
+                                                            .child(color_tag_label),
+                                                    )
+                                                    .child(
+                                                        div().flex().items_center().gap_1().child(
+                                                            quick_command_icon_mark(
+                                                                palette,
+                                                                editor.icon_tag.as_deref(),
+                                                                editor.color_tag.as_deref(),
+                                                            ),
+                                                        ),
+                                                    ),
+                                            )
+                                            .child(color_swatches)
+                                            .child(icon_grid),
+                                    )
+                                    .child(
+                                        div()
+                                            .pl_4()
+                                            .border_l_1()
+                                            .border_color(rgb(palette.border))
+                                            .flex()
+                                            .flex_col()
+                                            .items_end()
+                                            .gap_2()
+                                            .child(
+                                                div()
+                                                    .text_size(px(10.))
+                                                    .text_color(rgb(palette.text_muted))
+                                                    .child(pin_label),
+                                            )
+                                            .child(mode_button(
+                                                "quick-command-editor-pinned",
+                                                pin_label,
+                                                editor.pinned,
+                                                self.theme_palette(),
+                                                cx.listener(|this, _, _, cx| {
+                                                    this.toggle_quick_command_editor_pinned(cx);
+                                                }),
+                                            )),
+                                    ),
+                            )
+                            .child(
+                                div()
                                     .child(
                                         div()
                                             .text_size(px(10.))
                                             .text_color(rgb(palette.text_muted))
-                                            .child(category_label_text),
+                                            .child(execution_mode_label),
+                                    )
+                                    .child(
+                                        div()
+                                            .mt_2()
+                                            .grid()
+                                            .grid_cols(2)
+                                            .gap_2()
+                                            .child(mode_button(
+                                                "quick-command-editor-execute",
+                                                execute_label,
+                                                editor.execution_mode != "append",
+                                                self.theme_palette(),
+                                                cx.listener(|this, _, _, cx| {
+                                                    this.set_quick_command_editor_execution_mode(
+                                                        "execute", cx,
+                                                    );
+                                                }),
+                                            ))
+                                            .child(mode_button(
+                                                "quick-command-editor-append",
+                                                append_label,
+                                                editor.execution_mode == "append",
+                                                self.theme_palette(),
+                                                cx.listener(|this, _, _, cx| {
+                                                    this.set_quick_command_editor_execution_mode(
+                                                        "append", cx,
+                                                    );
+                                                }),
+                                            )),
                                     )
                                     .child(
                                         div()
                                             .mt_1()
-                                            .flex()
-                                            .items_center()
-                                            .justify_between()
-                                            .gap_2()
-                                            .child(
-                                                div()
-                                                    .min_w_0()
-                                                    .text_xs()
-                                                    .text_color(rgb(palette.text))
-                                                    .child(truncate_preview(&category_display, 26)),
-                                            )
-                                            .child(
-                                                div()
-                                                    .text_size(px(10.))
-                                                    .text_color(rgb(palette.text_muted))
-                                                    .child(category_search_label),
-                                            ),
-                                    )
-                                    .child(category_choices),
-                            ),
-                    )
-                    .child(div().mt_3().child(description_input))
-                    .child(
-                        div()
-                            .mt_3()
-                            .rounded_sm()
-                            .border_1()
-                            .border_color(rgb(palette.border))
-                            .bg(rgb(palette.input))
-                            .p_2()
-                            .flex()
-                            .items_start()
-                            .gap_4()
-                            .child(
-                                div()
-                                    .min_w_0()
-                                    .flex_1()
-                                    .child(
-                                        div()
-                                            .flex()
-                                            .items_center()
-                                            .justify_between()
-                                            .gap_2()
-                                            .child(
-                                                div()
-                                                    .text_size(px(10.))
-                                                    .text_color(rgb(palette.text_muted))
-                                                    .child(color_tag_label),
-                                            )
-                                            .child(div().flex().items_center().gap_1().child(
-                                                quick_command_icon_mark(
-                                                    palette,
-                                                    editor.icon_tag.as_deref(),
-                                                    editor.color_tag.as_deref(),
-                                                ),
-                                            )),
-                                    )
-                                    .child(color_swatches)
-                                    .child(icon_grid),
-                            )
-                            .child(
-                                div()
-                                    .pl_4()
-                                    .border_l_1()
-                                    .border_color(rgb(palette.border))
-                                    .flex()
-                                    .flex_col()
-                                    .items_end()
-                                    .gap_2()
-                                    .child(
-                                        div()
                                             .text_size(px(10.))
                                             .text_color(rgb(palette.text_muted))
-                                            .child(pin_label),
-                                    )
-                                    .child(mode_button(
-                                        "quick-command-editor-pinned",
-                                        pin_label,
-                                        editor.pinned,
-                                        self.theme_palette(),
-                                        cx.listener(|this, _, _, cx| {
-                                            this.toggle_quick_command_editor_pinned(cx);
-                                        }),
-                                    )),
-                            ),
+                                            .child(if editor.execution_mode == "append" {
+                                                append_hint
+                                            } else {
+                                                execute_hint
+                                            }),
+                                    ),
+                            )
+                            .child(div().min_h(px(128.)).flex().flex_col().child(command_input)),
                     )
                     .child(
                         div()
-                            .mt_3()
-                            .child(
-                                div()
-                                    .text_size(px(10.))
-                                    .text_color(rgb(palette.text_muted))
-                                    .child(execution_mode_label),
-                            )
-                            .child(
-                                div()
-                                    .mt_2()
-                                    .grid()
-                                    .grid_cols(2)
-                                    .gap_2()
-                                    .child(mode_button(
-                                        "quick-command-editor-execute",
-                                        execute_label,
-                                        editor.execution_mode != "append",
-                                        self.theme_palette(),
-                                        cx.listener(|this, _, _, cx| {
-                                            this.set_quick_command_editor_execution_mode(
-                                                "execute", cx,
-                                            );
-                                        }),
-                                    ))
-                                    .child(mode_button(
-                                        "quick-command-editor-append",
-                                        append_label,
-                                        editor.execution_mode == "append",
-                                        self.theme_palette(),
-                                        cx.listener(|this, _, _, cx| {
-                                            this.set_quick_command_editor_execution_mode(
-                                                "append", cx,
-                                            );
-                                        }),
-                                    )),
-                            )
-                            .child(
-                                div()
-                                    .mt_1()
-                                    .text_size(px(10.))
-                                    .text_color(rgb(palette.text_muted))
-                                    .child(if editor.execution_mode == "append" {
-                                        append_hint
-                                    } else {
-                                        execute_hint
-                                    }),
-                            ),
-                    )
-                    .child(div().mt_3().child(command_input))
-                    .child(
-                        div()
-                            .mt_4()
+                            .h(px(52.))
+                            .flex_none()
                             .flex()
                             .items_center()
                             .justify_end()
                             .gap_2()
+                            .px_5()
+                            .py_3()
+                            .border_t_1()
+                            .border_color(rgb(palette.border))
+                            .bg(rgb(palette.section_header))
                             .child(
                                 div()
                                     .flex()
