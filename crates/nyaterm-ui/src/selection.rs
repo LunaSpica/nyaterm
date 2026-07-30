@@ -447,25 +447,34 @@ impl Render for NyaSelectState {
 #[derive(IntoElement)]
 pub struct NyaSelect {
     state: Entity<NyaSelectState>,
+    appearance: bool,
 }
 
 impl NyaSelect {
     pub fn new(state: &Entity<NyaSelectState>) -> Self {
         Self {
             state: state.clone(),
+            appearance: true,
         }
+    }
+
+    pub fn appearance(mut self, appearance: bool) -> Self {
+        self.appearance = appearance;
+        self
     }
 }
 
 impl RenderOnce for NyaSelect {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
-        let (state, placeholder, disabled) = self.state.update(cx, |state, cx| {
+        let Self { state, appearance } = self;
+        let (state, placeholder, disabled) = state.update(cx, |state, cx| {
             let component = state.ensure_component(window, cx);
             state.sync_component(window, cx);
             (component, state.placeholder.clone(), state.disabled)
         });
         Select::new(&state)
             .small()
+            .appearance(appearance)
             .placeholder(placeholder)
             .disabled(disabled)
     }

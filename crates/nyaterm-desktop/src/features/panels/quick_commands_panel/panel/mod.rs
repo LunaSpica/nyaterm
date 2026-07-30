@@ -7,8 +7,7 @@ use super::super::{filtered_quick_commands, quick_command_category_options};
 use crate::features::{NyaTermApp, TextInputSetup};
 use crate::models::{QuickCommandSortMode, QuickCommandViewMode};
 use crate::widgets::small_button;
-use nyaterm_ui::NyaTooltip;
-use nyaterm_ui::{NyaDropdownMenu, NyaMenuItem};
+use nyaterm_ui::{NyaDropdownMenu, NyaInput, NyaMenuItem, NyaTooltip};
 
 mod rows;
 use rows::quick_command_tile_column_count;
@@ -300,7 +299,7 @@ impl NyaTermApp {
                                     .flex_1()
                                     .text_size(px(11.))
                                     .text_color(rgb(palette.text))
-                                    .child(search_field),
+                                    .child(NyaInput::new(&search_field)),
                             ),
                     )
                     .child(quick_command_toolbar_divider(palette))

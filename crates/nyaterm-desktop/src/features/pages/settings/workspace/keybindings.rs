@@ -1,4 +1,5 @@
 use gpui::{Context, FontWeight, IntoElement, KeyDownEvent, MouseButton, div, prelude::*, px, rgb};
+use nyaterm_ui::NyaInput;
 
 use crate::features::{NyaTermApp, TextInputSetup, gpui_code_font_family};
 use crate::shortcuts::{
@@ -75,7 +76,7 @@ impl NyaTermApp {
                                     cx.notify();
                                 }
                             }))
-                            .child(search_field),
+                            .child(NyaInput::new(&search_field)),
                     )
                     .when(overrides > 0, |this| {
                         this.child(small_button(

@@ -81,6 +81,35 @@ impl NyaTermApp {
     where
         I: Into<SharedString>,
     {
+        self.select_control_with_appearance(id, options, selected_value, disabled, true, cx)
+    }
+
+    pub(in crate::features) fn bare_select_control<I>(
+        &mut self,
+        id: I,
+        options: Vec<NyaSelectOption>,
+        selected_value: Option<String>,
+        disabled: bool,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement + use<I>
+    where
+        I: Into<SharedString>,
+    {
+        self.select_control_with_appearance(id, options, selected_value, disabled, false, cx)
+    }
+
+    fn select_control_with_appearance<I>(
+        &mut self,
+        id: I,
+        options: Vec<NyaSelectOption>,
+        selected_value: Option<String>,
+        disabled: bool,
+        appearance: bool,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement + use<I>
+    where
+        I: Into<SharedString>,
+    {
         let id = id.into();
         let select = self.select_entity(id.clone(), options, selected_value, disabled, cx);
 
@@ -89,7 +118,7 @@ impl NyaTermApp {
             .w_full()
             .max_w(px(360.))
             .h(px(34.))
-            .child(NyaSelect::new(&select))
+            .child(NyaSelect::new(&select).appearance(appearance))
     }
 
     fn on_select_changed(&mut self, id: &str, value: Option<&str>, cx: &mut Context<Self>) {

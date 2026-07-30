@@ -2,6 +2,7 @@ use gpui::{
     Context, FontWeight, IntoElement, KeyDownEvent, MouseButton, SharedString, div, prelude::*, px,
     rgb, rgba, svg,
 };
+use nyaterm_ui::NyaInput;
 
 use crate::features::{NyaTermApp, TextInputSetup};
 use crate::models::SecurityAuthTab;
@@ -161,7 +162,7 @@ impl NyaTermApp {
                                     .min_w_0()
                                     .flex_1()
                                     .overflow_hidden()
-                                    .child(password_input),
+                                    .child(NyaInput::new(&password_input)),
                             ),
                     )
                     .when_some(

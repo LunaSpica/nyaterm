@@ -3,7 +3,7 @@ use gpui::{
     Context, FontWeight, IntoElement, KeyDownEvent, SharedString, div, prelude::*, px, rgb,
 };
 use nyaterm_transport::SessionKind;
-use nyaterm_ui::NyaSelectOption;
+use nyaterm_ui::{NyaInput, NyaSelectOption};
 
 use super::super::{send_command_control_group, send_command_stepper_button};
 use crate::features::{NyaTermApp, TextInputSetup};
@@ -123,7 +123,7 @@ impl NyaTermApp {
             .child(send_command_control_group(
                 palette,
                 self.tr("serialSend.dataType"),
-                self.select_control(
+                self.bare_select_control(
                     "bottom-command-data-select",
                     data_options,
                     Some(selected_data),
@@ -134,7 +134,7 @@ impl NyaTermApp {
             .child(send_command_control_group(
                 palette,
                 self.tr("serialSend.sendMode"),
-                self.select_control(
+                self.bare_select_control(
                     "bottom-command-mode-select",
                     mode_options,
                     Some(selected_mode.to_string()),
@@ -145,7 +145,7 @@ impl NyaTermApp {
             .child(send_command_control_group(
                 palette,
                 self.tr("serialSend.target"),
-                self.select_control(
+                self.bare_select_control(
                     "bottom-command-target-select",
                     target_options,
                     Some(selected_target),
@@ -199,7 +199,12 @@ impl NyaTermApp {
                                 palette.text
                             }))
                             .when(!is_sending, |this| this.cursor_text())
-                            .child(div().min_w(px(36.)).flex_1().child(count_input))
+                            .child(
+                                div()
+                                    .min_w(px(36.))
+                                    .flex_1()
+                                    .child(NyaInput::new(&count_input)),
+                            )
                             .on_click(cx.listener(|this, _, window, cx| {
                                 this.focus_send_command_control(
                                     SendCommandControlFocus::Count,
@@ -249,7 +254,12 @@ impl NyaTermApp {
                             palette.text
                         }))
                         .when(!is_sending, |this| this.cursor_text())
-                        .child(div().min_w(px(42.)).flex_1().child(interval_input))
+                        .child(
+                            div()
+                                .min_w(px(42.))
+                                .flex_1()
+                                .child(NyaInput::new(&interval_input)),
+                        )
                         .child(
                             div()
                                 .text_size(px(10.))
@@ -274,7 +284,7 @@ impl NyaTermApp {
                 this.child(send_command_control_group(
                     palette,
                     self.tr("serialSend.lineEnding"),
-                    self.select_control(
+                    self.bare_select_control(
                         "bottom-command-eol-select",
                         line_ending_options,
                         Some(selected_line_ending),

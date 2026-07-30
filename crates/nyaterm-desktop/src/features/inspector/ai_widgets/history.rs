@@ -3,6 +3,7 @@ use gpui::{
     prelude::*, px, rgb, rgba, svg,
 };
 use nyaterm_core::{AgentCommandExecutionMode, truncate_preview};
+use nyaterm_ui::NyaInput;
 
 use crate::features::formatting::group_ai_sessions_by_date;
 use crate::features::view_widgets::tab_menu_separator;
@@ -464,7 +465,7 @@ impl NyaTermApp {
                                     .flex_1()
                                     .text_size(px(12.))
                                     .text_color(rgb(palette.text))
-                                    .child(search_field),
+                                    .child(NyaInput::new(&search_field)),
                             )
                             .when(!history_query.is_empty(), |this| {
                                 this.child(

@@ -4,6 +4,7 @@ use gpui::{
 };
 use nyaterm_core::truncate_preview;
 use nyaterm_transport::{SftpFileEntry, SftpFileType};
+use nyaterm_ui::NyaInput;
 
 use crate::features::{NyaTermApp, TextInputSetup};
 use crate::models::{
@@ -66,7 +67,7 @@ impl NyaTermApp {
                         .flex_1()
                         .text_size(px(10.))
                         .text_color(rgb(palette.text))
-                        .child(field),
+                        .child(NyaInput::new(&field)),
                 )
                 .into_any_element()
         });

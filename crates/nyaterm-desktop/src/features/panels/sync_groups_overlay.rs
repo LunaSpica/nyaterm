@@ -5,6 +5,7 @@ use gpui::{
     rgb, rgba,
 };
 use nyaterm_core::truncate_preview;
+use nyaterm_ui::NyaInput;
 
 use crate::features::formatting::session_kind_label;
 use crate::features::view_widgets::dialog_action_button;
@@ -541,7 +542,7 @@ impl NyaTermApp {
                                                                     window.focus(&search_focus);
                                                                 },
                                                             )
-                                                            .child(search_input),
+                                                            .child(NyaInput::new(&search_input)),
                                                     ),
                                             )
                                             .child(

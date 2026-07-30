@@ -5,6 +5,7 @@ use gpui::{
 };
 use nyaterm_core::truncate_preview;
 use nyaterm_transport::SftpFileType;
+use nyaterm_ui::NyaInput;
 
 use crate::features::{NyaTermApp, TextInputSetup, format_file_size};
 use crate::models::TransferBrowserSortColumn;
@@ -179,7 +180,7 @@ impl NyaTermApp {
                         .font_family(crate::features::gpui_code_font_family())
                         .text_size(px(12.))
                         .text_color(rgb(palette.text))
-                        .child(field),
+                        .child(NyaInput::new(&field)),
                 )
                 .into_any_element()
         });

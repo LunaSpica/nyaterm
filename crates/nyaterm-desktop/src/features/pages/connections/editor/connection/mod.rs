@@ -13,7 +13,7 @@ use gpui::{
     px, rgb, rgba,
 };
 use nyaterm_core::{ConnectionType, Group, SavedConnection, natural_compare, truncate_preview};
-use nyaterm_ui::{NyaSelectOption, NyaSelectState};
+use nyaterm_ui::{NyaInput, NyaSelectOption, NyaSelectState};
 
 use self::local::connection_editor_local_section;
 use self::serial::connection_editor_serial_section;
@@ -1057,7 +1057,7 @@ fn connection_description_field(
                         window.focus(&handle);
                     })
                 })
-                .children(entity.cloned()),
+                .children(entity.map(NyaInput::new)),
         )
 }
 

@@ -2,6 +2,7 @@ use gpui::{
     Context, FontWeight, IntoElement, KeyDownEvent, MouseButton, SharedString, Window,
     WindowControlArea, div, prelude::*, px, rgb, rgba, svg,
 };
+use nyaterm_ui::NyaInput;
 
 use crate::features::view_widgets::window_control_button;
 use crate::features::{NyaTermApp, TextInputSetup};
@@ -208,7 +209,7 @@ impl NyaTermApp {
                                                         .min_w_0()
                                                         .flex_1()
                                                         .overflow_hidden()
-                                                        .child(password_input),
+                                                        .child(NyaInput::new(&password_input)),
                                                 ),
                                         )
                                         .child(

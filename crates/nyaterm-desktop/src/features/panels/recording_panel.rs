@@ -4,6 +4,7 @@ use gpui::{
 };
 use nyaterm_core::truncate_preview;
 use nyaterm_transport::SessionInfo;
+use nyaterm_ui::NyaInput;
 
 use crate::features::formatting::{session_kind_label, short_id};
 use crate::features::{NyaTermApp, TextInputSetup};
@@ -319,7 +320,7 @@ impl NyaTermApp {
                                         .flex_1()
                                         .text_size(px(12.))
                                         .text_color(rgb(palette.text))
-                                        .child(search_field),
+                                        .child(NyaInput::new(&search_field)),
                                 ),
                         ),
                     ),

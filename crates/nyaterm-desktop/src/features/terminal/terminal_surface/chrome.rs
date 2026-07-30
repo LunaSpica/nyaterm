@@ -3,6 +3,7 @@ use gpui::{
     Window, div, prelude::*, px, rgb, rgba, svg,
 };
 use nyaterm_core::truncate_preview;
+use nyaterm_ui::NyaInput;
 
 use crate::features::terminal::terminal_runtime::terminal_scroll_track_ratio;
 use crate::features::{NyaTermApp, TextInputSetup};
@@ -396,7 +397,13 @@ impl NyaTermApp {
                             .on_mouse_down(MouseButton::Left, move |_, window, _| {
                                 window.focus(&search_focus);
                             })
-                            .child(div().min_w_0().flex_1().h_full().child(search_input)),
+                            .child(
+                                div()
+                                    .min_w_0()
+                                    .flex_1()
+                                    .h_full()
+                                    .child(NyaInput::new(&search_input)),
+                            ),
                     )
                     .child(terminal_search_flag_button(
                         "terminal-search-case",

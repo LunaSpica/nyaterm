@@ -3,6 +3,7 @@ use gpui::{
     rgb, rgba, svg,
 };
 use nyaterm_core::truncate_preview;
+use nyaterm_ui::NyaInput;
 
 use crate::features::{NyaTermApp, TextInputSetup};
 use crate::models::QuickSwitchItem;
@@ -206,7 +207,7 @@ impl NyaTermApp {
                                     .flex_1()
                                     .text_sm()
                                     .text_color(rgb(palette.text))
-                                    .child(query_input),
+                                    .child(NyaInput::new(&query_input)),
                             ),
                     )
                     .child(rows)

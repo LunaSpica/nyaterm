@@ -11,7 +11,7 @@ use nyaterm_core::{Group, ProxyConfig, SavedConnection, natural_compare, truncat
 
 use crate::features::{NyaTermApp, format_last_used_ms};
 use crate::models::{ConnectionEditorField, ConnectionEditorSelect, ConnectionSortMode};
-use nyaterm_ui::{NyaIconButton, NyaInputState, NyaSelect, NyaSelectState};
+use nyaterm_ui::{NyaIconButton, NyaInput, NyaInputState, NyaSelect, NyaSelectState};
 
 #[derive(Clone)]
 pub(super) enum ConnectionListRow {
@@ -848,7 +848,7 @@ pub(super) fn editor_field_box(
                 .flex_1()
                 .text_xs()
                 .text_color(rgb(palette.text))
-                .child(field.clone())
+                .child(NyaInput::new(field))
         }))
 }
 

@@ -1,4 +1,5 @@
 use gpui::{Context, IntoElement, div, prelude::*, px, rgb};
+use nyaterm_ui::NyaInput;
 
 use crate::features::NyaTermApp;
 use crate::models::ConnectionGroupEditorState;
@@ -32,7 +33,13 @@ impl NyaTermApp {
                             .text_color(rgb(palette.text_muted))
                             .child(self.tr("savedConnections.folderName")),
                     )
-                    .child(div().min_w_0().flex_1().text_xs().child(field))
+                    .child(
+                        div()
+                            .min_w_0()
+                            .flex_1()
+                            .text_xs()
+                            .child(NyaInput::new(&field)),
+                    )
             }))
             .when_some(editor.error.clone(), |this, error| {
                 this.child(

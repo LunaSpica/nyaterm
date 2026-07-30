@@ -1,4 +1,5 @@
 use gpui::{Context, IntoElement, KeyDownEvent, MouseButton, div, prelude::*, px, rgb};
+use nyaterm_ui::NyaInput;
 
 use crate::features::{NyaTermApp, TextInputSetup};
 use crate::theme::ThemePalette;
@@ -106,7 +107,7 @@ impl NyaTermApp {
                                             }
                                         },
                                     ))
-                                    .child(search_field),
+                                    .child(NyaInput::new(&search_field)),
                             )
                             .child(
                                 div()
