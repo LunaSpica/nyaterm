@@ -2,9 +2,15 @@
 
 ## Project Status
 
-NyaTerm is a native GPUI application. The migration from the legacy
-Tauri/WebView implementation is still incomplete, but a large part of the
-desktop module tree and UI state has already been cleaned up.
+NyaTerm is a native GPUI Rust desktop application. The GPUI architecture is now
+the baseline: the desktop and terminal-GPUI module trees are normal Rust
+modules, transient UI domains live on focused feature-state owners or
+authoritative GPUI Entities, and the legacy Tauri/WebView source tree is no
+longer part of the workspace.
+
+Treat remaining migration work as targeted parity, compatibility, or ownership
+cleanup tracked in `docs/architecture/gpui-migration-status.md`, not as a broad
+license to reintroduce legacy/WebView patterns or temporary migration buckets.
 
 Keep dynamic migration counts and long-form history in
 `docs/architecture/gpui-migration-status.md`, not in this file. Update that
@@ -55,8 +61,8 @@ manifest rather than by hand.
 
 ## Current Architecture
 
-`NyaTermApp` is still the central GPUI state owner, but it is no longer just one
-flat migration bucket. Major transient UI domains are grouped into focused
+`NyaTermApp` remains the central GPUI composition and state owner, but it is not
+a flat migration bucket. Major transient UI domains are grouped into focused
 feature-state structs, including connections, quick commands, remote ops,
 security, settings interaction, AI, terminal presentation, send-command, and
 transfers.

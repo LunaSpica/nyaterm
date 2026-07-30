@@ -1,7 +1,10 @@
 # GPUI Migration Status
 
 This document records the current GPUI migration boundaries and debt in
-`nyaterm-desktop`. Keep dynamic counts here instead of in `AGENTS.md`.
+`nyaterm-desktop`. The native GPUI architecture is now the project baseline;
+remaining entries here describe targeted parity, compatibility, ownership, and
+cleanup work rather than a broad half-migrated application state. Keep dynamic
+counts here instead of in `AGENTS.md`.
 
 Last updated from the working tree on 2026-07-30.
 
