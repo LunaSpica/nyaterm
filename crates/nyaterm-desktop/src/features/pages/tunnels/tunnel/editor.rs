@@ -62,6 +62,7 @@ pub(in crate::features::pages::tunnels) fn network_tunnel_editor_content(
         NetworkTunnelEditorField::Name,
         app.tr("network.tunnelName"),
         editor.name.clone(),
+        TextInputSetup::placeholder(app.tr("network.tunnelNamePlaceholder")),
         cx,
     );
     let listen_port_input = tunnel_editor_input(
@@ -73,6 +74,7 @@ pub(in crate::features::pages::tunnels) fn network_tunnel_editor_content(
             _ => app.tr("network.listenPortLocal"),
         },
         editor.listen_port.clone(),
+        TextInputSetup::default(),
         cx,
     );
     let dynamic = editor.is_dynamic();
@@ -85,6 +87,7 @@ pub(in crate::features::pages::tunnels) fn network_tunnel_editor_content(
                 _ => app.tr("network.targetPortLocal"),
             },
             editor.target_port.clone(),
+            TextInputSetup::default(),
             cx,
         )
     });
@@ -97,6 +100,7 @@ pub(in crate::features::pages::tunnels) fn network_tunnel_editor_content(
                 _ => app.tr("network.targetHostLocal"),
             },
             editor.target_host.clone(),
+            TextInputSetup::placeholder("127.0.0.1"),
             cx,
         )
     });
@@ -113,11 +117,11 @@ pub(in crate::features::pages::tunnels) fn network_tunnel_editor_content(
         )
         .child(
             div()
-                .grid()
-                .grid_cols(3)
-                .gap_2()
-                .child(name_input)
-                .child(tunnel_editor_selector(
+                .flex()
+                .flex_wrap()
+                .gap_3()
+                .child(div().min_w(px(220.)).flex_1().child(name_input))
+                .child(div().w(px(132.)).flex_none().child(tunnel_editor_selector(
                     app,
                     palette,
                     "network-tunnel-editor-type",
@@ -125,8 +129,8 @@ pub(in crate::features::pages::tunnels) fn network_tunnel_editor_content(
                     type_options,
                     selected_type,
                     cx,
-                ))
-                .child(tunnel_editor_selector(
+                )))
+                .child(div().w(px(132.)).flex_none().child(tunnel_editor_selector(
                     app,
                     palette,
                     "network-tunnel-editor-group",
@@ -134,13 +138,13 @@ pub(in crate::features::pages::tunnels) fn network_tunnel_editor_content(
                     group_options,
                     selected_group,
                     cx,
-                )),
+                ))),
         )
         .child(tunnel_editor_selector(
             app,
             palette,
             "network-tunnel-editor-connection",
-            app.tr("network.savedConnection"),
+            app.tr("network.selectedConnection"),
             connection_options,
             selected_connection,
             cx,
@@ -167,7 +171,7 @@ pub(in crate::features::pages::tunnels) fn network_tunnel_editor_content(
                     palette,
                     "network-tunnel-editor-bind-local",
                     app.tr("network.bindLocalhostOnly"),
-                    "127.0.0.1",
+                    app.tr("network.bindLocalhostOnlyHint"),
                     editor.bind_localhost,
                     cx.listener(|this, _, _, cx| {
                         this.set_network_tunnel_bind_localhost(true, cx);
@@ -177,7 +181,7 @@ pub(in crate::features::pages::tunnels) fn network_tunnel_editor_content(
                     palette,
                     "network-tunnel-editor-bind-all",
                     app.tr("network.bindAllInterfaces"),
-                    "0.0.0.0",
+                    app.tr("network.bindAllInterfacesHint"),
                     !editor.bind_localhost,
                     cx.listener(|this, _, _, cx| {
                         this.set_network_tunnel_bind_localhost(false, cx);
@@ -228,13 +232,14 @@ pub(in crate::features::pages::tunnels) fn tunnel_editor_input(
     field: NetworkTunnelEditorField,
     caption: &'static str,
     value: String,
+    setup: TextInputSetup,
     cx: &mut Context<NyaTermApp>,
 ) -> gpui::AnyElement {
     app.text_input_field(
         format!("network.tunnel-editor.{}", tunnel_editor_field_key(field)),
         caption,
         &value,
-        TextInputSetup::default(),
+        setup,
         cx,
     )
     .into_any_element()
@@ -271,11 +276,11 @@ where
         .gap_1()
         .child(
             div()
-                .text_size(px(11.))
+                .text_sm()
                 .text_color(rgb(palette.text_muted))
                 .child(label),
         )
-        .child(app.select_control(id.into(), options, Some(selected_value), false, cx))
+        .child(app.form_select_control(id.into(), options, Some(selected_value), false, cx))
 }
 
 pub(in crate::features::pages::tunnels) fn tunnel_editor_option(

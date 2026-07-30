@@ -98,6 +98,27 @@ impl NyaTermApp {
         self.select_control_with_appearance(id, options, selected_value, disabled, false, cx)
     }
 
+    pub(in crate::features) fn form_select_control<I>(
+        &mut self,
+        id: I,
+        options: Vec<NyaSelectOption>,
+        selected_value: Option<String>,
+        disabled: bool,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement + use<I>
+    where
+        I: Into<SharedString>,
+    {
+        let id = id.into();
+        let select = self.select_entity(id.clone(), options, selected_value, disabled, cx);
+
+        div()
+            .id(id)
+            .w_full()
+            .h(px(34.))
+            .child(NyaSelect::new(&select))
+    }
+
     fn select_control_with_appearance<I>(
         &mut self,
         id: I,

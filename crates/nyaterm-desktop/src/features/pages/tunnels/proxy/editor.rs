@@ -51,7 +51,7 @@ pub(in crate::features::pages::tunnels) fn network_proxy_editor_content(
         NetworkProxyEditorField::Name,
         app.tr("network.proxyName"),
         editor.name.clone(),
-        TextInputSetup::default(),
+        TextInputSetup::placeholder(app.tr("network.proxyNamePlaceholder")),
         cx,
     );
     let is_command = editor.is_proxy_command();
@@ -61,7 +61,7 @@ pub(in crate::features::pages::tunnels) fn network_proxy_editor_content(
             NetworkProxyEditorField::Command,
             app.tr("network.proxyCommand"),
             editor.command.clone(),
-            TextInputSetup::default(),
+            TextInputSetup::multi_line(app.tr("network.proxyCommandPlaceholder")),
             cx,
         )
     });
@@ -69,9 +69,9 @@ pub(in crate::features::pages::tunnels) fn network_proxy_editor_content(
         proxy_editor_input(
             app,
             NetworkProxyEditorField::Host,
-            app.tr("dialog.host"),
+            app.tr("settings.proxyHost"),
             editor.host.clone(),
-            TextInputSetup::default(),
+            TextInputSetup::placeholder("127.0.0.1"),
             cx,
         )
     });
@@ -79,7 +79,7 @@ pub(in crate::features::pages::tunnels) fn network_proxy_editor_content(
         proxy_editor_input(
             app,
             NetworkProxyEditorField::Port,
-            app.tr("dialog.port"),
+            app.tr("settings.proxyPort"),
             editor.port.clone(),
             TextInputSetup::default(),
             cx,
@@ -91,7 +91,7 @@ pub(in crate::features::pages::tunnels) fn network_proxy_editor_content(
             NetworkProxyEditorField::Username,
             app.tr("network.proxyUsername"),
             editor.username.clone(),
-            TextInputSetup::default(),
+            TextInputSetup::placeholder(app.tr("network.proxyUsernamePlaceholder")),
             cx,
         )
     });
@@ -128,7 +128,7 @@ pub(in crate::features::pages::tunnels) fn network_proxy_editor_content(
                     app,
                     palette,
                     "network-proxy-editor-protocol",
-                    app.tr("network.protocol"),
+                    app.tr("settings.proxyProtocol"),
                     protocol_options,
                     selected_protocol,
                     cx,
@@ -145,12 +145,13 @@ pub(in crate::features::pages::tunnels) fn network_proxy_editor_content(
             cx,
         ))
         .when(editor.is_proxy_command(), |this| {
-            this.children(command_input).child(
-                div()
-                    .text_xs()
-                    .text_color(rgb(palette.text_muted))
-                    .child(app.tr("network.proxyCommandHint")),
-            )
+            this.child(div().min_h(px(104.)).children(command_input))
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(rgb(palette.text_muted))
+                        .child(app.tr("network.proxyCommandHint")),
+                )
         })
         .when(!editor.is_proxy_command(), |this| {
             this.child(
